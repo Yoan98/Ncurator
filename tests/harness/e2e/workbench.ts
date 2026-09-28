@@ -780,9 +780,10 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   )
 }
 
-export const selectWorkbenchAttachmentThroughNativeDialog = async (
+const selectWorkbenchPathThroughNativeDialog = async (
   page: Page,
-  filePath: string
+  filePath: string,
+  kind: 'file' | 'directory'
 ): Promise<void> => {
   const addButton = getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton)
   const fileName = path.basename(filePath)
@@ -809,8 +810,11 @@ export const selectWorkbenchAttachmentThroughNativeDialog = async (
     { timeout: WORKBENCH_E2E_TIMEOUT_MS }
   )
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    await queueE2ENativeDialogSelection(page, { kind: 'file', path: filePath })
+    await queueE2ENativeDialogSelection(page, { kind, path: filePath })
     await addButton.click()
+    await page
+      .getByRole('menuitem', { name: kind === 'file' ? '选择文件' : '选择文件夹', exact: true })
+      .click()
     try {
       diagnostics.push(`e2e-native-dialog-selection:${String(attempt + 1)}`)
       await page.waitForFunction(
@@ -837,6 +841,16 @@ export const selectWorkbenchAttachmentThroughNativeDialog = async (
     `native file selection did not create attachment ${fileName}; diagnostics=${JSON.stringify(diagnostics)}`
   )
 }
+
+export const selectWorkbenchAttachmentThroughNativeDialog = async (
+  page: Page,
+  filePath: string
+): Promise<void> => selectWorkbenchPathThroughNativeDialog(page, filePath, 'file')
+
+export const selectWorkbenchDirectoryThroughNativeDialog = async (
+  page: Page,
+  directoryPath: string
+): Promise<void> => selectWorkbenchPathThroughNativeDialog(page, directoryPath, 'directory')
 
 export const waitForSettingsCountToBecome = async (
   page: Page,
@@ -1487,6 +1501,19 @@ export const openScheduledTasksView = async (page: Page): Promise<void> => {
   await getWorkbenchLocator(page, scheduledTaskSelectors.view).waitFor({ state: 'visible' })
 }
 
+export const waitForScheduledTaskDrawerClosed = async (page: Page): Promise<void> => {
+  await page.waitForFunction(() => {
+    const root = document.querySelector('.scheduled-task-config-drawer')
+    if (!root) return true
+    return (
+      !root.classList.contains('ant-drawer-open') &&
+      root
+        .querySelector('.ant-drawer-content-wrapper')
+        ?.classList.contains('ant-drawer-content-wrapper-hidden')
+    )
+  })
+}
+
 export const selectVisibleWorkbenchOption = async (page: Page, name: string): Promise<void> => {
   const dropdown = page.locator('.ant-select-dropdown').last()
   await dropdown.waitFor({ state: 'attached' })
@@ -1495,18 +1522,18 @@ export const selectVisibleWorkbenchOption = async (page: Page, name: string): Pr
     .evaluateAll((elements) =>
       elements.map((element) => element.getAttribute('aria-label') || element.textContent || '')
     )
-  const selectedIndex = await dropdown.locator('[role="option"]').evaluateAll((elements) =>
-    elements.findIndex((element) => element.getAttribute('aria-selected') === 'true')
-  )
+  const selectedIndex = await dropdown
+    .locator('[role="option"]')
+    .evaluateAll((elements) =>
+      elements.findIndex((element) => element.getAttribute('aria-selected') === 'true')
+    )
   const optionIndex = optionLabels.findIndex((label) => label.trim() === name)
   if (optionIndex < 0) {
     throw new Error(`visible Workbench option not found: ${name}`)
   }
   const optionCount = optionLabels.length
   const steps =
-    selectedIndex >= 0
-      ? (optionIndex - selectedIndex + optionCount) % optionCount
-      : optionIndex
+    selectedIndex >= 0 ? (optionIndex - selectedIndex + optionCount) % optionCount : optionIndex
   if (selectedIndex < 0) {
     await page.keyboard.press('Home')
   }
@@ -1553,9 +1580,9 @@ export const waitForWorkbenchSearchScopeEmptyThroughUi = async (page: Page): Pro
 const getWorkbenchMentionPanel = (page: Page, inputTestId: string): Locator =>
   inputTestId === workbenchSelectors.input
     ? getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
-    : getWorkbenchLocator(page, inputTestId)
-        .locator('xpath=..')
-        .getByTestId(workbenchSelectors.mentionPanel)
+    : page.locator(
+        `[data-testid="${scheduledTaskSelectors.formDescription}"] [data-testid="${workbenchSelectors.mentionPanel}"]`
+      )
 
 export const waitForWorkbenchMentionPanelText = async (
   page: Page,
@@ -1603,7 +1630,8 @@ export const insertWorkbenchReferenceToken = async (
   } else {
     const input = getWorkbenchLocator(page, inputTestId)
     await input.evaluate((element) => {
-      if (!(element instanceof HTMLElement)) throw new Error('workbench input is not an HTMLElement')
+      if (!(element instanceof HTMLElement))
+        throw new Error('workbench input is not an HTMLElement')
       element.focus()
       const selection = window.getSelection()
       const range = document.createRange()
@@ -1629,17 +1657,20 @@ export const insertWorkbenchReferenceToken = async (
       ].join('\n')
     )
   }
+  const wrapperTestId = scheduledTaskSelectors.formDescription
   await option.click()
   await page.waitForFunction(
-    (input: { testId: string; visibleName: string }) => {
+    (input: { testId: string; wrapperTestId: string; visibleName: string }) => {
       const editor = document.querySelector(`[data-testid="${input.testId}"]`)
       if (!(editor instanceof HTMLElement)) return false
-      return Array.from(editor.querySelectorAll('[data-role="scope-token"]')).some((node) =>
+      const tokenRoot = editor.closest(`[data-testid="${input.wrapperTestId}"]`) || editor
+      return Array.from(tokenRoot.querySelectorAll('[data-role="scope-token"]')).some((node) =>
         node.textContent?.includes(input.visibleName)
       )
     },
     {
       testId: inputTestId,
+      wrapperTestId,
       visibleName
     }
   )
@@ -1653,7 +1684,8 @@ export const getWorkbenchReferenceTokenTexts = async (
     if (!(element instanceof HTMLElement)) {
       throw new Error('workbench input is not an HTMLElement')
     }
-    return Array.from(element.querySelectorAll('[data-role="scope-token"]')).map((node) =>
+    const tokenRoot = element.closest('[data-testid="scheduled-task-form-description"]') || element
+    return Array.from(tokenRoot.querySelectorAll('[data-role="scope-token"]')).map((node) =>
       String(node.textContent || '')
         .replace('×', '')
         .trim()

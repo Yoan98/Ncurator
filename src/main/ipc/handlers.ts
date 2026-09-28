@@ -1872,12 +1872,16 @@ export function registerHandlers(services: {
           return { canceled: true, items: [], error: '附件目录不存在，无法保存附件' }
         }
         const dialogOptions: OpenDialogOptions = {
-          title: '选择附件',
-          buttonLabel: '选择附件',
-          properties: ['openFile', 'multiSelections', 'dontAddToRecent']
+          title: payload.selectionType === 'directory' ? '选择文件夹' : '选择文件',
+          buttonLabel: payload.selectionType === 'directory' ? '选择文件夹' : '选择文件',
+          properties: [
+            payload.selectionType === 'directory' ? 'openDirectory' : 'openFile',
+            'multiSelections',
+            'dontAddToRecent'
+          ]
         }
         const ownerWindow = BrowserWindow.fromWebContents(event.sender)
-        const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, 'file')
+        const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, payload.selectionType)
         const filePaths = e2eSelectedPath
           ? [e2eSelectedPath]
           : (
@@ -1910,8 +1914,7 @@ export function registerHandlers(services: {
       try {
         const attachment = await attachmentService.createSourceAttachmentFromPath({
           sourcePath: payload.sourcePath,
-          mimeType: payload.mimeType,
-          kind: payload.kind
+          mimeType: payload.mimeType
         })
         return { success: true, attachment }
       } catch (error) {

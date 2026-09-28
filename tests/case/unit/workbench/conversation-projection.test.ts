@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { projectAiConversationMessages } from '../../../../src/shared/workbench/conversationProjection'
-import type { AiRunRecord, ChatMessageLogRecord } from '../../../../src/shared/types'
+import type {
+  AiRunRecord,
+  ChatMessageContentNode,
+  ChatMessageLogRecord,
+  SelectedReference
+} from '../../../../src/shared/types'
 
 const buildRun = (input: Partial<AiRunRecord> & { id: string }): AiRunRecord => ({
   id: input.id,
@@ -78,6 +83,36 @@ describe('conversationProjection', () => {
     expect(messages.map((message) => message.id)).toEqual(['user-1', 'assistant-1'])
     expect(messages[0]).toMatchObject({ role: 'user', content: 'hello' })
     expect(messages[1]).toMatchObject({ role: 'assistant', content: 'world' })
+  })
+
+  it('restores structured content nodes from user log context', () => {
+    const reference: SelectedReference = {
+      kind: 'file',
+      name: 'brief.docx',
+      absolutePath: '/tmp/brief.docx'
+    }
+    const contentNodes: ChatMessageContentNode[] = [
+      { kind: 'text', text: 'Summarize this' },
+      { kind: 'reference', reference }
+    ]
+    const messages = projectAiConversationMessages({
+      partnerId: 'partner-1',
+      runs: [buildRun({ id: 'run-content-nodes', userMessageId: 'user-content-nodes' })],
+      records: [
+        buildLogRecord({
+          runId: 'run-content-nodes',
+          seq: 1,
+          entry: {
+            kind: 'user',
+            content: 'Summarize this',
+            input: 'Summarize this',
+            context: { selectedReferences: [reference], attachments: [], contentNodes }
+          }
+        })
+      ]
+    })
+
+    expect(messages[0]?.contentNodes).toEqual(contentNodes)
   })
 
   it('uses run.input for the bubble and ignores compaction checkpoints', () => {
@@ -189,10 +224,7 @@ describe('conversationProjection', () => {
     })
     const ordered = [...messages].sort((left, right) => left.timestamp - right.timestamp)
 
-    expect(ordered.map((message) => message.id)).toEqual([
-      'continued-user',
-      'continued-assistant'
-    ])
+    expect(ordered.map((message) => message.id)).toEqual(['continued-user', 'continued-assistant'])
     expect(ordered[1]?.timestamp).toBe(ordered[0]!.timestamp + 1)
   })
 

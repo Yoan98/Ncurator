@@ -3,11 +3,15 @@ import { describe, expect, it } from 'vitest'
 import { createContextBudgetNode } from '../../../../src/main/services/ai/human/node/contextBudgetNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
-import {
-  resolveEffectiveContextWindowTokens
-} from '../../../../src/main/services/ai/human/constants'
+import { resolveEffectiveContextWindowTokens } from '../../../../src/main/services/ai/human/constants'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
-import type { AiRunEvent, ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../src/shared/types'
+import type {
+  AiRunEvent,
+  ChatMessageContentNode,
+  ChatMessageLogEntry,
+  ChatMessageLogRecord,
+  SelectedReference
+} from '../../../../src/shared/types'
 import { LlmInputTooLongError } from '../../../../src/main/services/ai/errors'
 
 const DEFAULT_EFFECTIVE_CONTEXT_WINDOW_TOKENS = resolveEffectiveContextWindowTokens()
@@ -71,6 +75,35 @@ const budgetLogRecord = (seq: number, entry: ChatMessageLogEntry): ChatMessageLo
 })
 
 describe('ai unit context budget node', () => {
+  it('stores structured content nodes in the user transcript context', async () => {
+    const events: AiRunEvent[] = []
+    const reference: SelectedReference = {
+      kind: 'file',
+      name: 'brief.docx',
+      absolutePath: '/tmp/brief.docx'
+    }
+    const contentNodes: ChatMessageContentNode[] = [
+      { kind: 'text', text: '总结资料' },
+      { kind: 'reference', reference }
+    ]
+    const appended: ChatMessageLogEntry[] = []
+    const ctx = {
+      ...createBaseContext(events),
+      contentNodes,
+      appendMessageLog: async (entries: ChatMessageLogEntry[]) => {
+        appended.push(...entries)
+      }
+    } satisfies AiRunContext
+    const node = createContextBudgetNode({ ctx, cache: createHumanRuntimeCache() })
+
+    await node(createInitialHumanState({ taskId: 'task-content-nodes', userInput: '总结资料' }))
+
+    expect(appended[0]).toMatchObject({
+      kind: 'user',
+      context: { contentNodes }
+    })
+  })
+
   it('records continue decision with brain context budget snapshot', async () => {
     const events: AiRunEvent[] = []
     const ctx = createBaseContext(events)
@@ -112,13 +145,13 @@ describe('ai unit context budget node', () => {
       userInput: '请完成一个会触发压缩的长任务。'
     })
     cache.messages = [
-      ...Array.from(
-        { length: 6 },
-        (_, index) => [
-          new AIMessage({ content: `long message ${index} ${'x'.repeat(400)}` }),
-          new ToolMessage({ content: `tool result ${index} ${'x'.repeat(400)}`, tool_call_id: `call-${index}` })
-        ]
-      ).flat(),
+      ...Array.from({ length: 6 }, (_, index) => [
+        new AIMessage({ content: `long message ${index} ${'x'.repeat(400)}` }),
+        new ToolMessage({
+          content: `tool result ${index} ${'x'.repeat(400)}`,
+          tool_call_id: `call-${index}`
+        })
+      ]).flat(),
       new AIMessage({ content: 'previous brain turn' }),
       new HumanMessage({
         content: '请完成一个会触发压缩的长任务。',
@@ -154,9 +187,7 @@ describe('ai unit context budget node', () => {
         calls.push('append')
         const maxSeq = records.reduce((max, record) => Math.max(max, record.seq), 0)
         entries.forEach((entry, index) => {
-          records.push(
-            budgetLogRecord(maxSeq + index + 1, entry)
-          )
+          records.push(budgetLogRecord(maxSeq + index + 1, entry))
         })
         appended.push(...entries.map((entry) => ({ kind: entry.kind })))
       }

@@ -10,15 +10,15 @@ import {
   openScheduledTasksView,
   scheduledTaskSelectors,
   selectWorkbenchModel,
-  selectVisibleWorkbenchOption,
   setWorkbenchInput,
-  setupWorkbenchWithTempWorkspace
+  setupWorkbenchWithTempWorkspace,
+  waitForScheduledTaskDrawerClosed
 } from '../../../harness/e2e/workbench'
 
 const CASE_ID = 'scheduled-task-description-reference'
 const PARTNER_NAME = '定时任务引用伙伴'
 const TASK_NAME = '引用资料任务'
-const DESCRIPTION = '请阅读资料并总结要点 '
+const DESCRIPTION = '请阅读资料并总结**要点**，'
 
 const listTasks = async (page: import('playwright').Page): Promise<ScheduledTask[]> =>
   (await page.evaluate(async () => await window.api.scheduledTaskList())) as ScheduledTask[]
@@ -64,27 +64,34 @@ describe('workbench scheduled-task e2e', () => {
 
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
-          await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
-          await selectVisibleWorkbenchOption(page, PARTNER_NAME)
+          await page
+            .getByTestId(`${scheduledTaskSelectors.formPartner}-option-${partner.id}`)
+            .click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill(TASK_NAME)
-          await setWorkbenchInput(page, DESCRIPTION, scheduledTaskSelectors.formDescription)
+          await setWorkbenchInput(page, DESCRIPTION, scheduledTaskSelectors.formDescriptionInput)
+          const markdownRendered =
+            (await getWorkbenchLocator(page, scheduledTaskSelectors.formDescriptionInput)
+              .locator('strong')
+              .count()) > 0
           await insertWorkbenchReferenceToken(
             page,
             'sample-edit.docx',
             'sample-edit.docx',
-            scheduledTaskSelectors.formDescription
+            scheduledTaskSelectors.formDescriptionInput
           )
           const editorTokens = await getWorkbenchReferenceTokenTexts(
             page,
-            scheduledTaskSelectors.formDescription
+            scheduledTaskSelectors.formDescriptionInput
           )
           await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
+          await waitForScheduledTaskDrawerClosed(page)
 
           const created = (await listTasks(page)).find((task) => task.name === TASK_NAME)
           if (!created) throw new Error('failed to create scheduled task')
           const storedReference = created.selectedReferences.some(
             (reference) => reference.name === 'sample-edit.docx'
           )
+          const storedMarkdown = created.description === DESCRIPTION
           const storedContentNode = created.contentNodes.some(
             (node) => node.kind === 'reference' && node.reference.name === 'sample-edit.docx'
           )
@@ -99,7 +106,12 @@ describe('workbench scheduled-task e2e', () => {
           const deadline = Date.now() + 30_000
           while (Date.now() < deadline) {
             userMessage = (await openPartnerMessages(page, partner.id)).find(
-              (message) => message.role === 'user' && message.content.includes(DESCRIPTION.trim())
+              (message) =>
+                message.role === 'user' &&
+                message.content.includes(DESCRIPTION.trim()) &&
+                message.contentNodes?.some(
+                  (node) => node.kind === 'reference' && node.reference.name === 'sample-edit.docx'
+                )
             )
             if (userMessage) break
             await page.waitForTimeout(500)
@@ -113,7 +125,9 @@ describe('workbench scheduled-task e2e', () => {
 
           return {
             editorTokens,
+            markdownRendered,
             storedReference,
+            storedMarkdown,
             storedContentNode,
             messageReference: Boolean(messageReference),
             messageContentNode: Boolean(messageContentNode)
@@ -122,9 +136,12 @@ describe('workbench scheduled-task e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.editorTokens.some((text) => text.includes('sample-edit.docx')) &&
+              result.markdownRendered &&
               result.storedReference &&
+              result.storedMarkdown &&
               result.storedContentNode &&
-              result.messageReference,
+              result.messageReference &&
+              result.messageContentNode,
             {
               name: 'scheduled-task-description-reference-roundtrip',
               message: '定时任务描述中的引用应保存，并在立即执行提交给绑定伙伴。',

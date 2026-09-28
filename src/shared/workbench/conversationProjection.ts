@@ -45,6 +45,7 @@ export const projectAiConversationMessages = (input: {
         role: 'user',
         content: record.entry.input,
         timestamp: record.createdAt,
+        contentNodes: record.entry.context.contentNodes,
         selectedReferences: record.entry.context.selectedReferences as SelectedReference[],
         attachments: record.entry.context.attachments as ChatAttachment[]
       })

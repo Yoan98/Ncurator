@@ -9,7 +9,7 @@ import {
   openScheduledTasksView,
   scheduledTaskSelectors,
   setupWorkbenchWithTempWorkspace,
-  selectVisibleWorkbenchOption,
+  waitForScheduledTaskDrawerClosed,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
 
@@ -89,9 +89,11 @@ describe('workbench scheduled-task e2e', () => {
             page,
             `${scheduledTaskSelectors.itemEditPrefix}-${taskId}`
           ).click()
-          await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
-          await selectVisibleWorkbenchOption(page, reboundPartner.name)
+          await page
+            .getByTestId(`${scheduledTaskSelectors.formPartner}-option-${reboundPartner.id}`)
+            .click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
+          await waitForScheduledTaskDrawerClosed(page)
           const rebound = (
             (await page.evaluate(
               async () => await window.api.scheduledTaskList()

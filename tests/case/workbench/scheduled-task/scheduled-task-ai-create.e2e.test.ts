@@ -9,7 +9,6 @@ import {
   openScheduledTasksView,
   scheduledTaskSelectors,
   setupWorkbenchWithTempWorkspace,
-  selectVisibleWorkbenchOption,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
 
@@ -38,6 +37,16 @@ describe('workbench scheduled-task e2e', () => {
             createPartner: false,
             configureModel: false
           })
+          await openScheduledTasksView(page)
+          await getWorkbenchLocator(page, scheduledTaskSelectors.aiAddButton).click()
+          const emptyPartnerStateVisible = await page
+            .getByText('暂无伙伴', { exact: true })
+            .isVisible()
+          const emptyPartnerConfirmDisabled = await getWorkbenchLocator(
+            page,
+            scheduledTaskSelectors.aiConfirm
+          ).isDisabled()
+          await page.locator('.ant-modal .ant-btn-default').click()
           await createPartnerThroughWorkbenchUi(page, 'AI 创建目标伙伴')
           await createPartnerThroughWorkbenchUi(page, '草稿切换伙伴')
           const partners = (await page.evaluate(
@@ -49,20 +58,18 @@ describe('workbench scheduled-task e2e', () => {
 
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.aiAddButton).click()
-          await getWorkbenchLocator(page, scheduledTaskSelectors.aiPartner).click()
           const targetOption = page.getByTestId(
             `${scheduledTaskSelectors.aiPartner}-option-${target.id}`
           )
           const partnerOptionShowsAnimatedAvatar =
             (await targetOption.isVisible()) &&
             (await targetOption.locator('.nc-partner-avatar-animated').count()) === 1
-          await selectVisibleWorkbenchOption(page, target.name)
-          const selectedPartner = page.getByTestId(
-            `${scheduledTaskSelectors.aiPartner}-selected-${target.id}`
-          )
+          await targetOption.click()
+          const selectedPartner = targetOption
           const partnerSelectionShowsAnimatedAvatar =
             (await selectedPartner.isVisible()) &&
-            (await selectedPartner.locator('.nc-partner-avatar-animated').count()) === 1
+            (await selectedPartner.locator('.nc-partner-avatar-animated').count()) === 1 &&
+            (await selectedPartner.getAttribute('aria-pressed')) === 'true'
           await getWorkbenchLocator(page, scheduledTaskSelectors.aiConfirm).click()
 
           const input = getWorkbenchLocator(page, workbenchSelectors.input).last()
@@ -98,6 +105,8 @@ describe('workbench scheduled-task e2e', () => {
           const draftPersisted = await readVisibleDraft()
 
           return {
+            emptyPartnerStateVisible,
+            emptyPartnerConfirmDisabled,
             partnerOptionShowsAnimatedAvatar,
             partnerSelectionShowsAnimatedAvatar,
             draftPrefilled,
@@ -108,7 +117,9 @@ describe('workbench scheduled-task e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.partnerOptionShowsAnimatedAvatar &&
+            result.emptyPartnerStateVisible &&
+              result.emptyPartnerConfirmDisabled &&
+              result.partnerOptionShowsAnimatedAvatar &&
               result.partnerSelectionShowsAnimatedAvatar &&
               result.draftPrefilled &&
               result.targetOpened &&

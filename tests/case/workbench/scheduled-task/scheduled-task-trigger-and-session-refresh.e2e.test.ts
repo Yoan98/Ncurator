@@ -8,8 +8,9 @@ import {
   openScheduledTasksView,
   scheduledTaskSelectors,
   selectWorkbenchModel,
-  selectVisibleWorkbenchOption,
+  setWorkbenchInput,
   setupWorkbenchWithTempWorkspace,
+  waitForScheduledTaskDrawerClosed,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
 import type { ChatMessage, PartnerListItem, ScheduledTask } from '../../../../src/shared/types'
@@ -78,13 +79,15 @@ describe('workbench scheduled-task e2e', () => {
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('触发验证任务')
-          await getWorkbenchLocator(page, scheduledTaskSelectors.formDescription).fill(TASK_PROMPT)
-          await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
-          await selectVisibleWorkbenchOption(page, targetPartner.name)
+          await setWorkbenchInput(page, TASK_PROMPT, scheduledTaskSelectors.formDescriptionInput)
+          await page
+            .getByTestId(`${scheduledTaskSelectors.formPartner}-option-${targetPartner.id}`)
+            .click()
           // Compute time immediately before save/enable so we do not miss the daily slot.
           const scheduledHhmm = upcomingDailyHhmm(120_000)
           await fillScheduledTaskTime(page, scheduledHhmm)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
+          await waitForScheduledTaskDrawerClosed(page)
 
           const createdTasks = await listTasks(page)
           const createdTask = createdTasks.find((task) => task.name === '触发验证任务')

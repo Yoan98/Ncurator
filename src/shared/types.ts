@@ -562,7 +562,7 @@ export type ChatMessageContentNode =
       reference: SelectedReference
     }
 
-export type ChatAttachmentKind = 'image' | 'file'
+export type ChatAttachmentKind = 'image' | 'file' | 'directory'
 export type ChatAttachmentStatus = 'ready' | 'processing' | 'failed'
 
 export type ChatAttachment = {
@@ -579,6 +579,7 @@ export type ChatAttachment = {
 export type AttachmentPickRequest = {
   partnerId: string
   assetBucketId: string
+  selectionType: 'file' | 'directory'
 }
 
 export type AttachmentPickResponse = {
@@ -596,7 +597,6 @@ export type AttachmentProcessResponse = {
 export type AttachmentCreateFromPathRequest = {
   sourcePath: string
   mimeType?: string
-  kind?: ChatAttachmentKind
 }
 
 export type AttachmentSaveRequest = {
@@ -605,7 +605,7 @@ export type AttachmentSaveRequest = {
   name: string
   bytes: Uint8Array
   mimeType?: string
-  kind?: ChatAttachmentKind
+  kind?: Exclude<ChatAttachmentKind, 'directory'>
 }
 
 export type MarkdownLinkAccessStatus = 'accessible' | 'unavailable'
@@ -2004,6 +2004,7 @@ export type ChatMessageImageRef = {
 export type ChatMessageLogUserContext = {
   selectedReferences: SelectedReference[]
   attachments: ChatAttachment[]
+  contentNodes?: ChatMessageContentNode[]
 }
 
 export type ChatMessageLogPlanItem = {

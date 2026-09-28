@@ -36,10 +36,21 @@ describe('attachment service runtime directories', () => {
     )
   })
 
-  it('rejects source attachment directories', async () => {
-    await expect(
-      service.createSourceAttachmentFromPath({ sourcePath: sourceRootPath })
-    ).rejects.toThrow('附件必须是文件')
+  it('accepts source directories as path-only attachments', async () => {
+    const attachment = await service.createSourceAttachmentFromPath({ sourcePath: sourceRootPath })
+
+    expect(attachment.path).toBe(sourceRootPath)
+    expect(attachment.name).toBe(path.basename(sourceRootPath))
+    expect(attachment.kind).toBe('directory')
+    expect(attachment.size).toBeUndefined()
+    expect(attachment.mimeType).toBeUndefined()
+    await expect(fs.stat(getPartnerAssetBucketDir(partnerId, 'bucket-1'))).rejects.toThrow()
+  })
+
+  it('rejects empty source paths instead of resolving the current working directory', async () => {
+    await expect(service.createSourceAttachmentFromPath({ sourcePath: '  ' })).rejects.toThrow(
+      '附件路径不存在'
+    )
   })
 
   it('saves attachments under partner runtime and creates the scripts directory', async () => {

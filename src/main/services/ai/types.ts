@@ -30,6 +30,7 @@ import type {
   AiRunStatus,
   AiFileChangeRecord,
   ChatAttachment,
+  ChatMessageContentNode,
   BrainContextBudgetSnapshot,
   ChatMessageLogEntry,
   ChatMessageLogRecord,
@@ -70,6 +71,7 @@ export type AiRunStartPayload = {
   input: string
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
+  contentNodes?: ChatMessageContentNode[]
   mainModel?: WorkbenchSelectedModel
   preference?: AiPreference
   executionPermission?: AiExecutionPermission
@@ -343,6 +345,7 @@ export type AiRunContext = {
   platform: AiRuntimePlatform
   preference: AiPreference
   executionPermission: AiExecutionPermission
+  contentNodes?: ChatMessageContentNode[]
   referenceScope: AiReferenceScope
   humanRuntimeOverrides?: {
     graphRecursionLimit?: number

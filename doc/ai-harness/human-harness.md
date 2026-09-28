@@ -89,8 +89,8 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 - 普通 `running` run 可在 `ai_run.pending_messages_json` 保存多条待处理消息。交互处于审批或提问等待时，Workbench 展示交互卡并移除普通 Composer，Main 同时拒绝追加。
 - Main 在追加消息校验开始前同步登记一次待处理提交。`context_budget` 和 Brain 入口都等待这些提交结束，再检查 `pending_messages_json`；若校验成功且消息已入队，graph 以 `yielded` 结束当前调用。Brain 入口复查用于覆盖 `context_budget` 已通过、Brain 尚未开始的调度间隙；校验失败则原 run 继续。
 - 交接只会在前序工具结果已写入 transcript 且 dispatch 队列清空后发生，因此下一次 brain 不会越过尚未记录的工具结果。Brain 已开始后才到达的追加请求由下一处 `context_budget` 边界处理。
-- 若最终回答已经开始，human graph 正常完成原交付；Main 在 `run_completed` 事件后创建一次续接 run。批次内的 user 按 FIFO 进入 transcript，每条消息保留原始输入、参考资料和附件；最后一条消息决定续接模型、偏好与执行权限。
-- 安全交接时较早的追加消息以 `context_only` run 和 user log 落库，最后一条由续接 run 写入。运行正常结束时自动启动续接；停止、失败和应用重启恢复时只把待处理消息转成普通 user log，不自动调用模型。
+- 若最终回答已经开始，human graph 正常完成原交付；Main 在 `run_completed` 事件后创建一次续接 run。批次内的 user 按 FIFO 进入 transcript，每条消息保留原始输入、参考资料、附件和结构化 `contentNodes`；最后一条消息决定续接模型、偏好与执行权限。
+- 安全交接时较早的追加消息以 `context_only` run 和 user log 落库，最后一条由续接 run 写入。运行正常结束时自动启动续接；停止、失败和应用重启恢复时只把待处理消息转成普通 user log，不自动调用模型。结构化 `contentNodes` 随每条 user log 一起保存并参与 UI 投影。
 - 停止若发生在工具调用中途，已落库结果保持原样。`repairInterruptedToolCalls` 只在模型上下文投影中为没有结果的悬空调用补充合成 ToolMessage（“The run was interrupted before this tool call could be executed.”）；不会写成真实工具失败记录。
 
 ---
@@ -150,6 +150,8 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 **`user`** — `content` 是发给模型的 build 全文；`input` 是人打的字。只表示人说的那次。气泡文案用 `ai_run.input`，不读 `content`。
 
+`context` 保存当次 `selectedReferences`、`attachments` 和可选的 `contentNodes`，供 Workbench 消息投影还原结构化正文；它们位于既有 `entry_json` 中，不新增 SQLite 列。
+
 ```json
 {
   "kind": "user",
@@ -165,7 +167,20 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
         "kbDocumentIds": ["doc-abc"]
       }
     ],
-    "attachments": []
+    "attachments": [],
+    "contentNodes": [
+      { "kind": "text", "text": "按模板写本周周报，不要封面页。" },
+      {
+        "kind": "reference",
+        "reference": {
+          "kind": "file",
+          "name": "周报模板.docx",
+          "absolutePath": "/Users/me/workspace/周报模板.docx",
+          "kbAvailability": "indexed",
+          "kbDocumentIds": ["doc-abc"]
+        }
+      }
+    ]
   }
 }
 ```

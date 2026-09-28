@@ -38,6 +38,7 @@ import type {
   AiRunEvent,
   AiRunRecord,
   ChatMessage,
+  ChatMessageContentNode,
   PartnerClearContextResponse,
   PartnerOpenRequest,
   PartnerOpenResponse,
@@ -87,6 +88,7 @@ type ActiveQuestion = {
 
 type ActiveRun = {
   run: AiRunRecord
+  contentNodes?: ChatMessageContentNode[]
   cancelled: boolean
   finalizing: boolean
   deleted: boolean
@@ -596,7 +598,8 @@ export class ChatRunService {
             input: message.input,
             context: {
               selectedReferences: message.selectedReferences,
-              attachments: message.attachments
+              attachments: message.attachments,
+              contentNodes: message.contentNodes
             }
           }
         ]
@@ -642,6 +645,7 @@ export class ChatRunService {
     }
     const child: ActiveRun = {
       run: continuationRun,
+      contentNodes: latest.contentNodes,
       cancelled: false,
       finalizing: false,
       deleted: false,
@@ -936,6 +940,7 @@ export class ChatRunService {
 
     const activeRun: ActiveRun = {
       run,
+      contentNodes: payload.contentNodes,
       cancelled: false,
       finalizing: false,
       deleted: false,
@@ -1000,6 +1005,7 @@ export class ChatRunService {
           input: run.input,
           selectedReferences: run.selectedReferences,
           attachments: run.attachments,
+          contentNodes: entry.contentNodes,
           mainModel: run.mainModel,
           preference: run.preference,
           executionPermission: run.executionPermission,

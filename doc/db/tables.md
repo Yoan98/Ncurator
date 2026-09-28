@@ -97,7 +97,7 @@ Workbench 单例 UI。
 | `partner_id` | TEXT | 伙伴 id，级联删除 |
 | `run_id` | TEXT | 所属 run |
 | `seq` | INTEGER | 伙伴内顺序 |
-| `entry_json` | TEXT | 消息条目 |
+| `entry_json` | TEXT | 消息条目；user context 保存引用、附件和可选的结构化 `contentNodes` |
 | `created_at` | INTEGER | 创建时间 |
 
 ### `ai_run`

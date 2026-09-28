@@ -4,6 +4,7 @@ import {
   HiCheck,
   HiOutlineClipboardDocument,
   HiOutlineClock,
+  HiOutlineFolder,
   HiOutlinePencilSquare,
   HiOutlineQuestionMarkCircle,
   HiPhoto,
@@ -91,6 +92,7 @@ import ScheduledTaskCountChip from '../components/scheduledTasks/ScheduledTaskCo
 import MessageActionCapsule from '../components/workbench/MessageActionCapsule'
 import ImageLightbox from '../components/workbench/ImageLightbox'
 import AttachmentFileIcon from '../components/workbench/composer/AttachmentFileIcon'
+import type { DroppedAttachmentItem } from '../components/workbench/WorkbenchComposer'
 import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
 import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
 import type { ComposerDraftValue } from '../components/workbench/composer/types'
@@ -212,16 +214,25 @@ const WORKBENCH_POSITIONED_PANE_STYLE = {
 } as React.CSSProperties
 
 type FileSystemDragItem = DataTransferItem & {
-  webkitGetAsEntry?: () => { isFile: boolean } | null
+  webkitGetAsEntry?: () => { name: string; isFile: boolean; isDirectory: boolean } | null
 }
 
-const getDroppedFiles = (transfer: DataTransfer): File[] =>
-  Array.from(transfer.items).flatMap((item) => {
+const getDroppedFiles = (transfer: DataTransfer): DroppedAttachmentItem[] => {
+  const remainingFiles = Array.from(transfer.files)
+  return Array.from(transfer.items).flatMap((item) => {
     const entry = (item as FileSystemDragItem).webkitGetAsEntry?.()
-    if (entry && !entry.isFile) return []
-    const file = item.getAsFile()
-    return file ? [file] : []
+    let file = item.getAsFile()
+    if (file) {
+      const fileIndex = remainingFiles.findIndex((candidate) => candidate.name === file?.name)
+      if (fileIndex >= 0) remainingFiles.splice(fileIndex, 1)
+    } else {
+      const fileIndex = remainingFiles.findIndex((candidate) => candidate.name === entry?.name)
+      if (fileIndex >= 0) file = remainingFiles.splice(fileIndex, 1)[0]
+    }
+    if (!file) return []
+    return [{ file, kind: entry?.isDirectory ? 'directory' : 'file' }]
   })
+}
 
 const detectRendererPlatform = (): string =>
   navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin'
@@ -1023,7 +1034,7 @@ const ChatPage: React.FC = () => {
   const composerExecutionPermissionRef = useRef<WorkbenchExecutionPermission>(
     composerExecutionPermission
   )
-  const composerFileDropHandlerRef = useRef<((files: File[]) => void) | null>(null)
+  const composerFileDropHandlerRef = useRef<((items: DroppedAttachmentItem[]) => void) | null>(null)
   const attachmentDragDepthRef = useRef(0)
   const [isAttachmentDropActive, setIsAttachmentDropActive] = useState(false)
   const modelSelectionRef = useRef<WorkbenchModelSelection>(modelSelection)
@@ -4331,55 +4342,88 @@ const ChatPage: React.FC = () => {
         <div className="group/user-message flex justify-end">
           <div className="flex w-full min-w-0 flex-col items-end">
             {messageItem.attachments && messageItem.attachments.length > 0 ? (
-              <div className="mb-2 w-full max-w-full pt-1">
-                <div className="flex max-w-full flex-nowrap justify-end gap-2 overflow-x-auto overflow-y-hidden pb-1">
-                  {messageItem.attachments.map((attachment) => (
-                    <button
-                      key={attachment.id}
-                      type="button"
-                      className={`h-[54px] shrink-0 rounded-[8px] border border-[#E5E4E0] bg-white text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3] ${
-                        attachment.kind === 'image'
-                          ? 'w-[54px] overflow-hidden p-0'
-                          : 'flex w-[220px] items-center gap-2 px-2 py-1.5'
-                      }`}
-                      title={attachment.name}
-                      data-testid={`${workbenchSelectors.userMessageAttachmentPrefix}-${attachment.id}`}
-                      onClick={() => {
-                        if (attachment.kind === 'image') {
-                          const src = messageAttachmentPreviewUrls[attachment.id]
-                          if (src) setPreviewImage({ name: attachment.name, src })
-                          return
-                        }
-                        void window.api.openPath(attachment.path)
-                      }}
-                    >
-                      {attachment.kind === 'image' ? (
-                        messageAttachmentPreviewUrls[attachment.id] ? (
-                          <img
-                            src={messageAttachmentPreviewUrls[attachment.id]}
-                            alt={attachment.name}
-                            className="h-full w-full object-cover"
-                          />
+              <div className="mb-2 w-full min-w-0 max-w-full pt-1">
+                <div
+                  className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden pb-1"
+                  onWheel={(event) => {
+                    const element = event.currentTarget
+                    const maxScrollLeft = element.scrollWidth - element.clientWidth
+                    if (maxScrollLeft <= 0) return
+                    const delta =
+                      Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
+                    if (!delta) return
+                    const nextScrollLeft = Math.max(
+                      0,
+                      Math.min(maxScrollLeft, element.scrollLeft + delta)
+                    )
+                    if (nextScrollLeft === element.scrollLeft) return
+                    event.preventDefault()
+                    element.scrollLeft = nextScrollLeft
+                  }}
+                >
+                  <div className="flex w-max min-w-full flex-nowrap justify-end gap-2">
+                    {messageItem.attachments.map((attachment) => (
+                      <button
+                        key={attachment.id}
+                        type="button"
+                        className={`h-[54px] shrink-0 rounded-[8px] border border-[#E5E4E0] bg-white text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3] ${
+                          attachment.kind === 'image'
+                            ? 'w-[54px] overflow-hidden p-0'
+                            : 'flex w-[220px] items-center gap-2 px-2 py-1.5'
+                        }`}
+                        title={attachment.name}
+                        data-testid={`${workbenchSelectors.userMessageAttachmentPrefix}-${attachment.id}`}
+                        onClick={() => {
+                          if (attachment.kind === 'image') {
+                            const src = messageAttachmentPreviewUrls[attachment.id]
+                            if (src) setPreviewImage({ name: attachment.name, src })
+                            return
+                          }
+                          void window.api.openPath(attachment.path)
+                        }}
+                      >
+                        {attachment.kind === 'image' ? (
+                          messageAttachmentPreviewUrls[attachment.id] ? (
+                            <img
+                              src={messageAttachmentPreviewUrls[attachment.id]}
+                              alt={attachment.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center bg-[#F4F4F2] text-[#787774]">
+                              <HiPhoto className="h-5 w-5" />
+                            </span>
+                          )
+                        ) : attachment.kind === 'directory' ? (
+                          <>
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#F4F4F2] text-[#787774]">
+                              <HiOutlineFolder className="h-5 w-5" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
+                                {attachment.name}
+                              </span>
+                              <span className="block text-[12px] font-medium leading-4 text-[#787774]">
+                                文件夹
+                              </span>
+                            </span>
+                          </>
                         ) : (
-                          <span className="flex h-full w-full items-center justify-center bg-[#F4F4F2] text-[#787774]">
-                            <HiPhoto className="h-5 w-5" />
-                          </span>
-                        )
-                      ) : (
-                        <>
-                          <AttachmentFileIcon fileName={attachment.name} />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
-                              {attachment.name}
+                          <>
+                            <AttachmentFileIcon fileName={attachment.name} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
+                                {attachment.name}
+                              </span>
+                              <span className="block text-[12px] font-medium leading-4 text-[#787774]">
+                                {getAttachmentTypeLabel(attachment.name)}
+                              </span>
                             </span>
-                            <span className="block text-[12px] font-medium leading-4 text-[#787774]">
-                              {getAttachmentTypeLabel(attachment.name)}
-                            </span>
-                          </span>
-                        </>
-                      )}
-                    </button>
-                  ))}
+                          </>
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -5135,7 +5179,7 @@ const ChatPage: React.FC = () => {
                       data-testid={workbenchSelectors.attachmentDropOverlay}
                     >
                       <div className="border border-dashed border-[#7B96A8] bg-white/85 px-5 py-3 text-sm font-medium text-[#37586E] shadow-sm">
-                        松开以添加文件
+                        松开以添加文件或文件夹
                       </div>
                     </div>
                   ) : null}

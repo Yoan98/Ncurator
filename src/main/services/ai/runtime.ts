@@ -106,6 +106,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     platform,
     preference,
     executionPermission,
+    contentNodes: payload.contentNodes,
     humanRuntimeOverrides: deps.humanRuntimeOverrides,
     referenceScope: buildReferenceScope({
       selectedReferences: normalizedReferences,

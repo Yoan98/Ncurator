@@ -4,9 +4,11 @@ import {
   computeNextRunAt
 } from '../../../src/main/services/scheduler/ScheduledTaskService'
 import type {
+  ChatMessageContentNode,
   ChatSubmitResponse,
   Partner,
   PartnerUiStateV1,
+  SelectedReference,
   ScheduledTask
 } from '../../../src/shared/types'
 
@@ -166,14 +168,31 @@ describe('ScheduledTaskService', () => {
 
   it('reads the latest partner composer settings when running', async () => {
     const { service, taskStore, submitTask, getPartnerUiState } = createService()
-    taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
+    const reference: SelectedReference = {
+      kind: 'file',
+      name: 'brief.docx',
+      absolutePath: '/tmp/brief.docx'
+    }
+    const contentNodes: ChatMessageContentNode[] = [
+      { kind: 'text', text: '总结资料' },
+      { kind: 'reference', reference }
+    ]
+    taskStore.set(
+      makeTask({
+        nextRunAt: NOW - 1,
+        contentNodes,
+        selectedReferences: [reference]
+      })
+    )
     await service.runDue()
     expect(getPartnerUiState).toHaveBeenCalledWith('partner-1')
     expect(submitTask).toHaveBeenCalledWith(
       expect.objectContaining({
         mainModel: uiState.composer.modelSelection.mainModel,
         preference: 'local_sources_strict',
-        executionPermission: 'full_access'
+        executionPermission: 'full_access',
+        contentNodes,
+        selectedReferences: [reference]
       })
     )
   })

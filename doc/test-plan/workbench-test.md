@@ -21,7 +21,7 @@
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；必须在无进程级远程调试口下完成。同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 验证 type=fetch 读取网页正文后再回答。两类 case 均不得因 `web_search` 自动展开右侧搜索列表（该列表面板已不存在），对齐 `WB-CORE-007-AC4`。Composer 搜索模式与右侧搜索列表面板已删除，废弃 `WB-COMPOSER-004`、`WB-PANEL-002`。
-- Workbench 附件链路不限文件扩展名，任何可被文件选择器选中的普通文件都可以添加，不因扩展名拒绝；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
+- Workbench 附件链路不限制文件扩展名、大小、数量或目录大小；`+` 可选择文件或目录，拖放接受文件与目录并保留源绝对路径，目录不递归扫描；粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
 - Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 测试承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧（`WB-EXCEL-001` / `WB-EXCEL-002`）覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（`WB-EXCEL-002-AC3` 记录/baseline **只在 ai-test 硬断言**）；Workbench e2e 覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9` 用户闭环（UI 可见单入口，不重复硬断言 AC3）。
 - DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示统一的 `nodeId`、visual kind、`imagePath` 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。图片理解统一由 `agent-control` 内置的 `read_image` 把图片加入主模型请求。
 - Workbench 历史只展示白名单内的必要 DOCX 字段，不展示 worker、identity 或 replay 内部状态。DOCX 事件以 `nodeId` 定位，PPT 继续使用自己的 `location`，两套协议互不复用。
@@ -248,10 +248,10 @@ pnpm test:update:e2e
 #### `composer-attachments-context`
 
 - 测试类型：`e2e / live`
-- What：`+`、粘贴与拖入中间聊天区添加附件时，图片只以路径和元数据进入伙伴消息记录，常规文档和非白名单扩展名也能加入，并保持图片预览、文件打开、删除、普通文本粘贴和大文件提示行为。粘贴保存到伙伴 runtime assets。
+- What：`+` 文件/文件夹选择、真实源路径文件拖放、粘贴添加附件时，附件只以路径进入伙伴消息记录，常规文档和非白名单扩展名可加入，并保持图片预览、文件/目录打开、删除、普通文本粘贴行为。粘贴保存到伙伴 runtime assets；发送后多附件横向滚动可到达首尾。
 - Why：`+` 与拖放必须把源文件路径交给 AI，粘贴仍需保存副本，测试必须守住这两条不同链路。
-- How：创建伙伴；需要文件资料时通过设置页添加文件地址；通过系统文件窗口选择图片和多种文件，覆盖拖入、删除后重新添加图片、大文件 warning，并通过真实模型发送一次带附件消息；发送后读取 `ai_run` 与 log 投影消息。
-- Oracle：文件拖入中间聊天区时显示覆盖层，放下后消失；无伙伴时不添加附件；`+` 选择的文件保留原始源路径；粘贴文件落到 `userData/partners/{id}/runtime/assets/`；图片预览和删除正常；发送后图片附件仍是路径，持久消息不含 Base64，对齐 `WB-COMPOSER-010`、`WB-COMPOSER-013-AC2`、`WB-COMPOSER-013-AC3`；运行时缓存、HTTP(S) 原地址和失效占位由 AI tool 契约覆盖，对齐 `WB-COMPOSER-013-AC4`。免费且无 vision 模型在有效图片历史下的发送拦截由 unit `message-log-vision-context` 与 Composer 前置条件覆盖，对齐 `WB-COMPOSER-013-AC5`。
+- How：创建伙伴；需要文件资料时通过设置页添加文件地址；通过系统文件窗口分别选择文件与文件夹，并用真实本地文件拖放验证源路径进入草稿；覆盖多个附件、目录打开与移除、图片预览，并通过真实模型发送一次多附件消息；发送后读取 `ai_run` 与 log 投影消息，检查附件横向滚动首尾。Playwright 的合成拖放无法忠实构造操作系统目录拖入项，因此目录原生拖放需在桌面手工验收。
+- Oracle：文件/目录拖入中间聊天区时显示“松开以添加文件或文件夹”覆盖层，放下后消失；无伙伴时不添加附件；`+` 选择和拖放的文件、目录均保留原始绝对路径，目录附件显示文件夹图标、副标签并可打开/移除；粘贴文件落到 `userData/partners/{id}/runtime/assets/`；图片预览和删除正常；发送后附件仍为路径，持久消息不含 Base64；附件区溢出后首尾均可通过横向滚动访问且边界滚动不阻断消息纵向滚动，对齐 `WB-COMPOSER-010`、`WB-COMPOSER-013-AC2`、`WB-COMPOSER-013-AC3`；运行时缓存、HTTP(S) 原地址和失效占位由 AI tool 契约覆盖，对齐 `WB-COMPOSER-013-AC4`。免费且无 vision 模型在有效图片历史下的发送拦截由 unit `message-log-vision-context` 与 Composer 前置条件覆盖，对齐 `WB-COMPOSER-013-AC5`。
 
 #### `reference-mention-keyboard`
 
@@ -636,26 +636,26 @@ pnpm test:update:e2e
 #### `scheduled-task-config-lifecycle`
 
 - 测试类型：`e2e`
-- What：新增、必填拦截、编辑、启用开关、立即执行确认与删除完整闭环；伙伴位于第一项且必选，候选项与选中结果展示名称和动态形象；任务描述支持 `@`；新建保存后默认开启；编辑保存不改变启用状态。
+- What：新增、必填拦截、编辑、启用开关、立即执行确认与删除完整闭环；右侧抽屉开合、字段顺序和未保存关闭确认正确；伙伴位于第一项且必选，直接列表展示名称和动态形象并在超高时内部滚动；任务描述支持即时渲染 Markdown 与 `@`；新建保存后默认开启；编辑保存不改变启用状态。
 - Why：配置是定时任务可执行的前提；立即执行是占用兜底的入口。
-- How：通过真实 UI 打开视图新增任务，展开伙伴选择器并检查候选项形象，选择后检查选中结果的形象与动画，再填写名称、任务描述、执行时间和周期；保存后确认任务已绑定且处于开启状态；编辑并重新绑定伙伴，确认启用状态不变；点立即执行弹出确认后取消；删除并二次确认。
-- Oracle：新增与编辑预填对齐 `ST-FORM-001-AC1`；必填缺失拦截对齐 `ST-FORM-001-AC2`；每周必选星期对齐 `ST-FORM-001-AC3`；真实伙伴绑定对齐 `ST-FORM-001-AC6`；伙伴候选项和选中结果展示名称、形象与自然动画对齐 `ST-FORM-001-AC9`；编辑保存不改启用对齐 `ST-FORM-001-AC7` / `ST-SWITCH-001-AC3`；新建默认开启对齐 `ST-SWITCH-001-AC1`；删除二次确认对齐 `ST-DELETE-001-AC1/AC2`；列表展示对齐 `ST-LIST-001-AC2/AC4`；启用后数量 chip 对齐 `ST-ENTRY-001-AC3` / `ST-VIEW-001-AC4`；立即执行确认对齐 `ST-RUN-004-AC1`。
+- How：通过真实 UI 打开视图新增任务，检查半屏 Drawer、字段顺序、固定 footer 和遮罩不关闭；修改表单后按 Esc，检查关闭确认的取消与确认；滚动伙伴列表、选中伙伴，再填写名称、Markdown 任务描述、执行时间和周期；保存后确认任务已绑定且处于开启状态；编辑并重新绑定伙伴，确认启用状态不变；点立即执行弹出确认后取消；删除并二次确认。
+- Oracle：新增与编辑预填对齐 `ST-FORM-001-AC1`；必填缺失拦截对齐 `ST-FORM-001-AC2`；每周必选星期对齐 `ST-FORM-001-AC3`；Drawer 尺寸、字段、滚动、footer 与关闭确认对齐 `ST-FORM-001-AC4`、`ST-FORM-001-AC10`；真实伙伴绑定对齐 `ST-FORM-001-AC6`；伙伴列表的动态形象、截断、选中态、最大高度和内部滚动对齐 `ST-FORM-001-AC9`；编辑保存不改启用对齐 `ST-FORM-001-AC7` / `ST-SWITCH-001-AC3`；新建默认开启对齐 `ST-SWITCH-001-AC1`；删除二次确认对齐 `ST-DELETE-001-AC1/AC2`；列表展示对齐 `ST-LIST-001-AC2/AC4`；启用后数量 chip 对齐 `ST-ENTRY-001-AC3` / `ST-VIEW-001-AC4`；立即执行确认对齐 `ST-RUN-004-AC1`。
 
 #### `scheduled-task-description-reference`
 
 - 测试类型：`e2e`
 - What：在定时任务描述编辑器中输入文本并通过 `@` 选择真实文件，保存后立即执行。
-- Why：定时任务描述与聊天 Composer 共用引用序列化，必须验证引用没有只停留在界面状态。
+- Why：定时任务描述使用受控 Markdown 编辑器，必须验证正文、引用选择和执行消息保持一致，而不只停留在界面状态。
 - How：通过真实 UI 在 `任务描述` 编辑器选择 `sample-edit.docx`，从 IPC 读取任务的 `contentNodes` / `selectedReferences`，再立即执行并读取绑定伙伴的用户消息。
-- Oracle：编辑器显示引用 token；任务保存后同时包含文本节点、引用节点和 `selectedReferences`；触发消息保留同一引用，对齐 `ST-FORM-001-AC4`、`ST-RUN-001-AC1`。
+- Oracle：编辑器即时渲染 Markdown 并展示可移除的引用资料条；任务保存后同时包含 Markdown 原文、引用节点和 `selectedReferences`；触发消息保留同一引用，对齐 `ST-FORM-001-AC8`、`ST-FORM-001-AC11`、`ST-RUN-001-AC1`。
 
 #### `scheduled-task-ai-create`
 
 - 测试类型：`e2e`
 - What：从定时任务视图进入 AI 创建，选择伙伴后切换到该伙伴聊天并预填任务设置引导语。
 - Why：AI 创建只负责准备当前伙伴的对话草稿，不应创建任务、发送消息或启动运行。
-- How：通过真实 UI 打开 AI 创建，检查伙伴候选项和选中结果中的动态形象，选择伙伴并确认；读取当前聊天草稿、伙伴选中状态和消息记录，切换伙伴后再切回确认草稿仍然存在。
-- Oracle：AI 创建复用显示名称、形象与自然动画的伙伴选择器，对齐 `ST-FORM-001-AC9`；切换到所选伙伴；草稿等于任务设置引导语；没有用户消息和运行状态变化，对齐 `ST-FORM-001-AC5`。
+- How：通过真实 UI 打开 AI 创建，检查直接展示的伙伴列表、滚动与选中态，选择伙伴并确认；读取当前聊天草稿、伙伴选中状态和消息记录，切换伙伴后再切回确认草稿仍然存在。
+- Oracle：AI 创建使用显示名称、动态形象、截断和滚动列表，对齐 `ST-FORM-001-AC9`；切换到所选伙伴；草稿等于任务设置引导语；没有用户消息和运行状态变化，对齐 `ST-FORM-001-AC5`。
 
 #### `scheduled-task-partner-deletion`
 

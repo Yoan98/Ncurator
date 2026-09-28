@@ -98,16 +98,20 @@ const resolveUniqueTargetPath = async (dirPath: string, name: string): Promise<s
 export class AttachmentService {
   public createAttachmentFromPath(input: {
     filePath: string
-    kind?: ChatAttachment['kind']
+    kind?: Exclude<ChatAttachment['kind'], 'directory'>
     mimeType?: string
     displayName?: string
   }): ChatAttachment {
     const resolved = path.resolve(String(input.filePath || '').trim())
-    const mimeType = inferMimeType(resolved, input.mimeType)
-    const size = fs.existsSync(resolved) ? fs.statSync(resolved).size : undefined
+    const stats = fs.existsSync(resolved) ? fs.statSync(resolved) : null
+    const isDirectory = Boolean(stats?.isDirectory())
+    const mimeType = isDirectory ? undefined : inferMimeType(resolved, input.mimeType)
+    const size = stats && !isDirectory ? stats.size : undefined
     return {
       id: uuidv4(),
-      kind: input.kind || resolveAttachmentKind({ filePath: resolved, mimeType }),
+      kind: isDirectory
+        ? 'directory'
+        : input.kind || resolveAttachmentKind({ filePath: resolved, mimeType }),
       name: String(input.displayName || path.basename(resolved)).trim() || path.basename(resolved),
       path: resolved,
       mimeType,
@@ -118,18 +122,16 @@ export class AttachmentService {
 
   public async createSourceAttachmentFromPath(input: {
     sourcePath: string
-    kind?: ChatAttachment['kind']
     mimeType?: string
   }): Promise<ChatAttachment> {
-    const sourcePath = path.resolve(String(input.sourcePath || '').trim())
-    if (!sourcePath || !fs.existsSync(sourcePath)) {
-      throw new Error('附件文件不存在')
-    }
+    const rawSourcePath = String(input.sourcePath || '').trim()
+    if (!rawSourcePath) throw new Error('附件路径不存在')
+    const sourcePath = path.resolve(rawSourcePath)
+    if (!fs.existsSync(sourcePath)) throw new Error('附件路径不存在')
     const stats = await fs.promises.stat(sourcePath)
-    if (!stats.isFile()) throw new Error('附件必须是文件')
+    if (!stats.isFile() && !stats.isDirectory()) throw new Error('附件必须是文件或目录')
     return this.createAttachmentFromPath({
       filePath: sourcePath,
-      kind: input.kind,
       mimeType: input.mimeType
     })
   }
@@ -140,7 +142,7 @@ export class AttachmentService {
     name: string
     bytes: Uint8Array
     mimeType?: string
-    kind?: ChatAttachment['kind']
+    kind?: Exclude<ChatAttachment['kind'], 'directory'>
   }): Promise<ChatAttachment> {
     if (!input.bytes.byteLength) {
       throw new Error('附件内容为空')

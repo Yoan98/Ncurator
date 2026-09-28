@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
@@ -12,10 +12,10 @@ import {
   getWorkbenchPrefixLocator,
   pasteWorkbenchText,
   selectWorkbenchAttachmentThroughNativeDialog,
+  selectWorkbenchDirectoryThroughNativeDialog,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
   waitForWorkbenchAiRunCompletion,
-  waitForAntMessageText,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
@@ -37,6 +37,8 @@ const createAttachmentFixtures = async (): Promise<{
   xltmPath: string
   zipPath: string
   largePath: string
+  folderPath: string
+  droppedFilePath: string
   cleanup: () => Promise<void>
 }> => {
   const createdRootPath = await mkdtemp(path.join(os.tmpdir(), 'ncurator-composer-attachments-'))
@@ -51,10 +53,13 @@ const createAttachmentFixtures = async (): Promise<{
   const xltmPath = path.join(rootPath, 'macro-template-reference.xltm')
   const zipPath = path.join(rootPath, 'unknown-bundle.zip')
   const largePath = path.join(rootPath, 'qa-large.json')
+  const folderPath = path.join(rootPath, 'reference-folder')
+  const droppedFilePath = path.join(rootPath, 'dropped-context.md')
   const workbook = new ExcelJS.Workbook()
   workbook.addWorksheet('Data').getCell('A1').value = 'attachment fixture'
   const workbookBytes = Buffer.from(await workbook.xlsx.writeBuffer())
   await Promise.all([
+    mkdir(folderPath),
     writeFile(imagePath, ONE_PIXEL_PNG),
     writeFile(markdownPath, '# Preview\n\nAttachment markdown body.'),
     writeFile(legacyDocPath, 'legacy doc attachment fixture'),
@@ -64,7 +69,8 @@ const createAttachmentFixtures = async (): Promise<{
     writeFile(xltxPath, workbookBytes),
     writeFile(xltmPath, workbookBytes),
     writeFile(zipPath, 'unknown extension attachment fixture'),
-    writeFile(largePath, Buffer.alloc(11 * 1024 * 1024, 65))
+    writeFile(largePath, Buffer.alloc(11 * 1024 * 1024, 65)),
+    writeFile(droppedFilePath, '# Dropped path attachment')
   ])
   return {
     rootPath,
@@ -78,6 +84,8 @@ const createAttachmentFixtures = async (): Promise<{
     xltmPath,
     zipPath,
     largePath,
+    folderPath,
+    droppedFilePath,
     cleanup: async () => {
       await rm(rootPath, { recursive: true, force: true })
     }
@@ -114,8 +122,7 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['composer'],
-        description:
-          '对齐附件上下文 PRD：验证统一附件选择、任意扩展名放行（含非白名单 zip）、图片预览、文件默认打开、删除、普通文本粘贴和大文件提示。',
+        description: '验证文件与文件夹作为路径附件、无文件大小限制、附件卡片操作和发送后横向滚动。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'exclusive',
@@ -155,55 +162,90 @@ describe('workbench conversation e2e', () => {
           }
           await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.zipPath)
           await waitForAttachmentCardByName(page, 'unknown-bundle.zip')
-          const droppedFileData = (await readFile(attachments.markdownPath)).toString('base64')
-          await page.evaluate(
-            ({ targetTestId, fileData }) => {
-              const target = document.querySelector<HTMLElement>(
-                `[data-testid="${targetTestId}"]`
-              )
-              if (!target) throw new Error('attachment drop target unavailable')
-              const bytes = Uint8Array.from(atob(fileData), (character) => character.charCodeAt(0))
-              const file = new File([bytes], 'dropped-context.md', { type: 'text/markdown' })
-              const transfer = new DataTransfer()
-              transfer.items.add(file)
-              target.dispatchEvent(
-                new DragEvent('dragenter', {
-                  bubbles: true,
-                  cancelable: true,
-                  dataTransfer: transfer
-                })
-              )
-            },
-            { targetTestId: workbenchSelectors.attachmentDropTarget, fileData: droppedFileData }
+          await selectWorkbenchDirectoryThroughNativeDialog(page, attachments.folderPath)
+          await waitForAttachmentCardByName(page, 'reference-folder')
+          const folderCard = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.attachmentCardPrefix
           )
+            .filter({ hasText: 'reference-folder' })
+            .first()
+          const folderCardText = (await folderCard.textContent()) || ''
+          await folderCard.hover()
+          await folderCard
+            .locator(`[data-testid^="${workbenchSelectors.attachmentRemoveButtonPrefix}-"]`)
+            .click()
+          const folderRemoved =
+            (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+              .filter({ hasText: 'reference-folder' })
+              .count()) === 0
+          await selectWorkbenchDirectoryThroughNativeDialog(page, attachments.folderPath)
+          await waitForAttachmentCardByName(page, 'reference-folder')
+          const reopenedFolderCard = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.attachmentCardPrefix
+          )
+            .filter({ hasText: 'reference-folder' })
+            .first()
+          const openPathCountBeforeFolderClick = (
+            await runtime.collectSignals()
+          ).ipcInvokeEntries.filter((entry) => entry.name === 'openPath').length
+          await reopenedFolderCard.click()
+          await page.evaluate(() => {
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.id = 'e2e-attachment-drag-source'
+            input.style.display = 'none'
+            document.body.append(input)
+          })
+          await page
+            .locator('#e2e-attachment-drag-source')
+            .setInputFiles(attachments.droppedFilePath)
+          const dispatchAttachmentDrag = async (eventType: 'dragenter' | 'drop'): Promise<void> => {
+            await page.evaluate(
+              ({ targetTestId, inputId, eventType }) => {
+                const target = document.querySelector<HTMLElement>(
+                  `[data-testid="${targetTestId}"]`
+                )
+                const input = document.querySelector<HTMLInputElement>(`#${inputId}`)
+                const file = input?.files?.item(0)
+                if (!target || !file) throw new Error('attachment drop source unavailable')
+                const transfer = new DataTransfer()
+                transfer.items.add(file)
+                target.dispatchEvent(
+                  new DragEvent(eventType, {
+                    bubbles: true,
+                    cancelable: true,
+                    dataTransfer: transfer
+                  })
+                )
+              },
+              {
+                targetTestId: workbenchSelectors.attachmentDropTarget,
+                inputId: 'e2e-attachment-drag-source',
+                eventType
+              }
+            )
+          }
+          await dispatchAttachmentDrag('dragenter')
           const attachmentDropOverlay = getWorkbenchLocator(
             page,
             workbenchSelectors.attachmentDropOverlay
           )
           await attachmentDropOverlay.waitFor({ state: 'visible' })
           const attachmentDropOverlayVisible = await attachmentDropOverlay.isVisible()
-          await page.evaluate(
-            ({ targetTestId, fileData }) => {
-              const target = document.querySelector<HTMLElement>(
-                `[data-testid="${targetTestId}"]`
-              )
-              if (!target) throw new Error('attachment drop target unavailable')
-              const bytes = Uint8Array.from(atob(fileData), (character) => character.charCodeAt(0))
-              const file = new File([bytes], 'dropped-context.md', { type: 'text/markdown' })
-              const transfer = new DataTransfer()
-              transfer.items.add(file)
-              target.dispatchEvent(
-                new DragEvent('drop', {
-                  bubbles: true,
-                  cancelable: true,
-                  dataTransfer: transfer
-                })
-              )
-            },
-            { targetTestId: workbenchSelectors.attachmentDropTarget, fileData: droppedFileData }
-          )
+          const attachmentDropOverlayText = (await attachmentDropOverlay.textContent()) || ''
+          await dispatchAttachmentDrag('drop')
           await attachmentDropOverlay.waitFor({ state: 'hidden' })
           const attachmentDropOverlayHidden = (await attachmentDropOverlay.count()) === 0
+          await waitForAttachmentCardByName(page, 'dropped-context.md')
+          const signalsAfterFolderOpen = await runtime.collectSignals()
+          const folderOpenPathCalls = signalsAfterFolderOpen.ipcInvokeEntries
+            .filter((entry) => entry.name === 'openPath')
+            .slice(openPathCountBeforeFolderClick)
+          const folderOpened = folderOpenPathCalls.some(
+            (entry) => entry.payload === attachments.folderPath
+          )
           const partnerCountAfterAttachments = await countPartners(page)
           const imageCard = getImageAttachmentCardByName(page, 'qa-image.png')
           await imageCard.first().waitFor({ state: 'visible' })
@@ -307,10 +349,7 @@ describe('workbench conversation e2e', () => {
               .textContent()) || ''
           await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.largePath)
           await waitForAttachmentCardByName(page, 'qa-large.json')
-          const largeFileMessage = await waitForAntMessageText(
-            page,
-            '文件过大，建议放到工作空间索引里使用'
-          )
+          const largeFileMessage = await getAntMessageText(page)
 
           await pastePlainText(page, 'plain paste ok')
           const inputText = (
@@ -318,7 +357,7 @@ describe('workbench conversation e2e', () => {
           ).trim()
           await runtime.captureScreenshot({
             name: 'attachment-final-state',
-            message: '文件附件、大文件提示和普通文本粘贴后的最终输入框状态。'
+            message: '文件与目录附件、大文件添加和普通文本粘贴后的最终输入框状态。'
           })
           await fileCard.click()
           await page.waitForTimeout(500)
@@ -343,6 +382,69 @@ describe('workbench conversation e2e', () => {
             .find((message) => message.role === 'user')
           const submittedAttachments = submittedUserMessage?.attachments || []
           const persistedMessagesJson = JSON.stringify(submittedMessages)
+          const messageAttachmentScroll = submittedUserMessage
+            ? await page
+                .locator(
+                  `[data-testid="${workbenchSelectors.userMessagePrefix}-${submittedUserMessage.id}"] [data-testid^="${workbenchSelectors.userMessageAttachmentPrefix}-"]`
+                )
+                .first()
+                .evaluate(async (firstCard) => {
+                  const scroller = firstCard.parentElement?.parentElement
+                  const lastCard = scroller?.firstElementChild?.lastElementChild
+                  if (!(scroller instanceof HTMLElement) || !(lastCard instanceof HTMLElement)) {
+                    return {
+                      overflows: false,
+                      wheelMoved: false,
+                      boundaryWheelNotPrevented: false,
+                      firstVisible: false,
+                      lastVisible: false
+                    }
+                  }
+                  const overflows = scroller.scrollWidth > scroller.clientWidth
+                  scroller.scrollLeft = 0
+                  scroller.dispatchEvent(
+                    new WheelEvent('wheel', {
+                      bubbles: true,
+                      cancelable: true,
+                      deltaY: 320
+                    })
+                  )
+                  const wheelMoved = scroller.scrollLeft > 0
+                  scroller.scrollLeft = scroller.scrollWidth
+                  const boundaryWheel = new WheelEvent('wheel', {
+                    bubbles: true,
+                    cancelable: true,
+                    deltaY: 320
+                  })
+                  scroller.dispatchEvent(boundaryWheel)
+                  const boundaryWheelNotPrevented = !boundaryWheel.defaultPrevented
+                  scroller.scrollLeft = 0
+                  const firstRect = firstCard.getBoundingClientRect()
+                  const scrollerRect = scroller.getBoundingClientRect()
+                  const firstVisible =
+                    firstRect.left >= scrollerRect.left - 1 && firstRect.left < scrollerRect.right
+                  scroller.scrollLeft = scroller.scrollWidth
+                  await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+                  const lastRect = lastCard.getBoundingClientRect()
+                  const finalScrollerRect = scroller.getBoundingClientRect()
+                  const lastVisible =
+                    lastRect.right <= finalScrollerRect.right + 1 &&
+                    lastRect.right > finalScrollerRect.left
+                  return {
+                    overflows,
+                    wheelMoved,
+                    boundaryWheelNotPrevented,
+                    firstVisible,
+                    lastVisible
+                  }
+                })
+            : {
+                overflows: false,
+                wheelMoved: false,
+                boundaryWheelNotPrevented: false,
+                firstVisible: false,
+                lastVisible: false
+              }
 
           const signals = await runtime.collectSignals()
           const openPathCalls = signals.ipcInvokeEntries.filter(
@@ -355,7 +457,10 @@ describe('workbench conversation e2e', () => {
             previewVisible,
             attachmentDropOverlayVisible,
             attachmentDropOverlayHidden,
+            attachmentDropOverlayText,
             imageRemoved,
+            folderRemoved,
+            folderOpened,
             downloadButtonVisible: Boolean(downloadButtonBox),
             closeButtonVisible: Boolean(closeButtonBox),
             zoomControlBelowImage: Boolean(
@@ -375,8 +480,11 @@ describe('workbench conversation e2e', () => {
             pptxCardText,
             spreadsheetCardTexts,
             zipCardText,
+            folderCardText,
+            submittedAttachmentKinds: submittedAttachments.map((attachment) => attachment.kind),
             submittedAttachmentNames: submittedAttachments.map((attachment) => attachment.name),
             submittedAttachmentPaths: submittedAttachments.map((attachment) => attachment.path),
+            messageAttachmentScroll,
             persistedMessagesContainBase64: persistedMessagesJson.includes(';base64,'),
             largeFileMessage,
             inputText,
@@ -419,28 +527,40 @@ describe('workbench conversation e2e', () => {
                 'template-reference.xltx',
                 'macro-template-reference.xltm',
                 'unknown-bundle.zip',
-                'qa-large.json'
+                'qa-large.json',
+                'reference-folder',
+                'dropped-context.md'
               ].every((name) => result.submittedAttachmentNames.includes(name)) &&
-              result.submittedAttachmentPaths.length === 10 &&
+              result.submittedAttachmentPaths.length === 12 &&
+              result.submittedAttachmentKinds.includes('directory') &&
+              result.folderCardText.includes('文件夹') &&
+              result.folderRemoved &&
+              result.folderOpened &&
+              result.attachmentDropOverlayText.includes('松开以添加文件或文件夹') &&
+              result.messageAttachmentScroll.overflows &&
+              result.messageAttachmentScroll.wheelMoved &&
+              result.messageAttachmentScroll.boundaryWheelNotPrevented &&
+              result.messageAttachmentScroll.firstVisible &&
+              result.messageAttachmentScroll.lastVisible &&
               result.submittedAttachmentPaths.every((attachmentPath) => {
                 const normalized = attachmentPath.replace(/\\/g, '/')
                 const isSourceFixture = normalized.includes('/ncurator-composer-attachments-')
-                const isPartnerRuntimeAsset =
-                  /\/partners\/[^/]+\/runtime\/assets\//u.test(normalized)
+                const isPartnerRuntimeAsset = /\/partners\/[^/]+\/runtime\/assets\//u.test(
+                  normalized
+                )
                 return (
-                  (isSourceFixture || isPartnerRuntimeAsset) &&
-                  !normalized.includes('/.ncurator/')
+                  (isSourceFixture || isPartnerRuntimeAsset) && !normalized.includes('/.ncurator/')
                 )
               }) &&
               !result.persistedMessagesContainBase64 &&
-              result.largeFileMessage.includes('文件过大，建议放到工作空间索引里使用') &&
+              !result.largeFileMessage.includes('文件过大') &&
               result.inputText.includes('plain paste ok') &&
               result.openPathCallCount >= 1 &&
               result.attachmentSaveFileCallCount === 0,
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：拖放覆盖层可用；+/拖放保留源绝对路径，粘贴才写入 userData/partners/{id}/runtime/assets；任意扩展名可添加并显示类型；不新建伙伴；图片可预览；超过 10MB 只提示；普通文本粘贴仍正常，对齐 WB-COMPOSER-010。',
+                '附件输入应支持任意扩展名、目录路径和真实文件路径拖放；目录不展开，超过 10MB 仍可添加；发送后附件条首尾卡片可通过横向滚动访问。',
               data: result
             }
           )

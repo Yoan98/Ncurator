@@ -1,6 +1,7 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App as AntdApp, Spin, Tooltip } from 'antd'
-import { HiArrowUp, HiPhoto, HiPlus, HiStop, HiXMark } from 'react-icons/hi2'
+import { App as AntdApp, Dropdown, Spin, Tooltip } from 'antd'
+import type { MenuProps } from 'antd'
+import { HiArrowUp, HiOutlineFolder, HiPhoto, HiPlus, HiStop, HiXMark } from 'react-icons/hi2'
 import type {
   ChatAttachment,
   LLMConfig,
@@ -47,6 +48,8 @@ type MentionContext = {
   query: string
 }
 
+export type DroppedAttachmentItem = { file: File; kind: 'file' | 'directory' }
+
 type WorkbenchComposerProps = {
   partnerName?: string | null
   aiPreference: WorkbenchAiPreference
@@ -76,12 +79,11 @@ type WorkbenchComposerProps = {
     partnerId: string
     assetBucketId: string
   } | null>
-  onFileDropHandlerReady?: (handler: ((files: File[]) => void) | null) => void
+  onFileDropHandlerReady?: (handler: ((items: DroppedAttachmentItem[]) => void) | null) => void
 }
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
-const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   partnerName,
@@ -566,19 +568,11 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const appendAttachments = useCallback(
     (nextItems: ChatAttachment[], assetBucketId?: string | null): void => {
       if (nextItems.length === 0) return
-      const accepted: ChatAttachment[] = []
-      nextItems.forEach((item) => {
-        if (item.kind === 'file' && Number(item.size || 0) > LARGE_FILE_WARNING_BYTES) {
-          message.warning('文件过大，建议放到工作空间索引里使用')
-        }
-        accepted.push(item)
-      })
-      if (accepted.length === 0) return
       const current = draftValueRef.current
       const nextDraft: ComposerDraftValue = {
         ...current,
         assetBucketId: assetBucketId || current.assetBucketId || null,
-        attachments: [...(current.attachments || []), ...accepted]
+        attachments: [...(current.attachments || []), ...nextItems]
       }
       draftValueRef.current = nextDraft
       setHasContent(
@@ -588,7 +582,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       )
       onDraftChange(nextDraft)
     },
-    [message, onDraftChange]
+    [onDraftChange]
   )
 
   const removeAttachment = useCallback(
@@ -606,8 +600,20 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       focusEditorAfterControlChange()
       return
     }
-    const response = await window.api.attachmentPick(target)
+    const response = await window.api.attachmentPick({ ...target, selectionType: 'file' })
     if (response.error) message.warning(normalizeUserFacingError(response.error, '选择附件失败'))
+    if (!response.canceled) appendAttachments(response.items, target.assetBucketId)
+    focusEditorAfterControlChange()
+  }, [appendAttachments, focusEditorAfterControlChange, message, requestAttachmentTarget])
+
+  const handlePickDirectory = useCallback(async (): Promise<void> => {
+    const target = await requestAttachmentTarget()
+    if (!target) {
+      focusEditorAfterControlChange()
+      return
+    }
+    const response = await window.api.attachmentPick({ ...target, selectionType: 'directory' })
+    if (response.error) message.warning(normalizeUserFacingError(response.error, '选择文件夹失败'))
     if (!response.canceled) appendAttachments(response.items, target.assetBucketId)
     focusEditorAfterControlChange()
   }, [appendAttachments, focusEditorAfterControlChange, message, requestAttachmentTarget])
@@ -637,7 +643,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   )
 
   const createDroppedAttachmentFromFile = useCallback(
-    async (file: File) => {
+    async ({ file }: DroppedAttachmentItem) => {
       const target = await requestAttachmentTarget()
       if (!target) return null
       const sourcePath = window.api.attachmentGetSourcePath(file)
@@ -647,8 +653,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       }
       const created = await window.api.attachmentCreateFromPath({
         sourcePath,
-        mimeType: file.type,
-        kind: file.type.startsWith('image/') ? 'image' : 'file'
+        mimeType: file.type
       })
       if (!created.success && created.error) message.warning(created.error)
       return created.attachment
@@ -658,12 +663,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     [message, requestAttachmentTarget]
   )
 
-  const handleAttachmentFiles = useCallback(
-    (files: File[], source: 'clipboard' | 'drop'): void => {
+  const handleClipboardFiles = useCallback(
+    (files: File[]): void => {
       if (files.length === 0) return
-      const createAttachment =
-        source === 'drop' ? createDroppedAttachmentFromFile : createClipboardAttachmentFromFile
-      void Promise.all(files.map(createAttachment)).then((items) => {
+      void Promise.all(files.map(createClipboardAttachmentFromFile)).then((items) => {
         const validItems = items.filter(
           (item): item is { attachment: ChatAttachment; assetBucketId: string } => Boolean(item)
         )
@@ -673,19 +676,35 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         )
       })
     },
-    [appendAttachments, createClipboardAttachmentFromFile, createDroppedAttachmentFromFile]
+    [appendAttachments, createClipboardAttachmentFromFile]
+  )
+
+  const handleDroppedAttachments = useCallback(
+    (items: DroppedAttachmentItem[]): void => {
+      if (items.length === 0) return
+      void Promise.all(items.map(createDroppedAttachmentFromFile)).then((created) => {
+        const validItems = created.filter(
+          (item): item is { attachment: ChatAttachment; assetBucketId: string } => Boolean(item)
+        )
+        appendAttachments(
+          validItems.map((item) => item.attachment),
+          validItems[0]?.assetBucketId || null
+        )
+      })
+    },
+    [appendAttachments, createDroppedAttachmentFromFile]
   )
 
   useEffect(() => {
-    onFileDropHandlerReady?.((files) => handleAttachmentFiles(files, 'drop'))
+    onFileDropHandlerReady?.(handleDroppedAttachments)
     return () => onFileDropHandlerReady?.(null)
-  }, [handleAttachmentFiles, onFileDropHandlerReady])
+  }, [handleDroppedAttachments, onFileDropHandlerReady])
 
   const handleEditorPaste = (event: React.ClipboardEvent<HTMLSpanElement>): void => {
     const files = Array.from(event.clipboardData.files || [])
     if (files.length > 0) {
       event.preventDefault()
-      handleAttachmentFiles(files, 'clipboard')
+      handleClipboardFiles(files)
       return
     }
     const pastedText = event.clipboardData.getData('text/plain')
@@ -943,16 +962,22 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                       <HiPhoto className="h-5 w-5" />
                     )}
                   </span>
+                ) : attachment.kind === 'directory' ? (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#F4F4F2] text-[#787774]">
+                    <HiOutlineFolder className="h-5 w-5" />
+                  </span>
                 ) : (
                   <AttachmentFileIcon fileName={attachment.name} />
                 )}
-                {attachment.kind === 'file' ? (
+                {attachment.kind !== 'image' ? (
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
                       {attachment.name}
                     </span>
                     <span className="block text-[12px] font-medium leading-4 text-[#787774]">
-                      {getAttachmentTypeLabel(attachment.name)}
+                      {attachment.kind === 'directory'
+                        ? '文件夹'
+                        : getAttachmentTypeLabel(attachment.name)}
                     </span>
                   </span>
                 ) : null}
@@ -1047,17 +1072,35 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
         <div className="mx-[-4px] mt-1.5 flex items-center justify-between gap-2 px-1">
           <div className="flex shrink-0 items-center gap-1.5 text-[#91918E]">
-            <button
-              type="button"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#787774] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
-              aria-label="添加附件"
-              data-testid={workbenchSelectors.attachmentAddButton}
-              onClick={() => {
-                void handlePickAttachments()
-              }}
+            <Dropdown
+              trigger={['click']}
+              placement="topLeft"
+              menu={
+                {
+                  items: [
+                    { key: 'file', label: '选择文件', icon: <HiPlus className="h-4 w-4" /> },
+                    {
+                      key: 'directory',
+                      label: '选择文件夹',
+                      icon: <HiOutlineFolder className="h-4 w-4" />
+                    }
+                  ],
+                  onClick: ({ key }) => {
+                    if (key === 'file') void handlePickAttachments()
+                    if (key === 'directory') void handlePickDirectory()
+                  }
+                } satisfies MenuProps
+              }
             >
-              <HiPlus className="h-5 w-5" />
-            </button>
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#787774] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+                aria-label="添加附件"
+                data-testid={workbenchSelectors.attachmentAddButton}
+              >
+                <HiPlus className="h-5 w-5" />
+              </button>
+            </Dropdown>
 
             <WorkbenchSelect
               value={aiPreference}

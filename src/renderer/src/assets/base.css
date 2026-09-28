@@ -570,40 +570,6 @@ textarea,
   overflow: visible;
 }
 
-.nc-partner-select .ant-select-selector,
-.nc-partner-select .ant-select-selection-wrap,
-.nc-partner-select .ant-select-selection-item {
-  overflow: visible;
-}
-
-.nc-partner-select .ant-select-selection-search-input {
-  cursor: pointer;
-  caret-color: transparent;
-}
-
-.nc-partner-select-row {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 10px;
-  color: var(--notion-text);
-}
-
-.nc-partner-select-dropdown .ant-select-item-option {
-  overflow: visible;
-}
-
-.nc-partner-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
-  background: var(--notion-surface) !important;
-  color: var(--notion-text) !important;
-}
-
-.nc-partner-select-dropdown
-  .ant-select-item-option-selected:not(.ant-select-item-option-disabled)
-  * {
-  color: inherit !important;
-}
-
 .nc-partner-avatar-hop,
 .nc-partner-avatar-tilt {
   position: relative;
@@ -1370,6 +1336,25 @@ textarea,
   box-shadow:
     0 0 0 4px rgba(11, 107, 203, 0.1),
     var(--shadow-md);
+}
+
+.scheduled-task-markdown {
+  height: 320px;
+}
+
+.scheduled-task-markdown .vditor {
+  height: 100% !important;
+}
+
+.scheduled-task-markdown .vditor .vditor-reset {
+  padding: 14px 16px 28px;
+  font-size: 14px;
+}
+
+@media (max-width: 760px) {
+  .scheduled-task-config-drawer .ant-drawer-content-wrapper {
+    width: 100vw !important;
+  }
 }
 
 .nc-composer-rail {
