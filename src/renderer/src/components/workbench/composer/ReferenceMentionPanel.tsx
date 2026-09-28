@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Empty, Spin } from 'antd'
 import type { SelectedReference } from '../../../../../shared/types'
 import { workbenchSelectors } from '../../../testing/selectors'
@@ -22,6 +22,16 @@ type ReferenceMentionGroup = {
   items: SelectedReference[]
 }
 
+type MentionPanelLayout = {
+  placement: 'above' | 'below'
+  maxHeight: number
+}
+
+const PANEL_GAP = 8
+const PANEL_CHROME_HEIGHT = 18
+const PANEL_MAX_HEIGHT = 198
+const PANEL_CONTENT_MAX_HEIGHT = 180
+
 const getReferenceParentDisplayPath = (reference: SelectedReference): string => {
   if (reference.kind === 'web') return reference.url
   if (!reference.relativePath) return ''
@@ -39,7 +49,12 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
   onSelect,
   onLoadMore
 }) => {
+  const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [layout, setLayout] = useState<MentionPanelLayout>({
+    placement: 'above',
+    maxHeight: PANEL_MAX_HEIGHT
+  })
   const groups = [
     {
       title: '文件',
@@ -51,6 +66,63 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
     }
   ] satisfies ReferenceMentionGroup[]
   const visibleGroups = groups.filter((group) => group.items.length > 0)
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    const anchor = panel?.parentElement
+    if (!panel || !anchor) return
+
+    const updateLayout = (): void => {
+      const anchorRect = anchor.getBoundingClientRect()
+      let clipTop = 0
+      let clipBottom = window.innerHeight
+
+      for (
+        let ancestor = anchor.parentElement;
+        ancestor && clipBottom > clipTop;
+        ancestor = ancestor.parentElement
+      ) {
+        const overflowY = window.getComputedStyle(ancestor).overflowY
+        if (!['auto', 'scroll', 'hidden', 'clip'].includes(overflowY)) continue
+        const rect = ancestor.getBoundingClientRect()
+        const ancestorTop = rect.top + ancestor.clientTop
+        clipTop = Math.max(clipTop, ancestorTop)
+        clipBottom = Math.min(clipBottom, ancestorTop + ancestor.clientHeight)
+      }
+
+      const availableAbove = Math.max(0, anchorRect.top - clipTop - PANEL_GAP)
+      const availableBelow = Math.max(0, clipBottom - anchorRect.bottom - PANEL_GAP)
+      const contentHeight = scrollRef.current?.scrollHeight || 0
+      const naturalHeight = Math.min(
+        PANEL_MAX_HEIGHT,
+        Math.max(72, contentHeight + PANEL_CHROME_HEIGHT)
+      )
+      const placement: MentionPanelLayout['placement'] =
+        availableAbove >= naturalHeight || availableAbove >= availableBelow ? 'above' : 'below'
+      const availableHeight = placement === 'above' ? availableAbove : availableBelow
+      const maxHeight = Math.min(PANEL_MAX_HEIGHT, availableHeight)
+
+      setLayout((current) =>
+        current.placement === placement && current.maxHeight === maxHeight
+          ? current
+          : { placement, maxHeight }
+      )
+    }
+
+    updateLayout()
+    const resizeObserver = new ResizeObserver(updateLayout)
+    resizeObserver.observe(anchor)
+    resizeObserver.observe(panel)
+    if (scrollRef.current) resizeObserver.observe(scrollRef.current)
+    window.addEventListener('resize', updateLayout)
+    window.addEventListener('scroll', updateLayout, true)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateLayout)
+      window.removeEventListener('scroll', updateLayout, true)
+    }
+  }, [loading, options.length])
 
   useEffect(() => {
     const root = scrollRef.current
@@ -68,12 +140,20 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
 
   return (
     <div
-      className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-[14px] border border-[#E5E4E0] bg-white px-2 py-2 shadow-[0_16px_36px_rgba(15,15,15,0.1)]"
+      ref={panelRef}
+      className={`absolute inset-x-0 z-50 overflow-hidden rounded-[14px] border border-[#E5E4E0] bg-white px-2 py-2 shadow-[0_16px_36px_rgba(15,15,15,0.1)] ${
+        layout.placement === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'
+      }`}
+      style={{ maxHeight: `${layout.maxHeight}px` }}
+      data-placement={layout.placement}
       data-testid={workbenchSelectors.mentionPanel}
     >
       <div
         ref={scrollRef}
-        className="max-h-[180px] overflow-y-auto pr-1"
+        className="overflow-y-auto pr-1"
+        style={{
+          maxHeight: `${Math.max(0, Math.min(PANEL_CONTENT_MAX_HEIGHT, layout.maxHeight - PANEL_CHROME_HEIGHT))}px`
+        }}
         onScroll={handleScroll}
       >
         {loading ? (

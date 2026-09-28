@@ -13,7 +13,9 @@ import {
   selectWorkbenchModel,
   setWorkbenchInput,
   setupWorkbenchWithTempWorkspace,
-  waitForScheduledTaskDrawerClosed
+  workbenchSelectors,
+  waitForScheduledTaskDrawerClosed,
+  waitForWorkbenchMentionPanelText
 } from '../../../harness/e2e/workbench'
 
 const CASE_ID = 'scheduled-task-description-reference'
@@ -47,7 +49,8 @@ describe('workbench scheduled-task e2e', () => {
         domain: 'workbench',
         suite: 'scheduled-task',
         groups: [],
-        description: '验证通用 Composer 输入框中的行内 @ 引用可保存、回填并在立即执行时传给伙伴消息。',
+        description:
+          '验证通用 Composer 输入框中的行内 @ 引用可保存、回填并在立即执行时传给伙伴消息。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -69,13 +72,49 @@ describe('workbench scheduled-task e2e', () => {
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await selectScheduledTaskPartner(page, partner.id)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill(TASK_NAME)
-          await setWorkbenchInput(page, DESCRIPTION_PREFIX, scheduledTaskSelectors.formDescriptionInput)
+          await setWorkbenchInput(page, '@', scheduledTaskSelectors.formDescriptionInput)
+          const mentionPanelText = await waitForWorkbenchMentionPanelText(
+            page,
+            scheduledTaskSelectors.formDescriptionInput
+          )
+          const mentionPanel = page.locator(
+            `[data-testid="${scheduledTaskSelectors.formDescription}"] [data-testid="${workbenchSelectors.mentionPanel}"]`
+          )
+          const mentionPanelPlacement = await mentionPanel.evaluate((panel) => {
+            const editor = document.querySelector<HTMLElement>(
+              '[data-testid="scheduled-task-form-description-input"]'
+            )
+            const content = editor?.closest<HTMLElement>(
+              '[data-testid="scheduled-task-form-content"]'
+            )
+            if (!editor || !content)
+              throw new Error('scheduled-task mention geometry is unavailable')
+            const panelRect = panel.getBoundingClientRect()
+            const editorRect = editor.getBoundingClientRect()
+            const contentRect = content.getBoundingClientRect()
+            return {
+              placement: panel.getAttribute('data-placement'),
+              belowEditor: panelRect.top >= editorRect.bottom,
+              insideContent:
+                panelRect.top >= contentRect.top && panelRect.bottom <= contentRect.bottom
+            }
+          })
+          await setWorkbenchInput(page, '', scheduledTaskSelectors.formDescriptionInput)
+          await setWorkbenchInput(
+            page,
+            DESCRIPTION_PREFIX,
+            scheduledTaskSelectors.formDescriptionInput
+          )
           const markdownStayedLiteral =
             (await getWorkbenchLocator(page, scheduledTaskSelectors.formDescriptionInput)
               .locator('strong')
               .count()) === 0 &&
-            (await getWorkbenchLocator(page, scheduledTaskSelectors.formDescriptionInput)
-              .innerText()).includes(DESCRIPTION_PREFIX)
+            (
+              await getWorkbenchLocator(
+                page,
+                scheduledTaskSelectors.formDescriptionInput
+              ).innerText()
+            ).includes(DESCRIPTION_PREFIX)
           await insertWorkbenchReferenceToken(
             page,
             'sample-edit.docx',
@@ -99,7 +138,9 @@ describe('workbench scheduled-task e2e', () => {
             const after = document.createRange()
             after.selectNodeContents(editor)
             after.setStartAfter(token)
-            return before.toString().includes('**要点**') && after.toString().includes('并附上来源。')
+            return (
+              before.toString().includes('**要点**') && after.toString().includes('并附上来源。')
+            )
           })
           await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
           await waitForScheduledTaskDrawerClosed(page)
@@ -135,7 +176,9 @@ describe('workbench scheduled-task e2e', () => {
             const after = document.createRange()
             after.selectNodeContents(editor)
             after.setStartAfter(token)
-            return before.toString().includes('**要点**') && after.toString().includes('并附上来源。')
+            return (
+              before.toString().includes('**要点**') && after.toString().includes('并附上来源。')
+            )
           })
           const editTokens = await getWorkbenchReferenceTokenTexts(
             page,
@@ -144,7 +187,7 @@ describe('workbench scheduled-task e2e', () => {
           const referenceTokenBackfilled = editTokens.some((text) =>
             text.includes('sample-edit.docx')
           )
-          await page.locator('.scheduled-task-config-drawer .ant-drawer-close').click()
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formCancel).click()
           await waitForScheduledTaskDrawerClosed(page)
 
           await getWorkbenchLocator(
@@ -175,6 +218,8 @@ describe('workbench scheduled-task e2e', () => {
           )
 
           return {
+            mentionPanelText,
+            mentionPanelPlacement,
             editorTokens,
             markdownStayedLiteral,
             tokenInlineWithText,
@@ -190,7 +235,11 @@ describe('workbench scheduled-task e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.editorTokens.some((text) => text.includes('sample-edit.docx')) &&
+            result.mentionPanelText.length > 0 &&
+              result.mentionPanelPlacement.placement === 'below' &&
+              result.mentionPanelPlacement.belowEditor &&
+              result.mentionPanelPlacement.insideContent &&
+              result.editorTokens.some((text) => text.includes('sample-edit.docx')) &&
               result.markdownStayedLiteral &&
               result.tokenInlineWithText &&
               result.storedReference &&

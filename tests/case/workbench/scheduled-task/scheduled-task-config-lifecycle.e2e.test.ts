@@ -80,9 +80,10 @@ describe('workbench scheduled-task e2e', () => {
           const drawerOpened = await drawer.evaluate((element) =>
             element.classList.contains('ant-drawer-open')
           )
-          await drawer.locator('.ant-drawer-close').click()
+          const headerCloseButtonRemoved = (await drawer.locator('.ant-drawer-close').count()) === 0
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formCancel).click()
           await waitForScheduledTaskDrawerClosed(page)
-          const cleanTopCloseButtonWorks = !(await drawer.evaluate((element) =>
+          const cleanFooterCancelWorks = !(await drawer.evaluate((element) =>
             element.classList.contains('ant-drawer-open')
           ))
 
@@ -93,32 +94,26 @@ describe('workbench scheduled-task e2e', () => {
             element.classList.contains('ant-drawer-open')
           )
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('未保存的草稿')
-          await drawer.locator('.ant-drawer-close').click()
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formCancel).click()
           const discardConfirmation = page
             .locator('.ant-modal-confirm')
             .filter({ hasText: '放弃未保存的更改？' })
           await discardConfirmation.waitFor({ state: 'visible' })
-          const dirtyTopClosePrompts = await discardConfirmation.isVisible()
-          await discardConfirmation
-            .getByRole('button', { name: '继续编辑', exact: true })
-            .click()
+          const dirtyCancelPrompts = await discardConfirmation.isVisible()
+          await discardConfirmation.getByRole('button', { name: '继续编辑', exact: true }).click()
           await discardConfirmation.waitFor({ state: 'hidden' })
-          const dirtyTopCloseKeepsDrawerOpen = await drawer.evaluate((element) =>
+          const dirtyCancelKeepsDrawerOpen = await drawer.evaluate((element) =>
             element.classList.contains('ant-drawer-open')
           )
           await page.keyboard.press('Escape')
           await discardConfirmation.waitFor({ state: 'visible' })
-          await discardConfirmation
-            .getByRole('button', { name: '继续编辑', exact: true })
-            .click()
+          await discardConfirmation.getByRole('button', { name: '继续编辑', exact: true }).click()
           await discardConfirmation.waitFor({ state: 'hidden' })
           const escapeKeepsDirtyDrawerOpen = await drawer.evaluate((element) =>
             element.classList.contains('ant-drawer-open')
           )
           await getWorkbenchLocator(page, scheduledTaskSelectors.formCancel).click()
-          await discardConfirmation
-            .getByRole('button', { name: '放弃修改', exact: true })
-            .click()
+          await discardConfirmation.getByRole('button', { name: '放弃修改', exact: true }).click()
           await discardConfirmation.waitFor({ state: 'hidden' })
           await waitForScheduledTaskDrawerClosed(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
@@ -170,6 +165,10 @@ describe('workbench scheduled-task e2e', () => {
             { length: 36 },
             (_, index) => `任务描述滚动验证第 ${index + 1} 行，确认编辑区域限制高度并独立滚动。`
           ).join('\n')
+          const descriptionDefaultHeight = await getWorkbenchLocator(
+            page,
+            scheduledTaskSelectors.formDescriptionInput
+          ).evaluate((element) => getComputedStyle(element).height)
           await setWorkbenchInput(
             page,
             longDescription,
@@ -182,11 +181,12 @@ describe('workbench scheduled-task e2e', () => {
             const style = getComputedStyle(element)
             const maxScrollTop = element.scrollHeight - element.clientHeight
             element.scrollTop = maxScrollTop
-            const reachedBottom = maxScrollTop > 0 &&
+            const reachedBottom =
+              maxScrollTop > 0 &&
               element.scrollTop + element.clientHeight >= element.scrollHeight - 1
             element.scrollTop = 0
             return {
-              maxHeight: style.maxHeight,
+              height: style.height,
               overflowY: style.overflowY,
               scrollHeight: element.scrollHeight,
               clientHeight: element.clientHeight,
@@ -270,7 +270,7 @@ describe('workbench scheduled-task e2e', () => {
 
           let editEditorReady = false
           let descriptionBackfilled = false
-          let editTopCloseButtonWorks = false
+          let editHeaderCloseButtonRemoved = false
           if (item && created) {
             await getWorkbenchLocator(
               page,
@@ -283,17 +283,7 @@ describe('workbench scheduled-task e2e', () => {
             editEditorReady =
               (await descriptionEditor.isVisible()) &&
               (await page.getByText('页面出现异常，已停止渲染', { exact: true }).count()) === 0
-            await drawer.locator('.ant-drawer-close').click()
-            await waitForScheduledTaskDrawerClosed(page)
-            editTopCloseButtonWorks = !(await drawer.evaluate((element) =>
-              element.classList.contains('ant-drawer-open')
-            ))
-            await getWorkbenchLocator(
-              page,
-              `${scheduledTaskSelectors.itemEditPrefix}-${created.id}`
-            ).click()
-            await nameInput.waitFor({ state: 'visible' })
-            await descriptionEditor.waitFor({ state: 'visible' })
+            editHeaderCloseButtonRemoved = (await drawer.locator('.ant-drawer-close').count()) === 0
             await nameInput.fill(TASK_NAME_EDITED)
             if (!reboundPartner) throw new Error('failed to locate rebound scheduled-task partner')
             await selectScheduledTaskPartner(page, reboundPartner.id)
@@ -344,14 +334,16 @@ describe('workbench scheduled-task e2e', () => {
           return {
             drawerOpened,
             firstCreateEditorReady,
-            cleanTopCloseButtonWorks,
+            headerCloseButtonRemoved,
+            cleanFooterCancelWorks,
             maskKeepsDrawerOpen,
-            dirtyTopClosePrompts,
-            dirtyTopCloseKeepsDrawerOpen,
+            dirtyCancelPrompts,
+            dirtyCancelKeepsDrawerOpen,
             escapeKeepsDirtyDrawerOpen,
             drawerWidthMatches,
             fieldsOrdered,
             footerFixed,
+            descriptionDefaultHeight,
             descriptionScroll,
             partnerRequiredBlocked,
             formStillOpenAfterMissingPartner,
@@ -363,7 +355,7 @@ describe('workbench scheduled-task e2e', () => {
             enabledAfterToggle,
             editEditorReady,
             descriptionBackfilled,
-            editTopCloseButtonWorks,
+            editHeaderCloseButtonRemoved,
             countChipVisibleAfterEnable,
             editedCorrectly,
             countChipVisibleAfterEdit,
@@ -375,15 +367,17 @@ describe('workbench scheduled-task e2e', () => {
           await runtime.assertThat(
             result.drawerOpened &&
               result.firstCreateEditorReady &&
-              result.cleanTopCloseButtonWorks &&
+              result.headerCloseButtonRemoved &&
+              result.cleanFooterCancelWorks &&
               result.maskKeepsDrawerOpen &&
-              result.dirtyTopClosePrompts &&
-              result.dirtyTopCloseKeepsDrawerOpen &&
+              result.dirtyCancelPrompts &&
+              result.dirtyCancelKeepsDrawerOpen &&
               result.escapeKeepsDirtyDrawerOpen &&
               result.drawerWidthMatches &&
               result.fieldsOrdered &&
               result.footerFixed &&
-              result.descriptionScroll.maxHeight === '240px' &&
+              result.descriptionDefaultHeight === '240px' &&
+              result.descriptionScroll.height === '240px' &&
               result.descriptionScroll.overflowY === 'auto' &&
               result.descriptionScroll.scrollHeight > result.descriptionScroll.clientHeight &&
               result.descriptionScroll.reachedBottom &&
@@ -396,7 +390,7 @@ describe('workbench scheduled-task e2e', () => {
               result.enabledAfterToggle &&
               result.editEditorReady &&
               result.descriptionBackfilled &&
-              result.editTopCloseButtonWorks &&
+              result.editHeaderCloseButtonRemoved &&
               result.countChipVisibleAfterEnable &&
               result.editedCorrectly &&
               result.countChipVisibleAfterEdit &&
@@ -405,7 +399,7 @@ describe('workbench scheduled-task e2e', () => {
             {
               name: 'scheduled-task-config-lifecycle',
               message:
-                '定时任务应覆盖创建与编辑关闭、字段顺序、描述独立滚动、手动伙伴下拉及任务完整闭环。',
+                '定时任务应覆盖创建与编辑、无标题关闭按钮、取消与 Esc 确认、描述默认高度与独立滚动、手动伙伴下拉及任务完整闭环。',
               data: result
             }
           )

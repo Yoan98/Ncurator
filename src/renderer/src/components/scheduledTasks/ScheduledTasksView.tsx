@@ -498,7 +498,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
         title={form.id ? '编辑定时任务' : '新增定时任务'}
         placement="right"
         width="min(50vw, 800px)"
-        closable
+        closable={false}
         maskClosable={false}
         onClose={requestCloseForm}
         rootClassName="scheduled-task-config-drawer"
@@ -542,7 +542,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
                 }
                 placeholder="描述你希望伙伴完成的事，也可使用 @ 引用"
                 dataTestId={scheduledTaskSelectors.formDescriptionInput}
-                editorClassName="max-h-[240px] overflow-y-auto"
+                editorClassName="h-[240px] overflow-y-auto"
               />
             </div>
 
@@ -578,9 +578,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
                 }}
                 notFoundContent="暂无伙伴"
                 data-testid={scheduledTaskSelectors.formPartner}
-                onChange={(partnerId: string) =>
-                  setForm((current) => ({ ...current, partnerId }))
-                }
+                onChange={(partnerId: string) => setForm((current) => ({ ...current, partnerId }))}
               />
             </div>
 
