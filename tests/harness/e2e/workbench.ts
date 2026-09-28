@@ -1428,14 +1428,22 @@ export const selectWorkbenchModel = async (
     const byPresetId = menu.getByTestId(
       `${workbenchSelectors.modelSelectPresetOptionPrefix}-${modelName}`
     )
-    if (await byPresetId.isVisible().catch(() => false)) {
+    const presetReady = await byPresetId
+      .waitFor({ state: 'visible', timeout: Math.min(WORKBENCH_MODEL_LIST_TIMEOUT_MS, 20_000) })
+      .then(() => true)
+      .catch(() => false)
+    if (presetReady) {
       await byPresetId.click()
       return
     }
     const byFreeId = menu.getByTestId(
       `${workbenchSelectors.modelSelectFreeOptionPrefix}-${modelName}`
     )
-    if (await byFreeId.isVisible().catch(() => false)) {
+    const freeReady = await byFreeId
+      .waitFor({ state: 'visible', timeout: Math.min(WORKBENCH_MODEL_LIST_TIMEOUT_MS, 20_000) })
+      .then(() => true)
+      .catch(() => false)
+    if (freeReady) {
       await byFreeId.click()
       return
     }
