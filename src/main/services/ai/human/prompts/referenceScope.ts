@@ -28,8 +28,7 @@ const renderSelectedReference = (reference: SelectedReference, index: number): s
 }
 
 const renderAttachment = (attachment: ChatAttachment, index: number): string => {
-  return `第 ${index} 个附件：${attachment.name}
-- 路径：${attachment.path}`
+  return `第 ${index} 个附件路径：${attachment.path}`
 }
 
 export const buildReferenceScope = (input: {
@@ -48,4 +47,4 @@ export const renderSelectedReferencesText = (scope: AiReferenceScope): string =>
 export const renderAttachmentsText = (scope: AiReferenceScope): string =>
   (scope.attachments || [])
     .map((attachment, index) => renderAttachment(attachment, index + 1))
-    .join('\n\n')
+    .join('\n')
