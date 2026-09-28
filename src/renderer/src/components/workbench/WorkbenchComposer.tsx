@@ -1,6 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App as AntdApp, Dropdown, Spin, Tooltip } from 'antd'
-import type { MenuProps } from 'antd'
+import { App as AntdApp, Spin, Tooltip } from 'antd'
 import { HiArrowUp, HiOutlineFolder, HiPhoto, HiPlus, HiStop, HiXMark } from 'react-icons/hi2'
 import type {
   ChatAttachment,
@@ -38,7 +37,6 @@ import WorkbenchSelect from './WorkbenchSelect'
 import WorkbenchModelSelector from './WorkbenchModelSelector'
 import { AI_PREFERENCE_OPTIONS, EXECUTION_PERMISSION_OPTIONS } from './selectOptions'
 import type { ImageLightboxImage } from './ImageLightbox'
-import { getAttachmentTypeLabel } from './utils'
 import WorkbenchPlanProgress from './WorkbenchPlanProgress'
 
 type MentionContext = {
@@ -600,20 +598,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       focusEditorAfterControlChange()
       return
     }
-    const response = await window.api.attachmentPick({ ...target, selectionType: 'file' })
+    const response = await window.api.attachmentPick(target)
     if (response.error) message.warning(normalizeUserFacingError(response.error, '选择附件失败'))
-    if (!response.canceled) appendAttachments(response.items, target.assetBucketId)
-    focusEditorAfterControlChange()
-  }, [appendAttachments, focusEditorAfterControlChange, message, requestAttachmentTarget])
-
-  const handlePickDirectory = useCallback(async (): Promise<void> => {
-    const target = await requestAttachmentTarget()
-    if (!target) {
-      focusEditorAfterControlChange()
-      return
-    }
-    const response = await window.api.attachmentPick({ ...target, selectionType: 'directory' })
-    if (response.error) message.warning(normalizeUserFacingError(response.error, '选择文件夹失败'))
     if (!response.canceled) appendAttachments(response.items, target.assetBucketId)
     focusEditorAfterControlChange()
   }, [appendAttachments, focusEditorAfterControlChange, message, requestAttachmentTarget])
@@ -974,11 +960,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
                       {attachment.name}
                     </span>
-                    <span className="block text-[12px] font-medium leading-4 text-[#787774]">
-                      {attachment.kind === 'directory'
-                        ? '文件夹'
-                        : getAttachmentTypeLabel(attachment.name)}
-                    </span>
                   </span>
                 ) : null}
                 <span
@@ -1072,35 +1053,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
         <div className="mx-[-4px] mt-1.5 flex items-center justify-between gap-2 px-1">
           <div className="flex shrink-0 items-center gap-1.5 text-[#91918E]">
-            <Dropdown
-              trigger={['click']}
-              placement="topLeft"
-              menu={
-                {
-                  items: [
-                    { key: 'file', label: '选择文件', icon: <HiPlus className="h-4 w-4" /> },
-                    {
-                      key: 'directory',
-                      label: '选择文件夹',
-                      icon: <HiOutlineFolder className="h-4 w-4" />
-                    }
-                  ],
-                  onClick: ({ key }) => {
-                    if (key === 'file') void handlePickAttachments()
-                    if (key === 'directory') void handlePickDirectory()
-                  }
-                } satisfies MenuProps
-              }
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#787774] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+              aria-label="添加附件"
+              data-testid={workbenchSelectors.attachmentAddButton}
+              onClick={() => void handlePickAttachments()}
             >
-              <button
-                type="button"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#787774] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
-                aria-label="添加附件"
-                data-testid={workbenchSelectors.attachmentAddButton}
-              >
-                <HiPlus className="h-5 w-5" />
-              </button>
-            </Dropdown>
+              <HiPlus className="h-5 w-5" />
+            </button>
 
             <WorkbenchSelect
               value={aiPreference}

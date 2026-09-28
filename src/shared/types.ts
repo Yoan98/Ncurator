@@ -579,7 +579,6 @@ export type ChatAttachment = {
 export type AttachmentPickRequest = {
   partnerId: string
   assetBucketId: string
-  selectionType: 'file' | 'directory'
 }
 
 export type AttachmentPickResponse = {

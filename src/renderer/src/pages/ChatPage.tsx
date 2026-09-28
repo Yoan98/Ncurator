@@ -129,7 +129,6 @@ import {
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
   formatRelativeTime,
-  getAttachmentTypeLabel,
   applyQuestionInteractionResult,
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts
@@ -4403,9 +4402,6 @@ const ChatPage: React.FC = () => {
                               <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
                                 {attachment.name}
                               </span>
-                              <span className="block text-[12px] font-medium leading-4 text-[#787774]">
-                                文件夹
-                              </span>
                             </span>
                           </>
                         ) : (
@@ -4414,9 +4410,6 @@ const ChatPage: React.FC = () => {
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
                                 {attachment.name}
-                              </span>
-                              <span className="block text-[12px] font-medium leading-4 text-[#787774]">
-                                {getAttachmentTypeLabel(attachment.name)}
                               </span>
                             </span>
                           </>

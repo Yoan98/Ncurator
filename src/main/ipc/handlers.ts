@@ -185,17 +185,21 @@ if (e2eNativeDialogSelections) {
 
 const takeE2ENativeDialogSelection = (
   webContentsId: number,
-  kind: E2ENativeDialogSelection['kind']
+  expectedKind?: E2ENativeDialogSelection['kind']
 ): string | null => {
   const selection = e2eNativeDialogSelections?.get(webContentsId)
-  if (!selection || selection.kind !== kind) return null
+  if (!selection || (expectedKind && selection.kind !== expectedKind)) return null
   e2eNativeDialogSelections?.delete(webContentsId)
   const selectedPath = path.resolve(selection.path)
   if (!fs.existsSync(selectedPath)) {
     throw new Error(`E2E native dialog path does not exist: ${selectedPath}`)
   }
   const stats = fs.statSync(selectedPath)
-  if ((kind === 'directory' && !stats.isDirectory()) || (kind === 'file' && !stats.isFile())) {
+  const actualKind: E2ENativeDialogSelection['kind'] = stats.isDirectory() ? 'directory' : 'file'
+  if (selection.kind !== actualKind) {
+    throw new Error(`E2E native dialog path has the wrong type: ${selectedPath}`)
+  }
+  if (expectedKind && actualKind !== expectedKind) {
     throw new Error(`E2E native dialog path has the wrong type: ${selectedPath}`)
   }
   return selectedPath
@@ -1872,16 +1876,12 @@ export function registerHandlers(services: {
           return { canceled: true, items: [], error: '附件目录不存在，无法保存附件' }
         }
         const dialogOptions: OpenDialogOptions = {
-          title: payload.selectionType === 'directory' ? '选择文件夹' : '选择文件',
-          buttonLabel: payload.selectionType === 'directory' ? '选择文件夹' : '选择文件',
-          properties: [
-            payload.selectionType === 'directory' ? 'openDirectory' : 'openFile',
-            'multiSelections',
-            'dontAddToRecent'
-          ]
+          title: '添加附件',
+          buttonLabel: '选择',
+          properties: ['openFile', 'openDirectory', 'multiSelections', 'dontAddToRecent']
         }
         const ownerWindow = BrowserWindow.fromWebContents(event.sender)
-        const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, payload.selectionType)
+        const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id)
         const filePaths = e2eSelectedPath
           ? [e2eSelectedPath]
           : (

@@ -797,9 +797,9 @@ const selectWorkbenchPathThroughNativeDialog = async (
     .isVisible()
     .catch(() => false)
   if (alreadyVisible) return
-  // Native file dialogs are owned by the operating system and cannot be controlled reliably in
-  // headful macOS runs. The main process consumes this E2E-only selection through the same IPC
-  // handler that imports real attachment files.
+  // Native dialogs are owned by the operating system and cannot be controlled reliably in headful
+  // macOS runs. The main process consumes this E2E-only selection through the same IPC handler
+  // that imports real attachment paths.
   await addButton.waitFor({ state: 'visible' })
   await page.waitForFunction(
     (testId) => {
@@ -812,9 +812,6 @@ const selectWorkbenchPathThroughNativeDialog = async (
   for (let attempt = 0; attempt < 2; attempt += 1) {
     await queueE2ENativeDialogSelection(page, { kind, path: filePath })
     await addButton.click()
-    await page
-      .getByRole('menuitem', { name: kind === 'file' ? '选择文件' : '选择文件夹', exact: true })
-      .click()
     try {
       diagnostics.push(`e2e-native-dialog-selection:${String(attempt + 1)}`)
       await page.waitForFunction(

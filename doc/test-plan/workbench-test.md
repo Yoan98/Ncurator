@@ -21,7 +21,7 @@
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；必须在无进程级远程调试口下完成。同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 验证 type=fetch 读取网页正文后再回答。两类 case 均不得因 `web_search` 自动展开右侧搜索列表（该列表面板已不存在），对齐 `WB-CORE-007-AC4`。Composer 搜索模式与右侧搜索列表面板已删除，废弃 `WB-COMPOSER-004`、`WB-PANEL-002`。
-- Workbench 附件链路不限制文件扩展名、大小、数量或目录大小；`+` 可选择文件或目录，拖放接受文件与目录并保留源绝对路径，目录不递归扫描；粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
+- Workbench 附件链路不限制文件扩展名、大小、数量或目录大小；点击 `+` 直接打开可选择文件或目录的系统选择器，拖放接受文件与目录并保留源绝对路径，目录不递归扫描；粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
 - Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 测试承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧（`WB-EXCEL-001` / `WB-EXCEL-002`）覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（`WB-EXCEL-002-AC3` 记录/baseline **只在 ai-test 硬断言**）；Workbench e2e 覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9` 用户闭环（UI 可见单入口，不重复硬断言 AC3）。
 - DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示统一的 `nodeId`、visual kind、`imagePath` 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。图片理解统一由 `agent-control` 内置的 `read_image` 把图片加入主模型请求。
 - Workbench 历史只展示白名单内的必要 DOCX 字段，不展示 worker、identity 或 replay 内部状态。DOCX 事件以 `nodeId` 定位，PPT 继续使用自己的 `location`，两套协议互不复用。
@@ -248,10 +248,10 @@ pnpm test:update:e2e
 #### `composer-attachments-context`
 
 - 测试类型：`e2e / live`
-- What：`+` 文件/文件夹选择、真实源路径文件拖放、粘贴添加附件时，附件只以路径进入伙伴消息记录，常规文档和非白名单扩展名可加入，并保持图片预览、文件/目录打开、删除、普通文本粘贴行为。粘贴保存到伙伴 runtime assets；发送后多附件横向滚动可到达首尾。
+- What：`+` 系统选择器选择文件或文件夹、真实源路径文件拖放、粘贴添加附件时，附件只以路径进入伙伴消息记录，常规文档和非白名单扩展名可加入，并保持图片预览、文件/目录打开、删除、普通文本粘贴行为。粘贴保存到伙伴 runtime assets；发送后多附件横向滚动可到达首尾。
 - Why：`+` 与拖放必须把源文件路径交给 AI，粘贴仍需保存副本，测试必须守住这两条不同链路。
-- How：创建伙伴；需要文件资料时通过设置页添加文件地址；通过系统文件窗口分别选择文件与文件夹，并用真实本地文件拖放验证源路径进入草稿；覆盖多个附件、目录打开与移除、图片预览，并通过真实模型发送一次多附件消息；发送后读取 `ai_run` 与 log 投影消息，检查附件横向滚动首尾。Playwright 的合成拖放无法忠实构造操作系统目录拖入项，因此目录原生拖放需在桌面手工验收。
-- Oracle：文件/目录拖入中间聊天区时显示“松开以添加文件或文件夹”覆盖层，放下后消失；无伙伴时不添加附件；`+` 选择和拖放的文件、目录均保留原始绝对路径，目录附件显示文件夹图标、副标签并可打开/移除；粘贴文件落到 `userData/partners/{id}/runtime/assets/`；图片预览和删除正常；发送后附件仍为路径，持久消息不含 Base64；附件区溢出后首尾均可通过横向滚动访问且边界滚动不阻断消息纵向滚动，对齐 `WB-COMPOSER-010`、`WB-COMPOSER-013-AC2`、`WB-COMPOSER-013-AC3`；运行时缓存、HTTP(S) 原地址和失效占位由 AI tool 契约覆盖，对齐 `WB-COMPOSER-013-AC4`。免费且无 vision 模型在有效图片历史下的发送拦截由 unit `message-log-vision-context` 与 Composer 前置条件覆盖，对齐 `WB-COMPOSER-013-AC5`。
+- How：创建伙伴；需要文件资料时通过设置页添加文件地址；点击 `+` 在同一系统窗口分别选择文件与文件夹，并用真实本地文件拖放验证源路径进入草稿；覆盖多个附件、目录打开与移除、图片预览，并通过真实模型发送一次多附件消息；发送后读取 `ai_run` 与 log 投影消息，检查附件横向滚动首尾。Playwright 的合成拖放无法忠实构造操作系统目录拖入项，因此目录原生拖放需在桌面手工验收。
+- Oracle：文件/目录拖入中间聊天区时显示“松开以添加文件或文件夹”覆盖层，放下后消失；无伙伴时不添加附件；`+` 系统选择器和拖放的文件、目录均保留原始绝对路径，文件和目录卡片只显示对应图标与名称、不显示类型副标签，并可打开/移除；粘贴文件落到 `userData/partners/{id}/runtime/assets/`；图片预览和删除正常；发送后附件仍为路径，持久消息不含 Base64；附件区溢出后首尾均可通过横向滚动访问且边界滚动不阻断消息纵向滚动，对齐 `WB-COMPOSER-010`、`WB-COMPOSER-013-AC2`、`WB-COMPOSER-013-AC3`；运行时缓存、HTTP(S) 原地址和失效占位由 AI tool 契约覆盖，对齐 `WB-COMPOSER-013-AC4`。免费且无 vision 模型在有效图片历史下的发送拦截由 unit `message-log-vision-context` 与 Composer 前置条件覆盖，对齐 `WB-COMPOSER-013-AC5`。
 
 #### `reference-mention-keyboard`
 

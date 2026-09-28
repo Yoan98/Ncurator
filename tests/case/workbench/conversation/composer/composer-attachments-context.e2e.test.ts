@@ -318,6 +318,12 @@ describe('workbench conversation e2e', () => {
             .first()
           await fileCard.waitFor({ state: 'visible' })
           const fileCardText = (await fileCard.textContent()) || ''
+          const inputAttachmentTypeLabelCount = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.attachmentCardPrefix
+          )
+            .locator('span[class*="text-[12px]"][class*="leading-4"]')
+            .count()
           const legacyDocCardText =
             (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
               .filter({ hasText: 'legacy-reference.doc' })
@@ -382,6 +388,14 @@ describe('workbench conversation e2e', () => {
             .find((message) => message.role === 'user')
           const submittedAttachments = submittedUserMessage?.attachments || []
           const persistedMessagesJson = JSON.stringify(submittedMessages)
+          const messageAttachmentTypeLabelCount = submittedUserMessage
+            ? await page
+                .locator(
+                  `[data-testid="${workbenchSelectors.userMessagePrefix}-${submittedUserMessage.id}"] [data-testid^="${workbenchSelectors.userMessageAttachmentPrefix}-"]`
+                )
+                .locator('span[class*="text-[12px]"][class*="leading-4"]')
+                .count()
+            : 0
           const messageAttachmentScroll = submittedUserMessage
             ? await page
                 .locator(
@@ -476,6 +490,7 @@ describe('workbench conversation e2e', () => {
               closeButtonBox.y + closeButtonBox.height <= previewImageBox.y
             ),
             fileCardText,
+            inputAttachmentTypeLabelCount,
             legacyDocCardText,
             pptxCardText,
             spreadsheetCardTexts,
@@ -484,6 +499,7 @@ describe('workbench conversation e2e', () => {
             submittedAttachmentKinds: submittedAttachments.map((attachment) => attachment.kind),
             submittedAttachmentNames: submittedAttachments.map((attachment) => attachment.name),
             submittedAttachmentPaths: submittedAttachments.map((attachment) => attachment.path),
+            messageAttachmentTypeLabelCount,
             messageAttachmentScroll,
             persistedMessagesContainBase64: persistedMessagesJson.includes(';base64,'),
             largeFileMessage,
@@ -510,13 +526,18 @@ describe('workbench conversation e2e', () => {
               result.attachmentPickCallCount >= 2 &&
               result.zoomControlBelowImage &&
               result.topActionsAboveImage &&
-              result.fileCardText.includes('MD') &&
-              result.legacyDocCardText.includes('DOC') &&
-              result.pptxCardText.includes('PPTX') &&
-              ['XLSX', 'XLSM', 'XLTX', 'XLTM'].every((label, index) =>
-                result.spreadsheetCardTexts[index]?.includes(label)
+              result.fileCardText.includes('workbench-preview.md') &&
+              result.legacyDocCardText.includes('legacy-reference.doc') &&
+              result.pptxCardText.includes('slides-reference.pptx') &&
+              [
+                'sheet-reference.xlsx',
+                'macro-reference.xlsm',
+                'template-reference.xltx',
+                'macro-template-reference.xltm'
+              ].every((fileName, index) =>
+                result.spreadsheetCardTexts[index]?.includes(fileName)
               ) &&
-              result.zipCardText.includes('ZIP') &&
+              result.zipCardText.includes('unknown-bundle.zip') &&
               [
                 'workbench-preview.md',
                 'qa-image.png',
@@ -533,7 +554,9 @@ describe('workbench conversation e2e', () => {
               ].every((name) => result.submittedAttachmentNames.includes(name)) &&
               result.submittedAttachmentPaths.length === 12 &&
               result.submittedAttachmentKinds.includes('directory') &&
-              result.folderCardText.includes('文件夹') &&
+              result.folderCardText.includes('reference-folder') &&
+              result.inputAttachmentTypeLabelCount === 0 &&
+              result.messageAttachmentTypeLabelCount === 0 &&
               result.folderRemoved &&
               result.folderOpened &&
               result.attachmentDropOverlayText.includes('松开以添加文件或文件夹') &&
