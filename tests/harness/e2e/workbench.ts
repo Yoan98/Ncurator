@@ -1565,17 +1565,17 @@ export const fillScheduledTaskTime = async (page: Page, hhmm: string): Promise<v
 }
 
 export const selectScheduledTaskPartner = async (page: Page, partnerId: string): Promise<void> => {
-  const partners = (await page.evaluate(async () => await window.api.partnerList())) as PartnerListItem[]
+  const partners = (await page.evaluate(
+    async () => await window.api.partnerList()
+  )) as PartnerListItem[]
   const partner = partners.find((item) => item.id === partnerId)
   if (!partner) throw new Error(`scheduled-task partner not found: ${partnerId}`)
-  const select = getWorkbenchLocator(page, scheduledTaskSelectors.formPartner)
-  await select.click()
-  await select.locator('input[role="combobox"]').fill(partner.name)
   const option = getWorkbenchLocator(
     page,
     `${scheduledTaskSelectors.formPartner}-option-${partnerId}`
   )
   await option.waitFor({ state: 'visible' })
+  await option.scrollIntoViewIfNeeded()
   await option.click()
 }
 

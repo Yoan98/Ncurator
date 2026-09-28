@@ -498,7 +498,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
         title={form.id ? '编辑定时任务' : '新增定时任务'}
         placement="right"
         width="min(50vw, 800px)"
-        closable={false}
+        closable
         maskClosable={false}
         onClose={requestCloseForm}
         rootClassName="scheduled-task-config-drawer"
@@ -548,37 +548,11 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
 
             <div className="flex flex-col gap-1.5">
               <RequiredFieldLabel>伙伴</RequiredFieldLabel>
-              <Select
-                className="w-full"
-                value={form.partnerId || undefined}
-                placeholder="选择伙伴"
-                showSearch
-                optionFilterProp="label"
-                options={partners.map((partner) => ({
-                  value: partner.id,
-                  label: partner.name
-                }))}
-                optionRender={(option) => {
-                  const partner = partners.find((item) => item.id === option.value)
-                  if (!partner) return option.label
-                  return (
-                    <div
-                      className="flex min-w-0 items-center gap-2"
-                      data-testid={`${scheduledTaskSelectors.formPartner}-option-${partner.id}`}
-                    >
-                      <PartnerAvatar
-                        shape={partner.avatar_shape}
-                        color={partner.avatar_color}
-                        size={24}
-                        animationSeed={`scheduled-task-select-${partner.id}`}
-                      />
-                      <span className="truncate">{partner.name}</span>
-                    </div>
-                  )
-                }}
-                notFoundContent="暂无伙伴"
-                data-testid={scheduledTaskSelectors.formPartner}
-                onChange={(partnerId: string) => setForm((current) => ({ ...current, partnerId }))}
+              <PartnerOptionList
+                partners={partners}
+                value={form.partnerId}
+                dataTestId={scheduledTaskSelectors.formPartner}
+                onChange={(partnerId) => setForm((current) => ({ ...current, partnerId }))}
               />
             </div>
 
