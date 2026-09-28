@@ -25,7 +25,7 @@ describe('workbench scheduled-task e2e', () => {
         domain: 'workbench',
         suite: 'scheduled-task',
         groups: [],
-        description: '验证 AI 创建伙伴列表的名称截断、固定高度滚动、选择状态与草稿切换。',
+        description: '验证 AI 创建伙伴列表最多显示四项后滚动、名称截断、选择状态与草稿切换。',
         fixtures: [],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -65,11 +65,19 @@ describe('workbench scheduled-task e2e', () => {
           const partnerList = getWorkbenchLocator(page, scheduledTaskSelectors.aiPartner)
           const partnerListScroll = await partnerList.evaluate((element) => {
             const style = getComputedStyle(element)
+            const listRect = element.getBoundingClientRect()
+            const fullyVisibleOptionCount = [
+              ...element.querySelectorAll('button[data-testid]')
+            ].filter((option) => {
+              const optionRect = option.getBoundingClientRect()
+              return optionRect.top >= listRect.top + 1 && optionRect.bottom <= listRect.bottom - 1
+            }).length
             return {
               maxHeight: style.maxHeight,
               overflowY: style.overflowY,
               scrollHeight: element.scrollHeight,
-              clientHeight: element.clientHeight
+              clientHeight: element.clientHeight,
+              fullyVisibleOptionCount
             }
           })
           const targetOption = page.getByTestId(
@@ -142,8 +150,9 @@ describe('workbench scheduled-task e2e', () => {
           await runtime.assertThat(
             result.emptyPartnerStateVisible &&
               result.emptyPartnerConfirmDisabled &&
-              result.partnerListScroll.maxHeight === '320px' &&
+              result.partnerListScroll.maxHeight === '208px' &&
               result.partnerListScroll.overflowY === 'auto' &&
+              result.partnerListScroll.fullyVisibleOptionCount === 4 &&
               result.partnerListScroll.scrollHeight > result.partnerListScroll.clientHeight &&
               result.partnerListScrollsToOffscreenOption &&
               result.targetNameActuallyOverflows &&

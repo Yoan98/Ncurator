@@ -114,7 +114,7 @@ const PartnerOptionList = ({
   dataTestId: string
 }) => (
   <div
-    className="max-h-[320px] min-h-[72px] overflow-y-auto rounded-[8px] border border-[#E5E4E0] bg-white p-1"
+    className="max-h-[208px] min-h-[72px] overflow-y-auto rounded-[8px] border border-[#E5E4E0] bg-white p-1"
     data-testid={dataTestId}
   >
     {partners.length === 0 ? (
@@ -129,7 +129,7 @@ const PartnerOptionList = ({
             <button
               key={partner.id}
               type="button"
-              className={`flex min-h-12 w-full items-center gap-2.5 rounded-[6px] px-2.5 text-left transition-colors ${
+              className={`flex h-12 w-full items-center gap-2.5 rounded-[6px] px-2.5 text-left transition-colors ${
                 selected ? 'bg-[#EDF3F8] text-[#2F5F8F]' : 'text-[#37352F] hover:bg-[#F4F4F2]'
               }`}
               aria-pressed={selected}
@@ -542,7 +542,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
                 }
                 placeholder="描述你希望伙伴完成的事，也可使用 @ 引用"
                 dataTestId={scheduledTaskSelectors.formDescriptionInput}
-                editorClassName="h-[240px] overflow-y-auto"
+                editorClassName="h-[120px] overflow-y-auto"
               />
             </div>
 

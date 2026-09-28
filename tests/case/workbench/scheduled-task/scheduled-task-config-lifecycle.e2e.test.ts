@@ -207,11 +207,19 @@ describe('workbench scheduled-task e2e', () => {
           await partnerList.scrollIntoViewIfNeeded()
           const partnerListMetrics = await partnerList.evaluate((element) => {
             const style = getComputedStyle(element)
+            const listRect = element.getBoundingClientRect()
+            const fullyVisibleOptionCount = [
+              ...element.querySelectorAll('button[data-testid]')
+            ].filter((option) => {
+              const optionRect = option.getBoundingClientRect()
+              return optionRect.top >= listRect.top + 1 && optionRect.bottom <= listRect.bottom - 1
+            }).length
             return {
               maxHeight: style.maxHeight,
               overflowY: style.overflowY,
               scrollHeight: element.scrollHeight,
-              clientHeight: element.clientHeight
+              clientHeight: element.clientHeight,
+              fullyVisibleOptionCount
             }
           })
           const lastPartner = partnersBefore.at(-1)
@@ -433,15 +441,16 @@ describe('workbench scheduled-task e2e', () => {
               result.drawerWidthMatches &&
               result.fieldsOrdered &&
               result.footerFixed &&
-              result.descriptionDefaultHeight === '240px' &&
-              result.descriptionScroll.height === '240px' &&
+              result.descriptionDefaultHeight === '120px' &&
+              result.descriptionScroll.height === '120px' &&
               result.descriptionScroll.overflowY === 'auto' &&
               result.descriptionScroll.scrollHeight > result.descriptionScroll.clientHeight &&
               result.descriptionScroll.reachedBottom &&
               result.partnerRequiredBlocked &&
               result.formStillOpenAfterMissingPartner &&
-              result.partnerListMetrics.maxHeight === '320px' &&
+              result.partnerListMetrics.maxHeight === '208px' &&
               result.partnerListMetrics.overflowY === 'auto' &&
+              result.partnerListMetrics.fullyVisibleOptionCount === 4 &&
               result.partnerListMetrics.scrollHeight > result.partnerListMetrics.clientHeight &&
               result.partnerListReachedEnd &&
               result.lastPartnerVisibleAtScrollEnd &&
