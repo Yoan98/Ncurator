@@ -4,6 +4,7 @@ import 'vditor/dist/index.css'
 import '../fileRenders/markdownEditor.css'
 import type { ReferenceKind, SelectedReference } from '../../../../shared/types'
 import { REFERENCE_ITEM_PAGE_SIZE } from '../../../../shared/types'
+import { vditorI18n } from '../fileRenders/vditorI18n'
 import { getReferenceKey } from '../../utils/reference'
 import { scheduledTaskSelectors } from '../../testing/selectors'
 import ReferenceMentionPanel from '../workbench/composer/ReferenceMentionPanel'
@@ -51,8 +52,10 @@ const ScheduledTaskDescriptionEditor = forwardRef<ScheduledTaskDescriptionEditor
     const hostRef = useRef<HTMLDivElement | null>(null)
     const editorRef = useRef<Vditor | null>(null)
     const editorRootRef = useRef<HTMLElement | null>(null)
+    const valueRef = useRef(value)
     const onChangeRef = useRef(onChange)
     const selectedReferencesRef = useRef(selectedReferences)
+    const refreshMentionRef = useRef<() => void>(() => undefined)
     const keyDownHandlerRef = useRef<(event: KeyboardEvent) => void>(() => undefined)
     const keyDownListenerRef = useRef<((event: KeyboardEvent) => void) | null>(null)
     const mentionContextRef = useRef<MentionContext | null>(null)
@@ -65,9 +68,6 @@ const ScheduledTaskDescriptionEditor = forwardRef<ScheduledTaskDescriptionEditor
     const [mentionLoading, setMentionLoading] = useState(false)
     const [mentionLoadingMore, setMentionLoadingMore] = useState(false)
     const [mentionHasMore, setMentionHasMore] = useState(false)
-
-    onChangeRef.current = onChange
-    selectedReferencesRef.current = selectedReferences
 
     useImperativeHandle(
       forwardedRef,
@@ -112,6 +112,16 @@ const ScheduledTaskDescriptionEditor = forwardRef<ScheduledTaskDescriptionEditor
           if (requestIdRef.current === requestId) setMentionLoading(false)
         })
     }, [])
+
+    useEffect(() => {
+      valueRef.current = value
+      onChangeRef.current = onChange
+      selectedReferencesRef.current = selectedReferences
+    }, [onChange, selectedReferences, value])
+
+    useEffect(() => {
+      refreshMentionRef.current = refreshMention
+    }, [refreshMention])
 
     const loadMoreMentions = useCallback((): void => {
       const query = mentionQuery
@@ -170,45 +180,61 @@ const ScheduledTaskDescriptionEditor = forwardRef<ScheduledTaskDescriptionEditor
 
     useEffect(() => {
       const host = hostRef.current
-      if (!host || editorRef.current) return
-      host.replaceChildren()
-      const editor = new Vditor(host, {
-        mode: 'ir',
-        lang: 'zh_CN',
-        toolbar: [],
-        cache: { enable: false },
-        value,
-        cdn: new URL('vditor', document.baseURI).href,
-        placeholder: '描述你希望伙伴完成的事，也可使用 Markdown 和 @ 引用',
-        preview: {
-          delay: 80,
-          hljs: { enable: true, lineNumber: false, style: 'a11y-light' },
-          markdown: { gfmAutoLink: true, footnotes: true }
-        },
-        input: (nextValue) => {
-          onChangeRef.current(nextValue, selectedReferencesRef.current)
-          refreshMention()
-        },
-        after: () => {
-          editorRef.current = editor
-          editorRootRef.current = host.querySelector<HTMLElement>('.vditor-ir .vditor-reset')
-          if (editorRootRef.current) {
-            editorRootRef.current.dataset.testid = scheduledTaskSelectors.formDescriptionInput
-            keyDownListenerRef.current = (event) => keyDownHandlerRef.current(event)
-            editorRootRef.current.addEventListener('keydown', keyDownListenerRef.current)
+      if (!host) return
+      let mounted = true
+      // StrictMode replays effect cleanup immediately; let that pass cancel before Vditor is created.
+      const initializeTimer = window.setTimeout(() => {
+        if (!mounted || !host.isConnected || editorRef.current) return
+        host.replaceChildren()
+        const editor = new Vditor(host, {
+          mode: 'ir',
+          lang: 'zh_CN',
+          i18n: vditorI18n,
+          toolbar: [],
+          cache: { enable: false },
+          value: valueRef.current,
+          cdn: new URL('vditor', document.baseURI).href,
+          placeholder: '描述你希望伙伴完成的事，也可使用 Markdown 和 @ 引用',
+          preview: {
+            delay: 80,
+            hljs: { enable: true, lineNumber: false, style: 'a11y-light' },
+            markdown: { gfmAutoLink: true, footnotes: true }
+          },
+          input: (nextValue) => {
+            if (!mounted) return
+            onChangeRef.current(nextValue, selectedReferencesRef.current)
+            refreshMentionRef.current()
+          },
+          after: () => {
+            if (!mounted || editorRef.current !== editor) return
+            editorRootRef.current = host.querySelector<HTMLElement>('.vditor-ir .vditor-reset')
+            if (editorRootRef.current) {
+              editorRootRef.current.dataset.testid = scheduledTaskSelectors.formDescriptionInput
+              keyDownListenerRef.current = (event) => keyDownHandlerRef.current(event)
+              editorRootRef.current.addEventListener('keydown', keyDownListenerRef.current)
+            }
+            setReady(true)
           }
-          setReady(true)
-        }
-      })
-      editorRef.current = editor
+        })
+        editorRef.current = editor
+      }, 0)
       return () => {
+        mounted = false
+        window.clearTimeout(initializeTimer)
         requestIdRef.current += 1
         if (editorRootRef.current && keyDownListenerRef.current) {
           editorRootRef.current.removeEventListener('keydown', keyDownListenerRef.current)
         }
         keyDownListenerRef.current = null
-        editor.destroy()
-        editorRef.current = null
+        const editor = editorRef.current
+        if (editor) {
+          try {
+            editor.destroy()
+          } catch (error) {
+            console.error('[SCHEDULED-TASK] Vditor destroy failed:', error)
+          }
+          editorRef.current = null
+        }
         editorRootRef.current = null
       }
     }, [])
@@ -240,7 +266,9 @@ const ScheduledTaskDescriptionEditor = forwardRef<ScheduledTaskDescriptionEditor
       [mentionIndex, mentionOptions, mentionQuery, selectMention]
     )
 
-    keyDownHandlerRef.current = handleEditorKeyDown
+    useEffect(() => {
+      keyDownHandlerRef.current = handleEditorKeyDown
+    }, [handleEditorKeyDown])
 
     useEffect(() => {
       if (!ready || !editorRef.current || editorRef.current.getValue() === value) return

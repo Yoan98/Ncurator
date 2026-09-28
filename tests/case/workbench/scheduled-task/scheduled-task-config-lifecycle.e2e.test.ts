@@ -38,7 +38,7 @@ describe('workbench scheduled-task e2e', () => {
         suite: 'scheduled-task',
         groups: [],
         description:
-          '验证定时任务新增、伙伴必填、默认开启、编辑保存不改启用、立即执行确认与删除闭环。',
+          '验证定时任务首次新建和编辑时描述编辑器正常挂载，以及必填、默认开启、编辑保存、立即执行确认与删除闭环。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -66,7 +66,15 @@ describe('workbench scheduled-task e2e', () => {
 
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           const saveButton = getWorkbenchLocator(page, scheduledTaskSelectors.formSave)
+          const descriptionEditor = getWorkbenchLocator(
+            page,
+            scheduledTaskSelectors.formDescriptionInput
+          )
           await saveButton.waitFor({ state: 'visible' })
+          await descriptionEditor.waitFor({ state: 'visible' })
+          const firstCreateEditorReady =
+            (await descriptionEditor.isVisible()) &&
+            (await page.getByText('页面出现异常，已停止渲染', { exact: true }).count()) === 0
           const drawer = page.locator('.scheduled-task-config-drawer')
           const drawerOpened = await drawer.evaluate((element) =>
             element.classList.contains('ant-drawer-open')
@@ -234,6 +242,8 @@ describe('workbench scheduled-task e2e', () => {
             (await sidebarCountChip.textContent())?.trim() === '1' &&
             (await titleCountChip.textContent())?.trim() === '1'
 
+          let editEditorReady = false
+          let descriptionBackfilled = false
           if (item && created) {
             await getWorkbenchLocator(
               page,
@@ -241,6 +251,11 @@ describe('workbench scheduled-task e2e', () => {
             ).click()
             const nameInput = getWorkbenchLocator(page, scheduledTaskSelectors.formName)
             await nameInput.waitFor({ state: 'visible' })
+            await descriptionEditor.waitFor({ state: 'visible' })
+            descriptionBackfilled = (await descriptionEditor.innerText()).includes(TASK_PROMPT)
+            editEditorReady =
+              (await descriptionEditor.isVisible()) &&
+              (await page.getByText('页面出现异常，已停止渲染', { exact: true }).count()) === 0
             await nameInput.fill(TASK_NAME_EDITED)
             await page
               .getByTestId(`${scheduledTaskSelectors.formPartner}-option-${reboundPartner?.id}`)
@@ -291,6 +306,7 @@ describe('workbench scheduled-task e2e', () => {
 
           return {
             drawerOpened,
+            firstCreateEditorReady,
             maskKeepsDrawerOpen,
             escapeKeepsDirtyDrawerOpen,
             drawerWidthMatches,
@@ -307,6 +323,8 @@ describe('workbench scheduled-task e2e', () => {
             runNowConfirmCancelKeptIdle,
             disabledAfterToggle,
             enabledAfterToggle,
+            editEditorReady,
+            descriptionBackfilled,
             countChipVisibleAfterEnable,
             editedCorrectly,
             countChipVisibleAfterEdit,
@@ -318,6 +336,7 @@ describe('workbench scheduled-task e2e', () => {
           await runtime.assertThat(
             result.partnerIsFirstField &&
               result.drawerOpened &&
+              result.firstCreateEditorReady &&
               result.maskKeepsDrawerOpen &&
               result.escapeKeepsDirtyDrawerOpen &&
               result.drawerWidthMatches &&
@@ -334,6 +353,8 @@ describe('workbench scheduled-task e2e', () => {
               result.itemShowsSummary &&
               result.runNowConfirmCancelKeptIdle &&
               result.enabledAfterToggle &&
+              result.editEditorReady &&
+              result.descriptionBackfilled &&
               result.countChipVisibleAfterEnable &&
               result.editedCorrectly &&
               result.countChipVisibleAfterEdit &&
