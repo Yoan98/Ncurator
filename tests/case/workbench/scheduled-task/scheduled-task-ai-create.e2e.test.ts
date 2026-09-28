@@ -14,6 +14,7 @@ import {
 
 const CASE_ID = 'scheduled-task-ai-create'
 const INITIAL_DRAFT = '我们一起来设置一个定时任务吧。询问我需要安排什么，以及应该在什么时候运行。'
+const TARGET_PARTNER_NAME = 'AI 创建目标伙伴名称过长用于验证伙伴列表中的截断样式和可滚动选择'
 
 describe('workbench scheduled-task e2e', () => {
   it(
@@ -24,7 +25,7 @@ describe('workbench scheduled-task e2e', () => {
         domain: 'workbench',
         suite: 'scheduled-task',
         groups: [],
-        description: '验证 AI 创建选择伙伴后切换聊天、预填草稿、不自动发送并持久化草稿。',
+        description: '验证 AI 创建伙伴列表的名称截断、固定高度滚动、选择状态与草稿切换。',
         fixtures: [],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -47,20 +48,39 @@ describe('workbench scheduled-task e2e', () => {
             scheduledTaskSelectors.aiConfirm
           ).isDisabled()
           await page.locator('.ant-modal .ant-btn-default').click()
-          await createPartnerThroughWorkbenchUi(page, 'AI 创建目标伙伴')
+          await createPartnerThroughWorkbenchUi(page, TARGET_PARTNER_NAME)
           await createPartnerThroughWorkbenchUi(page, '草稿切换伙伴')
+          for (let index = 0; index < 8; index += 1) {
+            await createPartnerThroughWorkbenchUi(page, `AI 列表滚动伙伴${index + 1}`)
+          }
           const partners = (await page.evaluate(
             async () => await window.api.partnerList()
           )) as PartnerListItem[]
-          const target = partners.find((partner) => partner.name === 'AI 创建目标伙伴')
+          const target = partners.find((partner) => partner.name === TARGET_PARTNER_NAME)
           const other = partners.find((partner) => partner.name === '草稿切换伙伴')
           if (!target || !other) throw new Error('failed to create AI scheduled-task partners')
 
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.aiAddButton).click()
+          const partnerList = getWorkbenchLocator(page, scheduledTaskSelectors.aiPartner)
+          const partnerListScroll = await partnerList.evaluate((element) => {
+            const style = getComputedStyle(element)
+            return {
+              maxHeight: style.maxHeight,
+              overflowY: style.overflowY,
+              scrollHeight: element.scrollHeight,
+              clientHeight: element.clientHeight
+            }
+          })
           const targetOption = page.getByTestId(
             `${scheduledTaskSelectors.aiPartner}-option-${target.id}`
           )
+          await targetOption.scrollIntoViewIfNeeded()
+          const partnerListScrollsToOffscreenOption =
+            (await partnerList.evaluate((element) => element.scrollTop)) > 0
+          const targetNameActuallyOverflows = await targetOption
+            .locator('.truncate')
+            .evaluate((element) => element.scrollWidth > element.clientWidth)
           const partnerOptionShowsAnimatedAvatar =
             (await targetOption.isVisible()) &&
             (await targetOption.locator('.nc-partner-avatar-animated').count()) === 1
@@ -107,6 +127,9 @@ describe('workbench scheduled-task e2e', () => {
           return {
             emptyPartnerStateVisible,
             emptyPartnerConfirmDisabled,
+            partnerListScroll,
+            partnerListScrollsToOffscreenOption,
+            targetNameActuallyOverflows,
             partnerOptionShowsAnimatedAvatar,
             partnerSelectionShowsAnimatedAvatar,
             draftPrefilled,
@@ -119,6 +142,11 @@ describe('workbench scheduled-task e2e', () => {
           await runtime.assertThat(
             result.emptyPartnerStateVisible &&
               result.emptyPartnerConfirmDisabled &&
+              result.partnerListScroll.maxHeight === '320px' &&
+              result.partnerListScroll.overflowY === 'auto' &&
+              result.partnerListScroll.scrollHeight > result.partnerListScroll.clientHeight &&
+              result.partnerListScrollsToOffscreenOption &&
+              result.targetNameActuallyOverflows &&
               result.partnerOptionShowsAnimatedAvatar &&
               result.partnerSelectionShowsAnimatedAvatar &&
               result.draftPrefilled &&
@@ -128,7 +156,7 @@ describe('workbench scheduled-task e2e', () => {
             {
               name: 'scheduled-task-ai-create-prefills-draft',
               message:
-                'AI 创建应展示动态伙伴形象、选择并切换伙伴，只预填持久草稿，不发送消息或启动运行。',
+                'AI 创建应展示可滚动、名称截断且选择态正确的伙伴列表，并预填持久草稿而不发送消息。',
               data: result
             }
           )

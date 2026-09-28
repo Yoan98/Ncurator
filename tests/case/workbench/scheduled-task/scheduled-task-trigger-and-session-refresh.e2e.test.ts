@@ -7,6 +7,7 @@ import {
   getWorkbenchLocator,
   openScheduledTasksView,
   scheduledTaskSelectors,
+  selectScheduledTaskPartner,
   selectWorkbenchModel,
   setWorkbenchInput,
   setupWorkbenchWithTempWorkspace,
@@ -80,9 +81,7 @@ describe('workbench scheduled-task e2e', () => {
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('触发验证任务')
           await setWorkbenchInput(page, TASK_PROMPT, scheduledTaskSelectors.formDescriptionInput)
-          await page
-            .getByTestId(`${scheduledTaskSelectors.formPartner}-option-${targetPartner.id}`)
-            .click()
+          await selectScheduledTaskPartner(page, targetPartner.id)
           // Compute time immediately before save/enable so we do not miss the daily slot.
           const scheduledHhmm = upcomingDailyHhmm(120_000)
           await fillScheduledTaskTime(page, scheduledHhmm)

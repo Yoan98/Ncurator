@@ -31,8 +31,7 @@ import type {
 import { scheduledTaskSelectors } from '../../testing/selectors'
 import ScheduledTaskCountChip from './ScheduledTaskCountChip'
 import PartnerAvatar from '../workbench/PartnerAvatar'
-import ScheduledTaskDescriptionEditor from './ScheduledTaskDescriptionEditor'
-import type { ScheduledTaskDescriptionEditorHandle } from './ScheduledTaskDescriptionEditor'
+import ComposerInputEditor from '../workbench/composer/ComposerInputEditor'
 
 const WEEKDAY_OPTIONS = [
   { value: 0, label: '周日' },
@@ -54,6 +53,7 @@ type FormState = {
   partnerId: string
   name: string
   description: string
+  contentNodes: ChatMessageContentNode[]
   selectedReferences: SelectedReference[]
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
@@ -65,6 +65,7 @@ const emptyForm = (): FormState => ({
   partnerId: '',
   name: '',
   description: '',
+  contentNodes: [],
   selectedReferences: [],
   scheduleType: 'daily',
   timeOfDay: '09:00',
@@ -187,7 +188,6 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
   const [aiPartnerId, setAiPartnerId] = useState('')
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm())
-  const descriptionEditorRef = useRef<ScheduledTaskDescriptionEditorHandle | null>(null)
   const formInitialSnapshotRef = useRef('')
   const enabledCount = useMemo(() => countEnabledTasks(tasks), [tasks])
   const partnerNames = useMemo(
@@ -240,6 +240,10 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
       partnerId: task.partnerId,
       name: task.name,
       description: task.description,
+      contentNodes:
+        task.contentNodes?.length > 0
+          ? task.contentNodes
+          : buildContentNodes(task.description, task.selectedReferences),
       selectedReferences: task.selectedReferences,
       scheduleType: task.scheduleType,
       timeOfDay: task.timeOfDay,
@@ -261,13 +265,14 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
       okText: '放弃修改',
       okButtonProps: { danger: true },
       cancelText: '继续编辑',
+      zIndex: 1200,
       onOk: () => setFormOpen(false)
     })
   }
 
-  const buildSaveRequest = (descriptionValue: string): ScheduledTaskSaveRequest | null => {
+  const buildSaveRequest = (): ScheduledTaskSaveRequest | null => {
     const timeOfDay = form.timeOfDay.trim()
-    const description = descriptionValue.trim()
+    const description = form.description.trim()
     if (!partners.some((partner) => partner.id === form.partnerId)) {
       message.warning('请选择伙伴')
       return null
@@ -292,7 +297,10 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
       id: form.id || undefined,
       name: form.name.trim(),
       description,
-      contentNodes: buildContentNodes(description, form.selectedReferences),
+      contentNodes:
+        form.contentNodes.length > 0
+          ? form.contentNodes
+          : buildContentNodes(description, form.selectedReferences),
       selectedReferences: form.selectedReferences,
       scheduleType: form.scheduleType,
       timeOfDay,
@@ -302,11 +310,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
   }
 
   const handleSave = async (): Promise<void> => {
-    const description = descriptionEditorRef.current?.getValue() ?? form.description
-    if (description !== form.description) {
-      setForm((current) => ({ ...current, description }))
-    }
-    const payload = buildSaveRequest(description)
+    const payload = buildSaveRequest()
     if (!payload) return
     setSaving(true)
     try {
@@ -494,6 +498,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
         title={form.id ? '编辑定时任务' : '新增定时任务'}
         placement="right"
         width="min(50vw, 800px)"
+        closable
         maskClosable={false}
         onClose={requestCloseForm}
         rootClassName="scheduled-task-config-drawer"
@@ -504,16 +509,6 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
             className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5"
             data-testid={scheduledTaskSelectors.formContent}
           >
-            <label className="flex flex-col gap-2">
-              <RequiredFieldLabel>伙伴</RequiredFieldLabel>
-              <PartnerOptionList
-                partners={partners}
-                value={form.partnerId}
-                dataTestId={scheduledTaskSelectors.formPartner}
-                onChange={(partnerId) => setForm((current) => ({ ...current, partnerId }))}
-              />
-            </label>
-
             <label className="flex flex-col gap-1.5">
               <RequiredFieldLabel>任务名称</RequiredFieldLabel>
               <Input
@@ -526,14 +521,65 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
               />
             </label>
 
-            <div className="flex flex-col gap-1.5">
+            <div
+              className="flex flex-col gap-1.5"
+              data-testid={scheduledTaskSelectors.formDescription}
+            >
               <RequiredFieldLabel>任务描述</RequiredFieldLabel>
-              <ScheduledTaskDescriptionEditor
-                ref={descriptionEditorRef}
-                value={form.description}
-                selectedReferences={form.selectedReferences}
-                onChange={(description, selectedReferences) =>
-                  setForm((current) => ({ ...current, description, selectedReferences }))
+              <ComposerInputEditor
+                value={{
+                  input: form.description,
+                  contentNodes: form.contentNodes,
+                  selectedReferences: form.selectedReferences
+                }}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    description: value.input,
+                    contentNodes: value.contentNodes,
+                    selectedReferences: value.selectedReferences
+                  }))
+                }
+                placeholder="描述你希望伙伴完成的事，也可使用 @ 引用"
+                dataTestId={scheduledTaskSelectors.formDescriptionInput}
+                editorClassName="max-h-[240px] overflow-y-auto"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <RequiredFieldLabel>伙伴</RequiredFieldLabel>
+              <Select
+                className="w-full"
+                value={form.partnerId || undefined}
+                placeholder="选择伙伴"
+                showSearch
+                optionFilterProp="label"
+                options={partners.map((partner) => ({
+                  value: partner.id,
+                  label: partner.name
+                }))}
+                optionRender={(option) => {
+                  const partner = partners.find((item) => item.id === option.value)
+                  if (!partner) return option.label
+                  return (
+                    <div
+                      className="flex min-w-0 items-center gap-2"
+                      data-testid={`${scheduledTaskSelectors.formPartner}-option-${partner.id}`}
+                    >
+                      <PartnerAvatar
+                        shape={partner.avatar_shape}
+                        color={partner.avatar_color}
+                        size={24}
+                        animationSeed={`scheduled-task-select-${partner.id}`}
+                      />
+                      <span className="truncate">{partner.name}</span>
+                    </div>
+                  )
+                }}
+                notFoundContent="暂无伙伴"
+                data-testid={scheduledTaskSelectors.formPartner}
+                onChange={(partnerId: string) =>
+                  setForm((current) => ({ ...current, partnerId }))
                 }
               />
             </div>

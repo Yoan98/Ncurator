@@ -315,7 +315,6 @@ export const scheduledTaskSelectors = {
   formName: 'scheduled-task-form-name',
   formDescription: 'scheduled-task-form-description',
   formDescriptionInput: 'scheduled-task-form-description-input',
-  formReferenceList: 'scheduled-task-form-reference-list',
   drawer: 'scheduled-task-config-drawer',
   formContent: 'scheduled-task-form-content',
   formFooter: 'scheduled-task-form-footer',

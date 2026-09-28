@@ -8,6 +8,7 @@ import {
   getWorkbenchLocator,
   openScheduledTasksView,
   scheduledTaskSelectors,
+  selectScheduledTaskPartner,
   setupWorkbenchWithTempWorkspace,
   waitForScheduledTaskDrawerClosed,
   workbenchSelectors
@@ -89,9 +90,7 @@ describe('workbench scheduled-task e2e', () => {
             page,
             `${scheduledTaskSelectors.itemEditPrefix}-${taskId}`
           ).click()
-          await page
-            .getByTestId(`${scheduledTaskSelectors.formPartner}-option-${reboundPartner.id}`)
-            .click()
+          await selectScheduledTaskPartner(page, reboundPartner.id)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
           await waitForScheduledTaskDrawerClosed(page)
           const rebound = (

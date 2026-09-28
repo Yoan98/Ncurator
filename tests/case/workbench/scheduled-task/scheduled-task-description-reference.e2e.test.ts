@@ -9,6 +9,7 @@ import {
   insertWorkbenchReferenceToken,
   openScheduledTasksView,
   scheduledTaskSelectors,
+  selectScheduledTaskPartner,
   selectWorkbenchModel,
   setWorkbenchInput,
   setupWorkbenchWithTempWorkspace,
@@ -18,7 +19,9 @@ import {
 const CASE_ID = 'scheduled-task-description-reference'
 const PARTNER_NAME = '定时任务引用伙伴'
 const TASK_NAME = '引用资料任务'
-const DESCRIPTION = '请阅读资料并总结**要点**，'
+const DESCRIPTION_PREFIX = '请阅读资料并总结**要点**，'
+const DESCRIPTION_SUFFIX = '并附上来源。'
+const DESCRIPTION = `${DESCRIPTION_PREFIX} ${DESCRIPTION_SUFFIX}`
 
 const listTasks = async (page: import('playwright').Page): Promise<ScheduledTask[]> =>
   (await page.evaluate(async () => await window.api.scheduledTaskList())) as ScheduledTask[]
@@ -44,7 +47,7 @@ describe('workbench scheduled-task e2e', () => {
         domain: 'workbench',
         suite: 'scheduled-task',
         groups: [],
-        description: '验证定时任务描述编辑器支持 @ 引用，并在立即执行时把引用传给伙伴消息。',
+        description: '验证通用 Composer 输入框中的行内 @ 引用可保存、回填并在立即执行时传给伙伴消息。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -64,25 +67,40 @@ describe('workbench scheduled-task e2e', () => {
 
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
-          await page
-            .getByTestId(`${scheduledTaskSelectors.formPartner}-option-${partner.id}`)
-            .click()
+          await selectScheduledTaskPartner(page, partner.id)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill(TASK_NAME)
-          await setWorkbenchInput(page, DESCRIPTION, scheduledTaskSelectors.formDescriptionInput)
-          const markdownRendered =
+          await setWorkbenchInput(page, DESCRIPTION_PREFIX, scheduledTaskSelectors.formDescriptionInput)
+          const markdownStayedLiteral =
             (await getWorkbenchLocator(page, scheduledTaskSelectors.formDescriptionInput)
               .locator('strong')
-              .count()) > 0
+              .count()) === 0 &&
+            (await getWorkbenchLocator(page, scheduledTaskSelectors.formDescriptionInput)
+              .innerText()).includes(DESCRIPTION_PREFIX)
           await insertWorkbenchReferenceToken(
             page,
             'sample-edit.docx',
             'sample-edit.docx',
             scheduledTaskSelectors.formDescriptionInput
           )
+          await page.keyboard.insertText(DESCRIPTION_SUFFIX)
           const editorTokens = await getWorkbenchReferenceTokenTexts(
             page,
             scheduledTaskSelectors.formDescriptionInput
           )
+          const tokenInlineWithText = await getWorkbenchLocator(
+            page,
+            scheduledTaskSelectors.formDescriptionInput
+          ).evaluate((editor) => {
+            const token = editor.querySelector<HTMLElement>('[data-role="scope-token"]')
+            if (!token) return false
+            const before = document.createRange()
+            before.selectNodeContents(editor)
+            before.setEndBefore(token)
+            const after = document.createRange()
+            after.selectNodeContents(editor)
+            after.setStartAfter(token)
+            return before.toString().includes('**要点**') && after.toString().includes('并附上来源。')
+          })
           await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
           await waitForScheduledTaskDrawerClosed(page)
 
@@ -95,6 +113,39 @@ describe('workbench scheduled-task e2e', () => {
           const storedContentNode = created.contentNodes.some(
             (node) => node.kind === 'reference' && node.reference.name === 'sample-edit.docx'
           )
+          const storedReferenceFollowsText =
+            created.contentNodes.findIndex((node) => node.kind === 'reference') >
+            created.contentNodes.findIndex((node) => node.kind === 'text')
+
+          await getWorkbenchLocator(
+            page,
+            `${scheduledTaskSelectors.itemEditPrefix}-${created.id}`
+          ).click()
+          const descriptionEditor = getWorkbenchLocator(
+            page,
+            scheduledTaskSelectors.formDescriptionInput
+          )
+          await descriptionEditor.waitFor({ state: 'visible' })
+          const editTextBackfilled = await descriptionEditor.evaluate((editor) => {
+            const token = editor.querySelector<HTMLElement>('[data-role="scope-token"]')
+            if (!token) return false
+            const before = document.createRange()
+            before.selectNodeContents(editor)
+            before.setEndBefore(token)
+            const after = document.createRange()
+            after.selectNodeContents(editor)
+            after.setStartAfter(token)
+            return before.toString().includes('**要点**') && after.toString().includes('并附上来源。')
+          })
+          const editTokens = await getWorkbenchReferenceTokenTexts(
+            page,
+            scheduledTaskSelectors.formDescriptionInput
+          )
+          const referenceTokenBackfilled = editTokens.some((text) =>
+            text.includes('sample-edit.docx')
+          )
+          await page.locator('.scheduled-task-config-drawer .ant-drawer-close').click()
+          await waitForScheduledTaskDrawerClosed(page)
 
           await getWorkbenchLocator(
             page,
@@ -125,10 +176,14 @@ describe('workbench scheduled-task e2e', () => {
 
           return {
             editorTokens,
-            markdownRendered,
+            markdownStayedLiteral,
+            tokenInlineWithText,
             storedReference,
             storedMarkdown,
             storedContentNode,
+            storedReferenceFollowsText,
+            editTextBackfilled,
+            referenceTokenBackfilled,
             messageReference: Boolean(messageReference),
             messageContentNode: Boolean(messageContentNode)
           }
@@ -136,15 +191,20 @@ describe('workbench scheduled-task e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.editorTokens.some((text) => text.includes('sample-edit.docx')) &&
-              result.markdownRendered &&
+              result.markdownStayedLiteral &&
+              result.tokenInlineWithText &&
               result.storedReference &&
               result.storedMarkdown &&
               result.storedContentNode &&
+              result.storedReferenceFollowsText &&
+              result.editTextBackfilled &&
+              result.referenceTokenBackfilled &&
               result.messageReference &&
               result.messageContentNode,
             {
               name: 'scheduled-task-description-reference-roundtrip',
-              message: '定时任务描述中的引用应保存，并在立即执行提交给绑定伙伴。',
+              message:
+                '定时任务通用输入框应把 @ 引用以内联 token 呈现并原位保存、回填，立即执行时仍传给绑定伙伴。',
               data: result
             }
           )
