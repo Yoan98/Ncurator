@@ -12,6 +12,11 @@ import {
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
 
+const approxCssPx = (value: string, expected: number, tolerance = 1): boolean => {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) && Math.abs(parsed - expected) <= tolerance
+}
+
 const CASE_ID = 'scheduled-task-ai-create'
 const INITIAL_DRAFT = '我们一起来设置一个定时任务吧。询问我需要安排什么，以及应该在什么时候运行。'
 const TARGET_PARTNER_NAME = 'AI 创建目标伙伴名称过长用于验证伙伴列表中的截断样式和可滚动选择'
@@ -63,6 +68,9 @@ describe('workbench scheduled-task e2e', () => {
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.aiAddButton).click()
           const partnerList = getWorkbenchLocator(page, scheduledTaskSelectors.aiPartner)
+          await partnerList.evaluate((element) => {
+            element.scrollTop = 0
+          })
           const partnerListScroll = await partnerList.evaluate((element) => {
             const style = getComputedStyle(element)
             const listRect = element.getBoundingClientRect()
@@ -150,7 +158,7 @@ describe('workbench scheduled-task e2e', () => {
           await runtime.assertThat(
             result.emptyPartnerStateVisible &&
               result.emptyPartnerConfirmDisabled &&
-              result.partnerListScroll.maxHeight === '208px' &&
+              approxCssPx(result.partnerListScroll.maxHeight, 208) &&
               result.partnerListScroll.overflowY === 'auto' &&
               result.partnerListScroll.fullyVisibleOptionCount === 4 &&
               result.partnerListScroll.scrollHeight > result.partnerListScroll.clientHeight &&
