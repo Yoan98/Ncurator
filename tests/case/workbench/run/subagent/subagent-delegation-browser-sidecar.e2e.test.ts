@@ -40,14 +40,45 @@ const updates = async (runtime: E2ETestRuntime, started: number) => {
 // Real website input: forms send server receipts, source facts are rendered by JavaScript.
 const createSite = async () => {
   const receipts: string[] = []
+  const instances = new Map<string, string>()
+  const rendered: string[] = []
   const slow: http.ServerResponse[] = []
   let slowRequests = 0
   const server = http.createServer((request, response) => {
     const url = new URL(request.url || '/', 'http://localhost')
     if (url.pathname === '/submit') {
-      const value = url.searchParams.get('value') || ''
-      receipts.push(value)
-      response.end(`已提交 ${value}`)
+      if (request.method !== 'POST') {
+        response.writeHead(405)
+        response.end('需要通过页面提交')
+        return
+      }
+      let body = ''
+      request.on('data', (chunk) => {
+        body += chunk.toString()
+      })
+      request.on('end', () => {
+        try {
+          const payload = JSON.parse(body) as { value?: string; instance?: string }
+          if (
+            typeof payload.value !== 'string' ||
+            typeof payload.instance !== 'string' ||
+            !payload.instance
+          )
+            throw new Error('missing page instance')
+          receipts.push(payload.value)
+          instances.set(payload.value, payload.instance)
+          response.setHeader('content-type', 'text/plain; charset=utf-8')
+          response.end(`已提交 ${payload.value}`)
+        } catch {
+          response.writeHead(400)
+          response.end('提交内容不完整')
+        }
+      })
+      return
+    }
+    if (url.pathname === '/render') {
+      rendered.push(url.searchParams.get('marker') || '')
+      response.end('ok')
       return
     }
     if (url.pathname === '/slow') {
@@ -58,13 +89,13 @@ const createSite = async () => {
     if (url.pathname === '/facts') {
       response.setHeader('content-type', 'text/html; charset=utf-8')
       response.end(
-        `<!doctype html><title>事实资料</title><main id="facts"></main><script>document.querySelector('#facts').textContent = '核验事实：${url.searchParams.get('marker') || '31415'}。' + '这是经页面脚本渲染的实际资料，请核对事实并记录来源。'.repeat(25)</script>`
+        `<!doctype html><title>事实资料</title><main id="facts"></main><script>document.querySelector('#facts').textContent = '核验事实：${url.searchParams.get('marker') || '31415'}。' + '这是经页面脚本渲染的实际资料，请核对事实并记录来源。'.repeat(25); fetch('/render?marker=${url.searchParams.get('marker') || '31415'}')</script>`
       )
       return
     }
     response.setHeader('content-type', 'text/html; charset=utf-8')
     response.end(
-      '<!doctype html><title>独立提交页面</title><label>任务内容<input id="value" aria-label="任务内容"></label><button id="submit">提交</button><p id="status">尚未提交</p><script>document.querySelector("#submit").onclick=async()=>{const value=document.querySelector("#value").value;document.querySelector("#status").textContent=await(await fetch("/submit?value="+encodeURIComponent(value))).text()}</script>'
+      '<!doctype html><title>独立提交页面</title><label>任务内容<input id="value" aria-label="任务内容"></label><button id="submit">提交</button><p id="status">尚未提交</p><script>sessionStorage.instance ||= crypto.randomUUID(); document.querySelector("#submit").onclick=async()=>{const value=document.querySelector("#value").value;document.querySelector("#status").textContent=await(await fetch("/submit",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({value,instance:sessionStorage.instance})})).text()}</script>'
     )
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -73,6 +104,8 @@ const createSite = async () => {
   return {
     url: `http://127.0.0.1:${address.port}`,
     receipts,
+    instances,
+    rendered,
     getSlowRequests: () => slowRequests,
     close: async () => {
       slow.forEach((response) => response.destroy())
@@ -150,6 +183,8 @@ describe('subagent browser and sidecar real UI', () => {
           )
           expect(site.receipts).toContain('ALPHA_731')
           expect(site.receipts).toContain('BETA_892')
+          expect(site.instances.get('ALPHA_731')).not.toBe(site.instances.get('BETA_892'))
+          expect(site.rendered).toEqual(expect.arrayContaining(['31415', '27182']))
           expect(
             site.receipts.filter((value) => !['ALPHA_731', 'BETA_892'].includes(value))
           ).toHaveLength(0)

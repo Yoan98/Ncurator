@@ -28,6 +28,7 @@ const createMockCdpEndpointService = (): CdpEndpointService =>
 
 const createMockMainWindow = () =>
   ({
+    isDestroyed: vi.fn().mockReturnValue(false),
     on: vi.fn(),
     once: vi.fn(),
     removeListener: vi.fn(),
@@ -48,8 +49,16 @@ describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
 
     const executeJsMock = vi.fn().mockResolvedValue(undefined)
     const tabRuntime = {
-      persisted: { id: 'tab-1', ownerKey: 'session-1', url: 'https://example.com', createdAt: Date.now(), updatedAt: Date.now() },
+      persisted: {
+        id: 'tab-1',
+        ownerKey: 'session-1',
+        url: 'https://example.com',
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      },
       view: {
+        setBounds: vi.fn(),
+        setVisible: vi.fn(),
         webContents: {
           isDestroyed: () => false,
           executeJavaScript: executeJsMock
@@ -90,8 +99,16 @@ describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
     const executeJsMock = vi.fn().mockResolvedValue(undefined)
 
     const tabRuntime = {
-      persisted: { id: 'tab-2', ownerKey: 'session-1', url: 'https://example.com', createdAt: Date.now(), updatedAt: Date.now() },
+      persisted: {
+        id: 'tab-2',
+        ownerKey: 'session-1',
+        url: 'https://example.com',
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      },
       view: {
+        setBounds: vi.fn(),
+        setVisible: vi.fn(),
         webContents: {
           isDestroyed: () => true,
           executeJavaScript: executeJsMock
@@ -105,7 +122,6 @@ describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
 
     const tabsMap = (service as any).tabs as Map<string, any>
     tabsMap.set('tab-2', tabRuntime)
-
     ;(service as any).trackRunTab('run-456', 'tab-2')
     await service.releaseRun('run-456')
 

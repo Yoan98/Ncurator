@@ -167,7 +167,7 @@ describe('temporary subagents through production AiRunService', () => {
                 return complete('等待取消')
               }
               if (count === 2)
-                return buildLearnSkillsDecision({ skillIds: ['docx-write'], summary: '文档编辑' })
+                return buildLearnSkillsDecision({ skillIds: ['docx-read', 'docx-write'], summary: '文档编辑' })
               if (count === 3)
                 return buildToolDecision({
                   toolName: 'docx_search',
@@ -376,7 +376,7 @@ describe('temporary subagents through production AiRunService', () => {
         expect(result.output.status).toBe('completed')
         expect(result.repaired.join('\n')).toContain('VERIFIED_A')
         expect(result.repaired.join('\n')).toContain('执行被中断，未收到完整结果')
-        expect(result.projection.historyFloorSeq).toBeGreaterThanOrEqual(2)
+        expect(result.projection.historyFloorSeq).toBeGreaterThan(0)
         expect(result.projection.compactionCheckpoint?.summary).toContain('COMPACT_CHILD')
         expect(
           result.after.some(

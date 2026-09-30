@@ -107,8 +107,7 @@ export const DELEGATE_TO_SUBAGENT_TOOL_SPEC: HumanToolSpec<
   inputSchema: DELEGATE_TO_SUBAGENT_SCHEMA,
   promptSpec: {
     name: 'delegate_to_subagent',
-    description:
-      '并行执行临时子 agent 任务，等待结束后返回各任务的状态、结果和产物。子任务使用独立上下文，不包含主聊天历史。'
+    description: '执行临时子 agent 任务，返回各任务的状态、结果和产物。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'mutating',

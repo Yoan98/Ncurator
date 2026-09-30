@@ -6,17 +6,13 @@ export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
   tasks: z
     .array(
       z.object({
-        name: z.string().trim().min(1).max(8).describe('简短有趣的名称，最多 8 个字符'),
-        task: z
-          .string()
-          .trim()
-          .min(1)
-          .describe('子任务的完整描述：任务背景、资料路径和交付要求；子任务上下文不包含主聊天')
+        name: z.string().trim().min(1).max(8).describe('子任务名称'),
+        task: z.string().trim().min(1).describe('子任务描述')
       })
     )
     .min(1)
     .max(MAX_CONCURRENT_SUBAGENTS)
-    .describe(`本次执行的独立子任务，数量 1–${MAX_CONCURRENT_SUBAGENTS}`)
+    .describe('子任务列表')
 })
 
 export const LEARN_SKILL_SCHEMA = z.object({

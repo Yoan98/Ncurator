@@ -33,7 +33,7 @@ describe('live subagent collaboration quality', () => {
         const beforeSheet = await fs.readFile(xlsx)
         const beforeDoc = (await mammoth.extractRawText({ path: docx })).value
         const workbook = new ExcelJS.Workbook()
-        await workbook.xlsx.load(new Uint8Array(beforeSheet))
+        await workbook.xlsx.readFile(xlsx)
         const sheet = workbook.getWorksheet('订单明细')!
         let sales = 0,
           returns = 0

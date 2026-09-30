@@ -848,6 +848,7 @@ export class BrowserEmbedService implements BrowserUseService {
         await runtime.view.webContents.executeJavaScript(hideScript).catch(() => undefined)
       })
     )
+    this.applyAllVisibility()
   }
 
   private trackRunTab(runId: string, tabId: string): void {
@@ -860,6 +861,7 @@ export class BrowserEmbedService implements BrowserUseService {
       this.runTabMap.set(normalizedRunId, tabIds)
     }
     tabIds.add(normalizedTabId)
+    this.applyAllVisibility()
   }
 
   public async dispose(): Promise<void> {
@@ -1050,13 +1052,16 @@ export class BrowserEmbedService implements BrowserUseService {
         this.bounds.width > 0 &&
         this.bounds.height > 0 &&
         !this.mainWindow.isDestroyed()
-      if (visible) {
-        const nextBounds: Rectangle = {
-          x: Math.max(0, Math.round(this.bounds.x)),
-          y: Math.max(0, Math.round(this.bounds.y)),
-          width: Math.max(1, Math.round(this.bounds.width)),
-          height: Math.max(1, Math.round(this.bounds.height))
-        }
+      const controlled = [...this.runTabMap.values()].some((tabs) => tabs.has(tabId))
+      if (visible || controlled) {
+        const nextBounds: Rectangle = visible
+          ? {
+              x: Math.max(0, Math.round(this.bounds.x)),
+              y: Math.max(0, Math.round(this.bounds.y)),
+              width: Math.max(1, Math.round(this.bounds.width)),
+              height: Math.max(1, Math.round(this.bounds.height))
+            }
+          : { x: this.mainWindow.getContentBounds().width + 1, y: 0, width: 1280, height: 800 }
         const becomingVisible = !runtime.visible || !runtime.attached
         if (!runtime.attached) {
           this.mainWindow.contentView.addChildView(runtime.view)
