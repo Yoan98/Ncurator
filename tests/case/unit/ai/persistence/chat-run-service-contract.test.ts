@@ -189,6 +189,42 @@ afterEach(async () => {
 })
 
 describe('unit ai persistence backend', () => {
+  it('child stream markers broadcast without changing the owner run or transcript', async () => {
+    const { storage, service, events } = await createTestService()
+    await seedPartner(storage)
+    await seedAiTurn(storage, {
+      runId: 'owner-stream',
+      userMessageId: 'user-stream',
+      assistantMessageId: 'answer-stream',
+      userContent: '分头处理',
+      partialAnswer: '主伙伴自己的正文',
+      status: 'running',
+      createdAt: 1000
+    })
+    const before = await storage.aiRun.getRun('owner-stream')
+    const internal = service as ChatRunServicePrivate
+    await internal.queueRunEvent('owner-stream', {
+      type: 'subagent_stream',
+      runId: 'owner-stream',
+      toolCallId: 'delegate',
+      childRunId: 'child-stream',
+      delta: '子任务公开文字',
+      reset: true,
+      requesting: true,
+      createdAt: 2000
+    })
+    await internal.queueRunEvent('owner-stream', {
+      type: 'llm_request_state',
+      runId: 'owner-stream',
+      callId: 'request-stream',
+      requesting: false,
+      createdAt: 2001
+    })
+    expect(await storage.aiRun.getRun('owner-stream')).toEqual(before)
+    expect(await storage.chatMessageLog.list('partner-1')).toHaveLength(0)
+    expect(events.map((event) => event.type)).toEqual(['subagent_stream', 'llm_request_state'])
+  })
+
   it('chat-submit-ai-creates-placeholder-and-run', async () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)

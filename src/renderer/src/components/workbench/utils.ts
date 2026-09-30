@@ -653,6 +653,24 @@ export const reduceAssistantProcessGroups = (
   current: AssistantProcessGroup[],
   event: AiRunEvent
 ): AssistantProcessGroup[] => {
+  if (event.type === 'subagent_stream') {
+    const groupId = `${event.runId}:tool:${event.toolCallId}`
+    return current.map((group) =>
+      group.id !== groupId
+        ? group
+        : {
+            ...group,
+            subagents: group.subagents?.map((child) => {
+              if (child.childRunId !== event.childRunId || child.status !== 'running') return child
+              return {
+                ...child,
+                message: (event.reset ? '' : child.message || '') + (event.delta || ''),
+                requesting: event.requesting ?? child.requesting
+              }
+            })
+          }
+    )
+  }
   if (event.type === 'subagent_updated') {
     const groupId = `${event.runId}:tool:${event.update.toolCallId}`
     const group =
@@ -672,7 +690,16 @@ export const reduceAssistantProcessGroups = (
       if (index < 0) actions.push(event.update.action)
       else actions[index] = { ...actions[index], ...event.update.action }
     }
-    const child = { ...previous, ...event.update, actions }
+    const active = event.update.status === 'running' || event.update.status === 'queued'
+    const child = {
+      ...previous,
+      ...event.update,
+      actions,
+      message: active
+        ? (event.update.message ?? event.update.action?.text ?? previous?.message)
+        : event.update.result,
+      requesting: active ? previous?.requesting : false
+    }
     const subagents = group.subagents?.some((item) => item.childRunId === child.childRunId)
       ? group.subagents.map((item) => (item.childRunId === child.childRunId ? child : item))
       : [...(group.subagents || []), child]

@@ -120,8 +120,7 @@ const resolveBaseUrlHost = (baseUrl: string): string => {
   }
 }
 
-const hashText = (value: string): string =>
-  createHash('sha256').update(value).digest('hex')
+const hashText = (value: string): string => createHash('sha256').update(value).digest('hex')
 
 const formatLlmActivitySummary = (input: {
   status: 'started' | 'completed' | 'failed'
@@ -166,9 +165,7 @@ export const runLlmCallWithActivity = async <T>(input: {
   let firstTokenAt: number | undefined
   let latestRawText = ''
   const contextBudgetSnapshot =
-    input.telemetry.caller === 'human.brain'
-      ? input.telemetry.contextBudgetSnapshot
-      : undefined
+    input.telemetry.caller === 'human.brain' ? input.telemetry.contextBudgetSnapshot : undefined
 
   const details = {
     callId,
@@ -244,7 +241,24 @@ export const runLlmCallWithActivity = async <T>(input: {
     let result: LlmCallExecutionResult<T> | undefined
     for (;;) {
       try {
-        result = await input.execute(observer, callId)
+        input.ctx.sendEvent({
+          type: 'llm_request_state',
+          runId: input.runId,
+          callId,
+          requesting: true,
+          createdAt: Date.now()
+        })
+        try {
+          result = await input.execute(observer, callId)
+        } finally {
+          input.ctx.sendEvent({
+            type: 'llm_request_state',
+            runId: input.runId,
+            callId,
+            requesting: false,
+            createdAt: Date.now()
+          })
+        }
         if (retryGroupStarted) {
           emitLlmRetryProcessCompleted({
             sendEvent: input.ctx.sendEvent,

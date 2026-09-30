@@ -10,8 +10,14 @@ describe('ai unit structured chat activity', () => {
   it('resets streamed draft before a retry so stale chunks are not duplicated', async () => {
     let attempt = 0
     let visible = ''
+    const requests: boolean[] = []
     const result = await runLlmCallWithActivity({
-      ctx: { runId: 'retry-run', sendEvent: () => undefined },
+      ctx: {
+        runId: 'retry-run',
+        sendEvent: (event) => {
+          if (event.type === 'llm_request_state') requests.push(event.requesting)
+        }
+      },
       runId: 'retry-run',
       system: 'system',
       user: 'user',
@@ -44,6 +50,7 @@ describe('ai unit structured chat activity', () => {
 
     expect(result.output).toBe('fresh')
     expect(visible).toBe('fresh')
+    expect(requests).toEqual([true, false, true, false])
   })
 
   it('aborts retry sleep when the run is cancelled', async () => {
@@ -52,7 +59,11 @@ describe('ai unit structured chat activity', () => {
     const startedAt = Date.now()
     await expect(
       runLlmCallWithActivity({
-        ctx: { runId: 'cancel-sleep-run', sendEvent: () => undefined, abortSignal: controller.signal },
+        ctx: {
+          runId: 'cancel-sleep-run',
+          sendEvent: () => undefined,
+          abortSignal: controller.signal
+        },
         runId: 'cancel-sleep-run',
         system: 'system',
         user: 'user',

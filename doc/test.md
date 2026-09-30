@@ -337,7 +337,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - 文件内容是逐行原始运行时事件 JSON，不包额外 wrapper，不做 schema 投影。
 - 范围固定为完整 runtime 原始事件流。
 - 普通测试与 e2e 的采集路径可以不同，但最终落盘契约必须一致。
-- `runtime-events.jsonl` 始终写出；如果本次 run 没有 runtime 事件，则写空文件。
+- `runtime-events.jsonl` 始终写出；如果本次 run 没有 runtime 事件，则写空文件。E2E observer 为每条事件分配独立标识，重复采集按该标识去重；同毫秒的并行事件或流式片段均保留。
 - 当 `Oracle`、断言 `data` 或 `timeline.jsonl` 仍不足以解释失败原因时，必须继续回看 `runtime-events.jsonl`。
 
 ### 5.5 `artifacts.json`

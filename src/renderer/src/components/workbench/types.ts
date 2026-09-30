@@ -148,6 +148,7 @@ export type AssistantProcessGroupItem = {
 }
 
 export type SubagentTaskView = import('../../../../shared/types').SubagentUpdate & {
+  requesting?: boolean
   actions: import('../../../../shared/types').SubagentAction[]
 }
 

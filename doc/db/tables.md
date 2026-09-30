@@ -97,7 +97,7 @@ Workbench 单例 UI。
 | `partner_id` | TEXT    | 伙伴 id，级联删除                                                                                                                                                        |
 | `run_id`     | TEXT    | 所属 run                                                                                                                                                                 |
 | `seq`        | INTEGER | 伙伴内顺序                                                                                                                                                               |
-| `entry_json` | TEXT    | 消息条目；user context 保存引用、附件和可选的结构化 `contentNodes`；`subagent_updated` annotation 保存父派发调用关联、子任务状态/工具行动/精简结果（子完整日志仅在内存） |
+| `entry_json` | TEXT    | 消息条目；user context 保存引用、附件和可选的结构化 `contentNodes`；`subagent_updated` annotation 保存父派发调用关联、子任务排队及执行状态/工具行动/最新完整公开消息/精简结果（子完整日志仅在内存，流式片段与请求状态不落盘） |
 | `created_at` | INTEGER | 创建时间                                                                                                                                                                 |
 
 ### `ai_run`

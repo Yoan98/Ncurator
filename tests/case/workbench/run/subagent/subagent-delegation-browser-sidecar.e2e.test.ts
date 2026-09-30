@@ -182,11 +182,28 @@ describe('subagent browser and sidecar real UI', () => {
           const started = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
-            `请找两位临时帮手并行分头处理，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字，并搜索 Python 官方 csv reader 说明返回官方来源链接。他们各自使用自己的标签。你把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
+            `请一次派发三位临时帮手分头处理，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
           )
           await waitUntil(async () =>
             (await updates(runtime, started)).some((event) => event.update.status === 'running')
           )
+          const queuedRow = runtime.page
+            .locator('[data-testid="subagent-task"][data-status="queued"]')
+            .last()
+          await queuedRow.waitFor({ state: 'visible', timeout: 120_000 })
+          expect(await queuedRow.locator('.nc-partner-avatar-animated').count()).toBe(0)
+          expect(await queuedRow.locator('.grayscale').count()).toBe(1)
+          await queuedRow.hover()
+          const queuedCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+          await queuedCloud.waitFor({ state: 'visible' })
+          expect(await queuedCloud.getByTestId('subagent-message').textContent()).toBe('我在排队')
+          expect(await queuedCloud.getByTestId('subagent-stream-dot').count()).toBe(0)
+          await runtime.captureScreenshot({
+            name: 'subagent-cloud-queued',
+            message: '灰色排队行及排队云提示'
+          })
+          await runtime.page.mouse.move(0, 0)
+          await queuedCloud.waitFor({ state: 'hidden' })
           let previewChildRunId = ''
           await waitUntil(async () => {
             const action = (await updates(runtime, started)).find((event) =>
@@ -199,7 +216,13 @@ describe('subagent browser and sidecar real UI', () => {
             `[data-testid="subagent-task"][data-child-run-id="${previewChildRunId}"]`
           )
           expect(await childRow.locator('.nc-partner-avatar-animated').count()).toBe(1)
-          expect(await childRow.textContent()).toContain('干活中')
+          expect(await childRow.textContent()).not.toMatch(/干活中|已干完/)
+          expect(
+            await runtime.page
+              .getByTestId('subagent-group')
+              .first()
+              .evaluate((group) => getComputedStyle(group).flexDirection)
+          ).toBe('column')
           await childRow.hover()
           await runtime.page
             .locator('[data-testid="subagent-thought"]:visible')
@@ -213,9 +236,29 @@ describe('subagent browser and sidecar real UI', () => {
                 ),
             10_000
           )
+          const liveCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+          await liveCloud
+            .getByTestId('subagent-stream-dot')
+            .waitFor({ state: 'visible', timeout: 120_000 })
+          expect(
+            await liveCloud
+              .getByTestId('subagent-stream-dot')
+              .evaluate((dot) => getComputedStyle(dot).animationName)
+          ).toBe('nc-subagent-dot-breathe')
+          expect(await liveCloud.getByTestId('subagent-message').count()).toBe(1)
+          await waitUntil(
+            async () =>
+              liveCloud
+                .locator('.nc-subagent-thought-lines')
+                .evaluate(
+                  (lines) =>
+                    Math.abs(lines.scrollHeight - lines.clientHeight - lines.scrollTop) <= 2
+                ),
+            10_000
+          )
           await runtime.captureScreenshot({
             name: 'subagent-cloud-running',
-            message: '运行中的横向头像列表与云朵气泡'
+            message: '运行中的竖排头像列表与最新消息云朵气泡'
           })
           await runtime.page.mouse.move(0, 0)
           await runtime.page
@@ -235,6 +278,10 @@ describe('subagent browser and sidecar real UI', () => {
           )
           if ((await panelToggle.getAttribute('aria-label')) === '收起右侧栏')
             await panelToggle.click()
+          await waitUntil(
+            async () => (await panelToggle.getAttribute('aria-label')) === '展开右侧栏',
+            10_000
+          )
           await getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.partnerItemPrefix)
             .filter({ hasText: secondary })
             .click()
@@ -243,6 +290,10 @@ describe('subagent browser and sidecar real UI', () => {
               .filter({ hasText: secondary })
               .evaluate((row) => row.classList.contains('nc-sidebar-item-active'))
           )
+          await waitUntil(
+            async () => (await runtime.page.getByTestId('subagent-task').count()) === 0,
+            10_000
+          )
           await getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.partnerItemPrefix)
             .filter({ hasText: primary })
             .click()
@@ -250,6 +301,10 @@ describe('subagent browser and sidecar real UI', () => {
             getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.partnerItemPrefix)
               .filter({ hasText: primary })
               .evaluate((row) => row.classList.contains('nc-sidebar-item-active'))
+          )
+          await waitUntil(
+            async () => (await runtime.page.getByTestId('subagent-task').count()) === 3,
+            10_000
           )
           let pageGeometry: Array<{ id: number; viewport: number[]; instance: string }> = []
           await waitUntil(async () => {
@@ -277,12 +332,17 @@ describe('subagent browser and sidecar real UI', () => {
             data: pageGeometry
           })
           await waitUntil(async () => {
-            const finished = new Set(
-              (await updates(runtime, started))
-                .filter((event) => event.update.status !== 'running')
-                .map((event) => event.update.childRunId)
+            const latest = new Map(
+              (await updates(runtime, started)).map((event) => [
+                event.update.childRunId,
+                event.update.status
+              ])
             )
-            if (finished.size === 2) return true
+            if (
+              latest.size === 3 &&
+              [...latest.values()].every((status) => status !== 'running' && status !== 'queued')
+            )
+              return true
             expect(await panelToggle.getAttribute('aria-label')).toBe('展开右侧栏')
             return false
           }, 900_000)
@@ -337,7 +397,12 @@ describe('subagent browser and sidecar real UI', () => {
                 .filter((event) => event.update.status === 'completed')
                 .map((event) => event.update.childRunId)
             ).size
-          ).toBe(2)
+          ).toBe(3)
+          const childStreams = (await collectWorkbenchAiRunEvents(runtime)).filter(
+            (event) => event.type === 'subagent_stream' && event.runId === subagentEvents[0].runId
+          )
+          expect(childStreams.filter((event) => event.delta).length).toBeGreaterThan(3)
+          expect(childStreams.some((event) => event.delta && !event.reset)).toBe(true)
           expect(
             firstUpdates.filter(
               (event) =>
@@ -354,29 +419,50 @@ describe('subagent browser and sidecar real UI', () => {
             workbenchSelectors.assistantProcessTogglePrefix
           ).last()
           await processToggle.click()
-          expect(await runtime.page.getByTestId('subagent-task').count()).toBe(2)
+          expect(await runtime.page.getByTestId('subagent-task').count()).toBe(3)
           const completedChild = runtime.page.locator(
             `[data-testid="subagent-task"][data-child-run-id="${previewChildRunId}"]`
           )
-          expect(await completedChild.textContent()).toContain('已干完')
+          expect(await completedChild.textContent()).not.toMatch(/干活中|已干完/)
           expect(await completedChild.locator('.nc-partner-avatar-animated').count()).toBe(0)
           await completedChild.hover()
           await runtime.page
             .locator('[data-testid="subagent-thought"]:visible')
             .waitFor({ state: 'visible' })
-          const actionLines = runtime.page
-            .locator('[data-testid="subagent-thought"]:visible')
-            .getByTestId('subagent-action')
-          expect(await actionLines.count()).toBeGreaterThan(0)
+          const completedCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+          const completedResult = firstUpdates.find(
+            (event) =>
+              event.update.childRunId === previewChildRunId && event.update.status === 'completed'
+          )?.update.result
+          expect(completedResult).toBeTruthy()
+          expect(await completedCloud.getByTestId('subagent-message').textContent()).toBe(
+            completedResult
+          )
+          expect(await completedCloud.getByTestId('subagent-message').count()).toBe(1)
+          expect(await completedCloud.getByTestId('subagent-stream-dot').count()).toBe(0)
           expect(
-            await actionLines.evaluateAll((lines) =>
-              lines.every((line) => {
-                const style = getComputedStyle(line)
-                return style.textOverflow === 'ellipsis' && style.whiteSpace === 'nowrap'
-              })
-            )
+            await completedCloud.evaluate((cloud) => {
+              const lines = cloud.querySelector('.nc-subagent-thought-lines')!
+              const style = getComputedStyle(lines)
+              const bounds = cloud.getBoundingClientRect()
+              return (
+                bounds.width <= 220 &&
+                bounds.height <= 96 &&
+                style.whiteSpace === 'pre-wrap' &&
+                style.scrollbarWidth === 'none'
+              )
+            })
           ).toBe(true)
-          expect(await runtime.page.getByTestId('subagent-result').count()).toBe(0)
+          await waitUntil(
+            async () =>
+              completedCloud
+                .locator('.nc-subagent-thought-lines')
+                .evaluate(
+                  (lines) =>
+                    Math.abs(lines.scrollHeight - lines.clientHeight - lines.scrollTop) <= 2
+                ),
+            10_000
+          )
           await waitUntil(
             async () =>
               runtime.page
@@ -388,7 +474,7 @@ describe('subagent browser and sidecar real UI', () => {
           )
           await runtime.captureScreenshot({
             name: 'subagent-cloud-completed',
-            message: '完成后的公开行动文本和省略效果'
+            message: '完成后的实际交付消息、紧凑云面与自动滚底'
           })
           await runtime.page.mouse.move(0, 0)
           await runtime.page
@@ -418,7 +504,7 @@ describe('subagent browser and sidecar real UI', () => {
             const saved = path.join(setup.workspace.rootPath, crash ? '崩溃前.txt' : '停止前.txt')
             await sendWorkbenchMessage(
               runtime.page,
-              `找两位临时帮手同时处理：第一位创建 ${saved}，内容为 SAVED_${crash ? 'CRASH' : 'STOP'}，完成后立刻交付；第二位在内置浏览器打开 ${site.url}/slow，等待网页加载后汇报。你等待两项完成后整合。`
+              `这是新的独立任务，${crash ? '本次要创建一个名叫“崩溃前.txt”的新文件，先前“停止前.txt”保持原样。' : '本次要保存“停止前.txt”。'}找两位临时帮手同时处理：第一位创建 ${saved}，内容仅为 SAVED_${crash ? 'CRASH' : 'STOP'}，核对本次文件路径和实际内容后立刻交付；第二位在内置浏览器打开 ${site.url}/slow，等待网页加载后汇报。你等待两项完成后整合。`
             )
             await waitUntil(
               async () =>
@@ -427,6 +513,7 @@ describe('subagent browser and sidecar real UI', () => {
             )
             const before = await updates(runtime, start)
             const completed = before.find((event) => event.update.status === 'completed')!
+            expect(await fs.readFile(saved, 'utf8')).toContain(crash ? 'SAVED_CRASH' : 'SAVED_STOP')
             if (crash) {
               await runtime.restartApp({ crash: true })
               await getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.partnerItemPrefix)
@@ -439,8 +526,7 @@ describe('subagent browser and sidecar real UI', () => {
                 .last()
                 .click()
               await runtime.page
-                .getByTestId('subagent-task')
-                .filter({ hasText: '已中断' })
+                .locator('[data-testid="subagent-task"][data-status="interrupted"]')
                 .last()
                 .waitFor({ state: 'visible' })
               expect(
@@ -522,7 +608,7 @@ describe('subagent browser and sidecar real UI', () => {
         assert: async (result, runtime) => {
           runtime.assertThat(result.phases === 4, {
             name: 'subagent-four-phases',
-            message: '独立网页与 sidecar、展开回退、停止、异常退出与续聊均通过真实 UI',
+            message: '独立网页与 sidecar、悬浮云与回退、停止、异常退出与续聊均通过真实 UI',
             data: { receipts: result.receipts }
           })
         }

@@ -1,7 +1,7 @@
 import { getAssistantToolItemCopy } from '../../../../shared/assistantToolCopy'
 import { RUNTIME_TOOL_CATALOG, type RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 import { randomUUID } from 'node:crypto'
-import { MAX_CONCURRENT_SUBAGENTS } from '../constants'
+import { SUBAGENT_EXECUTION_CONCURRENCY } from '../constants'
 import type { AiRunDeps, AiRunStartPayload, AiRunState, AiTranscript, SubagentTask } from '../types'
 import type { ChatMessageLogRecord, SubagentUpdate } from '../../../../shared/types'
 import { terminalSessionManager } from '../human/tools/terminal/TerminalSessionManager'
@@ -38,16 +38,97 @@ export const createSubagentDispatcher = (
   run: (payload: AiRunStartPayload, deps: AiRunDeps) => Promise<AiRunState>
 ): NonNullable<AiRunDeps['delegateToSubagent']> => {
   let activeCount = 0
+  const pending: Array<() => Promise<void>> = []
+  let queueAbortBound = false
+  const cancelPending = (): void => {
+    deps.abortSignal?.removeEventListener('abort', cancelPending)
+    queueAbortBound = false
+    const cancelled = pending.splice(0)
+    // Each job observes cancellation before allocating a transcript or run resources.
+    for (const job of cancelled) void job()
+  }
+  const drain = (): void => {
+    while (activeCount < SUBAGENT_EXECUTION_CONCURRENCY && pending.length) {
+      const job = pending.shift()!
+      activeCount += 1
+      void job().finally(() => {
+        activeCount -= 1
+        drain()
+      })
+    }
+    if (!pending.length && queueAbortBound) {
+      deps.abortSignal?.removeEventListener('abort', cancelPending)
+      queueAbortBound = false
+    }
+  }
+  const schedule = (execute: () => Promise<SubagentUpdate>): Promise<SubagentUpdate> =>
+    new Promise((resolve, reject) => {
+      const job = async (): Promise<void> => {
+        try {
+          resolve(await execute())
+        } catch (error) {
+          reject(error)
+        }
+      }
+      if (deps.abortSignal?.aborted || deps.isCancelled()) {
+        void job()
+      } else {
+        pending.push(job)
+        if (!queueAbortBound && deps.abortSignal) {
+          queueAbortBound = true
+          deps.abortSignal.addEventListener('abort', cancelPending, { once: true })
+        }
+        drain()
+      }
+    })
   return async (tasks: SubagentTask[], toolCallId: string) => {
     if (payload.parentToolCallId) throw new SubagentBlockedError('子任务不能再次派发')
-    if (!tasks.length || activeCount + tasks.length > MAX_CONCURRENT_SUBAGENTS)
-      throw new Error(`每个主任务最多同时运行 ${MAX_CONCURRENT_SUBAGENTS} 个子任务`)
-    activeCount += tasks.length
-    try {
-      const modelConfig = await getModelConfig()
-      const results = await Promise.allSettled(
-        tasks.map(async (task): Promise<SubagentUpdate> => {
-          const childRunId = randomUUID()
+    if (!tasks.length) throw new Error('子任务列表不能为空')
+    const modelConfig = await getModelConfig()
+    const results = await Promise.allSettled(
+      tasks.map(async (task): Promise<SubagentUpdate> => {
+        const childRunId = randomUUID()
+        let base: SubagentUpdate = {
+          toolCallId,
+          childRunId,
+          name: task.name,
+          task: task.task,
+          status: 'queued'
+        }
+        let updates = Promise.resolve()
+        let blocker: string | undefined
+        const actions = new Map<string, string>()
+        let publicToolText = ''
+        const publish = (update: SubagentUpdate): Promise<void> => {
+          const next = updates.then(async () => {
+            await deps.chatMessageLogStore.appendBatch({
+              partnerId: payload.partnerId,
+              runId: payload.runId,
+              entries: [{ kind: 'annotation', eventType: 'subagent_updated', payload: update }]
+            })
+            deps.sendEvent({
+              type: 'subagent_updated',
+              runId: payload.runId,
+              update,
+              createdAt: Date.now()
+            })
+          })
+          updates = next
+          void next.catch(() => {})
+          return next
+        }
+        const needParent = (message: string): never => {
+          blocker = message
+          throw new SubagentBlockedError(message)
+        }
+        await publish(base)
+        return await schedule(async () => {
+          if (deps.abortSignal?.aborted || deps.isCancelled()) {
+            const cancelled: SubagentUpdate = { ...base, status: 'cancelled', result: '已停止' }
+            await publish(cancelled)
+            return cancelled
+          }
+          base = { ...base, status: 'running' }
           const transcript = createMemoryTranscript(payload.partnerId, childRunId)
           const controller = new AbortController()
           const cancel = (): void => {
@@ -56,39 +137,26 @@ export const createSubagentDispatcher = (
           }
           deps.abortSignal?.addEventListener('abort', cancel, { once: true })
           if (deps.abortSignal?.aborted || deps.isCancelled()) cancel()
-          const base: SubagentUpdate = {
-            toolCallId,
-            childRunId,
-            name: task.name,
-            task: task.task,
-            status: 'running'
-          }
-          let updates = Promise.resolve()
-          let blocker: string | undefined
-          const actions = new Map<string, string>()
-          let publicToolText = ''
-          const publish = (update: SubagentUpdate): Promise<void> => {
-            const next = updates.then(async () => {
-              await deps.chatMessageLogStore.appendBatch({
-                partnerId: payload.partnerId,
-                runId: payload.runId,
-                entries: [{ kind: 'annotation', eventType: 'subagent_updated', payload: update }]
-              })
+          const requests = new Set<string>()
+          let replaceStream = true
+          const stream = (update: {
+            delta?: string
+            reset?: boolean
+            requesting?: boolean
+          }): void => {
+            // Keep live fragments ordered with durable snapshots without persisting each fragment.
+            const next = updates.then(() => {
               deps.sendEvent({
-                type: 'subagent_updated',
+                type: 'subagent_stream',
                 runId: payload.runId,
-                update,
+                toolCallId,
+                childRunId,
+                ...update,
                 createdAt: Date.now()
               })
             })
             updates = next
-            // Event emission is synchronous; final delivery awaits the persisted stream.
             void next.catch(() => {})
-            return next
-          }
-          const needParent = (message: string): never => {
-            blocker = message
-            throw new SubagentBlockedError(message)
           }
           try {
             await publish(base)
@@ -118,7 +186,22 @@ export const createSubagentDispatcher = (
                 sendEvent: (event) => {
                   // The thought event is public assistant text accompanying this round of tool calls.
                   // Raw reasoning deltas, skill state and lifecycle remain local.
-                  if (
+                  if (event.type === 'llm_request_state') {
+                    if (event.requesting) requests.add(event.callId)
+                    else requests.delete(event.callId)
+                    stream({ requesting: requests.size > 0 })
+                  } else if (event.type === 'assistant_brain_stream_started') {
+                    replaceStream = true
+                  } else if (event.type === 'assistant_brain_stream_reset') {
+                    replaceStream = true
+                    stream({ reset: true })
+                  } else if (event.type === 'assistant_brain_stream_delta') {
+                    stream({ delta: event.text, reset: replaceStream })
+                    replaceStream = false
+                  } else if (event.type === 'assistant_brain_stream_completed') {
+                    if (event.text.trim())
+                      void publish({ ...base, message: event.text.slice(0, 12000) })
+                  } else if (
                     event.type === 'assistant_process_group_started' &&
                     event.display.kind === 'thinking'
                   ) {
@@ -201,7 +284,16 @@ export const createSubagentDispatcher = (
             }
             await publish(update)
             return update
+          } catch (error) {
+            const update: SubagentUpdate = {
+              ...base,
+              status: controller.signal.aborted || deps.isCancelled() ? 'cancelled' : 'failed',
+              result: error instanceof Error ? error.message : String(error)
+            }
+            await publish(update)
+            return update
           } finally {
+            stream({ requesting: false })
             try {
               await updates
             } finally {
@@ -210,13 +302,11 @@ export const createSubagentDispatcher = (
             }
           }
         })
-      )
-      return results.map((result) => {
-        if (result.status === 'rejected') throw result.reason
-        return result.value
       })
-    } finally {
-      activeCount -= tasks.length
-    }
+    )
+    return results.map((result) => {
+      if (result.status === 'rejected') throw result.reason
+      return result.value
+    })
   }
 }

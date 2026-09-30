@@ -209,12 +209,9 @@ const escapeHtml = (value: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
 
-const getRuntimeEventKey = (entry: E2ERuntimeSignals['aiRunEventEntries'][number]): string => {
-  const event = entry.event
-  const runId = 'runId' in event ? String(event.runId || '') : ''
-  const createdAt = 'createdAt' in event ? String(event.createdAt || '') : ''
-  return [entry.ts, event.type, runId, createdAt].join(':')
-}
+// Distinct fragments and parallel child updates can share both type and millisecond timestamp.
+const getRuntimeEventKey = (entry: E2ERuntimeSignals['aiRunEventEntries'][number]): string =>
+  entry.id
 
 const getLlmIoKey = (entry: E2ERuntimeSignals['llmIoEntries'][number]): string =>
   entry.record.callId ||

@@ -1370,6 +1370,8 @@ export class ChatRunService {
   }
 
   private async projectEvent(runId: string, run: AiRunRecord, event: AiRunEvent): Promise<void> {
+    // Child streaming and request markers only affect live presentation, never the owner run row.
+    if (event.type === 'subagent_stream' || event.type === 'llm_request_state') return
     const entry = this.activeRuns.get(runId)
     const now = Date.now()
     const saveImmediately = event.type !== 'answer_token'

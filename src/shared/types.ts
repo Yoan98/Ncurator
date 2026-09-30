@@ -1600,6 +1600,7 @@ export type AiRunFailureCode =
 export type AiRunFailureSource = 'provider' | 'internal'
 
 export type SubagentTaskStatus =
+  | 'queued'
   | 'running'
   | 'completed'
   | 'failed'
@@ -1622,11 +1623,29 @@ export type SubagentUpdate = {
   task: string
   status: SubagentTaskStatus
   action?: SubagentAction
+  message?: string
   result?: string
   artifacts?: AiArtifactRef[]
 }
 
 type AiRunEventPayload =
+  | {
+      type: 'llm_request_state'
+      runId: string
+      callId: string
+      requesting: boolean
+      createdAt: number
+    }
+  | {
+      type: 'subagent_stream'
+      runId: string
+      toolCallId: string
+      childRunId: string
+      delta?: string
+      reset?: boolean
+      requesting?: boolean
+      createdAt: number
+    }
   | { type: 'subagent_updated'; runId: string; update: SubagentUpdate; createdAt: number }
   | {
       type: 'run_started'

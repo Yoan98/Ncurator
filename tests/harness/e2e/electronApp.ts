@@ -25,6 +25,7 @@ export type E2EIpcInvokeEntry = {
 }
 
 export type E2EAiRunEventEntry = {
+  id: string
   ts: string
   event: AiRunEvent
 }
@@ -395,6 +396,7 @@ const installPageObservers = async (page: Page, sink?: ElectronSignalSink): Prom
     window.addEventListener('ncurator-e2e-ai-run-event', (event) => {
       const detail = (event as CustomEvent<AiRunEvent>).detail
       const entry = {
+        id: crypto.randomUUID(),
         ts: now(),
         event: detail
       }

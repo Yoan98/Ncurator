@@ -1,5 +1,4 @@
 import { z } from 'zod/v4'
-import { MAX_CONCURRENT_SUBAGENTS } from '../../../constants'
 import { humanPlanItemSchema } from '../../schema'
 
 export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
@@ -11,7 +10,6 @@ export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
       })
     )
     .min(1)
-    .max(MAX_CONCURRENT_SUBAGENTS)
     .describe('子任务列表')
 })
 

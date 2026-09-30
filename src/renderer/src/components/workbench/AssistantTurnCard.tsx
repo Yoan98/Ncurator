@@ -30,7 +30,8 @@ import type {
   AssistantProcessIconKind,
   AssistantProcessThought,
   AssistantRichTextSegment,
-  AssistantTurnViewModel
+  AssistantTurnViewModel,
+  SubagentTaskView
 } from './types'
 import type { WorkspaceSource } from '../../../../shared/types'
 import type { OpenableMarkdownReference } from '../markdownReference'
@@ -303,75 +304,104 @@ const subagentAvatar = (runId: string) => {
   }
 }
 
-const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
-  const statusText = {
-    running: '干活中',
-    completed: '已干完',
-    failed: '没干成',
-    cancelled: '已停止',
-    blocked: '待主伙伴接手',
-    interrupted: '已中断'
-  }
+const SubagentThought: React.FC<{ child: SubagentTaskView; open: boolean }> = ({ child, open }) => {
+  const contentRef = useRef<HTMLDivElement>(null)
+  const active = child.status === 'running'
+  const text =
+    child.status === 'queued'
+      ? '我在排队'
+      : active
+        ? child.message || ''
+        : child.result ||
+          {
+            completed: '任务已完成',
+            failed: '执行失败',
+            cancelled: '已停止',
+            blocked: '需要主伙伴继续处理',
+            interrupted: '执行被中断，未收到完整结果'
+          }[child.status]
+  const requesting = active && child.requesting
+  useLayoutEffect(() => {
+    if (!open || !contentRef.current) return
+    const content = contentRef.current
+    const scrollToLatest = (): void => {
+      content.scrollTop = content.scrollHeight
+    }
+    scrollToLatest()
+    const frame = requestAnimationFrame(scrollToLatest)
+    const observer = new ResizeObserver(scrollToLatest)
+    observer.observe(content)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [open, text, requesting])
   return (
-    <div data-testid="subagent-group" className="flex flex-wrap items-center gap-x-5 gap-y-2 py-1">
-      {(group.subagents || []).map((child) => {
-        const actions = child.actions.filter((action) => action.text.trim())
-        return (
-          <Tooltip
-            key={child.childRunId}
-            placement="topLeft"
-            trigger={['hover', 'focus']}
-            arrow={false}
-            color="transparent"
-            overlayClassName="nc-subagent-thought-tooltip"
-            mouseEnterDelay={0.15}
-            title={
-              actions.length ? (
-                <div data-testid="subagent-thought" className="nc-subagent-thought-cloud">
-                  <svg
-                    className="nc-subagent-thought-outline"
-                    viewBox="0 0 264 110"
-                    preserveAspectRatio="none"
-                    aria-hidden="true"
-                  >
-                    <path d="M30 94C9 94 1 74 11 60C0 45 10 25 30 24C36 5 60 2 74 14C86 0 109 0 120 13C139 0 161 5 169 18C189 6 210 15 214 28C240 22 259 38 254 57C270 74 254 97 232 96C220 111 195 108 184 98C166 112 143 109 131 99C113 112 89 107 81 97C65 111 42 107 30 94Z" />
-                  </svg>
-                  <div className="nc-subagent-thought-lines">
-                    {actions.map((action) => (
-                      <div key={action.id} data-testid="subagent-action" className="truncate">
-                        {action.text}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null
-            }
-          >
-            <button
-              type="button"
-              data-testid="subagent-task"
-              data-child-run-id={child.childRunId}
-              data-status={child.status}
-              aria-label={`${child.name}，${statusText[child.status]}`}
-              className="flex items-center gap-1.5 rounded-lg py-1 pr-1 text-left text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-[#9B9A97]"
-            >
-              <PartnerAvatar
-                {...subagentAvatar(child.childRunId)}
-                size={32}
-                animated={child.status === 'running'}
-                animationSeed={child.childRunId}
-              />
-              <span className="max-w-[8em] truncate text-[#37352F]">{child.name}</span>
-              <span className={child.status === 'failed' ? 'text-[#B3261E]' : 'text-[#9B9A97]'}>
-                {statusText[child.status]}
-              </span>
-            </button>
-          </Tooltip>
-        )
-      })}
+    <div data-testid="subagent-thought" className="nc-subagent-thought-cloud">
+      <svg
+        className="nc-subagent-thought-outline"
+        viewBox="0 0 264 110"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path d="M30 94C9 94 1 74 11 60C0 45 10 25 30 24C36 5 60 2 74 14C86 0 109 0 120 13C139 0 161 5 169 18C189 6 210 15 214 28C240 22 259 38 254 57C270 74 254 97 232 96C220 111 195 108 184 98C166 112 143 109 131 99C113 112 89 107 81 97C65 111 42 107 30 94Z" />
+      </svg>
+      <div ref={contentRef} className="nc-subagent-thought-lines">
+        <span data-testid="subagent-message">{requesting ? text.trimEnd() : text}</span>
+        {requesting ? (
+          <span
+            data-testid="subagent-stream-dot"
+            className="nc-subagent-stream-dot"
+            aria-label="正在请求模型"
+          />
+        ) : null}
+      </div>
     </div>
   )
 }
+
+const SubagentTaskRow: React.FC<{ child: SubagentTaskView }> = ({ child }) => {
+  const [open, setOpen] = useState(false)
+  return (
+    <Tooltip
+      placement="topLeft"
+      trigger={['hover', 'focus']}
+      arrow={false}
+      color="transparent"
+      overlayClassName="nc-subagent-thought-tooltip"
+      mouseEnterDelay={0.15}
+      onOpenChange={setOpen}
+      title={<SubagentThought child={child} open={open} />}
+    >
+      <button
+        type="button"
+        data-testid="subagent-task"
+        data-child-run-id={child.childRunId}
+        data-status={child.status}
+        aria-label={child.name}
+        className={`flex items-center gap-1.5 rounded-lg py-1 pr-1 text-left text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-[#9B9A97] ${child.status === 'queued' ? 'text-[#9B9A97]' : 'text-[#37352F]'}`}
+      >
+        <span className={child.status === 'queued' ? 'grayscale opacity-40' : undefined}>
+          <PartnerAvatar
+            {...subagentAvatar(child.childRunId)}
+            size={32}
+            animated={child.status === 'running'}
+            animationSeed={child.childRunId}
+          />
+        </span>
+        <span className="max-w-[8em] truncate">{child.name}</span>
+      </button>
+    </Tooltip>
+  )
+}
+
+const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => (
+  <div data-testid="subagent-group" className="flex flex-col items-start gap-1 py-1">
+    {(group.subagents || []).map((child) => (
+      <SubagentTaskRow key={child.childRunId} child={child} />
+    ))}
+  </div>
+)
 
 const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
   if (group.subagents?.length) return <SubagentGroupView group={group} />

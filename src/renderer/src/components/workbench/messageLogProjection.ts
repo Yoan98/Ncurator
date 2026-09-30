@@ -272,8 +272,13 @@ export const projectProcessGroups = (input: {
   for (const group of projectedGroups) {
     if (input.runFinished && group.subagents)
       group.subagents = group.subagents.map((child) =>
-        child.status === 'running'
-          ? { ...child, status: 'interrupted', result: '执行被中断，未收到完整结果' }
+        child.status === 'running' || child.status === 'queued'
+          ? {
+              ...child,
+              requesting: false,
+              status: 'interrupted',
+              result: '执行被中断，未收到完整结果'
+            }
           : child
       )
   }

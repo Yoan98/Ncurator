@@ -52,6 +52,8 @@ describe('temporary subagents through production AiRunService', () => {
       execute: async (runtime) => {
         const inputs: string[] = []
         let parentCalls = 0
+        let active = 0
+        let peak = 0
         const started = new Set<string>()
         let releaseChildren: () => void = () => {}
         const bothStarted = new Promise<void>((resolve) => {
@@ -59,31 +61,49 @@ describe('temporary subagents through production AiRunService', () => {
         })
         const runner = await createAiServiceTestRunner(runtime, {
           userInput: 'PARENT_SECRET 只存在主聊天',
+          abortSignal: new AbortController().signal,
           llmScript: {
             'human.brain': steps(async (call) => {
               if (!isChild(call))
                 return ++parentCalls === 1
                   ? delegate([
                       { name: '海豹', task: 'CHILD_ALPHA 独立查验 A' },
-                      { name: '水獭', task: 'CHILD_BETA 独立查验 B' }
+                      { name: '水獭', task: 'CHILD_BETA 独立查验 B' },
+                      { name: '松鼠', task: 'CHILD_GAMMA 独立查验 C' },
+                      { name: '狐狸', task: 'CHILD_DELTA 独立查验 D' },
+                      ...Array.from({ length: 8 }, (_, index) => ({
+                        name: `飞鸟${index + 1}`,
+                        task: `CHILD_EXTRA_${index + 1} 独立查验`
+                      }))
                     ])
                   : complete('主伙伴汇集完成')
               inputs.push(call.user)
-              const task = call.user.includes('CHILD_ALPHA') ? 'A' : 'B'
+              const task = call.user.match(/CHILD_([A-Z_0-9]+)/)?.[1] || ''
+              active += 1
+              peak = Math.max(peak, active)
               started.add(task)
               if (started.size === 2) releaseChildren()
               await bothStarted
+              active -= 1
               return complete(`RESULT_${task} 核对完成`)
             })
           }
         })
         const output = await runner.run()
         const records = await runtime.storageService.chatMessageLog.list(runner.payload.partnerId)
-        return { output, records, inputs, events: runner.events.slice(), io: runner.io.slice() }
+        return {
+          output,
+          records,
+          inputs,
+          peak,
+          events: runner.events.slice(),
+          io: runner.io.slice()
+        }
       },
       assert: async (result, runtime) => {
         expect(result.output.status).toBe('completed')
-        expect(result.inputs).toHaveLength(2)
+        expect(result.inputs).toHaveLength(12)
+        expect(result.peak).toBe(2)
         expect(result.inputs.every((input) => !input.includes('PARENT_SECRET'))).toBe(true)
         const terminal = result.records.filter(
           (record) =>
@@ -91,7 +111,7 @@ describe('temporary subagents through production AiRunService', () => {
             record.entry.eventType === 'subagent_updated' &&
             record.entry.payload.status === 'completed'
         )
-        expect(terminal).toHaveLength(2)
+        expect(terminal).toHaveLength(12)
         expect(result.records.every((record) => record.runId === runtime.runId)).toBe(true)
         expect(
           result.records.filter(
@@ -99,14 +119,64 @@ describe('temporary subagents through production AiRunService', () => {
           )
         ).toHaveLength(1)
         expect(result.events.filter((event) => event.type === 'answer_completed')).toHaveLength(1)
-        expect(result.io.filter((record) => record.ownerRunId === runtime.runId)).toHaveLength(2)
+        expect(result.io.filter((record) => record.ownerRunId === runtime.runId)).toHaveLength(12)
+        const started = result.events.filter(
+          (event) =>
+            event.type === 'subagent_updated' &&
+            event.update.status === 'running' &&
+            !event.update.action &&
+            !event.update.message
+        )
+        expect(
+          started.map((event) => (event.type === 'subagent_updated' ? event.update.name : ''))
+        ).toEqual([
+          '海豹',
+          '水獭',
+          '松鼠',
+          '狐狸',
+          ...Array.from({ length: 8 }, (_, index) => `飞鸟${index + 1}`)
+        ])
+        const released = result.events.findIndex(
+          (event) => event.type === 'subagent_updated' && event.update.status === 'completed'
+        )
+        const third = result.events.findIndex(
+          (event) =>
+            event.type === 'subagent_updated' &&
+            event.update.status === 'running' &&
+            event.update.name === '松鼠'
+        )
+        expect(third).toBeGreaterThan(released)
+        const streams = result.events.filter((event) => event.type === 'subagent_stream')
+        for (const ended of terminal) {
+          if (ended.entry.kind !== 'annotation' || ended.entry.eventType !== 'subagent_updated')
+            continue
+          const own = streams.filter((event) => event.childRunId === ended.entry.payload.childRunId)
+          expect(
+            own
+              .filter((event) => event.delta)
+              .map((event) => event.delta)
+              .join('')
+          ).toBe(ended.entry.payload.result)
+          expect(own.some((event) => event.requesting === true)).toBe(true)
+          expect(own.at(-1)?.requesting).toBe(false)
+        }
+        expect(
+          result.records.filter(
+            (record) =>
+              record.entry.kind === 'annotation' &&
+              record.entry.eventType === 'subagent_updated' &&
+              record.entry.payload.status === 'queued'
+          )
+        ).toHaveLength(12)
         runtime.assertThat(
           result.records.some(
             (record) =>
               record.entry.kind === 'tool' &&
               record.entry.toolName === 'delegate_to_subagent' &&
-              record.entry.content.includes('RESULT_A') &&
-              record.entry.content.includes('RESULT_B')
+              record.entry.content.includes('RESULT_ALPHA') &&
+              record.entry.content.includes('RESULT_BETA') &&
+              record.entry.content.includes('RESULT_GAMMA') &&
+              record.entry.content.includes('RESULT_DELTA')
           ),
           {
             name: 'aggregate-result',
@@ -157,7 +227,15 @@ describe('temporary subagents through production AiRunService', () => {
                     summary: '主伙伴先读文本'
                   })
                 const phase = parentStep - 3
-                return delegate([{ name: `海豹${phase}`, task: `PHASE_${phase} 修改 ${file}` }])
+                return delegate(
+                  phase === 3
+                    ? [
+                        { name: '海豹3', task: `PHASE_3 等待取消 ${file}` },
+                        { name: '水獭3', task: `PHASE_3 等待取消 ${file}` },
+                        { name: '排队狐狸', task: 'PHASE_QUEUED 不应该开始' }
+                      ]
+                    : [{ name: `海豹${phase}`, task: `PHASE_${phase} 修改 ${file}` }]
+                )
               }
               const phase = call.user.match(/PHASE_(\d)/)?.[1] || '1'
               const count = (childCalls.get(phase) || 0) + 1
@@ -167,7 +245,10 @@ describe('temporary subagents through production AiRunService', () => {
                 return complete('等待取消')
               }
               if (count === 2)
-                return buildLearnSkillsDecision({ skillIds: ['docx-read', 'docx-write'], summary: '文档编辑' })
+                return buildLearnSkillsDecision({
+                  skillIds: ['docx-read', 'docx-write'],
+                  summary: '文档编辑'
+                })
               if (count === 3)
                 return buildToolDecision({
                   toolName: 'docx_search',
@@ -245,7 +326,8 @@ describe('temporary subagents through production AiRunService', () => {
           persisted,
           reverted,
           restored: await fs.readFile(file, 'utf8'),
-          events: runner.events.slice()
+          events: runner.events.slice(),
+          io: runner.io.slice()
         }
       },
       assert: async (result, runtime) => {
@@ -264,7 +346,8 @@ describe('temporary subagents through production AiRunService', () => {
         const cancelled = result.events.filter(
           (event) => event.type === 'subagent_updated' && event.update.status === 'cancelled'
         )
-        expect(cancelled).toHaveLength(1)
+        expect(cancelled).toHaveLength(3)
+        expect(result.io.some((record) => record.user.includes('PHASE_QUEUED'))).toBe(false)
         for (const event of result.events)
           if (event.type === 'subagent_updated') {
             // No idle or running child terminal session may survive disposal.
@@ -315,7 +398,17 @@ describe('temporary subagents through production AiRunService', () => {
             content: '派发',
             toolCalls: [{ id: 'dispatch-1', name: 'delegate_to_subagent', args: { tasks } }]
           },
-          { kind: 'annotation', eventType: 'subagent_updated', payload: update }
+          { kind: 'annotation', eventType: 'subagent_updated', payload: update },
+          {
+            kind: 'annotation',
+            eventType: 'subagent_updated',
+            payload: {
+              toolCallId: 'dispatch-1',
+              childRunId: 'child-b',
+              ...tasks[1],
+              status: 'queued'
+            }
+          }
         ]
         await runtime.storageService.chatMessageLog.appendBatch({
           partnerId: runner.payload.partnerId,
