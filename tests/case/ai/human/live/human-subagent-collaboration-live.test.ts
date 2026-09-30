@@ -33,7 +33,7 @@ describe('live subagent collaboration quality', () => {
         const beforeSheet = await fs.readFile(xlsx)
         const beforeDoc = (await mammoth.extractRawText({ path: docx })).value
         const workbook = new ExcelJS.Workbook()
-        await workbook.xlsx.load(beforeSheet)
+        await workbook.xlsx.load(new Uint8Array(beforeSheet))
         const sheet = workbook.getWorksheet('订单明细')!
         let sales = 0,
           returns = 0
@@ -44,7 +44,7 @@ describe('live subagent collaboration quality', () => {
           }
         })
         const runner = await createAiServiceTestRunner(runtime, {
-          userInput: `请找三位临时帮手分头做这三件独立的事，每位负责一项，你最后整合交付：\n1. 只读 ${xlsx} 的订单明细，核对 D 列销售额和 E 列退货金额的合计及净额，实际计算验证。\n2. 修改 ${config}：主备端点都改成 https://api.example.com/v2/checkout，超时改为 3000；重试次数和遥测保持原样。\n3. 把 ${docx} 中的 Hello from fixture 改成 Hello from safe edit，其余内容保持原样。\n然后你自己写 ${report}，包含三项结果、准确金额及资料链接，检查保存的文件后交付。`
+          userInput: `请用临时帮手分头做这三件独立的事，每位负责一项，最多同时两位，分两批安排，你最后整合交付：\n1. 只读 ${xlsx} 的订单明细，核对 D 列销售额和 E 列退货金额的合计及净额，实际计算验证。\n2. 修改 ${config}：主备端点都改成 https://api.example.com/v2/checkout，超时改为 3000；重试次数和遥测保持原样。\n3. 把 ${docx} 中的 Hello from fixture 改成 Hello from safe edit，其余内容保持原样。\n然后你自己写 ${report}，包含三项结果、准确金额及资料链接，检查保存的文件后交付。`
         })
         const startedAt = Date.now()
         const output = await runner.run()

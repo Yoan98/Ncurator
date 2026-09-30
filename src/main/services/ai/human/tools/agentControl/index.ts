@@ -11,8 +11,7 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { prepareImagesForMainModel } from './readImage'
 
-// agent-control 工具只用于让模型通过原生 tool call 表达控制意图（学习技能、更新计划），
-// 真正的副作用由对应节点（learning / plan）按工具名拦截处理，因此这里的 func 只是兜底占位。
+// 学习、计划和提问由各自节点处理；图片读取和子任务派发在公共 hand 工具链执行。
 export const agentControlToolFamily: ToolFamilyDefinition = {
   familyId: 'agent-control',
   buildTools: ({ ctx }) => {

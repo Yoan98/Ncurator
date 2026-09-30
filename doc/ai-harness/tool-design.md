@@ -173,7 +173,7 @@ hand 收到 call batch
 
 ### 一次性派发与资源范围
 
-`delegate_to_subagent` 属于内置 `agent-control`，输入 `tasks` 长度 1–3，每项包含最多八字符的 `name` 和自足 `task`（背景、资料与交付要求）。工具内部调用公共 AiRunService 并行执行；输出只包含任务状态、精简结果、依据与产物路径，继续走现有 modelResult / 大小守卫。
+`delegate_to_subagent` 属于内置 `agent-control`，输入 `tasks` 长度 1–`MAX_CONCURRENT_SUBAGENTS`，当前默认上限 2，每项包含最多八字符的 `name` 和自足 `task`（背景、资料与交付要求）。工具内部调用公共 AiRunService 并行执行；输出只包含任务状态、精简结果、依据与产物路径，继续走现有 modelResult / 大小守卫。
 
 主子运行工具策略与执行链相同；子运行额外禁用再次派发、用户提问、定时任务管理。学习工具后策略仍生效；人工审批交回主伙伴。
 

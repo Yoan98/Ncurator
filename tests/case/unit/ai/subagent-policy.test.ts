@@ -1,3 +1,4 @@
+import { MAX_CONCURRENT_SUBAGENTS } from '../../../../src/main/services/ai/constants'
 import { describe, it, expect } from 'vitest'
 import { assertToolAllowed, isToolAllowed } from '../../../../src/main/services/ai/run/toolPolicy'
 import { acquireRunFile, releaseRunFiles } from '../../../../src/main/services/ai/run/fileLease'
@@ -18,11 +19,14 @@ describe('subagent policy and file leases', () => {
     expect(isToolAllowed({ isSubagent: true }, 'browser_use')).toBe(true)
     expect(isToolAllowed({ isSubagent: true }, 'terminal_run')).toBe(true)
   })
-  it('guards 1–3 tasks and short names', () => {
+  it('guards the configured task limit and short names', () => {
     expect(DELEGATE_TO_SUBAGENT_SCHEMA.safeParse({ tasks: [] }).success).toBe(false)
     expect(
       DELEGATE_TO_SUBAGENT_SCHEMA.safeParse({
-        tasks: Array.from({ length: 4 }, () => ({ name: '海豹', task: '任务' }))
+        tasks: Array.from({ length: MAX_CONCURRENT_SUBAGENTS + 1 }, () => ({
+          name: '海豹',
+          task: '任务'
+        }))
       }).success
     ).toBe(false)
     expect(

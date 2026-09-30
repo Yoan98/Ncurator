@@ -120,7 +120,7 @@ describe('subagent browser and sidecar real UI', () => {
           const started = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
-            `请找三位临时帮手并行分头处理，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，再读取资料 ${site.url}/facts?marker=31415 并核对该数字，最后将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，再读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明并返回官方来源链接。他们各自使用自己的标签。你把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
+            `请找两位临时帮手并行分头处理，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字，并搜索 Python 官方 csv reader 说明返回官方来源链接。他们各自使用自己的标签。你把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
           )
           await waitUntil(async () =>
             (await updates(runtime, started)).some((event) => event.update.status === 'running')
@@ -160,7 +160,7 @@ describe('subagent browser and sidecar real UI', () => {
                 .filter((event) => event.update.status === 'completed')
                 .map((event) => event.update.childRunId)
             ).size
-          ).toBe(3)
+          ).toBe(2)
           expect(
             firstUpdates.filter(
               (event) =>
@@ -178,7 +178,7 @@ describe('subagent browser and sidecar real UI', () => {
             workbenchSelectors.assistantProcessTogglePrefix
           ).last()
           await processToggle.click()
-          expect(await runtime.page.getByTestId('subagent-task').count()).toBe(3)
+          expect(await runtime.page.getByTestId('subagent-task').count()).toBe(2)
           await runtime.page.getByTestId('subagent-task').first().locator('summary').click()
           expect(await runtime.page.getByTestId('subagent-action').count()).toBeGreaterThan(0)
           expect(

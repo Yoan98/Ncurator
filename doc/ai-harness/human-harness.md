@@ -6,7 +6,7 @@ human graph 的消息与上下文设计约束。修改 `src/main/services/ai/hum
 
 ## 一次性子运行
 
-主子运行均调用 `AiRunService.run` 和相同 human graph。`runId` 标识执行实例，`ownerRunId` 标识持久数据与文件产物归属；子运行带父派发 `toolCallId`，不创建 `ai_run` 或伙伴行。派发工具内部并行运行最多三个独立实例，不增加另一套 graph/模型循环。
+主子运行均调用 `AiRunService.run` 和相同 human graph。`runId` 标识执行实例，`ownerRunId` 标识持久数据与文件产物归属；子运行带父派发 `toolCallId`，不创建 `ai_run` 或伙伴行。派发工具内部并行运行默认最多两个独立实例（统一由 `MAX_CONCURRENT_SUBAGENTS` 控制），不增加另一套 graph/模型循环。
 
 `AiTranscript` 提供相同 append/load 契约：主运行读写 SQLite，子运行读写独立内存记录（独立 seq、计划、技能、compaction checkpoint）。相同投影/预算/压缩入口消费两种适配。子完整日志随实例释放；名称、ID 和任务放在派发输入/事件，不改变固定 System。模型配置在派发时继承父运行已解析快照；工具顺序保持稳定，缓存命中仍由供应商决定。
 

@@ -1,4 +1,5 @@
 import { z } from 'zod/v4'
+import { MAX_CONCURRENT_SUBAGENTS } from '../../../constants'
 import { humanPlanItemSchema } from '../../schema'
 
 export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
@@ -10,12 +11,12 @@ export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
           .string()
           .trim()
           .min(1)
-          .describe('独立任务、必要背景、资料路径及交付要求；子任务看不到主聊天')
+          .describe('子任务的完整描述：任务背景、资料路径和交付要求；子任务上下文不包含主聊天')
       })
     )
     .min(1)
-    .max(3)
-    .describe('可以独立完成的 1–3 个任务')
+    .max(MAX_CONCURRENT_SUBAGENTS)
+    .describe(`本次执行的独立子任务，数量 1–${MAX_CONCURRENT_SUBAGENTS}`)
 })
 
 export const LEARN_SKILL_SCHEMA = z.object({

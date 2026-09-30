@@ -1048,6 +1048,7 @@ const ChatPage: React.FC = () => {
   const pendingTimelineJumpDayRef = useRef<number | null>(null)
   const timelinePinSpacerRef = useRef<HTMLDivElement>(null)
   const programmaticScrollRef = useRef(false)
+  const backgroundPanelUpdatesRef = useRef<Record<string, Promise<void>>>({})
   const persistQueuesRef = useRef<Record<string, Promise<void>>>({})
   const persistRevisionsRef = useRef<Record<string, number>>({})
   const persistRetryTimersRef = useRef<Record<string, number>>({})
@@ -1933,15 +1934,37 @@ const ChatPage: React.FC = () => {
       partnerId: string,
       update: (state: PartnerUiStateV1) => PartnerUiStateV1
     ): Promise<void> => {
-      try {
-        const opened = await window.api.partnerOpen({ partnerId, limit: 1 })
-        const currentState = opened.uiState || createDefaultPartnerUiState({ mainModel: null })
-        await persistUiStateForKey(partnerId, update(currentState))
-      } catch (error) {
-        console.error('Failed to update background session UI state', error)
-      }
+      const previous = backgroundPanelUpdatesRef.current[partnerId] || Promise.resolve()
+      const next = previous
+        .catch(() => undefined)
+        .then(async () => {
+          try {
+            await persistQueuesRef.current[partnerId]
+            const active =
+              currentPartnerIdRef.current === partnerId && uiStateReadyKeyRef.current === partnerId
+            const currentState = active
+              ? buildUiStateForKey(partnerId)
+              : (await window.api.partnerOpen({ partnerId, limit: 1 })).uiState ||
+                createDefaultPartnerUiState({ mainModel: null })
+            const updated = update(currentState)
+            tabWorkspacesRef.current = {
+              ...tabWorkspacesRef.current,
+              [partnerId]: {
+                tabs: updated.panel.tabs as WorkbenchResourceTab[],
+                activeTabId: updated.panel.activeTabId,
+                panelCollapsed: updated.panel.collapsed
+              }
+            }
+            setTabWorkspaces(tabWorkspacesRef.current)
+            await persistUiStateForKey(partnerId, updated)
+          } catch (error) {
+            console.error('Failed to update background session UI state', error)
+          }
+        })
+      backgroundPanelUpdatesRef.current[partnerId] = next
+      await next
     },
-    [persistUiStateForKey]
+    [buildUiStateForKey, persistUiStateForKey]
   )
 
   const persistBackgroundBrowserTab = useCallback(

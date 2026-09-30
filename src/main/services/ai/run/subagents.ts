@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { MAX_CONCURRENT_SUBAGENTS } from '../constants'
 import type { AiRunDeps, AiRunStartPayload, AiRunState, AiTranscript, SubagentTask } from '../types'
 import type { ChatMessageLogRecord, SubagentUpdate } from '../../../../shared/types'
 import { terminalSessionManager } from '../human/tools/terminal/TerminalSessionManager'
@@ -36,6 +37,34 @@ const actionLabels: Record<string, string> = {
   image_generate: '生成图片'
 }
 
+const actionText = (toolName: string, input: object): string => {
+  let label = actionLabels[toolName] || '执行工具'
+  if (toolName === 'browser_use' && 'action' in input && typeof input.action === 'string') {
+    label =
+      (
+        {
+          navigate: '打开网页',
+          list_tabs: '查看自己的标签',
+          observe: '查看页面操作',
+          act: '操作网页',
+          extract: '提取网页内容',
+          screenshot: '查看页面截图',
+          scroll: '滚动页面',
+          back: '返回上一页'
+        } as Record<string, string>
+      )[input.action] || label
+  }
+  if (toolName === 'web_search' && 'type' in input && input.type === 'fetch') label = '读取网页资料'
+  for (const key of ['instruction', 'commandExplanation', 'query', 'url', 'sourcePath']) {
+    if (key in input) {
+      const value = Reflect.get(input, key)
+      if (typeof value === 'string' && value.trim())
+        return `${label}：${value.trim().replace(/\s+/g, ' ')}`.slice(0, 180)
+    }
+  }
+  return label
+}
+
 export const createMemoryTranscript = (
   partnerId: string,
   runId: string
@@ -69,8 +98,8 @@ export const createSubagentDispatcher = (
   let activeCount = 0
   return async (tasks: SubagentTask[], toolCallId: string) => {
     if (payload.parentToolCallId) throw new SubagentBlockedError('子任务不能再次派发')
-    if (!tasks.length || activeCount + tasks.length > 3)
-      throw new Error('每个主任务最多同时运行 3 个子任务')
+    if (!tasks.length || activeCount + tasks.length > MAX_CONCURRENT_SUBAGENTS)
+      throw new Error(`每个主任务最多同时运行 ${MAX_CONCURRENT_SUBAGENTS} 个子任务`)
     activeCount += tasks.length
     try {
       const modelConfig = await getModelConfig()
@@ -94,6 +123,7 @@ export const createSubagentDispatcher = (
           }
           let updates = Promise.resolve()
           let blocker: string | undefined
+          const actions = new Map<string, string>()
           const publish = (update: SubagentUpdate): Promise<void> => {
             const next = updates.then(async () => {
               await deps.chatMessageLogStore.appendBatch({
@@ -145,12 +175,17 @@ export const createSubagentDispatcher = (
                 sendEvent: (event) => {
                   // Only public tool actions are persisted. Brain text, skills, plans and lifecycle remain local.
                   if (event.type === 'tool_call_started') {
+                    const text = actionText(event.toolName, event.input)
+                    actions.set(event.toolCallId, text)
                     void publish({
                       ...base,
                       action: {
                         id: event.toolCallId,
                         toolName: event.toolName,
-                        text: actionLabels[event.toolName] || '执行工具',
+                        text:
+                          actions.get(event.toolCallId) ||
+                          actionLabels[event.toolName] ||
+                          '执行工具',
                         status: 'running'
                       }
                     })
@@ -160,7 +195,10 @@ export const createSubagentDispatcher = (
                       action: {
                         id: event.toolCallId,
                         toolName: event.toolName,
-                        text: actionLabels[event.toolName] || '执行工具',
+                        text:
+                          actions.get(event.toolCallId) ||
+                          actionLabels[event.toolName] ||
+                          '执行工具',
                         status: event.error || event.result?.ok === false ? 'failed' : 'completed',
                         feedback:
                           event.error ||

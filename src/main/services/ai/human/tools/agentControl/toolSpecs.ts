@@ -108,7 +108,7 @@ export const DELEGATE_TO_SUBAGENT_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'delegate_to_subagent',
     description:
-      '将 1–3 项独立任务并行交给临时子 agent，再整合它们的结果。提供完整任务背景和资料路径；不复制聊天历史。子任务不能提问或再次派发，需要协助会交回。避免派发相互依赖或同时修改同一文件的任务。'
+      '并行执行临时子 agent 任务，等待结束后返回各任务的状态、结果和产物。子任务使用独立上下文，不包含主聊天历史。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'mutating',

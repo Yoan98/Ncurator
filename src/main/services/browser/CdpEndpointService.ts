@@ -391,10 +391,6 @@ class BrowserCdpClient {
     socket.onMessage((data) => {
       void this.handleMessage(data)
     })
-    if (preferredTargetId) {
-      const target = this.bridge.getTarget(preferredTargetId)
-      if (target) this.attachTarget(target, false)
-    }
   }
 
   public close(): void {
@@ -435,6 +431,10 @@ class BrowserCdpClient {
       const targetId = readString(data.targetId) || readString(asRecord(data.targetInfo).targetId)
       if (targetId && !this.allowsTarget(targetId)) return
     }
+    this.emitEvent(method, params, sessionId)
+  }
+
+  private emitEvent(method: string, params: unknown, sessionId?: string): void {
     const payload: Record<string, unknown> = { method, params }
     if (sessionId) payload.sessionId = sessionId
     this.socket.send(JSON.stringify(payload))
@@ -456,7 +456,8 @@ class BrowserCdpClient {
         electronSessionId
       })
     }
-    this.sendEvent(method, params, sessionId === pageSessionId ? pageSessionId : sessionId)
+    // The source page session already passed the scope check; include its child frames.
+    this.emitEvent(method, params, sessionId === pageSessionId ? pageSessionId : sessionId)
   }
 
   private async handleMessage(raw: string): Promise<void> {

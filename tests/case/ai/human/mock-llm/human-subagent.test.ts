@@ -1,10 +1,19 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import mammoth from 'mammoth'
+import { createAiRunContext } from '../../../../../src/main/services/ai/runtime'
+import { createContextCompactionNode } from '../../../../../src/main/services/ai/human/node/contextCompactionNode'
+import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
+import { createInitialHumanState } from '../../../../../src/main/services/ai/human/state/schema'
 import { describe, it, expect } from 'vitest'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import type { ScriptedLlmCall, ScriptedLlmStep } from '../../../../harness/backend/test-types'
-import { buildCompleteTaskDecision, buildToolDecision } from '../testUtils'
+import {
+  buildCompleteTaskDecision,
+  buildToolDecision,
+  buildLearnSkillsDecision
+} from '../testUtils'
 import {
   projectMessageLogRecords,
   repairInterruptedToolCalls
@@ -27,7 +36,7 @@ const steps = (
     call: ScriptedLlmCall
   ) => ReturnType<typeof complete> | Promise<ReturnType<typeof complete>>
 ): ScriptedLlmStep[] => Array.from({ length: 30 }, () => execute)
-const isChild = (call: ScriptedLlmCall): boolean => call.user.includes('你正在执行主伙伴派发')
+const isChild = (call: ScriptedLlmCall): boolean => /用户诉求：\n(?:CHILD_|PHASE_)/.test(call.user)
 
 describe('temporary subagents through production AiRunService', () => {
   it('human-subagent-isolation', async () => {
@@ -115,12 +124,14 @@ describe('temporary subagents through production AiRunService', () => {
       suite: 'human',
       groups: ['mock-llm'],
       harnessMode: 'mock-llm',
-      fixtures: [],
+      fixtures: ['tests/fixtures/workspace/sample-edit.docx'],
       runMode: 'single',
       description: '文件统一基线与取消后保留修改',
       execute: async (runtime) => {
         const file = path.join(runtime.workspaceRoot, 'handoff.txt')
         await fs.writeFile(file, 'first baseline\nprotected\n')
+        const docx = runtime.getFixtureWorkspacePath('tests/fixtures/workspace/sample-edit.docx')
+        const docxBefore = await fs.readFile(docx)
         const controller = new AbortController()
         let parentCall = 0
         const childCalls = new Map<string, number>()
@@ -130,7 +141,22 @@ describe('temporary subagents through production AiRunService', () => {
           llmScript: {
             'human.brain': steps(async (call) => {
               if (!isChild(call)) {
-                const phase = ++parentCall
+                const parentStep = ++parentCall
+                if (parentStep === 1)
+                  return buildLearnSkillsDecision({ skillIds: ['docx-read'], summary: '查看文档' })
+                if (parentStep === 2)
+                  return buildToolDecision({
+                    toolName: 'docx_search',
+                    args: { sourcePath: docx, query: 'Hello from fixture' },
+                    summary: '主伙伴先读文档'
+                  })
+                if (parentStep === 3)
+                  return buildToolDecision({
+                    toolName: 'text_file_read',
+                    args: { sourcePath: file },
+                    summary: '主伙伴先读文本'
+                  })
+                const phase = parentStep - 3
                 return delegate([{ name: `海豹${phase}`, task: `PHASE_${phase} 修改 ${file}` }])
               }
               const phase = call.user.match(/PHASE_(\d)/)?.[1] || '1'
@@ -140,6 +166,38 @@ describe('temporary subagents through production AiRunService', () => {
                 controller.abort()
                 return complete('等待取消')
               }
+              if (count === 2)
+                return buildLearnSkillsDecision({ skillIds: ['docx-write'], summary: '文档编辑' })
+              if (count === 3)
+                return buildToolDecision({
+                  toolName: 'docx_search',
+                  args: {
+                    sourcePath: docx,
+                    query: phase === '1' ? 'Hello from fixture' : 'Intermediate docx'
+                  },
+                  summary: '定位文档'
+                })
+              if (count === 4) {
+                const nodeId = [...call.user.matchAll(/nodeId=([^;\s]+)/g)].at(-1)?.[1]
+                if (!nodeId) throw new Error('真实 DOCX 读取未返回节点')
+                return buildToolDecision({
+                  toolName: 'docx_content_edit',
+                  args: {
+                    sourcePath: docx,
+                    type: 'replace_text',
+                    nodeId,
+                    oldText: phase === '1' ? 'Hello from fixture' : 'Intermediate docx',
+                    newText: phase === '1' ? 'Intermediate docx' : 'Final docx'
+                  },
+                  summary: '修改文档'
+                })
+              }
+              if (count === 5)
+                return buildToolDecision({
+                  toolName: 'terminal_run',
+                  args: { command: 'pwd', commandExplanation: '确认子终端工作区' },
+                  summary: '子终端'
+                })
               return count === 1
                 ? buildToolDecision({
                     toolName: 'text_file_edit',
@@ -165,12 +223,25 @@ describe('temporary subagents through production AiRunService', () => {
         ).items
         const persisted = await fs.readFile(file, 'utf8')
         const files = new AiFileChangeService(runtime.storageService.aiFileChange)
-        const reverted = changes[0]
-          ? await files.revertRecord({ changeId: changes[0].id })
+        const editedDocx = (await mammoth.extractRawText({ path: docx })).value
+        const docxChange = changes.find((change) => change.path === docx)
+        const preview = docxChange?.previewPath
+          ? (await mammoth.extractRawText({ path: docxChange.previewPath })).value
+          : ''
+        const textChange = changes.find((change) => change.path === file)
+        const docxReverted = docxChange
+          ? await files.revertRecord({ changeId: docxChange.id })
+          : undefined
+        const reverted = textChange
+          ? await files.revertRecord({ changeId: textChange.id })
           : undefined
         return {
           output,
           changes,
+          editedDocx,
+          preview,
+          docxReverted,
+          docxRestored: (await fs.readFile(docx)).equals(docxBefore),
           persisted,
           reverted,
           restored: await fs.readFile(file, 'utf8'),
@@ -179,8 +250,14 @@ describe('temporary subagents through production AiRunService', () => {
       },
       assert: async (result, runtime) => {
         expect(result.output.status).toBe('cancelled')
-        expect(result.changes).toHaveLength(1)
-        expect(result.changes[0].runId).toBe(runtime.runId)
+        expect(result.changes).toHaveLength(2)
+        expect(result.changes.every((change) => change.runId === runtime.runId)).toBe(true)
+        expect(result.editedDocx).toContain('Final docx')
+        expect(result.preview).toContain('Hello from fixture')
+        expect(result.preview).toContain('Final docx')
+        expect(result.preview).not.toContain('Intermediate docx')
+        expect(result.docxReverted?.success).toBe(true)
+        expect(result.docxRestored).toBe(true)
         expect(result.persisted).toBe('last version\nprotected\n')
         expect(result.reverted?.success).toBe(true)
         expect(result.restored).toBe('first baseline\nprotected\n')
@@ -191,7 +268,9 @@ describe('temporary subagents through production AiRunService', () => {
         for (const event of result.events)
           if (event.type === 'subagent_updated') {
             // No idle or running child terminal session may survive disposal.
-            await terminalSessionManager.closeByChatSession(event.update.childRunId)
+            expect(
+              terminalSessionManager.list({ chatSessionId: event.update.childRunId })
+            ).toHaveLength(0)
           }
         runtime.assertThat(true, {
           name: 'parent-owned-revert',
@@ -214,7 +293,10 @@ describe('temporary subagents through production AiRunService', () => {
       execute: async (runtime) => {
         const runner = await createAiServiceTestRunner(runtime, {
           userInput: '继续中断任务',
-          llmScript: { 'human.brain': [{ output: complete('读取已完成反馈后继续') }] }
+          llmScript: {
+            'human.brain': [{ output: complete('读取已完成反馈后继续') }],
+            'human.context_compaction': [{ text: 'COMPACT_CHILD' }, { text: 'COMPACT_CHILD' }]
+          }
         })
         const tasks = [
           { name: '海豹', task: '独立任务 A' },
@@ -247,21 +329,35 @@ describe('temporary subagents through production AiRunService', () => {
           {
             kind: 'user',
             input: 'old',
-            content: 'OLD_CONTEXT',
+            content: 'OLD_CONTEXT '.repeat(4000),
             context: { selectedReferences: [], attachments: [] }
           },
+          { kind: 'assistant', content: '历史任务已结束', toolCalls: [] },
           {
-            kind: 'annotation',
-            eventType: 'compaction_checkpoint',
-            payload: {
-              compactBlockId: 'compact',
-              throughSeq: 1,
-              sourceMessageCount: 1,
-              summary: 'COMPACT_CHILD'
-            }
+            kind: 'user',
+            input: 'next',
+            content: '独立任务继续',
+            context: { selectedReferences: [], attachments: [] }
           },
           { kind: 'assistant', content: 'KEPT_TAIL', toolCalls: [] }
         ])
+        const childCtx = createAiRunContext(
+          {
+            ...runner.payload,
+            runId: 'child-memory',
+            ownerRunId: runtime.runId,
+            parentToolCallId: 'compact-parent'
+          },
+          {
+            ...runner.deps,
+            transcript: memory,
+            humanRuntimeOverrides: { modelContextWindowTokens: 4000 },
+            sendEvent: (event) => runtime.eventCollector.add(event)
+          }
+        )
+        await createContextCompactionNode({ ctx: childCtx, cache: createHumanRuntimeCache() })(
+          createInitialHumanState({ taskId: 'child-memory', userInput: '独立任务继续' })
+        )
         const projection = projectMessageLogRecords(await memory.load())
         memory.clear()
         const output = await runner.run()
@@ -280,8 +376,15 @@ describe('temporary subagents through production AiRunService', () => {
         expect(result.output.status).toBe('completed')
         expect(result.repaired.join('\n')).toContain('VERIFIED_A')
         expect(result.repaired.join('\n')).toContain('执行被中断，未收到完整结果')
-        expect(result.projection.historyFloorSeq).toBe(1)
-        expect(result.projection.compactionCheckpoint?.summary).toBe('COMPACT_CHILD')
+        expect(result.projection.historyFloorSeq).toBeGreaterThanOrEqual(2)
+        expect(result.projection.compactionCheckpoint?.summary).toContain('COMPACT_CHILD')
+        expect(
+          result.after.some(
+            (record) =>
+              record.entry.kind === 'annotation' &&
+              record.entry.eventType === 'compaction_checkpoint'
+          )
+        ).toBe(false)
         expect(result.empty).toBe(0)
         expect(
           result.after.some(
@@ -289,7 +392,9 @@ describe('temporary subagents through production AiRunService', () => {
               record.entry.kind === 'tool' && record.entry.toolName === 'delegate_to_subagent'
           )
         ).toBe(false)
-        expect(result.io[0].user).toContain('VERIFIED_A')
+        expect(result.io.find((record) => record.runId === runtime.runId)?.user).toContain(
+          'VERIFIED_A'
+        )
         runtime.assertThat(true, {
           name: 'recover-without-resurrection',
           message: '修复仅用于模型投影，保留完成事实，不写虚构 tool 结果、不重启子实例'
