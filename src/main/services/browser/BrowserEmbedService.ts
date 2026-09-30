@@ -16,10 +16,7 @@ import {
   EMBEDDED_BROWSER_PARTITION,
   EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS
 } from './constants'
-import {
-  BROWSER_RELOAD_CONSOLE_TOKEN,
-  buildNetErrorDocumentHtml
-} from './netErrorPage'
+import { BROWSER_RELOAD_CONSOLE_TOKEN, buildNetErrorDocumentHtml } from './netErrorPage'
 import {
   BLANK_PAGE_ERROR,
   formatNavigateNetError,
@@ -86,9 +83,9 @@ const createCancelledError = (): Error & { code: 'CANCELLED' } => {
 const isCancelledError = (error: unknown): boolean =>
   Boolean(
     error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: unknown }).code === 'CANCELLED'
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'CANCELLED'
   )
 
 const raceAbort = async <T>(
@@ -287,8 +284,7 @@ const loadNavigatePlan = async (
   plan: NavigatePlan,
   signal?: AbortSignal
 ): Promise<
-  | { ok: true; url: string; title: string }
-  | { ok: false; error: string; displayUrl: string }
+  { ok: true; url: string; title: string } | { ok: false; error: string; displayUrl: string }
 > => {
   const url = plan.url
   const failedCode = await loadUrlOnce(contents, url, signal)
@@ -368,6 +364,8 @@ export class BrowserEmbedService implements BrowserUseService {
   private readonly tabs = new Map<string, BrowserTabRuntime>()
   private readonly runTabMap = new Map<string, Set<string>>()
   private readonly hydratedOwnerIds = new Set<string>()
+  private readonly childTabScopes = new Map<string, string>()
+  private readonly tabOperations = new Map<string, Promise<unknown>>()
   private activeTabId: string | null = null
   private presentedTabId: string | null = null
   private presentationId = 0
@@ -447,7 +445,7 @@ export class BrowserEmbedService implements BrowserUseService {
       .map((tab) => this.toState(tab))
   }
 
-  public async createTab(ownerId: string): Promise<BrowserTabState> {
+  public async createTab(ownerId: string, background = false): Promise<BrowserTabState> {
     const normalizedOwnerId = String(ownerId || '').trim() || '__browser__'
     this.hydrateOwner(normalizedOwnerId)
     const now = Date.now()
@@ -474,7 +472,7 @@ export class BrowserEmbedService implements BrowserUseService {
     }
     this.tabs.set(persisted.id, runtime)
     this.stateStore.save(persisted)
-    this.activeTabId = persisted.id
+    if (!background) this.activeTabId = persisted.id
     this.applyAllVisibility()
     return this.toState(runtime)
   }
@@ -733,8 +731,33 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   public async run(input: BrowserUseRunInput): Promise<BrowserUseRunResult> {
+    if ('tabId' in input && input.tabId) {
+      const scope = this.childTabScopes.get(input.tabId)
+      if (scope !== input.executionScope)
+        throw new Error('browser tab is outside this execution scope')
+      const previous = this.tabOperations.get(input.tabId) || Promise.resolve()
+      const operation = previous
+        .catch(() => undefined)
+        .then(() => {
+          if (input.abortSignal?.aborted) throw createCancelledError()
+          return this.runScoped(input)
+        })
+      this.tabOperations.set(input.tabId, operation)
+      try {
+        return await operation
+      } finally {
+        if (this.tabOperations.get(input.tabId) === operation)
+          this.tabOperations.delete(input.tabId)
+      }
+    }
+    return await this.runScoped(input)
+  }
+
+  private async runScoped(input: BrowserUseRunInput): Promise<BrowserUseRunResult> {
     if (input.action === 'list_tabs') {
-      const tabs = this.listTabs(input.ownerId)
+      const tabs = this.listTabs(input.ownerId).filter(
+        (tab) => this.childTabScopes.get(tab.id) === input.executionScope
+      )
       return {
         action: 'list_tabs',
         tabs: tabs.map((tab) => ({
@@ -751,11 +774,12 @@ export class BrowserEmbedService implements BrowserUseService {
       const plan = parseNavigatePlan(input.url)
       const tabId = input.tabId
         ? this.requireTab(input.tabId).persisted.id
-        : (await this.createTab(input.ownerId)).id
+        : (await this.createTab(input.ownerId, input.background)).id
       if (input.abortSignal?.aborted) throw createCancelledError()
       if (input.runId) {
         this.trackRunTab(input.runId, tabId)
       }
+      if (input.executionScope) this.childTabScopes.set(tabId, input.executionScope)
       const runtime = this.requireTab(tabId)
       runtime.lastNavigateRaw = input.url
       runtime.navGeneration += 1
@@ -812,6 +836,8 @@ export class BrowserEmbedService implements BrowserUseService {
     if (!normalizedRunId) return
     const tabIds = this.runTabMap.get(normalizedRunId)
     this.runTabMap.delete(normalizedRunId)
+    for (const [tabId, scope] of this.childTabScopes)
+      if (scope === normalizedRunId) this.childTabScopes.delete(tabId)
     if (!tabIds || tabIds.size === 0) return
 
     const hideScript = createHideCursorScript()
@@ -906,6 +932,7 @@ export class BrowserEmbedService implements BrowserUseService {
         partition: EMBEDDED_BROWSER_PARTITION
       }
     })
+    view.setBounds({ x: 0, y: 0, width: 1280, height: 800 })
     runtime.view = view
     runtime.attached = false
     this.bindViewEvents(runtime, view)
@@ -1131,7 +1158,9 @@ export class BrowserEmbedService implements BrowserUseService {
         ? { title: contents?.getTitle().trim() || runtime.persisted.title }
         : {}),
       // Prefer persisted zoom: live getZoomFactor() is briefly 1.0 across navigations.
-      zoomPercent: Math.round((runtime.persisted.zoomFactor || contents?.getZoomFactor() || 1) * 100),
+      zoomPercent: Math.round(
+        (runtime.persisted.zoomFactor || contents?.getZoomFactor() || 1) * 100
+      ),
       canGoBack: history?.canGoBack() || Boolean(persistedHistory && persistedHistory.index > 0),
       canGoForward:
         history?.canGoForward() ||
@@ -1196,108 +1225,147 @@ export class BrowserEmbedService implements BrowserUseService {
       }
     }
     const stagehandModule = await import('@browserbasehq/stagehand')
-    const targetId = this.cdpEndpointService.registerTarget(view.webContents as CdpDebuggableContents)
+    const targetId = this.cdpEndpointService.registerTarget(
+      view.webContents as CdpDebuggableContents
+    )
     try {
-    const cdpUrl = (await this.cdpEndpointService.getEndpoint()).browserWebSocketUrl
-    const runtimeModel = resolveStagehandRuntimeModel(input.llmConfig)
-    if (runtimeModel.mode === 'langchain-client') {
-      runtimeModel.llmClient.setAbortSignal(signal)
-    }
-    const stagehand = new stagehandModule.Stagehand({
-      env: 'LOCAL',
-      disablePino: true,
-      verbose: 0,
-      disableAPI: true,
-      ...(runtimeModel.mode === 'stagehand-model'
-        ? { model: runtimeModel.model }
-        : { llmClient: runtimeModel.llmClient }),
-      localBrowserLaunchOptions: { cdpUrl, connectTimeoutMs: 20_000 },
-      actTimeoutMs: EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS,
-      domSettleTimeout: 1_000
-    })
-    const abortStagehand = (): Promise<void> => this.closeStagehand(stagehand)
-    try {
-      await raceAbort(stagehand.init(), signal, abortStagehand)
-      const page = stagehand.context.pages().find((candidate) => candidate.targetId() === targetId)
-      if (!page) throw new Error('Stagehand target page not found')
-      stagehand.context.setActivePage(page)
-      const title = await raceAbort(page.title(), signal, abortStagehand)
-      const pageInfo = toBrowserUsePage(page.url(), title)
-
-      if (input.action === 'extract') {
-        const result = await raceAbort(stagehand.extract(input.instruction, { page }), signal, abortStagehand)
-        return {
-          action: 'extract',
-          tabId,
-          page: pageInfo,
-          result: { extracted: stringifyStagehandExtraction(result) }
-        }
+      const cdpUrl = (await this.cdpEndpointService.getScopedEndpoint(targetId)).browserWebSocketUrl
+      const runtimeModel = resolveStagehandRuntimeModel(input.llmConfig)
+      if (runtimeModel.mode === 'langchain-client') {
+        runtimeModel.llmClient.setAbortSignal(signal)
       }
+      const stagehand = new stagehandModule.Stagehand({
+        env: 'LOCAL',
+        disablePino: true,
+        verbose: 0,
+        disableAPI: true,
+        ...(runtimeModel.mode === 'stagehand-model'
+          ? { model: runtimeModel.model }
+          : { llmClient: runtimeModel.llmClient }),
+        localBrowserLaunchOptions: { cdpUrl, connectTimeoutMs: 20_000 },
+        actTimeoutMs: EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS,
+        domSettleTimeout: 1_000
+      })
+      const abortStagehand = (): Promise<void> => this.closeStagehand(stagehand)
+      try {
+        await raceAbort(stagehand.init(), signal, abortStagehand)
+        const page = stagehand.context
+          .pages()
+          .find((candidate) => candidate.targetId() === targetId)
+        if (!page) throw new Error('Stagehand target page not found')
+        stagehand.context.setActivePage(page)
+        const title = await raceAbort(page.title(), signal, abortStagehand)
+        const pageInfo = toBrowserUsePage(page.url(), title)
 
-      if (input.action === 'observe') {
-        const actions = await raceAbort(
-          stagehand.observe(input.instruction, { page }),
-          signal,
-          abortStagehand
-        )
-        return {
-          action: 'observe',
-          tabId,
-          page: pageInfo,
-          result: { actions: actions.map(toBrowserStagehandAction) }
-        }
-      }
-
-      if (input.action === 'screenshot') {
-        await fs.mkdir(path.dirname(input.screenshotPath), { recursive: true })
-        await raceAbort(
-          page.screenshot({
-            fullPage: false,
-            animations: 'disabled',
-            caret: 'hide',
-            scale: 'device',
-            path: input.screenshotPath,
-            type: 'png'
-          }),
-          signal,
-          abortStagehand
-        )
-        return {
-          action: 'screenshot',
-          tabId,
-          page: pageInfo,
-          result: { path: input.screenshotPath }
-        }
-      }
-
-      if (input.action === 'scroll') {
-        const percentage = Math.max(1, Math.min(200, input.percentage ?? 80))
-        const direction = input.direction ?? 'down'
-        const { w, h } = (await raceAbort(
-          page.mainFrame().evaluate('({ w: window.innerWidth, h: window.innerHeight })'),
-          signal,
-          abortStagehand
-        )) as { w: number; h: number }
-        const scrollDistance = Math.round((h * percentage) / 100)
-        const cx = Math.floor(w / 2)
-        const cy = Math.floor(h / 2)
-        const deltaY = direction === 'up' ? -scrollDistance : scrollDistance
-
-        await raceAbort(page.scroll(cx, cy, 0, deltaY), signal, abortStagehand)
-        await raceAbort(page.waitForTimeout(300), signal, abortStagehand)
-
-        return {
-          action: 'scroll',
-          tabId,
-          page: toBrowserUsePage(page.url(), await page.title()),
-          result: {
-            message: `Scrolled ${percentage}% ${direction} (${scrollDistance}px)`,
-            scrolledPixels: scrollDistance
+        if (input.action === 'extract') {
+          const result = await raceAbort(
+            stagehand.extract(input.instruction, { page }),
+            signal,
+            abortStagehand
+          )
+          return {
+            action: 'extract',
+            tabId,
+            page: pageInfo,
+            result: { extracted: stringifyStagehandExtraction(result) }
           }
         }
-      }
 
-      if (input.action === 'act_instruction') {
+        if (input.action === 'observe') {
+          const actions = await raceAbort(
+            stagehand.observe(input.instruction, { page }),
+            signal,
+            abortStagehand
+          )
+          return {
+            action: 'observe',
+            tabId,
+            page: pageInfo,
+            result: { actions: actions.map(toBrowserStagehandAction) }
+          }
+        }
+
+        if (input.action === 'screenshot') {
+          await fs.mkdir(path.dirname(input.screenshotPath), { recursive: true })
+          await raceAbort(
+            page.screenshot({
+              fullPage: false,
+              animations: 'disabled',
+              caret: 'hide',
+              scale: 'device',
+              path: input.screenshotPath,
+              type: 'png'
+            }),
+            signal,
+            abortStagehand
+          )
+          return {
+            action: 'screenshot',
+            tabId,
+            page: pageInfo,
+            result: { path: input.screenshotPath }
+          }
+        }
+
+        if (input.action === 'scroll') {
+          const percentage = Math.max(1, Math.min(200, input.percentage ?? 80))
+          const direction = input.direction ?? 'down'
+          const { w, h } = (await raceAbort(
+            page.mainFrame().evaluate('({ w: window.innerWidth, h: window.innerHeight })'),
+            signal,
+            abortStagehand
+          )) as { w: number; h: number }
+          const scrollDistance = Math.round((h * percentage) / 100)
+          const cx = Math.floor(w / 2)
+          const cy = Math.floor(h / 2)
+          const deltaY = direction === 'up' ? -scrollDistance : scrollDistance
+
+          await raceAbort(page.scroll(cx, cy, 0, deltaY), signal, abortStagehand)
+          await raceAbort(page.waitForTimeout(300), signal, abortStagehand)
+
+          return {
+            action: 'scroll',
+            tabId,
+            page: toBrowserUsePage(page.url(), await page.title()),
+            result: {
+              message: `Scrolled ${percentage}% ${direction} (${scrollDistance}px)`,
+              scrolledPixels: scrollDistance
+            }
+          }
+        }
+
+        if (input.action === 'act_instruction') {
+          const visualizer = new BrowserActionVisualizer()
+          await visualizer.prepare(page)
+          const listener = (event: unknown): void => visualizer.handleFlowEvent(page, event)
+          stagehand.bus.on('*', listener)
+          let result: Awaited<ReturnType<StagehandInstance['act']>>
+          try {
+            result = await raceAbort(
+              stagehand.act(input.instruction, { page }),
+              signal,
+              abortStagehand
+            )
+          } finally {
+            stagehand.bus.off('*', listener)
+            await visualizer.flush()
+          }
+          return {
+            action: 'act_instruction',
+            tabId,
+            page: toBrowserUsePage(page.url(), await page.title()),
+            result: {
+              success: result.success,
+              message: result.message,
+              actionDescription: result.actionDescription || input.instruction
+            }
+          }
+        }
+
+        if (input.action !== 'act') {
+          throw new Error(`unsupported browser run action: ${String(input.action)}`)
+        }
+
         const visualizer = new BrowserActionVisualizer()
         await visualizer.prepare(page)
         const listener = (event: unknown): void => visualizer.handleFlowEvent(page, event)
@@ -1305,7 +1373,15 @@ export class BrowserEmbedService implements BrowserUseService {
         let result: Awaited<ReturnType<StagehandInstance['act']>>
         try {
           result = await raceAbort(
-            stagehand.act(input.instruction, { page }),
+            stagehand.act(
+              {
+                selector: input.stagehandAction.selector,
+                description: input.stagehandAction.description,
+                method: input.stagehandAction.method,
+                arguments: input.stagehandAction.arguments
+              },
+              { page }
+            ),
             signal,
             abortStagehand
           )
@@ -1313,61 +1389,22 @@ export class BrowserEmbedService implements BrowserUseService {
           stagehand.bus.off('*', listener)
           await visualizer.flush()
         }
+        const executed = toBrowserActionCandidate(input.actionId, input.stagehandAction)
         return {
-          action: 'act_instruction',
+          action: 'act',
           tabId,
           page: toBrowserUsePage(page.url(), await page.title()),
           result: {
             success: result.success,
             message: result.message,
-            actionDescription: result.actionDescription || input.instruction
+            actionDescription: result.actionDescription || input.stagehandAction.description,
+            executed
           }
         }
-      }
-
-      if (input.action !== 'act') {
-        throw new Error(`unsupported browser run action: ${String(input.action)}`)
-      }
-
-      const visualizer = new BrowserActionVisualizer()
-      await visualizer.prepare(page)
-      const listener = (event: unknown): void => visualizer.handleFlowEvent(page, event)
-      stagehand.bus.on('*', listener)
-      let result: Awaited<ReturnType<StagehandInstance['act']>>
-      try {
-        result = await raceAbort(
-          stagehand.act(
-            {
-              selector: input.stagehandAction.selector,
-              description: input.stagehandAction.description,
-              method: input.stagehandAction.method,
-              arguments: input.stagehandAction.arguments
-            },
-            { page }
-          ),
-          signal,
-          abortStagehand
-        )
       } finally {
-        stagehand.bus.off('*', listener)
-        await visualizer.flush()
+        await this.closeStagehand(stagehand)
+        this.captureRuntimeState(runtime)
       }
-      const executed = toBrowserActionCandidate(input.actionId, input.stagehandAction)
-      return {
-        action: 'act',
-        tabId,
-        page: toBrowserUsePage(page.url(), await page.title()),
-        result: {
-          success: result.success,
-          message: result.message,
-          actionDescription: result.actionDescription || input.stagehandAction.description,
-          executed
-        }
-      }
-    } finally {
-      await this.closeStagehand(stagehand)
-      this.captureRuntimeState(runtime)
-    }
     } finally {
       this.cdpEndpointService.unregisterTarget(targetId)
     }

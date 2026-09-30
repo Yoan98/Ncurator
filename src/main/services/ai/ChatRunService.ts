@@ -1012,6 +1012,7 @@ export class ChatRunService {
           workspaceRoots
         },
         {
+          releaseRun: (executionRunId) => this.deps.runResourceManager.releaseRun(executionRunId),
           llmStore: this.deps.llmStore,
           partnerStore: this.deps.partnerStore,
           chatMessageLogStore: this.deps.chatMessageLogStore,

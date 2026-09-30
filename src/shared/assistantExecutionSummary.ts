@@ -112,6 +112,7 @@ const TOOL_UI_KINDS = {
   learn_skill: 'learning',
   update_plan: 'generic',
   read_image: 'image-read',
+  delegate_to_subagent: 'generic',
   ask_user_question: 'generic',
   scheduled_task_list: 'generic',
   scheduled_task_action: 'generic'
@@ -423,12 +424,12 @@ export const buildAssistantExecutionSummaryText = (
       status
     )
     const representative = kindItems[0]
-    const shortSegments = trimHeaderSegments(
-      getItemHeaderShortSegments(representative, kindStatus)
-    )
+    const shortSegments = trimHeaderSegments(getItemHeaderShortSegments(representative, kindStatus))
     const prefix = index === 0 ? '' : '、'
     const countSuffix =
-      kindItems.length > 1 ? [text(` ${kindItems.length} 次`)] : ([] as AssistantExecutionTextSegment[])
+      kindItems.length > 1
+        ? [text(` ${kindItems.length} 次`)]
+        : ([] as AssistantExecutionTextSegment[])
     return sentence(text(prefix), ...shortSegments, ...countSuffix)
   })
 }
@@ -448,7 +449,8 @@ export const resolveItemIconKind = (
     if (action === 'navigate' || headerShort === '打开网页') return 'web'
     if (action === 'observe' || headerShort === '查看页面') return 'eye'
     if (action === 'extract' || headerShort === '提取内容') return 'extract'
-    if (action === 'act' || action === 'act_instruction' || headerShort === '操作页面') return 'browser'
+    if (action === 'act' || action === 'act_instruction' || headerShort === '操作页面')
+      return 'browser'
     if (action === 'screenshot' || headerShort === '截取页面') return 'camera'
     if (action === 'scroll' || headerShort === '滚动页面') return 'scroll'
     if (action === 'list_tabs' || headerShort === '列出标签') return 'window'

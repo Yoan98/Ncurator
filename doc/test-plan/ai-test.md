@@ -1,5 +1,39 @@
 # NCurator-Desktop AI 测试计划
 
+## 一次性子任务
+
+#### `human-subagent-collaboration-live`
+
+- 测试类型：backend / live；suite `human`，group `live`。
+- What：三位临时帮手分别核对经营表、修改文本配置和 DOCX，主伙伴写交接报告。
+- Why：验证真实派发的任务完成度、证据和整合质量，以及文件统一归属。
+- How：自然语言任务经生产 `AiRunService.run`；现有 XLSX、DOCX 和固定配置 fixture 复制到临时 workspace；真实模型、终端、工具和存储。保留主子 LLM I/O、事件、耗时与 token/cache 数据。
+- Oracle：三项子任务完成；终端产出数值事实；源经营表不变；配置与 DOCX 指定修改落盘且保护内容不变；主报告包含核对事实与依据；文件记录均归主 run。执行者根据 raw logs 评估完成度、准确性、依据和整合质量，回写 0–100 分，不设自动评分门槛。
+
+#### `human-subagent-isolation`
+
+- 测试类型：backend / mock-llm。
+- What：批量派发、独立上下文、工具策略与结果汇集。
+- Why：子任务不能读主聊天、再次派发或等待用户；子事件不能终止主 run。
+- How：生产 `AiRunService.run`，只脚本化 LLM 决策，其他依赖使用真实服务与存储。
+- Oracle：1–3 项并行执行且结果进入主工具消息；子完整日志不入 SQLite；状态与精简行动 annotation 持久化；受限工具不可绑定和执行。
+
+#### `human-subagent-file-cancellation`
+
+- 测试类型：backend / mock-llm。
+- What：子文件修改统一归属、同路径基线复用与取消资源清理。
+- Why：保证单一修改入口和完整回退，销毁子实例不丢已提交文件。
+- How：生产运行链、真实文本/文档工具和文件记录；父级 AbortSignal 取消。
+- Oracle：文件记录归主 run；同路径保留首次基线及最后状态；取消后资源释放，已保存修改继续保留。
+
+#### `human-subagent-transcript-recovery`
+
+- 测试类型：backend / mock-llm。
+- What：内存日志投影、compaction 与缺失派发结果恢复。
+- Why：共用消息链且重启不复活子实例，保留已完成事实。
+- How：生产运行与投影入口；只脚本化 LLM；模拟的仅为模型决策，日志与存储真实。
+- Oracle：子 compaction 不污染主计划/技能；已完成子结果进入合成反馈，其余标记中断；修复不写真实 tool 行、不自动派发。
+
 ## 最新 Live 评估
 
 | caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                         | 简短依据                                                                                                                                                                                                                                                         |

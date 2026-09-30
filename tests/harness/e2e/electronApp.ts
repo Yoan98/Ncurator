@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import os from 'node:os'
 import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -130,7 +131,11 @@ export type LaunchedElectronApp = {
   userDataDir: string
   appInfo: E2EAppInfo
   collectSignals: () => Promise<E2ERuntimeSignals>
-  close: (input: { tracePath: string; preserveUserData?: boolean }) => Promise<void>
+  close: (input: {
+    tracePath: string
+    preserveUserData?: boolean
+    crash?: boolean
+  }) => Promise<void>
 }
 
 export type E2EAppTarget = 'source' | 'package'
@@ -642,6 +647,37 @@ export const launchElectronApp = async (input: {
             input.signalSink
           )
         }
+      }
+      if (closeInput.crash && electronProcess?.pid) {
+        // Only terminate the process tree launched by this harness. No production shutdown hooks.
+        if (process.platform === 'win32')
+          execFileSync('taskkill', ['/PID', String(electronProcess.pid), '/T', '/F'])
+        else {
+          const rows = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8' })
+            .trim()
+            .split('\n')
+            .map((line) => line.trim().split(/\s+/).map(Number))
+          const descendants = [electronProcess.pid]
+          for (let index = 0; index < descendants.length; index++)
+            for (const [pid, parent] of rows)
+              if (parent === descendants[index] && !descendants.includes(pid)) descendants.push(pid)
+          for (const pid of descendants.reverse()) {
+            try {
+              process.kill(pid, 'SIGKILL')
+            } catch {
+              /* already exited */
+            }
+          }
+        }
+        recordLifecycle('electron-force-killed')
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 3000)
+          electronProcess.once('exit', () => {
+            clearTimeout(timer)
+            resolve()
+          })
+        })
+        return
       }
       let gracefulExitRequested = false
       try {

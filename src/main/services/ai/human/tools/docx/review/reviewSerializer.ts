@@ -1,3 +1,4 @@
+import { diffArrays } from 'diff'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
@@ -424,4 +425,55 @@ export const materializeDocxProjectedArtifact = async (input: {
   )
   await ensureDirForFile(input.outPath)
   await fs.writeFile(input.outPath, buffer)
+}
+
+/** Compare original owner baseline to the current document when several executions edit it. */
+export const materializeDocxNetReview = async (input: {
+  sourceBuffer: Buffer
+  workingBuffer: Buffer
+  outPath: string
+}): Promise<{ insertCount: number; deleteCount: number }> => {
+  const source = await loadDocxBundle(input.sourceBuffer)
+  const working = await loadDocxBundle(input.workingBuffer)
+  let insertCount = 0,
+    deleteCount = 0
+  const serializer = new XMLSerializer()
+  for (const part of working.stories) {
+    const original = source.stories.find((story) => story.story.storyId === part.story.storyId)
+    const root = part.root
+    const before = original
+      ? childElements(original.root).filter((node) => node.localName !== 'sectPr')
+      : []
+    const after = childElements(root).filter((node) => node.localName !== 'sectPr')
+    const section = firstChildElement(root, 'sectPr')
+    const changes = diffArrays(
+      before.map((node) => serializer.serializeToString(node)),
+      after.map((node) => serializer.serializeToString(node))
+    )
+    clearChildren(root)
+    for (const change of changes)
+      for (const xml of change.value) {
+        const parsed = new DOMParser().parseFromString(xml, 'application/xml').documentElement
+        const element = root.ownerDocument.importNode(parsed, true) as Element
+        if (change.added) {
+          applyRevisionToRuns(element, 'inserted')
+          insertCount++
+        }
+        if (change.removed) {
+          applyRevisionToRuns(element, 'deleted')
+          deleteCount++
+        }
+        root.appendChild(element)
+      }
+    if (section) root.appendChild(section)
+  }
+  const buffer = await writeDocumentXml(working.zip, working)
+  await assertNoNewDocxValidationProblems(
+    input.sourceBuffer,
+    buffer,
+    'review_artifact_invalid_generated'
+  )
+  await ensureDirForFile(input.outPath)
+  await fs.writeFile(input.outPath, buffer)
+  return { insertCount, deleteCount }
 }

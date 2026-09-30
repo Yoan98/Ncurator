@@ -1945,7 +1945,7 @@ const ChatPage: React.FC = () => {
   )
 
   const persistBackgroundBrowserTab = useCallback(
-    (partnerId: string, browserTabId: string): void => {
+    (partnerId: string, browserTabId: string, preserveSelection = false): void => {
       void window.api.browserPanelStateGet({ tabId: browserTabId }).then((response) => {
         if (!response.success || !response.state) return
         const browser = response.state
@@ -1964,7 +1964,9 @@ const ChatPage: React.FC = () => {
             : [...state.panel.tabs, tab]
           return {
             ...state,
-            panel: { ...state.panel, tabs, activeTabId: resourceId, collapsed: false }
+            panel: preserveSelection
+              ? { ...state.panel, tabs }
+              : { ...state.panel, tabs, activeTabId: resourceId, collapsed: false }
           }
         })
       })
@@ -3411,7 +3413,7 @@ const ChatPage: React.FC = () => {
 
       if (eventPartnerId !== currentPartnerIdRef.current) {
         if (event.type === 'browser_panel_opened' && eventPartnerId) {
-          persistBackgroundBrowserTab(eventPartnerId, event.browserTabId)
+          persistBackgroundBrowserTab(eventPartnerId, event.browserTabId, event.background)
         }
         if (messageId) {
           updateTurnForRun(event.runId, (current) => reduceAssistantTurnByRunEvent(current, event))
@@ -3425,6 +3427,10 @@ const ChatPage: React.FC = () => {
 
       updateTurnForRun(event.runId, (current) => reduceAssistantTurnByRunEvent(current, event))
 
+      if (event.type === 'browser_panel_opened' && event.background && eventPartnerId) {
+        persistBackgroundBrowserTab(eventPartnerId, event.browserTabId, event.background)
+        return
+      }
       if (event.type === 'browser_panel_opened') {
         void openBrowserTab(event.browserTabId)
         return

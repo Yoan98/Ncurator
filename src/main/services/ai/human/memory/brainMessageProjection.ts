@@ -8,11 +8,7 @@ import {
   createCompactedBrainUserMessage,
   createCurrentBrainUserMessage
 } from '../node/utils/messageTail'
-import {
-  orderMessageLogBySeq,
-  repairInterruptedToolCalls,
-  resolveHistoryFloor
-} from './transcript'
+import { orderMessageLogBySeq, repairInterruptedToolCalls, resolveHistoryFloor } from './transcript'
 import { messagesFromLogEntries } from './conversationLogMessages'
 
 export type BrainMessagesProjection = {
@@ -20,10 +16,7 @@ export type BrainMessagesProjection = {
   currentUserMessageIndex: number
 }
 
-const buildCurrentUserMessage = (input: {
-  ctx: AiRunContext
-  state: HumanState
-}): BaseMessage =>
+const buildCurrentUserMessage = (input: { ctx: AiRunContext; state: HumanState }): BaseMessage =>
   createCurrentBrainUserMessage(
     buildBrainUserMessage({
       state: input.state,
@@ -51,7 +44,9 @@ export const projectBrainMessagesFromLog = (input: {
 
   const checkpointSummary = floor.compactionCheckpoint?.summary.trim()
   if (checkpointSummary) {
-    messages.push(createCompactedBrainUserMessage(wrapCompactionCheckpointContent(checkpointSummary)))
+    messages.push(
+      createCompactedBrainUserMessage(wrapCompactionCheckpointContent(checkpointSummary))
+    )
   }
   messages.push(...messagesFromLogEntries(projectedRecords.map((record) => record.entry)))
 
@@ -59,7 +54,7 @@ export const projectBrainMessagesFromLog = (input: {
     messages.push(buildCurrentUserMessage(input))
   }
 
-  const repaired = repairInterruptedToolCalls(messages)
+  const repaired = repairInterruptedToolCalls(messages, ordered)
   return {
     messages: repaired,
     currentUserMessageIndex: repaired.length > 0 ? repaired.length - 1 : 0

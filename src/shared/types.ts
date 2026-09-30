@@ -1162,6 +1162,8 @@ export type AiLlmRequestWireDiff = {
 }
 
 export type AiLlmIoRecord = {
+  ownerRunId?: string
+  parentToolCallId?: string
   callId: string
   runId: string
   taskId?: string
@@ -1597,7 +1599,35 @@ export type AiRunFailureCode =
   | 'unexpected_error'
 export type AiRunFailureSource = 'provider' | 'internal'
 
+export type SubagentTaskStatus =
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'blocked'
+  | 'interrupted'
+
+export type SubagentAction = {
+  id: string
+  toolName: string
+  text: string
+  status: 'running' | 'completed' | 'failed'
+  feedback?: string
+}
+
+export type SubagentUpdate = {
+  toolCallId: string
+  childRunId: string
+  name: string
+  task: string
+  status: SubagentTaskStatus
+  action?: SubagentAction
+  result?: string
+  artifacts?: AiArtifactRef[]
+}
+
 type AiRunEventPayload =
+  | { type: 'subagent_updated'; runId: string; update: SubagentUpdate; createdAt: number }
   | {
       type: 'run_started'
       runId: string
@@ -1714,6 +1744,7 @@ type AiRunEventPayload =
     }
   | {
       type: 'browser_panel_opened'
+      background?: boolean
       runId: string
       taskId?: string
       browserTabId: string
@@ -2012,6 +2043,7 @@ export type ChatMessageLogPlanItem = {
 }
 
 export type ChatMessageLogAnnotationEntry =
+  | { kind: 'annotation'; eventType: 'subagent_updated'; payload: SubagentUpdate }
   | {
       kind: 'annotation'
       eventType: 'thinking_started' | 'thinking_completed' | 'finalizing_started'

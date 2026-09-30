@@ -378,6 +378,7 @@ const TOOL_ITEM_RENDERERS = {
       sentence(text('学习 '), text(skillName), text(' 失败了'))
     )
   },
+  delegate_to_subagent: () => toolCopy('分头处理', sentence(text('分头处理'))),
   update_plan: () => toolCopy('更新任务计划', sentence(text('更新任务计划'))),
   scheduled_task_list: () => toolCopy('查看定时任务', sentence(text('查看当前伙伴的定时任务'))),
   scheduled_task_action: () => toolCopy('操作定时任务', sentence(text('操作定时任务')))
@@ -755,7 +756,8 @@ const upsertGroupFromDisplayEvent = (
   })
   return upsertProcessGroup(baseGroups, {
     ...next,
-    items: existing?.items || []
+    items: existing?.items || [],
+    subagents: existing?.subagents
   })
 }
 
@@ -946,6 +948,34 @@ export const reduceAssistantProcessGroups = (
   current: AssistantProcessGroup[],
   event: AiRunEvent
 ): AssistantProcessGroup[] => {
+  if (event.type === 'subagent_updated') {
+    const groupId = `${event.runId}:tool:${event.update.toolCallId}`
+    const group =
+      current.find((item) => item.id === groupId) ||
+      createDisplayProcessGroup({
+        groupId,
+        kind: 'skill',
+        display: { kind: 'tool', toolName: 'delegate_to_subagent', input: {} },
+        status: 'running',
+        createdAt: event.createdAt,
+        sourceEventType: event.type
+      })
+    const previous = group.subagents?.find((child) => child.childRunId === event.update.childRunId)
+    const actions = [...(previous?.actions || [])]
+    if (event.update.action) {
+      const index = actions.findIndex((action) => action.id === event.update.action?.id)
+      if (index < 0) actions.push(event.update.action)
+      else actions[index] = { ...actions[index], ...event.update.action }
+    }
+    const child = { ...previous, ...event.update, actions }
+    const subagents = group.subagents?.some((item) => item.childRunId === child.childRunId)
+      ? group.subagents.map((item) => (item.childRunId === child.childRunId ? child : item))
+      : [...(group.subagents || []), child]
+    const next = { ...group, subagents }
+    return current.some((item) => item.id === groupId)
+      ? current.map((item) => (item.id === groupId ? next : item))
+      : [...current, next]
+  }
   if (event.type === 'human_interaction_required') {
     const interaction = event.interaction
     if (interaction.kind !== 'question') return current

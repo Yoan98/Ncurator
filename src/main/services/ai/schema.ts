@@ -21,6 +21,7 @@ export const aiArtifactRefSchema: z.ZodType<AiArtifactRef> = aiFileArtifactRefSc
 export const aiRunStatusSchema = z.enum(AI_RUN_STATUSES)
 
 export const aiRunStateFieldSchemas = {
+  needsParent: z.boolean().optional(),
   runId: z.string(),
   partnerId: z.string(),
   status: aiRunStatusSchema,

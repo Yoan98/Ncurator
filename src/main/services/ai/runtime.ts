@@ -7,6 +7,7 @@ import { normalizeSelectedReferences } from './utils/runContext'
 import { KB_INDEXING_IN_PROGRESS_ERROR } from './human/tools/kb/retrievalTools'
 import type { AiExecutionPermission, AiPreference } from '../../../shared/types'
 import { isFreeModelConfigId } from '../../../shared/freeModels'
+import { acquireRunFile } from './run/fileLease'
 import { FreeModelCatalogService } from '../llm/FreeModelCatalogService'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
@@ -58,7 +59,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     } satisfies LlmRuntimeConfig
   }
 
-  const getRequestedConfig = async () => getModelConfig(payload.mainModel, '主模型')
+  const getRequestedConfig = async () =>
+    deps.modelConfig || (await getModelConfig(payload.mainModel, '主模型'))
   let requestedConfigPromise: ReturnType<typeof getRequestedConfig> | undefined
 
   const loadRequestedConfig = async () => {
@@ -84,7 +86,10 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   const resolveChatTools = (): AiRunContext['chatTools'] =>
     deps.chatToolsWrapper ? deps.chatToolsWrapper(llmExecutor.chatTools) : llmExecutor.chatTools
 
+  const ownerRunId = payload.ownerRunId || payload.runId
+  const touchedPaths = new Set<string>()
   const appendMessageLog: AiRunContext['appendMessageLog'] = async (entries, options) => {
+    if (deps.transcript) return await deps.transcript.append(entries, options)
     await deps.chatMessageLogStore.appendBatch({
       partnerId: payload.partnerId,
       runId: options?.runId || payload.runId,
@@ -93,10 +98,19 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   }
 
   const loadMessageLog: AiRunContext['loadMessageLog'] = async () => {
+    if (deps.transcript) return await deps.transcript.load()
     return await deps.chatMessageLogStore.list(payload.partnerId)
   }
 
   return {
+    ownerRunId,
+    isSubagent: Boolean(payload.parentToolCallId),
+    delegateToSubagent:
+      deps.delegateToSubagent ||
+      (async () => {
+        throw new Error('当前运行不支持派发')
+      }),
+    acquireFile: (sourcePath) => acquireRunFile(payload.runId, sourcePath),
     runId: payload.runId,
     partnerId: payload.partnerId,
     userMessageId: payload.userMessageId,
@@ -132,7 +146,23 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         error: '当前运行不支持用户提问'
       })),
     getLlmConfig: loadRequestedConfig,
-    browserUseService: deps.browserUseService,
+    browserUseService:
+      deps.browserUseService && payload.parentToolCallId
+        ? {
+            ...deps.browserUseService,
+            createTab: (ownerId) => deps.browserUseService!.createTab(ownerId),
+            ensureAutomationTab: (ownerId) => deps.browserUseService!.ensureAutomationTab(ownerId),
+            getActiveTabId: () => deps.browserUseService!.getActiveTabId(),
+            listTabs: (ownerId) => deps.browserUseService!.listTabs(ownerId),
+            run: (request) =>
+              deps.browserUseService!.run({
+                ...request,
+                executionScope: payload.runId,
+                background: true
+              }),
+            navigate: (url, tabId) => deps.browserUseService!.navigate(url, tabId)
+          }
+        : deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,
     scheduledTaskService: deps.scheduledTaskService,
     appendMessageLog,
@@ -161,23 +191,33 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       deps.docxApplyService.beginRun({
         runId: payload.runId,
         partnerId: payload.partnerId,
+        ownerRunId,
         inputText: String(payload.input || '')
       })
     },
-    applyDocxRunEdits: async () => {
-      return await deps.docxApplyService.applyRunEdits({
+    applyDocxRunEdits: async (options) => {
+      const records = await deps.docxApplyService.applyRunEdits({
+        retainState: options?.retainState,
         runId: payload.runId,
         partnerId: payload.partnerId
       })
+      records.forEach((record) => touchedPaths.add(record.source_path))
+      return records
     },
     discardDocxApplyRun: () => {
       deps.docxApplyService.discardRun(payload.runId)
     },
     saveFileChangeRecord: async (record) => {
+      touchedPaths.add(record.path)
+      record.runId = ownerRunId
+      record.partnerId = payload.partnerId
       await deps.saveFileChangeRecord(record)
     },
     listFileChangeRecords: async (input) => {
-      return await deps.listFileChangeRecords(input)
+      const records = await deps.listFileChangeRecords({ runId: ownerRunId })
+      return payload.parentToolCallId && input.participatingOnly
+        ? records.filter((record) => touchedPaths.has(record.path))
+        : records
     },
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService,

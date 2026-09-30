@@ -107,6 +107,8 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string => 
 技能目录：
 ${renderSkillCatalog(input.ctx.platform)}
 
+${input.ctx.isSubagent ? '你正在执行主伙伴派发的独立任务。只交付必要结果、依据和文件路径。不能再次派发、提问或管理定时任务；需要人工协助时停止并在交付中说明阻碍，交回主伙伴。' : '可将独立任务交给临时子 agent，提供任务背景和交付要求。需要自己整合子任务结果完成用户诉求。'}
+
 当前运行环境：
 ${renderLocalEnvironmentText(input.ctx)}
 `.trim()

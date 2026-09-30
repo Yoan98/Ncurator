@@ -1,3 +1,9 @@
+import { SubagentBlockedError } from './run/toolPolicy'
+import { createSubagentDispatcher } from './run/subagents'
+import { releaseRunFiles } from './run/fileLease'
+import { releaseDocxRunSession } from './human/tools/docx/worker/docxWorkerClient'
+import { releasePdfRunSession } from '../pdf/worker/pdfWorkerClient'
+import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
 import { createHumanGraphRunner } from './human/graph/humanGraph'
 import { createAiRunContext } from './runtime'
 import { runAiRuntimePreflight } from './runtimePreflight'
@@ -26,7 +32,16 @@ export class AiRunService {
   public async run(payload: AiRunStartPayload, deps: AiRunDeps): Promise<AiRunState> {
     try {
       await runAiRuntimePreflight(deps)
-      const ctx = createAiRunContext(payload, deps)
+      const ctx = createAiRunContext(payload, {
+        ...deps,
+        delegateToSubagent: (tasks, toolCallId) => dispatch(tasks, toolCallId)
+      })
+      const dispatch = createSubagentDispatcher(
+        payload,
+        deps,
+        ctx.getLlmConfig,
+        (childPayload, childDeps) => this.run(childPayload, childDeps)
+      )
       const runHumanTask = createHumanGraphRunner({ ctx })
       const output = await runHumanTask(
         {
@@ -53,6 +68,17 @@ export class AiRunService {
         finalArtifacts: output.artifacts || []
       })
     } catch (e) {
+      if (payload.parentToolCallId && e instanceof SubagentBlockedError)
+        return {
+          ...createFailedAiRunState({
+            runId: payload.runId,
+            partnerId: payload.partnerId,
+            input: payload.input,
+            error: e.message,
+            failureSource: 'internal'
+          }),
+          needsParent: true
+        }
       if (isCancelledError(e)) {
         return createCancelledAiRunState({
           runId: payload.runId,
@@ -91,6 +117,20 @@ export class AiRunService {
         failureProviderCode: failure.providerCode,
         failureCode: failure.failureCode
       })
+    } finally {
+      await Promise.allSettled([
+        deps.releaseRun
+          ? deps.releaseRun(payload.runId)
+          : Promise.all([
+              releaseDocxRunSession(payload.runId),
+              releasePdfRunSession(payload.runId),
+              deps.browserUseService?.releaseRun?.(payload.runId)
+            ]),
+        ...(payload.parentToolCallId
+          ? [terminalSessionManager.closeByChatSession(payload.runId)]
+          : [])
+      ])
+      releaseRunFiles(payload.runId)
     }
   }
 }

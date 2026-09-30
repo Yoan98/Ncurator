@@ -142,47 +142,47 @@ const hashBytes = (bytes: Uint8Array | string): string =>
 
 const replaceFileWithBytes = async (targetPath: string, bytes: Uint8Array): Promise<void> => {
   await withOfficeFileWrite(targetPath, async () => {
-  await fs.mkdir(path.dirname(targetPath), { recursive: true })
-  const token = randomUUID()
-  const tempPath = `${targetPath}.ncurator-${token}.tmp`
-  const backupPath = `${targetPath}.ncurator-${token}.previous`
-  let hasBackup = false
-  let preserveBackup = false
-  try {
-    await fs.writeFile(tempPath, bytes)
+    await fs.mkdir(path.dirname(targetPath), { recursive: true })
+    const token = randomUUID()
+    const tempPath = `${targetPath}.ncurator-${token}.tmp`
+    const backupPath = `${targetPath}.ncurator-${token}.previous`
+    let hasBackup = false
+    let preserveBackup = false
     try {
-      await fs.copyFile(targetPath, backupPath)
-      hasBackup = true
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    }
-
-    try {
-      await fs.rename(tempPath, targetPath)
-    } catch {
-      await fs.rm(targetPath, { force: true })
-      await fs.rename(tempPath, targetPath)
-    }
-    notifyOfficeFileWritten(targetPath)
-  } catch (error) {
-    if (hasBackup) {
+      await fs.writeFile(tempPath, bytes)
       try {
-        await fs.rm(targetPath, { force: true })
-        await fs.rename(backupPath, targetPath)
-        hasBackup = false
-        notifyOfficeFileWritten(targetPath)
+        await fs.copyFile(targetPath, backupPath)
+        hasBackup = true
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+
+      try {
+        await fs.rename(tempPath, targetPath)
       } catch {
-        // Preserve the original error. The backup remains beside the target for recovery.
-        preserveBackup = true
+        await fs.rm(targetPath, { force: true })
+        await fs.rename(tempPath, targetPath)
+      }
+      notifyOfficeFileWritten(targetPath)
+    } catch (error) {
+      if (hasBackup) {
+        try {
+          await fs.rm(targetPath, { force: true })
+          await fs.rename(backupPath, targetPath)
+          hasBackup = false
+          notifyOfficeFileWritten(targetPath)
+        } catch {
+          // Preserve the original error. The backup remains beside the target for recovery.
+          preserveBackup = true
+        }
+      }
+      throw error
+    } finally {
+      await fs.rm(tempPath, { force: true }).catch(() => undefined)
+      if (hasBackup && !preserveBackup) {
+        await fs.rm(backupPath, { force: true }).catch(() => undefined)
       }
     }
-    throw error
-  } finally {
-    await fs.rm(tempPath, { force: true }).catch(() => undefined)
-    if (hasBackup && !preserveBackup) {
-      await fs.rm(backupPath, { force: true }).catch(() => undefined)
-    }
-  }
   })
 }
 
@@ -310,9 +310,7 @@ const isLikelyImageBytes = (bytes: Uint8Array): boolean => {
   )
 }
 
-const resolveAssetBytes = async (input: {
-  rawPath: string
-}): Promise<Uint8Array> => {
+const resolveAssetBytes = async (input: { rawPath: string }): Promise<Uint8Array> => {
   const data = decodeDataUrl(input.rawPath)
   if (data) return data
   if (/^https?:\/\//i.test(input.rawPath)) {
@@ -1078,7 +1076,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       slideCount: slides.length,
       slides: [...selected]
         .sort((left, right) => left - right)
-        .map((index) => outlineItem(document.presentation, slides[index]!, index)),
+        .map((index) => outlineItem(document.presentation, slides[index]!, index))
     }
   }
 
@@ -1260,10 +1258,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         const source = findSlide(document.presentation, args.slideId)
         const duplicate = duplicateSlide(document.presentation, source)
         placeSlide(document.presentation, duplicate, args.location)
-        result = editOutput(
-          slideIdOf(duplicate),
-          elementIdsOf(duplicate)
-        )
+        result = editOutput(slideIdOf(duplicate), elementIdsOf(duplicate))
       } else if (args.type === 'replace_text') {
         const targetSlides = args.slideIds?.map((slideId) =>
           findSlide(document.presentation, slideId)
@@ -1295,9 +1290,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         }
         if (replacements === 0) throw new Error(`未找到要替换的文字：${args.query}`)
         const uniqueChanged = [...new Set(changedSlideIds)]
-        result = editOutput(
-          uniqueChanged.length === 1 ? uniqueChanged[0] : undefined
-        )
+        result = editOutput(uniqueChanged.length === 1 ? uniqueChanged[0] : undefined)
       } else if (args.type === 'edit_elements') {
         const slide = findSlide(document.presentation, args.slideId)
         const beforeIds = elementIdsOf(slide)
@@ -1315,10 +1308,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
             }
           })
         }
-        result = editOutput(
-          args.slideId,
-          createdIdsSince(beforeIds, slide)
-        )
+        result = editOutput(args.slideId, createdIdsSince(beforeIds, slide))
       } else {
         setSlideNotes(findSlide(document.presentation, args.slideId), args.text)
         result = editOutput(args.slideId)
@@ -1349,6 +1339,18 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         throw new Error(`pptx 校验失败: ${issues.map((issue) => issue.message).join('; ')}`)
       const afterBytes = await savePresentation(document.presentation)
       const afterPresentation = await loadPresentation(afterBytes)
+      const previous = (await input.ctx.listFileChangeRecords({ runId: input.runId })).find(
+        (record) => record.path === document.sourcePath && record.status === 'applied'
+      )
+      if (previous) {
+        document.changeId = previous.id
+        document.beforeBytes =
+          previous.operation === 'created'
+            ? undefined
+            : previous.beforeSnapshotPath
+              ? new Uint8Array(await fs.readFile(previous.beforeSnapshotPath))
+              : document.beforeBytes
+      }
       const dirs = await ensureAssetDirectory(workspaceRootPath, document.changeId)
       const beforeExists = Boolean(document.beforeBytes)
       const beforePresentation = document.beforeBytes

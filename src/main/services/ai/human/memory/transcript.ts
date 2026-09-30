@@ -9,7 +9,22 @@ import { messagesFromLogEntries } from './conversationLogMessages'
 const INTERRUPTED_TOOL_CONTENT =
   'Error: The run was interrupted before this tool call could be executed.'
 
-export const repairInterruptedToolCalls = (messages: BaseMessage[]): BaseMessage[] => {
+export const repairInterruptedToolCalls = (
+  messages: BaseMessage[],
+  records: readonly ChatMessageLogRecord[] = []
+): BaseMessage[] => {
+  const childResults = new Map<
+    string,
+    Map<string, import('../../../../../shared/types').SubagentUpdate>
+  >()
+  for (const record of records) {
+    if (record.entry.kind !== 'annotation' || record.entry.eventType !== 'subagent_updated')
+      continue
+    const update = record.entry.payload
+    const children = childResults.get(update.toolCallId) || new Map()
+    children.set(update.childRunId, update)
+    childResults.set(update.toolCallId, children)
+  }
   const satisfied = new Set<string>()
   for (const message of messages) {
     if (message.getType() !== 'tool') continue
@@ -30,9 +45,31 @@ export const repairInterruptedToolCalls = (messages: BaseMessage[]): BaseMessage
       for (const call of calls) {
         const id = typeof call.id === 'string' ? call.id : ''
         if (!id || satisfied.has(id)) continue
+        const remainingChildren = [...(childResults.get(id)?.values() || [])]
         pendingInterrupted.push(
           new ToolMessage({
-            content: INTERRUPTED_TOOL_CONTENT,
+            content:
+              call.name === 'delegate_to_subagent'
+                ? JSON.stringify({
+                    children: Array.isArray(call.args?.tasks)
+                      ? call.args.tasks.map((task: { name: string; task: string }) => {
+                          const childIndex = remainingChildren.findIndex(
+                            (child) => child.name === task.name && child.task === task.task
+                          )
+                          const completed =
+                            childIndex >= 0 ? remainingChildren.splice(childIndex, 1)[0] : undefined
+                          return completed && completed.status !== 'running'
+                            ? completed
+                            : {
+                                ...task,
+                                status: 'interrupted',
+                                result: '执行被中断，未收到完整结果'
+                              }
+                        })
+                      : [],
+                    interrupted: true
+                  })
+                : INTERRUPTED_TOOL_CONTENT,
             tool_call_id: id
           })
         )
@@ -63,9 +100,7 @@ export const deriveMessageLogMessages = (input: {
   }
   const entries =
     lastUserIndex >= 0
-      ? input.entries.filter(
-          (entry, index) => !(entry.kind === 'user' && index === lastUserIndex)
-        )
+      ? input.entries.filter((entry, index) => !(entry.kind === 'user' && index === lastUserIndex))
       : input.entries
   return messagesFromLogEntries(entries)
 }
@@ -84,14 +119,11 @@ export type MessageLogProjection = {
   historyFloorSeq: number
 }
 
-export const orderMessageLogBySeq = (
-  records: ChatMessageLogRecord[]
-): ChatMessageLogRecord[] => [...records].sort((a, b) => a.seq - b.seq)
+export const orderMessageLogBySeq = (records: ChatMessageLogRecord[]): ChatMessageLogRecord[] =>
+  [...records].sort((a, b) => a.seq - b.seq)
 
 export const isConversationLogRecord = (record: ChatMessageLogRecord): boolean =>
-  record.entry.kind === 'user' ||
-  record.entry.kind === 'assistant' ||
-  record.entry.kind === 'tool'
+  record.entry.kind === 'user' || record.entry.kind === 'assistant' || record.entry.kind === 'tool'
 
 export type HistoryFloor = {
   historyFloorSeq: number
@@ -104,8 +136,7 @@ export const resolveHistoryFloor = (records: readonly ChatMessageLogRecord[]): H
     .reverse()
     .find(
       (record) =>
-        record.entry.kind === 'annotation' &&
-        record.entry.eventType === 'compaction_checkpoint'
+        record.entry.kind === 'annotation' && record.entry.eventType === 'compaction_checkpoint'
     )
   const compactionCheckpoint =
     compactionCheckpointRecord?.entry.kind === 'annotation' &&
@@ -138,18 +169,14 @@ export const resolveCompactionThroughSeq = (
  * 把不可变日志投影为下一次模型调用需要的历史。
  * `compaction_checkpoint.throughSeq` 覆盖范围内的对话由 checkpoint 摘要替代，绝不同时发送摘要和完整旧历史。
  */
-export const projectMessageLogRecords = (
-  records: ChatMessageLogRecord[]
-): MessageLogProjection => {
+export const projectMessageLogRecords = (records: ChatMessageLogRecord[]): MessageLogProjection => {
   const ordered = orderMessageLogBySeq(records)
   const floor = resolveHistoryFloor(ordered)
   const projectedRecords = ordered.filter((record) => record.seq > floor.historyFloorSeq)
   // 历史 user 由 projectBrainMessagesFromLog 按 content 还原；这里只投影过程 tail。
   // 每次新 run 的当前 user 统一由 buildBrainUserMessage 构造。
   const messages = deriveMessageLogMessages({
-    entries: projectedRecords
-      .map((record) => record.entry)
-      .filter((entry) => entry.kind !== 'user')
+    entries: projectedRecords.map((record) => record.entry).filter((entry) => entry.kind !== 'user')
   })
   let plan: ChatMessageLogPlanItem[] = []
   let learnedSkillIds: string[] = []
@@ -165,7 +192,7 @@ export const projectMessageLogRecords = (
   }
 
   return {
-    messages: repairInterruptedToolCalls(messages),
+    messages: repairInterruptedToolCalls(messages, ordered),
     plan,
     learnedSkillIds,
     compactionCheckpoint: floor.compactionCheckpoint,

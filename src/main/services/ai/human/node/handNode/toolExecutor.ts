@@ -1,3 +1,6 @@
+import { releaseRunFiles } from '../../../run/fileLease'
+import { releaseDocxRunSession } from '../../tools/docx/worker/docxWorkerClient'
+import { assertToolAllowed } from '../../../run/toolPolicy'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { JsonObject, JsonValue } from '../../../../../../shared/types'
 import { isJsonObject } from '../../../../../utils/aiCapabilityUtils'
@@ -5,7 +8,11 @@ import { clipText } from '../../../utils/text'
 import type { AiRunContext } from '../../../types'
 import { ensureSkillTools } from '../learningNode/skillLoader'
 import { resolveToolResultErrorText } from '../../shared/toolResultRenderers'
-import { findEffectiveSkillIdByToolName, getEffectiveLearnedSkillIds } from '../../skills'
+import {
+  findEffectiveSkillIdByToolName,
+  getEffectiveLearnedSkillIds,
+  getSkillDefinition
+} from '../../skills'
 import type { HumanRuntimeCache, RuntimeSkillId, ToolCallResult } from '../../types'
 import { withToolLifecycle } from '../../tools/utils/lifecycle'
 import { createToolEventEmitter, withActiveToolCall } from '../../tools/utils/toolEvents'
@@ -189,6 +196,32 @@ export const executeToolCall = async (input: {
   toolName: string
   args: Record<string, JsonValue>
 }): Promise<ToolCallResult> => {
+  assertToolAllowed(input.ctx, input.toolName)
+  if (input.toolName === 'delegate_to_subagent') {
+    // The parent pauses here. Relinquish its committed document sessions so children can
+    // use those files and the parent reloads their latest contents after the handoff.
+    await releaseDocxRunSession(input.ctx.runId)
+    input.ctx.discardDocxApplyRun()
+    input.ctx.beginDocxApplyRun()
+    input.cache.docxRuntime = undefined
+    input.cache.excelRuntime = undefined
+    input.cache.pptRuntime = undefined
+    for (const family of ['docx', 'excel', 'ppt'] as const)
+      delete input.cache.familyToolsets[family]
+    for (const skillId of getEffectiveLearnedSkillIds(input.learnedSkillIds)) {
+      if (['docx', 'excel', 'ppt'].includes(getSkillDefinition(skillId).familyId)) {
+        delete input.cache.skillToolsets[skillId]
+      }
+    }
+    releaseRunFiles(input.ctx.runId)
+  }
+  if (/^(docx_|ppt_|excel_|text_file_|image_generate)/.test(input.toolName)) {
+    for (const key of ['sourcePath', 'outputPath']) {
+      const sourcePath = input.args[key]
+      if (typeof sourcePath === 'string' && !/^https?:/.test(sourcePath))
+        input.ctx.acquireFile(sourcePath)
+    }
+  }
   const toolEvents = createToolEventEmitter({
     ctx: input.ctx,
     runId: input.ctx.runId,

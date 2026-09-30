@@ -1,3 +1,4 @@
+import { isToolAllowed } from '../../../run/toolPolicy'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiRunContext } from '../../../types'
 import type { AiToolFamilyId, ToolFamilyBuildInput } from '../../tools/types'
@@ -19,8 +20,8 @@ const TOOL_FAMILY_BUILDERS: Record<
   excel: TOOL_FAMILY_DEFINITIONS.excel.buildTools,
   web: TOOL_FAMILY_DEFINITIONS.web.buildTools,
   'image-generation': TOOL_FAMILY_DEFINITIONS['image-generation'].buildTools,
-  'agent-control': TOOL_FAMILY_DEFINITIONS['agent-control'].buildTools
-  , 'scheduled-tasks': TOOL_FAMILY_DEFINITIONS['scheduled-tasks'].buildTools
+  'agent-control': TOOL_FAMILY_DEFINITIONS['agent-control'].buildTools,
+  'scheduled-tasks': TOOL_FAMILY_DEFINITIONS['scheduled-tasks'].buildTools
 }
 
 const ensureFamilyTools = (input: {
@@ -39,7 +40,7 @@ const ensureFamilyTools = (input: {
     runId: input.runId,
     partnerId: input.ctx.partnerId,
     taskId: input.taskId
-  })
+  }).filter((tool) => isToolAllowed(input.ctx, tool.name))
   attachProviderToolDefinitions(built)
   input.cache.familyToolsets[input.familyId] = built
   return built

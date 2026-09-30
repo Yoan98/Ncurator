@@ -1,6 +1,23 @@
 import { z } from 'zod/v4'
 import { humanPlanItemSchema } from '../../schema'
 
+export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
+  tasks: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(8).describe('简短有趣的名称，最多 8 个字符'),
+        task: z
+          .string()
+          .trim()
+          .min(1)
+          .describe('独立任务、必要背景、资料路径及交付要求；子任务看不到主聊天')
+      })
+    )
+    .min(1)
+    .max(3)
+    .describe('可以独立完成的 1–3 个任务')
+})
+
 export const LEARN_SKILL_SCHEMA = z.object({
   skillIds: z.array(z.string().min(1)).min(1).describe('要加载的技能 ID 列表')
 })

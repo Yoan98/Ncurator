@@ -147,7 +147,12 @@ export type AssistantProcessGroupItem = {
   }
 }
 
+export type SubagentTaskView = import('../../../../shared/types').SubagentUpdate & {
+  actions: import('../../../../shared/types').SubagentAction[]
+}
+
 export type AssistantProcessGroup = {
+  subagents?: SubagentTaskView[]
   id: string
   kind: AssistantProcessGroupKind
   skillKey: AssistantProcessSkillKey

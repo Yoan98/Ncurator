@@ -16,7 +16,7 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
       },
       cache,
       runId,
-      partnerId,
+      partnerId: ctx.isSubagent ? runId : partnerId,
       taskId,
       workspaceRootPath: getTerminalStartDirectory(),
       workspaceId: '',

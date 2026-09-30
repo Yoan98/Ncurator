@@ -1,3 +1,5 @@
+import { releaseRunFiles } from '../../run/fileLease'
+import { SubagentBlockedError } from '../../run/toolPolicy'
 import { END, START, StateGraph } from '@langchain/langgraph'
 import { SystemMessage } from '@langchain/core/messages'
 import type { AiRunContext, HumanRunDispatchOptions } from '../../types'
@@ -162,7 +164,10 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       }
     } catch (error) {
       ctx.discardDocxApplyRun()
+      if (error instanceof SubagentBlockedError) throw error
       throw classifyThrownErrorToAiRunFailure(error, cache.currentState)
+    } finally {
+      releaseRunFiles(ctx.runId)
     }
   }
 }

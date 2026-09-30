@@ -1,3 +1,4 @@
+import { SerialRequestQueue } from './SerialRequestQueue'
 import { randomUUID } from 'node:crypto'
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import fs from 'node:fs'
@@ -105,26 +106,26 @@ const readMarkdownText = (value: JsonValue | undefined): string | undefined => {
   if (!isObjectRecord(value)) return undefined
 
   return (
-    readObjectString(value, 'fit_markdown')
-    || readObjectString(value, 'fitMarkdown')
-    || readObjectString(value, 'raw_markdown')
-    || readObjectString(value, 'rawMarkdown')
-    || readObjectString(value, 'markdown')
-    || readObjectString(value, 'content')
+    readObjectString(value, 'fit_markdown') ||
+    readObjectString(value, 'fitMarkdown') ||
+    readObjectString(value, 'raw_markdown') ||
+    readObjectString(value, 'rawMarkdown') ||
+    readObjectString(value, 'markdown') ||
+    readObjectString(value, 'content')
   )
 }
 
 const readPublishedAtFromMetadata = (value: JsonValue | undefined): string | undefined => {
   if (!isObjectRecord(value)) return undefined
   return (
-    readObjectString(value, 'published_time')
-    || readObjectString(value, 'publishedTime')
-    || readObjectString(value, 'datePublished')
-    || readObjectString(value, 'publishdate')
-    || readObjectString(value, 'pubdate')
-    || readObjectString(value, 'article:published_time')
-    || readObjectString(value, 'modified_time')
-    || readObjectString(value, 'modifiedTime')
+    readObjectString(value, 'published_time') ||
+    readObjectString(value, 'publishedTime') ||
+    readObjectString(value, 'datePublished') ||
+    readObjectString(value, 'publishdate') ||
+    readObjectString(value, 'pubdate') ||
+    readObjectString(value, 'article:published_time') ||
+    readObjectString(value, 'modified_time') ||
+    readObjectString(value, 'modifiedTime')
   )
 }
 
@@ -138,25 +139,25 @@ const readPublishedAt = (obj: JsonObject): string | undefined => {
       : []
 
   return (
-    readObjectString(obj, 'published_at')
-    || readObjectString(obj, 'publishedAt')
-    || readPublishedAtFromMetadata(metadata)
-    || jsonLdItems.map(readPublishedAtFromMetadata).find(Boolean)
+    readObjectString(obj, 'published_at') ||
+    readObjectString(obj, 'publishedAt') ||
+    readPublishedAtFromMetadata(metadata) ||
+    jsonLdItems.map(readPublishedAtFromMetadata).find(Boolean)
   )
 }
 
 const readStatusCode = (obj: JsonObject | undefined): number | undefined =>
-  readObjectNumber(obj, 'status_code')
-  || readObjectNumber(obj, 'statusCode')
-  || readObjectNumber(obj, 'http_status')
-  || readObjectNumber(obj, 'httpStatus')
-  || readObjectNumber(obj, 'status')
+  readObjectNumber(obj, 'status_code') ||
+  readObjectNumber(obj, 'statusCode') ||
+  readObjectNumber(obj, 'http_status') ||
+  readObjectNumber(obj, 'httpStatus') ||
+  readObjectNumber(obj, 'status')
 
 const readErrorMessage = (obj: JsonObject | undefined): string | undefined =>
-  readObjectString(obj, 'error')
-  || readObjectString(obj, 'error_message')
-  || readObjectString(obj, 'errorMessage')
-  || readObjectString(obj, 'message')
+  readObjectString(obj, 'error') ||
+  readObjectString(obj, 'error_message') ||
+  readObjectString(obj, 'errorMessage') ||
+  readObjectString(obj, 'message')
 
 class WebCrawlerSidecarError extends Error {
   public readonly requestedUrl?: string
@@ -181,16 +182,16 @@ class WebCrawlerSidecarError extends Error {
 }
 
 const readFinalUrl = (obj: JsonObject | undefined): string | undefined =>
-  readObjectString(obj, 'final_url')
-  || readObjectString(obj, 'finalUrl')
-  || readObjectString(obj, 'redirected_url')
-  || readObjectString(obj, 'redirectedUrl')
-  || readObjectString(obj, 'url')
+  readObjectString(obj, 'final_url') ||
+  readObjectString(obj, 'finalUrl') ||
+  readObjectString(obj, 'redirected_url') ||
+  readObjectString(obj, 'redirectedUrl') ||
+  readObjectString(obj, 'url')
 
 const readRequestedUrl = (obj: JsonObject | undefined): string | undefined =>
-  readObjectString(obj, 'requested_url')
-  || readObjectString(obj, 'requestedUrl')
-  || readObjectString(obj, 'url')
+  readObjectString(obj, 'requested_url') ||
+  readObjectString(obj, 'requestedUrl') ||
+  readObjectString(obj, 'url')
 
 const normalizeLinkItem = (value: JsonValue | undefined): WebCrawlerLink | undefined => {
   if (!isObjectRecord(value)) return undefined
@@ -199,18 +200,17 @@ const normalizeLinkItem = (value: JsonValue | undefined): WebCrawlerLink | undef
   const text = readObjectString(value, 'text')
   const title = readObjectString(value, 'title')
 
-  const baseDomain =
-    readObjectString(value, 'base_domain') || readObjectString(value, 'baseDomain')
+  const baseDomain = readObjectString(value, 'base_domain') || readObjectString(value, 'baseDomain')
   const headData =
-    (isObjectRecord(value.head_data) && value.head_data)
-    || (isObjectRecord(value.headData) && value.headData)
-    || undefined
+    (isObjectRecord(value.head_data) && value.head_data) ||
+    (isObjectRecord(value.headData) && value.headData) ||
+    undefined
   const headExtractionStatus =
-    readObjectString(value, 'head_extraction_status')
-    || readObjectString(value, 'headExtractionStatus')
+    readObjectString(value, 'head_extraction_status') ||
+    readObjectString(value, 'headExtractionStatus')
   const headExtractionError =
-    readObjectString(value, 'head_extraction_error')
-    || readObjectString(value, 'headExtractionError')
+    readObjectString(value, 'head_extraction_error') ||
+    readObjectString(value, 'headExtractionError')
   const intrinsicScore =
     readObjectNumber(value, 'intrinsic_score') ?? readObjectNumber(value, 'intrinsicScore')
   const contextualScore =
@@ -218,8 +218,7 @@ const normalizeLinkItem = (value: JsonValue | undefined): WebCrawlerLink | undef
   const totalScore = readObjectNumber(value, 'total_score') ?? readObjectNumber(value, 'totalScore')
   const normalizedIntrinsicScore = intrinsicScore ?? 0
   const normalizedContextualScore = contextualScore ?? 0
-  const normalizedTotalScore =
-    totalScore ?? normalizedIntrinsicScore + normalizedContextualScore
+  const normalizedTotalScore = totalScore ?? normalizedIntrinsicScore + normalizedContextualScore
 
   return {
     href,
@@ -267,24 +266,24 @@ const normalizeResult = (payload: JsonObject): WebCrawlerResult => {
 
   const raw = isObjectRecord(payload.raw) ? payload.raw : payload
   const title =
-    readObjectString(payload, 'title')
-    || readObjectString(isObjectRecord(raw.metadata) ? raw.metadata : undefined, 'title')
+    readObjectString(payload, 'title') ||
+    readObjectString(isObjectRecord(raw.metadata) ? raw.metadata : undefined, 'title')
   const markdown =
-    readObjectString(payload, 'markdown')
-    || readMarkdownText(payload.markdown)
-    || readMarkdownText(raw.markdown)
-    || readObjectString(raw, 'fit_markdown')
-    || readObjectString(raw, 'fitMarkdown')
+    readObjectString(payload, 'markdown') ||
+    readMarkdownText(payload.markdown) ||
+    readMarkdownText(raw.markdown) ||
+    readObjectString(raw, 'fit_markdown') ||
+    readObjectString(raw, 'fitMarkdown')
   const publishedAt =
-    readObjectString(payload, 'published_at')
-    || readObjectString(payload, 'publishedAt')
-    || readPublishedAt(raw)
+    readObjectString(payload, 'published_at') ||
+    readObjectString(payload, 'publishedAt') ||
+    readPublishedAt(raw)
   if (!markdown) {
     throw new WebCrawlerSidecarError({
       message:
-        readErrorMessage(raw)
-        || readErrorMessage(payload)
-        || 'web crawler sidecar result missing markdown',
+        readErrorMessage(raw) ||
+        readErrorMessage(payload) ||
+        'web crawler sidecar result missing markdown',
       requestedUrl,
       finalUrl,
       statusCode: readStatusCode(raw) || readStatusCode(payload),
@@ -448,6 +447,7 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
   private child?: ChildProcessWithoutNullStreams
   private childStartupPromise?: Promise<ChildProcessWithoutNullStreams>
   private closed = false
+  private readonly queue = new SerialRequestQueue()
   private pending = new Map<string, PendingRequest>()
   private stdoutInterface?: readline.Interface
   private stderrBuffer = ''
@@ -468,31 +468,45 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     )
   }
 
-  public async crawl(input: { url: string; topic: string }): Promise<WebCrawlerResult> {
-    const payload = await this.sendRequest({
-      id: randomUUID(),
-      action: 'crawl',
-      input: {
-        url: input.url,
-        topic: input.topic
-      }
-    })
+  public async crawl(input: {
+    url: string
+    topic: string
+    abortSignal?: AbortSignal
+  }): Promise<WebCrawlerResult> {
+    const payload = await this.sendRequest(
+      {
+        id: randomUUID(),
+        action: 'crawl',
+        input: {
+          url: input.url,
+          topic: input.topic
+        }
+      },
+      input.abortSignal
+    )
     return normalizeResult(payload)
   }
 
-  public async search(input: { query: string }): Promise<WebSearchResult> {
-    const payload = await this.sendRequest({
-      id: randomUUID(),
-      action: 'search',
-      input: {
-        query: input.query
-      }
-    })
+  public async search(input: {
+    query: string
+    abortSignal?: AbortSignal
+  }): Promise<WebSearchResult> {
+    const payload = await this.sendRequest(
+      {
+        id: randomUUID(),
+        action: 'search',
+        input: {
+          query: input.query
+        }
+      },
+      input.abortSignal
+    )
     return normalizeSearchResult(payload)
   }
 
   public async close(): Promise<void> {
     this.closed = true
+    this.queue.close()
     this.rejectAllPending(new Error('web crawler sidecar closed'))
     await this.childStartupPromise?.catch(() => undefined)
     await this.stopChild()
@@ -524,10 +538,7 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     const connection = await Promise.race([
       resolveCdpConnection(),
       new Promise<WebCrawlerCdpConnection>((_, reject) => {
-        setTimeout(
-          () => reject(new Error('web crawler CDP connection timed out')),
-          20_000
-        )
+        setTimeout(() => reject(new Error('web crawler CDP connection timed out')), 20_000)
       })
     ])
     if (this.closed) {
@@ -609,14 +620,22 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     }
   }
 
-  private async sendRequest(request: WebCrawlerSidecarRequest): Promise<JsonObject> {
+  private async sendRequest(
+    request: WebCrawlerSidecarRequest,
+    signal?: AbortSignal
+  ): Promise<JsonObject> {
+    return await this.queue.enqueue(() => this.submitRequest(request), signal)
+  }
+
+  private async submitRequest(request: WebCrawlerSidecarRequest): Promise<JsonObject> {
     const child = await this.ensureChild()
     return await new Promise<JsonObject>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(request.id)
         this.childStartupPromise = undefined
-        void this.stopChild()
-        reject(new Error('web crawler sidecar request timeout'))
+        void this.stopChild().finally(() =>
+          reject(new Error('web crawler sidecar request timeout'))
+        )
       }, this.requestTimeoutMs)
 
       this.pending.set(request.id, { resolve, reject, timer })

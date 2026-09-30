@@ -4,6 +4,20 @@ human graph 的消息与上下文设计约束。修改 `src/main/services/ai/hum
 
 ---
 
+## 一次性子运行
+
+主子运行均调用 `AiRunService.run` 和相同 human graph。`runId` 标识执行实例，`ownerRunId` 标识持久数据与文件产物归属；子运行带父派发 `toolCallId`，不创建 `ai_run` 或伙伴行。派发工具内部并行运行最多三个独立实例，不增加另一套 graph/模型循环。
+
+`AiTranscript` 提供相同 append/load 契约：主运行读写 SQLite，子运行读写独立内存记录（独立 seq、计划、技能、compaction checkpoint）。相同投影/预算/压缩入口消费两种适配。子完整日志随实例释放；名称、ID 和任务放在派发输入/事件，不改变固定 System。模型配置在派发时继承父运行已解析快照；工具顺序保持稳定，缓存命中仍由供应商决定。
+
+子运行只向父侧持久化 `subagent_updated` annotation：名字、任务、状态、工具行动与有界结果。回答流、thinking、skill、plan、compaction 和子终态不直接投递到父状态。annotation 不参与模型上下文；所有子任务收口后通过一条父 ToolMessage 投递结果。子 I/O 保持实际 runId，并记录 ownerRunId / parentToolCallId 供诊断关联。
+
+子任务禁用派发、提问和定时任务管理，策略同时用于工具目录/绑定及执行入口；人工审批需求直接交回主伙伴。子实例 finally 释放 worker、浏览器控制、终端与文件会话锁，不能删除已持久化的产物。相同路径的文档工作态在同一执行者内排他持有；跨执行冲突明确交回串行处理，避免持有多个文件时相互等待。
+
+悬空派发调用修复只发生在模型投影：已持久化子终态/结果保持原样，其余补「执行被中断，未收到完整结果」。不写虚构 tool 行、不自动重派。UI 从同一主日志恢复卡片，对终态主 run 下未结束的子卡片显示中断。
+
+派发前主运行释放已提交的文档工作会话及文件租约，返回后重新读取最新文件；子运行之间仍保持排他租约，冲突交回主伙伴串行处理。
+
 ## 1. Graph 流转
 
 human graph 是单次 AI run 的 LangGraph 编排；**每轮调主模型前必过 `context_budget`**。节点只通过 `AiRunContext.appendMessageLog` 写 transcript，通过 `HumanRuntimeCache.messages` 维护 brain 侧运行时消息序。
@@ -38,15 +52,15 @@ graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 
 原则：**谁产出事实，谁写对应 log**（详见第 2.2 节「写入分工」）。
 
-| 节点 | 调模型 | 写 log | 改 runtime cache |
-|------|--------|--------|------------------|
-| `context_budget` | 否 | 本轮首次进循环时写 `user`（压缩前也会写） | 判定 compaction；发现运行中追加消息时在该边界让出当前 graph |
-| `context_compaction` | 是（压缩模型） | `compaction_checkpoint`（含摘要） | **整段替换** messages 为 System + 合成 Compact User + tail 原文（第 5 节） |
-| `brain` | 是（主模型） | `thinking_*`；**仅当有 `toolCalls`（或截断 / 内容安全）时写 `assistant`** | 有 tool 时 append assistant；**不** refresh build user |
-| `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
-| `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`** | 加载 skill 工具；**不**改 build user |
-| `plan` | 否 | `tool` + `plan_updated` | 更新 state.plan；**不**改 build user |
-| `hand` / `human_interaction` | 否 | `tool`（+ 可选 `images[]`）+ `human_interaction_resolved` annotation | append ToolMessage；`read_image` 后 append 多模态 HumanMessage；
+| 节点                         | 调模型         | 写 log                                                                    | 改 runtime cache                                                           |
+| ---------------------------- | -------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `context_budget`             | 否             | 本轮首次进循环时写 `user`（压缩前也会写）                                 | 判定 compaction；发现运行中追加消息时在该边界让出当前 graph                |
+| `context_compaction`         | 是（压缩模型） | `compaction_checkpoint`（含摘要）                                         | **整段替换** messages 为 System + 合成 Compact User + tail 原文（第 5 节） |
+| `brain`                      | 是（主模型）   | `thinking_*`；**仅当有 `toolCalls`（或截断 / 内容安全）时写 `assistant`** | 有 tool 时 append assistant；**不** refresh build user                     |
+| `dispatch`                   | 否             | 否                                                                        | 消费 `tool_calls` 队列，路由下一 stage                                     |
+| `learning`                   | 否             | `learning_*` + `tool` + **`skill_state_updated`**                         | 加载 skill 工具；**不**改 build user                                       |
+| `plan`                       | 否             | `tool` + `plan_updated`                                                   | 更新 state.plan；**不**改 build user                                       |
+| `hand` / `human_interaction` | 否             | `tool`（+ 可选 `images[]`）+ `human_interaction_resolved` annotation      | append ToolMessage；`read_image` 后 append 多模态 HumanMessage；           |
 
 交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：docx/ppt 落盘 side effect → `finalizing_started` → 写交付 `assistant`（`toolCalls: []`）→ 立即 `answer_completed` / `run_completed`。下一轮同伙伴发送可立刻创建。
 无 `tool_calls` 的正常交付路径上，**brain 不向 log 写 `assistant`**（流式 Answer 只走事件 / `partial_answer`）。
@@ -55,12 +69,12 @@ graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 
 `dispatch` 是 **`tool_calls` 队列的唯一消费者**，严格按模型返回顺序处理：
 
-| `toolName` | 目标节点 | 批处理 |
-|------------|----------|--------|
-| `learn_skill` | `learning` | 单次仅处理队首一条 |
+| `toolName`          | 目标节点            | 批处理                                 |
+| ------------------- | ------------------- | -------------------------------------- |
+| `learn_skill`       | `learning`          | 单次仅处理队首一条                     |
 | `ask_user_question` | `human_interaction` | 单次仅处理队首一条，回答后继续消费队列 |
-| `update_plan` | `plan` | 连续同类 call 合并一批 |
-| 其余 | `hand` | 连续同类 call 合并一批 |
+| `update_plan`       | `plan`              | 连续同类 call 合并一批                 |
+| 其余                | `hand`              | 连续同类 call 合并一批                 |
 
 `learning` / `human_interaction` / `plan` / `hand` 执行完后先回 `dispatch` 继续消费队列；**队列空**才 `stage → context_budget`（不是直接回 brain）。同一 assistant 消息可包含多个提问或混合其他工具，dispatch 不合并提问、不重排调用；每个 `tool_call_id` 都获得结果后才进入下一轮 brain。
 `brain` 在 schema 校验前对全部 call 做 `normalizeToolCallArgs`；`learn_skill` / `update_plan` 的参数校验由各节点负责。
@@ -75,12 +89,12 @@ graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 
 ### 1.5 runtime cache 要点
 
-| 字段 | 用途 |
-|------|------|
-| `messages` | brain 请求的 LangChain 消息序 |
+| 字段                      | 用途                                                           |
+| ------------------------- | -------------------------------------------------------------- |
+| `messages`                | brain 请求的 LangChain 消息序                                  |
 | `currentUserMessageIndex` | 当前 run 的 build user 下标（同 run refresh；resume 时为末尾） |
-| `currentUserLogAppended` | 本 run 是否已写 log `user` |
-| `lastBrainInputTokens` | 预算估算；compaction 后需 fresh usage |
+| `currentUserLogAppended`  | 本 run 是否已写 log `user`                                     |
+| `lastBrainInputTokens`    | 预算估算；compaction 后需 fresh usage                          |
 
 Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `messagesFromLogEntries`，与新 run 投影同一入口。System、Compact User、当前 build User 除外。禁止 push 流式 AIMessage；`context_budget` 已写入的 log `user` 不得再投影一遍。
 
@@ -112,39 +126,39 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 **表字段**
 
-| 列 | 含义 |
-|----|------|
-| `partner_id` | 所属伙伴 |
-| `run_id` | 写入时所属 AI run |
-| `seq` | 伙伴内单调递增；`compaction_checkpoint.throughSeq` / 投影按 `seq` |
-| `entry_json` | `ChatMessageLogEntry` |
-| `created_at` | 写入时间 |
+| 列           | 含义                                                              |
+| ------------ | ----------------------------------------------------------------- |
+| `partner_id` | 所属伙伴                                                          |
+| `run_id`     | 写入时所属 AI run                                                 |
+| `seq`        | 伙伴内单调递增；`compaction_checkpoint.throughSeq` / 投影按 `seq` |
+| `entry_json` | `ChatMessageLogEntry`                                             |
+| `created_at` | 写入时间                                                          |
 
 **写入入口**：graph 节点 → `AiRunContext.appendMessageLog` → `ChatMessageLogStore.appendBatch`（同 batch 内 `seq` 连续分配）。
 
 #### 四种 `kind`
 
-| `kind` | 存什么 | 谁写 |
-|--------|--------|------|
-| `user` | 发给模型的 build 全文 + `context` | **`context_budget`**（本轮首次进 brain；压缩前也会写） |
-| `assistant` | 文本 + `toolCalls[]`（交付另含 `linkAccess`） | **brain**（过程决策 / 截断 / 内容安全 fallback）或 **`finalizeDelivery`**（正常交付）；**同一轮交付正文不叠写** |
-| `tool` | 工具反馈正文 + 可选 `images[]` | **`hand` / `plan` / `learning`**（执行结果；不写 assistant） |
-| `annotation` | 过程与状态事件 | 见下表 |
+| `kind`       | 存什么                                        | 谁写                                                                                                            |
+| ------------ | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `user`       | 发给模型的 build 全文 + `context`             | **`context_budget`**（本轮首次进 brain；压缩前也会写）                                                          |
+| `assistant`  | 文本 + `toolCalls[]`（交付另含 `linkAccess`） | **brain**（过程决策 / 截断 / 内容安全 fallback）或 **`finalizeDelivery`**（正常交付）；**同一轮交付正文不叠写** |
+| `tool`       | 工具反馈正文 + 可选 `images[]`                | **`hand` / `plan` / `learning`**（执行结果；不写 assistant）                                                    |
+| `annotation` | 过程与状态事件                                | 见下表                                                                                                          |
 
 #### `annotation` 事件
 
-| `eventType` | `payload` | 投影用途 |
-|-------------|-----------|----------|
-| `thinking_started` / `thinking_completed` | `{}` | UI 过程层 |
-| `learning_started` / `learning_completed` | `{ skillId }` | UI 过程层 |
-| `skill_state_updated` | `{ learnedSkillIds: string[] }` | 同 run 只驱动 bindTools；新 run 从图启动扫描该伙伴剩余 log 最新一条 |
-| `plan_updated` | `{ plan: [{ title, status }] }` | UI 计划条；新 run 从图启动扫描该伙伴剩余 log 最新一条 |
-| `compaction_checkpoint` | `{ compactBlockId, throughSeq, sourceMessageCount, summary }` | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User |
-| `finalizing_started` | `{}` | 投影时**清空** plan |
-| `human_interaction_resolved` | `{ interactionId, kind, result }` | UI Activity：在对应工具行下按顺序展示问题与答案 |
-| `approval_batch_resolved` | `{ batchId, notExecutedToolCallIds?, items: [{ toolCallId, toolName, command, commandExplanation?, action, message? }] }` | 人工审批的同意、拒绝或指导结果按 `toolCallId` 投影到原工具项下的内嵌审核结果区域 |
-| `terminal_review_started` | `{ reviewId, commandIds }` | 持久化 AI 终端审核开始；用 assistant toolCalls 中的同一 `toolCallId` 在 Activity 显示审核中 |
-| `terminal_review_resolved` | `{ reviewId, decisions: [{ commandId, decision, reason }] }` | `terminal_run` 副作用命中后的 AI 审核结论；按 `commandId` 投影到同一工具项下的内嵌审核结果区域；reason 记录逐项判断依据但不投影到 UI，命令编号对应 hand 批次中的 toolCallId |
+| `eventType`                               | `payload`                                                                                                                 | 投影用途                                                                                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `thinking_started` / `thinking_completed` | `{}`                                                                                                                      | UI 过程层                                                                                                                                                                   |
+| `learning_started` / `learning_completed` | `{ skillId }`                                                                                                             | UI 过程层                                                                                                                                                                   |
+| `skill_state_updated`                     | `{ learnedSkillIds: string[] }`                                                                                           | 同 run 只驱动 bindTools；新 run 从图启动扫描该伙伴剩余 log 最新一条                                                                                                         |
+| `plan_updated`                            | `{ plan: [{ title, status }] }`                                                                                           | UI 计划条；新 run 从图启动扫描该伙伴剩余 log 最新一条                                                                                                                       |
+| `compaction_checkpoint`                   | `{ compactBlockId, throughSeq, sourceMessageCount, summary }`                                                             | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User                                                                           |
+| `finalizing_started`                      | `{}`                                                                                                                      | 投影时**清空** plan                                                                                                                                                         |
+| `human_interaction_resolved`              | `{ interactionId, kind, result }`                                                                                         | UI Activity：在对应工具行下按顺序展示问题与答案                                                                                                                             |
+| `approval_batch_resolved`                 | `{ batchId, notExecutedToolCallIds?, items: [{ toolCallId, toolName, command, commandExplanation?, action, message? }] }` | 人工审批的同意、拒绝或指导结果按 `toolCallId` 投影到原工具项下的内嵌审核结果区域                                                                                            |
+| `terminal_review_started`                 | `{ reviewId, commandIds }`                                                                                                | 持久化 AI 终端审核开始；用 assistant toolCalls 中的同一 `toolCallId` 在 Activity 显示审核中                                                                                 |
+| `terminal_review_resolved`                | `{ reviewId, decisions: [{ commandId, decision, reason }] }`                                                              | `terminal_run` 副作用命中后的 AI 审核结论；按 `commandId` 投影到同一工具项下的内嵌审核结果区域；reason 记录逐项判断依据但不投影到 UI，命令编号对应 hand 批次中的 toolCallId |
 
 #### `entry_json` 示例
 
@@ -242,7 +256,11 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 **`annotation` 示例**
 
 ```json
-{ "kind": "annotation", "eventType": "skill_state_updated", "payload": { "learnedSkillIds": ["docx-read", "docx-write"] } }
+{
+  "kind": "annotation",
+  "eventType": "skill_state_updated",
+  "payload": { "learnedSkillIds": ["docx-read", "docx-write"] }
+}
 ```
 
 ```json
@@ -275,18 +293,18 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 按「谁产出事实，谁写」落库；**禁止**为对称在多个节点重复写同一语义正文（尤其正常交付不得 brain + `finalizeDelivery` 各写一条空 `toolCalls` 的 `assistant`，否则续跑会出现连续重复 AI）。
 
-| 节点 / 步骤 | 写入 `kind` / `eventType` | 说明 |
-|-------------|---------------------------|------|
-| `context_budget` | `user` | 本轮首次进循环时写 **build 全文**（`content`）与人打的字（`input`）；压缩前也会写；brain **不**写 `user` |
-| `brain`（有 tool_calls） | `thinking_started` → `assistant`（含 `toolCalls`）→ `thinking_completed` | 固化主模型过程决策；须在 hand/plan/learning **之前**落库 |
-| `brain`（正常交付） | `thinking_started` → `thinking_completed` | **不**写 log `assistant`；Answer 草稿仅事件 / `partial_answer` |
-| `brain`（截断） | 半截 `assistant` | `finish_reason=length`：先写再失败，可 resume |
-| `brain`（内容安全） | `assistant`（`toolCalls: []`） | fallback 交付；走 `completeDelivery`，**不**再经 `finalizeDelivery` 叠写 |
-| `dispatch` → `learning` | `learning_started` → `tool`（`learn_skill`）→ `learning_completed` → **`skill_state_updated`** | 成功写完整 `learnedSkillIds`；重复学习 / 失败只写 `tool` |
-| `dispatch` → `plan` | `tool`（`update_plan`）+ `plan_updated` | 参数合法时同批写；**不**写 assistant |
-| `dispatch` → `hand` | `tool`（+ 可选 `images[]`） | 每个 call 一条；审批拒绝写失败 `tool`；**不**写 assistant |
-| `context_compaction` | `compaction_checkpoint` | 书签 + 摘要正文；发给主模型时再合成 User |
-| `finalizeDelivery` | `finalizing_started` → `assistant`（`toolCalls: []` + `linkAccess`） | 正常交付正文的**唯一** writer（落盘与链接访问检查之后）；清空 plan 投影 |
+| 节点 / 步骤              | 写入 `kind` / `eventType`                                                                      | 说明                                                                                                     |
+| ------------------------ | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `context_budget`         | `user`                                                                                         | 本轮首次进循环时写 **build 全文**（`content`）与人打的字（`input`）；压缩前也会写；brain **不**写 `user` |
+| `brain`（有 tool_calls） | `thinking_started` → `assistant`（含 `toolCalls`）→ `thinking_completed`                       | 固化主模型过程决策；须在 hand/plan/learning **之前**落库                                                 |
+| `brain`（正常交付）      | `thinking_started` → `thinking_completed`                                                      | **不**写 log `assistant`；Answer 草稿仅事件 / `partial_answer`                                           |
+| `brain`（截断）          | 半截 `assistant`                                                                               | `finish_reason=length`：先写再失败，可 resume                                                            |
+| `brain`（内容安全）      | `assistant`（`toolCalls: []`）                                                                 | fallback 交付；走 `completeDelivery`，**不**再经 `finalizeDelivery` 叠写                                 |
+| `dispatch` → `learning`  | `learning_started` → `tool`（`learn_skill`）→ `learning_completed` → **`skill_state_updated`** | 成功写完整 `learnedSkillIds`；重复学习 / 失败只写 `tool`                                                 |
+| `dispatch` → `plan`      | `tool`（`update_plan`）+ `plan_updated`                                                        | 参数合法时同批写；**不**写 assistant                                                                     |
+| `dispatch` → `hand`      | `tool`（+ 可选 `images[]`）                                                                    | 每个 call 一条；审批拒绝写失败 `tool`；**不**写 assistant                                                |
+| `context_compaction`     | `compaction_checkpoint`                                                                        | 书签 + 摘要正文；发给主模型时再合成 User                                                                 |
+| `finalizeDelivery`       | `finalizing_started` → `assistant`（`toolCalls: []` + `linkAccess`）                           | 正常交付正文的**唯一** writer（落盘与链接访问检查之后）；清空 plan 投影                                  |
 
 ```text
 用户发送
@@ -306,15 +324,15 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 单次 AI run 的生命周期与 UI 运行态；**不是 transcript**，不参与 brain 上下文投影。
 
-| 字段（要点） | 用途 |
-|--------------|------|
-| `status` | `running` / `waiting_human` / `completed` / `failed` / `cancelled` |
-| `input` | 本轮用户输入原文 |
-| `partial_answer` / `partial_answer_role` | 流式 UI 草稿；**不参与** resume 与下次 brain |
-| `final_answer` / `error` / `failure_code` / `failure_raw_message` | 终态展示（短标题 + 原文详情） |
-| `pending_interaction` | 等待用户问题回答或批量审批；`full_access` 只自动通过审批，不自动回答问题 |
-| `artifacts` | run 级产物引用（Workbench 展示） |
-| `selectedReferences` / `attachments` | run 创建时 Composer 快照（与 log `user.context` 对应） |
+| 字段（要点）                                                      | 用途                                                                     |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `status`                                                          | `running` / `waiting_human` / `completed` / `failed` / `cancelled`       |
+| `input`                                                           | 本轮用户输入原文                                                         |
+| `partial_answer` / `partial_answer_role`                          | 流式 UI 草稿；**不参与** resume 与下次 brain                             |
+| `final_answer` / `error` / `failure_code` / `failure_raw_message` | 终态展示（短标题 + 原文详情）                                            |
+| `pending_interaction`                                             | 等待用户问题回答或批量审批；`full_access` 只自动通过审批，不自动回答问题 |
+| `artifacts`                                                       | run 级产物引用（Workbench 展示）                                         |
+| `selectedReferences` / `attachments`                              | run 创建时 Composer 快照（与 log `user.context` 对应）                   |
 
 **写入**：`ChatRunService` 创建/更新 run。
 **读取**：Renderer 伙伴 snapshot、`activeRuns`、审批 UI。
@@ -324,14 +342,14 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 工具写文件产生的修改记录与 diff artifact；服务 Workbench 预览、红绿 diff、回退。
 
-| 字段（要点） | 用途 |
-|--------------|------|
-| `run_id` / `partner_id` | 归属 |
-| `path` / `fileName` / `operation` | 文件身份与操作类型 |
-| `capability` | `text_file` / `docx` / `ppt` / `excel` / `image` |
-| `status` | `applied` / `failed` / `reverted` 等 |
-| `changeCount` / `insertCount` / `deleteCount` | 改动统计 |
-| `previewArtifactHash` 等 | diff 预览对象 |
+| 字段（要点）                                  | 用途                                             |
+| --------------------------------------------- | ------------------------------------------------ |
+| `run_id` / `partner_id`                       | 归属                                             |
+| `path` / `fileName` / `operation`             | 文件身份与操作类型                               |
+| `capability`                                  | `text_file` / `docx` / `ppt` / `excel` / `image` |
+| `status`                                      | `applied` / `failed` / `reverted` 等             |
+| `changeCount` / `insertCount` / `deleteCount` | 改动统计                                         |
+| `previewArtifactHash` 等                      | diff 预览对象                                    |
 
 **不进 brain prompt**；工具结果摘要已在 log 的 `tool.content` 中。
 **run 失败不丢记录**：已 `applied` 的修改保持，供 Workbench 展示与回退。
@@ -340,11 +358,11 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 新 run 的参考资料和附件来自 **Composer 当前 `@` 引用与附件**，由 `buildBrainUserMessage` 分别渲染进 build user 的「用户@的参考资料」「用户添加的附件」段。工作地址列表不进这两段，单独渲染为 build user 的「默认工作区」（位于资料段之上），按设置页现表快照，不进 System。
 
-| | log 里的 `user.context` | Composer → build user |
-|--|-------------------------|------------------------|
-| 作用 | 审计「当时用户说了什么、配了什么」 | 驱动**当前 run** brain 输入 |
-| 同 run | 首条 build user 的资料段 | 来自发送时 Composer（仅 `@` 与附件） |
-| resume | 每条 log `user` 各存各的 snapshot | **append** 新 build user 在末尾；资料段用**当前** Composer |
+|        | log 里的 `user.context`            | Composer → build user                                      |
+| ------ | ---------------------------------- | ---------------------------------------------------------- |
+| 作用   | 审计「当时用户说了什么、配了什么」 | 驱动**当前 run** brain 输入                                |
+| 同 run | 首条 build user 的资料段           | 来自发送时 Composer（仅 `@` 与附件）                       |
+| resume | 每条 log `user` 各存各的 snapshot  | **append** 新 build user 在末尾；资料段用**当前** Composer |
 
 ---
 
@@ -358,10 +376,10 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 **组装路径**：
 
-| 时机 | 谁拼 messages | 形态 |
-|------|---------------|------|
-| **新 run / resume 启动** | `projectBrainMessagesFromLog` + graph 包 System | `[System] + [Compact User]? + [seq > historyFloorSeq 原文] + [Current User]` |
-| **同 run 刚压完** | `projectBrainMessagesFromLog`（`appendCurrentUser=false`）+ graph 包 System | `[System] + [Compact User]? + [seq > historyFloorSeq 原文]`；本轮 user 若 `seq > throughSeq` 出现在原文里，不再末尾 append 一条 |
+| 时机                     | 谁拼 messages                                                               | 形态                                                                                                                            |
+| ------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **新 run / resume 启动** | `projectBrainMessagesFromLog` + graph 包 System                             | `[System] + [Compact User]? + [seq > historyFloorSeq 原文] + [Current User]`                                                    |
+| **同 run 刚压完**        | `projectBrainMessagesFromLog`（`appendCurrentUser=false`）+ graph 包 System | `[System] + [Compact User]? + [seq > historyFloorSeq 原文]`；本轮 user 若 `seq > throughSeq` 出现在原文里，不再末尾 append 一条 |
 
 ```mermaid
 flowchart TD
@@ -387,12 +405,12 @@ flowchart TD
 
 ### 3.1 投影产物
 
-| 产物 | 消费方 | 规则 |
-|------|--------|------|
-| Brain messages | 主模型 | 第 3.2–3.3 节；第 4 节缓存；第 5–6 节边界事件 |
-| UI 对话轮次 | Renderer | 按 `run_id` 聚合 log 中的 `user` + 交付 `assistant` |
-| UI 过程层 | Renderer | 单 run 的 log → `projectProcessGroups`（第 3.4 节） |
-| 历史 user 审计 | UI / 测试 | log 中 `user` 条目（含 `context` 快照） |
+| 产物           | 消费方    | 规则                                                |
+| -------------- | --------- | --------------------------------------------------- |
+| Brain messages | 主模型    | 第 3.2–3.3 节；第 4 节缓存；第 5–6 节边界事件       |
+| UI 对话轮次    | Renderer  | 按 `run_id` 聚合 log 中的 `user` + 交付 `assistant` |
+| UI 过程层      | Renderer  | 单 run 的 log → `projectProcessGroups`（第 3.4 节） |
+| 历史 user 审计 | UI / 测试 | log 中 `user` 条目（含 `context` 快照）             |
 
 ### 3.2 Brain messages 标准形态
 
@@ -415,13 +433,13 @@ flowchart TD
 [User]                ← run-2 续发，append 在末尾
 ```
 
-| 段 | 含义 |
-|----|------|
-| System | 系统提示 |
-| User（人说的） | log `user.content`；当时的 build 全文。图里叫 `[History User]` / `[Current User]` |
-| User（Compact User） | 投影时由 `compaction_checkpoint.summary` 套 `<summary>` 外壳合成；不是 log user |
-| 过程 | assistant / tool / 多模态合成 HumanMessage |
-| User（续发） | 新 run 末尾 append 的 build 全文 |
+| 段                   | 含义                                                                              |
+| -------------------- | --------------------------------------------------------------------------------- |
+| System               | 系统提示                                                                          |
+| User（人说的）       | log `user.content`；当时的 build 全文。图里叫 `[History User]` / `[Current User]` |
+| User（Compact User） | 投影时由 `compaction_checkpoint.summary` 套 `<summary>` 外壳合成；不是 log user   |
+| 过程                 | assistant / tool / 多模态合成 HumanMessage                                        |
+| User（续发）         | 新 run 末尾 append 的 build 全文                                                  |
 
 **build user 块**（各字段来源见第 3.3 节；`偏好` / `默认工作区` / `用户@的参考资料` / `用户添加的附件` 无内容时整块省略）：
 
@@ -467,14 +485,14 @@ flowchart TD
 
 **build 各块**
 
-| 块 | 来源 |
-|----|------|
-| `用户诉求` | 当时那条 User 对应 run 的 `input` |
-| `偏好` | 当时 Composer；`default` 时整块省略 |
-| `默认工作区` | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
-| `用户@的参考资料` | 当时 Composer 的 `@`（第 2.5 节）；空时整块省略 |
-| `用户添加的附件` | 当时 Composer 的附件（第 2.5 节）；空时整块省略 |
-| `当前时间` | 当时 run 的 `runStartedAt`（历史行不再改） |
+| 块                | 来源                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| `用户诉求`        | 当时那条 User 对应 run 的 `input`                                                       |
+| `偏好`            | 当时 Composer；`default` 时整块省略                                                     |
+| `默认工作区`      | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
+| `用户@的参考资料` | 当时 Composer 的 `@`（第 2.5 节）；空时整块省略                                         |
+| `用户添加的附件`  | 当时 Composer 的附件（第 2.5 节）；空时整块省略                                         |
+| `当前时间`        | 当时 run 的 `runStartedAt`（历史行不再改）                                              |
 
 annotation 扫描该伙伴**全部**剩余 log（不受 `historyFloorSeq` 限制）：技能从最新 `skill_state_updated` 恢复。计划仍按 `plan_updated` / `finalizing_started` 扫描。清空消息记录会物理删除 log，因此技能 / 计划不会从已删除的历史恢复。
 
@@ -496,12 +514,12 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 
 #### 对话轮次（按 run 切分）
 
-| UI 元素 | log 来源 | 规则 |
-|---------|----------|------|
-| 用户气泡 | `ai_run.input`；该 run 的 `user` 行只提供时间与 `context` | 不展示 `user.content`（那是模型稿）；Compact User 不当气泡 |
-| 助手气泡 | 该 run 最后一条交付 `assistant`（`toolCalls: []`） | 经 `finalizeDelivery` 写入；展示 Markdown 正文 |
-| 运行态 / 错误 | `ai_run` | `status`、`error`、`failure_code`、`failure_raw_message`、审批、流式草稿 |
-| 文件改动 | `ai_file_change` | Workbench diff / 回退；不进对话正文 |
+| UI 元素       | log 来源                                                  | 规则                                                                     |
+| ------------- | --------------------------------------------------------- | ------------------------------------------------------------------------ |
+| 用户气泡      | `ai_run.input`；该 run 的 `user` 行只提供时间与 `context` | 不展示 `user.content`（那是模型稿）；Compact User 不当气泡               |
+| 助手气泡      | 该 run 最后一条交付 `assistant`（`toolCalls: []`）        | 经 `finalizeDelivery` 写入；展示 Markdown 正文                           |
+| 运行态 / 错误 | `ai_run`                                                  | `status`、`error`、`failure_code`、`failure_raw_message`、审批、流式草稿 |
+| 文件改动      | `ai_file_change`                                          | Workbench diff / 回退；不进对话正文                                      |
 
 同一伙伴多 run：按 `run_id` + `seq` 排序；resume 产生新 run，用户可见**多条** user 气泡，对应 brain 侧多条 build user（第 6 节）。
 
@@ -509,16 +527,16 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 
 `projectProcessGroups({ runId, records })` 扫描**该 run** 的 log 记录（使用 `seq` / `createdAt` 保证顺序与时间基）：
 
-| log 信号 | UI 过程组 |
-|----------|-----------|
-| `thinking_started` … `thinking_completed` 之间的 `assistant` | Thought 文本流（`processThoughts`） |
-| `compaction_checkpoint` | compaction 组（单独成行） |
-| `terminal_review_started` / `terminal_review_resolved` | 在审核结果出现前建立或更新同一 `terminal_run` Activity 项；以 `toolCallId` 与 assistant toolCalls、后续工具结果关联。AI 审核结果显示在该项下的内嵌区域；未结束的审核状态和结论刷新后仍可投影；reason 不投影到 UI |
-| `approval_batch_resolved` | 按 `toolCallId` 将人工同意、拒绝或指导结果投影到同一工具项下的内嵌审核结果区域；不新增过程项 |
-| `tool`（排除 `update_plan`；**含** `learn_skill`） | tool 组；展示 toolName + 入参 snapshot；两次 Thought 之间在 UI 合并为 Activity 面板 |
-| `plan_updated` | 计划条（非过程组；run snapshot 扫描 annotation） |
-| `finalizing_started` | 清空计划条（不渲染过程层） |
-| `learning_started` / `learning_completed` | 仅 harness / 状态注解；**不**投影为独立学习过程组 |
+| log 信号                                                     | UI 过程组                                                                                                                                                                                                        |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `thinking_started` … `thinking_completed` 之间的 `assistant` | Thought 文本流（`processThoughts`）                                                                                                                                                                              |
+| `compaction_checkpoint`                                      | compaction 组（单独成行）                                                                                                                                                                                        |
+| `terminal_review_started` / `terminal_review_resolved`       | 在审核结果出现前建立或更新同一 `terminal_run` Activity 项；以 `toolCallId` 与 assistant toolCalls、后续工具结果关联。AI 审核结果显示在该项下的内嵌区域；未结束的审核状态和结论刷新后仍可投影；reason 不投影到 UI |
+| `approval_batch_resolved`                                    | 按 `toolCallId` 将人工同意、拒绝或指导结果投影到同一工具项下的内嵌审核结果区域；不新增过程项                                                                                                                     |
+| `tool`（排除 `update_plan`；**含** `learn_skill`）           | tool 组；展示 toolName + 入参 snapshot；两次 Thought 之间在 UI 合并为 Activity 面板                                                                                                                              |
+| `plan_updated`                                               | 计划条（非过程组；run snapshot 扫描 annotation）                                                                                                                                                                 |
+| `finalizing_started`                                         | 清空计划条（不渲染过程层）                                                                                                                                                                                       |
+| `learning_started` / `learning_completed`                    | 仅 harness / 状态注解；**不**投影为独立学习过程组                                                                                                                                                                |
 
 `update_plan` **不出** tool 过程组。`learn_skill` 与其它工具一样进入 Activity。
 
@@ -557,11 +575,11 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 #### 约束摘要
 
-| 项 | 值 |
-|----|-----|
-| `read_image` 单次 | 1–10 路径 |
-| 源图上限 | 20 MiB / 8192 边 / 6400 万像素 |
-| 请求图上限 | 64 万像素 / 1 MiB（webp 转换后） |
+| 项                   | 值                                |
+| -------------------- | --------------------------------- |
+| `read_image` 单次    | 1–10 路径                         |
+| 源图上限             | 20 MiB / 8192 边 / 6400 万像素    |
+| 请求图上限           | 64 万像素 / 1 MiB（webp 转换后）  |
 | ToolMessage 携带图片 | **不支持**；必须合成 HumanMessage |
 
 ---
@@ -586,11 +604,11 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ### 4.2 稳态下如何保持命中
 
-| 操作 | 对前缀的影响 |
-|------|--------------|
-| brain → hand → 再 brain | 已发送段不变；tail 末尾 append；当前 build user 不变 |
-| `update_plan` / `learn_skill` | 只改 state + tool 结果 + bindTools；**不改** build user |
-| **resume** | 历史段 **不变**（log content）；末尾 **append** 新 User（第 6 节） |
+| 操作                          | 对前缀的影响                                                       |
+| ----------------------------- | ------------------------------------------------------------------ |
+| brain → hand → 再 brain       | 已发送段不变；tail 末尾 append；当前 build user 不变               |
+| `update_plan` / `learn_skill` | 只改 state + tool 结果 + bindTools；**不改** build user            |
+| **resume**                    | 历史段 **不变**（log content）；末尾 **append** 新 User（第 6 节） |
 
 ### 4.3 打破前缀缓存的操作
 
@@ -802,15 +820,15 @@ seq N  user      content=用户诉求：继续把周报写完…
 
 ### 6.5 边界
 
-| 情况 | 行为 |
-|------|------|
-| 多次 resume | 每次 append 新 build user 在末尾；首条 `User built₁` 保留原始用户诉求 |
-| `output_truncated` / `runtime_limit` | 可继续；半截 assistant 已在 log/tail |
-| `input_too_long` | 不写 log user，不调 brain |
-| 编辑重发 | 删除该 `runId` 的 `ai_run` 与全部 message log。已写入文件与 `ai_file_change` 不回滚 |
-| 伙伴隔离 | 只读本伙伴 log |
-| `partial_answer` | 仅 UI 草稿，不参与 resume |
-| 已落盘文件 | `ai_file_change` 不因 run 失败丢失 |
+| 情况                                 | 行为                                                                                |
+| ------------------------------------ | ----------------------------------------------------------------------------------- |
+| 多次 resume                          | 每次 append 新 build user 在末尾；首条 `User built₁` 保留原始用户诉求               |
+| `output_truncated` / `runtime_limit` | 可继续；半截 assistant 已在 log/tail                                                |
+| `input_too_long`                     | 不写 log user，不调 brain                                                           |
+| 编辑重发                             | 删除该 `runId` 的 `ai_run` 与全部 message log。已写入文件与 `ai_file_change` 不回滚 |
+| 伙伴隔离                             | 只读本伙伴 log                                                                      |
+| `partial_answer`                     | 仅 UI 草稿，不参与 resume                                                           |
+| 已落盘文件                           | `ai_file_change` 不因 run 失败丢失                                                  |
 
 ---
 
@@ -818,11 +836,11 @@ seq N  user      content=用户诉求：继续把周报写完…
 
 ### 7.1 概念
 
-| 概念 | 含义 |
-|------|------|
-| **Skill** | 能力包；`builtin` 默认可 bind；`external` 需 `learn_skill` 后才进入 bindTools |
-| **Tool** | 具体执行入口；归属一个或多个 skill |
-| **agent-control** | 内置 skill，承载 `learn_skill`、`update_plan`、`read_image` |
+| 概念              | 含义                                                                          |
+| ----------------- | ----------------------------------------------------------------------------- |
+| **Skill**         | 能力包；`builtin` 默认可 bind；`external` 需 `learn_skill` 后才进入 bindTools |
+| **Tool**          | 具体执行入口；归属一个或多个 skill                                            |
+| **agent-control** | 内置 skill，承载 `learn_skill`、`update_plan`、`read_image`                   |
 
 skill / tool 的 prompt **只声明边界**，不写固定调用顺序（细节见 `tool-design.md` 第 1 节）。
 
@@ -841,11 +859,11 @@ brain 返回 learn_skill
 
 **active tool 上限**：`HUMAN_MAX_ACTIVE_TOOLS = 25`（含 builtin / agent-control 工具）。新 skill 超限时 **FIFO 淘汰**最早学习的 external skill，写 tool 反馈说明 `evicted=…`。
 
-| 结果 | log | brain |
-|------|-----|-------|
-| 新 skill 加载成功 | `tool` + `skill_state_updated` | 下轮 bindTools 含新工具；**不改** build user |
-| 重复 / unknown / 超限 | 仅 `tool` | 技能块不变 |
-| 审批 / 取消 | 按 hand 规则 | — |
+| 结果                  | log                            | brain                                        |
+| --------------------- | ------------------------------ | -------------------------------------------- |
+| 新 skill 加载成功     | `tool` + `skill_state_updated` | 下轮 bindTools 含新工具；**不改** build user |
+| 重复 / unknown / 超限 | 仅 `tool`                      | 技能块不变                                   |
+| 审批 / 取消           | 按 hand 规则                   | —                                            |
 
 ### 7.3 update_plan 流程
 
@@ -884,11 +902,11 @@ brain 返回 update_plan
 
 ### 8.1 Thought 与 Answer
 
-| 阶段 | UI 角色 | log |
-|------|---------|-----|
-| brain 流式中、尚无 tool_calls | Answer 草稿（可转 Thought） | **尚未**写 `assistant` |
-| 收到 tool_calls 分片 | Thought | 本轮结束由 **brain** 写 `assistant` + `toolCalls` |
-| 无 tool_calls、流正常关闭 | Answer → 交付 | **仅** `finalizeDelivery` 写交付 `assistant`（brain 本轮不写 log `assistant`） |
+| 阶段                          | UI 角色                     | log                                                                            |
+| ----------------------------- | --------------------------- | ------------------------------------------------------------------------------ |
+| brain 流式中、尚无 tool_calls | Answer 草稿（可转 Thought） | **尚未**写 `assistant`                                                         |
+| 收到 tool_calls 分片          | Thought                     | 本轮结束由 **brain** 写 `assistant` + `toolCalls`                              |
+| 无 tool_calls、流正常关闭     | Answer → 交付               | **仅** `finalizeDelivery` 写交付 `assistant`（brain 本轮不写 log `assistant`） |
 
 **判定顺序**：Provider 无 `finish_reason` 时，仍等流关闭后再按完整响应判定。
 Main **不**强制计划全部 `done` 才允许交付。
@@ -924,16 +942,16 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 #### 失败码（互斥）
 
-| `failure_code` | 短标题（气泡 / toast） | `rawMessage` | 说明 |
-|----------------|------------------------|--------------|------|
-| `user_cancelled` | 已取消 | 可空 | 用户停止；事件为 `run_cancelled` |
-| `process_interrupted` | 任务已中断，可继续对话推进 | 可空 | 进程/重启打断 |
-| `llm_request_failed` | 模型请求失败 | **必留原文** | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案 |
-| `output_truncated` | 模型输出达到长度限制，可发送「继续」接着完成 | 可选 | `finish_reason=length` |
-| `input_too_long` | 当前输入超过模型上下文限制，请缩短后重试 | 可空 | 当前 user alone 超窗；**不写** log user，不调 brain |
-| `runtime_limit` | 已达到运行上限，可继续对话推进 | 可空 | 图递归上限 |
-| `internal_error` | 运行遇到内部错误 | **必留 detail** | 主动断言（如 compaction bookmark `undefined`） |
-| `unexpected_error` | 运行失败，请重试 | **必留**异常原文 | 未知兜底 |
+| `failure_code`        | 短标题（气泡 / toast）                       | `rawMessage`     | 说明                                                 |
+| --------------------- | -------------------------------------------- | ---------------- | ---------------------------------------------------- |
+| `user_cancelled`      | 已取消                                       | 可空             | 用户停止；事件为 `run_cancelled`                     |
+| `process_interrupted` | 任务已中断，可继续对话推进                   | 可空             | 进程/重启打断                                        |
+| `llm_request_failed`  | 模型请求失败                                 | **必留原文**     | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案 |
+| `output_truncated`    | 模型输出达到长度限制，可发送「继续」接着完成 | 可选             | `finish_reason=length`                               |
+| `input_too_long`      | 当前输入超过模型上下文限制，请缩短后重试     | 可空             | 当前 user alone 超窗；**不写** log user，不调 brain  |
+| `runtime_limit`       | 已达到运行上限，可继续对话推进               | 可空             | 图递归上限                                           |
+| `internal_error`      | 运行遇到内部错误                             | **必留 detail**  | 主动断言（如 compaction bookmark `undefined`）       |
+| `unexpected_error`    | 运行失败，请重试                             | **必留**异常原文 | 未知兜底                                             |
 
 落库：真正失败时 `ai_run.error` = 短标题，`ai_run.failure_raw_message` = 原文；UI：气泡「失败：{title}」+「查看详情」展开 `rawMessage`（及 HTTP / providerCode）。`user_cancelled` 只保留 `cancelled` 状态和 `failure_code`，不写 `error`、不合成 `final_answer`，UI 不生成失败气泡或「已取消」正文；已有 answer 片段与 `ai_file_change` 保留。
 
@@ -943,58 +961,57 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 仅 `classifyLlmRetry`（`llmRetry.ts`）驱动 `runLlmCallWithActivity`；**不再**盲信 `LlmProviderError.retryable` 旧戳。
 
-| 优先级 | 信号 | 判定 |
-|--------|------|------|
-| 1 | HTTP status | 401/402/403 → 不重试；408/429/500/502/503/504 → 可重试（有上限）；**429 使用指数退避**（2s 起、上限 15s） |
-| 2 | providerCode / type | `insufficient_balance`、`quota_exceeded`、`invalid_api_key`、`authentication_error`… → 不重试；`rate_limit_exceeded`、`timeout`、`request_timeout`、`server_error`、`service_unavailable`、`resource_exhausted`… → 可重试；`rate_limit_exceeded` / `resource_exhausted` 使用同上指数退避 |
-| 3 | 类型信号 | `constructor.name` 为 `APIConnectionError` / `APIConnectionTimeoutError`，或 `error.name === 'TimeoutError'`（含一层 `cause`）→ 可重试、短退避 |
-| 4 | unknown | **不重试**；不匹配文案 |
-
+| 优先级 | 信号                | 判定                                                                                                                                                                                                                                                                                     |
+| ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1      | HTTP status         | 401/402/403 → 不重试；408/429/500/502/503/504 → 可重试（有上限）；**429 使用指数退避**（2s 起、上限 15s）                                                                                                                                                                                |
+| 2      | providerCode / type | `insufficient_balance`、`quota_exceeded`、`invalid_api_key`、`authentication_error`… → 不重试；`rate_limit_exceeded`、`timeout`、`request_timeout`、`server_error`、`service_unavailable`、`resource_exhausted`… → 可重试；`rate_limit_exceeded` / `resource_exhausted` 使用同上指数退避 |
+| 3      | 类型信号            | `constructor.name` 为 `APIConnectionError` / `APIConnectionTimeoutError`，或 `error.name === 'TimeoutError'`（含一层 `cause`）→ 可重试、短退避                                                                                                                                           |
+| 4      | unknown             | **不重试**；不匹配文案                                                                                                                                                                                                                                                                   |
 
 #### 告警（不停跑）
 
-| 场景 | 行为 |
-|------|------|
+| 场景                       | 行为                                                |
+| -------------------------- | --------------------------------------------------- |
 | brain 无 usage、资料校验等 | `run_warning`；**不改** `ai_run.status`，不结束 run |
-| 审批拒绝 | hand 写失败 `tool`；继续 dispatch / brain |
+| 审批拒绝                   | hand 写失败 `tool`；继续 dispatch / brain           |
 
 #### 场景对照
 
-| 场景 | `failure_code` / 行为 | log / brain |
-|------|------------------------|-------------|
-| 用户停止 | `user_cancelled` / `cancelled` | 已写段保留；repair 悬空 tool_calls |
-| 应用重启 | `process_interrupted` | 活动 run 标记 failed；不自动调模型 |
-| 输出截断 | `output_truncated` | 写半截 `assistant` 后失败；可 resume |
-| 图递归上限 | `runtime_limit` | 可 resume |
-| 当前 user 超窗 | `input_too_long` | **不写** log user，不调 brain |
-| 模型请求失败 | `llm_request_failed` | 可 resume；详情保留原文 |
-| compaction bookmark 丢失 | `internal_error` | **硬停**，禁止回 budget 空转 |
-| 审批拒绝 | hand 写失败 `tool` | 继续 dispatch / brain |
+| 场景                     | `failure_code` / 行为          | log / brain                          |
+| ------------------------ | ------------------------------ | ------------------------------------ |
+| 用户停止                 | `user_cancelled` / `cancelled` | 已写段保留；repair 悬空 tool_calls   |
+| 应用重启                 | `process_interrupted`          | 活动 run 标记 failed；不自动调模型   |
+| 输出截断                 | `output_truncated`             | 写半截 `assistant` 后失败；可 resume |
+| 图递归上限               | `runtime_limit`                | 可 resume                            |
+| 当前 user 超窗           | `input_too_long`               | **不写** log user，不调 brain        |
+| 模型请求失败             | `llm_request_failed`           | 可 resume；详情保留原文              |
+| compaction bookmark 丢失 | `internal_error`               | **硬停**，禁止回 budget 空转         |
+| 审批拒绝                 | hand 写失败 `tool`             | 继续 dispatch / brain                |
 
 ### 8.5 与存储的关系
 
-| 数据 | run 失败后 |
-|------|------------|
-| `chat_session_message_log` | append-only，已写行保留 |
-| `ai_file_change`（`applied`） | 保留，Workbench 可预览/回退 |
-| `ai_run.partial_answer` | 仅 UI 草稿，丢弃不参与恢复 |
-| docx apply 事务 | 失败 run discard；成功 apply 已在 finalize 前提交 |
+| 数据                          | run 失败后                                        |
+| ----------------------------- | ------------------------------------------------- |
+| `chat_session_message_log`    | append-only，已写行保留                           |
+| `ai_file_change`（`applied`） | 保留，Workbench 可预览/回退                       |
+| `ai_run.partial_answer`       | 仅 UI 草稿，丢弃不参与恢复                        |
+| docx apply 事务               | 失败 run discard；成功 apply 已在 finalize 前提交 |
 
 ---
 
 ## 附录：关键代码索引
 
-| Concern | 路径 |
-|---------|------|
-| Graph | `src/main/services/ai/human/graph/humanGraph.ts` |
-| Log 投影 | `src/main/services/ai/human/memory/brainMessageProjection.ts` |
-| Log → 消息 | `src/main/services/ai/human/memory/conversationLogMessages.ts` |
-| 过程 tail 投影 | `src/main/services/ai/human/memory/transcript.ts` |
-| 多模态 | `src/main/services/ai/human/memory/multimodal.ts` |
-| Build user | `src/main/services/ai/human/prompts/brain.ts` |
-| Compaction | `src/main/services/ai/human/node/contextCompactionNode/` |
-| Log 存储 | `src/main/services/storage/domains/ChatMessageLogStore.ts` |
-| Resume | `src/main/services/ai/ChatRunService.ts` |
-| 交付 | `src/main/services/ai/human/node/brainNode/finalizeDelivery.ts` |
-| UI 过程投影 | `src/renderer/src/components/workbench/messageLogProjection.ts` |
-| 工具 registry | `src/main/services/ai/human/tools/registry.ts` |
+| Concern        | 路径                                                            |
+| -------------- | --------------------------------------------------------------- |
+| Graph          | `src/main/services/ai/human/graph/humanGraph.ts`                |
+| Log 投影       | `src/main/services/ai/human/memory/brainMessageProjection.ts`   |
+| Log → 消息     | `src/main/services/ai/human/memory/conversationLogMessages.ts`  |
+| 过程 tail 投影 | `src/main/services/ai/human/memory/transcript.ts`               |
+| 多模态         | `src/main/services/ai/human/memory/multimodal.ts`               |
+| Build user     | `src/main/services/ai/human/prompts/brain.ts`                   |
+| Compaction     | `src/main/services/ai/human/node/contextCompactionNode/`        |
+| Log 存储       | `src/main/services/storage/domains/ChatMessageLogStore.ts`      |
+| Resume         | `src/main/services/ai/ChatRunService.ts`                        |
+| 交付           | `src/main/services/ai/human/node/brainNode/finalizeDelivery.ts` |
+| UI 过程投影    | `src/renderer/src/components/workbench/messageLogProjection.ts` |
+| 工具 registry  | `src/main/services/ai/human/tools/registry.ts`                  |

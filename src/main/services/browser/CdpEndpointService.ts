@@ -58,7 +58,9 @@ const browserUserAgent = (): string =>
   `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion()} Safari/537.36`
 
 const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
 
 const readString = (value: unknown): string => (typeof value === 'string' ? value : '')
 
@@ -79,6 +81,15 @@ export class CdpEndpointService {
       throw error
     })
     return this.listenPromise
+  }
+
+  public async getScopedEndpoint(targetId: string): Promise<CdpEndpoint> {
+    if (!this.targets.has(targetId)) throw new Error('CDP target not registered')
+    const endpoint = await this.getEndpoint()
+    return {
+      ...endpoint,
+      browserWebSocketUrl: `${endpoint.browserWebSocketUrl}?target=${encodeURIComponent(targetId)}`
+    }
   }
 
   public registerTarget(contents: CdpDebuggableContents): string {
@@ -206,7 +217,8 @@ export class CdpEndpointService {
   }
 
   private async handleHttp(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname.replace(/\/$/u, '') || '/'
+    const pathname =
+      new URL(request.url || '/', 'http://127.0.0.1').pathname.replace(/\/$/u, '') || '/'
     if (request.method !== 'GET') {
       response.writeHead(405).end()
       return
@@ -224,10 +236,18 @@ export class CdpEndpointService {
 
   private handleUpgrade(request: IncomingMessage, socket: Duplex): void {
     const key = readString(request.headers['sec-websocket-key'])
-    const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname
+    const requestUrl = new URL(request.url || '/', 'http://127.0.0.1')
+    const pathname = requestUrl.pathname
+    const scopedTargetId = requestUrl.searchParams.get('target')
     const isBrowserPath = pathname === `/devtools/browser/${this.browserId}`
-    const pageTargetId = pathname.startsWith('/devtools/page/') ? pathname.slice('/devtools/page/'.length) : ''
-    if (!key || (!isBrowserPath && !this.targets.has(pageTargetId))) {
+    const pageTargetId = pathname.startsWith('/devtools/page/')
+      ? pathname.slice('/devtools/page/'.length)
+      : ''
+    if (
+      !key ||
+      (scopedTargetId && !this.targets.has(scopedTargetId)) ||
+      (!isBrowserPath && !this.targets.has(pageTargetId))
+    ) {
       socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n')
       socket.destroy()
       return
@@ -243,7 +263,7 @@ export class CdpEndpointService {
       ].join('\r\n')
     )
     const ws = new LoopbackWebSocket(socket)
-    const client = new BrowserCdpClient(this, ws, pageTargetId || null)
+    const client = new BrowserCdpClient(this, ws, pageTargetId || scopedTargetId || null)
     this.clients.add(client)
     ws.onClose(() => this.clients.delete(client))
   }
@@ -286,7 +306,9 @@ export class CdpEndpointService {
   }
 
   public listTargetInfos(attachedIds: Set<string>): Array<Record<string, unknown>> {
-    return [...this.targets.values()].map((target) => this.toTargetInfo(target, attachedIds.has(target.targetId)))
+    return [...this.targets.values()].map((target) =>
+      this.toTargetInfo(target, attachedIds.has(target.targetId))
+    )
   }
 
   public getTarget(targetId: string): RegisteredTarget | undefined {
@@ -350,7 +372,8 @@ export class CdpEndpointService {
   }
 
   private broadcast(message: { method: string; params: unknown; sessionId?: string }): void {
-    for (const client of this.clients) client.sendEvent(message.method, message.params, message.sessionId)
+    for (const client of this.clients)
+      client.sendEvent(message.method, message.params, message.sessionId)
   }
 }
 
@@ -363,7 +386,7 @@ class BrowserCdpClient {
   public constructor(
     private readonly bridge: CdpEndpointService,
     private readonly socket: LoopbackWebSocket,
-    preferredTargetId: string | null
+    private readonly preferredTargetId: string | null
   ) {
     socket.onMessage((data) => {
       void this.handleMessage(data)
@@ -387,11 +410,31 @@ class BrowserCdpClient {
   }
 
   public autoAttachIfNeeded(target: RegisteredTarget): void {
-    if (!this.autoAttach || this.sessionsByTarget.has(target.targetId)) return
+    if (
+      !this.allowsTarget(target.targetId) ||
+      !this.autoAttach ||
+      this.sessionsByTarget.has(target.targetId)
+    )
+      return
     this.attachTarget(target, true)
   }
 
+  public allowsTarget(targetId: string): boolean {
+    return !this.preferredTargetId || this.preferredTargetId === targetId
+  }
+
+  private targetInfos(attachedIds: Set<string>): Array<Record<string, unknown>> {
+    return this.bridge
+      .listTargetInfos(attachedIds)
+      .filter((info) => this.allowsTarget(String(info.targetId)))
+  }
+
   public sendEvent(method: string, params: unknown, sessionId?: string): void {
+    if (method.startsWith('Target.')) {
+      const data = asRecord(params)
+      const targetId = readString(data.targetId) || readString(asRecord(data.targetInfo).targetId)
+      if (targetId && !this.allowsTarget(targetId)) return
+    }
     const payload: Record<string, unknown> = { method, params }
     if (sessionId) payload.sessionId = sessionId
     this.socket.send(JSON.stringify(payload))
@@ -429,11 +472,7 @@ class BrowserCdpClient {
       const result = await this.dispatch(message)
       this.reply(id, result, message.sessionId)
     } catch (error) {
-      this.replyError(
-        id,
-        error instanceof Error ? error.message : String(error),
-        message.sessionId
-      )
+      this.replyError(id, error instanceof Error ? error.message : String(error), message.sessionId)
     }
   }
 
@@ -468,7 +507,7 @@ class BrowserCdpClient {
       case 'Target.setDiscoverTargets':
         this.discoverTargets = Boolean(params.discover)
         if (this.discoverTargets) {
-          for (const info of this.bridge.listTargetInfos(new Set(this.sessionsByTarget.keys()))) {
+          for (const info of this.targetInfos(new Set(this.sessionsByTarget.keys()))) {
             this.sendEvent('Target.targetCreated', { targetInfo: info })
           }
         }
@@ -476,7 +515,7 @@ class BrowserCdpClient {
       case 'Target.setAutoAttach':
         this.autoAttach = Boolean(params.autoAttach)
         if (this.autoAttach) {
-          for (const target of this.bridge.listTargetInfos(new Set()).map((info) =>
+          for (const target of this.targetInfos(new Set()).map((info) =>
             this.bridge.getTarget(String(info.targetId || ''))
           )) {
             if (target) this.autoAttachIfNeeded(target)
@@ -484,10 +523,11 @@ class BrowserCdpClient {
         }
         return {}
       case 'Target.getTargets':
-        return { targetInfos: this.bridge.listTargetInfos(new Set(this.sessionsByTarget.keys())) }
+        return { targetInfos: this.targetInfos(new Set(this.sessionsByTarget.keys())) }
       case 'Target.attachToTarget': {
         const target = this.bridge.getTarget(readString(params.targetId))
-        if (!target) throw new Error('No target with given id found')
+        if (!target || !this.allowsTarget(target.targetId))
+          throw new Error('No target with given id found')
         const session = this.attachTarget(target, true)
         return { sessionId: session.sessionId }
       }
@@ -498,9 +538,11 @@ class BrowserCdpClient {
         return {}
       }
       case 'Target.getTargetInfo': {
-        const targetId = readString(params.targetId) || this.bridge.firstTargetId() || ''
+        const targetId =
+          readString(params.targetId) || this.preferredTargetId || this.bridge.firstTargetId() || ''
         const target = this.bridge.getTarget(targetId)
-        if (!target) throw new Error('No target with given id found')
+        if (!target || !this.allowsTarget(target.targetId))
+          throw new Error('No target with given id found')
         return {
           targetInfo: this.bridge.toTargetInfo(target, this.sessionsByTarget.has(targetId))
         }
@@ -511,7 +553,7 @@ class BrowserCdpClient {
       case 'Target.closeTarget':
         return { success: true }
       case 'Target.createTarget': {
-        const existing = this.bridge.firstTargetId()
+        const existing = this.preferredTargetId || this.bridge.firstTargetId()
         if (!existing) throw new Error('No CDP target is registered')
         return { targetId: existing }
       }
@@ -534,10 +576,13 @@ class BrowserCdpClient {
     const session = this.sessions.get(sessionId)
     if (!session) throw new Error('Session not found')
     const target = this.bridge.getTarget(session.targetId)
-    if (!target) throw new Error('No target with given id found')
+    if (!target || !this.allowsTarget(target.targetId))
+      throw new Error('No target with given id found')
     if (method === 'Runtime.runIfWaitingForDebugger') {
       try {
-        return (await this.bridge.sendCommand(target, method, params, session.electronSessionId)) ?? {}
+        return (
+          (await this.bridge.sendCommand(target, method, params, session.electronSessionId)) ?? {}
+        )
       } catch {
         return {}
       }

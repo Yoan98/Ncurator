@@ -17,10 +17,7 @@ import {
 import { decodeTextFile } from '../human/tools/textFile/textFileUtils'
 import { WorkspaceObjectStore } from './WorkspaceObjectStore'
 import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../../shared/constants'
-import {
-  ensurePartnerRuntimeDirs,
-  getPartnerObjectsDir
-} from '../../assets/WorkspaceAssetService'
+import { ensurePartnerRuntimeDirs, getPartnerObjectsDir } from '../../assets/WorkspaceAssetService'
 import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../wps/officeFileWriteNotify'
 
 const FORCE_REVERT_WARNING =
@@ -36,8 +33,33 @@ export class AiFileChangeService {
   public constructor(private readonly store: AiFileChangeRecordStore) {}
 
   public async saveRecord(record: AiFileChangeRecord): Promise<void> {
-    const existing = (await this.store.getRecord({ changeId: record.id })).record
-    const next = await this.finalizeRecord(record, existing)
+    const byId = (await this.store.getRecord({ changeId: record.id })).record
+    const existing =
+      byId ||
+      (record.status === 'applied'
+        ? (await this.store.listRecords({ runId: record.runId })).items.find(
+            (item) =>
+              item.partnerId === record.partnerId &&
+              item.path === record.path &&
+              item.status === 'applied'
+          )
+        : undefined)
+    const merged =
+      existing && existing.id !== record.id
+        ? {
+            ...record,
+            id: existing.id,
+            operation: existing.operation,
+            beforePath: existing.beforePath,
+            beforeSnapshotPath: existing.beforeSnapshotPath,
+            beforeChecksum: existing.beforeChecksum,
+            beforeObjectHash: existing.beforeObjectHash,
+            createdAt: existing.createdAt,
+            previewPath: record.capability === 'text_file' ? undefined : record.previewPath
+          }
+        : record
+    const next = await this.finalizeRecord(merged, existing)
+    Object.assign(record, next)
     await this.store.saveRecord(next)
     if (
       next.status === 'applied' &&
@@ -188,7 +210,8 @@ export class AiFileChangeService {
 
     const updatedAt = Date.now()
     try {
-      const restorePath = record.operation === 'created' ? currentPath : record.beforePath || record.path
+      const restorePath =
+        record.operation === 'created' ? currentPath : record.beforePath || record.path
       const applyRevert = async (): Promise<void> => {
         if (record.operation === 'created') {
           await fs.rm(currentPath, { force: true })

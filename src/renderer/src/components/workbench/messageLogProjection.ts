@@ -7,6 +7,7 @@ import type {
 import { normalizeThoughtText } from '../../../../shared/thoughtText'
 import { isBrainThinkingOpenInLog } from '../../../../shared/assistantThinkingWait'
 import {
+  reduceAssistantProcessGroups,
   createDisplayProcessGroup,
   createDisplayProcessItem,
   removePendingTerminalReviewItems
@@ -45,6 +46,7 @@ export const projectProcessGroups = (input: {
   }
 
   const upsertGroup = (group: AssistantProcessGroup): void => {
+    group = { ...group, subagents: group.subagents || groupById.get(group.id)?.subagents }
     if (!groupById.has(group.id)) orderedGroupIds.push(group.id)
     groupById.set(group.id, group)
   }
@@ -66,7 +68,15 @@ export const projectProcessGroups = (input: {
   for (const record of input.records) {
     const entry: ChatMessageLogEntry = record.entry
     if (entry.kind === 'annotation') {
-      if (entry.eventType === 'thinking_started') {
+      if (entry.eventType === 'subagent_updated') {
+        const groups = reduceAssistantProcessGroups([...groupById.values()], {
+          type: 'subagent_updated',
+          runId: input.runId,
+          update: entry.payload,
+          createdAt: resolveCreatedAt(record)
+        })
+        groups.forEach(upsertGroup)
+      } else if (entry.eventType === 'thinking_started') {
         thinkingOpen = true
       } else if (entry.eventType === 'thinking_completed') {
         thinkingOpen = false
@@ -259,6 +269,14 @@ export const projectProcessGroups = (input: {
     .map((id) => groupById.get(id))
     .filter((group): group is AssistantProcessGroup => Boolean(group))
     .sort((left, right) => left.createdAt - right.createdAt)
+  for (const group of projectedGroups) {
+    if (input.runFinished && group.subagents)
+      group.subagents = group.subagents.map((child) =>
+        child.status === 'running'
+          ? { ...child, status: 'interrupted', result: '执行被中断，未收到完整结果' }
+          : child
+      )
+  }
   const processGroups = input.runFinished
     ? removePendingTerminalReviewItems(projectedGroups)
     : projectedGroups

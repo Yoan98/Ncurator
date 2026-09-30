@@ -63,6 +63,8 @@ export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 export type AiRuntimePlatform = 'macos' | 'windows'
 
 export type AiRunStartPayload = {
+  ownerRunId?: string
+  parentToolCallId?: string
   runId: string
   partnerId: string
   partnerName: string
@@ -283,6 +285,8 @@ export type BrowserUseRunRequest = (
 ) & {
   abortSignal?: AbortSignal
   runId?: string
+  executionScope?: string
+  background?: boolean
 }
 
 export type BrowserUseService = {
@@ -295,7 +299,21 @@ export type BrowserUseService = {
   releaseRun?: (runId: string) => Promise<void>
 }
 
+export type AiTranscript = {
+  append: (entries: ChatMessageLogEntry[], options?: { runId?: string }) => Promise<void>
+  load: () => Promise<ChatMessageLogRecord[]>
+}
+
+export type SubagentTask = { name: string; task: string }
+
 export type AiRunDeps = {
+  modelConfig?: LlmRuntimeConfig
+  transcript?: AiTranscript
+  delegateToSubagent?: (
+    tasks: SubagentTask[],
+    toolCallId: string
+  ) => Promise<import('../../../shared/types').SubagentUpdate[]>
+  releaseRun?: (runId: string) => Promise<void>
   defaultStreamingMode?: AiLlmStreamingMode
   llmStore: LlmConfigStore
   partnerStore: PartnerStore
@@ -306,7 +324,10 @@ export type AiRunDeps = {
   hasRunningKnowledgeIndexJob?: () => Promise<boolean>
   docxApplyService: DocxApplyService
   saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
-  listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
+  listFileChangeRecords: (input: {
+    runId: string
+    participatingOnly?: boolean
+  }) => Promise<AiFileChangeRecord[]>
   isCancelled: () => boolean
   hasPendingUserMessages?: () => boolean
   waitForPendingUserMessageSubmissions?: () => Promise<void>
@@ -336,6 +357,13 @@ export type AiRunDeps = {
 }
 
 export type AiRunContext = {
+  ownerRunId: string
+  isSubagent: boolean
+  delegateToSubagent: (
+    tasks: SubagentTask[],
+    toolCallId: string
+  ) => Promise<import('../../../shared/types').SubagentUpdate[]>
+  acquireFile: (sourcePath: string) => void
   runId: string
   partnerId: string
   userMessageId: string
@@ -416,10 +444,13 @@ export type AiRunContext = {
   }) => void
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
   beginDocxApplyRun: () => void
-  applyDocxRunEdits: () => Promise<DocxApplyRecord[]>
+  applyDocxRunEdits: (options?: { retainState?: boolean }) => Promise<DocxApplyRecord[]>
   discardDocxApplyRun: () => void
   saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
-  listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
+  listFileChangeRecords: (input: {
+    runId: string
+    participatingOnly?: boolean
+  }) => Promise<AiFileChangeRecord[]>
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   assertKbSearchAvailable: () => Promise<void>

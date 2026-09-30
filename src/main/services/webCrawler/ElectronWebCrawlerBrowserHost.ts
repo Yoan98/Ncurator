@@ -44,7 +44,8 @@ const waitForWebContentsLoad = async (
     }
     const onFail = (_event: Electron.Event, _code: number, description: string): void =>
       finish(new Error(description || 'Electron web crawler marker page load failed'))
-    const onDestroyed = (): void => finish(new Error('Electron web crawler browser host was destroyed'))
+    const onDestroyed = (): void =>
+      finish(new Error('Electron web crawler browser host was destroyed'))
     contents.once('did-finish-load', onDone)
     contents.once('did-stop-loading', onDone)
     contents.once('did-fail-load', onFail)
@@ -131,7 +132,7 @@ export class ElectronWebCrawlerBrowserHost {
     this.registeredTargetId = this.cdpEndpointService.registerTarget(
       view.webContents as CdpDebuggableContents
     )
-    const endpoint = await this.cdpEndpointService.getEndpoint()
+    const endpoint = await this.cdpEndpointService.getScopedEndpoint(this.registeredTargetId)
     if (this.closed) {
       throw new Error('Electron web crawler browser host is closed')
     }

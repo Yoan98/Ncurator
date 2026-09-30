@@ -358,10 +358,16 @@ const alignWorksheetRows = (
   const maxColumn = Math.max(before.columnCount, after.columnCount, 1)
   const beforeRows = Array.from({ length: before.rowCount }, (_, index) => index + 1)
   const afterRows = Array.from({ length: after.rowCount }, (_, index) => index + 1)
-  while (beforeRows.length > 0 && isTrailingEmptyRow(before, beforeRows[beforeRows.length - 1], maxColumn)) {
+  while (
+    beforeRows.length > 0 &&
+    isTrailingEmptyRow(before, beforeRows[beforeRows.length - 1], maxColumn)
+  ) {
     beforeRows.pop()
   }
-  while (afterRows.length > 0 && isTrailingEmptyRow(after, afterRows[afterRows.length - 1], maxColumn)) {
+  while (
+    afterRows.length > 0 &&
+    isTrailingEmptyRow(after, afterRows[afterRows.length - 1], maxColumn)
+  ) {
     afterRows.pop()
   }
   const beforeSignatures = beforeRows.map((row) => rowSignature(before, row, maxColumn))
@@ -655,9 +661,7 @@ const applyStyle = (cell: ExcelJS.Cell, style: ExcelStyle | undefined): void => 
       ...currentFont,
       bold: typeof style.bold === 'boolean' ? style.bold : currentFont.bold,
       italic: typeof style.italic === 'boolean' ? style.italic : currentFont.italic,
-      color: style.fontColor
-        ? { argb: toExcelArgb(style.fontColor) }
-        : currentFont.color
+      color: style.fontColor ? { argb: toExcelArgb(style.fontColor) } : currentFont.color
     }
   }
   if (style.fillColor)
@@ -686,7 +690,10 @@ const requireSheet = (workbook: ExcelJS.Workbook, sheetName: string): ExcelJS.Wo
   return sheet
 }
 
-const serializeLiteral = (value: unknown, fallbackText: string): string | number | boolean | null => {
+const serializeLiteral = (
+  value: unknown,
+  fallbackText: string
+): string | number | boolean | null => {
   if (value === null || value === undefined || value === '') return null
   if (typeof value === 'number' || typeof value === 'boolean') return value
   if (typeof value === 'string') return value
@@ -702,7 +709,14 @@ const serializeLiteral = (value: unknown, fallbackText: string): string | number
   return fallbackText || null
 }
 
-const projectRangeCell = (cell: ExcelJS.Cell): string | number | boolean | null | { formula: string; value?: string | number | boolean | null } => {
+const projectRangeCell = (
+  cell: ExcelJS.Cell
+):
+  | string
+  | number
+  | boolean
+  | null
+  | { formula: string; value?: string | number | boolean | null } => {
   const formula = getFormula(cell.value)
   if (formula) {
     const result = getFormulaResult(cell.value)
@@ -717,7 +731,8 @@ const projectRangeCell = (cell: ExcelJS.Cell): string | number | boolean | null 
 const projectStyleCell = (
   cell: ExcelJS.Cell
 ): { bold?: boolean; fontColor?: string; fillColor?: string; numberFormat?: string } | null => {
-  const style: { bold?: boolean; fontColor?: string; fillColor?: string; numberFormat?: string } = {}
+  const style: { bold?: boolean; fontColor?: string; fillColor?: string; numberFormat?: string } =
+    {}
   if (cell.font?.bold) style.bold = true
   const fontColor = toExcelRgb(cell.font?.color?.argb)
   if (fontColor) style.fontColor = fontColor
@@ -799,7 +814,10 @@ const applyOperation = (input: {
     const expectedRows = range.bottom - range.top + 1
     const expectedColumns = range.right - range.left + 1
     const rowCount = operation.values.length
-    if (rowCount !== expectedRows || operation.values.some((row) => row.length !== expectedColumns)) {
+    if (
+      rowCount !== expectedRows ||
+      operation.values.some((row) => row.length !== expectedColumns)
+    ) {
       throw new Error(
         `set_range 的 values 行列必须与 range ${operation.range} 一致（${String(expectedRows)}x${String(expectedColumns)}）`
       )
@@ -1021,8 +1039,22 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       }
     }
     const beforeBytes = cachedBytes || (exists ? await readBytes(sourcePath) : undefined)
-    if (!state.baselineBytesByPath.has(sourcePath))
-      state.baselineBytesByPath.set(sourcePath, beforeBytes)
+    if (!state.baselineBytesByPath.has(sourcePath)) {
+      const existing = (await input.ctx.listFileChangeRecords({ runId: input.runId })).find(
+        (record) => record.path === sourcePath && record.status === 'applied'
+      )
+      state.baselineBytesByPath.set(
+        sourcePath,
+        existing
+          ? existing.operation === 'created'
+            ? undefined
+            : existing.beforeSnapshotPath
+              ? await readBytes(existing.beforeSnapshotPath)
+              : beforeBytes
+          : beforeBytes
+      )
+      if (existing) state.recordsByPath.set(sourcePath, existing)
+    }
     const workbook = beforeBytes ? await loadWorkbook(beforeBytes) : new ExcelJS.Workbook()
     const sheetLineage = new Map(
       state.sheetLineageByPath.get(sourcePath) ||
@@ -1066,7 +1098,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     const now = Date.now()
     const record = {
       id: changeId,
-        partnerId: input.partnerId,
+      partnerId: input.partnerId,
       runId: input.runId,
       status: 'applied' as const,
       capability: 'excel' as const,

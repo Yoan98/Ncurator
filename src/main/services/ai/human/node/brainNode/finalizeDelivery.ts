@@ -31,10 +31,16 @@ export const applyDeliverySideEffects = async (input: {
   cache: HumanRuntimeCache
   state: HumanState
   finalizing?: boolean
+  retainWorkingState?: boolean
 }): Promise<HumanState> => {
-  const docxApplyRecords = await input.ctx.applyDocxRunEdits()
-  const pptApplyRecords = (await input.cache.pptRuntime?.commitAll()) || []
-  const fileChangeRecords = await input.ctx.listFileChangeRecords({ runId: input.ctx.runId })
+  const docxApplyRecords = await input.ctx.applyDocxRunEdits({
+    retainState: input.retainWorkingState
+  })
+  await input.cache.pptRuntime?.commitAll()
+  const fileChangeRecords = await input.ctx.listFileChangeRecords({
+    runId: input.ctx.runId,
+    participatingOnly: true
+  })
   const fileChanges = buildFileChangesSummaryFromFileChangeRecords(fileChangeRecords)
 
   if (input.finalizing !== false) {
@@ -53,11 +59,12 @@ export const applyDeliverySideEffects = async (input: {
           taskId: input.state.task.taskId
         })
       : mergeArtifactRefs(input.state.execution.artifacts)
+  const deliveryRecords = fileChangeRecords
   const artifacts =
-    pptApplyRecords.length > 0
+    deliveryRecords.length > 0
       ? appendFileChangeArtifactsAndEmitEvents({
           existingArtifacts: docxArtifacts,
-          records: pptApplyRecords,
+          records: deliveryRecords,
           sendEvent: input.ctx.sendEvent,
           runId: input.ctx.runId,
           taskId: input.state.task.taskId

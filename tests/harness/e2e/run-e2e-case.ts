@@ -134,6 +134,7 @@ export type E2ETestRuntime = {
   }) => Promise<TestArtifact>
   collectSignals: () => Promise<E2ERuntimeSignals>
   restartApp: (input?: {
+    crash?: boolean
     prepareUserData?: (userDataDir: string) => Promise<void>
   }) => Promise<{ page: Page; electronApp: ElectronApplication }>
   registerResource: (resource: {
@@ -587,7 +588,11 @@ export const runE2ECase = async <TResult>(
         )
         const traceAbsolutePath = path.join(logDirArtifacts, traceRelativePath)
         await mkdir(path.dirname(traceAbsolutePath), { recursive: true })
-        await currentApp.close({ tracePath: traceAbsolutePath, preserveUserData: true })
+        await currentApp.close({
+          tracePath: traceAbsolutePath,
+          preserveUserData: true,
+          crash: input?.crash
+        })
         await captureArtifact({
           kind: 'trace',
           relativePath: traceRelativePath,

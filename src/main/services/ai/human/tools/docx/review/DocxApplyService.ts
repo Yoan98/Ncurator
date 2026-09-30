@@ -15,7 +15,10 @@ import { toAiFileChangeRecordFromDocxApply } from '../../../../utils/artifacts'
 import { RunDocxEditTracker } from './RunDocxEditTracker'
 import type { ResolvedDocxOpenTarget } from './types'
 import { calculateFileStats, fileExists } from './utils'
-import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../../../../wps/officeFileWriteNotify'
+import {
+  notifyOfficeFileWritten,
+  withOfficeFileWrite
+} from '../../../../../wps/officeFileWriteNotify'
 
 const FORCE_REVERT_WARNING =
   '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
@@ -30,7 +33,12 @@ export class DocxApplyService {
     this.editTracker = new RunDocxEditTracker(docxApplyStore)
   }
 
-  public beginRun(input: { runId: string; partnerId: string; inputText: string }): void {
+  public beginRun(input: {
+    runId: string
+    ownerRunId?: string
+    partnerId: string
+    inputText: string
+  }): void {
     this.editTracker.beginRun(input)
   }
 
@@ -49,6 +57,7 @@ export class DocxApplyService {
   }
 
   public async applyRunEdits(input: {
+    retainState?: boolean
     runId: string
     partnerId: string
   }): Promise<DocxApplyRecord[]> {
@@ -144,19 +153,7 @@ export class DocxApplyService {
   private async saveAiFileChangeRecord(record: DocxApplyRecord): Promise<void> {
     if (!this.aiFileChangeService) return
     const projected = toAiFileChangeRecordFromDocxApply(record)
-    const existing = await this.aiFileChangeService.getRecord({ changeId: record.id })
-    await this.aiFileChangeService.saveRecord(
-      existing.record
-        ? {
-            ...projected,
-            ...existing.record,
-            status: projected.status,
-            updatedAt: projected.updatedAt,
-            revertedAt: projected.revertedAt,
-            error: projected.error
-          }
-        : projected
-    )
+    await this.aiFileChangeService.saveRecord(projected)
   }
 
   public async resolveDocxOpenTarget(sourcePath: string): Promise<ResolvedDocxOpenTarget> {

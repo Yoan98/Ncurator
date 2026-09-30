@@ -1,7 +1,12 @@
 import { tool } from '@langchain/core/tools'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import type { AiToolCallResult, IpcJsonObject, JsonObject, JsonValue } from '../../../../../../shared/types'
+import type {
+  AiToolCallResult,
+  IpcJsonObject,
+  JsonObject,
+  JsonValue
+} from '../../../../../../shared/types'
 import type {
   BrowserActionCandidate,
   BrowserStagehandAction,
@@ -29,27 +34,8 @@ import {
 } from './httpPageFetch'
 import { isCancelledError } from '../../../utils/runFailure'
 
-const WEB_SEARCH_FETCH_TIMEOUT_MS = 70_000
 const WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS = 200
 const BROWSER_SCREENSHOT_BUCKET = 'browser-screenshots'
-
-const withTimeout = async <T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  message: string
-): Promise<T> => {
-  let timer: NodeJS.Timeout | undefined
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(message)), timeoutMs)
-      })
-    ])
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
-}
 
 const webSourceService = new WebSourceService()
 
@@ -110,9 +96,9 @@ const buildFetchFailureOutput = (input: {
         ? input.error.statusCode
         : undefined
   const requestedUrl =
-    details.requestedUrl
-    || (isHttpPageFetchError(input.error) ? input.error.requestedUrl : undefined)
-    || input.fallbackUrl
+    details.requestedUrl ||
+    (isHttpPageFetchError(input.error) ? input.error.requestedUrl : undefined) ||
+    input.fallbackUrl
   const finalUrl =
     details.finalUrl || (isHttpPageFetchError(input.error) ? input.error.finalUrl : undefined)
   return {
@@ -336,7 +322,11 @@ export const webToolFamily: ToolFamilyDefinition = {
               try {
                 const crawlPage = async (): Promise<WebSearchFetchOutput> =>
                   buildFetchOutput({
-                    result: await service.crawl({ url: crawlUrl, topic: crawlUrl })
+                    result: await service.crawl({
+                      url: crawlUrl,
+                      topic: crawlUrl,
+                      abortSignal: ctx.abortSignal
+                    })
                   })
 
                 const tryHttpPage = async (): Promise<WebSearchFetchOutput | null> => {
@@ -360,16 +350,16 @@ export const webToolFamily: ToolFamilyDefinition = {
                   payload = httpOnly
                 } else {
                   const httpResult = await tryHttpPage()
-                  if (httpResult && httpResult.markdown.length >= WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS) {
+                  if (
+                    httpResult &&
+                    httpResult.markdown.length >= WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS
+                  ) {
                     payload = httpResult
                   } else {
                     try {
-                      payload = await withTimeout(
-                        crawlPage(),
-                        WEB_SEARCH_FETCH_TIMEOUT_MS,
-                        'web_search fetch timed out'
-                      )
+                      payload = await crawlPage()
                     } catch (crawlError) {
+                      if (isCancelledError(crawlError)) throw crawlError
                       if (httpResult) {
                         payload = httpResult
                       } else {
@@ -384,6 +374,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                 )
                 return payload
               } catch (error) {
+                if (isCancelledError(error)) throw error
                 const payload = buildFetchFailureOutput({
                   error: error instanceof Error ? error : new Error(String(error)),
                   fallbackUrl: crawlUrl
@@ -395,7 +386,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                     toolName: WEB_SEARCH_TOOL_SPEC.name,
                     ok: false,
                     data: payload
-                })
+                  })
                 )
                 return payload
               }
@@ -403,7 +394,10 @@ export const webToolFamily: ToolFamilyDefinition = {
 
             const rawQuery = String(args.query || '').trim()
             try {
-              const searchResult = await service.search({ query: rawQuery })
+              const searchResult = await service.search({
+                query: rawQuery,
+                abortSignal: ctx.abortSignal
+              })
               if (searchResult.results.length === 0) {
                 const payload = { error: 'web_search 没有找到相关结果' }
                 session.fail(
@@ -424,6 +418,7 @@ export const webToolFamily: ToolFamilyDefinition = {
               )
               return payload
             } catch (error) {
+              if (isCancelledError(error)) throw error
               const payload = {
                 error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))
               }
@@ -479,10 +474,18 @@ export const webToolFamily: ToolFamilyDefinition = {
               let observeActions: BrowserActionCandidate[] | undefined
 
               if (args.action === 'list_tabs') {
-                result = await service.run({ action: 'list_tabs', ownerId, llmConfig, abortSignal, runId })
+                result = await service.run({
+                  action: 'list_tabs',
+                  ownerId,
+                  llmConfig,
+                  abortSignal,
+                  runId
+                })
               } else if (args.action === 'navigate') {
                 const tabIdArg =
-                  typeof args.tabId === 'string' && args.tabId.trim() ? args.tabId.trim() : undefined
+                  typeof args.tabId === 'string' && args.tabId.trim()
+                    ? args.tabId.trim()
+                    : undefined
                 result = await service.run({
                   action: 'navigate',
                   ownerId,

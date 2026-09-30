@@ -1,11 +1,14 @@
 import { tool } from '@langchain/core/tools'
 import type { ToolFamilyDefinition } from '../types'
 import {
+  DELEGATE_TO_SUBAGENT_TOOL_SPEC,
   ASK_USER_QUESTION_TOOL_SPEC,
   LEARN_SKILL_TOOL_SPEC,
   READ_IMAGE_TOOL_SPEC,
   UPDATE_PLAN_TOOL_SPEC
 } from './toolSpecs'
+import { createToolEventEmitter } from '../utils/toolEvents'
+import { withToolLifecycle } from '../utils/lifecycle'
 import { prepareImagesForMainModel } from './readImage'
 
 // agent-control 工具只用于让模型通过原生 tool call 表达控制意图（学习技能、更新计划），
@@ -46,6 +49,29 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
       schema: ASK_USER_QUESTION_TOOL_SPEC.inputSchema
     })
 
-    return [learnSkill, updatePlan, readImage, askUserQuestion]
+    const delegate = tool(
+      async (args) =>
+        await withToolLifecycle({
+          emitter: createToolEventEmitter({ ctx, runId: ctx.runId, stage: 'human_hand' }),
+          toolName: DELEGATE_TO_SUBAGENT_TOOL_SPEC.name,
+          args,
+          execute: async (session) => {
+            const children = await ctx.delegateToSubagent(args.tasks, session.toolCallId)
+            const result = {
+              toolName: DELEGATE_TO_SUBAGENT_TOOL_SPEC.name,
+              ok: true,
+              data: { children }
+            }
+            session.succeed(undefined, result)
+            return { children }
+          }
+        }),
+      {
+        name: DELEGATE_TO_SUBAGENT_TOOL_SPEC.name,
+        description: DELEGATE_TO_SUBAGENT_TOOL_SPEC.promptSpec.description,
+        schema: DELEGATE_TO_SUBAGENT_TOOL_SPEC.inputSchema
+      }
+    )
+    return [learnSkill, updatePlan, readImage, askUserQuestion, delegate]
   }
 }

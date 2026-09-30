@@ -24,12 +24,12 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 
 ## 2. 描述分层
 
-| 层 | 写什么 | 不写什么 |
-| --- | --- | --- |
-| `skill.description` | 该 skill 覆盖的能力域 | 工具调用顺序、跨工具编排 |
-| `tool promptSpec.description` | 单工具能力边界与限制 | 字段表、JSON 结构、跨工具下一步、先 A 后 B |
-| `inputSchema` 字段 `.describe()` | 参数语义、单位、缺省、格式、数量上限 | — |
-| `toolSchemas` / `outputTypes.ts` 输出 TS 类型 | 结构化结果字段语义（内部真相） | 不在 `promptSpec` 重复；不暴露给模型 |
+| 层                                            | 写什么                               | 不写什么                                   |
+| --------------------------------------------- | ------------------------------------ | ------------------------------------------ |
+| `skill.description`                           | 该 skill 覆盖的能力域                | 工具调用顺序、跨工具编排                   |
+| `tool promptSpec.description`                 | 单工具能力边界与限制                 | 字段表、JSON 结构、跨工具下一步、先 A 后 B |
+| `inputSchema` 字段 `.describe()`              | 参数语义、单位、缺省、格式、数量上限 | —                                          |
+| `toolSchemas` / `outputTypes.ts` 输出 TS 类型 | 结构化结果字段语义（内部真相）       | 不在 `promptSpec` 重复；不暴露给模型       |
 
 模型可见契约 = `promptSpec` + `inputSchema`（经 LangChain bindTools 暴露）。内部 TS 输出类型供执行层与契约测试，不经 prompt 暴露。
 
@@ -83,11 +83,11 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 ### 4.2 节点自有校验
 
-| 工具 | brain schema 校验 | 校验方 |
-|------|-------------------|--------|
-| `learn_skill` | **跳过** | `learning` 节点 |
-| `update_plan` | **跳过** | `plan` 节点 |
-| 其余 | `inputSchema.safeParse` | brain → 失败写 ToolMessage 反馈 |
+| 工具          | brain schema 校验       | 校验方                          |
+| ------------- | ----------------------- | ------------------------------- |
+| `learn_skill` | **跳过**                | `learning` 节点                 |
+| `update_plan` | **跳过**                | `plan` 节点                     |
+| 其余          | `inputSchema.safeParse` | brain → 失败写 ToolMessage 反馈 |
 
 跳过 schema 的工具仍走 `normalizeToolCallArgs`。
 
@@ -97,11 +97,11 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 工具执行 → 结构化 `ToolCallResult` → `modelResult.render*` → `renderedText` → **整段文本**统一判断：
 
-| 条件 | 行为 |
-|------|------|
-| > 51,200 UTF-8 bytes **或** > 2,000 行 | `ok: false`，提示缩小范围 |
-| 否则 > 32,000 字符 | 全文落盘 `userData/partners/{id}/runtime/toolresult/<runId>/` 目录，返回 head/tail 预览 + 路径 + `text_file_read` 指引 |
-| 否则 | 整段直出 ToolMessage |
+| 条件                                   | 行为                                                                                                                   |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| > 51,200 UTF-8 bytes **或** > 2,000 行 | `ok: false`，提示缩小范围                                                                                              |
+| 否则 > 32,000 字符                     | 全文落盘 `userData/partners/{id}/runtime/toolresult/<runId>/` 目录，返回 head/tail 预览 + 路径 + `text_file_read` 指引 |
+| 否则                                   | 整段直出 ToolMessage                                                                                                   |
 
 实现：`buildModelToolResultDelivery`（`shared/modelToolResult.ts`）。
 预览常量：`HEAD=6000` chars，`TAIL=2000` chars。
@@ -110,11 +110,11 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 以下限制在**工具执行层**，不属于上述三档阈值：
 
-| 类型 | 默认上限 |
-|------|----------|
-| 搜索类 match | 10 条 |
-| `text_file_read` | `startLine` / `lineCount` 分页 |
-| docx / ppt / pdf search | 各域 constants |
+| 类型                    | 默认上限                       |
+| ----------------------- | ------------------------------ |
+| 搜索类 match            | 10 条                          |
+| `text_file_read`        | `startLine` / `lineCount` 分页 |
+| docx / ppt / pdf search | 各域 constants                 |
 
 Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 terminal 工具 spec）。
 
@@ -124,23 +124,22 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 
 每个工具保留独立 `renderSuccess`，内部复用 `renderFamilies/` 共享块：
 
-| 族 | 典型工具 | 格式要点 |
-| --- | --- | --- |
-| **A** 纯 prose | 各类 edit / mutation | 单行确认，如文件已更新 |
-| **B** XML envelope | `text_file_read`、`pdf_read_pages`、`read_image` | `<file path="…">` + 行号或正文 |
-| **C** 终端流 + marker | `terminal_run`、`terminal_read` | 输出正文 + `[status: …]` 等方括号标记 |
-| **D** 分组纯文本 | search / list / outline；`web_search`（search） | 标题 + 分组列表；SERP 用 rank / title / url / snippet |
-| **E** Markdown/Web | `web_search`（fetch）、`browser_use`（extract） | 不可信内容前缀 + Markdown 正文 |
-
+| 族                    | 典型工具                                         | 格式要点                                              |
+| --------------------- | ------------------------------------------------ | ----------------------------------------------------- |
+| **A** 纯 prose        | 各类 edit / mutation                             | 单行确认，如文件已更新                                |
+| **B** XML envelope    | `text_file_read`、`pdf_read_pages`、`read_image` | `<file path="…">` + 行号或正文                        |
+| **C** 终端流 + marker | `terminal_run`、`terminal_read`                  | 输出正文 + `[status: …]` 等方括号标记                 |
+| **D** 分组纯文本      | search / list / outline；`web_search`（search）  | 标题 + 分组列表；SERP 用 rank / title / url / snippet |
+| **E** Markdown/Web    | `web_search`（fetch）、`browser_use`（extract）  | 不可信内容前缀 + Markdown 正文                        |
 
 ### 6.1 控制类工具
 
-| 工具 | 渲染要点 |
-|------|----------|
-| `learn_skill` | 由 `learning` 节点直接写 ToolMessage（loaded / duplicate / unknown / evicted 摘要），不走 `buildModelToolResultDelivery` |
-| `update_plan` | 由 `plan` 节点直接写 ToolMessage（计划项列表 `[status] title`），不走 `buildModelToolResultDelivery` |
-| `read_image` | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness 第 3.5 节） |
-| `ask_user_question` | 只询问会改变执行结果的信息；每次调用包含 1 至 3 个问题，选项具体互斥，用户始终可选择“其他，请填写”；
+| 工具                | 渲染要点                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `learn_skill`       | 由 `learning` 节点直接写 ToolMessage（loaded / duplicate / unknown / evicted 摘要），不走 `buildModelToolResultDelivery` |
+| `update_plan`       | 由 `plan` 节点直接写 ToolMessage（计划项列表 `[status] title`），不走 `buildModelToolResultDelivery`                     |
+| `read_image`        | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness 第 3.5 节）                                                   |
+| `ask_user_question` | 只询问会改变执行结果的信息；每次调用包含 1 至 3 个问题，选项具体互斥，用户始终可选择“其他，请填写”；                     |
 
 ### 6.2 写工具输出
 
@@ -172,15 +171,25 @@ hand 收到 call batch
 
 ---
 
+### 一次性派发与资源范围
+
+`delegate_to_subagent` 属于内置 `agent-control`，输入 `tasks` 长度 1–3，每项包含最多八字符的 `name` 和自足 `task`（背景、资料与交付要求）。工具内部调用公共 AiRunService 并行执行；输出只包含任务状态、精简结果、依据与产物路径，继续走现有 modelResult / 大小守卫。
+
+主子运行工具策略与执行链相同；子运行额外禁用再次派发、用户提问、定时任务管理。学习工具后策略仍生效；人工审批交回主伙伴。
+
+浏览器以执行范围隔离标签、发现和 CDP 客户端。后台创建不影响用户展示状态；控制释放后标签保留给主伙伴。sidecar 搜索和抓取统一 FIFO 串行，排队可取消且不计入提交后的执行超时；取消已提交请求不提前释放位置或杀死共享进程。
+
+受控文件记录从写入时使用 ownerRunId，相同路径复用记录和首次基线；Office 工作态覆盖读取到提交的排他范围。每批工具完成后刷新 DOCX/PPT 写回记录；终态释放临时工作态而保留记录/快照。子交付只汇总参与的文件，主交付汇总整个主 run。
+
 ## 8. 与测试 / 生成文档的关系
 
-| 文档 / 测试 | 职责 |
-|-------------|------|
-| 本文 | 设计原则与管道约束 |
-| `doc/ai-tool-prompt-audit.md` | 各工具 input/output/渲染活例子（按需生成，不入库） |
-| `doc/test-plan/ai-test.md` | tool / human 回归范围与 Oracle |
+| 文档 / 测试                                  | 职责                                                                                                  |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 本文                                         | 设计原则与管道约束                                                                                    |
+| `doc/ai-tool-prompt-audit.md`                | 各工具 input/output/渲染活例子（按需生成，不入库）                                                    |
+| `doc/test-plan/ai-test.md`                   | tool / human 回归范围与 Oracle                                                                        |
 | `tests/case/unit/ai/*-tool-contract.test.ts` | 已有 family 的轻量契约（schema + renderSuccess 存在性；覆盖 docx / pdf / ppt / text-file / terminal） |
-| `tests/case/ai/tool/**` | 领域工具行为与 terminal 契约 |
+| `tests/case/ai/tool/**`                      | 领域工具行为与 terminal 契约                                                                          |
 
 新增工具检查清单：
 
@@ -193,12 +202,12 @@ hand 收到 call batch
 
 ## 附录：关键代码索引
 
-| Concern | 路径 |
-|---------|------|
-| Registry | `src/main/services/ai/human/tools/registry.ts` |
-| 类型 | `src/main/services/ai/human/tools/types.ts` |
-| 投递管道 | `src/main/services/ai/human/shared/modelToolResult.ts` |
-| 阈值 / 落盘 | `src/main/services/ai/human/shared/toolResultPersistence.ts` |
-| 参数展开 | `src/main/services/ai/human/shared/toolArgsNormalize.ts` |
-| 渲染族 | `src/main/services/ai/human/shared/modelToolResultRenderers.ts`、`renderFamilies/` |
-| hand 执行 | `src/main/services/ai/human/node/handNode/index.ts` |
+| Concern     | 路径                                                                               |
+| ----------- | ---------------------------------------------------------------------------------- |
+| Registry    | `src/main/services/ai/human/tools/registry.ts`                                     |
+| 类型        | `src/main/services/ai/human/tools/types.ts`                                        |
+| 投递管道    | `src/main/services/ai/human/shared/modelToolResult.ts`                             |
+| 阈值 / 落盘 | `src/main/services/ai/human/shared/toolResultPersistence.ts`                       |
+| 参数展开    | `src/main/services/ai/human/shared/toolArgsNormalize.ts`                           |
+| 渲染族      | `src/main/services/ai/human/shared/modelToolResultRenderers.ts`、`renderFamilies/` |
+| hand 执行   | `src/main/services/ai/human/node/handNode/index.ts`                                |

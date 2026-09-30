@@ -1,3 +1,4 @@
+import { applyDeliverySideEffects } from '../brainNode/finalizeDelivery'
 import { randomUUID } from 'node:crypto'
 import type {
   ChatMessageImageRef,
@@ -95,6 +96,16 @@ const executeHandCalls = async (input: {
         args: toolCall.args
       })
     )
+    // Persist each tool's disk effects before the next tool can wait, fail or be cancelled.
+    if (input.cache.currentState) {
+      input.cache.currentState = await applyDeliverySideEffects({
+        ctx: input.ctx,
+        cache: input.cache,
+        state: input.cache.currentState,
+        finalizing: false,
+        retainWorkingState: true
+      })
+    }
   }
   return results
 }
@@ -398,6 +409,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       taskId: state.task.taskId,
       learnedSkillIds: state.skills.learnedSkillIds
     })
+    const readyState = input.cache.currentState || state
     input.cache.toolCallCount += results.length
 
     const toolTranscript = await appendToolMessages({
@@ -418,13 +430,13 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     )
 
     const artifacts = mergeArtifactRefs(
-      state.execution.artifacts,
+      readyState.execution.artifacts,
       extractArtifactRefsFromToolResults(results)
     )
     return returnToBrainAfterTrace({
       ctx: input.ctx,
       cache: input.cache,
-      state,
+      state: readyState,
       traceItems: results.map((result) => ({
         action: 'call_tool',
         publicNarrative: buildToolCallDisplayText(result),

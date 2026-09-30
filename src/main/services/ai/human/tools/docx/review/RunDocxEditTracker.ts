@@ -5,7 +5,7 @@ import type { DocxApplyRecord } from '../../../../../../../shared/types'
 import type { DocxApplyStore } from '../../../../../storage/domains/DocxApplyStore'
 import type { DocxChangedNode, DocxCreatedNode, DocxReplaySession } from '../types'
 import { getDocxWorkerClient } from '../worker/docxWorkerClient'
-import { materializeDocxProjectedArtifact } from './reviewSerializer'
+import { materializeDocxProjectedArtifact, materializeDocxNetReview } from './reviewSerializer'
 import type { RunDocxEditDocument } from './types'
 import { buildDocxChangeSummary, calculateFileStats, sanitizeFileName } from './utils'
 import { buildDocxApplyArtifactPaths } from './viewProjection'
@@ -13,6 +13,7 @@ import { projectReviewView } from './viewProjector'
 
 type RunDocxEditState = {
   partnerId: string
+  ownerRunId: string
   documentBySourcePath: Map<string, RunDocxEditDocument>
   sourcePathByDocId: Map<string, string>
 }
@@ -27,9 +28,15 @@ export class RunDocxEditTracker {
 
   public constructor(private readonly docxApplyStore: DocxApplyStore) {}
 
-  public beginRun(input: { runId: string; partnerId: string; inputText: string }): void {
+  public beginRun(input: {
+    runId: string
+    ownerRunId?: string
+    partnerId: string
+    inputText: string
+  }): void {
     this.runEdits.set(input.runId, {
       partnerId: input.partnerId,
+      ownerRunId: input.ownerRunId || input.runId,
       documentBySourcePath: new Map(),
       sourcePathByDocId: new Map()
     })
@@ -96,6 +103,7 @@ export class RunDocxEditTracker {
   }
 
   public async applyRunEdits(input: {
+    retainState?: boolean
     runId: string
     partnerId: string
   }): Promise<DocxApplyRecord[]> {
@@ -119,7 +127,7 @@ export class RunDocxEditTracker {
       return true
     })
     if (changedDocuments.length === 0) {
-      this.runEdits.delete(input.runId)
+      if (!input.retainState) this.runEdits.delete(input.runId)
       return []
     }
 
@@ -128,20 +136,56 @@ export class RunDocxEditTracker {
       for (const document of changedDocuments) {
         const record = await this.applyDocument({
           runId: input.runId,
+          ownerRunId: state.ownerRunId,
           partnerId: state.partnerId,
           document
         })
+        const existing = (
+          await this.docxApplyStore.listRecords({ partnerId: state.partnerId })
+        ).items.find(
+          (item) =>
+            item.run_id === state.ownerRunId &&
+            item.source_path === record.source_path &&
+            item.status === 'applied'
+        )
+        if (existing?.before_snapshot_path && existing.before_checksum !== record.before_checksum) {
+          const net = await materializeDocxNetReview({
+            sourceBuffer: await fs.readFile(existing.before_snapshot_path),
+            workingBuffer: await fs.readFile(record.source_path),
+            outPath: record.preview_diff_artifact_path
+          })
+          const stats = await calculateFileStats(record.preview_diff_artifact_path)
+          Object.assign(record, {
+            insert_count: net.insertCount,
+            delete_count: net.deleteCount,
+            change_count: net.insertCount + net.deleteCount,
+            preview_diff_checksum: stats.checksum,
+            preview_diff_byte_size: stats.byteSize
+          })
+        }
+        if (existing)
+          Object.assign(record, {
+            id: existing.id,
+            operation: existing.operation,
+            before_exists: existing.before_exists,
+            before_snapshot_path: existing.before_snapshot_path,
+            before_checksum: existing.before_checksum,
+            before_byte_size: existing.before_byte_size,
+            before_modified_at: existing.before_modified_at,
+            created_at: existing.created_at
+          })
         await this.docxApplyStore.saveRecord(record)
         records.push(record)
       }
     } finally {
-      this.runEdits.delete(input.runId)
+      if (!input.retainState) this.runEdits.delete(input.runId)
     }
 
     return records
   }
 
   private async applyDocument(input: {
+    ownerRunId: string
     runId: string
     partnerId: string
     document: RunDocxEditDocument
@@ -153,7 +197,7 @@ export class RunDocxEditTracker {
     const now = Date.now()
     const paths = buildDocxApplyArtifactPaths({
       partnerId: input.partnerId,
-      runId: input.runId,
+      runId: input.ownerRunId,
       applyId,
       sourceName: input.document.sourceName
     })
@@ -241,7 +285,7 @@ export class RunDocxEditTracker {
     return {
       id: applyId,
       partner_id: input.partnerId,
-      run_id: input.runId,
+      run_id: input.ownerRunId,
       status: 'applied',
       source_path: input.document.sourcePath,
       source_name: input.document.sourceName,

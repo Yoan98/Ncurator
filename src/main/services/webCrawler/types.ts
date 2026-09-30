@@ -42,8 +42,12 @@ export type WebSearchResult = {
 }
 
 export type WebCrawlerService = {
-  crawl: (input: { url: string; topic: string }) => Promise<WebCrawlerResult>
-  search: (input: { query: string }) => Promise<WebSearchResult>
+  crawl: (input: {
+    url: string
+    topic: string
+    abortSignal?: AbortSignal
+  }) => Promise<WebCrawlerResult>
+  search: (input: { query: string; abortSignal?: AbortSignal }) => Promise<WebSearchResult>
   close: () => Promise<void>
 }
 

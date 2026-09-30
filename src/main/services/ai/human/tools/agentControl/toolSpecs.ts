@@ -8,6 +8,7 @@ import {
   renderReadImageModelResult
 } from '../../shared/modelToolResultRenderers'
 import {
+  DELEGATE_TO_SUBAGENT_SCHEMA,
   LEARN_SKILL_SCHEMA,
   READ_IMAGE_SCHEMA,
   UPDATE_PLAN_SCHEMA,
@@ -95,7 +96,29 @@ export const READ_IMAGE_TOOL_SPEC: HumanToolSpec<
   modelResult: { renderSuccess: renderReadImageModelResult }
 }
 
+export const DELEGATE_TO_SUBAGENT_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof DELEGATE_TO_SUBAGENT_SCHEMA>,
+  'delegate_to_subagent',
+  'agent-control'
+> = {
+  name: 'delegate_to_subagent',
+  familyId: 'agent-control',
+  skillIds: ['agent-control'],
+  inputSchema: DELEGATE_TO_SUBAGENT_SCHEMA,
+  promptSpec: {
+    name: 'delegate_to_subagent',
+    description:
+      '将 1–3 项独立任务并行交给临时子 agent，再整合它们的结果。提供完整任务背景和资料路径；不复制聊天历史。子任务不能提问或再次派发，需要协助会交回。避免派发相互依赖或同时修改同一文件的任务。'
+  },
+  resolveExecutionMeta: createStaticExecutionMetaResolver({
+    mutability: 'mutating',
+    defaultResourceKey: 'subagent'
+  }),
+  modelResult: { renderSuccess: ({ data }) => JSON.stringify(data) }
+}
+
 export const AGENT_CONTROL_TOOL_SPECS = [
+  DELEGATE_TO_SUBAGENT_TOOL_SPEC,
   LEARN_SKILL_TOOL_SPEC,
   UPDATE_PLAN_TOOL_SPEC,
   READ_IMAGE_TOOL_SPEC,

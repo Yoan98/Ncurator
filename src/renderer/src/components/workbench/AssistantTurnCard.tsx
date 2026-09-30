@@ -290,7 +290,80 @@ const AssistantProcessThoughtView: React.FC<{
   )
 }
 
+const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
+  const children = group.subagents || []
+  const completed = children.filter((child) => child.status === 'completed').length
+  const statusText = {
+    running: '处理中',
+    completed: '已完成',
+    failed: '失败',
+    cancelled: '已停止',
+    blocked: '需要主伙伴处理',
+    interrupted: '已中断'
+  }
+  return (
+    <section
+      data-testid="subagent-group"
+      className="space-y-1 text-[13px] leading-[22px] text-[#37352F]"
+    >
+      <div className="flex items-center justify-between text-[14px] leading-7">
+        <span>分头处理</span>
+        <span className="text-[#9B9A97]">
+          已完成 {completed} / {children.length}
+        </span>
+      </div>
+      {children.map((child) => (
+        <details
+          key={child.childRunId}
+          data-testid="subagent-task"
+          data-child-run-id={child.childRunId}
+          data-status={child.status}
+          className="group/subagent"
+        >
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-[8px] outline-none focus-visible:ring-1 focus-visible:ring-[#9B9A97] [&::-webkit-details-marker]:hidden">
+            <HiChevronDown className="h-4 w-4 shrink-0 -rotate-90 text-[#9B9A97] transition-transform group-open/subagent:rotate-0" />
+            <span className="shrink-0">{child.name}</span>
+            <span className="min-w-0 flex-1 truncate text-[#9B9A97]">{child.task}</span>
+            <span
+              className={
+                child.status === 'failed' ? 'shrink-0 text-[#B3261E]' : 'shrink-0 text-[#9B9A97]'
+              }
+            >
+              {statusText[child.status]}
+            </span>
+          </summary>
+          <div className="space-y-1 py-1 pl-6">
+            {child.actions.map((action) => (
+              <div
+                key={action.id}
+                data-testid="subagent-action"
+                className={action.status === 'failed' ? 'text-[#B3261E]' : undefined}
+              >
+                <div className="flex justify-between gap-2">
+                  <span>{action.text}</span>
+                  <span className="shrink-0 text-[#9B9A97]">{statusText[action.status]}</span>
+                </div>
+                {action.feedback ? (
+                  <p className="whitespace-pre-wrap break-words text-[#9B9A97]">
+                    {action.feedback}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+            {child.result ? (
+              <p data-testid="subagent-result" className="whitespace-pre-wrap break-words">
+                {child.result}
+              </p>
+            ) : null}
+          </div>
+        </details>
+      ))}
+    </section>
+  )
+}
+
 const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
+  if (group.subagents?.length) return <SubagentGroupView group={group} />
   const isRunning = group.status === 'running'
   const groupText = getGroupText(group)
   const shouldShowIcon = group.kind === 'compaction' || group.kind === 'retry'
@@ -401,7 +474,11 @@ const buildAssistantTimeline = (input: {
 
   const timeline: AssistantTimelineEntry[] = []
   for (const entry of rawEntries) {
-    if (entry.kind === 'decision' || !isActivityToolGroup(entry.group)) {
+    if (
+      entry.kind === 'decision' ||
+      entry.group.subagents?.length ||
+      !isActivityToolGroup(entry.group)
+    ) {
       timeline.push(entry)
       continue
     }
@@ -728,9 +805,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
       <div className="space-y-4">
         {timeline.length > 0 || hasStreamingThought || reserveThinkingSlot || turn.startedAt ? (
-          <div
-            data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}
-          >
+          <div data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}>
             {turn.startedAt ? (
               turn.runFinished ? (
                 <button

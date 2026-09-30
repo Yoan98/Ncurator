@@ -1,3 +1,4 @@
+import { assertToolAllowed } from '../../../run/toolPolicy'
 import { randomUUID } from 'node:crypto'
 import type { JsonObject, UserQuestion } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
@@ -16,6 +17,7 @@ export const createHumanInteractionNode = (input: {
     input.ctx.checkCancelled()
     const action = state.execution.pendingRound?.nextAction
     if (!action || action.action !== 'interaction') return returnToBrain(state)
+    assertToolAllowed(input.ctx, 'ask_user_question')
     const { questions } = ASK_USER_QUESTION_SCHEMA.parse(action.args)
     emitToolProcessStarted({
       sendEvent: input.ctx.sendEvent,

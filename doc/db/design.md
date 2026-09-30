@@ -25,6 +25,7 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 - `document.active_generation_id` 只用于写后删旧 chunk 与孤儿清理，不进入检索 `where`。
 - 外键级联与无 CASCADE 绑定以当前 schema / migration 为准。
 
+
 ## SQLite Migration
 
 ### 当前边界
