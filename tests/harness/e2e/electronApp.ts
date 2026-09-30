@@ -171,20 +171,24 @@ export const pasteTextThroughElectronClipboard = async (
 ): Promise<boolean> => {
   const electronApp = electronApplicationByPage.get(page)
   if (!electronApp) return false
+  const pageWindow = await electronApp.browserWindow(page)
+  const windowId = await pageWindow.evaluate((window) => window.id)
+  await pageWindow.dispose()
 
-  return electronApp.evaluate(({ BrowserWindow, clipboard }, text) => {
-    const targetWindow =
-      BrowserWindow.getFocusedWindow() ||
-      BrowserWindow.getAllWindows().find((window) => !window.isDestroyed())
-    if (!targetWindow || targetWindow.isDestroyed() || targetWindow.webContents.isDestroyed()) {
-      return false
-    }
+  return electronApp.evaluate(
+    ({ BrowserWindow, clipboard }, input) => {
+      const targetWindow = BrowserWindow.fromId(input.windowId)
+      if (!targetWindow || targetWindow.isDestroyed() || targetWindow.webContents.isDestroyed()) {
+        return false
+      }
 
-    clipboard.writeText(text)
-    if (clipboard.readText() !== text) return false
-    targetWindow.webContents.paste()
-    return true
-  }, value)
+      clipboard.writeText(input.text)
+      if (clipboard.readText() !== input.text) return false
+      targetWindow.webContents.paste()
+      return true
+    },
+    { windowId, text: value }
+  )
 }
 
 export const queueE2ENativeDialogSelection = async (

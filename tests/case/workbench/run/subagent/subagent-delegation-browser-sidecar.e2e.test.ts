@@ -5,6 +5,8 @@ import { describe, it, expect } from 'vitest'
 import { runE2ECase, type E2ETestRuntime } from '../../../../harness/e2e/run-e2e-case'
 import {
   selectWorkbenchModel,
+  selectWorkbenchExecutionPermission,
+  selectWorkbenchResourceMenuItem,
   setupWorkbenchWithTempWorkspace,
   sendWorkbenchMessage,
   collectWorkbenchAiRunEvents,
@@ -89,7 +91,7 @@ const createSite = async () => {
     if (url.pathname === '/facts') {
       response.setHeader('content-type', 'text/html; charset=utf-8')
       response.end(
-        `<!doctype html><title>事实资料</title><main id="facts"></main><script>document.querySelector('#facts').textContent = '核验事实：${url.searchParams.get('marker') || '31415'}。' + '这是经页面脚本渲染的实际资料，请核对事实并记录来源。'.repeat(25); fetch('/render?marker=${url.searchParams.get('marker') || '31415'}')</script>`
+        `<!doctype html><title>事实资料</title><main><h1>事实核验资料</h1><p id="facts"></p></main><script>document.querySelector('#facts').textContent = '核验事实：${url.searchParams.get('marker') || '31415'}。' + '这是经页面脚本渲染的实际资料，请核对事实并记录来源。'.repeat(25); fetch('/render?marker=${url.searchParams.get('marker') || '31415'}')</script>`
       )
       return
     }
@@ -124,11 +126,12 @@ describe('subagent browser and sidecar real UI', () => {
         domain: 'workbench',
         suite: 'run',
         groups: ['subagent'],
-        description: '子任务独立标签、sidecar、展开回退、停止与崩溃续聊',
+        description: '子任务独立标签、sidecar、头像气泡与统一回退、停止与崩溃续聊',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',
+        extraEnv: { NCURATOR_WEB_SEARCH_LOOPBACK_FETCH: '0' },
         runMode: 'single',
         execute: async (runtime) => {
           const site = await createSite()
@@ -147,9 +150,35 @@ describe('subagent browser and sidecar real UI', () => {
             .filter({ hasText: primary })
             .click()
           await selectWorkbenchModel(runtime.page, setup.env.modelName)
+          await selectWorkbenchExecutionPermission(runtime.page, '完全访问')
           const config = path.join(setup.workspace.rootPath, 'subagent-checkout-config.ts')
           const baseline = await fs.readFile(config, 'utf8')
           const report = path.join(setup.workspace.rootPath, '网页交接.md')
+          const initialPanelToggle = getWorkbenchLocator(
+            runtime.page,
+            workbenchSelectors.contentPanelToggle
+          )
+          if ((await initialPanelToggle.getAttribute('aria-label')) === '展开右侧栏')
+            await initialPanelToggle.click()
+          const fileFilter = runtime.page.getByPlaceholder('筛选文件…')
+          if (!(await fileFilter.isVisible().catch(() => false))) {
+            const explorerToggle = getWorkbenchLocator(
+              runtime.page,
+              workbenchSelectors.workspaceExplorerToggle
+            )
+            if (await explorerToggle.isVisible().catch(() => false)) await explorerToggle.click()
+            else await selectWorkbenchResourceMenuItem(runtime, 'file')
+          }
+          await fileFilter.fill('subagent-checkout-config.ts')
+          await runtime.page.getByTitle('subagent-checkout-config.ts', { exact: true }).click()
+          const selectedResource = getWorkbenchPrefixLocator(
+            runtime.page,
+            workbenchSelectors.resourceTabPrefix
+          ).filter({ hasText: 'subagent-checkout-config.ts' })
+          await selectedResource
+            .locator('button[aria-current="page"]')
+            .waitFor({ state: 'visible' })
+          expect(await selectedResource.locator('button[aria-current="page"]').count()).toBe(1)
           const started = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
@@ -158,11 +187,48 @@ describe('subagent browser and sidecar real UI', () => {
           await waitUntil(async () =>
             (await updates(runtime, started)).some((event) => event.update.status === 'running')
           )
-          const childRow = runtime.page.getByTestId('subagent-task').first()
-          await childRow.locator('summary').click()
-          expect(await childRow.getAttribute('open')).not.toBeNull()
-          await childRow.locator('summary').click()
-          expect(await childRow.getAttribute('open')).toBeNull()
+          let previewChildRunId = ''
+          await waitUntil(async () => {
+            const action = (await updates(runtime, started)).find((event) =>
+              event.update.action?.text.trim()
+            )
+            previewChildRunId = action?.update.childRunId || ''
+            return Boolean(previewChildRunId)
+          })
+          const childRow = runtime.page.locator(
+            `[data-testid="subagent-task"][data-child-run-id="${previewChildRunId}"]`
+          )
+          expect(await childRow.locator('.nc-partner-avatar-animated').count()).toBe(1)
+          expect(await childRow.textContent()).toContain('干活中')
+          await childRow.hover()
+          await runtime.page
+            .locator('[data-testid="subagent-thought"]:visible')
+            .waitFor({ state: 'visible' })
+          await waitUntil(
+            async () =>
+              runtime.page
+                .locator('[data-testid="subagent-thought"]:visible')
+                .evaluate(
+                  (cloud) => Number(getComputedStyle(cloud.closest('.ant-tooltip')!).opacity) === 1
+                ),
+            10_000
+          )
+          await runtime.captureScreenshot({
+            name: 'subagent-cloud-running',
+            message: '运行中的横向头像列表与云朵气泡'
+          })
+          await runtime.page.mouse.move(0, 0)
+          await runtime.page
+            .locator('[data-testid="subagent-thought"]:visible')
+            .waitFor({ state: 'hidden' })
+          await childRow.focus()
+          await runtime.page
+            .locator('[data-testid="subagent-thought"]:visible')
+            .waitFor({ state: 'visible' })
+          await getWorkbenchLocator(runtime.page, workbenchSelectors.input).focus()
+          await runtime.page
+            .locator('[data-testid="subagent-thought"]:visible')
+            .waitFor({ state: 'hidden' })
           const panelToggle = getWorkbenchLocator(
             runtime.page,
             workbenchSelectors.contentPanelToggle
@@ -172,9 +238,60 @@ describe('subagent browser and sidecar real UI', () => {
           await getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.partnerItemPrefix)
             .filter({ hasText: secondary })
             .click()
+          await waitUntil(async () =>
+            getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.partnerItemPrefix)
+              .filter({ hasText: secondary })
+              .evaluate((row) => row.classList.contains('nc-sidebar-item-active'))
+          )
           await getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.partnerItemPrefix)
             .filter({ hasText: primary })
             .click()
+          await waitUntil(async () =>
+            getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.partnerItemPrefix)
+              .filter({ hasText: primary })
+              .evaluate((row) => row.classList.contains('nc-sidebar-item-active'))
+          )
+          let pageGeometry: Array<{ id: number; viewport: number[]; instance: string }> = []
+          await waitUntil(async () => {
+            pageGeometry = await runtime.electronApp.evaluate(async ({ webContents }, prefix) => {
+              const pages = webContents
+                .getAllWebContents()
+                .filter((contents) => contents.getURL() === `${prefix}/`)
+              return Promise.all(
+                pages.map(async (contents) => ({
+                  id: contents.id,
+                  ...(await contents.executeJavaScript(
+                    '({ viewport: [innerWidth, innerHeight], instance: sessionStorage.instance })'
+                  ))
+                }))
+              )
+            }, site.url)
+            return (
+              pageGeometry.length >= 2 &&
+              pageGeometry.every((page) => page.viewport.every((size) => size > 0))
+            )
+          }, 90_000)
+          runtime.signal({
+            name: 'subagent-page-geometry',
+            message: '独立后台标签保持有效 viewport',
+            data: pageGeometry
+          })
+          await waitUntil(async () => {
+            const finished = new Set(
+              (await updates(runtime, started))
+                .filter((event) => event.update.status !== 'running')
+                .map((event) => event.update.childRunId)
+            )
+            if (finished.size === 2) return true
+            expect(await panelToggle.getAttribute('aria-label')).toBe('展开右侧栏')
+            return false
+          }, 900_000)
+          await panelToggle.click()
+          await selectedResource
+            .locator('button[aria-current="page"]')
+            .waitFor({ state: 'visible' })
+          expect(await selectedResource.locator('button[aria-current="page"]').count()).toBe(1)
+          await panelToggle.click()
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             started,
@@ -185,6 +302,31 @@ describe('subagent browser and sidecar real UI', () => {
           expect(site.receipts).toContain('BETA_892')
           expect(site.instances.get('ALPHA_731')).not.toBe(site.instances.get('BETA_892'))
           expect(site.rendered).toEqual(expect.arrayContaining(['31415', '27182']))
+          const subagentEvents = await updates(runtime, started)
+          const webCallIds = new Set(
+            subagentEvents.flatMap((event) =>
+              event.update.action?.toolName === 'web_search' ? [event.update.action.id] : []
+            )
+          )
+          const childIo = (await runtime.collectSignals()).llmIoEntries
+            .map((entry) => entry.record)
+            .filter((record) => record.ownerRunId === subagentEvents[0].runId)
+          for (const marker of ['31415', '27182']) {
+            expect(
+              childIo.some((record) =>
+                record.requestWire?.messages.some(
+                  (message) =>
+                    message.role === 'tool' &&
+                    Boolean(message.toolCallId && webCallIds.has(message.toolCallId)) &&
+                    typeof message.content === 'string' &&
+                    message.content.includes(`核验事实：${marker}。`) &&
+                    message.content.includes('这是经页面脚本渲染的实际资料') &&
+                    !message.content.includes('document.querySelector') &&
+                    !message.content.includes('python3 -c')
+                )
+              )
+            ).toBe(true)
+          }
           expect(
             site.receipts.filter((value) => !['ALPHA_731', 'BETA_892'].includes(value))
           ).toHaveLength(0)
@@ -207,15 +349,51 @@ describe('subagent browser and sidecar real UI', () => {
           expect(reportText).toContain('31415')
           expect(reportText).toContain('27182')
           expect(reportText).toMatch(/https:\/\/docs.python.org/)
-          expect(await panelToggle.getAttribute('aria-label')).toBe('展开右侧栏')
           const processToggle = getWorkbenchPrefixLocator(
             runtime.page,
             workbenchSelectors.assistantProcessTogglePrefix
           ).last()
           await processToggle.click()
           expect(await runtime.page.getByTestId('subagent-task').count()).toBe(2)
-          await runtime.page.getByTestId('subagent-task').first().locator('summary').click()
-          expect(await runtime.page.getByTestId('subagent-action').count()).toBeGreaterThan(0)
+          const completedChild = runtime.page.locator(
+            `[data-testid="subagent-task"][data-child-run-id="${previewChildRunId}"]`
+          )
+          expect(await completedChild.textContent()).toContain('已干完')
+          expect(await completedChild.locator('.nc-partner-avatar-animated').count()).toBe(0)
+          await completedChild.hover()
+          await runtime.page
+            .locator('[data-testid="subagent-thought"]:visible')
+            .waitFor({ state: 'visible' })
+          const actionLines = runtime.page
+            .locator('[data-testid="subagent-thought"]:visible')
+            .getByTestId('subagent-action')
+          expect(await actionLines.count()).toBeGreaterThan(0)
+          expect(
+            await actionLines.evaluateAll((lines) =>
+              lines.every((line) => {
+                const style = getComputedStyle(line)
+                return style.textOverflow === 'ellipsis' && style.whiteSpace === 'nowrap'
+              })
+            )
+          ).toBe(true)
+          expect(await runtime.page.getByTestId('subagent-result').count()).toBe(0)
+          await waitUntil(
+            async () =>
+              runtime.page
+                .locator('[data-testid="subagent-thought"]:visible')
+                .evaluate(
+                  (cloud) => Number(getComputedStyle(cloud.closest('.ant-tooltip')!).opacity) === 1
+                ),
+            10_000
+          )
+          await runtime.captureScreenshot({
+            name: 'subagent-cloud-completed',
+            message: '完成后的公开行动文本和省略效果'
+          })
+          await runtime.page.mouse.move(0, 0)
+          await runtime.page
+            .locator('[data-testid="subagent-thought"]:visible')
+            .waitFor({ state: 'hidden' })
           expect(
             await getWorkbenchPrefixLocator(
               runtime.page,
@@ -271,9 +449,46 @@ describe('subagent browser and sidecar real UI', () => {
                   .getAttribute('data-status')
               ).toBe('completed')
             } else {
-              await getWorkbenchLocator(runtime.page, workbenchSelectors.cancelButton).click()
+              const loadingPages = await runtime.electronApp.evaluate(({ webContents }) =>
+                webContents
+                  .getAllWebContents()
+                  .filter(
+                    (contents) =>
+                      contents.isLoadingMainFrame() && !contents.getURL().startsWith('file:')
+                  )
+                  .map((contents) => contents.id)
+              )
+              expect(loadingPages.length).toBeGreaterThan(0)
+              await runtime.page.getByRole('button', { name: '停止本次运行', exact: true }).click()
+              await waitUntil(async () => {
+                const latest = new Map(
+                  (await updates(runtime, start)).map((event) => [
+                    event.update.childRunId,
+                    event.update.status
+                  ])
+                )
+                return (
+                  latest.size === 2 &&
+                  [...latest.values()].includes('cancelled') &&
+                  [...latest.values()].every((status) => status !== 'running')
+                )
+              })
               await waitUntil(async () =>
-                (await updates(runtime, start)).some((event) => event.update.status === 'cancelled')
+                runtime.electronApp.evaluate(
+                  ({ BrowserWindow, WebContentsView, webContents }, ids) =>
+                    ids.every((id) => {
+                      const contents = webContents.fromId(id)
+                      return (
+                        (!contents || !contents.isLoadingMainFrame()) &&
+                        !BrowserWindow.getAllWindows().some((window) =>
+                          window.contentView.children.some(
+                            (view) => view instanceof WebContentsView && view.webContents.id === id
+                          )
+                        )
+                      )
+                    }),
+                  loadingPages
+                )
               )
             }
             expect(await fs.readFile(saved, 'utf8')).toContain(crash ? 'SAVED_CRASH' : 'SAVED_STOP')

@@ -14,6 +14,7 @@ import {
   EMBEDDED_BROWSER_PAGE_CONTENT_POLL_MS,
   EMBEDDED_BROWSER_PAGE_CONTENT_WAIT_MS,
   EMBEDDED_BROWSER_PARTITION,
+  EMBEDDED_BROWSER_RELEASE_SCRIPT_TIMEOUT_MS,
   EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS
 } from './constants'
 import { BROWSER_RELOAD_CONSOLE_TOKEN, buildNetErrorDocumentHtml } from './netErrorPage'
@@ -838,6 +839,7 @@ export class BrowserEmbedService implements BrowserUseService {
     this.runTabMap.delete(normalizedRunId)
     for (const [tabId, scope] of this.childTabScopes)
       if (scope === normalizedRunId) this.childTabScopes.delete(tabId)
+    this.applyAllVisibility()
     if (!tabIds || tabIds.size === 0) return
 
     const hideScript = createHideCursorScript()
@@ -845,10 +847,21 @@ export class BrowserEmbedService implements BrowserUseService {
       [...tabIds].map(async (tabId) => {
         const runtime = this.tabs.get(tabId)
         if (!runtime?.view || runtime.view.webContents.isDestroyed()) return
-        await runtime.view.webContents.executeJavaScript(hideScript).catch(() => undefined)
+        const contents = runtime.view.webContents
+        if (!contents.getURL() || contents.getURL().startsWith('about:blank')) return
+        let timeout: ReturnType<typeof setTimeout> | undefined
+        try {
+          await Promise.race([
+            contents.executeJavaScript(hideScript).catch(() => undefined),
+            new Promise<void>((resolve) => {
+              timeout = setTimeout(resolve, EMBEDDED_BROWSER_RELEASE_SCRIPT_TIMEOUT_MS)
+            })
+          ])
+        } finally {
+          clearTimeout(timeout)
+        }
       })
     )
-    this.applyAllVisibility()
   }
 
   private trackRunTab(runId: string, tabId: string): void {
@@ -1061,10 +1074,12 @@ export class BrowserEmbedService implements BrowserUseService {
               width: Math.max(1, Math.round(this.bounds.width)),
               height: Math.max(1, Math.round(this.bounds.height))
             }
-          : { x: this.mainWindow.getContentBounds().width + 1, y: 0, width: 1280, height: 800 }
-        const becomingVisible = !runtime.visible || !runtime.attached
-        if (!runtime.attached) {
-          this.mainWindow.contentView.addChildView(runtime.view)
+          : { x: 0, y: 0, width: 1280, height: 800 }
+        const becomingVisible = (visible && !runtime.visible) || !runtime.attached
+        // Background pages stay inside the native surface, behind the app's own view.
+        // Moving them outside the window clips their viewport to zero on macOS.
+        if (!runtime.attached || runtime.visible !== visible) {
+          this.mainWindow.contentView.addChildView(runtime.view, visible ? undefined : 0)
           runtime.attached = true
         }
         runtime.view.setBounds(nextBounds)
@@ -1230,7 +1245,7 @@ export class BrowserEmbedService implements BrowserUseService {
       }
     }
     const stagehandModule = await import('@browserbasehq/stagehand')
-    const targetId = this.cdpEndpointService.registerTarget(
+    const targetId = await this.cdpEndpointService.registerTarget(
       view.webContents as CdpDebuggableContents
     )
     try {

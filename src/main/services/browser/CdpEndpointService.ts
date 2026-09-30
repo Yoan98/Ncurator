@@ -92,14 +92,20 @@ export class CdpEndpointService {
     }
   }
 
-  public registerTarget(contents: CdpDebuggableContents): string {
+  public async registerTarget(contents: CdpDebuggableContents): Promise<string> {
     if (this.closed) throw new Error('embedded_browser_cdp_unavailable: bridge closed')
     if (contents.isDestroyed()) throw new Error('embedded browser CDP target was destroyed')
     for (const target of this.targets.values()) {
       if (target.contents.id === contents.id) return target.targetId
     }
 
-    const targetId = randomUUID()
+    if (!contents.debugger.isAttached()) contents.debugger.attach('1.3')
+    const info = asRecord(await contents.debugger.sendCommand('Target.getTargetInfo'))
+    const targetId = readString(asRecord(info.targetInfo).targetId)
+    if (!targetId) throw new Error('embedded browser CDP target identity is unavailable')
+    if (this.closed || contents.isDestroyed())
+      throw new Error('embedded browser CDP target was destroyed')
+    if (this.targets.has(targetId)) return targetId
     const target: RegisteredTarget = {
       targetId,
       contents,

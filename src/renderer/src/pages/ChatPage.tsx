@@ -1041,6 +1041,7 @@ const ChatPage: React.FC = () => {
   const contentPanelRef = useRef<WorkbenchContentPanelState>(contentPanel)
   const tabWorkspacesRef = useRef<Record<string, WorkbenchTabWorkspaceState>>(tabWorkspaces)
   const contentPanelCollapsedRef = useRef(contentPanelCollapsed)
+  const partnerUiStatesRef = useRef<Record<string, PartnerUiStateV1>>({})
   const panelFallbackByKeyRef = useRef<Record<string, WorkbenchContentPanelState>>({})
   const uiStateReadyKeyRef = useRef<string | null>(null)
   const [uiStateReadyKey, setUiStateReadyKey] = useState<string | null>(null)
@@ -1085,6 +1086,7 @@ const ChatPage: React.FC = () => {
   const persistUiStateForKey = useCallback(
     (key: string, state: PartnerUiStateV1): Promise<void> => {
       if (!key) return Promise.resolve()
+      partnerUiStatesRef.current[key] = state
       const revision = (persistRevisionsRef.current[key] || 0) + 1
       persistRevisionsRef.current[key] = revision
       const existingRetry = persistRetryTimersRef.current[key]
@@ -1940,12 +1942,15 @@ const ChatPage: React.FC = () => {
         .then(async () => {
           try {
             await persistQueuesRef.current[partnerId]
+            const storedState =
+              partnerUiStatesRef.current[partnerId] ||
+              (await window.api.partnerOpen({ partnerId, limit: 1 })).uiState ||
+              createDefaultPartnerUiState({ mainModel: null })
             const active =
               currentPartnerIdRef.current === partnerId && uiStateReadyKeyRef.current === partnerId
             const currentState = active
               ? buildUiStateForKey(partnerId)
-              : (await window.api.partnerOpen({ partnerId, limit: 1 })).uiState ||
-                createDefaultPartnerUiState({ mainModel: null })
+              : partnerUiStatesRef.current[partnerId] || storedState
             const updated = update(currentState)
             tabWorkspacesRef.current = {
               ...tabWorkspacesRef.current,
@@ -2171,11 +2176,12 @@ const ChatPage: React.FC = () => {
     try {
       const opened = await window.api.partnerOpen({ partnerId, limit: 50 })
       if (partnerSwitchRequestRef.current !== requestId) return
-      applyPartnerUiState(partnerId, opened.uiState || null)
+      const uiState = partnerUiStatesRef.current[partnerId] || opened.uiState || null
+      applyPartnerUiState(partnerId, uiState)
       setActiveTimelineDayStart(null)
       pendingTimelineJumpDayRef.current = null
-      const restoredActiveTab = opened.uiState?.panel.tabs.find(
-        (tab) => tab.id === opened.uiState?.panel.activeTabId
+      const restoredActiveTab = uiState?.panel.tabs.find(
+        (tab) => tab.id === uiState?.panel.activeTabId
       )
       if (
         restoredActiveTab?.state.kind === 'apply_workspace' &&

@@ -14,6 +14,9 @@ export class SerialRequestQueue {
     return new Promise<T>((resolve, reject) => {
       const abort = (): void => {
         entry.cancelled = true
+        const pendingIndex = this.pending.indexOf(entry)
+        if (pendingIndex >= 0) this.pending.splice(pendingIndex, 1)
+        signal?.removeEventListener('abort', abort)
         reject(cancelledError())
       }
       const entry: QueueEntry = {

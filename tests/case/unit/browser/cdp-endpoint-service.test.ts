@@ -14,6 +14,7 @@ const APP_BOOT_SOURCE = readFileSync(
 )
 
 class FakeDebugger extends EventEmitter {
+  public readonly targetId = `native-${Math.random()}`
   public attached = false
   public commands: Array<{ method: string; params: unknown; sessionId?: string }> = []
 
@@ -31,6 +32,7 @@ class FakeDebugger extends EventEmitter {
 
   public async sendCommand(method: string, params?: unknown, sessionId?: string): Promise<unknown> {
     this.commands.push({ method, params, sessionId })
+    if (method === 'Target.getTargetInfo') return { targetInfo: { targetId: this.targetId } }
     if (method === 'Runtime.evaluate') {
       return { result: { type: 'string', value: 'ok' } }
     }
@@ -108,7 +110,10 @@ describe('CdpEndpointService bridge', () => {
       'https://example.com/page',
       'Demo'
     ) as unknown as CdpDebuggableContents
-    const targetId = service.registerTarget(contents)
+    const targetId = await service.registerTarget(contents)
+    expect(targetId).toBe(
+      contents.debugger instanceof FakeDebugger ? contents.debugger.targetId : ''
+    )
     const endpoint = await service.getEndpoint()
 
     expect(endpoint.browserWebSocketUrl.startsWith('ws://127.0.0.1:')).toBe(true)
@@ -141,7 +146,7 @@ describe('CdpEndpointService bridge', () => {
       'https://example.com/act',
       'Act'
     ) as unknown as CdpDebuggableContents
-    const targetId = service.registerTarget(contents)
+    const targetId = await service.registerTarget(contents)
     const endpoint = await service.getEndpoint()
     const socket = new WebSocket(endpoint.browserWebSocketUrl)
     await new Promise<void>((resolve, reject) => {
@@ -189,8 +194,12 @@ describe('CdpEndpointService bridge', () => {
 describe('scoped CDP clients', () => {
   it('isolates discovery, attach, fallback and target events across simultaneous clients', async () => {
     const service = createService()
-    const a = service.registerTarget(new FakeContents(101) as unknown as CdpDebuggableContents)
-    const b = service.registerTarget(new FakeContents(102) as unknown as CdpDebuggableContents)
+    const a = await service.registerTarget(
+      new FakeContents(101) as unknown as CdpDebuggableContents
+    )
+    const b = await service.registerTarget(
+      new FakeContents(102) as unknown as CdpDebuggableContents
+    )
     const socketA = new WebSocket((await service.getScopedEndpoint(a)).browserWebSocketUrl)
     const socketB = new WebSocket((await service.getScopedEndpoint(b)).browserWebSocketUrl)
     await Promise.all(

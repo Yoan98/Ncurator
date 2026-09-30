@@ -1,69 +1,11 @@
+import { getAssistantToolItemCopy } from '../../../../shared/assistantToolCopy'
+import { RUNTIME_TOOL_CATALOG, type RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 import { randomUUID } from 'node:crypto'
 import { MAX_CONCURRENT_SUBAGENTS } from '../constants'
 import type { AiRunDeps, AiRunStartPayload, AiRunState, AiTranscript, SubagentTask } from '../types'
 import type { ChatMessageLogRecord, SubagentUpdate } from '../../../../shared/types'
 import { terminalSessionManager } from '../human/tools/terminal/TerminalSessionManager'
 import { SubagentBlockedError } from './toolPolicy'
-
-const actionLabels: Record<string, string> = {
-  learn_skill: '学习任务技能',
-  update_plan: '更新任务计划',
-  read_image: '查看图片',
-  terminal_run: '执行命令',
-  terminal_read: '读取命令结果',
-  text_file_read: '读取文本文件',
-  text_file_search: '查找文本',
-  text_file_edit: '修改文本文件',
-  web_search: '查询网页资料',
-  browser_use: '操作网页',
-  docx_read_outline: '查看文档结构',
-  docx_read_nodes: '读取文档内容',
-  docx_search: '查找文档内容',
-  docx_content_edit: '编辑文档',
-  docx_format: '调整文档格式',
-  docx_table_edit: '编辑文档表格',
-  docx_comments_revisions: '处理文档修订',
-  excel_read: '读取工作表',
-  excel_edit: '编辑工作表',
-  ppt_read_outline: '查看演示文稿结构',
-  ppt_read_slides: '读取幻灯片',
-  ppt_search: '查找幻灯片',
-  ppt_edit: '编辑演示文稿',
-  pdf_outline: '查看 PDF 结构',
-  pdf_read_pages: '读取 PDF',
-  pdf_search: '查找 PDF',
-  kb_search: '查询知识库',
-  kb_list_documents: '查看资料目录',
-  image_generate: '生成图片'
-}
-
-const actionText = (toolName: string, input: object): string => {
-  let label = actionLabels[toolName] || '执行工具'
-  if (toolName === 'browser_use' && 'action' in input && typeof input.action === 'string') {
-    label =
-      (
-        {
-          navigate: '打开网页',
-          list_tabs: '查看自己的标签',
-          observe: '查看页面操作',
-          act: '操作网页',
-          extract: '提取网页内容',
-          screenshot: '查看页面截图',
-          scroll: '滚动页面',
-          back: '返回上一页'
-        } as Record<string, string>
-      )[input.action] || label
-  }
-  if (toolName === 'web_search' && 'type' in input && input.type === 'fetch') label = '读取网页资料'
-  for (const key of ['instruction', 'commandExplanation', 'query', 'url', 'sourcePath']) {
-    if (key in input) {
-      const value = Reflect.get(input, key)
-      if (typeof value === 'string' && value.trim())
-        return `${label}：${value.trim().replace(/\s+/g, ' ')}`.slice(0, 180)
-    }
-  }
-  return label
-}
 
 export const createMemoryTranscript = (
   partnerId: string,
@@ -124,6 +66,7 @@ export const createSubagentDispatcher = (
           let updates = Promise.resolve()
           let blocker: string | undefined
           const actions = new Map<string, string>()
+          let publicToolText = ''
           const publish = (update: SubagentUpdate): Promise<void> => {
             const next = updates.then(async () => {
               await deps.chatMessageLogStore.appendBatch({
@@ -173,19 +116,34 @@ export const createSubagentDispatcher = (
                   needParent('子任务需要人工审批，请由主伙伴继续处理'),
                 requestUserQuestion: async () => needParent('子任务需要用户协助，请由主伙伴询问'),
                 sendEvent: (event) => {
-                  // Only public tool actions are persisted. Brain text, skills, plans and lifecycle remain local.
-                  if (event.type === 'tool_call_started') {
-                    const text = actionText(event.toolName, event.input)
+                  // The thought event is public assistant text accompanying this round of tool calls.
+                  // Raw reasoning deltas, skill state and lifecycle remain local.
+                  if (
+                    event.type === 'assistant_process_group_started' &&
+                    event.display.kind === 'thinking'
+                  ) {
+                    publicToolText = ''
+                  } else if (event.type === 'assistant_process_thought') {
+                    publicToolText = event.text
+                  } else if (event.type === 'tool_call_started') {
+                    const toolName = Object.prototype.hasOwnProperty.call(
+                      RUNTIME_TOOL_CATALOG,
+                      event.toolName
+                    )
+                      ? (event.toolName as RuntimeToolName)
+                      : 'unnamed'
+                    const text =
+                      publicToolText ||
+                      getAssistantToolItemCopy(toolName, 'running', event.input)
+                        .detail.map((segment) => segment.text)
+                        .join('')
                     actions.set(event.toolCallId, text)
                     void publish({
                       ...base,
                       action: {
                         id: event.toolCallId,
                         toolName: event.toolName,
-                        text:
-                          actions.get(event.toolCallId) ||
-                          actionLabels[event.toolName] ||
-                          '执行工具',
+                        text: actions.get(event.toolCallId) || '',
                         status: 'running'
                       }
                     })
@@ -195,10 +153,7 @@ export const createSubagentDispatcher = (
                       action: {
                         id: event.toolCallId,
                         toolName: event.toolName,
-                        text:
-                          actions.get(event.toolCallId) ||
-                          actionLabels[event.toolName] ||
-                          '执行工具',
+                        text: actions.get(event.toolCallId) || '',
                         status: event.error || event.result?.ok === false ? 'failed' : 'completed',
                         feedback:
                           event.error ||

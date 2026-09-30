@@ -624,11 +624,15 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     request: WebCrawlerSidecarRequest,
     signal?: AbortSignal
   ): Promise<JsonObject> {
-    return await this.queue.enqueue(() => this.submitRequest(request), signal)
+    return await this.queue.enqueue(() => this.submitRequest(request, signal), signal)
   }
 
-  private async submitRequest(request: WebCrawlerSidecarRequest): Promise<JsonObject> {
+  private async submitRequest(
+    request: WebCrawlerSidecarRequest,
+    signal?: AbortSignal
+  ): Promise<JsonObject> {
     const child = await this.ensureChild()
+    if (signal?.aborted) throw Object.assign(new Error('已取消'), { code: 'CANCELLED' })
     return await new Promise<JsonObject>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(request.id)

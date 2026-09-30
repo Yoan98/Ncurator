@@ -10,7 +10,7 @@ human graph 的消息与上下文设计约束。修改 `src/main/services/ai/hum
 
 `AiTranscript` 提供相同 append/load 契约：主运行读写 SQLite，子运行读写独立内存记录（独立 seq、计划、技能、compaction checkpoint）。相同投影/预算/压缩入口消费两种适配。子完整日志随实例释放；名称、ID 和任务放在派发输入/事件，不改变固定 System。模型配置在派发时继承父运行已解析快照；工具顺序保持稳定，缓存命中仍由供应商决定。
 
-子运行只向父侧持久化 `subagent_updated` annotation：名字、任务、状态、工具行动与有界结果。回答流、thinking、skill、plan、compaction 和子终态不直接投递到父状态。annotation 不参与模型上下文；所有子任务收口后通过一条父 ToolMessage 投递结果。子 I/O 保持实际 runId，并记录 ownerRunId / parentToolCallId 供诊断关联。
+子运行只向父侧持久化 `subagent_updated` annotation：名字、任务、状态、工具行动与有界结果。行动文本优先复用该轮工具调用附带的公开 assistant 文本；无附带说明时复用公共工具过程文案，不生成新的模型摘要。Main 与 Renderer 共用工具过程文案映射，只保存最终可读文本而不保存子完整工具入参；交付正文不进入气泡。回答流、thinking、skill、plan、compaction 和子终态不直接投递到父状态。annotation 不参与模型上下文；所有子任务收口后通过一条父 ToolMessage 投递结果。子 I/O 保持实际 runId，并记录 ownerRunId / parentToolCallId 供诊断关联。
 
 子任务禁用派发、提问和定时任务管理，策略同时用于工具目录/绑定及执行入口；人工审批需求直接交回主伙伴。子实例 finally 释放 worker、浏览器控制、终端与文件会话锁，不能删除已持久化的产物。相同路径的文档工作态在同一执行者内排他持有；跨执行冲突明确交回串行处理，避免持有多个文件时相互等待。
 

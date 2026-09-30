@@ -68,7 +68,8 @@ export const fetchHttpPage = async (url: string): Promise<WebSearchFetchOutput> 
   const html = await response.text()
   const $ = cheerio.load(html)
   const title = $('title').first().text().trim() || undefined
-  const markdown = normalizePageText($('body').text() || $.root().text())
+  $('script, style, noscript, template').remove()
+  const markdown = normalizePageText($('body').text())
   if (!markdown) {
     throw new Error('网页正文为空')
   }

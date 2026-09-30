@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { BrowserWindow } from 'electron'
 import { BrowserEmbedService } from '../../../../src/main/services/browser/BrowserEmbedService'
 import { BROWSER_CURSOR_OVERLAY_ID } from '../../../../src/main/services/browser/BrowserActionVisualizer'
 import { AiRunResourceManager } from '../../../../src/main/services/ai/run/AiRunResourceManager'
@@ -26,7 +27,7 @@ const createMockCdpEndpointService = (): CdpEndpointService =>
     dispose: vi.fn()
   }) as unknown as CdpEndpointService
 
-const createMockMainWindow = () =>
+const createMockMainWindow = (): BrowserWindow =>
   ({
     isDestroyed: vi.fn().mockReturnValue(false),
     on: vi.fn(),
@@ -37,7 +38,14 @@ const createMockMainWindow = () =>
       removeChildView: vi.fn()
     },
     getContentBounds: vi.fn().mockReturnValue({ x: 0, y: 0, width: 1000, height: 800 })
-  }) as any
+  }) as unknown as BrowserWindow
+
+const getBrowserInternals = (service: BrowserEmbedService) =>
+  service as unknown as {
+    tabs: Map<string, object>
+    runTabMap: Map<string, Set<string>>
+    trackRunTab: (runId: string, tabId: string) => void
+  }
 
 describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
   it('releases cursor on registered tabs when releaseRun is called', async () => {
@@ -61,6 +69,7 @@ describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
         setVisible: vi.fn(),
         webContents: {
           isDestroyed: () => false,
+          getURL: () => 'https://example.com',
           executeJavaScript: executeJsMock
         }
       },
@@ -71,11 +80,11 @@ describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
     }
 
     // Access private properties for targeted unit testing
-    const tabsMap = (service as any).tabs as Map<string, any>
+    const tabsMap = getBrowserInternals(service).tabs
     tabsMap.set('tab-1', tabRuntime)
 
     // Simulate trackRunTab
-    ;(service as any).trackRunTab('run-123', 'tab-1')
+    getBrowserInternals(service).trackRunTab('run-123', 'tab-1')
 
     // Release the run
     await service.releaseRun('run-123')
@@ -120,12 +129,39 @@ describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
       restoring: false
     }
 
-    const tabsMap = (service as any).tabs as Map<string, any>
+    const tabsMap = getBrowserInternals(service).tabs
     tabsMap.set('tab-2', tabRuntime)
-    ;(service as any).trackRunTab('run-456', 'tab-2')
+    getBrowserInternals(service).trackRunTab('run-456', 'tab-2')
     await service.releaseRun('run-456')
 
     expect(executeJsMock).not.toHaveBeenCalled()
+  })
+
+  it('detaches background views when cursor cleanup cannot finish', async () => {
+    const mainWindow = createMockMainWindow()
+    const service = new BrowserEmbedService(
+      mainWindow,
+      createMockCdpEndpointService(),
+      createMockStateStore()
+    )
+    const executeJavaScript = vi.fn(() => new Promise<void>(() => {}))
+    const view = {
+      setBounds: vi.fn(),
+      setVisible: vi.fn(),
+      webContents: {
+        isDestroyed: () => false,
+        getURL: () => 'https://example.com',
+        executeJavaScript
+      }
+    }
+    const internals = getBrowserInternals(service)
+    internals.tabs.set('pending-page', { view, attached: true, visible: false })
+    internals.trackRunTab('pending-run', 'pending-page')
+    await service.releaseRun('pending-run')
+    expect(internals.runTabMap.has('pending-run')).toBe(false)
+    expect(mainWindow.contentView.removeChildView).toHaveBeenCalledWith(view)
+    expect(view.setVisible).toHaveBeenLastCalledWith(false)
+    expect(executeJavaScript).toHaveBeenCalledOnce()
   })
 
   it('integrates with AiRunResourceManager for lifecycle coordination', async () => {

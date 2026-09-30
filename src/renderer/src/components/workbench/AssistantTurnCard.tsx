@@ -1,4 +1,7 @@
-﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Tooltip } from 'antd'
+import PartnerAvatar from './PartnerAvatar'
+import { PARTNER_AVATAR_SHAPES, PARTNER_AVATAR_COLORS } from '../../../../shared/types'
 import { FaSpider } from 'react-icons/fa'
 import { PiBrowsers, PiEyes } from 'react-icons/pi'
 import { TbMoodConfuzed } from 'react-icons/tb'
@@ -290,75 +293,83 @@ const AssistantProcessThoughtView: React.FC<{
   )
 }
 
+const subagentAvatar = (runId: string) => {
+  let seed = 2166136261
+  for (const character of runId) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619)
+  seed >>>= 0
+  return {
+    shape: PARTNER_AVATAR_SHAPES[seed % PARTNER_AVATAR_SHAPES.length],
+    color: PARTNER_AVATAR_COLORS[(seed >>> 8) % PARTNER_AVATAR_COLORS.length]
+  }
+}
+
 const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
-  const children = group.subagents || []
-  const completed = children.filter((child) => child.status === 'completed').length
   const statusText = {
-    running: '处理中',
-    completed: '已完成',
-    failed: '失败',
+    running: '干活中',
+    completed: '已干完',
+    failed: '没干成',
     cancelled: '已停止',
-    blocked: '需要主伙伴处理',
+    blocked: '待主伙伴接手',
     interrupted: '已中断'
   }
   return (
-    <section
-      data-testid="subagent-group"
-      className="space-y-1 text-[13px] leading-[22px] text-[#37352F]"
-    >
-      <div className="flex items-center justify-between text-[14px] leading-7">
-        <span>分头处理</span>
-        <span className="text-[#9B9A97]">
-          已完成 {completed} / {children.length}
-        </span>
-      </div>
-      {children.map((child) => (
-        <details
-          key={child.childRunId}
-          data-testid="subagent-task"
-          data-child-run-id={child.childRunId}
-          data-status={child.status}
-          className="group/subagent"
-        >
-          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-[8px] outline-none focus-visible:ring-1 focus-visible:ring-[#9B9A97] [&::-webkit-details-marker]:hidden">
-            <HiChevronDown className="h-4 w-4 shrink-0 -rotate-90 text-[#9B9A97] transition-transform group-open/subagent:rotate-0" />
-            <span className="shrink-0">{child.name}</span>
-            <span className="min-w-0 flex-1 truncate text-[#9B9A97]">{child.task}</span>
-            <span
-              className={
-                child.status === 'failed' ? 'shrink-0 text-[#B3261E]' : 'shrink-0 text-[#9B9A97]'
-              }
-            >
-              {statusText[child.status]}
-            </span>
-          </summary>
-          <div className="space-y-1 py-1 pl-6">
-            {child.actions.map((action) => (
-              <div
-                key={action.id}
-                data-testid="subagent-action"
-                className={action.status === 'failed' ? 'text-[#B3261E]' : undefined}
-              >
-                <div className="flex justify-between gap-2">
-                  <span>{action.text}</span>
-                  <span className="shrink-0 text-[#9B9A97]">{statusText[action.status]}</span>
+    <div data-testid="subagent-group" className="flex flex-wrap items-center gap-x-5 gap-y-2 py-1">
+      {(group.subagents || []).map((child) => {
+        const actions = child.actions.filter((action) => action.text.trim())
+        return (
+          <Tooltip
+            key={child.childRunId}
+            placement="topLeft"
+            trigger={['hover', 'focus']}
+            arrow={false}
+            color="transparent"
+            overlayClassName="nc-subagent-thought-tooltip"
+            mouseEnterDelay={0.15}
+            title={
+              actions.length ? (
+                <div data-testid="subagent-thought" className="nc-subagent-thought-cloud">
+                  <svg
+                    className="nc-subagent-thought-outline"
+                    viewBox="0 0 264 110"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                  >
+                    <path d="M30 94C9 94 1 74 11 60C0 45 10 25 30 24C36 5 60 2 74 14C86 0 109 0 120 13C139 0 161 5 169 18C189 6 210 15 214 28C240 22 259 38 254 57C270 74 254 97 232 96C220 111 195 108 184 98C166 112 143 109 131 99C113 112 89 107 81 97C65 111 42 107 30 94Z" />
+                  </svg>
+                  <div className="nc-subagent-thought-lines">
+                    {actions.map((action) => (
+                      <div key={action.id} data-testid="subagent-action" className="truncate">
+                        {action.text}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                {action.feedback ? (
-                  <p className="whitespace-pre-wrap break-words text-[#9B9A97]">
-                    {action.feedback}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-            {child.result ? (
-              <p data-testid="subagent-result" className="whitespace-pre-wrap break-words">
-                {child.result}
-              </p>
-            ) : null}
-          </div>
-        </details>
-      ))}
-    </section>
+              ) : null
+            }
+          >
+            <button
+              type="button"
+              data-testid="subagent-task"
+              data-child-run-id={child.childRunId}
+              data-status={child.status}
+              aria-label={`${child.name}，${statusText[child.status]}`}
+              className="flex items-center gap-1.5 rounded-lg py-1 pr-1 text-left text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-[#9B9A97]"
+            >
+              <PartnerAvatar
+                {...subagentAvatar(child.childRunId)}
+                size={32}
+                animated={child.status === 'running'}
+                animationSeed={child.childRunId}
+              />
+              <span className="max-w-[8em] truncate text-[#37352F]">{child.name}</span>
+              <span className={child.status === 'failed' ? 'text-[#B3261E]' : 'text-[#9B9A97]'}>
+                {statusText[child.status]}
+              </span>
+            </button>
+          </Tooltip>
+        )
+      })}
+    </div>
   )
 }
 

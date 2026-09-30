@@ -65,7 +65,7 @@ export class ElectronWebCrawlerBrowserHost {
 
   public constructor(private readonly cdpEndpointService: CdpEndpointService) {}
 
-  public getConnection(): Promise<WebCrawlerCdpConnection> {
+  public async getConnection(): Promise<WebCrawlerCdpConnection> {
     if (this.closed) {
       throw new Error('Electron web crawler browser host is closed')
     }
@@ -74,7 +74,11 @@ export class ElectronWebCrawlerBrowserHost {
       this.closeView()
       throw error
     })
-    return this.connectionPromise
+    const connection = await this.connectionPromise
+    if (this.view && this.view.webContents.getURL() !== connection.contextMarkerUrl) {
+      await waitForWebContentsLoad(this.view.webContents, connection.contextMarkerUrl)
+    }
+    return connection
   }
 
   public async close(): Promise<void> {
@@ -129,7 +133,7 @@ export class ElectronWebCrawlerBrowserHost {
     hostWindow.contentView.addChildView(view)
     view.setBounds(WEB_CRAWLER_HOST_VIEW_BOUNDS)
     await waitForWebContentsLoad(view.webContents, contextMarkerUrl)
-    this.registeredTargetId = this.cdpEndpointService.registerTarget(
+    this.registeredTargetId = await this.cdpEndpointService.registerTarget(
       view.webContents as CdpDebuggableContents
     )
     const endpoint = await this.cdpEndpointService.getScopedEndpoint(this.registeredTargetId)
