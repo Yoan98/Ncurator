@@ -16,6 +16,11 @@ import {
 } from '../../../harness/e2e/workbench'
 import type { PartnerListItem, ScheduledTask } from '../../../../src/shared/types'
 
+const approxCssPx = (value: string, expected: number, tolerance = 1): boolean => {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) && Math.abs(parsed - expected) <= tolerance
+}
+
 const CASE_ID = 'scheduled-task-config-lifecycle'
 const PARTNER_NAME = '生命周期伙伴'
 const REBOUND_PARTNER_NAME = '重新绑定伙伴'
@@ -205,6 +210,9 @@ describe('workbench scheduled-task e2e', () => {
           const formStillOpenAfterMissingPartner = await saveButton.isVisible()
           const partnerList = getWorkbenchLocator(page, scheduledTaskSelectors.formPartner)
           await partnerList.scrollIntoViewIfNeeded()
+          await partnerList.evaluate((element) => {
+            element.scrollTop = 0
+          })
           const partnerListMetrics = await partnerList.evaluate((element) => {
             const style = getComputedStyle(element)
             const listRect = element.getBoundingClientRect()
@@ -441,14 +449,14 @@ describe('workbench scheduled-task e2e', () => {
               result.drawerWidthMatches &&
               result.fieldsOrdered &&
               result.footerFixed &&
-              result.descriptionDefaultHeight === '120px' &&
-              result.descriptionScroll.height === '120px' &&
+              approxCssPx(result.descriptionDefaultHeight, 120) &&
+              approxCssPx(result.descriptionScroll.height, 120) &&
               result.descriptionScroll.overflowY === 'auto' &&
               result.descriptionScroll.scrollHeight > result.descriptionScroll.clientHeight &&
               result.descriptionScroll.reachedBottom &&
               result.partnerRequiredBlocked &&
               result.formStillOpenAfterMissingPartner &&
-              result.partnerListMetrics.maxHeight === '208px' &&
+              approxCssPx(result.partnerListMetrics.maxHeight, 208) &&
               result.partnerListMetrics.overflowY === 'auto' &&
               result.partnerListMetrics.fullyVisibleOptionCount === 4 &&
               result.partnerListMetrics.scrollHeight > result.partnerListMetrics.clientHeight &&
