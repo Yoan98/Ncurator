@@ -9,21 +9,21 @@
 </p>
 
 <p align="center">
-  <a href="https://www.ncurator.com/zh">官网</a> ·
-  <a href="https://www.ncurator.com/zh/manual">使用手册</a> ·
+  <a href="https://www.guanzhangai.cn/zh">官网（国内）</a> ·
+  <a href="https://www.ncurator.com/zh">官网（海外）</a> ·
+  <a href="https://www.guanzhangai.cn/zh/manual">使用手册</a> ·
   <a href="./README.en.md">English</a>
 </p>
 
 <p align="center">
-  <a href="https://download.ncurator.com/downloads/latest/windows-x64.exe">下载 Windows</a> ·
-  <a href="https://download.ncurator.com/downloads/latest/macos-arm64.dmg">下载 macOS（Apple 芯片）</a> ·
-  <a href="https://download.ncurator.com/downloads/latest/macos-x64.dmg">下载 macOS（Intel 芯片）</a>
+  <a href="https://www.guanzhangai.cn/api/download/windows-x64">下载 Windows</a> ·
+  <a href="https://www.guanzhangai.cn/api/download/mac-arm64">下载 macOS（Apple 芯片）</a>
 </p>
 
 <div align="center">
   <video controls muted loop playsinline width="100%" poster="https://www.ncurator.com/media/ncurator-customer-meeting-poster.jpg" aria-label="馆长真实产品演示">
     <source src="https://www.ncurator.com/media/ncurator-customer-meeting.mp4" type="video/mp4" />
-    你的浏览器不支持视频播放，请前往<a href="https://www.ncurator.com/zh">官网观看演示</a>。
+    你的浏览器不支持视频播放，请前往<a href="https://www.guanzhangai.cn/zh">官网观看演示</a>。
   </video>
 </div>
 
@@ -70,7 +70,7 @@
 2. 在馆长中添加模型服务地址和 API Key。
 3. 创建工作空间，配置可供馆长使用的本地目录；需要知识库时下载向量模型并更新索引。
 
-完整配置、视觉模型和 macOS 安装说明见[官方使用手册](https://www.ncurator.com/zh/manual)。
+完整配置、视觉模型和 macOS 安装说明见[官方使用手册](https://www.guanzhangai.cn/zh/manual)（海外镜像：[ncurator.com](https://www.ncurator.com/zh/manual)）。
 
 ## 浏览器插件
 

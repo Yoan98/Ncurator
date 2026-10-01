@@ -9,21 +9,21 @@
 </p>
 
 <p align="center">
-  <a href="https://www.ncurator.com/en">Website</a> ·
-  <a href="https://www.ncurator.com/en/manual">Manual</a> ·
+  <a href="https://www.guanzhangai.cn/zh">Official site (China)</a> ·
+  <a href="https://www.ncurator.com/zh">International site</a> ·
+  <a href="https://www.guanzhangai.cn/zh/manual">Manual</a> ·
   <a href="./README.md">中文</a>
 </p>
 
 <p align="center">
-  <a href="https://download.ncurator.com/downloads/latest/windows-x64.exe">Download for Windows</a> ·
-  <a href="https://download.ncurator.com/downloads/latest/macos-arm64.dmg">Download for macOS (Apple silicon)</a> ·
-  <a href="https://download.ncurator.com/downloads/latest/macos-x64.dmg">Download for macOS (Intel)</a>
+  <a href="https://www.guanzhangai.cn/api/download/windows-x64">Download for Windows</a> ·
+  <a href="https://www.guanzhangai.cn/api/download/mac-arm64">Download for macOS (Apple silicon)</a>
 </p>
 
 <div align="center">
   <video controls muted loop playsinline width="100%" poster="https://www.ncurator.com/media/ncurator-customer-meeting-poster.jpg" aria-label="Ncurator product demo">
     <source src="https://www.ncurator.com/media/ncurator-customer-meeting.mp4" type="video/mp4" />
-    Your browser does not support video playback. Watch the demo on the <a href="https://www.ncurator.com/en">official website</a>.
+    Your browser does not support video playback. Watch the demo on the <a href="https://www.guanzhangai.cn/zh">official website</a>.
   </video>
 </div>
 
@@ -70,7 +70,7 @@ You can select a main model and a vision model separately. Vision models can rea
 2. Add a model endpoint and API key in Ncurator.
 3. Create a workspace and configure the local folders Ncurator can use. To use the knowledge base, download a vector model and update the index.
 
-See the [official manual](https://www.ncurator.com/en/manual) for setup details, vision models, and macOS installation help.
+See the [official manual](https://www.guanzhangai.cn/zh/manual) for setup details, vision models, and macOS installation help (overseas mirror: [ncurator.com](https://www.ncurator.com/zh/manual)).
 
 ## Browser extension
 
