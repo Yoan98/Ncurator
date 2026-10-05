@@ -1,5 +1,10 @@
 import fs from 'node:fs/promises'
 import JSZip from 'jszip'
+import {
+  readReviewPart,
+  reviewRuns,
+  storyText
+} from '../../../../harness/backend/docxReviewAssertions'
 import { describe, it } from 'vitest'
 import type { DocxApplyRecord } from '../../../../../src/shared/types'
 import {
@@ -26,21 +31,19 @@ const packageXml = async (filePath: string, partName: string): Promise<string> =
   return await part.async('text')
 }
 
-const count = (value: string, needle: string): number => value.split(needle).length - 1
-
-describe('ai tool docx v2 apply and diff backend', () => {
-  it('docx-v2-apply-diff', async () => {
+describe('ai tool docx apply and diff backend', () => {
+  it('docx-apply-diff', async () => {
     await runBackendCase({
-      caseId: 'docx-v2-apply-diff',
+      caseId: 'docx-apply-diff',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 DOCX v2 Source 到 Working 净 Diff、apply 预览和 checkpoint 回退。',
+      description: '验证 DOCX Source 到 Working 净 Diff、apply 预览和 checkpoint 回退。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const sourcePath = await writeTestDocxFile(runtime.workspaceRoot, 'v2-apply.docx', [
+        const sourcePath = await writeTestDocxFile(runtime.workspaceRoot, 'apply.docx', [
           { type: 'paragraph', text: 'Version A' },
           { type: 'paragraph', text: 'Keep this paragraph' },
           {
@@ -66,25 +69,25 @@ describe('ai tool docx v2 apply and diff backend', () => {
           '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Header A</w:t></w:r></w:p></w:hdr>'
         )
         await fs.writeFile(sourcePath, await sourceZip.generateAsync({ type: 'nodebuffer' }))
-        const stylePath = await writeTestDocxFile(runtime.workspaceRoot, 'v2-style.docx', [
+        const stylePath = await writeTestDocxFile(runtime.workspaceRoot, 'style.docx', [
           { type: 'paragraph', text: 'Style package' }
         ])
         const restoredStylePath = await writeTestDocxFile(
           runtime.workspaceRoot,
-          'v2-style-restored.docx',
+          'style-restored.docx',
           [{ type: 'paragraph', text: 'Style restored' }]
         )
         const restoredCommentPath = await writeTestDocxFile(
           runtime.workspaceRoot,
-          'v2-comment-restored.docx',
+          'comment-restored.docx',
           [{ type: 'paragraph', text: 'Comment restored' }]
         )
-        const restoredPath = await writeTestDocxFile(runtime.workspaceRoot, 'v2-restored.docx', [
+        const restoredPath = await writeTestDocxFile(runtime.workspaceRoot, 'restored.docx', [
           { type: 'paragraph', text: 'Restore A' }
         ])
         const batchFormatPath = await writeRichTestDocxFile(
           runtime.workspaceRoot,
-          'v2-batch-format.docx',
+          'batch-format.docx',
           [
             {
               type: 'paragraph',
@@ -224,18 +227,18 @@ describe('ai tool docx v2 apply and diff backend', () => {
           })
 
           const records = await harness.ctx.applyDocxRunEdits()
-          const record = records.find((candidate) => candidate.source_name === 'v2-apply.docx')
-          if (!record) throw new Error('expected v2-apply.docx apply record')
+          const record = records.find((candidate) => candidate.source_name === 'apply.docx')
+          if (!record) throw new Error('expected apply.docx apply record')
           const diffXml = await documentXml(record.preview_diff_artifact_path)
           const diffHeaderXml = await packageXml(
             record.preview_diff_artifact_path,
             'word/header1.xml'
           )
-          const styleRecord = records.find((candidate) => candidate.source_name === 'v2-style.docx')
+          const styleRecord = records.find((candidate) => candidate.source_name === 'style.docx')
           if (!styleRecord) throw new Error('expected package-only style apply record')
           const styleDiffXml = await documentXml(styleRecord.preview_diff_artifact_path)
           const batchFormatRecord = records.find(
-            (candidate) => candidate.source_name === 'v2-batch-format.docx'
+            (candidate) => candidate.source_name === 'batch-format.docx'
           )
           if (!batchFormatRecord) throw new Error('expected batch format apply record')
           const batchFormatDiffXml = await documentXml(batchFormatRecord.preview_diff_artifact_path)
@@ -250,6 +253,24 @@ describe('ai tool docx v2 apply and diff backend', () => {
             batchFormatDiffXml,
             finalXml,
             revert,
+            accepted: storyText(
+              await readReviewPart(await fs.readFile(record.preview_diff_artifact_path)),
+              true
+            ),
+            rejected: storyText(
+              await readReviewPart(await fs.readFile(record.preview_diff_artifact_path)),
+              false
+            ),
+            headerRuns: reviewRuns(
+              await readReviewPart(
+                await fs.readFile(record.preview_diff_artifact_path),
+                'word/header1.xml'
+              )
+            ),
+            batchRuns: reviewRuns(
+              await readReviewPart(await fs.readFile(batchFormatRecord.preview_diff_artifact_path))
+            ),
+            styleRecord,
             revertedMatchesSource: Buffer.compare(before, await fs.readFile(sourcePath)) === 0
           }
         } finally {
@@ -262,29 +283,42 @@ describe('ai tool docx v2 apply and diff backend', () => {
           result.records
             .map((item) => item.source_name)
             .sort()
-            .join(',') === 'v2-apply.docx,v2-batch-format.docx,v2-style.docx' &&
+            .join(',') === 'apply.docx,batch-format.docx,style.docx' &&
             record.status === 'applied' &&
-            count(result.diffXml, 'Version A') === 1 &&
-            count(result.diffXml, 'Version B') === 0 &&
-            count(result.diffXml, 'Version C') === 1 &&
+            result.rejected[0] === 'Version A' &&
+            !result.rejected.includes('Version B') &&
+            result.accepted[0] === 'Version C' &&
             result.diffXml.includes('w:fill="FDECEC"') &&
             result.diffXml.includes('w:fill="E9F7EF"') &&
             result.diffXml.includes('Single operation') &&
-            result.diffHeaderXml.includes('Header A') &&
-            result.diffHeaderXml.includes('Header B') &&
+            result.headerRuns
+              .filter((r) => r.kind !== 'inserted')
+              .map((r) => r.text)
+              .join('') === 'Header A' &&
+            result.headerRuns
+              .filter((r) => r.kind !== 'deleted')
+              .map((r) => r.text)
+              .join('') === 'Header B' &&
             result.diffHeaderXml.includes('w:fill="FDECEC"') &&
             result.diffHeaderXml.includes('w:fill="E9F7EF"') &&
-            result.styleDiffXml.includes('文档级变更') &&
+            !result.styleDiffXml.includes('文档级变更') &&
+            result.styleRecord.change_count === 1 &&
+            result.styleRecord.insert_count === 0 &&
+            result.styleRecord.delete_count === 0 &&
             result.batchFormatDiffXml.includes('First') &&
             result.batchFormatDiffXml.includes('Second') &&
-            count(result.batchFormatDiffXml, 'w:fill="E9F7EF"') >= 2 &&
+            result.batchRuns
+              .filter((r) => r.kind === 'formatted')
+              .map((r) => r.text)
+              .join('') === 'FirstSecond' &&
+            result.batchRuns.some((r) => r.text === ' gap ' && !r.kind) &&
             !result.finalXml.includes('w:fill="FDECEC"') &&
             !result.finalXml.includes('w:fill="E9F7EF"') &&
             result.revert.success === true &&
             result.revertedMatchesSource,
           {
-            name: 'docx-v2-apply-diff-keeps-only-source-and-final-state',
-            message: 'DOCX v2 应生成净 Diff、跳过恢复原值文档，并可从 checkpoint 回退。',
+            name: 'docx-apply-diff-keeps-only-source-and-final-state',
+            message: 'DOCX 应生成净 Diff、跳过恢复原值文档，并可从 checkpoint 回退。',
             data: {
               record,
               recordNames: result.records.map((item) => item.source_name),

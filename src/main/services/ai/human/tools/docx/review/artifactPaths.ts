@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { getPartnerRuntimeDir } from '../../../../../assets/WorkspaceAssetService'
 import { sanitizeFileNameForPath } from '../../../../utils/fileNamePolicy'
 
@@ -14,6 +15,7 @@ export const buildDocxApplyArtifactPaths = (input: {
   runId: string
   applyId: string
   sourceName: string
+  sourcePath: string
 }): DocxApplyArtifactPaths => {
   const workDir = path.join(getPartnerRuntimeDir(input.partnerId), 'file-changes', input.runId)
   const baseName = sanitizeFileNameForPath({
@@ -24,6 +26,9 @@ export const buildDocxApplyArtifactPaths = (input: {
     workDir,
     workingArtifactPath: path.join(workDir, `${input.applyId}-working-${baseName}`),
     diffArtifactPath: path.join(workDir, `${input.applyId}-diff-${baseName}`),
-    beforeSnapshotPath: path.join(workDir, `${input.applyId}-before-${baseName}`)
+    beforeSnapshotPath: path.join(
+      workDir,
+      `${createHash('sha256').update(path.resolve(input.sourcePath)).digest('hex').slice(0, 24)}-before-${baseName}`
+    )
   }
 }

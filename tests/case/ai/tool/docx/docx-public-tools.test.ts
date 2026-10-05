@@ -32,10 +32,10 @@ type MutationResult = {
 const nodeText = (node: DocxPublicReadRootNode): string => JSON.stringify(node)
 const isEmptyResult = (result: MutationResult): boolean => Object.keys(result).length === 0
 
-describe('ai tool docx v2 backend', () => {
-  it('docx-v2-public-tools', async () => {
+describe('ai tool docx backend', () => {
+  it('docx-public-tools', async () => {
     await runBackendCase({
-      caseId: 'docx-v2-public-tools',
+      caseId: 'docx-public-tools',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
@@ -44,7 +44,7 @@ describe('ai tool docx v2 backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const sourcePath = await writeTestDocxFile(runtime.workspaceRoot, 'docx-v2.docx', [
+        const sourcePath = await writeTestDocxFile(runtime.workspaceRoot, 'docx.docx', [
           { type: 'paragraph', text: 'Alpha paragraph' },
           { type: 'paragraph', text: 'Second paragraph' },
           {
@@ -62,12 +62,12 @@ describe('ai tool docx v2 backend', () => {
             ]
           }
         ])
-        const imagePath = path.join(runtime.workspaceRoot, 'docx-v2-image.png')
-        const createdPath = path.join(runtime.workspaceRoot, 'docx-v2-created.docx')
-        const createdTablePath = path.join(runtime.workspaceRoot, 'docx-v2-created-table.docx')
+        const imagePath = path.join(runtime.workspaceRoot, 'docx-image.png')
+        const createdPath = path.join(runtime.workspaceRoot, 'docx-created.docx')
+        const createdTablePath = path.join(runtime.workspaceRoot, 'docx-created-table.docx')
         const pureImageDocxPath = await writeTestDocxFile(
           runtime.workspaceRoot,
-          'docx-v2-pure-image.docx',
+          'docx-pure-image.docx',
           [{ type: 'paragraph', text: '' }]
         )
         await fs.writeFile(
@@ -256,7 +256,7 @@ describe('ai tool docx v2 backend', () => {
                 imagePath,
                 widthCm: 1,
                 heightCm: 1,
-                altText: 'DOCX v2 test image'
+                altText: 'DOCX test image'
               }
             ]
           })
@@ -271,7 +271,7 @@ describe('ai tool docx v2 backend', () => {
               imagePath,
               widthCm: 1.5,
               heightCm: 1.5,
-              altText: 'Replaced DOCX v2 test image'
+              altText: 'Replaced DOCX test image'
             }
           })
           const visualMove = await harness.invoke<MutationResult>('docx_content_edit', {
@@ -407,12 +407,12 @@ describe('ai tool docx v2 backend', () => {
             JSON.stringify(result.readAfter.nodes).includes('"type":"visual"') &&
             JSON.stringify(result.readAfter.nodes).includes('"imagePath"') &&
             JSON.stringify(result.readAfter.nodes).includes(result.visualNodeId) &&
-            JSON.stringify(result.readAfter.nodes).includes('Replaced DOCX v2 test image') &&
+            JSON.stringify(result.readAfter.nodes).includes('Replaced DOCX test image') &&
             JSON.stringify(result.visualSearch.matches[0]?.node).includes('"type":"visual"') &&
             JSON.stringify(result.visualSearch.matches[0]?.node).includes('"imagePath"'),
           {
-            name: 'docx-v2-tools-share-one-working-session',
-            message: 'DOCX v2 工具应共享 Working 文档，连续调用后 nodeId 保持稳定且结果可回读。',
+            name: 'docx-tools-share-one-working-session',
+            message: 'DOCX 工具应共享 Working 文档，连续调用后 nodeId 保持稳定且结果可回读。',
             data: result
           }
         )

@@ -16,9 +16,9 @@ const pixel = Buffer.from(
   'base64'
 )
 
-describe('DOCX v2 operation matrix', () => {
+describe('DOCX operation matrix', () => {
   it('executes the remaining content, format, table, media, comment, and revision operations', async () => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-operation-matrix-v2-'))
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-operation-matrix-'))
     const filePath = path.join(tempDir, 'matrix.docx')
     const imagePath = path.join(tempDir, 'image.png')
     try {

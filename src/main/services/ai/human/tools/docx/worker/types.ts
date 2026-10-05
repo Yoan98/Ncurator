@@ -21,7 +21,6 @@ export type DocxWorkerAction =
   | 'get_nodes_by_ids'
   | 'get_nodes_by_range'
   | 'get_nodes_by_index_range'
-  | 'get_replay_snapshot_xml'
   | 'get_annotations'
   | 'search'
   | 'get_visual'
@@ -34,12 +33,6 @@ export type DocxWorkerRequest =
       requestId: string
       runId: string
       action: 'get_annotations'
-      payload: { docId: string }
-    }
-  | {
-      requestId: string
-      runId: string
-      action: 'get_replay_snapshot_xml'
       payload: { docId: string }
     }
   | {
@@ -161,11 +154,6 @@ export type DocxWorkerSuccessPayload =
         revisionId: string
         kind: 'insert' | 'delete' | 'move_from' | 'move_to'
       }>
-    }
-  | {
-      action: 'get_replay_snapshot_xml'
-      packageFingerprint: string
-      nodes: Array<{ nodeId: string; rawXml: string }>
     }
   | {
       action: 'get_visual'

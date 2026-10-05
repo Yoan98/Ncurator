@@ -28,7 +28,7 @@ const createStubAiRunContext = (): AiRunContext =>
     requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
     loadMessageLog: async () => [],
     appendMessageLog: async () => undefined,
-    trackDocxOpen: () => {},
+    trackDocxOpen: async () => {},
     trackDocxChanges: () => {},
     resolveDocxOpenTarget: async () => {
       throw new Error('resolveDocxOpenTarget should not be called in tool executor unit tests')

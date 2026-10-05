@@ -1,479 +1,61 @@
-import { diffArrays } from 'diff'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
-import type JSZip from 'jszip'
-import { childElements, firstChildElement, isElementNode } from '../adapters/ooxml/dom'
-import { buildDocumentNodeIndex, loadDocxBundle } from '../adapters/ooxml/nodeIndex'
-import type { DocxEditableNode, DocxVisualDescriptor, IndexedNode } from '../adapters/ooxml/types'
-import { isRootNode } from '../adapters/ooxml/types'
+import { XMLSerializer } from '@xmldom/xmldom'
+import { loadDocxBundle } from '../adapters/ooxml/nodeIndex'
 import { findNewDocxValidationProblems, validateDocxBuffer } from '../adapters/ooxml/validator'
-import { createNodeElementFromSpec, createParagraphElementFromSpec } from '../utils/specDom'
-import type { DocxNodeSpec, DocxReplayNode, DocxReplaySession } from '../types'
-import { projectCommittedView, projectReviewView } from './viewProjector'
+import { buildDocxNetReview } from './netReview'
+import type { DocxNetReview } from './netReview'
+import { REVIEW } from './documentModel'
 
-const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-
-type RevisionKind = 'inserted' | 'deleted'
-
-const ensureDirForFile = async (filePath: string): Promise<void> => {
-  await fs.mkdir(path.dirname(filePath), { recursive: true })
-}
-
-const setWordAttribute = (node: Element, localName: string, value: string): void => {
-  node.setAttribute(`w:${localName}`, value)
-}
-
-const cloneElement = (node: Element): Element => node.cloneNode(true) as Element
-
-const clearChildren = (node: Element): void => {
-  while (node.firstChild) {
-    node.removeChild(node.firstChild)
-  }
-}
-
-const getOrCreateChild = (node: Element, localName: string): Element => {
-  const existing = firstChildElement(node, localName)
-  if (existing) return existing
-  const created = node.ownerDocument.createElementNS(WORD_NS, `w:${localName}`)
-  node.insertBefore(created, node.firstChild)
-  return created
-}
-
-const styleRunForRevision = (run: Element, kind: RevisionKind): void => {
-  const rPr = getOrCreateChild(run, 'rPr')
-  childElements(rPr)
-    .filter(
-      (child) =>
-        child.localName === 'color' || child.localName === 'shd' || child.localName === 'strike'
+/** Sole production review path: immutable owner baseline versus the real final package. */
+export const materializeDocxReview = async (input: {
+  sourceBuffer: Buffer
+  workingBuffer: Buffer
+  outPath: string
+  created?: boolean
+}): Promise<DocxNetReview> => {
+  const source = await loadDocxBundle(input.sourceBuffer),
+    working = await loadDocxBundle(input.workingBuffer)
+  const result = await buildDocxNetReview(source, working, input.created),
+    serializer = new XMLSerializer()
+  const parts = new Map(working.stories.map((part) => [part.partName, part.dom]))
+  for (const [name, document] of parts) {
+    // Word requires drawing ids to be unique even when an old/new object is shown twice.
+    let drawingId = 1
+    for (const node of Array.from(document.getElementsByTagName('*'))) {
+      if (['docPr', 'cNvPr'].includes(node.localName) && node.hasAttribute('id'))
+        node.setAttribute('id', String(drawingId++))
+    }
+    document.documentElement.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:ncr', REVIEW)
+    if (result.summaries.length)
+      document.documentElement.setAttributeNS(
+        REVIEW,
+        'ncr:documentChanges',
+        JSON.stringify(result.summaries)
+      )
+    document.documentElement.setAttributeNS(
+      'http://www.w3.org/2000/xmlns/',
+      'xmlns:mc',
+      'http://schemas.openxmlformats.org/markup-compatibility/2006'
     )
-    .forEach((child) => rPr.removeChild(child))
-  if (kind === 'deleted') {
-    const strike = run.ownerDocument.createElementNS(WORD_NS, 'w:strike')
-    const color = run.ownerDocument.createElementNS(WORD_NS, 'w:color')
-    const shade = run.ownerDocument.createElementNS(WORD_NS, 'w:shd')
-    setWordAttribute(color, 'val', 'B42318')
-    setWordAttribute(shade, 'fill', 'FDECEC')
-    rPr.appendChild(strike)
-    rPr.appendChild(color)
-    rPr.appendChild(shade)
-    return
+    const ignorable = document.documentElement.getAttribute('mc:Ignorable') || ''
+    document.documentElement.setAttributeNS(
+      'http://schemas.openxmlformats.org/markup-compatibility/2006',
+      'mc:Ignorable',
+      [...new Set([...ignorable.split(/\s+/).filter(Boolean), 'ncr'])].join(' ')
+    )
+    working.zip.file(name, serializer.serializeToString(document))
   }
-
-  const color = run.ownerDocument.createElementNS(WORD_NS, 'w:color')
-  const shade = run.ownerDocument.createElementNS(WORD_NS, 'w:shd')
-  setWordAttribute(color, 'val', '166534')
-  setWordAttribute(shade, 'fill', 'E9F7EF')
-  rPr.appendChild(color)
-  rPr.appendChild(shade)
-}
-
-const applyRevisionToRuns = (element: Element, kind: RevisionKind): void => {
-  const children = Array.from({ length: element.childNodes.length })
-    .map((_, index) => element.childNodes.item(index))
-    .filter(Boolean)
-
-  children.forEach((child) => {
-    if (!isElementNode(child)) return
-    if (child.localName === 'r') {
-      styleRunForRevision(child, kind)
-      return
-    }
-    applyRevisionToRuns(child, kind)
-  })
-}
-
-const getRunText = (run: Element): string =>
-  Array.from({ length: run.childNodes.length })
-    .map((_, index) => run.childNodes.item(index))
-    .filter(Boolean)
-    .map((child) => {
-      if (!isElementNode(child)) return child.textContent || ''
-      if (child.localName === 't') return child.textContent || ''
-      return getRunText(child)
-    })
-    .join('')
-
-const collectRunElements = (element: Element): Element[] => {
-  const result: Element[] = []
-  const stack: Element[] = [element]
-  while (stack.length > 0) {
-    const current = stack.pop()
-    if (!current) continue
-    if (current.localName === 'r') {
-      result.push(current)
-      continue
-    }
-    Array.from({ length: current.childNodes.length })
-      .map((_, index) => current.childNodes.item(index))
-      .filter(isElementNode)
-      .forEach((child) => stack.push(child))
-  }
-  return result
-}
-
-const applyFormattedMarker = (element: Element, query?: string): void => {
-  const normalizedQuery = String(query || '').trim()
-  const runs = collectRunElements(element)
-  if (runs.length === 0) return
-
-  const matchedRuns =
-    normalizedQuery.length > 0
-      ? runs.filter((run) => getRunText(run).includes(normalizedQuery))
-      : runs
-  const targetRuns = matchedRuns.length > 0 ? matchedRuns : runs
-  targetRuns.forEach((run) => styleRunForRevision(run, 'inserted'))
-}
-
-const getTableCell = (table: Element, rowIndex: number, colIndex: number): Element | undefined => {
-  const row = childElements(table, 'tr')[rowIndex]
-  return row ? childElements(row, 'tc')[colIndex] : undefined
-}
-
-const replaceCellWithReviewContent = (
-  cell: Element,
-  change: NonNullable<DocxReplayNode['tableCellChanges']>[number]
-): void => {
-  const currentParagraphs = childElements(cell, 'p').map(cloneElement)
-  childElements(cell)
-    .filter((child) => child.localName !== 'tcPr')
-    .forEach((child) => cell.removeChild(child))
-
-  change.before.paragraphs.forEach((paragraphSpec) => {
-    const paragraph = createParagraphElementFromSpec(cell.ownerDocument, paragraphSpec)
-    applyRevisionToRuns(paragraph, 'deleted')
-    cell.appendChild(paragraph)
-  })
-  currentParagraphs.forEach((paragraph) => {
-    applyRevisionToRuns(paragraph, 'inserted')
-    cell.appendChild(paragraph)
-  })
-}
-
-const applyTableCellReviewMarkers = (element: Element, node: DocxReplayNode): boolean => {
-  if (element.localName !== 'tbl' || !node.tableCellChanges?.length) return false
-  node.tableCellChanges.forEach((change) => {
-    const cell = getTableCell(element, change.rowIndex, change.colIndex)
-    if (!cell) return
-    if (change.kind === 'formatted') {
-      applyRevisionToRuns(cell, 'inserted')
-      return
-    }
-    replaceCellWithReviewContent(cell, change)
-  })
-  return true
-}
-
-const getBody = (doc: Document): Element => {
-  const bodies = doc.getElementsByTagNameNS(WORD_NS, 'body')
-  const body = bodies.item(0)
-  if (!body) throw new Error('word/document.xml has no w:body')
-  return body
-}
-
-const clearBodyContent = (body: Element): void => {
-  const removable = Array.from({ length: body.childNodes.length })
-    .map((_, index) => body.childNodes.item(index))
-    .filter(Boolean)
-    .filter((child) => isElementNode(child) && child.localName !== 'sectPr')
-
-  removable.forEach((child) => body.removeChild(child))
-}
-
-const writeDocumentXml = async (
-  zip: JSZip,
-  bundle: Awaited<ReturnType<typeof loadDocxBundle>>
-): Promise<Buffer> => {
-  const documentsByPart = new Map<string, Document>([['word/document.xml', bundle.documentDom]])
-  bundle.stories.forEach((story) => documentsByPart.set(story.partName, story.dom))
-  documentsByPart.forEach((document, partName) => {
-    zip.file(partName, new XMLSerializer().serializeToString(document))
-  })
-  return await zip.generateAsync({
-    type: 'nodebuffer',
-    compression: 'DEFLATE'
-  })
-}
-
-const assertNoNewDocxValidationProblems = async (
-  sourceBuffer: Buffer,
-  buffer: Buffer,
-  context: string
-): Promise<void> => {
+  const buffer = await working.zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
   const problems = findNewDocxValidationProblems(
-    await validateDocxBuffer(sourceBuffer),
+    await validateDocxBuffer(input.sourceBuffer),
     await validateDocxBuffer(buffer)
   )
-  if (problems.length === 0) return
-  throw new Error(
-    `${context}: ${problems.map((problem) => `${problem.code}:${problem.message}`).join('; ')}`
-  )
-}
-
-const isRenderableIndexedNode = (
-  node: IndexedNode | DocxEditableNode | DocxVisualDescriptor | undefined
-): node is Exclude<IndexedNode, { kind: 'table_cell' }> =>
-  Boolean(node && isRootNode(node) && node.kind !== 'table_cell')
-
-const parseSnapshotElement = (rawXml: string): Element | null => {
-  if (!rawXml) return null
-  const element = new DOMParser().parseFromString(rawXml, 'application/xml').documentElement
-  return element &&
-    ['p', 'tbl', 'sdt', 'ins', 'del', 'moveFrom', 'moveTo'].includes(element.localName)
-    ? element
-    : null
-}
-
-const resolveElementForNode = (input: {
-  shellDocument: Document
-  node: DocxReplayNode
-  session: DocxReplaySession
-  currentIndex: ReturnType<typeof buildDocumentNodeIndex>
-  sourceIndex: ReturnType<typeof buildDocumentNodeIndex>
-}): { element: Element; reconstructed: boolean } => {
-  const shouldUseSourceView =
-    input.node.reviewState === 'deleted' || input.node.reviewState === 'replaced-old'
-
-  if (!shouldUseSourceView) {
-    const currentNodeId = input.node.currentNodeId || input.node.nodeId
-    const currentSnapshotNode = currentNodeId
-      ? input.session.activeSnapshot.nodeById.get(currentNodeId)
-      : undefined
-    const currentInternalNodeId = currentSnapshotNode
-      ? input.currentIndex.rootNodeIds[currentSnapshotNode.nodeIndex]
-      : currentNodeId
-    const currentNode = currentInternalNodeId
-      ? input.currentIndex.nodesById.get(currentInternalNodeId)
-      : undefined
-    const renderableCurrentNode = isRenderableIndexedNode(currentNode) ? currentNode : null
-    if (renderableCurrentNode) {
-      return { element: cloneElement(renderableCurrentNode.node), reconstructed: false }
-    }
-    const currentSnapshotElement = parseSnapshotElement(currentSnapshotNode?.rawXml || '')
-    if (currentSnapshotElement) {
-      return { element: cloneElement(currentSnapshotElement), reconstructed: false }
-    }
-  }
-
-  const sourceNodeId = input.node.sourceNodeId || input.node.nodeId
-  const sourceSnapshotNode = sourceNodeId
-    ? input.session.sourceSnapshot.nodeById.get(sourceNodeId)
-    : undefined
-  const sourceInternalNodeId = sourceSnapshotNode
-    ? input.sourceIndex.rootNodeIds[sourceSnapshotNode.nodeIndex]
-    : sourceNodeId
-  const sourceNode = sourceInternalNodeId
-    ? input.sourceIndex.nodesById.get(sourceInternalNodeId)
-    : undefined
-  const renderableSourceNode = isRenderableIndexedNode(sourceNode) ? sourceNode : null
-  if (renderableSourceNode) {
-    return { element: cloneElement(renderableSourceNode.node), reconstructed: false }
-  }
-  const sourceSnapshotElement = parseSnapshotElement(sourceSnapshotNode?.rawXml || '')
-  if (sourceSnapshotElement) {
-    return { element: cloneElement(sourceSnapshotElement), reconstructed: false }
-  }
-
-  return {
-    element: createNodeElementFromSpec(input.shellDocument, input.node.spec, null),
-    reconstructed: true
-  }
-}
-
-const applyReviewMarker = (element: Element, node: DocxReplayNode): void => {
-  if (applyTableCellReviewMarkers(element, node)) return
-  if (node.reviewState === 'formatted') {
-    if (node.reviewQueries?.length) {
-      node.reviewQueries.forEach((query) => applyFormattedMarker(element, query))
-    } else {
-      applyFormattedMarker(element)
-    }
-    return
-  }
-  if (node.reviewState === 'inserted' || node.reviewState === 'replaced-new') {
-    applyRevisionToRuns(element, 'inserted')
-    return
-  }
-  if (node.reviewState === 'deleted' || node.reviewState === 'replaced-old') {
-    applyRevisionToRuns(element, 'deleted')
-  }
-}
-
-const appendPackageChangeSummary = (body: Element): void => {
-  const paragraph = body.ownerDocument.createElementNS(WORD_NS, 'w:p')
-  const run = body.ownerDocument.createElementNS(WORD_NS, 'w:r')
-  const text = body.ownerDocument.createElementNS(WORD_NS, 'w:t')
-  text.appendChild(
-    body.ownerDocument.createTextNode('文档级变更：样式、批注、修订或文档设置已更新')
-  )
-  run.appendChild(text)
-  paragraph.appendChild(run)
-  applyRevisionToRuns(paragraph, 'inserted')
-  const section = firstChildElement(body, 'sectPr')
-  body.insertBefore(paragraph, section || null)
-}
-
-const ensureStableTableLayout = (
-  table: Element,
-  spec: Extract<DocxNodeSpec, { kind: 'table' }>
-): void => {
-  const columnCount = Math.max(1, ...spec.rows.map((row) => row.length))
-  const tableWidth = 9072
-  const columnWidth = Math.max(720, Math.floor(tableWidth / columnCount))
-  const doc = table.ownerDocument
-
-  const tblPr = getOrCreateChild(table, 'tblPr')
-  const tblW = firstChildElement(tblPr, 'tblW') || doc.createElementNS(WORD_NS, 'w:tblW')
-  const tblLayout =
-    firstChildElement(tblPr, 'tblLayout') || doc.createElementNS(WORD_NS, 'w:tblLayout')
-  setWordAttribute(tblW, 'w', String(tableWidth))
-  setWordAttribute(tblW, 'type', 'dxa')
-  setWordAttribute(tblLayout, 'type', 'fixed')
-  if (!tblW.parentNode) tblPr.appendChild(tblW)
-  if (!tblLayout.parentNode) tblPr.appendChild(tblLayout)
-
-  let tblGrid = firstChildElement(table, 'tblGrid')
-  if (!tblGrid) {
-    tblGrid = doc.createElementNS(WORD_NS, 'w:tblGrid')
-    table.insertBefore(tblGrid, table.firstChild?.nextSibling || null)
-  }
-  clearChildren(tblGrid)
-  for (let index = 0; index < columnCount; index += 1) {
-    const gridCol = doc.createElementNS(WORD_NS, 'w:gridCol')
-    setWordAttribute(gridCol, 'w', String(columnWidth))
-    tblGrid.appendChild(gridCol)
-  }
-
-  childElements(table, 'tr').forEach((row) => {
-    childElements(row, 'tc').forEach((cell) => {
-      const tcPr = getOrCreateChild(cell, 'tcPr')
-      const tcW = firstChildElement(tcPr, 'tcW') || doc.createElementNS(WORD_NS, 'w:tcW')
-      setWordAttribute(tcW, 'w', String(columnWidth))
-      setWordAttribute(tcW, 'type', 'dxa')
-      if (!tcW.parentNode) tcPr.appendChild(tcW)
-    })
-  })
-}
-
-export const materializeDocxProjectedArtifact = async (input: {
-  sourceBuffer: Buffer
-  workingBuffer: Buffer
-  session: DocxReplaySession
-  kind: 'review' | 'committed'
-  outPath: string
-}): Promise<void> => {
-  const workingBundle = await loadDocxBundle(input.workingBuffer)
-  const sourceBundle = await loadDocxBundle(input.sourceBuffer)
-  const currentIndex = buildDocumentNodeIndex(workingBundle)
-  const sourceIndex = buildDocumentNodeIndex(sourceBundle)
-  const projectedNodes =
-    input.kind === 'review' ? projectReviewView(input.session) : projectCommittedView(input.session)
-  const storyIds = [...new Set(projectedNodes.map((node) => node.story.storyId))].sort(
-    (left, right) => {
-      if (left.startsWith('textbox:') && !right.startsWith('textbox:')) return -1
-      if (!left.startsWith('textbox:') && right.startsWith('textbox:')) return 1
-      if (left === 'body') return 1
-      if (right === 'body') return -1
-      return left.localeCompare(right)
-    }
-  )
-  storyIds.forEach((storyId) => {
-    const storyNodes = projectedNodes.filter((node) => node.story.storyId === storyId)
-    const storyPart = workingBundle.stories.find((part) => part.story.storyId === storyId)
-    const root = storyId === 'body' ? getBody(workingBundle.documentDom) : storyPart?.root
-    if (!root) throw new Error(`DOCX review story is missing: ${storyId}`)
-    const preservedSection = storyId === 'body' ? firstChildElement(root, 'sectPr') : null
-    if (storyId === 'body') clearBodyContent(root)
-    else clearChildren(root)
-    storyNodes.forEach((node) => {
-      const resolved = resolveElementForNode({
-        shellDocument: root.ownerDocument,
-        node,
-        session: input.session,
-        currentIndex,
-        sourceIndex
-      })
-      const element = resolved.element
-      if (resolved.reconstructed && node.kind === 'table' && node.spec.kind === 'table') {
-        ensureStableTableLayout(element, node.spec)
-      }
-      if (input.kind === 'review') {
-        applyReviewMarker(element, node)
-      }
-      if (preservedSection) {
-        root.insertBefore(element, preservedSection)
-      } else {
-        root.appendChild(element)
-      }
-    })
-  })
-  if (
-    input.kind === 'review' &&
-    input.session.sourceSnapshot.packageFingerprint !==
-      input.session.activeSnapshot.packageFingerprint
-  ) {
-    appendPackageChangeSummary(getBody(workingBundle.documentDom))
-  }
-
-  const buffer = await writeDocumentXml(workingBundle.zip, workingBundle)
-  await assertNoNewDocxValidationProblems(
-    input.sourceBuffer,
-    buffer,
-    input.kind === 'review'
-      ? 'review_artifact_invalid_generated'
-      : 'committed_artifact_invalid_generated'
-  )
-  await ensureDirForFile(input.outPath)
-  await fs.writeFile(input.outPath, buffer)
-}
-
-/** Compare original owner baseline to the current document when several executions edit it. */
-export const materializeDocxNetReview = async (input: {
-  sourceBuffer: Buffer
-  workingBuffer: Buffer
-  outPath: string
-}): Promise<{ insertCount: number; deleteCount: number }> => {
-  const source = await loadDocxBundle(input.sourceBuffer)
-  const working = await loadDocxBundle(input.workingBuffer)
-  let insertCount = 0,
-    deleteCount = 0
-  const serializer = new XMLSerializer()
-  for (const part of working.stories) {
-    const original = source.stories.find((story) => story.story.storyId === part.story.storyId)
-    const root = part.root
-    const before = original
-      ? childElements(original.root).filter((node) => node.localName !== 'sectPr')
-      : []
-    const after = childElements(root).filter((node) => node.localName !== 'sectPr')
-    const section = firstChildElement(root, 'sectPr')
-    const changes = diffArrays(
-      before.map((node) => serializer.serializeToString(node)),
-      after.map((node) => serializer.serializeToString(node))
+  if (problems.length)
+    throw new Error(
+      `review_artifact_invalid_generated: ${problems.map((p) => `${p.code}:${p.message}`).join('; ')}`
     )
-    clearChildren(root)
-    for (const change of changes)
-      for (const xml of change.value) {
-        const parsed = new DOMParser().parseFromString(xml, 'application/xml').documentElement
-        const element = root.ownerDocument.importNode(parsed, true) as Element
-        if (change.added) {
-          applyRevisionToRuns(element, 'inserted')
-          insertCount++
-        }
-        if (change.removed) {
-          applyRevisionToRuns(element, 'deleted')
-          deleteCount++
-        }
-        root.appendChild(element)
-      }
-    if (section) root.appendChild(section)
-  }
-  const buffer = await writeDocumentXml(working.zip, working)
-  await assertNoNewDocxValidationProblems(
-    input.sourceBuffer,
-    buffer,
-    'review_artifact_invalid_generated'
-  )
-  await ensureDirForFile(input.outPath)
+  await fs.mkdir(path.dirname(input.outPath), { recursive: true })
   await fs.writeFile(input.outPath, buffer)
-  return { insertCount, deleteCount }
+  return result
 }

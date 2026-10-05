@@ -87,6 +87,10 @@ const toDocxApplyWriteRow = (record: DocxApplyRecord) => ({
 export class DocxApplyStore {
   public constructor(private readonly sqlite: SqliteCore) {}
 
+  public async removeRecord(id: string): Promise<void> {
+    this.sqlite.prepare('DELETE FROM docx_apply WHERE id = ?').run(id)
+  }
+
   public async saveRecord(record: DocxApplyRecord): Promise<void> {
     insertOrReplace(this.sqlite, 'docx_apply', toDocxApplyWriteRow(record))
   }
@@ -122,9 +126,9 @@ export class DocxApplyStore {
   }
 
   public async getRecord(applyId: string): Promise<DocxApplyRecord | null> {
-    const row = this.sqlite.prepare('SELECT * FROM docx_apply WHERE id = ? LIMIT 1').get(applyId) as
-      | DocxApplyRow
-      | undefined
+    const row = this.sqlite
+      .prepare('SELECT * FROM docx_apply WHERE id = ? LIMIT 1')
+      .get(applyId) as DocxApplyRow | undefined
     return row ? toDocxApplyRecord(row) : null
   }
 }

@@ -1,6 +1,6 @@
+import { DOMParser } from '@xmldom/xmldom'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import { describe, expect, it } from 'vitest'
 import {
   buildNodeIndex,
@@ -8,7 +8,6 @@ import {
 } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import { readParagraphStyle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/contentTree'
 import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/tools/docx/worker/docxWorker'
-import { createReplaySnapshot } from '../../../../src/main/services/ai/human/tools/docx/review/replayTree'
 import { projectDocxReadNodes } from '../../../../src/main/services/ai/human/tools/docx/publicReadTree'
 import type { DocxReadContentNode } from '../../../../src/main/services/ai/human/tools/docx/nodeTypes'
 import { collectVisualNodeEntries } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/types'
@@ -212,23 +211,6 @@ describe('docx recursive content tree visuals', () => {
     expect(images).toHaveLength(18)
     expect(realEmptyParagraphs).toHaveLength(22)
     expect(new Set(images.map((visual) => visual.nodeId)).size).toBe(18)
-    const snapshot = createReplaySnapshot({
-      packageFingerprint: 'fixture',
-      outlineNodes: index.outline,
-      detailedNodesById: index.detailByNodeId,
-      rawXmlByNodeId: new Map(
-        [...index.nodesById.entries()].map(([nodeId, node]) => [
-          nodeId,
-          new XMLSerializer().serializeToString(node.node)
-        ])
-      )
-    })
-    const bindings = snapshot.nodes.flatMap((node) => node.visuals.map((visual) => visual.nodeId))
-    expect(bindings).toHaveLength(18)
-    expect(new Set(bindings).size).toBe(18)
-    expect(snapshot.nodes.filter((node) => node.visuals.length).every((node) => node.rawXml)).toBe(
-      true
-    )
   })
 
   it.each([

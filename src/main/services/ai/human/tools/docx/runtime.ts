@@ -6,27 +6,19 @@ import type {
   DocxCapabilityToolsInput,
   DocxCapabilityToolsRuntimeState,
   DocxCreatedNode,
-  DocxDetailedNode,
+  DocxChangedNode,
   DocxDiskFingerprint,
   DocxOpenStats,
-  DocxOperation,
   DocxOutlineNode,
   DocxReadSession,
-  DocxReplaySession,
-  DocxReplaySnapshot,
-  DocxRevision
+  DocxEditSession
 } from './types'
 import { getDocxWorkerClient } from './worker/docxWorkerClient'
 import type { DocxWorkerRequest, DocxWorkerResponse } from './worker/types'
 import { resolveToolPath } from '../terminal/commandPolicy'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolEventEmitter } from '../utils/toolEvents'
-import {
-  applyRevisionToReplaySession,
-  createEmptyReplaySnapshot,
-  createReplaySessionFromSnapshot,
-  createReplaySnapshot
-} from './review/replayTree'
+import { createEditSession } from './review/editSession'
 import { isLegacyDocPath, isReadableWordPath } from './legacyDocPolicy'
 import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../../../wps/officeFileWriteNotify'
 
@@ -47,14 +39,14 @@ export type RequireReadSessionResult =
       currentRevisionRef: string
       stats: DocxOpenStats
       readSession?: DocxReadSession
-      replaySession?: DocxReplaySession
+      editSession?: DocxEditSession
     }
   | { failure: DocxToolFailure }
 
-export type RequireReplaySessionResult =
+export type RequireEditSessionResult =
   | {
       sourcePath: string
-      session: DocxReplaySession
+      session: DocxEditSession
       docId: string
       currentRevisionRef: string
     }
@@ -103,57 +95,38 @@ export type DocxToolRuntime = {
   ) => Promise<DocxWorkerResponse>
   resolveDocxPath: (rawPath: string) => string | null
   getReadSession: (sourcePath: string) => DocxReadSession | undefined
-  getReplaySession: (sourcePath: string) => DocxReplaySession | undefined
+  getEditSession: (sourcePath: string) => DocxEditSession | undefined
   ensureReadSession: (input: {
     toolName: string
     toolCallId: string
     sourcePath: string
   }) => Promise<RequireReadSessionResult>
-  ensureReplaySession: (input: {
+  ensureEditSession: (input: {
     toolName: string
     toolCallId: string
     sourcePath: string
     reason?: 'history' | 'edit' | 'rollback'
-  }) => Promise<RequireReplaySessionResult>
+  }) => Promise<RequireEditSessionResult>
   registerCreatedDocument: (input: {
     sourcePath: string
     baselineDocId: string
     workingDocId: string
     stats?: DocxOpenStats
     persistedStats: DocxDiskFingerprint
-    summary?: string
   }) => Promise<{
-    session: DocxReplaySession
+    session: DocxEditSession
     previousRevisionRef: string
     currentRevisionRef: string
-    changedNodes: DocxRevision['changedNodes']
-    createdNodes: DocxRevision['createdNodes']
+    changedNodes: DocxChangedNode[]
+    createdNodes: DocxCreatedNode[]
   }>
   registerRevision: (input: {
     sourcePath: string
     previousDocId: string
     nextDocId: string
-    ops: DocxOperation[]
-    createdNodes: DocxRevision['createdNodes']
-    createdNodesByOperation?: NonNullable<DocxRevision['createdNodesByOperation']>
-    opNextDocIds?: NonNullable<DocxRevision['opNextDocIds']>
-    changedNodes?: DocxRevision['changedNodes']
     persistedStats: DocxDiskFingerprint
     stats?: DocxOpenStats
-    summary?: string
   }) => Promise<{ currentRevisionRef: string; previousRevisionRef: string }>
-  expandOpsForReview: (docId: string, ops: DocxOperation[]) => Promise<DocxOperation[]>
-  cloneActiveReplaySession: (
-    sourcePath: string
-  ) => { ok: true; session: DocxReplaySession } | { ok: false; error: string }
-  buildReplaySnapshotForDoc: (docId: string) => Promise<DocxReplaySnapshot>
-  applyTempRevisionToReplaySession: (input: {
-    session: DocxReplaySession
-    revisionRef: string
-    op: DocxOperation
-    createdNodes: DocxCreatedNode[]
-    nextDocId: string
-  }) => Promise<void>
   buildResourceContext: (input: {
     sourcePath: string
     effectKind: DocxToolResourceContext['effectKind']
@@ -168,11 +141,11 @@ export type DocxToolRuntime = {
 
 export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxToolRuntime => {
   const readSessionBySourcePath = new Map<string, DocxReadSession>()
-  const replaySessionBySourcePath = new Map<string, DocxReplaySession>()
+  const editSessionBySourcePath = new Map<string, DocxEditSession>()
   const state: DocxCapabilityToolsRuntimeState = {
     sourcePathByDocId: new Map(),
     readSessionBySourcePath,
-    replaySessionBySourcePath
+    editSessionBySourcePath
   }
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
   const toolEvents = createToolEventEmitter({
@@ -269,8 +242,8 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   const getReadSession = (sourcePath: string): DocxReadSession | undefined =>
     state.readSessionBySourcePath.get(path.resolve(sourcePath))
 
-  const getReplaySession = (sourcePath: string): DocxReplaySession | undefined =>
-    state.replaySessionBySourcePath.get(path.resolve(sourcePath))
+  const getEditSession = (sourcePath: string): DocxEditSession | undefined =>
+    state.editSessionBySourcePath.get(path.resolve(sourcePath))
 
   const isSessionFresh = async (
     sourcePath: string,
@@ -298,7 +271,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   }): DocxToolFailure => {
     const sourcePath = path.resolve(inputValue.sourcePath)
     state.readSessionBySourcePath.delete(sourcePath)
-    state.replaySessionBySourcePath.delete(sourcePath)
+    state.editSessionBySourcePath.delete(sourcePath)
     return emitFailure({
       toolName: inputValue.toolName,
       toolCallId: inputValue.toolCallId,
@@ -322,42 +295,23 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     session.cache.outlineByCacheKey.set(key, value)
   }
 
-  const cacheDetailedNodes = (
-    session: DocxReadSession | undefined,
-    nodes: readonly DocxDetailedNode[]
-  ) => {
-    if (!session) return
-    nodes.forEach((node) => {
-      session.cache.detailByNodeId.set(node.nodeId, node)
-    })
-  }
-
-  const buildOpenStatsFromReplaySnapshot = (snapshot: DocxReplaySnapshot): DocxOpenStats => ({
-    rootNodeCount: snapshot.nodes.length
-  })
-
-  const syncReplaySessionStats = (session: DocxReplaySession): void => {
-    session.stats = buildOpenStatsFromReplaySnapshot(session.activeSnapshot)
-  }
-
-  const buildReadSessionResultFromReplay = (
+  const buildReadSessionResultFromEditSession = (
     sourcePath: string,
-    session: DocxReplaySession
+    session: DocxEditSession
   ): Exclude<RequireReadSessionResult, { failure: DocxToolFailure }> => {
-    syncReplaySessionStats(session)
     return {
       sourcePath,
       docId: session.activeDocId,
       currentRevisionRef: session.activeRevisionRef,
       stats: session.stats,
-      replaySession: session
+      editSession: session
     }
   }
 
-  const buildReplaySessionResult = (
+  const buildEditSessionResult = (
     sourcePath: string,
-    session: DocxReplaySession
-  ): Exclude<RequireReplaySessionResult, { failure: DocxToolFailure }> => ({
+    session: DocxEditSession
+  ): Exclude<RequireEditSessionResult, { failure: DocxToolFailure }> => ({
     sourcePath,
     session,
     docId: session.activeDocId,
@@ -405,7 +359,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       cache: createReadSessionCache()
     }
     state.readSessionBySourcePath.set(normalizedSourcePath, session)
-    input.ctx.trackDocxOpen({
+    await input.ctx.trackDocxOpen({
       docId: workerResponse.payload.docId,
       sourcePath: normalizedSourcePath
     })
@@ -450,109 +404,27 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     return result.nodes
   }
 
-  const fetchDetailedNodesByIds = async (
-    docId: string,
-    nodeIds: string[],
-    session?: DocxReadSession
-  ): Promise<DocxDetailedNode[]> => {
-    const cachedNodes: DocxDetailedNode[] = []
-    const missingNodeIds: string[] = []
-    nodeIds.forEach((nodeId) => {
-      const cached = session?.cache.detailByNodeId.get(nodeId)
-      if (cached) {
-        cachedNodes.push(cached)
-      } else {
-        missingNodeIds.push(nodeId)
-      }
-    })
-    if (missingNodeIds.length === 0) {
-      return cachedNodes
-    }
-    const response = await callWorker({
-      action: 'get_nodes_by_ids',
-      payload: {
-        docId,
-        nodeIds: missingNodeIds
-      }
-    })
-    if (!response.ok) {
-      throw new Error(response.error)
-    }
-    if (response.payload.action !== 'get_nodes_by_ids') {
-      throw new Error('worker protocol mismatch (get_nodes_by_ids)')
-    }
-    cacheDetailedNodes(session, response.payload.nodes)
-    const resolvedById = new Map<string, DocxDetailedNode>()
-    cachedNodes.forEach((node) => resolvedById.set(node.nodeId, node))
-    response.payload.nodes.forEach((node) => resolvedById.set(node.nodeId, node))
-    return nodeIds
-      .map((nodeId) => resolvedById.get(nodeId))
-      .filter((node): node is DocxDetailedNode => Boolean(node))
-  }
-
-  const buildReplaySnapshotForDoc = async (
-    docId: string,
-    session?: DocxReadSession
-  ): Promise<DocxReplaySnapshot> => {
-    const outlineNodes = await fetchOutlineNodes({
-      session,
-      docId,
-      fromNodeIndex: 0,
-      toNodeIndex: Number.MAX_SAFE_INTEGER,
-      includeCells: true
-    })
-    const detailedNodes = await fetchDetailedNodesByIds(
-      docId,
-      outlineNodes.map((node) => node.nodeId),
-      session
-    )
-    const rawXmlResponse = await callWorker({
-      action: 'get_replay_snapshot_xml',
-      payload: { docId }
-    })
-    if (!rawXmlResponse.ok) throw new Error(rawXmlResponse.error)
-    if (rawXmlResponse.payload.action !== 'get_replay_snapshot_xml') {
-      throw new Error('worker protocol mismatch (get_replay_snapshot_xml)')
-    }
-    return createReplaySnapshot({
-      packageFingerprint: rawXmlResponse.payload.packageFingerprint,
-      outlineNodes,
-      detailedNodesById: new Map(detailedNodes.map((node) => [node.nodeId, node] as const)),
-      rawXmlByNodeId: new Map(
-        rawXmlResponse.payload.nodes.map((node) => [node.nodeId, node.rawXml] as const)
-      )
-    })
-  }
-
-  const upgradeReadSessionToReplaySession = async (
+  const upgradeReadSessionToEditSession = async (
     sourcePath: string,
-    targetMode: DocxReplaySession['targetMode']
-  ): Promise<DocxReplaySession> => {
+    targetMode: DocxEditSession['targetMode']
+  ): Promise<DocxEditSession> => {
     const normalizedSourcePath = path.resolve(sourcePath)
-    const existingReplay = getReplaySession(normalizedSourcePath)
-    if (existingReplay) return existingReplay
+    const existingEditSession = getEditSession(normalizedSourcePath)
+    if (existingEditSession) return existingEditSession
     const readSession = getReadSession(normalizedSourcePath)
     if (!readSession) {
       throw new Error(`read session not found for sourcePath: ${normalizedSourcePath}`)
     }
-    const snapshot = await buildReplaySnapshotForDoc(readSession.docId, readSession)
-    const revisionEntry: DocxRevision = {
-      revisionRef: readSession.currentRevisionRef,
-      docId: readSession.docId,
-      createdAt: Date.now()
-    }
-    const session = createReplaySessionFromSnapshot({
+    const session = createEditSession({
       sourcePath: normalizedSourcePath,
       targetMode,
       sourceDocId: readSession.docId,
       stats: readSession.stats,
-      diskFingerprint: readSession.diskFingerprint,
-      snapshot
+      diskFingerprint: readSession.diskFingerprint
     })
     session.docIdByRevisionRef = new Map([[readSession.currentRevisionRef, readSession.docId]])
     session.revisionRefByDocId = new Map([[readSession.docId, readSession.currentRevisionRef]])
-    session.revisionByDocId = new Map([[readSession.docId, revisionEntry]])
-    state.replaySessionBySourcePath.set(normalizedSourcePath, session)
+    state.editSessionBySourcePath.set(normalizedSourcePath, session)
     state.readSessionBySourcePath.delete(normalizedSourcePath)
     return session
   }
@@ -574,12 +446,12 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       }
     }
 
-    const replaySession = getReplaySession(requestedSourcePath)
-    if (replaySession) {
-      if (!(await isSessionFresh(requestedSourcePath, replaySession.diskFingerprint))) {
+    const editSession = getEditSession(requestedSourcePath)
+    if (editSession) {
+      if (!(await isSessionFresh(requestedSourcePath, editSession.diskFingerprint))) {
         return { failure: externalChangeFailure({ ...params, sourcePath: requestedSourcePath }) }
       }
-      return buildReadSessionResultFromReplay(requestedSourcePath, replaySession)
+      return buildReadSessionResultFromEditSession(requestedSourcePath, editSession)
     }
 
     const existingReadSession = getReadSession(requestedSourcePath)
@@ -605,12 +477,12 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     }
   }
 
-  const ensureReplaySession = async (params: {
+  const ensureEditSession = async (params: {
     toolName: string
     toolCallId: string
     sourcePath: string
     reason?: 'history' | 'edit' | 'rollback'
-  }): Promise<RequireReplaySessionResult> => {
+  }): Promise<RequireEditSessionResult> => {
     const requestedSourcePath = resolveDocxPath(params.sourcePath)
     if (!requestedSourcePath) {
       return {
@@ -623,12 +495,17 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       }
     }
 
-    const existingReplay = getReplaySession(requestedSourcePath)
-    if (existingReplay) {
-      if (!(await isSessionFresh(requestedSourcePath, existingReplay.diskFingerprint))) {
+    const existingEditSession = getEditSession(requestedSourcePath)
+    if (existingEditSession) {
+      if (!(await isSessionFresh(requestedSourcePath, existingEditSession.diskFingerprint))) {
         return { failure: externalChangeFailure({ ...params, sourcePath: requestedSourcePath }) }
       }
-      return buildReplaySessionResult(requestedSourcePath, existingReplay)
+      await input.ctx.trackDocxOpen({
+        docId: existingEditSession.activeDocId,
+        sourcePath: requestedSourcePath,
+        editSession: existingEditSession
+      })
+      return buildEditSessionResult(requestedSourcePath, existingEditSession)
     }
 
     let readSession = getReadSession(requestedSourcePath)
@@ -651,20 +528,20 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
             toolName: params.toolName,
             toolCallId: params.toolCallId,
             reason: 'failed',
-            error: 'cannot upgrade an active replay-backed read context'
+            error: 'cannot upgrade an active editable read context'
           })
         }
       }
     }
 
     try {
-      const replay = await upgradeReadSessionToReplaySession(readSession.sourcePath, 'update')
-      input.ctx.trackDocxOpen({
-        docId: replay.sourceDocId,
-        sourcePath: replay.sourcePath,
-        replaySession: replay
+      const session = await upgradeReadSessionToEditSession(readSession.sourcePath, 'update')
+      await input.ctx.trackDocxOpen({
+        docId: session.sourceDocId,
+        sourcePath: session.sourcePath,
+        editSession: session
       })
-      return buildReplaySessionResult(replay.sourcePath, replay)
+      return buildEditSessionResult(session.sourcePath, session)
     } catch (error) {
       return {
         failure: emitFailure({
@@ -681,89 +558,49 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     }
   }
 
-  const stringifyNodeSpec = (spec: DocxReplaySnapshot['nodes'][number]['spec']): string => {
-    if (spec.kind === 'paragraph') {
-      return spec.runs.map((run) => run.text).join('')
-    }
-    return spec.rows
-      .map((row) =>
-        row
-          .map((cell) =>
-            cell.paragraphs
-              .map((paragraph) => paragraph.runs.map((run) => run.text).join(''))
-              .join('\n')
-          )
-          .join('\t')
-      )
-      .join('\n')
-  }
-
-  const buildCreatedNodesFromSnapshot = (snapshot: DocxReplaySnapshot): DocxCreatedNode[] =>
-    snapshot.nodes.flatMap((node) => [
-      {
-        nodeId: node.nodeId,
-        type: node.kind
-      } as const,
-      ...node.tableCellNodeIds.map((cellNodeId) => ({
-        nodeId: cellNodeId,
-        type: 'table_cell' as const
-      }))
-    ])
-
-  const buildInsertedChangedNodesFromSnapshot = (
-    snapshot: DocxReplaySnapshot
-  ): DocxRevision['changedNodes'] =>
-    snapshot.nodes.map((node) => ({
-      action: 'inserted',
-      nodeId: node.nodeId,
-      beforeText: '',
-      afterText: stringifyNodeSpec(node.spec)
-    }))
-
   const registerCreatedDocument = async (params: {
     sourcePath: string
     baselineDocId: string
     workingDocId: string
     stats?: DocxOpenStats
     persistedStats: DocxDiskFingerprint
-    summary?: string
   }) => {
     const normalizedSourcePath = path.resolve(params.sourcePath)
-    if (state.replaySessionBySourcePath.has(normalizedSourcePath)) {
+    if (state.editSessionBySourcePath.has(normalizedSourcePath)) {
       throw new Error(`docx session already exists for sourcePath: ${normalizedSourcePath}`)
     }
 
     state.readSessionBySourcePath.delete(normalizedSourcePath)
     state.sourcePathByDocId.set(params.baselineDocId, normalizedSourcePath)
-    const baselineRevisionEntry: DocxRevision = {
-      revisionRef: 'v1',
-      docId: params.baselineDocId,
-      createdAt: Date.now()
-    }
-    const baselineSnapshot = createEmptyReplaySnapshot()
-    const session = createReplaySessionFromSnapshot({
+    const session = createEditSession({
       sourcePath: normalizedSourcePath,
       targetMode: 'create',
       sourceDocId: params.baselineDocId,
       stats: params.stats || { rootNodeCount: 0 },
-      diskFingerprint: params.persistedStats,
-      snapshot: baselineSnapshot
+      diskFingerprint: params.persistedStats
     })
-    session.revisionByDocId = new Map([[params.baselineDocId, baselineRevisionEntry]])
-    state.replaySessionBySourcePath.set(normalizedSourcePath, session)
+    state.editSessionBySourcePath.set(normalizedSourcePath, session)
 
-    const workingSnapshot = await buildReplaySnapshotForDoc(params.workingDocId)
-    const createdNodes = buildCreatedNodesFromSnapshot(workingSnapshot)
-    const changedNodes = buildInsertedChangedNodesFromSnapshot(workingSnapshot)
+    const outline = await fetchOutlineNodes({
+      docId: params.workingDocId,
+      fromNodeIndex: 0,
+      toNodeIndex: Number.MAX_SAFE_INTEGER,
+      includeCells: true
+    })
+    const createdNodes = outline.map((node) => ({ nodeId: node.nodeId, type: node.type }))
+    const changedNodes: DocxChangedNode[] = outline
+      .filter((node) => node.type !== 'table_cell')
+      .map((node) => ({
+        action: 'inserted',
+        nodeId: node.nodeId,
+        beforeText: '',
+        afterText: node.text
+      }))
     const revisionUpdate = await registerRevision({
       sourcePath: normalizedSourcePath,
       previousDocId: params.baselineDocId,
       nextDocId: params.workingDocId,
-      ops: [{ type: 'create_document' }],
-      createdNodes,
-      changedNodes,
-      persistedStats: params.persistedStats,
-      summary: params.summary
+      persistedStats: params.persistedStats
     })
 
     return {
@@ -779,17 +616,11 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     sourcePath: string
     previousDocId: string
     nextDocId: string
-    ops: DocxOperation[]
-    createdNodes: DocxRevision['createdNodes']
-    createdNodesByOperation?: NonNullable<DocxRevision['createdNodesByOperation']>
-    opNextDocIds?: NonNullable<DocxRevision['opNextDocIds']>
-    changedNodes?: DocxRevision['changedNodes']
     persistedStats: DocxDiskFingerprint
     stats?: DocxOpenStats
-    summary?: string
   }) => {
     const sourcePath = path.resolve(params.sourcePath)
-    const session = state.replaySessionBySourcePath.get(sourcePath)
+    const session = state.editSessionBySourcePath.get(sourcePath)
     if (!session) {
       throw new Error(`docx session not found for sourcePath: ${sourcePath}`)
     }
@@ -802,108 +633,26 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     session.docIdByRevisionRef.set(currentRevisionRef, params.nextDocId)
     session.revisionRefByDocId.set(params.nextDocId, currentRevisionRef)
     state.sourcePathByDocId.set(params.nextDocId, sourcePath)
-    const nextSnapshot = await buildReplaySnapshotForDoc(params.nextDocId)
-    const revisionEntry: DocxRevision = {
-      revisionRef: currentRevisionRef,
-      docId: params.nextDocId,
-      parentRevisionRef: previousRevisionRef,
-      createdAt: Date.now(),
-      changedNodes: params.changedNodes,
-      summary: params.summary,
-      ops: params.ops,
-      createdNodes: params.createdNodes,
-      createdNodesByOperation: params.createdNodesByOperation,
-      opNextDocIds: params.opNextDocIds
-    }
-    session.revisionByDocId.set(params.nextDocId, revisionEntry)
-    for (const [opIndex, op] of params.ops.entries()) {
-      const opNextDocId = params.opNextDocIds?.[opIndex]
-      const opSnapshot =
-        opNextDocId && opNextDocId !== params.nextDocId
-          ? await buildReplaySnapshotForDoc(opNextDocId)
-          : nextSnapshot
-      applyRevisionToReplaySession({
-        session,
-        revisionRef: currentRevisionRef,
-        op,
-        createdNodes: params.createdNodesByOperation?.[opIndex] || params.createdNodes || [],
-        nextSnapshot: opSnapshot
-      })
-    }
     session.activeDocId = params.nextDocId
     session.activeRevisionRef = currentRevisionRef
     session.diskFingerprint = params.persistedStats
     if (params.stats) session.stats = params.stats
-    else syncReplaySessionStats(session)
+    else
+      session.stats = {
+        rootNodeCount: (
+          await fetchOutlineNodes({
+            docId: params.nextDocId,
+            fromNodeIndex: 0,
+            toNodeIndex: Number.MAX_SAFE_INTEGER,
+            includeCells: false
+          })
+        ).length
+      }
     return {
       currentRevisionRef,
       previousRevisionRef
     }
   }
-
-  const cloneActiveReplaySession = (
-    sourcePath: string
-  ): { ok: true; session: DocxReplaySession } | { ok: false; error: string } => {
-    const source = state.replaySessionBySourcePath.get(path.resolve(sourcePath))
-    if (!source) {
-      return {
-        ok: false,
-        error: `docx session not found for sourcePath: ${path.resolve(sourcePath)}`
-      }
-    }
-    const clone: DocxReplaySession = {
-      ...source,
-      docIdByRevisionRef: new Map(source.docIdByRevisionRef),
-      revisionRefByDocId: new Map(source.revisionRefByDocId),
-      revisionByDocId: new Map(source.revisionByDocId),
-      nodeById: new Map(
-        [...source.nodeById.entries()].map(([nodeId, node]) => [nodeId, { ...node }] as const)
-      ),
-      rootNodeIds: [...source.rootNodeIds]
-    }
-    return {
-      ok: true,
-      session: clone
-    }
-  }
-
-  const applyTempRevisionToReplaySession = async (params: {
-    session: DocxReplaySession
-    revisionRef: string
-    op: DocxOperation
-    createdNodes: DocxCreatedNode[]
-    nextDocId: string
-  }): Promise<void> => {
-    const nextSnapshot = await buildReplaySnapshotForDoc(params.nextDocId)
-    applyRevisionToReplaySession({
-      session: params.session,
-      revisionRef: params.revisionRef,
-      op: params.op,
-      createdNodes: params.createdNodes,
-      nextSnapshot
-    })
-    params.session.activeDocId = params.nextDocId
-    params.session.activeRevisionRef = params.revisionRef
-  }
-
-  const expandOpsForReview = async (
-    docId: string,
-    ops: DocxOperation[]
-  ): Promise<DocxOperation[]> =>
-    await Promise.all(
-      ops.map(async (op) => {
-        if (op.type !== 'format_text') return op
-        const response = await callWorker({
-          action: 'get_node_layout',
-          payload: { docId, nodeId: op.nodeId }
-        })
-        if (!response.ok) throw new Error(response.error)
-        if (response.payload.action !== 'get_node_layout') {
-          throw new Error('worker protocol mismatch (get_node_layout)')
-        }
-        return { ...op, nodeId: response.payload.ownerNodeId }
-      })
-    )
 
   const buildResourceContext = (params: {
     sourcePath: string
@@ -924,72 +673,72 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   }): Promise<{ checksum: string; byteSize: number; modifiedAt: number }> => {
     const sourcePath = path.resolve(inputValue.sourcePath)
     return await withOfficeFileWrite(sourcePath, async () => {
-    await fs.mkdir(path.dirname(sourcePath), { recursive: true })
-    const tempPath = path.join(
-      path.dirname(sourcePath),
-      `.${path.basename(sourcePath)}.ncurator-${randomUUID()}.tmp`
-    )
-    const backupPath = `${tempPath}.previous`
-    let hasBackup = false
-    let preserveBackup = false
-    try {
-      const materialized = await callWorker({
-        action: 'materialize_draft',
-        payload: { docId: inputValue.docId, outPath: tempPath }
-      })
-      if (!materialized.ok) throw new Error(materialized.error)
-      if (materialized.payload.action !== 'materialize_draft') {
-        throw new Error('worker protocol mismatch (materialize_draft)')
-      }
-
+      await fs.mkdir(path.dirname(sourcePath), { recursive: true })
+      const tempPath = path.join(
+        path.dirname(sourcePath),
+        `.${path.basename(sourcePath)}.ncurator-${randomUUID()}.tmp`
+      )
+      const backupPath = `${tempPath}.previous`
+      let hasBackup = false
+      let preserveBackup = false
       try {
-        await fs.copyFile(sourcePath, backupPath)
-        hasBackup = true
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-      }
+        const materialized = await callWorker({
+          action: 'materialize_draft',
+          payload: { docId: inputValue.docId, outPath: tempPath }
+        })
+        if (!materialized.ok) throw new Error(materialized.error)
+        if (materialized.payload.action !== 'materialize_draft') {
+          throw new Error('worker protocol mismatch (materialize_draft)')
+        }
 
-      try {
-        await fs.rename(tempPath, sourcePath)
-      } catch {
-        await fs.rm(sourcePath, { force: true })
-        await fs.rename(tempPath, sourcePath)
-      }
-
-      const [buffer, stat] = await Promise.all([fs.readFile(sourcePath), fs.stat(sourcePath)])
-      const checksum = createHash('sha256').update(buffer).digest('hex')
-      if (checksum !== materialized.payload.checksum) {
-        throw new Error('post-write checksum mismatch')
-      }
-      if (hasBackup) {
-        await fs.rm(backupPath, { force: true })
-        hasBackup = false
-      }
-      notifyOfficeFileWritten(sourcePath)
-      return {
-        checksum,
-        byteSize: buffer.byteLength,
-        modifiedAt: Math.trunc(stat.mtimeMs)
-      }
-    } catch (error) {
-      if (hasBackup) {
         try {
-          await fs.rm(sourcePath, { force: true })
-          await fs.rename(backupPath, sourcePath)
-          hasBackup = false
-          notifyOfficeFileWritten(sourcePath)
+          await fs.copyFile(sourcePath, backupPath)
+          hasBackup = true
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        }
+
+        try {
+          await fs.rename(tempPath, sourcePath)
         } catch {
-          // Preserve the original error. The backup remains beside the target for recovery.
-          preserveBackup = true
+          await fs.rm(sourcePath, { force: true })
+          await fs.rename(tempPath, sourcePath)
+        }
+
+        const [buffer, stat] = await Promise.all([fs.readFile(sourcePath), fs.stat(sourcePath)])
+        const checksum = createHash('sha256').update(buffer).digest('hex')
+        if (checksum !== materialized.payload.checksum) {
+          throw new Error('post-write checksum mismatch')
+        }
+        if (hasBackup) {
+          await fs.rm(backupPath, { force: true })
+          hasBackup = false
+        }
+        notifyOfficeFileWritten(sourcePath)
+        return {
+          checksum,
+          byteSize: buffer.byteLength,
+          modifiedAt: Math.trunc(stat.mtimeMs)
+        }
+      } catch (error) {
+        if (hasBackup) {
+          try {
+            await fs.rm(sourcePath, { force: true })
+            await fs.rename(backupPath, sourcePath)
+            hasBackup = false
+            notifyOfficeFileWritten(sourcePath)
+          } catch {
+            // Preserve the original error. The backup remains beside the target for recovery.
+            preserveBackup = true
+          }
+        }
+        throw error
+      } finally {
+        await fs.rm(tempPath, { force: true }).catch(() => undefined)
+        if (hasBackup && !preserveBackup) {
+          await fs.rm(backupPath, { force: true }).catch(() => undefined)
         }
       }
-      throw error
-    } finally {
-      await fs.rm(tempPath, { force: true }).catch(() => undefined)
-      if (hasBackup && !preserveBackup) {
-        await fs.rm(backupPath, { force: true }).catch(() => undefined)
-      }
-    }
     })
   }
 
@@ -1003,15 +752,11 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     callWorker,
     resolveDocxPath,
     getReadSession,
-    getReplaySession,
+    getEditSession,
     ensureReadSession,
-    ensureReplaySession,
+    ensureEditSession,
     registerCreatedDocument,
     registerRevision,
-    expandOpsForReview,
-    cloneActiveReplaySession,
-    buildReplaySnapshotForDoc,
-    applyTempRevisionToReplaySession,
     buildResourceContext,
     persistDocId
   }

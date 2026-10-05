@@ -10,7 +10,7 @@ import type {
   AiLlmToolCallResult
 } from './llmExecutor'
 import type { WebCrawlerService } from '../webCrawler/types'
-import type { DocxChangedNode, DocxCreatedNode, DocxReplaySession } from './human/tools/docx/types'
+import type { DocxEditSession } from './human/tools/docx/types'
 import type { DocxApplyService } from './human/tools/docx/review/DocxApplyService'
 import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
@@ -433,14 +433,12 @@ export type AiRunContext = {
   trackDocxOpen: (input: {
     docId: string
     sourcePath: string
-    replaySession?: DocxReplaySession
-  }) => void
+    editSession?: DocxEditSession
+  }) => Promise<void>
   trackDocxChanges: (input: {
     previousDocId: string
     nextDocId: string
-    changedNodes: DocxChangedNode[]
-    createdNodes: DocxCreatedNode[]
-    replaySession?: DocxReplaySession
+    editSession?: DocxEditSession
   }) => void
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
   beginDocxApplyRun: () => void

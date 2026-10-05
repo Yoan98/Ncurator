@@ -985,8 +985,7 @@ export class ChatRunService {
     })
     this.deps.docxApplyService.beginRun({
       runId,
-      partnerId: run.partnerId,
-      inputText: run.input
+      partnerId: run.partnerId
     })
 
     const scheduledTaskService =

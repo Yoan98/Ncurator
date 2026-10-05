@@ -118,6 +118,10 @@ const toWriteRow = (record: AiFileChangeRecord) => ({
 export class AiFileChangeStore {
   public constructor(private readonly sqlite: SqliteCore) {}
 
+  public async removeRecord(id: string): Promise<void> {
+    this.sqlite.prepare('DELETE FROM ai_file_change WHERE id = ?').run(id)
+  }
+
   public async saveRecord(record: AiFileChangeRecord): Promise<void> {
     insertOrReplace(this.sqlite, 'ai_file_change', toWriteRow(record))
   }

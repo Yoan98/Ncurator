@@ -1,11 +1,11 @@
-import type { DocxReplaySession } from '../types'
+import type { DocxEditSession } from '../types'
 
 export type RunDocxEditDocument = {
   sourcePath: string
   sourceName: string
   latestDocId: string
-  dirtyChangeCount: number
-  replaySession?: DocxReplaySession
+  dirty: boolean
+  editSession?: DocxEditSession
 }
 
 export type ResolvedDocxOpenTarget = {

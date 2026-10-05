@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { parentPort } from 'node:worker_threads'
-import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
+import { DOMParser } from '@xmldom/xmldom'
 import { extractLegacyDocBody, splitLegacyDocParagraphs } from '../utils/legacyDocReader'
 import type { DocxDetailedNode, DocxOperation, DocxOutlineNode, DocxSearchMatch } from '../types'
 import {
@@ -47,58 +47,6 @@ const localAttribute = (node: Element, name: string): string => {
     if (attribute?.localName === name) return attribute.value
   }
   return ''
-}
-
-const replayModelPart = (name: string): boolean =>
-  /^word\/(styles|numbering|settings|comments|commentsExtended|footnotes|endnotes|header\d+|footer\d+)\.xml$/.test(
-    name
-  ) ||
-  /^word\/(media|embeddings|charts)\//.test(name) ||
-  /^customXml\//.test(name) ||
-  name.endsWith('.rels')
-
-const normalizedReplayPart = (name: string, content: Buffer): Buffer | undefined => {
-  if (!name.endsWith('.xml') && !name.endsWith('.rels')) return content
-  const xml = content.toString('utf8')
-  const doc = new DOMParser().parseFromString(xml, 'application/xml')
-  if (name === 'word/comments.xml' && doc.getElementsByTagNameNS('*', 'comment').length === 0) {
-    return undefined
-  }
-  if (
-    name === 'word/commentsExtended.xml' &&
-    doc.getElementsByTagNameNS('*', 'commentEx').length === 0
-  ) {
-    return undefined
-  }
-  if (name === 'word/settings.xml' && doc.documentElement.childNodes.length === 0) return undefined
-  if (name.endsWith('.rels')) {
-    const relationships = Array.from(doc.getElementsByTagNameNS('*', 'Relationship'))
-    relationships.forEach((relationship) => {
-      const type = relationship.getAttribute('Type') || ''
-      if (type.endsWith('/comments') || type.endsWith('/commentsExtended')) {
-        relationship.parentNode?.removeChild(relationship)
-      }
-    })
-    if (doc.documentElement.childNodes.length === 0) return undefined
-  }
-  return Buffer.from(new XMLSerializer().serializeToString(doc), 'utf8')
-}
-
-const replayPackageFingerprint = async (snapshot: DocSnapshot): Promise<string> => {
-  if (snapshot.format !== 'docx') return createHash('sha256').update(snapshot.buffer).digest('hex')
-  const hash = createHash('sha256')
-  const names = Object.keys(snapshot.bundle.zip.files).filter(replayModelPart).sort()
-  for (const name of names) {
-    const entry = snapshot.bundle.zip.file(name)
-    if (!entry) continue
-    const normalized = normalizedReplayPart(name, await entry.async('nodebuffer'))
-    if (!normalized) continue
-    hash.update(name)
-    hash.update('\0')
-    hash.update(normalized)
-    hash.update('\0')
-  }
-  return hash.digest('hex')
 }
 
 const messageText = (error: Error | string): string =>
@@ -667,29 +615,6 @@ export const handleDocxWorkerRequest = async (
             request.payload.fromNodeIndex,
             request.payload.toNodeIndex
           )
-        }
-      }
-    }
-
-    if (request.action === 'get_replay_snapshot_xml') {
-      const snapshot = getSnapshot(request.runId, request.payload.docId)
-      const serializer = new XMLSerializer()
-      return {
-        requestId: request.requestId,
-        ok: true,
-        payload: {
-          action: 'get_replay_snapshot_xml',
-          packageFingerprint: await replayPackageFingerprint(snapshot),
-          nodes: [...snapshot.index.nodesById.entries()]
-            .filter((entry): entry is [string, Extract<(typeof entry)[1], { category: 'root' }>] =>
-              isRootNode(entry[1])
-            )
-            .map(([internalNodeId, node]) => {
-              const nodeId = snapshot.identity.publicIdByInternalId.get(internalNodeId)
-              if (!nodeId)
-                throw new Error(`docx identity missing for internal node: ${internalNodeId}`)
-              return { nodeId, rawXml: serializer.serializeToString(node.node) }
-            })
         }
       }
     }

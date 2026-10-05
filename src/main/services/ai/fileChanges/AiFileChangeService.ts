@@ -24,6 +24,7 @@ const FORCE_REVERT_WARNING =
   '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
 
 export interface AiFileChangeRecordStore {
+  removeRecord(id: string): Promise<void>
   saveRecord(record: AiFileChangeRecord): Promise<void>
   listRecords(request?: ListAiFileChangeRecordsRequest): Promise<ListAiFileChangeRecordsResponse>
   getRecord(request: GetAiFileChangeRecordRequest): Promise<GetAiFileChangeRecordResponse>
@@ -31,6 +32,10 @@ export interface AiFileChangeRecordStore {
 
 export class AiFileChangeService {
   public constructor(private readonly store: AiFileChangeRecordStore) {}
+
+  public async removeRecord(id: string): Promise<void> {
+    await this.store.removeRecord(id)
+  }
 
   public async saveRecord(record: AiFileChangeRecord): Promise<void> {
     const byId = (await this.store.getRecord({ changeId: record.id })).record

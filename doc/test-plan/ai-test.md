@@ -76,7 +76,7 @@
 ### 2.1 `tool`
 
 - 负责生产工具 runtime 的完整输入输出、读写链、错误边界、原子性、修改记录与回退契约；只验证真实生产工具调用，不允许 fake。
-- `tool / docx` 覆盖 7 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 Source→Working 净 Diff。
+- `tool / docx` 覆盖 7 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 首次基线→最终 Worker 文件净 Diff。
 - `tool / text-file` 覆盖普通文本按行分页读取、四种写入 action、修改记录、结构化 diff 与回退前置数据，以及按行号定位的文本搜索；unit 侧见 `tests/case/unit/ai/text-file-tool-contract.test.ts`。
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作地址内修改记录、Artifact、安全校验和工作地址外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
@@ -129,9 +129,9 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只认�
 
 #### docx 类别
 
-DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segment map 百分比区间、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、分页/分栏/section 边界、中英文混合 TF-IDF、DrawingML/VML 视觉锚点、TF-IDF/MMR 摘要预算、搜索全量计数但只构造前 10 条详情、无效搜索 scope、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和 visual 节点编辑清理。公开工具回归还必须验证错误 ID 不会提交部分修改。
+DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segment map 百分比区间、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 首次基线→最终 Worker 文件净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、分页/分栏/section 边界、中英文混合 TF-IDF、DrawingML/VML 视觉锚点、TF-IDF/MMR 摘要预算、搜索全量计数但只构造前 10 条详情、无效搜索 scope、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和 visual 节点编辑清理。公开工具回归还必须验证错误 ID 不会提交部分修改。
 
-##### `docx-v2-public-tools`
+##### `docx-public-tools`
 
 - 测试类型：`backend`
 - What：3 个读取工具和 4 个写入工具使用同一 DOCX 编辑会话，连续读取、内容编辑、格式、表格、图片、批注与修订后仍可回读。
@@ -155,13 +155,48 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - How：对同一路径连续调用读工具并检查运行期 open 与 session 状态。
 - Oracle：只建立一个当前会话，返回真实节点；错误路径和 `.doc` 写入返回明确错误。
 
-##### `docx-v2-apply-diff`
+##### `docx-apply-diff`
 
 - 测试类型：`backend`
-- What：同一 Run 的 Source→Working 净 Diff、正式写回、Review 预览与 checkpoint 回退。
-- Why：Diff 是 DOCX 写入不可丢失的核心能力，不能用操作次数代替最终净变化。
-- How：真实执行 A→B→C、A→B→A、表格新增行、页眉修改和只修改命名样式的 package 级操作，提交 run 后解析 Review DOCX，再执行回退。
-- Oracle：Review 只含 A 与 C，不含 B；恢复 A 的文档不生成记录；正文与页眉 Diff 都有红删绿增；只有 package part 变化时出现“文档级变更”摘要；正式文件没有 Diff 标记；回退逐字节恢复 Source。
+- What：真实 DOCX 公开工具写入到首尾净审阅、正式文件、统计、连续任务基线和 checkpoint 回退。
+- Why：内容正确和全局红绿数量不足以证明审阅位置、局部范围和资源正确，不能按操作历史生成审阅。
+- How：生产 createAiRunContext 与真实 docx 工具、Worker、store 和 apply service；隔离文档执行连续替换、恢复、表格、页眉、命名样式及批注，解析真实 Review OOXML 并回退。
+- Oracle：字符级 Diff 只保留原始删除字符和最终新增字符；纯格式局部绿标、不覆盖原色/背景、不插入说明；不可见文档级变化有效计数但无假新增；恢复原状无记录；正式文件无系统标记；回退逐字节恢复。
+
+##### `docx-net-review-matrix`
+
+- 测试类型：`backend`
+- What：DOCX 内容、格式、表格和资源的首尾净变化矩阵，包含重复内容、位置和字符范围。
+- Why：防止只验证 operation 成功或标记存在而漏掉审阅语义。
+- How：真实七个公开工具和 apply 链路；按下表准备真实隔离输入，执行生产写入后解析正式文件、review、记录，并从 checkpoint 回退；同一 case 内分开记录每个场景断言，禁止 fake executor/store 或伪造产物。
+- Oracle：每个场景同时验证最终文件、审阅位置与范围、净统计、资源引用和回退；不同操作得到相同首尾状态时结果一致；去掉系统删除内容还原最终文字，去掉系统新增内容还原原始文字及顺序。
+
+| 能力     | 覆盖场景 / Oracle                                                                             |
+| -------- | --------------------------------------------------------------------------------------------- |
+| 内容     | 新增、删除、替换、清空、整节点替换、连续修改、恢复、新增后删除、操作路径等价                  |
+| 移动     | 上下、相邻、首尾、多段、重复文字、表格前后、移回；旧位置红删、新位置绿增；无变化移动成功      |
+| 组合     | 先改后搬、先搬后改、连续搬、搬回保留改字、搬后删除                                            |
+| 字符     | 中文英文、数字标点、离散修改、空白、emoji/组合字符、跨 run/超链接、相同文字重新分 run、长段落 |
+| 格式     | 字符/段落/单元格/表格/节范围；原色及背景保留；格式恢复与间接命名样式变化                      |
+| 表格     | 单元格改字/格式、行列增删、合并拆分、整表移动、对象替换                                       |
+| 区域资源 | 正文、页眉页脚及支持的脚注/文本框；图片、编号、链接、字段等引用完整且旧资源保留               |
+| 文档级   | 批注增改删、修订接受拒绝、样式和设置变化及恢复；不重复计数                                    |
+| 生命周期 | 新建/回退删除、多文件隔离、连续执行首次基线、先进入编辑但后生成记录、零变化消除、统计一致     |
+| 失败     | 无效目标、跨 story 禁止移动、批量预检/执行失败无部分写盘                                      |
+
+公开协议覆盖矩阵如下。`docx-net-review-matrix` 的每个场景均走真实 runtime、Worker、文件、记录和回退服务；读取分页、搜索预算、定位错误和原子格式化另由对应公开用例验证。内部媒体 operation 不属于额外公开工具，公开入口使用 visual 节点的内容编辑协议。
+
+| 公开工具                  | 全部操作 / 请求范围                                                                                                                                                                                       | 正式用例与核心断言                                                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docx_read_outline`       | 百分比范围、空文档、多区域、密集表格、长段落                                                                                                                                                              | `docx-outline-pagination`、`docx-public-tools`：完整 segment、顺序、文字预算、真实当前状态                                                      |
+| `docx_search`             | literal / regex、scope、计数、邻居、无效表达式                                                                                                                                                            | `docx-search-original-text-contract`、`docx-search-literal-contract`、`docx-search-regex-contract`：原文精确命中、稳定 ID、全量计数、失败无写入 |
+| `docx_read_nodes`         | node IDs / node index、递归表格、visual                                                                                                                                                                   | `docx-public-tools`：定位后精准复读、跨工具状态共享、图片引用及创建 ID 可读                                                                     |
+| `docx_content_edit`       | `replace_text`、`insert_nodes`、`replace_node`、`delete_node`、`move_node`                                                                                                                                | `docx-public-tools`、`docx-net-review-matrix`：文字/visual 创建替换删除移动、首尾顺序重建、等价路径、无变化移动、跨区域拒绝无部分提交           |
+| `docx_format`             | `format_text`、`format_paragraph`、`format_section`、`reset_format`、`apply_named_style`、`create_named_style`、`update_named_style`、`delete_named_style`、`set_numbering`                               | `docx-public-tools`、`docx-net-review-matrix`：实际范围、纯格式 +0/-0、独立样式记录、恢复消除、批量无效目标不得部分生效                         |
+| `docx_table_edit`         | `create_table`、`delete_table`、`insert_row`、`delete_row`、`insert_column`、`delete_column`、`merge_cells`、`split_cell`、`format_table`、`format_row`、`format_cell`                                    | `docx-net-review-matrix`：首尾行列/合并拓扑、对应单元格、格式范围、逐字节回退                                                                   |
+| `docx_comments_revisions` | `add_comment`、`update_comment`、`reply_comment`、`delete_comment`、`enable_track_changes`、`disable_track_changes`、`accept_revision`、`reject_revision`、`accept_all_revisions`、`reject_all_revisions` | `docx-public-tools`、`docx-net-review-matrix`、`docx-apply-diff`：批注/设置独立变化、根级修订结构、原有用户修订保留、恢复/回退                  |
+
+Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大范围文字变化与长段落耗时/输出规模；`docx-review-resources` 补超链接、旧新资源冲突、命名样式/默认样式/主题继承、缺失定义补全、节范围、用户修订保真。`docx-node-identity`、`docx-operation-matrix` 和现有递归/visual 测试继续保障编辑能力；这些测试不能替代上述真实公开工具覆盖。Workbench 用例归属及界面 Oracle 见 Workbench 测试计划。
 
 ##### `docx-search-original-text-contract`
 

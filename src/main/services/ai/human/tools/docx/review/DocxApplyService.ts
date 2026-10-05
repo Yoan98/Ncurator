@@ -30,15 +30,12 @@ export class DocxApplyService {
     private readonly docxApplyStore: DocxApplyStore,
     private readonly aiFileChangeService?: AiFileChangeService
   ) {
-    this.editTracker = new RunDocxEditTracker(docxApplyStore)
+    this.editTracker = new RunDocxEditTracker(docxApplyStore, async (id) => {
+      await this.aiFileChangeService?.removeRecord(id)
+    })
   }
 
-  public beginRun(input: {
-    runId: string
-    ownerRunId?: string
-    partnerId: string
-    inputText: string
-  }): void {
+  public beginRun(input: { runId: string; ownerRunId?: string; partnerId: string }): void {
     this.editTracker.beginRun(input)
   }
 
@@ -46,8 +43,10 @@ export class DocxApplyService {
     this.editTracker.discardRun(runId)
   }
 
-  public registerDocxOpen(input: Parameters<RunDocxEditTracker['registerDocxOpen']>[0]): void {
-    this.editTracker.registerDocxOpen(input)
+  public async registerDocxOpen(
+    input: Parameters<RunDocxEditTracker['registerDocxOpen']>[0]
+  ): Promise<void> {
+    await this.editTracker.registerDocxOpen(input)
   }
 
   public registerDocxChanges(

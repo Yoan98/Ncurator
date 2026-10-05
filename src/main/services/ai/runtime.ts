@@ -167,22 +167,20 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     scheduledTaskService: deps.scheduledTaskService,
     appendMessageLog,
     loadMessageLog,
-    trackDocxOpen: ({ docId, sourcePath, replaySession }) => {
-      deps.docxApplyService.registerDocxOpen({
+    trackDocxOpen: async ({ docId, sourcePath, editSession }) => {
+      await deps.docxApplyService.registerDocxOpen({
         runId: payload.runId,
         docId,
         sourcePath,
-        replaySession
+        editSession
       })
     },
-    trackDocxChanges: ({ previousDocId, nextDocId, changedNodes, createdNodes, replaySession }) => {
+    trackDocxChanges: ({ previousDocId, nextDocId, editSession }) => {
       deps.docxApplyService.registerDocxChanges({
         runId: payload.runId,
         previousDocId,
         nextDocId,
-        changedNodes,
-        createdNodes,
-        replaySession
+        editSession
       })
     },
     resolveDocxOpenTarget: async (sourcePath) =>
@@ -191,8 +189,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       deps.docxApplyService.beginRun({
         runId: payload.runId,
         partnerId: payload.partnerId,
-        ownerRunId,
-        inputText: String(payload.input || '')
+        ownerRunId
       })
     },
     applyDocxRunEdits: async (options) => {

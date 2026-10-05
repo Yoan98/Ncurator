@@ -197,6 +197,7 @@ export const createRealAiDepsFactory = async (input: {
     const ctx = createAiRunContext(
       {
         runId,
+        ownerRunId: contextInput.ownerRunId,
         partnerId,
         partnerName: 'backend test partner',
         userMessageId: `test-user-message-${runId}`,

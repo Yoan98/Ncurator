@@ -204,6 +204,8 @@ const applyMoveNode = async (
       'cross-story move is not supported because relationships cannot be preserved safely'
     )
   }
+  if (moving === anchor && (op.position === 'before' || op.position === 'after'))
+    return { buffer, changedNodes: [] }
   let anchorAncestor: Node | null = anchor
   while (anchorAncestor) {
     if (anchorAncestor === moving) throw new Error('cannot move a node into itself')
@@ -227,7 +229,10 @@ const applyMoveNode = async (
     const parent = anchor.parentNode
     if (!parent || parent.nodeType !== 1) throw new Error('move anchor has no element parent')
     assertCompatibleInsertion(parent as Element, moving)
-    parent.insertBefore(moving, op.position === 'before' ? anchor : anchor.nextSibling)
+    const next = op.position === 'before' ? anchor : anchor.nextSibling
+    if (next === moving || (moving.parentNode === parent && moving.nextSibling === next))
+      return { buffer, changedNodes: [] }
+    parent.insertBefore(moving, next)
   } else {
     const container = anchor.localName === 'sdt' ? firstChildElement(anchor, 'sdtContent') : anchor
     if (
@@ -240,7 +245,11 @@ const applyMoveNode = async (
       throw new Error(`only visual nodes can move directly inside paragraph ${op.anchorNodeId}`)
     }
     assertCompatibleInsertion(container, moving)
-    container.insertBefore(moving, op.position === 'inside_start' ? container.firstChild : null)
+    const next = op.position === 'inside_start' ? container.firstChild : null
+    if (next === moving || (moving.parentNode === container && moving.nextSibling === next)) {
+      return { buffer, changedNodes: [] }
+    }
+    container.insertBefore(moving, next)
   }
   return {
     buffer: await writeDocumentXml(bundle),
@@ -1115,7 +1124,8 @@ const isMediaTargetReferenced = async (zip: JSZip, mediaPath: string): Promise<b
     const referencesTarget = childElements(relationships.documentElement, 'Relationship').some(
       (relation) =>
         relation.getAttribute('TargetMode') !== 'External' &&
-        resolveDocxRelationshipTarget(relation.getAttribute('Target') || '', sourcePart) === mediaPath
+        resolveDocxRelationshipTarget(relation.getAttribute('Target') || '', sourcePart) ===
+          mediaPath
     )
     if (referencesTarget) return true
   }

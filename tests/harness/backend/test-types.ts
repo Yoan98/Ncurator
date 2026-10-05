@@ -178,6 +178,7 @@ export type SeedChatHistoryInput = {
 }
 
 export type CreateAiRunContextInput = {
+  ownerRunId?: string
   bindWorkspace?: boolean
   partnerId?: string
   sessionId?: string

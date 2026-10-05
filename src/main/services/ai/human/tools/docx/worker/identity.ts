@@ -16,7 +16,7 @@ import type {
   IndexedNode
 } from '../adapters/ooxml/types'
 import { isEditableNode, isRootNode, isVisualNode } from '../adapters/ooxml/types'
-import { childElements } from '../adapters/ooxml/dom'
+import { childElements, getAttr } from '../adapters/ooxml/dom'
 
 export type DocxIdentityIndex = {
   publicIdByInternalId: Map<string, string>
@@ -539,11 +539,9 @@ const tableMutationContext = (input: {
           ? input.op.cellNodeId
           : undefined
     const internalTarget = targetId
-      ? input.previousIdentity.internalNodeIdByPublicId.get(targetId)
+      ? resolveInternalNodeId(input.previousIdentity, targetId)
       : undefined
-    let node = internalTarget
-      ? editableNodeAt(input.previousIndex, internalTarget)?.node
-      : undefined
+    let node = internalTarget ? input.previousIndex.nodesById.get(internalTarget)?.node : undefined
     while (node && node.localName !== 'tbl') node = node.parentNode as Element | undefined
     const internalTableId = node
       ? [...input.previousIndex.nodesById.values()].find((candidate) => candidate.node === node)
@@ -577,6 +575,51 @@ const applyLogicalOp = (
   previousIndex: NodeIndex,
   previousIdentity: DocxIdentityIndex
 ): void => {
+  if (
+    ['accept_revision', 'reject_revision', 'accept_all_revisions', 'reject_all_revisions'].includes(
+      op.type
+    )
+  ) {
+    const accepting = op.type === 'accept_revision' || op.type === 'accept_all_revisions'
+    const revisionId = 'revisionId' in op ? op.revisionId : undefined
+    const exposed = (node: Element, storyId: string): LogicalRootNode[] => {
+      if (
+        ['ins', 'del', 'moveFrom', 'moveTo'].includes(node.localName) &&
+        (!revisionId || getAttr(node, 'id') === revisionId)
+      ) {
+        const insertion = node.localName === 'ins' || node.localName === 'moveTo'
+        return accepting === insertion
+          ? childElements(node).flatMap((child) => exposed(child, storyId))
+          : []
+      }
+      const kind =
+        node.localName === 'p'
+          ? 'paragraph'
+          : node.localName === 'tbl'
+            ? 'table'
+            : node.localName === 'sdt'
+              ? 'content_control'
+              : 'revision'
+      return [
+        {
+          nodeId: createNodeId(),
+          kind,
+          storyId,
+          cellNodeIds:
+            kind === 'table' ? Array.from(node.getElementsByTagName('w:tc'), createNodeId) : []
+        }
+      ]
+    }
+    const next = body.flatMap((logical) => {
+      if (logical.kind !== 'revision') return [logical]
+      const internal = previousIdentity.internalIdByPublicId.get(logical.nodeId)
+      const node = internal && previousIndex.nodesById.get(internal)?.node
+      if (!node || (revisionId && getAttr(node, 'id') !== revisionId)) return [logical]
+      return exposed(node, logical.storyId)
+    })
+    body.splice(0, body.length, ...next)
+    return
+  }
   if (
     op.type === 'create_document' ||
     op.type === 'replace_text' ||
@@ -732,9 +775,9 @@ const applyLogicalOp = (
         rows[rowIndex]?.splice(fromColumn + 1, removeCount)
       }
     } else {
-      const internalCellId = previousIdentity.internalNodeIdByPublicId.get(op.cellNodeId)
+      const internalCellId = resolveInternalNodeId(previousIdentity, op.cellNodeId)
       const cellNode = internalCellId
-        ? editableNodeAt(previousIndex, internalCellId)?.node
+        ? previousIndex.nodesById.get(internalCellId)?.node
         : undefined
       const rowNode = cellNode?.parentNode as Element | undefined
       const rowIndex = rowNode ? childElements(table, 'tr').indexOf(rowNode) : -1
@@ -762,7 +805,7 @@ const applyLogicalOp = (
   if (op.type === 'move_node') {
     const sourceIndex = body.findIndex((node) => node.nodeId === op.nodeId)
     const anchorIndex = body.findIndex((node) => node.nodeId === op.anchorNodeId)
-    if (sourceIndex < 0 || anchorIndex < 0) return
+    if (sourceIndex < 0 || anchorIndex < 0 || sourceIndex === anchorIndex) return
     const [moving] = body.splice(sourceIndex, 1)
     if (!moving) return
     const nextAnchorIndex = body.findIndex((node) => node.nodeId === op.anchorNodeId)

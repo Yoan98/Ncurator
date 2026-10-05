@@ -104,7 +104,7 @@ export const createDocxToolHarness = (
   const built = buildDocxCapabilityTools({
     ctx,
     cache,
-    runId: runtime.runId,
+    runId: ctx.runId,
     partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
@@ -119,7 +119,7 @@ export const createDocxToolHarness = (
     state: built.state,
     activities,
     async release(): Promise<void> {
-      await resourceManager.releaseRun(runtime.runId)
+      await resourceManager.releaseRun(ctx.runId)
     }
   }
 }
