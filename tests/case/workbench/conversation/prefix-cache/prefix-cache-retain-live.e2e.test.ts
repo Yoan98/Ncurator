@@ -60,7 +60,7 @@ describe('workbench conversation e2e', () => {
         groups: ['prefix-cache'],
         description:
           '验证同伙伴三轮短续接（含文本读工具历史）时，相邻跨 run 前缀缓存与 toolsHash 保持稳定（发布准备必跑）。',
-        fixtures: ['tests/fixtures/workspace'],
+        fixtures: [],
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',
@@ -68,7 +68,7 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const env = loadWorkbenchLiveModelEnv()
-          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
+          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID, 'empty')
           await writeFile(path.join(workspace.rootPath, NOTE_FILE_NAME), NOTE_BODY, 'utf8')
           const workspaceName = clampWorkbenchPartnerName(`Workbench ${CASE_ID}`)
           await configureLiveModelThroughSettingsUi(page, env)
@@ -156,10 +156,14 @@ describe('workbench conversation e2e', () => {
             run3Status: 'completed' as const,
             run1UsedTextRead: runUsedTextReadTool(evidence1.events),
             run1ToRun2PrefixCache: collectContinuationPrefixCacheReuse({
+              previousRunId: runIdOf(evidence1.events),
+              nextRunId: runIdOf(evidence2.events),
               previousLlmIo: run1LlmIo,
               nextLlmIo: run2LlmIo
             }),
             run2ToRun3PrefixCache: collectContinuationPrefixCacheReuse({
+              previousRunId: runIdOf(evidence2.events),
+              nextRunId: runIdOf(evidence3.events),
               previousLlmIo: run2LlmIo,
               nextLlmIo: run3LlmIo
             })

@@ -70,6 +70,8 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 
 ## 最新 Live 评估
 
+跨 run 缓存用例从已完成落盘的 LLM 日志按真实 `runId` 选择上一轮末次有效 brain 和下一轮首次 brain；禁止按日志数组长度切分轮次。断言记录双方 runId/callId、历史消息前缀和工具定义是否一致，以及服务端返回的缓存复用率。保留 85% 门槛；低命中与前缀改写分开归因，不用延时或降低门槛掩盖失败。
+
 | caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                                  | 简短依据                                                                                                                                                                                                                                                         |
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | human-subagent-collaboration-live                   | 完成 |            93 | deepseek-flash                   | 2026-10-05 15:04 CST | tests/logs/ai/human/live/human-subagent-collaboration-live/20261005-150459-302-7e8af28d                   | 三项子任务完成，核算 91,824,000 / 422,000 / 91,402,000；配置和 Word 修改归主 run，正式文件与独立审核解析、B 清理通过。78s。                                                                                                                                      |
@@ -79,14 +81,14 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 | human-excel-edit-weekly-review-live                 | 完成 |            95 | deepseek-flash                   | 2026-10-05 15:06 CST | tests/logs/ai/human/live/human-excel-edit-weekly-review-live/20261005-150618-395-56b40350                 | 4 次 excel_edit：表头、680000 和扣退货净额公式正确，保护区保持原样；单条审核工作簿与 B 清理通过。38s。                                                                                                                                                           |
 | human-excel-create-monthly-budget-live              | 完成 |            92 | deepseek-flash                   | 2026-10-05 15:06 CST | tests/logs/ai/human/live/human-excel-create-monthly-budget-live/20261005-150658-161-c84b8c3c              | 两表预算、SUMIF/COUNTIF 和金额格式断言通过，正式文件与独立审核均可解析；14 次编辑、10 次读取，复核略多。38s。                                                                                                                                                    |
 | human-kb-guided-docx-comparison-draft-live          | 完成 |            95 | deepseek-flash                   | 2026-10-05 15:09 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20261005-150900-453-4712c312          | KB 证据与原文读取后两次编辑，按明确主题映射更新两份 Word；来源保护、独立审核、B 清理通过。79s。                                                                                                                                                                  |
-| human-ppt-create-executive-deck-live                | 完成 |            88 | deepseek-flash                   | 2026-10-05 15:05 CST | tests/logs/ai/human/live/human-ppt-create-executive-deck-live/20261005-150537-478-9ce84e61                | 6 页简报与完整 SVG 审核通过，清理 B 后页面可读；抽看封面和风险页，整体可用，但风险表负责人列长文字有截断，排版仍需改进。116s。                                                                                                                                   |
-| human-ppt-edit-management-review-live               | 完成 |            94 | deepseek-flash                   | 2026-10-05 15:06 CST | tests/logs/ai/human/live/human-ppt-edit-management-review-live/20261005-150616-341-bf855124               | 3 次编辑：插执行摘要、王晨→李然、2002→2015；议程和愿景保护、9→10 页与独立前后 SVG 审核通过。58s。                                                                                                                                                                |
+| human-ppt-create-executive-deck-live | 完成 | 94 | deepseek-flash | 2026-10-05 17:02 CST | tests/logs/ai/human/live/human-ppt-create-executive-deck-live/20261005-170203-691-aad35e9c | 6 页简报、正式 PPT 和自包含 SVG 审核通过；按实际字体检查表格无单元格溢出、无其他文字框重叠。审核图与 LibreOffice 独立渲染人工复核，中文、全角括号和底部说明完整。87s。 |
+| human-ppt-edit-management-review-live | 完成 | 94 | deepseek-flash | 2026-10-05 17:02 CST | tests/logs/ai/human/live/human-ppt-edit-management-review-live/20261005-170203-693-c804081e | 3 次编辑新增摘要、改汇报人与成立年份；议程/愿景保护、9→10 页、独立前后 SVG 和确认 B 清理通过。56s。 |
 | human-ppt-read-management-risk-review-live          | 完成 |            90 | qwen3.8-flash                    | 2026-08-30 12:39 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260830-123903-652                   | 中文提案只读，Oracle 通过；KPI 85% 正确。缓存 74.1%（首轮占比高）。                                                                                                                                                                                              |
 | human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775                      | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。                                                                                                                                                                        |
 | human-runtime-script-system-python-live             | 完成 |            95 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20260814-160300-706                      | 本机 Python 在临时脚本目录运行临时脚本，得到确定性结果并核对。                                                                                                                                                                                                   |
 | human-runtime-download-python-live                  | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415                           | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。                                                                                                                                                                                                  |
-| human-partner-resume-with-new-selection-live        | 完成 |            95 | qwen3.8-flash                    | 2026-09-12 12:35 CST | tests/logs/ai/human/live/human-partner-resume-with-new-selection-live/20260912-122841-441                 | Run1 `llm_request_failed` 后同伙伴续做：历史过拟合原文仍在，新选图形学.docx 补反走样并写草稿；未写项标清。跨 run 缓存 0.992（9216/9287）。无 Discard User。                                                                                                      |
-| human-partner-continuation-live                     | 完成 |            91 | deepseek-flash                   | 2026-10-05 15:25 CST | tests/logs/ai/human/live/human-partner-continuation-live/20261005-152500-280-0b84e91c                     | 两轮任务完成，历史+尾部 user 投影与双主题事实通过；跨 run 前缀复用 100.6%，过程有多次终端读图和反复核对，答复偏长。326s。                                                                                                                                        |
+| human-partner-resume-with-new-selection-live | 缓存未达标 | 93 | deepseek-flash | 2026-10-05 17:02 CST | tests/logs/ai/human/live/human-partner-resume-with-new-selection-live/20261005-170203-704-8862e8b1 | 中断后同伙伴续做，保留旧事实并使用新选择文件完成草稿，功能断言通过；请求前缀及工具定义完整保留，但服务端返回缓存复用 64.75%（19456/30047），未达 85%。66s。 |
+| human-partner-continuation-live | 完成 | 91 | deepseek-flash | 2026-10-05 17:03 CST | tests/logs/ai/human/live/human-partner-continuation-live/20261005-170302-079-ba8b5605 | 两轮正常完成，历史追加、新选文件和双主题事实通过；日志等待落盘并按真实 runId 配对后，前缀及工具定义一致，缓存复用 90.95%（73344/80646），达到 85% 门槛。338s。 |
 | human-docx-positioned-structural-edit-fallback-live | 完成 |            85 | deepseek-flash                   | 2026-10-05 15:09 CST | tests/logs/ai/human/live/human-docx-positioned-structural-edit-fallback-live/20261005-150900-453-0b6d3dc1 | 复杂定位原稿 hash 未变，非定位文件编辑与独立审核通过；模型在临时副本多次试探保护边界并处理 stale nodeId，过程有冗余。79s。                                                                                                                                       |
 | human-legacy-doc-reading-live                       | 完成 |            94 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815                                | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。                                                                                                                                                                                     |
 | human-text-file-write-checkout-cutover-live         | 完成 |            96 | deepseek-flash                   | 2026-10-05 15:07 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20261005-150706-485-43600589         | 两处端点及超时准确更新，重试/telemetry 不变；两次编辑，完整行 JSON 审核与 B 清理通过。9s。                                                                                                                                                                       |
@@ -95,10 +97,10 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 | human-web-search-intent-query-live                  | 完成 |            90 | qwen3.8-flash                    | 2026-09-01 16:24 CST | tests/logs/ai/human/live/human-web-search-intent-query-live/20260901-162353-087                           | 2×search + 2×fetch 成功读取 read_csv 与 DataFrame.to_csv 官方 API 页，errors=0。                                                                                                                                                                                 |
 | human-terminal-preview-service-live                 | 完成 |            88 | qwen3.8-flash                    | 2026-08-31 18:30 CST | tests/logs/ai/human/live/human-terminal-preview-service-live/20260831-183019-685                          | 启动预览服务、确认页面并关闭服务，前台 yield/读终端或后台+wait 两条路径均可。                                                                                                                                                                                    |
 | human-legacy-doc-edit-skip-live                     | 完成 |            88 | deepseek-v4-flash                | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129                              | .doc 写入失败后停止重试，源文件不变，任务完成。                                                                                                                                                                                                                  |
-| human-docx-visual-reading-live                      | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243                               | 真实读取 DOCX 图片并准确回答，源文件未改。                                                                                                                                                                                                                       |
+| human-docx-visual-reading-live | 完成 | 93 | deepseek-flash | 2026-10-05 17:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20261005-170424-148-371e1d67 | 读取正文和真实图片，回答图片中的关键事实，来源文件 hash 不变；工具及完成态断言通过。31s。 |
 | human-pdf-visual-reading-live                       | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871                                | PDF 页级视觉读取与识图，正确回答图形差异，源 PDF 未改。                                                                                                                                                                                                          |
-| human-docx-dangling-image-edit-live                 | 完成 |            94 | deepseek-flash                   | 2026-10-05 15:25 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20261005-152500-278-a10eb57a                 | 读取真实图片，16 次 Word 编辑补工时；NULL 残留不阻断审核，正式 DOCX 与独立审核解析、确认 B 和清理通过。86s。                                                                                                                                                     |
-| human-skill-eviction-relearn-loop-live              | 完成 |            92 | deepseek-flash                   | 2026-10-05 15:25 CST | tests/logs/ai/human/live/human-skill-eviction-relearn-loop-live/20261005-152500-277-18f8d229              | 三轮独立主 run：FIFO 淘汰、Word/PPT 写入及重学完成；独立审核与 B 清理通过；续接前缀复用 100.4% / 90.5%。72s。                                                                                                                                                    |
+| human-docx-dangling-image-edit-live | 网络中断 | — | deepseek-flash | 2026-10-05 17:09 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20261005-170954-178-a9df391c | 读取正文和真实图片后 provider 返回 Connection error，run failed，未执行 Word 编辑，本次写入审核验收未完成。正文读取断言允许提纲加节点读取或搜索。run 834s，含日志清理共 1574s。 |
+| human-skill-eviction-relearn-loop-live | 缓存未达标 | 92 | deepseek-flash | 2026-10-05 17:03 CST | tests/logs/ai/human/live/human-skill-eviction-relearn-loop-live/20261005-170332-050-46c8fb53 | 两轮完成 FIFO 淘汰、同轮重学、Word/PPT 写入；独立审核与 B 清理通过。读图和学习混合批次无消息顺序错误。前缀和工具定义一致，缓存复用 50.69%（9088/17929），未达 85%。51s。 |
 
 ## 1. 总体目标
 
@@ -357,8 +359,8 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / tool`
 - What：元素位置、样式、图层、复制、线条、图片、表格、图表和公式更新。
 - Why：专业 PPT 编辑依赖元素级能力，不能只覆盖整页创建。
-- How：对真实 PPT 依次执行代表性的元素级编辑并重新读取结果。
-- Oracle：操作成功；写回 `createdElementIds` 可继续用于后续编辑；最终 pptx 可解析。
+- How：对真实 PPT 依次执行代表性的元素级编辑并重新读取结果；表格创建与更新使用非等宽列、非等高行、明确字号和字体，包含中文人名及全角括号。
+- Oracle：操作成功；写回 `createdElementIds` 可继续用于后续编辑；正式 PPT 的列宽、行高、单元格字体和字号正确；审核 SVG 完整保留文字且换行后的字形不越出单元格，也不与相邻说明区域重叠；另一主 run 仅改变表格字号仍产生准确修改标记和前后 SVG；非法维度或不合框的表格在保存前失败。
 
 ##### `ppt-visual-runtime-contract`
 
@@ -366,7 +368,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：PPT 元素规格编译、画布边界、非法输入和原子失败保持稳定。
 - Why：这是生产 PPT 工具的运行时契约，不应由 Unit 重复拥有完整 runtime 流程。
 - How：用元素规格创建、插入、渲染和解析产物；非法出画布（960×540，单位 pt）或字号超过框高的输入应失败。
-- Oracle：合法页面生成可解析 PPTX 且关键元素位置与字号（pt，与 bounds 同单位）稳定；非法页面返回可解释错误且不留下半成品。
+- Oracle：合法页面生成可解析 PPTX 且关键元素位置与字号（pt，与 bounds 同单位）稳定；非法页面返回可解释错误且不留下半成品。中文、全角标点的 SVG 换行按实际字体宽度测量；普通预览和审核生成使用同一测量规则。
 
 #### excel 类别
 
@@ -899,8 +901,8 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：mock human 能组合 PDF 页面读取与主模型图片输入。
 - Why：扫描 PDF 需要页面图片路径，但图片理解应由主模型完成。
-- How：脚本化 human 先调用 `pdf_read_pages`，再把返回的 `pageImagePath` 交给 `read_image`。
-- Oracle：页面读取和图片引用均成功；同一次后续主模型请求包含页面图片；不调用任何旧 visual/render 工具。
+- How：脚本化 human 先调用真实 `pdf_read_pages`；下一批把返回的 `pageImagePath` 交给两次 `read_image`，中间夹入 `learn_skill`，覆盖跨 hand/learning 节点分段投影。
+- Oracle：下一次真实 brain 请求中，同一 assistant 的全部工具结果连续位于图片消息之前；两次读图按输入顺序进入同一多模态消息，持久 log 重建与运行中缓存一致。任务完成且 PDF 和 read_image 工具实际成功。
 
 ##### `kb-answer-with-real-kb`
 
@@ -1038,7 +1040,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：真实模型在空文件地址从零创建约 5–6 页可开会用的 16:9 管理层汇报（封面、执行摘要、KPI、趋势图、风险与负责人、下一步）。
 - Why：创建主路径要验收「真人能开会用」的交付，而不只是文件可解析。
 - How：无 fixture；用户指定文件名与页结构诉求；模型自行 `ppt_edit` 创建并自检。
-- Oracle：`ppt_edit` 成功；正式文件可解析；`slideCount` 5–8；正文含执行摘要/风险/下一步（中英均可）；出画布 0、error 0、1 artifact。质量完成度由 raw logs + artifact 人工评分回写顶部快照。
+- Oracle：`ppt_edit` 成功；正式文件可解析；`slideCount` 5–8；正文含执行摘要/风险/下一步（中英均可）；出画布 0、error 0、1 artifact；正式文件中的表格按实际 SVG 字形无单元格溢出，且表格边界不与其他文字框重叠。质量完成度由 raw logs + artifact 人工评分回写顶部快照。
 
 ##### `human-terminal-data-reconciliation-live`
 
@@ -1118,7 +1120,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：真实模型能读取带 `NULL` 图片残留的需求 DOCX，识别真实图片、评估需求并写回开发时间；主 run 收尾生成可独立解析的审核，残留图片不阻断净差异。
 - Why：这条回归覆盖用户真实的“读图 + 分析 + 同文件编辑”闭环，防止底层脏关系再次被算成虚假图片或阻止写入。
 - How：使用真实附件和用户原句，通过生产主 run 与完整工具发现链执行；从统一记录读取本轮修改，直接解析正式 DOCX 与审核产物。
-- Oracle：任务完成；调用 DOCX 读取、`read_image` 和成功的 `docx_content_edit`；图片读取没有缺失文件错误，最终答复不出现“图片9”，产出的 DOCX 比原文新增至少 12 条有效工时表达，接受小数、区间及天、人天、人日、工作日、小时等自然表述。
+- Oracle：任务完成；调用 DOCX 提纲与正文读取（`docx_read_nodes` 或 `docx_search`）、`read_image` 和成功的 `docx_content_edit`；图片读取没有缺失文件错误，最终答复不出现“图片9”，产出的 DOCX 比原文新增至少 12 条有效工时表达，接受小数、区间及天、人天、人日、工作日、小时等自然表述。
 
 ##### `human-web-search-by-url-live`
 

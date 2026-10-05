@@ -8,10 +8,7 @@ const elementIdSchema = z.string().min(1).describe('元素 elementId')
 /** Opaque hex; `#` optional at runtime as兜底. Contract documents `#RRGGBB` only. */
 const pptHexColorSchema = z
   .string()
-  .regex(
-    /^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/,
-    '颜色必须是 #RRGGBB（不透明）'
-  )
+  .regex(/^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, '颜色必须是 #RRGGBB（不透明）')
   .describe('不透明颜色；#RRGGBB')
 
 export const pptBoundsSchema = z
@@ -19,10 +16,7 @@ export const pptBoundsSchema = z
     x: z.number().min(0).describe('左上角 X，单位 pt，须落在 960×540 画布内'),
     y: z.number().min(0).describe('左上角 Y，单位 pt，须落在 960×540 画布内'),
     width: z.number().positive().describe('宽度，单位 pt'),
-    height: z
-      .number()
-      .positive()
-      .describe('高度，单位 pt；含文字时须 ≥ fontSize（与字号同单位）')
+    height: z.number().positive().describe('高度，单位 pt；含文字时须 ≥ fontSize（与字号同单位）')
   })
   .strict()
   .meta({ id: 'PptBounds' })
@@ -139,6 +133,25 @@ const chartSeriesSchema = z
   .meta({ id: 'PptChartSeries' })
 const imageFitSchema = z.enum(['contain', 'cover', 'stretch'])
 
+const pptTableLayoutFields = {
+  columnWidths: z
+    .array(z.number().positive())
+    .min(1)
+    .optional()
+    .describe('各列宽度，单位 pt；数量等于列数，总和等于表格宽度。长文字列应更宽'),
+  rowHeights: z
+    .array(z.number().positive())
+    .min(1)
+    .optional()
+    .describe('各行高度，单位 pt；数量等于行数，总和等于表格高度，须容纳换行文字'),
+  fontSize: z
+    .number()
+    .positive()
+    .optional()
+    .describe('所有单元格字号，单位 pt；创建默认 18。密集表格建议 12–14，溢出时增大空间或减小字号'),
+  fontFamily: z.string().trim().min(1).optional().describe('所有单元格字体，同时设置西文和东亚字体')
+}
+
 export const pptElementSchema = z
   .discriminatedUnion('type', [
     z
@@ -182,7 +195,11 @@ export const pptElementSchema = z
       .object({
         type: z.literal('table').describe('表格'),
         bounds: pptBoundsSchema,
-        rows: z.array(z.array(z.string()).min(1)).min(1).describe('单元格文字，从左到右、从上到下')
+        rows: z
+          .array(z.array(z.string()).min(1))
+          .min(1)
+          .describe('单元格文字，从左到右、从上到下；每行列数相同'),
+        ...pptTableLayoutFields
       })
       .strict(),
     z
@@ -263,8 +280,11 @@ const pptElementOperationSchema = z
       .strict(),
     z
       .object({
-        type: z.literal('update_table').describe('改表格单元格'),
+        type: z
+          .literal('update_table')
+          .describe('修改表格文字、列宽、行高或字体字号；布局总尺寸保持表格边界'),
         elementId: elementIdSchema,
+        ...pptTableLayoutFields,
         cells: z
           .array(
             z
@@ -276,8 +296,18 @@ const pptElementOperationSchema = z
               .strict()
           )
           .min(1)
+          .optional()
       })
-      .strict(),
+      .strict()
+      .refine(
+        (value) =>
+          value.cells ||
+          value.columnWidths ||
+          value.rowHeights ||
+          value.fontSize ||
+          value.fontFamily,
+        '至少提供一项表格修改'
+      ),
     z
       .object({
         type: z.literal('update_chart').describe('改图表数据'),

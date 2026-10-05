@@ -5,9 +5,17 @@ import {
   findShapesOutsideCanvas,
   getSlideText,
   getSlides,
+  getSlideShapes,
+  getShapeBoundsResolved,
+  hasShapeText,
+  isTableShape,
   loadPresentation,
   validatePresentation
 } from 'pptx-kit'
+import {
+  findPptTableOverflows,
+  renderPptSlideSvg
+} from '../../../../../src/main/services/ai/human/tools/ppt/textLayout'
 import { describe, it } from 'vitest'
 import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -44,11 +52,43 @@ describe('ai human live ppt create backend', () => {
           const bytes = await fs.readFile(sourcePath)
           const presentation = await loadPresentation(new Uint8Array(bytes))
           const texts = getSlides(presentation).map((slide) => getSlideText(slide))
+          const tableLayoutProblems: { slideIndex: number; text: string; cellIndex?: number }[] = []
+          for (const [slideIndex, slide] of getSlides(presentation).entries()) {
+            const shapes = getSlideShapes(slide)
+            const tables = shapes.filter(isTableShape)
+            if (!tables.length) continue
+            const svg = await renderPptSlideSvg(presentation, slide)
+            for (const table of tables) {
+              const bounds = getShapeBoundsResolved(presentation, table)
+              const overlaps = shapes
+                .filter((shape) => !isTableShape(shape) && hasShapeText(shape))
+                .filter((shape) => {
+                  const other = getShapeBoundsResolved(presentation, shape)
+                  return (
+                    bounds.x < other.x + other.w &&
+                    bounds.x + bounds.w > other.x &&
+                    bounds.y < other.y + other.h &&
+                    bounds.y + bounds.h > other.y
+                  )
+                })
+              tableLayoutProblems.push(
+                ...findPptTableOverflows(presentation, table, svg).map((overflow) => ({
+                  slideIndex: slideIndex + 1,
+                  ...overflow
+                })),
+                ...overlaps.map(() => ({
+                  slideIndex: slideIndex + 1,
+                  text: '表格与其他文字框重叠'
+                }))
+              )
+            }
+          }
           return {
             output,
             events: runtime.eventCollector.snapshot().slice(eventOffset),
             slideCount: texts.length,
             texts,
+            tableLayoutProblems,
             outsideShapeCount: getSlides(presentation).reduce(
               (count, slide) => count + findShapesOutsideCanvas(slide, presentation).length,
               0
@@ -75,6 +115,7 @@ describe('ai human live ppt create backend', () => {
               /下一步|next|action/iu.test(joined) &&
               result.outsideShapeCount === 0 &&
               result.validationErrors === 0 &&
+              result.tableLayoutProblems.length === 0 &&
               artifacts.length === 1,
             {
               name: 'human-live-ppt-create-delivers-usable-executive-deck',
@@ -84,7 +125,8 @@ describe('ai human live ppt create backend', () => {
                 toolNames,
                 artifacts,
                 slideCount: result.slideCount,
-                texts: result.texts
+                texts: result.texts,
+                tableLayoutProblems: result.tableLayoutProblems
               }
             }
           )

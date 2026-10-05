@@ -141,7 +141,7 @@ describe('ai human live backend', () => {
           ).run()
           await assertRunFileReviews(runtime, run1Output)
           const run1Events = runtime.eventCollector.snapshot()
-          const run1LlmIo = runtime.eventCollector.snapshotLlmIo()
+          const run1LlmIo = await runtime.eventCollector.snapshotLlmIo()
           const skillsAfterRun1 = readLatestLearnedSkillIds(
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
@@ -155,14 +155,18 @@ describe('ai human live backend', () => {
           ).run()
           await assertRunFileReviews(runtime, run2Output)
           const afterRun2Events = runtime.eventCollector.snapshot()
-          const afterRun2LlmIo = runtime.eventCollector.snapshotLlmIo()
+          const afterRun2LlmIo = await runtime.eventCollector.snapshotLlmIo()
           const run2Events = afterRun2Events.slice(run1Events.length)
-          const run2LlmIo = afterRun2LlmIo.slice(run1LlmIo.length)
+          const run2LlmIo = afterRun2LlmIo.filter(
+            (record) => record.runId === `${runtime.runId}-run-2`
+          )
           const skillsAfterRun2 = readLatestLearnedSkillIds(
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
           const run2Eviction = collectLearningEvictionEvidence(run2Events)
           const run2PrefixCache = collectContinuationPrefixCacheReuse({
+            previousRunId: `${runtime.runId}-run-1`,
+            nextRunId: `${runtime.runId}-run-2`,
             previousLlmIo: run1LlmIo,
             nextLlmIo: run2LlmIo
           })
@@ -225,9 +229,9 @@ describe('ai human live backend', () => {
           ).run()
           await assertRunFileReviews(runtime, run3Output)
           const allEvents = runtime.eventCollector.snapshot()
-          const allLlmIo = runtime.eventCollector.snapshotLlmIo()
+          const allLlmIo = await runtime.eventCollector.snapshotLlmIo()
           const run3Events = allEvents.slice(afterRun2Events.length)
-          const run3LlmIo = allLlmIo.slice(afterRun2LlmIo.length)
+          const run3LlmIo = allLlmIo.filter((record) => record.runId === `${runtime.runId}-run-3`)
           const skillsAfterRun3 = readLatestLearnedSkillIds(
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
@@ -244,6 +248,8 @@ describe('ai human live backend', () => {
             run3Events,
             run2PrefixCache,
             run3PrefixCache: collectContinuationPrefixCacheReuse({
+              previousRunId: `${runtime.runId}-run-2`,
+              nextRunId: `${runtime.runId}-run-3`,
               previousLlmIo: run2LlmIo,
               nextLlmIo: run3LlmIo
             }),
@@ -321,7 +327,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(Boolean(result.run2PrefixCache?.satisfied), {
             name: 'run2-reuses-run1-prefix-cache',
             message:
-              'Run2 首次 brain 的 cachedInputTokens 应明显复用 Run1 末次 brain 的 inputTokens 前缀；低于公用跨 run 比例门槛说明前缀被改写或缓存未命中。',
+              'Run2 首次 brain 的 cachedInputTokens 应明显复用 Run1 末次 brain 的 inputTokens 前缀；历史消息前缀和工具定义须一致，服务端缓存复用率须达到公用门槛；低命中按实际请求日志独立归因。',
             data: result.run2PrefixCache
               ? continuationPrefixCacheAssertionData(result.run2PrefixCache)
               : { run2PrefixCache: null }
@@ -367,7 +373,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(Boolean(result.run3PrefixCache?.satisfied), {
             name: 'run3-reuses-run2-prefix-cache',
             message:
-              'Run3 首次 brain 的 cachedInputTokens 应明显复用 Run2 末次 brain 的 inputTokens 前缀；低于公用跨 run 比例门槛说明前缀被改写或缓存未命中。',
+              'Run3 首次 brain 的 cachedInputTokens 应明显复用 Run2 末次 brain 的 inputTokens 前缀；历史消息前缀和工具定义须一致，服务端缓存复用率须达到公用门槛；低命中按实际请求日志独立归因。',
             data: result.run3PrefixCache
               ? continuationPrefixCacheAssertionData(result.run3PrefixCache)
               : { run3PrefixCache: null }

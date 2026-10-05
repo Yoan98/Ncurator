@@ -7,6 +7,7 @@ import {
 } from '../../../../src/main/services/ai/human/memory/conversationLogMessages'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { buildToolFeedback } from '../../../../src/main/services/ai/human/shared/toolFeedback'
+import { repairInterruptedToolCalls } from '../../../../src/main/services/ai/human/memory/transcript'
 
 const userEntry = (content: string): ChatMessageLogEntry => ({
   kind: 'user',
@@ -19,6 +20,87 @@ const userEntry = (content: string): ChatMessageLogEntry => ({
 })
 
 describe('ai unit conversation log messages', () => {
+  it.each(['learn_skill', 'update_plan', 'ask_user'])(
+    'defers images across split batches containing %s',
+    (toolName) => {
+      const entries: ChatMessageLogEntry[] = [
+        {
+          kind: 'assistant',
+          content: '',
+          toolCalls: [
+            { id: 'image-a', name: 'read_image', args: {} },
+            { id: 'other', name: toolName, args: {} },
+            { id: 'image-b', name: 'read_image', args: {} }
+          ]
+        },
+        {
+          kind: 'tool',
+          toolCallId: 'image-a',
+          toolName: 'read_image',
+          ok: true,
+          content: 'a',
+          images: [{ path: '/tmp/a.png', mimeType: 'image/png', sizeBytes: 1, width: 1, height: 1 }]
+        },
+        { kind: 'tool', toolCallId: 'other', toolName, ok: false, content: 'Error: failed' },
+        {
+          kind: 'tool',
+          toolCallId: 'image-b',
+          toolName: 'read_image',
+          ok: true,
+          content: 'b',
+          images: [{ path: '/tmp/b.png', mimeType: 'image/png', sizeBytes: 1, width: 1, height: 1 }]
+        }
+      ]
+      const cache = createHumanRuntimeCache()
+      entries.forEach((entry, index) => {
+        appendLogEntriesToCache(cache, [entry])
+        if (index < entries.length - 1) {
+          expect(cache.messages?.some((message) => message.getType() === 'human')).toBe(false)
+        }
+      })
+      const projected = messagesFromLogEntries(entries)
+      expect(cache.messages?.map((message) => message.toDict())).toEqual(
+        projected.map((message) => message.toDict())
+      )
+      expect(projected.map((message) => message.getType())).toEqual([
+        'ai',
+        'tool',
+        'tool',
+        'tool',
+        'human'
+      ])
+      expect(cache.conversationProjection?.pendingImages).toHaveLength(0)
+    }
+  )
+
+  it('preserves images when rebuilding an interrupted batch and repairs results before them', () => {
+    const entries: ChatMessageLogEntry[] = [
+      {
+        kind: 'assistant',
+        content: '',
+        toolCalls: [
+          { id: 'image', name: 'read_image', args: {} },
+          { id: 'learn', name: 'learn_skill', args: {} }
+        ]
+      },
+      {
+        kind: 'tool',
+        toolCallId: 'image',
+        toolName: 'read_image',
+        ok: true,
+        content: 'image',
+        images: [{ path: '/tmp/a.png', mimeType: 'image/png', sizeBytes: 1, width: 1, height: 1 }]
+      }
+    ]
+    const cache = createHumanRuntimeCache()
+    appendLogEntriesToCache(cache, entries)
+    expect(cache.messages?.map((message) => message.getType())).toEqual(['ai', 'tool'])
+    const repaired = repairInterruptedToolCalls(messagesFromLogEntries(entries))
+    expect(repaired.map((message) => message.getType())).toEqual(['ai', 'tool', 'tool', 'human'])
+    expect((repaired[2] as ToolMessage).tool_call_id).toBe('learn')
+    expect(JSON.stringify(repaired[3].content)).toContain(encodeURIComponent('/tmp/a.png'))
+  })
+
   it('keeps original assistant tool call args and order when projecting', () => {
     const entry: ChatMessageLogEntry = {
       kind: 'assistant',
@@ -78,9 +160,7 @@ describe('ai unit conversation log messages', () => {
         toolName: 'read_image',
         ok: true,
         content: 'a',
-        images: [
-          { path: '/tmp/a.png', mimeType: 'image/png', sizeBytes: 10, width: 1, height: 1 }
-        ]
+        images: [{ path: '/tmp/a.png', mimeType: 'image/png', sizeBytes: 10, width: 1, height: 1 }]
       }
     ]
 

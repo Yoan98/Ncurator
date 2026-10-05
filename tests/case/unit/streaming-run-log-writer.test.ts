@@ -2,12 +2,12 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { HumanMessage } from '@langchain/core/messages'
 import type { AiLlmIoRecord, AiRunEvent } from '../../../src/shared/types'
+import { serializeChatToolsRequestWire } from '../../../src/main/services/ai/utils/llmRequestWire'
 import { EventCollector } from '../../harness/core/eventCollector'
-import {
-  createStreamingRunLogWriter,
-  resolveRunLogDir
-} from '../../harness/backend/write-run-log'
+import { collectContinuationPrefixCacheReuse } from '../../harness/core/continuation-prefix-cache'
+import { createStreamingRunLogWriter, resolveRunLogDir } from '../../harness/backend/write-run-log'
 import type { TestLogEvent, TestRunMeta } from '../../harness/core/run-log-contract'
 
 const createdDirs: string[] = []
@@ -22,6 +22,84 @@ const readJsonLines = async (filePath: string): Promise<unknown[]> => {
 }
 
 describe('streaming run log writer', () => {
+  it('selects actual cross-run requests even when next records include a late previous request', () => {
+    const record = (
+      runId: string,
+      callId: string,
+      inputTokens: number,
+      cachedInputTokens: number
+    ): AiLlmIoRecord => ({
+      runId,
+      callId,
+      caller: 'human.brain',
+      schemaName: 'brain',
+      model: 'test',
+      baseUrlHost: 'example.com',
+      system: '',
+      user: '',
+      streamed: false,
+      chunkCount: 0,
+      streamingMode: 'force_non_stream',
+      startedAt: 1,
+      completedAt: 2,
+      durationMs: 1,
+      status: 'completed',
+      requestWire: serializeChatToolsRequestWire({
+        messages: [new HumanMessage('previous context')],
+        tools: []
+      }),
+      usage: {
+        inputTokens,
+        outputTokens: 1,
+        totalTokens: inputTokens + 1,
+        cachedInputTokens,
+        cacheHitRate: cachedInputTokens / inputTokens,
+        source: 'usage_metadata'
+      }
+    })
+    const early = record('run-1', 'early', 21300, 21000)
+    const late = record('run-1', 'late', 21599, 21376)
+    const next = record('run-2', 'next', 20874, 8704)
+    next.requestWire = serializeChatToolsRequestWire({
+      messages: [new HumanMessage('previous context'), new HumanMessage('next task')],
+      tools: []
+    })
+    const result = collectContinuationPrefixCacheReuse({
+      previousRunId: 'run-1',
+      nextRunId: 'run-2',
+      previousLlmIo: [early, late],
+      nextLlmIo: [late, next]
+    })
+    expect(result.previousLastBrain?.callId).toBe('late')
+    expect(result.nextFirstBrain?.callId).toBe('next')
+    expect(result.reuseRatio).toBeCloseTo(8704 / 21599)
+    expect(result.prefixPreserved).toBe(true)
+    expect(result.satisfied).toBe(false)
+    const highHit = record('run-2', 'high-hit', 22000, 21376)
+    highHit.requestWire = next.requestWire
+    const compare = (nextRecord: AiLlmIoRecord) =>
+      collectContinuationPrefixCacheReuse({
+        previousRunId: 'run-1',
+        nextRunId: 'run-2',
+        previousLlmIo: [early, late],
+        nextLlmIo: [late, nextRecord]
+      })
+    expect(compare(highHit).satisfied).toBe(true)
+    highHit.requestWire = serializeChatToolsRequestWire({
+      messages: [new HumanMessage('rewritten context'), new HumanMessage('next task')],
+      tools: []
+    })
+    expect(compare(highHit).prefixPreserved).toBe(false)
+    expect(compare(highHit).satisfied).toBe(false)
+    expect(() =>
+      collectContinuationPrefixCacheReuse({
+        previousRunId: 'run-1',
+        nextRunId: 'run-1',
+        previousLlmIo: [early],
+        nextLlmIo: [late]
+      })
+    ).toThrow('distinct run IDs')
+  })
   afterEach(async () => {
     await Promise.all(
       createdDirs.map(async (dirPath) => {
@@ -126,7 +204,9 @@ describe('streaming run log writer', () => {
       const logDir = resolveRunLogDir({ scope, caseId, runId })
       expect(await fs.stat(logDir)).toBeTruthy()
 
-      const meta = JSON.parse(await fs.readFile(path.join(logDir, 'meta.json'), 'utf8')) as TestRunMeta
+      const meta = JSON.parse(
+        await fs.readFile(path.join(logDir, 'meta.json'), 'utf8')
+      ) as TestRunMeta
       expect(meta.status).toBe('running')
 
       const timelineEvents = await readJsonLines(path.join(logDir, 'timeline.jsonl'))
@@ -236,6 +316,7 @@ describe('streaming run log writer', () => {
 
       const collector = new EventCollector({
         sink: {
+          flush: writer.flush,
           onRuntimeEvent: (event) => {
             writer.appendRuntimeEvent(event)
           },
@@ -274,10 +355,9 @@ describe('streaming run log writer', () => {
         status: 'completed'
       } satisfies AiLlmIoRecord)
 
-      await writer.flush()
-
+      const records = await collector.snapshotLlmIo()
       expect(collector.snapshot()).toHaveLength(1)
-      expect(collector.snapshotLlmIo()).toHaveLength(1)
+      expect(records).toHaveLength(1)
     } finally {
       process.chdir(previousCwd)
     }

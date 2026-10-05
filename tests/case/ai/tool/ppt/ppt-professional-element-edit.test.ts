@@ -1,7 +1,19 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { getSlides, loadPresentation } from 'pptx-kit'
+import {
+  getSlides,
+  getSlideShapes,
+  getTableCells,
+  getTableCellParagraphs,
+  getTableColumnWidths,
+  getTableRowHeights,
+  isTableShape,
+  loadPresentation
+} from 'pptx-kit'
+import { findPptTableOverflows } from '../../../../../src/main/services/ai/human/tools/ppt/textLayout'
+import type { PptDiffManifest } from '../../../../../src/main/services/ai/human/tools/ppt/types'
 import { describe, it } from 'vitest'
+import { DOMParser } from '@xmldom/xmldom'
 import type { JsonObject } from '../../../../../src/shared/types'
 import { createPptToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -77,8 +89,12 @@ describe('ai tool ppt professional editing', () => {
                 bounds: { x: 140, y: 300, width: 360, height: 150 },
                 rows: [
                   ['指标', '结果'],
-                  ['增长', '18%']
-                ]
+                  ['增长', '18%'],
+                  ['负责人', '王海涛（供应链总监）']
+                ],
+                columnWidths: [200, 160],
+                rowHeights: [30, 50, 70],
+                fontSize: 18
               }
             },
             {
@@ -113,6 +129,36 @@ describe('ai tool ppt professional editing', () => {
         const duplicateId = String(
           elements.filter((element) => element.text === '专业编辑验证').at(-1)?.elementId
         )
+
+        const beforeInvalid = await fs.readFile(sourcePath)
+        const invalidDimensions = await harness.invoke<JsonObject>('ppt_edit', {
+          sourcePath,
+          type: 'edit_elements',
+          slideId,
+          operations: [{ type: 'update_table', elementId: tableId, columnWidths: [10] }]
+        })
+        const invalidOverflow = await harness.invoke<JsonObject>('ppt_edit', {
+          sourcePath,
+          type: 'edit_elements',
+          slideId,
+          operations: [{ type: 'update_table', elementId: tableId, fontSize: 120 }]
+        })
+        const failedWritesUnchanged = beforeInvalid.equals(await fs.readFile(sourcePath))
+        await harness.invoke<JsonObject>('ppt_edit', {
+          sourcePath,
+          type: 'edit_elements',
+          slideId,
+          operations: [
+            {
+              type: 'update_table',
+              elementId: tableId,
+              columnWidths: [270, 90],
+              rowHeights: [30, 50, 70],
+              fontSize: 14,
+              fontFamily: 'Arial'
+            }
+          ]
+        })
 
         await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
@@ -155,11 +201,58 @@ describe('ai tool ppt professional editing', () => {
           (record) => record.capability === 'ppt'
         )
         const presentation = await loadPresentation(new Uint8Array(await fs.readFile(sourcePath)))
+        const finalTable = getSlideShapes(getSlides(presentation)[0]!).find(isTableShape)!
+        const manifest = JSON.parse(
+          await fs.readFile(records[0]!.previewPath!, 'utf8')
+        ) as PptDiffManifest
+        const frame = manifest.slides.find((slide) => slide.after?.index === 1)!.after!
+        const svg = await fs.readFile(
+          path.resolve(path.dirname(records[0]!.previewPath!), frame.svg),
+          'utf8'
+        )
+        const formatHarness = createPptToolHarness(runtime, { runId: `${runtime.runId}-format` })
+        await formatHarness.invoke<JsonObject>('ppt_edit', {
+          sourcePath,
+          type: 'edit_elements',
+          slideId,
+          operations: [{ type: 'update_table', elementId: tableId, fontSize: 13 }]
+        })
+        const formatRecords = await formatHarness.ctx.finalizeRunFileChanges()
+        const formatManifest = JSON.parse(
+          await fs.readFile(formatRecords[0]!.previewPath!, 'utf8')
+        ) as PptDiffManifest
+        const formatSlide = formatManifest.slides.find((slide) => slide.after?.index === 1)!
+        const beforeFormatSvg = await fs.readFile(formatSlide.before!.svg, 'utf8')
+        const afterFormatSvg = await fs.readFile(formatSlide.after!.svg, 'utf8')
         return {
           updatedSlides: updatedReadback.slides,
           duplicated,
           records,
-          slideCount: getSlides(presentation).length
+          slideCount: getSlides(presentation).length,
+          columnWidths: getTableColumnWidths(finalTable).map((value) => Number(value) / 12700),
+          rowHeights: getTableRowHeights(finalTable).map((value) => Number(value) / 12700),
+          formats: getTableCells(finalTable).flatMap((row) =>
+            row.flatMap((cell) =>
+              getTableCellParagraphs(cell).flatMap((paragraph) =>
+                paragraph.elements.map((element) => element.format)
+              )
+            )
+          ),
+          overflows: findPptTableOverflows(presentation, finalTable, svg),
+          reviewHasFullName:
+            new DOMParser()
+              .parseFromString(svg, 'image/svg+xml')
+              .documentElement.textContent?.includes('王海涛（供应链总监）') === true,
+          formatChangeMarked:
+            formatRecords.length === 1 &&
+            formatRecords[0]!.operation === 'updated' &&
+            formatSlide.elementChanges.length === 1 &&
+            formatSlide.elementChanges[0]!.kind === 'modified' &&
+            beforeFormatSvg.includes('font-size="18.67"') &&
+            afterFormatSvg.includes('font-size="17.33"'),
+          failedWritesUnchanged,
+          invalidDimensions,
+          invalidOverflow
         }
       },
       assert: async (result, runtime) => {
@@ -168,6 +261,26 @@ describe('ai tool ppt professional editing', () => {
         const table = elements.find((element) => element.type === 'table')
         const chart = elements.find((element) => element.type === 'chart')
         const formula = elements.find((element) => element.type === 'formula')
+        runtime.assertThat(
+          result.columnWidths.join(',') === '270,90' &&
+            result.rowHeights.join(',') === '30,50,70' &&
+            result.formats.every(
+              (format) =>
+                format?.size === 14 && format.font === 'Arial' && format.fontEastAsian === 'Arial'
+            ) &&
+            result.overflows.length === 0 &&
+            result.reviewHasFullName &&
+            result.formatChangeMarked &&
+            result.failedWritesUnchanged &&
+            Boolean(result.invalidDimensions.error) &&
+            String(result.invalidOverflow.error).includes('文字超出边界'),
+          {
+            name: 'ppt-table-layout-and-self-contained-review',
+            message:
+              '表格布局和字体必须真实写入，审核中全角括号完整且文字不溢出；失败调用不得发布文件。',
+            data: result
+          }
+        )
         runtime.assertThat(
           elements.some((element) => element.type === 'connector') &&
             (table?.details as { rows?: string[][] })?.rows?.[1]?.[1] === '24%' &&

@@ -123,7 +123,8 @@ describe('workbench result e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
-            caseId: CASE_ID
+            caseId: CASE_ID,
+            workspaceContents: 'empty'
           })
           await createBaselineDeck(setup.workspace.rootPath)
           const filePath = path.join(setup.workspace.rootPath, FILE_NAME)

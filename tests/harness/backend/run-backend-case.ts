@@ -143,6 +143,7 @@ export const runBackendCase = async <TResult>(
   })
   const eventCollector = new EventCollector({
     sink: {
+      flush: streamingLogWriter.flush,
       onRuntimeEvent: (event) => {
         streamingLogWriter.appendRuntimeEvent(event)
       },

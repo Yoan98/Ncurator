@@ -8,6 +8,8 @@
 - Renderer: React v19 · React Router DOM v7 · Ant Design v5 · Tailwind CSS v4 + Less
 - Main: LangChain JS · LangGraph JS · @huggingface/transformers v3 · SQLite + better-sqlite3 · LanceDB · pdf-parse · mammoth · @node-rs/jieba
 
+PPT 普通预览与历史审核均由 `pptx-kit-preview` 生成 SVG，共用 Canvas 字体宽度测量和明确的中西文字体回退列表；Renderer 使用浏览器 Canvas，Main 使用本地 Canvas。历史审核保存生成后的 SVG，后续渲染只读取该产物。
+
 ## 系统分层
 
 NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌入、索引、检索、AI 编排和持久化都优先在本地完成。

@@ -182,16 +182,16 @@ describe('ai human live backend', () => {
 
           await runtime.seedLlmConfig(liveConfig)
           await runtime.chatStore.savePartner({
-          id: PARTNER_ID,
-          name: 'live partner resume test',
-          avatar_shape: 'circle',
-          avatar_color: 'blue',
-          created_at: Date.now(),
-          updated_at: Date.now(),
-          last_viewed_at: Date.now(),
-          pinned: false,
-          pinned_at: null
-        })
+            id: PARTNER_ID,
+            name: 'live partner resume test',
+            avatar_shape: 'circle',
+            avatar_color: 'blue',
+            created_at: Date.now(),
+            updated_at: Date.now(),
+            last_viewed_at: Date.now(),
+            pinned: false,
+            pinned_at: null
+          })
           const interruptedResult = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-1-interrupted`,
@@ -217,7 +217,7 @@ describe('ai human live backend', () => {
             runtime.eventCollector.snapshot()
           )
           const logAfterNetwork = await runtime.storageService.chatMessageLog.list(PARTNER_ID)
-          const run1LlmIo = runtime.eventCollector.snapshotLlmIo()
+          const run1LlmIo = await runtime.eventCollector.snapshotLlmIo()
 
           let run2BrainMessages: BaseMessage[] | null = null
           const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> =
@@ -245,8 +245,8 @@ describe('ai human live backend', () => {
           const logAfterResume = await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           const run2Events = runtime.eventCollector.snapshot()
           const run2Id = `${runtime.runId}-run-2-resume`
-          const allLlmIo = runtime.eventCollector.snapshotLlmIo()
-          const run2LlmIo = allLlmIo.slice(run1LlmIo.length)
+          const allLlmIo = await runtime.eventCollector.snapshotLlmIo()
+          const run2LlmIo = allLlmIo.filter((record) => record.runId === run2Id)
           const run2BrainPrompt = allLlmIo
             .filter((record) => record.runId === run2Id && record.caller === 'human.brain')
             .map((record) => record.user)
@@ -284,6 +284,8 @@ describe('ai human live backend', () => {
             run2MessageTypes,
             run2HasHistoricalAndCurrentBrainUser,
             run2PrefixCache: collectContinuationPrefixCacheReuse({
+              previousRunId: `${runtime.runId}-run-1-interrupted`,
+              nextRunId: run2Id,
               previousLlmIo: run1LlmIo,
               nextLlmIo: run2LlmIo
             }),
@@ -341,7 +343,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(Boolean(result.run2PrefixCache?.satisfied), {
             name: 'human-live-partner-resume-reuses-interrupted-prefix-cache',
             message:
-              '恢复 run 首次 brain 的 cachedInputTokens 应明显复用中断前末次有效 brain 的 inputTokens 前缀；低于公用跨 run 比例门槛说明前缀被改写或缓存未命中。',
+              '恢复 run 首次 brain 的 cachedInputTokens 应明显复用中断前末次有效 brain 的 inputTokens 前缀；历史消息前缀和工具定义须一致，服务端缓存复用率须达到公用门槛；低命中按实际请求日志独立归因。',
             data: result.run2PrefixCache
               ? continuationPrefixCacheAssertionData(result.run2PrefixCache)
               : { run2PrefixCache: null }

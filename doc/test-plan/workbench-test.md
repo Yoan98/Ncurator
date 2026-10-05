@@ -249,7 +249,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`（路径 `conversation/prefix-cache/`；`release:start` Tag 前必跑）
 - What：同一伙伴经真实 Workbench UI 连续三轮短任务（Run1 `@` 选中极短笔记抽出事实，Run2/Run3 同选中文件追问），相邻跨 run 首轮 brain 均须明显复用上一 run 末次前缀缓存，且 `toolsHash` 一致。
 - Why：发布准备需要一条轻量、专职的前缀缓存回归。纯闲聊测不到 tool 历史投影与 tools 前缀稳态；backend 直调 `AiRunService` 也绕过 Composer `@` 选中与生产发送组装。若消息重建或工具表漂移导致缓存丢失，会拖高成本并放大续接不稳定。
-- How：临时 workspace 写入 `cache-retain-note.txt` 后经 Settings 添加文件地址并建伙伴、选 live 模型。每轮用 `@` 选中该文件再发送（不得 `sendWorkbenchMessage` 清空 token）。Run1 要求读笔记说出项目代号（硬断言文本读工具）；Run2 问发布窗口；Run3 问负责人。e2e observer 只采集生产 `recordLlmIo` 并写入 `llm-io.jsonl`。两段跨 run 缓存用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）；硬断言相邻段 `toolsHash` 相等；断言 data 附带 `requestWireDiff` 供排障。
+- How：创建空临时 workspace，仅写入 `cache-retain-note.txt`，经 Settings 添加文件地址并建伙伴、选 live 模型。每轮用 `@` 选中该文件再发送（不得 `sendWorkbenchMessage` 清空 token）。Run1 要求读笔记说出项目代号（硬断言文本读工具）；Run2 问发布窗口；Run3 问负责人。e2e observer 只采集生产 `recordLlmIo` 并写入 `llm-io.jsonl`。两段跨 run 缓存用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）；硬断言相邻段 `toolsHash` 相等；按实际 runId 选择完成日志中的请求，禁止按数组长度切分；断言 data 附带双方 runId/callId、历史前缀是否一致和 `requestWireDiff` 供排障。
 - Oracle：三轮均 `completed`，对齐 `WB-SESSION-005`；Run1 有 `text_file_read` / `text_file_search` 证据，且发送带 `@` 选中，对齐 `WB-CORE-002`；Run2 首次 brain 相对 Run1 末次、以及 Run3 首次 brain 相对 Run2 末次，均满足 `cachedInputTokens / 上一末次 inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，且两段 `toolsHash` 分别一致。没有 live key 必须失败，不能跳过。
 
 #### `user-message-actions`
@@ -545,15 +545,15 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`
 - What：真实 AI 创建两页 PPT 后，用户可打开页面级左右 diff、看到准确 `+2/-0`、切换审核/预览并回撤文件；运行时生成的 `userData/partners/{id}/runtime/assets` 资源不出现在修改文件和右侧变更列表。
 - Why：新建 PPT 必须同时验证文件交付、审核模式和回退闭环。
-- How：通过真实 Workbench UI 请求 AI 创建两页 PPT，打开修改记录，操作审核/预览、缩放、拖拽和回退。
-- Oracle：真实 PPT 创建、原子写入和 run 级修改记录对齐 `WB-PPT-001`、`WB-APPLY-002`；pptx 可解析，修改文件与右侧“本次运行改动”只显示用户 PPT、不显示 `userData/partners/{id}/runtime/assets` 内的运行时资源；审核模式显示两页和 `+2/-0`，预览模式显示正式 PPT，现有缩放拖拽可用；回撤后新建文件被删除，对齐 `WB-APPLY-003`。
+- How：创建空临时 workspace，经真实 Settings 和 Workbench UI 请求 AI 创建两页 PPT，第一页含中文负责人和全角括号的风险表；打开修改记录，操作审核/预览、缩放、拖拽和回退；从两种模式实际显示的 SVG 收集浏览器字形边界。
+- Oracle：真实 PPT 创建、原子写入和 run 级修改记录对齐 `WB-PPT-001`、`WB-APPLY-002`；pptx 可解析，修改文件与右侧“本次运行改动”只显示用户 PPT、不显示 `userData/partners/{id}/runtime/assets` 内的运行时资源；审核模式显示两页和 `+2/-0`，预览模式显示正式 PPT；两种模式都完整保留负责人姓名及全角括号，浏览器实际字形不越出表格单元格；现有缩放拖拽可用；回撤后新建文件被删除，对齐 `WB-APPLY-003`。
 
 #### `ppt-update-diff-interactions`
 
 - 测试类型：`e2e`
 - What：已有 PPT 更新后的左右差异、绿色新增/修改/移动、红色删除、准确 `+N/-N`、缩略图筛选、审核/预览、缩放和拖动画布。
 - Why：创建态与更新态的差异语义不同，不能只用新建 PPT case 代替。
-- How：让真实 AI 对已有四页 PPT 主动移动一页、修改一页、删除中间页、新增一页，并要求末页完全不变；打开修改记录并操作审核/预览、筛选、同步切页、缩放、拖动、关联应用打开和回退。关联应用启动在 E2E 中使用 no-op 成功分支，不实际启动 Office/WPS。 测试进程将正式 PPT 首页面文字改为 C，读取界面实际 SVG 验证预览 C、历史审核仍为 B，并确认强制回退。
+- How：在空临时 workspace 中准备四页基线 PPT，让真实 AI 主动移动一页、修改一页、删除中间页、新增一页，并要求末页完全不变；打开修改记录并操作审核/预览、筛选、同步切页、缩放、拖动、关联应用打开和回退。关联应用启动在 E2E 中使用 no-op 成功分支，不实际启动 Office/WPS。 测试进程将正式 PPT 首页面文字改为 C，读取界面实际 SVG 验证预览 C、历史审核仍为 B，并确认强制回退。
 - Oracle：正式 PPT 内容和顺序正确；审核显示准确 `+3/-1`、三个绿色页面标记和一个红色删除标记；删除中间页不会把未改末页标绿，变化筛选为四页、全部模式为五个 before/after 对齐项；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；审核/预览切换、同步缩放拖动不变，底部「滚轮缩放 / 拖拽平移」提示固定可见（缩放或拖拽后仍在），回退后 bytes 与 baseline 完全一致，对齐 `WB-PANEL-003-AC19`、`WB-PPT-002`、`WB-APPLY-003`。
 
 #### `excel-update-diff-and-revert`

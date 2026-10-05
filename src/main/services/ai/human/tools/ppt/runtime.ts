@@ -61,6 +61,9 @@ import {
   getTableCell,
   getTableCells,
   getTableCellText,
+  getTableCellParagraphs,
+  getTableColumnWidths,
+  getTableRowHeights,
   isChartShape,
   isTableShape,
   loadPresentation,
@@ -94,13 +97,17 @@ import {
   setSlideBackground,
   setSlideNotes,
   setTableCellText,
+  setTableCellTextFormat,
+  setTableColumnWidth,
+  setTableRowHeight,
   validatePresentation,
   type ChartKind,
   type PresentationData,
   type SlideData,
   type SlideShapeData
 } from 'pptx-kit'
-import type { JsonObject } from '../../../../../../shared/types'
+import { assertPptTableFits, renderPptSlideSvg } from './textLayout'
+import type { JsonObject, JsonValue } from '../../../../../../shared/types'
 import { fileExists } from '../docx/review/utils'
 import { resolveToolPath } from '../terminal/commandPolicy'
 import { getPartnerAssetsRootDir } from '../../../../assets/WorkspaceAssetService'
@@ -413,10 +420,84 @@ const readShapeStyle = (shape: SlideShapeData): JsonObject | undefined => {
   return Object.keys(style).length > 0 ? style : undefined
 }
 
+type TableLayout = {
+  columnWidths?: number[]
+  rowHeights?: number[]
+  fontSize?: number
+  fontFamily?: string
+}
+
+const applyTableLayout = (
+  presentation: PresentationData,
+  table: SlideShapeData,
+  layout: TableLayout
+): void => {
+  const bounds = getShapeBoundsResolved(presentation, table)
+  const size = getSlideSize(presentation)
+  if (!bounds || !size) throw new Error('无法读取表格或页面尺寸')
+  const updateDimensions = (
+    values: number[] | undefined,
+    existing: readonly number[],
+    extent: number,
+    canvasExtent: number,
+    slideExtent: number,
+    label: string,
+    setter: typeof setTableColumnWidth
+  ): void => {
+    if (!values) return
+    const target = (extent * canvasExtent) / slideExtent
+    if (
+      values.length !== existing.length ||
+      Math.abs(values.reduce((sum, value) => sum + value, 0) - target) > 0.1
+    ) {
+      throw new Error(`表格${label}数量须为 ${existing.length}，总和须等于 ${target.toFixed(2)}pt`)
+    }
+    values.forEach((value, index) =>
+      setter(table, index, emu(Math.round((value * slideExtent) / canvasExtent)))
+    )
+  }
+  updateDimensions(
+    layout.columnWidths,
+    getTableColumnWidths(table),
+    bounds.w,
+    DEFAULT_WIDTH,
+    size.width,
+    '列宽',
+    setTableColumnWidth
+  )
+  updateDimensions(
+    layout.rowHeights,
+    getTableRowHeights(table),
+    bounds.h,
+    DEFAULT_HEIGHT,
+    size.height,
+    '行高',
+    setTableRowHeight
+  )
+  if (layout.fontSize !== undefined || layout.fontFamily !== undefined) {
+    for (const row of getTableCells(table)) {
+      for (const cell of row) {
+        setTableCellTextFormat(cell, {
+          size: layout.fontSize,
+          font: layout.fontFamily,
+          fontEastAsian: layout.fontFamily
+        })
+      }
+    }
+  }
+}
+
 const readShapeDetails = (shape: SlideShapeData): JsonObject | undefined => {
   if (isTableShape(shape)) {
     return {
-      rows: getTableCells(shape).map((row) => row.map((cell) => getTableCellText(cell)))
+      rows: getTableCells(shape).map((row) => row.map((cell) => getTableCellText(cell))),
+      columnWidths: getTableColumnWidths(shape).map((width) => Number(width) / 12700),
+      rowHeights: getTableRowHeights(shape).map((height) => Number(height) / 12700),
+      paragraphs: JSON.parse(
+        JSON.stringify(
+          getTableCells(shape).map((row) => row.map((cell) => getTableCellParagraphs(cell)))
+        )
+      ) as JsonValue
     }
   }
   if (isChartShape(shape)) {
@@ -580,14 +661,13 @@ const renderPresentationSlides = async (input: {
   previewDir: string
   prefix: string
 }): Promise<Map<string, PptDiffFrame & { hash: string }>> => {
-  const { renderSlideToSvg } = await import('pptx-kit-preview/node')
   await fs.mkdir(input.previewDir, { recursive: true })
   const slides = getSlides(input.presentation)
   const output = new Map<string, PptDiffFrame & { hash: string }>()
   for (const slideId of input.slideIds) {
     const index = slides.findIndex((slide) => slideIdOf(slide) === slideId)
     if (index < 0) continue
-    const svg = renderSlideToSvg(input.presentation, slides[index]!, { textLayout: 'svg' })
+    const svg = await renderPptSlideSvg(input.presentation, slides[index]!)
     const hash = hashBytes(svg)
     const svgPath = path.join(input.previewDir, `${input.prefix}-${hash.slice(0, 20)}.svg`)
     await fs.writeFile(svgPath, svg, 'utf8')
@@ -789,9 +869,11 @@ const applyElementOperation = async (input: {
   if (op.type === 'update_table') {
     const table = findElement(input.document.presentation, input.slide, op.elementId)
     if (!isTableShape(table)) throw new Error(`elementId 不是表格: ${op.elementId}`)
-    for (const cell of op.cells) {
+    for (const cell of op.cells || []) {
       setTableCellText(getTableCell(table, cell.rowIndex - 1, cell.columnIndex - 1), cell.text)
     }
+    applyTableLayout(input.document.presentation, table, op)
+    await assertPptTableFits(input.document.presentation, input.slide, table)
     return
   }
   if (op.type === 'update_chart') {
@@ -911,7 +993,15 @@ const applyElementOperation = async (input: {
     return
   }
   if (element.type === 'table') {
-    addSlideTable(input.slide, { ...bounds, rows: element.rows })
+    if (element.rows.some((row) => row.length !== element.rows[0]!.length)) {
+      throw new Error('表格每行的列数必须相同')
+    }
+    const table = addSlideTable(input.slide, { ...bounds, rows: element.rows })
+    applyTableLayout(input.document.presentation, table, {
+      ...element,
+      fontSize: element.fontSize ?? 18
+    })
+    await assertPptTableFits(input.document.presentation, input.slide, table)
     return
   }
   if (element.type === 'chart') {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { DocRenderer, DocRendererProps, IDocument } from 'react-doc-viewer'
 import { getSlides, loadPresentation } from 'pptx-kit'
-import { renderSlideToSvg } from 'pptx-kit-preview'
+import { createPptTextMeasurer, renderPptSvg } from '../../../../shared/pptTextMeasurer'
 import PptSlideDeckViewer, { type PptViewerSlide } from './PptSlideDeckViewer'
 
 type PptDocument = Omit<IDocument, 'fileData'> & {
@@ -48,11 +48,15 @@ const CustomPptxRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
       try {
         const bytes = await readDocumentBytes(document)
         const presentation = await loadPresentation(bytes)
+        await window.document.fonts.ready
+        const context = window.document.createElement('canvas').getContext('2d')
+        if (!context) throw new Error('无法初始化 PPT 文字测量')
+        const measureText = createPptTextMeasurer(context)
         const sourceSlides = getSlides(presentation)
         const nextSlides: PptViewerSlide[] = []
         for (let index = 0; index < sourceSlides.length; index += 1) {
           if (cancelled) return
-          const svg = renderSlideToSvg(presentation, sourceSlides[index]!, { textLayout: 'svg' })
+          const svg = await renderPptSvg(presentation, sourceSlides[index]!, measureText)
           nextSlides.push({
             id: `slide-${index + 1}`,
             index: index + 1,
