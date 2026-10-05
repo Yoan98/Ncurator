@@ -1,3 +1,4 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
@@ -7,7 +8,7 @@ import {
   PDF_READING_FIXTURE_PATH,
   SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../../harness/backend/aiLiveTestData'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -73,12 +74,14 @@ const collectLearningEvictionEvidence = (events: readonly AiRunEvent[]) => {
   )
   const docxReadRelearnAfterEviction =
     docxReadEvictionIndex >= 0 &&
-    learningSteps.slice(docxReadEvictionIndex + 1).some(
-      (event) =>
-        event.skillId === 'docx-read' &&
-        (event.summary.includes('learning 已加载 docx-read') ||
-          event.publicNarrative.includes('已学习 docx-read'))
-    )
+    learningSteps
+      .slice(docxReadEvictionIndex + 1)
+      .some(
+        (event) =>
+          event.skillId === 'docx-read' &&
+          (event.summary.includes('learning 已加载 docx-read') ||
+            event.publicNarrative.includes('已学习 docx-read'))
+      )
   return {
     learningSteps,
     evictionSummaries,
@@ -95,17 +98,13 @@ const collectStartedToolNames = (events: readonly AiRunEvent[]): string[] =>
   filterAiRunEventsByType(events, 'tool_call_started').map((event) => String(event.toolName || ''))
 
 const hasDocxReadEvidence = (toolNames: readonly string[]): boolean =>
-  toolNames.some((name) =>
-    ['docx_read_outline', 'docx_search', 'docx_read_nodes'].includes(name)
-  )
+  toolNames.some((name) => ['docx_read_outline', 'docx_search', 'docx_read_nodes'].includes(name))
 
 const hasPdfReadEvidence = (toolNames: readonly string[]): boolean =>
   toolNames.some((name) => ['pdf_outline', 'pdf_search', 'pdf_read_pages'].includes(name))
 
 const hasPptReadEvidence = (toolNames: readonly string[]): boolean =>
-  toolNames.some((name) =>
-    ['ppt_read_outline', 'ppt_read_slides', 'ppt_search'].includes(name)
-  )
+  toolNames.some((name) => ['ppt_read_outline', 'ppt_read_slides', 'ppt_search'].includes(name))
 
 const hasExcelReadEvidence = (toolNames: readonly string[]): boolean =>
   toolNames.includes('excel_read')
@@ -133,20 +132,28 @@ describe('ai human live backend', () => {
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const runnerOptions = { partnerId: PARTNER_ID }
 
-          const run1Output = await createHumanTestRunner(runtime, runnerOptions).run({
-            taskId: `${runtime.taskId}-run-1`,
-            userInput: RUN1_USER_INPUT
-          })
+          const run1Output = await (
+            await createAiServiceTestRunner(runtime, {
+              ...runnerOptions,
+              userInput: RUN1_USER_INPUT,
+              runId: `${runtime.runId}-run-1`
+            })
+          ).run()
+          await assertRunFileReviews(runtime, run1Output)
           const run1Events = runtime.eventCollector.snapshot()
           const run1LlmIo = runtime.eventCollector.snapshotLlmIo()
           const skillsAfterRun1 = readLatestLearnedSkillIds(
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
 
-          const run2Output = await createHumanTestRunner(runtime, runnerOptions).run({
-            taskId: `${runtime.taskId}-run-2`,
-            userInput: RUN2_USER_INPUT
-          })
+          const run2Output = await (
+            await createAiServiceTestRunner(runtime, {
+              ...runnerOptions,
+              userInput: RUN2_USER_INPUT,
+              runId: `${runtime.runId}-run-2`
+            })
+          ).run()
+          await assertRunFileReviews(runtime, run2Output)
           const afterRun2Events = runtime.eventCollector.snapshot()
           const afterRun2LlmIo = runtime.eventCollector.snapshotLlmIo()
           const run2Events = afterRun2Events.slice(run1Events.length)
@@ -209,10 +216,14 @@ describe('ai human live backend', () => {
             }
           }
 
-          const run3Output = await createHumanTestRunner(runtime, runnerOptions).run({
-            taskId: `${runtime.taskId}-run-3`,
-            userInput: RUN3_USER_INPUT
-          })
+          const run3Output = await (
+            await createAiServiceTestRunner(runtime, {
+              ...runnerOptions,
+              userInput: RUN3_USER_INPUT,
+              runId: `${runtime.runId}-run-3`
+            })
+          ).run()
+          await assertRunFileReviews(runtime, run3Output)
           const allEvents = runtime.eventCollector.snapshot()
           const allLlmIo = runtime.eventCollector.snapshotLlmIo()
           const run3Events = allEvents.slice(afterRun2Events.length)
@@ -294,8 +305,7 @@ describe('ai human live backend', () => {
                 result.memoExists),
             {
               name: 'run2-evicts-oldest-skill-and-continues',
-              message:
-                'Run2 学新技能时应 FIFO 淘汰最早的 docx-read，并在淘汰后仍能完成写入续做。',
+              message: 'Run2 学新技能时应 FIFO 淘汰最早的 docx-read，并在淘汰后仍能完成写入续做。',
               data: {
                 status: result.run2Output?.status,
                 skillsAfterRun2: result.skillsAfterRun2,

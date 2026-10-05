@@ -20,6 +20,7 @@ import {
   createIsolatedWorkspace
 } from './workspaceManager'
 import { EventCollector } from '../core/eventCollector'
+import type { AiFileChangeRecord } from '../../../src/shared/types'
 import {
   TEST_LOG_SCHEMA_VERSION,
   type TestDomain,
@@ -156,6 +157,7 @@ export const runBackendCase = async <TResult>(
   let fixtureBindings: FixtureBinding[] = []
   let status: TestRunStatus = 'failed'
   let runtime: BackendTestRuntime | undefined
+  let fileChangeRecords: AiFileChangeRecord[] = []
   let annotationArtifacts: Awaited<ReturnType<typeof collectMessageLogAnnotationArtifact>> = []
   const counters = {
     steps: 0,
@@ -244,6 +246,7 @@ export const runBackendCase = async <TResult>(
       status = 'passed'
     } finally {
       try {
+        fileChangeRecords = (await runtime.storageService.aiFileChange.listRecords()).items
         if (definition.messageLogAnnotationPartnerIds) {
           annotationArtifacts = await collectMessageLogAnnotationArtifact({
             scope,
@@ -274,7 +277,8 @@ export const runBackendCase = async <TResult>(
           caseId: definition.caseId,
           runId,
           workspaceRoot,
-          runtimeEventsPath: streamingLogWriter.paths.runtimeEventsPath
+          runtimeEventsPath: streamingLogWriter.paths.runtimeEventsPath,
+          fileChangeRecords
         })
       : []
     const emptySeedManifest: BackendSeedManifest = {

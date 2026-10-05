@@ -1,3 +1,4 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -8,7 +9,7 @@ import {
   validatePresentation
 } from 'pptx-kit'
 import { describe, it } from 'vitest'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
@@ -29,15 +30,17 @@ describe('ai human live ppt create backend', () => {
         execute: async (runtime) => {
           const sourcePath = path.join(runtime.workspaceRoot, FILE_NAME)
           const eventOffset = runtime.eventCollector.snapshot().length
-          const output = await createHumanTestRunner(runtime, {}).run({
-            taskId: runtime.taskId,
-            userInput: [
-              `请直接在工作区创建“${FILE_NAME}”，做一份可给管理层开会用的 16:9 汇报，约 5–6 页：`,
-              '封面、执行摘要、关键 KPI、交付或业务趋势图、风险与负责人、下一步。',
-              '内容自拟但要像真实业务（含中文人名、日期和具体数字），版式专业可读。',
-              '完成后自检文件可正常打开。'
-            ].join('')
-          })
+          const output = await (
+            await createAiServiceTestRunner(runtime, {
+              userInput: [
+                `请直接在工作区创建“${FILE_NAME}”，做一份可给管理层开会用的 16:9 汇报，约 5–6 页：`,
+                '封面、执行摘要、关键 KPI、交付或业务趋势图、风险与负责人、下一步。',
+                '内容自拟但要像真实业务（含中文人名、日期和具体数字），版式专业可读。',
+                '完成后自检文件可正常打开。'
+              ].join('')
+            })
+          ).run()
+          await assertRunFileReviews(runtime, output)
           const bytes = await fs.readFile(sourcePath)
           const presentation = await loadPresentation(new Uint8Array(bytes))
           const texts = getSlides(presentation).map((slide) => getSlideText(slide))
@@ -58,7 +61,7 @@ describe('ai human live ppt create backend', () => {
         assert: async (result, runtime) => {
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
           const toolNames = starts.map((event) => event.toolName)
-          const artifacts = (result.output.artifacts || []).filter(
+          const artifacts = (result.output.finalArtifacts || []).filter(
             (artifact) => artifact.kind === 'file' && artifact.capability === 'ppt'
           )
           const joined = result.texts.join('\n')

@@ -5,6 +5,7 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
+  createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   insertWorkbenchReferenceToken,
@@ -20,7 +21,6 @@ import {
 const CASE_ID = 'apply-workspace-collapsed-restore'
 const TARGET_FILE = 'workbench-preview.md'
 const MARKER = 'cedar-apply-collapsed-restore-771'
-const PARTNER_B_ID = 'collapsed-restore-partner-b'
 const PARTNER_B_NAME = '折叠恢复伙伴 B'
 
 const waitForActivePartner = async (
@@ -61,36 +61,13 @@ describe('workbench result e2e', () => {
           const targetPath = path.join(setup.workspace.rootPath, TARGET_FILE)
           const beforeText = await fs.readFile(targetPath, 'utf-8')
 
-          const workspaceList = await page.evaluate(() => window.api.workspaceList())
-          const targetWorkspace =
-            workspaceList.items.find((workspace) => workspace.root_path === setup.workspace.rootPath) ||
-            workspaceList.items[0]
-          if (!targetWorkspace) throw new Error('未找到测试工作区')
-          await page.evaluate(
-            async ({ partnerB }) => {
-              const response = await window.api.partnerSave(partnerB)
-              if (!response.success) throw new Error(response.error || 'partnerSave failed')
-            },
-            {
-              partnerB: {
-                id: PARTNER_B_ID,
-                name: PARTNER_B_NAME,
-                avatar_shape: 'circle' as const,
-                avatar_color: 'blue' as const,
-                created_at: Date.now() - 60_000,
-                updated_at: Date.now() - 60_000,
-                last_viewed_at: Date.now() - 60_000,
-                pinned: false,
-                pinned_at: null
-              }
-            }
-          )
-
+          const [partnerA] = await page.evaluate(() => window.api.partnerList())
+          if (!partnerA) throw new Error('未找到当前伙伴')
           await insertWorkbenchReferenceToken(page, TARGET_FILE)
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请只完成这一个写回动作：修改我刚选中的 ${TARGET_FILE}，只在文件末尾新增一行“${MARKER}”，写回原文件，不要新建文件。写回后立即回复“已写回”，不要继续读取、复核或追加其他操作。`
+            `请使用应用里的文本编辑能力修改我刚选中的 ${TARGET_FILE}，不要通过命令行或脚本修改文件。只在文件末尾新增一行“${MARKER}”，保存到原文件，不要新建文件，然后简短回复。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
@@ -101,12 +78,19 @@ describe('workbench result e2e', () => {
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
           const afterText = await fs.readFile(targetPath, 'utf-8')
-          const partnerList = await page.evaluate(() => window.api.partnerList())
-          const partnerA = partnerList.find((partner) => partner.id !== PARTNER_B_ID)
-          if (!partnerA) throw new Error('AI run 未找到当前伙伴')
+          await createPartnerThroughWorkbenchUi(page, PARTNER_B_NAME)
+          const partnerB = (await page.evaluate(() => window.api.partnerList())).find(
+            (partner) => partner.name === PARTNER_B_NAME
+          )
+          if (!partnerB) throw new Error('未找到新建伙伴')
           await getWorkbenchLocator(
             page,
-            `${workbenchSelectors.partnerItemPrefix}-${PARTNER_B_ID}`
+            `${workbenchSelectors.partnerItemPrefix}-${partnerA.id}`
+          ).click()
+          await waitForActivePartner(page, partnerA.id)
+          await getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.partnerItemPrefix}-${partnerB.id}`
           ).waitFor({ state: 'visible', timeout: 15_000 })
 
           await waitForApplyEntry(page)
@@ -137,9 +121,9 @@ describe('workbench result e2e', () => {
 
           await getWorkbenchLocator(
             page,
-            `${workbenchSelectors.partnerItemPrefix}-${PARTNER_B_ID}`
+            `${workbenchSelectors.partnerItemPrefix}-${partnerB.id}`
           ).click()
-          await waitForActivePartner(page, PARTNER_B_ID)
+          await waitForActivePartner(page, partnerB.id)
           const shellCountInPartnerB = await getWorkbenchLocator(
             page,
             workbenchSelectors.contentPanelShell

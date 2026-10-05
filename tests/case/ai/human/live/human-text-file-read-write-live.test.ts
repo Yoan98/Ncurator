@@ -1,13 +1,16 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
 const hashFile = async (filePath: string): Promise<string> =>
-  createHash('sha256').update(await fs.readFile(filePath)).digest('hex')
+  createHash('sha256')
+    .update(await fs.readFile(filePath))
+    .digest('hex')
 
 const seedCheckoutConfig = async (filePath: string): Promise<void> => {
   await fs.writeFile(
@@ -40,12 +43,13 @@ describe('ai human live text-file backend', () => {
           const sourcePath = path.join(runtime.workspaceRoot, 'checkout-config.ts')
           await seedCheckoutConfig(sourcePath)
           const beforeHash = await hashFile(sourcePath)
-          const output = await createHumanTestRunner(runtime, {
-          }).run({
-            taskId: runtime.taskId,
-            userInput:
-              '在结账切换前，请审阅 checkout-config.ts，告诉我主备端点、超时、重试次数和遥测设置是否就绪。不要修改文件。'
-          })
+          const output = await (
+            await createAiServiceTestRunner(runtime, {
+              userInput:
+                '在结账切换前，请审阅 checkout-config.ts，告诉我主备端点、超时、重试次数和遥测设置是否就绪。不要修改文件。'
+            })
+          ).run()
+          await assertRunFileReviews(runtime, output)
           return {
             output,
             beforeHash,
@@ -87,12 +91,13 @@ describe('ai human live text-file backend', () => {
         execute: async (runtime) => {
           const sourcePath = path.join(runtime.workspaceRoot, 'checkout-config.ts')
           await seedCheckoutConfig(sourcePath)
-          const output = await createHumanTestRunner(runtime, {
-          }).run({
-            taskId: runtime.taskId,
-            userInput:
-              '请在 checkout-config.ts 中执行结账端点切换：把两处 OLD_API_URL 替换为 API_BASE_URL，把 timeoutMs 改为 3000，retryCount 和 telemetryChannel 保持不变。编辑后核对文件。'
-          })
+          const output = await (
+            await createAiServiceTestRunner(runtime, {
+              userInput:
+                '请在 checkout-config.ts 中执行结账端点切换：把两处 OLD_API_URL 替换为 API_BASE_URL，把 timeoutMs 改为 3000，retryCount 和 telemetryChannel 保持不变。编辑后核对文件。'
+            })
+          ).run()
+          await assertRunFileReviews(runtime, output)
           return {
             output,
             finalContent: await fs.readFile(sourcePath, 'utf8'),
@@ -115,7 +120,8 @@ describe('ai human live text-file backend', () => {
               result.finalContent.includes("telemetryChannel = 'checkout-prod'"),
             {
               name: 'human-live-text-file-write-is-scoped-and-complete',
-              message: 'The live model must complete the explicit cutover without changing unrelated configuration.',
+              message:
+                'The live model must complete the explicit cutover without changing unrelated configuration.',
               data: { toolNames, finalContent: result.finalContent }
             }
           )

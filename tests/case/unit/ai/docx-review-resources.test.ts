@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { loadDocxBundle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import { buildDocxNetReview } from '../../../../src/main/services/ai/human/tools/docx/review/netReview'
 import {
@@ -10,6 +13,11 @@ import {
   elementChildren
 } from '../../../harness/backend/docxReviewAssertions'
 import { W } from '../../../../src/main/services/ai/human/tools/docx/review/documentModel'
+import { materializeDocxReview } from '../../../../src/main/services/ai/human/tools/docx/review/reviewSerializer'
+import {
+  findNewDocxValidationProblems,
+  validateDocxBuffer
+} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/validator'
 const compare = async (
   before: string,
   after: string,
@@ -90,6 +98,44 @@ describe('DOCX structural and relationship fidelity', () => {
     expect(projectReview(body, true)!.getElementsByTagName('w:drawing').length).toBe(0)
     expect(projectReview(body, false)!.getElementsByTagName('w:drawing').length).toBe(1)
   })
+  it.each(['../NULL', 'media/missing.png'])(
+    'preserves existing broken image target %s without losing real resources',
+    async (target) => {
+      const picture = (id: string) =>
+        `<w:r><w:drawing><a:blip xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" r:embed="${id}"/></w:drawing></w:r>`
+      const before = `<w:p><w:r><w:t>版本126</w:t></w:r>${picture('broken')}${picture('real')}</w:p>`
+      const extras = {
+        'word/_rels/document.xml.rels': relationship('broken', target, 'image', '').replace(
+          '</Relationships>',
+          '<Relationship Id="real" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/real.png"/></Relationships>'
+        ),
+        'word/media/real.png': Buffer.from('real-image')
+      }
+      const sourceBuffer = await reviewBuffer(before, extras)
+      const workingBuffer = await reviewBuffer(before.replace('126', '128'), extras)
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-broken-review-'))
+      try {
+        const outPath = path.join(dir, 'review.docx')
+        const result = await materializeDocxReview({ sourceBuffer, workingBuffer, outPath })
+        const buffer = await fs.readFile(outPath)
+        const review = await loadDocxBundle(buffer)
+        expect(result.stats).toEqual({ changeCount: 1, insertCount: 1, deleteCount: 1 })
+        expect(storyText(review.documentDom, false)).toEqual(['版本126'])
+        expect(storyText(review.documentDom, true)).toEqual(['版本128'])
+        expect(await review.zip.file('word/media/real.png')!.async('nodebuffer')).toEqual(
+          Buffer.from('real-image')
+        )
+        expect(
+          findNewDocxValidationProblems(
+            await validateDocxBuffer(sourceBuffer),
+            await validateDocxBuffer(buffer)
+          )
+        ).toEqual([])
+      } finally {
+        await fs.rm(dir, { recursive: true, force: true })
+      }
+    }
+  )
   it('counts one changed cell and keeps its character diff within the cell', async () => {
     const result = await compare(
       table([

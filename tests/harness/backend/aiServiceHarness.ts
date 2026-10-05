@@ -10,16 +10,17 @@ export const createAiServiceTestRunner = async (
   runtime: BackendTestRuntime,
   options: CreateAiRunContextInput & { abortSignal?: AbortSignal } = {}
 ) => {
-  const context = runtime.createAiRunContext(options)
+  const executionRunId = options.runId || runtime.runId
+  const context = runtime.createAiRunContext({ ...options, runId: executionRunId })
   const config = await context.getLlmConfig()
   const files = new AiFileChangeService(runtime.storageService.aiFileChange)
   const payload: AiRunStartPayload = {
-    runId: options.runId || runtime.runId,
+    runId: executionRunId,
     ownerRunId: options.ownerRunId,
     partnerId: context.partnerId,
     partnerName: context.partnerName,
-    userMessageId: `user-${runtime.runId}`,
-    assistantMessageId: `assistant-${runtime.runId}`,
+    userMessageId: `user-${executionRunId}`,
+    assistantMessageId: `assistant-${executionRunId}`,
     input: options.userInput || '完成当前任务',
     workspaceRoots: context.workspaceRoots,
     mainModel: { configId: config.id, modelName: config.model_name || '' },
@@ -30,6 +31,7 @@ export const createAiServiceTestRunner = async (
   const events: AiRunEvent[] = []
   const io: AiLlmIoRecord[] = []
   const deps: AiRunDeps = {
+    defaultStreamingMode: options.streamingModeOverride,
     llmStore: runtime.llmStore,
     partnerStore: runtime.partnerStore,
     chatMessageLogStore: runtime.storageService.chatMessageLog,
@@ -56,6 +58,7 @@ export const createAiServiceTestRunner = async (
       accepted: true,
       decisions: request.items.map((item) => ({ itemId: item.itemId, action: 'approve' }))
     }),
+    requestUserQuestion: context.requestUserQuestion,
     llmDriver: options.llmScript
       ? createScriptedStructuredOutputDriver(options.llmScript)
       : undefined,

@@ -1,8 +1,9 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
@@ -28,18 +29,20 @@ describe('ai human live excel create backend', () => {
         execute: async (runtime) => {
           const sourcePath = path.join(runtime.workspaceRoot, FILE_NAME)
           const eventOffset = runtime.eventCollector.snapshot().length
-          const output = await createHumanTestRunner(runtime, {}).run({
-            taskId: runtime.taskId,
-            userInput: [
-              `请在工作区新建《${FILE_NAME}》，做一份能拿去部门对齐的 9 月费用预算：`,
-              '至少包含「部门明细」和「汇总看板」两个工作表；',
-              '明细里要有部门、费用科目、预算金额，覆盖市场、研发、人事等常见部门（每个部门 2～3 条科目即可）；',
-              '汇总看板用 SUM 或 SUMIF 汇总明细金额，不要手填合计；',
-              '金额列用千分位格式。',
-              '完成后确认文件能打开即可。',
-              '约束：内容与公式正确、金额格式到位后立即交付，不要反复微调样式/列宽，也不要用终端去解析或核验 xlsx 内部格式。'
-            ].join('')
-          })
+          const output = await (
+            await createAiServiceTestRunner(runtime, {
+              userInput: [
+                `请在工作区新建《${FILE_NAME}》，做一份能拿去部门对齐的 9 月费用预算：`,
+                '至少包含「部门明细」和「汇总看板」两个工作表；',
+                '明细里要有部门、费用科目、预算金额，覆盖市场、研发、人事等常见部门（每个部门 2～3 条科目即可）；',
+                '汇总看板用 SUM 或 SUMIF 汇总明细金额，不要手填合计；',
+                '金额列用千分位格式。',
+                '完成后确认文件能打开即可。',
+                '约束：内容与公式正确、金额格式到位后立即交付，不要反复微调样式/列宽，也不要用终端去解析或核验 xlsx 内部格式。'
+              ].join('')
+            })
+          ).run()
+          await assertRunFileReviews(runtime, output)
           const workbook = new ExcelJS.Workbook()
           await workbook.xlsx.load((await fs.readFile(sourcePath)) as never)
           const formulas = workbook.worksheets.flatMap((sheet) => {
@@ -62,8 +65,8 @@ describe('ai human live excel create backend', () => {
             return found
           })
           const excelRecords = (
-            await runtime.createAiRunContext().listFileChangeRecords({ runId: runtime.runId })
-          ).filter((record) => record.capability === 'excel')
+            await runtime.storageService.aiFileChange.listRecords({ runId: runtime.runId })
+          ).items.filter((record) => record.capability === 'excel')
           return {
             output,
             events: runtime.eventCollector.snapshot().slice(eventOffset),
@@ -90,7 +93,8 @@ describe('ai human live excel create backend', () => {
               result.artifacts === 1,
             {
               name: 'human-live-excel-create-monthly-budget',
-              message: 'live human 应从零创建可解析的月度预算：多表、汇总为公式，并交付 1 条修改记录。',
+              message:
+                'live human 应从零创建可解析的月度预算：多表、汇总为公式，并交付 1 条修改记录。',
               data: {
                 toolNames,
                 sheetNames: result.sheetNames,

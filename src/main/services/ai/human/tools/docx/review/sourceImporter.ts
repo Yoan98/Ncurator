@@ -369,7 +369,11 @@ export class SourceImporter {
                 'Target',
                 path.posix.relative(
                   path.posix.dirname(targetPart.partName),
-                  await this.copyPart(name)
+                  // Preserve an already broken image target (e.g. Word's ../NULL sentinel).
+                  // It has no bytes to import; real images still retain both old/new resources.
+                  (rel.getAttribute('Type') || '').endsWith('/image') && !this.source.zip.file(name)
+                    ? name
+                    : await this.copyPart(name)
                 )
               )
           }

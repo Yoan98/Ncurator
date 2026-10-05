@@ -1,9 +1,10 @@
-import { cp, mkdir } from 'node:fs/promises'
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { AiRunEvent } from '../../../src/shared/types'
+import type { AiRunEvent, AiFileChangeRecord } from '../../../src/shared/types'
 import type { TestArtifact } from '../core/run-log-contract'
 import { iterateJsonLines } from '../core/read-run-log'
 import { resolveRunArtifactsDir } from './write-run-log'
+import type { PptDiffManifest } from '../../../src/main/services/ai/human/tools/ppt/types'
 
 const ASCII_SAFE_EXTENSION = /^\.[A-Za-z0-9_-]+$/
 
@@ -18,10 +19,7 @@ const getArtifactStorageExtension = (
 }
 
 const buildArtifactRelativePath = (event: Extract<AiRunEvent, { type: 'file_artifact' }>): string =>
-  path.posix.join(
-    'file-artifacts',
-    `${event.artifactId}${getArtifactStorageExtension(event)}`
-  )
+  path.posix.join('file-artifacts', `${event.artifactId}${getArtifactStorageExtension(event)}`)
 
 export const collectBackendRunArtifacts = async (input: {
   scope: string
@@ -29,6 +27,7 @@ export const collectBackendRunArtifacts = async (input: {
   runId: string
   workspaceRoot: string
   runtimeEventsPath: string
+  fileChangeRecords?: readonly AiFileChangeRecord[]
 }): Promise<TestArtifact[]> => {
   const artifactsDir = resolveRunArtifactsDir({
     scope: input.scope,
@@ -58,6 +57,36 @@ export const collectBackendRunArtifacts = async (input: {
       capability: event.capability,
       refs: event.stepId ? { stepId: event.stepId } : undefined
     })
+    if (event.applyId) {
+      const record = input.fileChangeRecords?.find((record) => record.id === event.applyId)
+      if (!record?.previewPath) continue
+      const reviewRelative = path.posix.join('file-artifacts', `${event.artifactId}.review`)
+      const reviewDir = path.join(artifactsDir, reviewRelative)
+      try {
+        await cp(path.dirname(record.previewPath), reviewDir, { recursive: true, force: true })
+        const reviewPath = path.join(reviewDir, path.basename(record.previewPath))
+        if (record.capability === 'ppt') {
+          const manifest = JSON.parse(await readFile(reviewPath, 'utf8')) as PptDiffManifest
+          for (const slide of manifest.slides)
+            for (const side of [slide.before, slide.after])
+              if (side)
+                side.svg = path.join(
+                  reviewDir,
+                  path.relative(path.dirname(record.previewPath), side.svg)
+                )
+          await writeFile(reviewPath, JSON.stringify(manifest))
+        }
+        collected.push({
+          id: `${event.artifactId}-review`,
+          kind: 'other',
+          path: path.posix.join('artifacts', reviewRelative, path.basename(reviewPath)),
+          fileName: path.basename(reviewPath),
+          capability: record.capability
+        })
+      } catch (error) {
+        console.error('[TEST-REVIEW-ARCHIVE]', { changeId: record.id, error })
+      }
+    }
   }
 
   return collected
