@@ -134,9 +134,9 @@ describe('workbench result e2e', () => {
               ({ testId, sheetName }) => {
                 const root = document.querySelector(`[data-testid="${testId}"]`)
                 if (!root) return false
-                const tab = Array.from(root.querySelectorAll('[data-u-comp="slide-tab-item"]')).find(
-                  (item) => item.textContent?.trim() === sheetName
-                )
+                const tab = Array.from(
+                  root.querySelectorAll('[data-u-comp="slide-tab-item"]')
+                ).find((item) => item.textContent?.trim() === sheetName)
                 if (!tab) return false
                 return getComputedStyle(tab, '::after').backgroundColor === 'rgb(34, 160, 107)'
               },
@@ -169,9 +169,17 @@ describe('workbench result e2e', () => {
           await diffNotesSheetTab.click()
           const diffNotesSheetVisible = await diffNotesSheetTab.isVisible().catch(() => false)
           await viewer.getByText('Data', { exact: true }).last().click()
+          const external = new ExcelJS.Workbook()
+          await external.xlsx.load(actualBytes as never)
+          external.getWorksheet('Data')!.name = 'External C'
+          await fs.writeFile(filePath, Buffer.from(await external.xlsx.writeBuffer()))
           const diffUri = await viewer.getAttribute('data-excel-uri')
           await documentModeToggle.click()
           await waitForExcelReady(diffUri)
+          const previewExternalCSheetVisible = await viewer
+            .getByText('External C', { exact: true })
+            .last()
+            .isVisible()
           const previewChangedSheets = await readChangedSheets()
           const previewDataTabHasDot = await sheetTabHasChangeDot('Data')
           const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
@@ -180,12 +188,15 @@ describe('workbench result e2e', () => {
           const fileNotesSheetTab = viewer.getByText('Notes', { exact: true }).last()
           await fileNotesSheetTab.click()
           const fileModeNotesVisible = await fileNotesSheetTab.isVisible().catch(() => false)
-          await viewer.getByText('Data', { exact: true }).last().click()
+          await viewer.getByText('External C', { exact: true }).last().click()
           const fileUri = await viewer.getAttribute('data-excel-uri')
           await documentModeToggle.click()
           await waitForExcelReady(fileUri)
           const restoredToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const restoredModeTag = (await documentModeTag.textContent())?.trim()
+          const reviewRetainsBSheet =
+            (await viewer.getByText('Data', { exact: true }).last().isVisible()) &&
+            (await viewer.getByText('External C', { exact: true }).count()) === 0
           const pptBeforeAfterVisible =
             (await getWorkbenchLocator(page, workbenchSelectors.pptDiffBefore).count()) > 0 ||
             (await getWorkbenchLocator(page, workbenchSelectors.pptDiffAfter).count()) > 0
@@ -193,10 +204,14 @@ describe('workbench result e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
+          await page.getByText('仍然回退这次修改？').waitFor({ state: 'visible' })
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const revertedBytes = await fs.readFile(filePath)
 
           return {
+            previewExternalCSheetVisible,
+            reviewRetainsBSheet,
             actualValue: actual.getWorksheet('Data')?.getCell('B2').value,
             actualFormula: (
               actual.getWorksheet('Data')?.getCell('C2').value as { formula?: string } | undefined
@@ -256,6 +271,8 @@ describe('workbench result e2e', () => {
               result.diffChangedSheets.includes('Notes') === false &&
               result.diffDataTabHasDot &&
               result.diffNotesTabHasDot === false &&
+              result.previewExternalCSheetVisible &&
+              result.reviewRetainsBSheet &&
               result.previewChangedSheets.length === 0 &&
               result.previewDataTabHasDot === false &&
               result.diffNotesSheetVisible &&

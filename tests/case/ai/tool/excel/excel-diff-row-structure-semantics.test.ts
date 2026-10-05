@@ -58,6 +58,7 @@ describe('ai tool excel row diff backend', () => {
 
         const harness = createExcelToolHarness(runtime)
         const recordOf = async (filePath: string) => {
+          await harness.ctx.finalizeRunFileChanges()
           const record = (await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).find(
             (item) => item.path === filePath
           )
@@ -224,10 +225,12 @@ describe('ai tool excel row diff backend', () => {
 
         const harness = createExcelToolHarness(runtime)
         const recordOf = async (filePath: string) => {
+          await harness.ctx.finalizeRunFileChanges()
           const record = (await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).find(
             (item) => item.path === filePath
           )
-          if (!record?.previewPath) throw new Error(`missing preview for ${filePath}`)
+          if (!record) return undefined
+          if (!record.previewPath) throw new Error(`missing preview for ${filePath}`)
           return {
             previewPath: record.previewPath,
             changeCount: record.changeCount,
@@ -291,7 +294,9 @@ describe('ai tool excel row diff backend', () => {
           sourcePath: path.join(runtime.workspaceRoot, 'sheet-restored.xlsx'),
           sheetName: 'Temporary'
         })
-        const sheetRestored = await recordOf(path.join(runtime.workspaceRoot, 'sheet-restored.xlsx'))
+        const sheetRestored = await recordOf(
+          path.join(runtime.workspaceRoot, 'sheet-restored.xlsx')
+        )
 
         await harness.invoke('excel_edit', {
           type: 'rename_sheet',
@@ -307,12 +312,17 @@ describe('ai tool excel row diff backend', () => {
         })
         const sheetRenamed = await recordOf(path.join(runtime.workspaceRoot, 'sheet-renamed.xlsx'))
 
-        const inspect = async (record: {
-          previewPath: string
-          changeCount: number
-          insertCount: number
-          deleteCount: number
-        }) => {
+        const inspect = async (
+          record:
+            | {
+                previewPath: string
+                changeCount: number
+                insertCount: number
+                deleteCount: number
+              }
+            | undefined
+        ) => {
+          if (!record) return undefined
           const workbook = new ExcelJS.Workbook()
           await workbook.xlsx.load((await fs.readFile(record.previewPath)) as never)
           return {
@@ -335,20 +345,12 @@ describe('ai tool excel row diff backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          [result.cell, result.row, result.sheet].every(
-            (item) =>
-              JSON.stringify(item.sheetNames) === JSON.stringify(['Data']) &&
-              item.red.length === 0 &&
-              item.green.length === 0 &&
-              item.changeCount === 0 &&
-              item.insertCount === 0 &&
-              item.deleteCount === 0
-          ) &&
-            JSON.stringify(result.renamed.sheetNames) === JSON.stringify(['Final']) &&
-            result.renamed.red.length === 0 &&
-            result.renamed.green.length === 0 &&
-            result.renamed.changeCount === 0 &&
-            result.renamed.insertCount === 0 &&
+          [result.cell, result.row, result.sheet].every((item) => item === undefined) &&
+            JSON.stringify(result.renamed?.sheetNames) === JSON.stringify(['Final']) &&
+            result.renamed?.red.length === 0 &&
+            result.renamed.green.includes('A1') &&
+            result.renamed.changeCount === 1 &&
+            result.renamed.insertCount === 1 &&
             result.renamed.deleteCount === 0,
           {
             name: 'excel-cumulative-diff-removes-zero-net-change-noise',

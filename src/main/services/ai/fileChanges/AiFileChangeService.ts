@@ -10,14 +10,7 @@ import type {
   RevertAiFileChangeResponse
 } from '../../../../shared/types'
 import { calculateFileStats, fileExists } from '../human/tools/docx/review/utils'
-import {
-  countTextFileDiffLines,
-  createTextFileDiffArtifact
-} from '../human/tools/textFile/textDiff'
-import { decodeTextFile } from '../human/tools/textFile/textFileUtils'
-import { WorkspaceObjectStore } from './WorkspaceObjectStore'
-import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../../shared/constants'
-import { ensurePartnerRuntimeDirs, getPartnerObjectsDir } from '../../assets/WorkspaceAssetService'
+import { FileChangeSessions } from './FileChangeSession'
 import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../wps/officeFileWriteNotify'
 
 const FORCE_REVERT_WARNING =
@@ -31,54 +24,19 @@ export interface AiFileChangeRecordStore {
 }
 
 export class AiFileChangeService {
-  public constructor(private readonly store: AiFileChangeRecordStore) {}
+  public constructor(private readonly store: AiFileChangeRecordStore) {
+    this.sessions = new FileChangeSessions(store)
+  }
 
   public async removeRecord(id: string): Promise<void> {
     await this.store.removeRecord(id)
   }
 
+  public readonly sessions: FileChangeSessions
+
   public async saveRecord(record: AiFileChangeRecord): Promise<void> {
-    const byId = (await this.store.getRecord({ changeId: record.id })).record
-    const existing =
-      byId ||
-      (record.status === 'applied'
-        ? (await this.store.listRecords({ runId: record.runId })).items.find(
-            (item) =>
-              item.partnerId === record.partnerId &&
-              item.path === record.path &&
-              item.status === 'applied'
-          )
-        : undefined)
-    const merged =
-      existing && existing.id !== record.id
-        ? {
-            ...record,
-            id: existing.id,
-            operation: existing.operation,
-            beforePath: existing.beforePath,
-            beforeSnapshotPath: existing.beforeSnapshotPath,
-            beforeChecksum: existing.beforeChecksum,
-            beforeObjectHash: existing.beforeObjectHash,
-            createdAt: existing.createdAt,
-            previewPath: record.capability === 'text_file' ? undefined : record.previewPath
-          }
-        : record
-    const next = await this.finalizeRecord(merged, existing)
-    Object.assign(record, next)
-    await this.store.saveRecord(next)
-    if (
-      next.status === 'applied' &&
-      next.capability === 'text_file' &&
-      (next.operation === 'created' || next.operation === 'updated') &&
-      !next.previewPath &&
-      (next.beforeSnapshotPath || next.afterSnapshotPath)
-    ) {
-      try {
-        await this.materializeTextPreview(next)
-      } catch {
-        // Preview generation is best effort; the change record remains usable without it.
-      }
-    }
+    // Content tools pass confirmed versions. Never infer B from a mutable source.
+    await this.store.saveRecord(record)
   }
 
   public async listRecords(
@@ -90,104 +48,7 @@ export class AiFileChangeService {
   public async getRecord(
     request: GetAiFileChangeRecordRequest
   ): Promise<GetAiFileChangeRecordResponse> {
-    const response = await this.store.getRecord(request)
-    if (
-      !response.record ||
-      response.record.capability !== 'text_file' ||
-      (response.record.operation !== 'created' && response.record.operation !== 'updated')
-    ) {
-      return response
-    }
-    if (response.record.previewPath) return response
-    try {
-      return { record: await this.materializeTextPreview(response.record) }
-    } catch (error) {
-      return {
-        record: response.record,
-        error: error instanceof Error ? error.message : String(error)
-      }
-    }
-  }
-
-  private async finalizeRecord(
-    record: AiFileChangeRecord,
-    existing: AiFileChangeRecord | undefined
-  ): Promise<AiFileChangeRecord> {
-    const now = Date.now()
-    const next: AiFileChangeRecord = {
-      ...record,
-      beforePath: record.beforePath || existing?.beforePath,
-      afterPath: record.afterPath || existing?.afterPath,
-      beforeSnapshotPath: record.beforeSnapshotPath || existing?.beforeSnapshotPath,
-      beforeObjectHash: record.beforeObjectHash || existing?.beforeObjectHash,
-      beforeChecksum: record.beforeChecksum || existing?.beforeChecksum,
-      createdAt: existing?.createdAt || record.createdAt || now,
-      updatedAt: now
-    }
-
-    const outputPath = next.afterPath || next.path
-    if (next.operation !== 'deleted' && !next.afterSnapshotPath && (await fileExists(outputPath))) {
-      await ensurePartnerRuntimeDirs(next.partnerId)
-      const output = await new WorkspaceObjectStore(getPartnerObjectsDir(next.partnerId)).putFile(
-        outputPath
-      )
-      next.afterSnapshotPath = output.objectPath
-      next.afterObjectHash = output.hash
-      next.afterChecksum = output.hash
-    }
-
-    if (next.status === 'applied' && this.hasNoEffectiveChange(next)) {
-      next.status = 'failed'
-      next.error = NO_EFFECTIVE_FILE_CHANGE_MESSAGE
-    } else if (next.status === 'applied') {
-      next.error = undefined
-    }
-    return next
-  }
-
-  private hasNoEffectiveChange(record: AiFileChangeRecord): boolean {
-    if (record.operation === 'created') return !record.afterChecksum
-    if (record.operation === 'deleted') return !record.beforeChecksum
-    if (record.operation === 'renamed') {
-      return !record.beforePath || !record.afterPath || record.beforePath === record.afterPath
-    }
-    return Boolean(
-      record.beforeChecksum &&
-      record.afterChecksum &&
-      record.beforeChecksum === record.afterChecksum
-    )
-  }
-
-  private async materializeTextPreview(record: AiFileChangeRecord): Promise<AiFileChangeRecord> {
-    const beforeBuffer = record.beforeSnapshotPath
-      ? await fs.readFile(record.beforeSnapshotPath)
-      : Buffer.alloc(0)
-    const afterBuffer = record.afterSnapshotPath
-      ? await fs.readFile(record.afterSnapshotPath)
-      : Buffer.alloc(0)
-    const before = beforeBuffer.length
-      ? decodeTextFile(beforeBuffer, record.beforePath || record.path).normalizedContent
-      : ''
-    const after = afterBuffer.length
-      ? decodeTextFile(afterBuffer, record.afterPath || record.path).normalizedContent
-      : ''
-    const artifact = createTextFileDiffArtifact({ before, after })
-    const counts = countTextFileDiffLines(artifact)
-    await ensurePartnerRuntimeDirs(record.partnerId)
-    const previewObject = await new WorkspaceObjectStore(
-      getPartnerObjectsDir(record.partnerId)
-    ).putBuffer(Buffer.from(`${JSON.stringify(artifact)}\n`, 'utf-8'))
-    const updated: AiFileChangeRecord = {
-      ...record,
-      insertCount: counts.insertCount,
-      deleteCount: counts.deleteCount,
-      changeCount: Math.max(1, counts.insertCount + counts.deleteCount),
-      previewPath: previewObject.objectPath,
-      previewArtifactHash: previewObject.hash,
-      updatedAt: Date.now()
-    }
-    await this.store.saveRecord(updated)
-    return updated
+    return await this.store.getRecord(request)
   }
 
   public async revertRecord(
@@ -231,7 +92,6 @@ export class AiFileChangeService {
             `${path.basename(restorePath)}.revert-${record.id}.tmp`
           )
           await fs.copyFile(record.beforeSnapshotPath, tempOutputPath)
-          await fs.rm(restorePath, { force: true })
           await fs.rename(tempOutputPath, restorePath)
         }
         notifyOfficeFileWritten(currentPath)

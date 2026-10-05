@@ -1,15 +1,12 @@
-import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { tool, type StructuredToolInterface } from '@langchain/core/tools'
 import type {
-  AiFileChangeOperation,
   AiFileChangeRecord,
   AiToolCallResult,
   IpcJsonObject,
   JsonObject
 } from '../../../../../../shared/types'
-import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
@@ -23,7 +20,6 @@ import {
   type FileReadInput,
   type FileReadOutput
 } from './toolSpecs'
-import { countTextFileDiffLines, createTextFileDiffArtifact } from './textDiff'
 import {
   calculateBufferChecksum,
   decodeTextFile,
@@ -32,7 +28,6 @@ import {
   resolveSafeTextFilePath,
   withTextFileMutationQueue
 } from './textFileUtils'
-import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { buildTextFileSearchTool } from './textFileSearch'
 
 type TextFileToolFailure = Error & {
@@ -182,26 +177,6 @@ const ensureCreateTargetAvailable = async (sourcePath: string): Promise<void> =>
   }
 }
 
-const atomicReplaceFile = async (input: {
-  sourcePath: string
-  content: Buffer
-  mode: number
-  operationId: string
-}): Promise<void> => {
-  const tempPath = path.join(
-    path.dirname(input.sourcePath),
-    `.${path.basename(input.sourcePath)}.${input.operationId}.tmp`
-  )
-  try {
-    await fs.writeFile(tempPath, input.content, { flag: 'wx', mode: input.mode })
-    await fs.chmod(tempPath, input.mode)
-    await fs.rename(tempPath, input.sourcePath)
-  } catch (error) {
-    await fs.rm(tempPath, { force: true }).catch(() => undefined)
-    throw error
-  }
-}
-
 const buildEditMessage = (input: {
   action: FileEditInput['action']
   sourcePath: string
@@ -226,20 +201,8 @@ const editTextFile = async (
   })
 
   return await withTextFileMutationQueue(sourcePath, async () => {
-    const existingRecord = (await buildInput.ctx.listFileChangeRecords({ runId: buildInput.runId }))
-      .filter(
-        (record) =>
-          record.capability === 'text_file' &&
-          record.path === sourcePath &&
-          record.status === 'applied'
-      )
-      .sort((left, right) => right.updatedAt - left.updatedAt)[0]
-    const operationId = existingRecord?.id || randomUUID()
-    const operation: AiFileChangeOperation =
-      existingRecord?.operation || (args.action === 'create' ? 'created' : 'updated')
     let beforeBuffer: Buffer | undefined
     let beforeChecksum: string | undefined
-    let beforeMode = 0o644
     let beforeNormalized = ''
     let afterNormalized = ''
     let afterBuffer: Buffer
@@ -259,8 +222,6 @@ const editTextFile = async (
         sourcePath: args.sourcePath,
         allowMissing: false
       })
-      const stats = await fs.stat(sourcePath)
-      beforeMode = stats.mode
       beforeBuffer = await fs.readFile(sourcePath)
       beforeChecksum = calculateBufferChecksum(beforeBuffer)
       const decoded = decodeTextFile(beforeBuffer, args.sourcePath)
@@ -297,127 +258,16 @@ const editTextFile = async (
       throw new Error(`无法写入 ${args.sourcePath}：不支持二进制文本。`)
     }
 
-    let baselineNormalized = beforeNormalized
-    let recordBeforeSnapshotPath = beforeBuffer
-      ? path.join(
-          getPartnerRuntimeDir(buildInput.partnerId),
-          'file-changes',
-          buildInput.runId,
-          `${operationId}.before`
-        )
-      : undefined
-    let recordBeforeChecksum = beforeChecksum
-    if (existingRecord?.operation === 'created') {
-      baselineNormalized = ''
-      recordBeforeSnapshotPath = undefined
-      recordBeforeChecksum = undefined
-    } else if (existingRecord) {
-      if (!existingRecord.beforeSnapshotPath) {
-        throw new Error(`无法更新 ${args.sourcePath}：原始快照缺失。`)
-      }
-      const baselineBuffer = await fs.readFile(existingRecord.beforeSnapshotPath)
-      baselineNormalized = decodeTextFile(baselineBuffer, args.sourcePath).normalizedContent
-      recordBeforeSnapshotPath = existingRecord.beforeSnapshotPath
-      recordBeforeChecksum = existingRecord.beforeChecksum
-    }
-
-    const diffArtifact = createTextFileDiffArtifact({
-      before: baselineNormalized,
-      after: afterNormalized
+    const confirmed = await buildInput.ctx.writeFileChange({
+      sourcePath,
+      buffer: afterBuffer,
+      capability: 'text_file',
+      expectedChecksum: beforeChecksum,
+      created: args.action === 'create'
     })
-    const { insertCount, deleteCount } = countTextFileDiffLines(diffArtifact)
-    const artifactRoot = path.join(
-      getPartnerRuntimeDir(buildInput.partnerId),
-      'file-changes',
-      buildInput.runId
-    )
-    const beforeSnapshotPath = recordBeforeSnapshotPath
-    const afterChecksum = calculateBufferChecksum(afterBuffer)
-    let targetWritten = false
-
-    try {
-      await fs.mkdir(artifactRoot, { recursive: true })
-      if (!existingRecord && beforeBuffer && beforeSnapshotPath) {
-        await fs.writeFile(beforeSnapshotPath, beforeBuffer)
-      }
-
-      if (args.action === 'create') {
-        await fs.writeFile(sourcePath, afterBuffer, { flag: 'wx', mode: 0o644 })
-      } else {
-        const currentBuffer = await fs.readFile(sourcePath)
-        if (calculateBufferChecksum(currentBuffer) !== beforeChecksum) {
-          throw new Error(`无法写入 ${args.sourcePath}：文件在操作期间被其他进程修改。`)
-        }
-        await atomicReplaceFile({
-          sourcePath,
-          content: afterBuffer,
-          mode: beforeMode,
-          operationId
-        })
-      }
-      targetWritten = true
-
-      const now = Date.now()
-      const record: AiFileChangeRecord = {
-        id: operationId,
-        partnerId: buildInput.partnerId,
-        runId: buildInput.runId,
-        status: 'applied',
-        capability: 'text_file',
-        path: sourcePath,
-        fileName: path.basename(sourcePath),
-        operation,
-        source: 'text_tool',
-        beforePath: operation === 'updated' ? sourcePath : undefined,
-        afterPath: sourcePath,
-        changeCount: (existingRecord?.changeCount || 0) + changeCount,
-        insertCount,
-        deleteCount,
-        beforeSnapshotPath,
-        beforeChecksum: recordBeforeChecksum,
-        afterChecksum,
-        createdAt: existingRecord?.createdAt || now,
-        updatedAt: now
-      }
-      await buildInput.ctx.saveFileChangeRecord(record)
-
-      emitFileArtifactEvent({
-        ctx: buildInput.ctx,
-        runId: buildInput.runId,
-        taskId: buildInput.taskId,
-        capability: 'text_file',
-        artifactPath: sourcePath,
-        operation,
-        applyId: operationId,
-        changeCount: record.changeCount,
-        insertCount: record.insertCount,
-        deleteCount: record.deleteCount
-      })
-
-      return {
-        message: buildEditMessage({
-          action: args.action,
-          sourcePath: args.sourcePath,
-          changeCount
-        }),
-        record
-      }
-    } catch (error) {
-      if (targetWritten) {
-        if (beforeBuffer) {
-          await atomicReplaceFile({
-            sourcePath,
-            content: beforeBuffer,
-            mode: beforeMode,
-            operationId: `${operationId}.rollback`
-          }).catch(() => undefined)
-        } else {
-          await fs.rm(sourcePath, { force: true }).catch(() => undefined)
-        }
-      }
-      if (!existingRecord && beforeSnapshotPath)
-        await fs.rm(beforeSnapshotPath, { force: true }).catch(() => undefined)
-      throw error
+    return {
+      message: buildEditMessage({ action: args.action, sourcePath: args.sourcePath, changeCount }),
+      record: confirmed.record
     }
   })
 }

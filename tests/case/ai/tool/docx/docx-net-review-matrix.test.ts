@@ -29,7 +29,6 @@ describe('DOCX net review public tool matrix', () => {
       description: '真实公开工具验证移动组合、逐字/格式范围、连续基线、零净记录与字节回退。',
       execute: async (runtime) => {
         const harness = createDocxToolHarness(runtime)
-        harness.ctx.beginDocxApplyRun()
         const observations: Array<{ name: string; stats?: number[]; review?: string[] }> = []
         const equivalentReviews = new Map<string, string>()
         const id = async (sourcePath: string, query: string, occurrence = 0) =>
@@ -63,10 +62,17 @@ describe('DOCX net review public tool matrix', () => {
             oldText,
             newText
           })
-        const apply = async (sourcePath: string): Promise<DocxApplyRecord | undefined> =>
-          (await harness.ctx.applyDocxRunEdits({ retainState: true })).find(
-            (r) => r.source_path === sourcePath
+        const apply = async (
+          sourcePath: string,
+          target = harness
+        ): Promise<DocxApplyRecord | undefined> => {
+          const record = (await target.ctx.finalizeRunFileChanges()).find(
+            (record) => record.path === sourcePath
           )
+          return record
+            ? (await runtime.docxApplyService.getRecord({ applyId: record.id })).record
+            : undefined
+        }
         const verify = async (
           name: string,
           sourcePath: string,
@@ -77,8 +83,8 @@ describe('DOCX net review public tool matrix', () => {
           if (zero) {
             runtime.assertThat(
               !record &&
-                !(await runtime.docxApplyStore.listRecords()).items.some(
-                  (r) => r.source_path === sourcePath && r.status === 'applied'
+                !(await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).some(
+                  (r) => r.path === sourcePath && r.status === 'applied'
                 ),
               { name: `${name}-zero`, message: '恢复原状后不得保留记录或过期统计' }
             )
@@ -626,17 +632,32 @@ describe('DOCX net review public tool matrix', () => {
           ])
           const baseline = await fs.readFile(continuous)
           await replace(continuous, '原始A', '中间B')
-          const first = await apply(continuous)
+          const first = (await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).find(
+            (record) => record.path === continuous
+          )
           await replace(continuous, '中间B', '最终C')
-          const second = await apply(continuous)
+          const second = (await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).find(
+            (record) => record.path === continuous
+          )
           runtime.assertThat(
-            first?.id === second?.id && first?.before_checksum === second?.before_checksum,
+            first?.id === second?.id && first?.beforeChecksum === second?.beforeChecksum,
             { name: 'continuous-first-baseline', message: '连续应用共用首次基线和同一个修改记录' }
           )
           await replace(continuous, '最终C', '原始A')
           await verify('continuous-restored', continuous, baseline, await apply(continuous), true)
-          await replace(continuous, '原始A', '最终D')
-          await verify('continuous-after-zero', continuous, baseline, await apply(continuous))
+          const continuousNext = await writeTestDocxFile(
+            runtime.workspaceRoot,
+            'continuous-after-zero.docx',
+            [{ type: 'paragraph', text: '原始A' }]
+          )
+          const nextBaseline = await fs.readFile(continuousNext)
+          await replace(continuousNext, '原始A', '最终D')
+          await verify(
+            'continuous-after-zero',
+            continuousNext,
+            nextBaseline,
+            await apply(continuousNext)
+          )
           const regions = await writeTestDocxFile(runtime.workspaceRoot, 'regions.docx', [
             { type: 'paragraph', text: 'Body unchanged' }
           ])
@@ -693,12 +714,13 @@ describe('DOCX net review public tool matrix', () => {
           ])
           const crossBefore = await fs.readFile(crossPath)
           await replace(crossPath, 'First baseline A', 'Intermediate B')
-          const crossFirst = await apply(crossPath)
+          const crossFirst = (
+            await harness.ctx.listFileChangeRecords({ runId: runtime.runId })
+          ).find((record) => record.path === crossPath)
           const next = createDocxToolHarness(runtime, {
             runId: `${runtime.runId}-next`,
             ownerRunId: runtime.runId
           })
-          next.ctx.beginDocxApplyRun()
           try {
             const query = async (text: string) =>
               (
@@ -714,10 +736,11 @@ describe('DOCX net review public tool matrix', () => {
               oldText: 'Intermediate B',
               newText: 'Final C'
             })
-            const second = (await next.ctx.applyDocxRunEdits({ retainState: true }))[0]!
+            const second = (await next.ctx.listFileChangeRecords({ runId: runtime.runId })).find(
+              (record) => record.path === crossPath
+            )!
             runtime.assertThat(
-              second.id === crossFirst?.id &&
-                second.before_checksum === crossFirst?.before_checksum,
+              second.id === crossFirst?.id && second.beforeChecksum === crossFirst?.beforeChecksum,
               {
                 name: 'separate-executions-first-baseline',
                 message: '独立 Worker 执行共用 owner 首次基线及记录'
@@ -731,7 +754,9 @@ describe('DOCX net review public tool matrix', () => {
               newText: 'First baseline A'
             })
             runtime.assertThat(
-              (await next.ctx.applyDocxRunEdits()).length === 0 &&
+              !(await next.ctx.finalizeRunFileChanges()).some(
+                (record) => record.path === crossPath
+              ) &&
                 !(await next.ctx.listFileChangeRecords({ participatingOnly: false })).some(
                   (r) => r.path === crossPath
                 ),
@@ -740,12 +765,12 @@ describe('DOCX net review public tool matrix', () => {
           } finally {
             await next.release()
           }
-          // Recreate service/run state after zero; the immutable snapshot survives on disk.
+          await fs.writeFile(crossPath, crossBefore)
+          // Start a fresh edit after the completed zero-change review.
           const last = createDocxToolHarness(runtime, {
             runId: `${runtime.runId}-last`,
             ownerRunId: runtime.runId
           })
-          last.ctx.beginDocxApplyRun()
           try {
             const node = (
               await last.invoke<DocxSearchResult>('docx_search', {
@@ -760,7 +785,7 @@ describe('DOCX net review public tool matrix', () => {
               oldText: 'First baseline A',
               newText: 'Final D'
             })
-            const record = (await last.ctx.applyDocxRunEdits())[0]!
+            const record = (await apply(crossPath, last))!
             await verify('cross-execution-after-zero', crossPath, crossBefore, record)
           } finally {
             await last.release()
@@ -774,7 +799,6 @@ describe('DOCX net review public tool matrix', () => {
             runId: `${runtime.runId}-ahead`,
             ownerRunId: runtime.runId
           })
-          ahead.ctx.beginDocxApplyRun()
           try {
             const target = (
               await ahead.invoke<DocxSearchResult>('docx_search', {
@@ -789,7 +813,7 @@ describe('DOCX net review public tool matrix', () => {
               oldText: 'Intermediate B',
               newText: 'Final C'
             })
-            const record = (await ahead.ctx.applyDocxRunEdits())[0]!
+            const record = (await apply(pendingPath, ahead))!
             runtime.assertThat(
               !!record.before_snapshot_path &&
                 pendingBefore.equals(await fs.readFile(record.before_snapshot_path)),

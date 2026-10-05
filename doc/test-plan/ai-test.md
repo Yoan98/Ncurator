@@ -1,5 +1,39 @@
 # NCurator-Desktop AI 测试计划
 
+## 文件写盘、Run 收尾与历史审核
+
+#### `file-change-immutable-review`
+
+- 测试类型：backend / tool-real；suite `tool`，group `file-changes`。
+- What：四类文件统一版本与审核闭环。
+- Why：防止可变正式文件污染历史 B。
+- How：真实公开工具写入，外部写 C，再显式 owner 收尾并解析审核。
+- Oracle：四类真实工具正式 A→B，运行中无审核，外部 C 后收尾固定 B；删除临时版本、重复收尾与原始字节回退。
+
+#### `excel-blank-layout-and-sheet-identity`
+
+- 测试类型：backend / tool-real；suite `tool`，group `excel`。
+- What：空白布局和工作表、行列结构身份。
+- Why：不能按空值或相同名称消除有效变化。
+- How：真实工具连续编辑并重建 runtime，解析正式文件与 review.xlsx。
+- Oracle：空白样式、尺寸、合并、列删除对齐，runtime 重建后 Sheet 重命名/同名重建（含已删除名称冲突）及恢复原样。
+
+Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具成功前正式文件完整写入、立即回读验证，并持久化唯一最新确认工作版本及结构身份。首次实际写入前保存原始字节 A；主 run 真正完成、失败或取消时仅计算 A→最后成功版本 B 的净差异。子任务结束、yield、模型回答及追加消息续接不触发收尾。正式文件后来变为 C，历史审核和最终校验值仍属于 B。
+
+主要覆盖归 `ai/tool`：四类真实工具逐次解析正式文件；运行中无审核产物；收尾一次、恢复原样不留修改记录、新建空文件仍可撤销；连续修改、runtime 重建、子任务共享基线、纯格式和结构变化；A→B 后外部写 C 的历史审核；PPT 连续公式替换并在中途重建 runtime、移动/恢复、页码/层级顺移、纯文字对齐及备注仅修改标记；Excel 行列对齐、Sheet 重命名/同名重建、空白样式/尺寸/合并及合并区域行列操作。断言正式文件、审核中的实际内容、样式和标记，不能仅检查存在或计数。
+
+`unit/ai` 覆盖共用发布边界和算法：保存前失败、保存后失败、回读不一致、快照持久化失败；错误包含实际原因和真实文件状态，不暴露内部路径，不自动恢复；下一次编辑重新读取磁盘。首次修改在尝试替换正式文件前失败时，不固定该次基线；重试以当时正式文件为 A。AI 生命周期覆盖正常/失败/取消、在途写入等待、进程中断和启动补生成、重复收尾及审核失败保留计算输入。不得增加生产故障开关。Excel 持久化失败用例必须到达目标失败阶段。
+
+审核产物自包含：Word review.docx、Excel review.xlsx、PPT manifest.json 与前后 SVG/资源、文本 review.json（完整有序差异行及旧新行数）。完成记录保存后清理临时工作版本和 pending.json；原始 A 按内容寻址保存以支持原始字节回退。覆盖清理 B 后仍可渲染、文本未变行展开、新建撤销、后续修改确认、两轮依次撤销。Word 既有净比较、字符差异、格式和资源矩阵完整回归。失败或取消不否认已落盘事实。
+
+#### `human-file-change-finalization`
+
+- 测试类型：backend / mock-llm；suite `human`，group `mock-llm`。
+- What：真正 owner run 的文件审核收尾及失败分支。
+- Why：yield 和续接不能切断首次 A，也不能提前发布审核；模型失败不能丢失已保存修改。
+- How：生产 `AiRunService.run`、真实文本工具、正式文件与 Store；只脚本化模型决策，沿用追加消息测试的调度回调，在真实工具结果后通知待处理消息。续接使用同一 ownerRunId；另一轮在保存后由脚本模型返回不可重试错误。
+- Oracle：yield 后正式 B 已保存但无审核；续接最终 B2 的审核仍相对 A且仅一条 owner 记录；主 run 失败后审核包含成功保存的 B，临时输入清理、正式文件保留。
+
 ## 一次性子任务
 
 #### `human-subagent-collaboration-live`
@@ -76,7 +110,7 @@
 ### 2.1 `tool`
 
 - 负责生产工具 runtime 的完整输入输出、读写链、错误边界、原子性、修改记录与回退契约；只验证真实生产工具调用，不允许 fake。
-- `tool / docx` 覆盖 7 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 首次基线→最终 Worker 文件净 Diff。
+- `tool / docx` 覆盖 7 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 首次原始字节基线→最终确认落盘版本净 Diff。
 - `tool / text-file` 覆盖普通文本按行分页读取、四种写入 action、修改记录、结构化 diff 与回退前置数据，以及按行号定位的文本搜索；unit 侧见 `tests/case/unit/ai/text-file-tool-contract.test.ts`。
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作地址内修改记录、Artifact、安全校验和工作地址外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
@@ -129,7 +163,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只认�
 
 #### docx 类别
 
-DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segment map 百分比区间、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 首次基线→最终 Worker 文件净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、分页/分栏/section 边界、中英文混合 TF-IDF、DrawingML/VML 视觉锚点、TF-IDF/MMR 摘要预算、搜索全量计数但只构造前 10 条详情、无效搜索 scope、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和 visual 节点编辑清理。公开工具回归还必须验证错误 ID 不会提交部分修改。
+DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segment map 百分比区间、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 首次原始字节基线→最终确认落盘版本净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、分页/分栏/section 边界、中英文混合 TF-IDF、DrawingML/VML 视觉锚点、TF-IDF/MMR 摘要预算、搜索全量计数但只构造前 10 条详情、无效搜索 scope、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和 visual 节点编辑清理。公开工具回归还必须验证错误 ID 不会提交部分修改。
 
 ##### `docx-public-tools`
 
@@ -303,9 +337,9 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `ppt-create-read-edit-commit`
 
 - 测试类型：`backend / tool`
-- What：`ppt_edit` 按单次 operation 用元素规格创建页面、读取、编辑，以及写入时生成单一页面级 diff 记录。
+- What：`ppt_edit` 按单次 operation 用元素规格创建页面、读取、编辑，以及主 run 收尾生成单一页面级 diff 记录。
 - Why：PPT 工具必须同时守住直接写回和 run 级差异聚合。
-- How：分两次 `insert_slide` 创建真实多页 PPT，连续读取和编辑，再检查写入保存的记录。
+- How：分两次 `insert_slide` 创建真实多页 PPT，连续读取和编辑，运行中检查正式文件，收尾后检查审核记录。
 - Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；写回只含 `slideId` / `createdElementIds` 等锚点；同一文件只生成一条修改记录和页面级 diff。
 
 ##### `ppt-diff-slide-and-element-net-semantics`
@@ -313,8 +347,8 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / tool`
 - What：真实 PPT runtime 按本 Run 首个 baseline 和最终文件生成 Diff Manifest v4，覆盖页面和元素的新增、删除、修改、移动、恢复与组合计数。
 - Why：工具调用次数、插入删除造成的页码偏移和置顶造成的层级编号顺移都可能制造假 Diff，必须直接解析真实 artifact 验证净变化。
-- How：对三个真实 PPT 连续执行页面 A→B→C、A→B→A、修改后删除、新增后继续修改、新增后删除、中间页删除、主动移动及移动后恢复；再分别改变元素内容、样式、位置、大小、层级，覆盖同元素多种修改、公式 replacement lineage、元素新增后修改、修改后删除、新增后删除、修改后恢复、备注修改后恢复；另对已有页执行 `replace_slide`（同 slideId 整页替换）；最后提交 Run 并读取 Manifest 和正式 PPT。
-- Oracle：页面组合得到准确 `+3/-2`，元素组合得到准确 `+6/-1`，`replace_slide` 页为 modified 且元素旧全部 deleted、新全部 added；零净变化文件不生成记录；中间页增删不把后续页标记为移动，置顶只计算真实移动元素；中间稿和临时对象不进入 before/after；正式 PPT 可解析且无 Diff 污染，修改记录的 `insertCount/deleteCount/changeCount` 分别等于 v4 的 positive、negative 和两者之和。
+- How：对三个真实 PPT 连续执行页面 A→B→C、A→B→A、修改后删除、新增后继续修改、新增后删除、中间页删除、主动移动及移动后恢复；再分别改变元素内容、样式、位置、大小、层级，覆盖同元素多种修改、中途重建 runtime 的连续公式 replacement lineage 与纯文字对齐、元素新增后修改、修改后删除、新增后删除、修改后恢复、备注修改后恢复；另对已有页执行 `replace_slide`（同 slideId 整页替换）；最后提交 Run 并读取 Manifest 和正式 PPT。
+- Oracle：页面组合得到准确 `+3/-2`，元素组合得到准确 `+7/-1`，`replace_slide` 页为 modified 且元素旧全部 deleted、新全部 added；零净变化文件不生成记录；中间页增删不把后续页标记为移动，置顶只计算真实移动元素；中间稿和临时对象不进入 before/after；正式 PPT 可解析且无 Diff 污染，修改记录的 `insertCount/deleteCount/changeCount` 分别等于 v4 的 positive、negative 和两者之和。
 
 ##### `ppt-professional-element-edit`
 
@@ -362,9 +396,9 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 
 - 测试类型：`backend`
 - What：Excel 全部编辑 type、样式、工作簿结构、原子写入和累计修改记录，并校验非行位移类 diff xlsx 语义。
-- Why：写入失败、外部并发修改或 record 持久化失败都不能留下半提交状态；同一次 run 的多轮编辑必须相对首个 baseline 生成累计 Diff；删除 Sheet、清空范围和边框粗细不能只靠 UI e2e 间接发现。
-- How：真实覆盖 `set_range`/清空、公式、样式、行列与 Sheet 操作、no-op、外部修改冲突、record 持久化失败回滚和同 run 两轮编辑；直接解析 diff xlsx 检查 sheet 顺序、tab 色、单元格值、边框、行高、列宽和合并单元格。
-- Oracle：每个 type 落盘后可读；删除最后一个 Sheet 失败；新增 Sheet 在 Diff 中为绿色标签；删除 Sheet 按 baseline 原位置恢复完整旧内容并显示红色标签；清空范围保留修改前值并显示红色中等粗细边框；源 xlsx 不包含 diff 标记；no-op 不产生记录；冲突与持久化失败恢复到安全状态；最终仅一条累计 record，Diff 相对首个 baseline。
+- Why：写入失败、外部并发修改或 record 持久化失败必须报告正式文件实际状态；同一次 run 的多轮编辑必须相对首个 baseline 生成累计 Diff；删除 Sheet、清空范围和边框粗细不能只靠 UI e2e 间接发现。
+- How：真实覆盖 `set_range`/清空、公式、样式、行列与 Sheet 操作、no-op、外部修改冲突、同 run 两轮编辑；持久化失败边界在 unit/ai 使用真实发布阶段验证，不自动恢复；直接解析 diff xlsx 检查 sheet 顺序、tab 色、单元格值、边框、行高、列宽和合并单元格。
+- Oracle：每个 type 落盘后可读；删除最后一个 Sheet 失败；新增 Sheet 在 Diff 中为绿色标签；删除 Sheet 按 baseline 原位置恢复完整旧内容并显示红色标签；清空范围保留修改前值并显示红色中等粗细边框；源 xlsx 不包含 diff 标记；no-op 不产生记录；外部冲突不覆盖文件；保存后失败不恢复正式文件，下一次重新读取；最终仅一条累计 record，Diff 相对首个 baseline。
 
 ##### `excel-diff-row-structure-semantics`
 
@@ -526,7 +560,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：`image_generate` 使用 SVG 内容生成真实 PNG、JPEG、WebP，并自动创建或更新目标图片。
 - Why：图片生成的核心交付是可读取的正式图片文件，不能只验证 SVG 或伪造扩展名。
 - How：在临时工作区调用真实 `image_generate`，分别输出 PNG、JPEG、WebP；同一路径再次生成，并覆盖一份预先存在的 JPEG。
-- Oracle：三种文件签名正确且均可实际解码为预期尺寸；新建和已有路径连续更新都复用修改记录和 applyId；已有文件始终保存首次写入前快照；Artifact capability 为 `image`；工具结果只返回 `outputPath`。
+- Oracle：三种文件签名正确且均可实际解码为预期尺寸；新建和已有路径连续更新都复用修改记录和 applyId；已有文件始终保存首次写入前快照；运行中无 file_artifact，主 run 收尾后发布图片记录并保留不可变最终图片快照，不新增图片内容 diff；工具结果只返回 `outputPath`。
 
 ##### `image-generate-safety-and-boundary-contract`
 
@@ -655,7 +689,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：human 直接使用 builtin `image_generate` 生成并交付 PNG，无需学习。
 - Why：Tool 测试不覆盖 Brain、Hand 的技能装载和交付主链。
-- How：只脚本化 LLM 决策，真实执行 human graph、图片渲染、修改记录和 Artifact。
+- How：通过生产 `AiRunService.run` 包含真正主 run 的文件收尾；只脚本化 LLM 决策，真实执行 human graph、图片渲染、修改记录和 Artifact。
 - Oracle：主链经过 Hand 与 brain 交付；只调用一次 `image_generate`；PNG 可解码且尺寸正确；Artifact 和最终交付文件名一致。
 
 ##### `human-excel-read-edit`
@@ -663,7 +697,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend`
 - What：human 学习 Excel 能力后读取已有工作簿、修改并复读验证。
 - Why：补齐 Excel 在真实 human graph 中完全缺失的 non-live 回归。
-- How：只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。脚本调用 `excel_read` / `excel_edit` 学技能后读-写-复读。
+- How：通过生产 `AiRunService.run` 包含真正主 run 的文件收尾；只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。脚本调用 `excel_read` / `excel_edit` 学技能后读-写-复读。
 - Oracle：任务完成；调用包含读、写、复读；正式文件、累计 record、artifact 与最终答复一致。
 
 ##### `human-text-file-read-write`
@@ -671,7 +705,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend`
 - What：human 能读取普通文本、修改并交付结果。
 - Why：Text File 目前只有 tool 与 live，缺少可快速定位 graph/runtime 问题的 mock 层。
-- How：脚本化 LLM 决策，真实执行 text read/write 和修改记录链路。
+- How：通过生产 `AiRunService.run` 包含真正主 run 的文件收尾；脚本化 LLM 决策，真实执行 text read/write 和修改记录链路。
 - Oracle：修改落盘且可复读；artifact 和最终答复包含正确文件。
 
 ##### `human-text-file-search-locate-read`
@@ -879,7 +913,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：AI 能学习 `ppt-read / ppt-write`，通过两次 `ppt_edit(insert_slide)` 创建多页并交付 PPT。
 - Why：需要验证 human 主链能正确学习并调用 PPT 能力。
-- How：使用 scripted LLM 输出驱动真实 human graph 创建并交付 PPT。
+- How：通过生产 `AiRunService.run` 包含真正主 run 的文件收尾；使用 scripted LLM 输出驱动真实 human graph 创建并交付 PPT。
 - Oracle：最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
 
 ##### `scheduled-task-learn-create-read-update-read`
@@ -1081,7 +1115,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / live`
 - What：真实模型能读取带 `NULL` 图片残留的需求 DOCX，识别真实图片、评估需求并写回开发时间。
 - Why：这条回归覆盖用户真实的“读图 + 分析 + 同文件编辑”闭环，防止底层脏关系再次被算成虚假图片或阻止写入。
-- How：使用真实附件和用户原句，只开放 DOCX 读取、内置 `read_image` 和编辑工具，并注入主模型配置。
+- How：使用真实附件和用户原句，只开放 DOCX 读取、内置 `read_image` 和编辑工具，并注入主模型配置；应用记录读取统一 Word 薄适配。
 - Oracle：任务完成；调用 DOCX 读取、`read_image` 和成功的 `docx_content_edit`；图片读取没有缺失文件错误，最终答复不出现“图片9”，产出的 DOCX 比原文新增至少 12 条有效工时表达。
 
 ##### `human-web-search-by-url-live`

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { readdir } from 'node:fs/promises'
 import { collectBackendRunArtifacts } from './artifactCollector'
@@ -123,7 +124,7 @@ export const runBackendCase = async <TResult>(
   const liveConfig = definition.harnessMode === 'live' ? loadLiveLlmConfigFromEnv() : null
   const runtimeModelName = liveConfig?.model_name || definition.runtimeModelName || null
   const startedAtMs = Date.now()
-  const runId = createRunId(startedAtMs)
+  const runId = `${createRunId(startedAtMs)}-${randomUUID().slice(0, 8)}`
   const scope = buildRunScope({
     domain: definition.domain,
     suite: definition.suite,

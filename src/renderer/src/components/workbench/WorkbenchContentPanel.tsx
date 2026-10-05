@@ -86,7 +86,7 @@ const getApplyDocumentPath = (
   displayMode: DocumentDisplayMode
 ): string => {
   if (displayMode === 'preview') return record.path
-  return record.previewPath || record.afterSnapshotPath || record.path
+  return record.previewPath || ''
 }
 
 const getPathFileName = (value?: string): string => {
@@ -164,7 +164,6 @@ const getParentPath = (filePath: string): string => {
   const separatorIndex = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'))
   return separatorIndex > 0 ? normalized.slice(0, separatorIndex) : filePath
 }
-
 
 type WorkbenchDocumentPreviewPanelProps = {
   filePath: string
@@ -784,14 +783,22 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       }
       return [
         {
-          filePath: activeApplyRecord.afterSnapshotPath || activeApplyRecord.path,
+          filePath:
+            activeApplyRecord.capability === 'image'
+              ? activeApplyRecord.afterSnapshotPath || activeApplyRecord.path
+              : documentDisplayMode === 'preview'
+                ? activeApplyRecord.path
+                : activeApplyRecord.previewPath || '',
           fileName: activeApplyRecord.fileName
         }
       ]
     }
     const filePath = getApplyDocumentPath(activeApplyRecord, documentDisplayMode)
+    if (!filePath) return []
     const editable =
-      documentDisplayMode === 'preview' && editableKind !== null && filePath === activeApplyRecord.path
+      documentDisplayMode === 'preview' &&
+      editableKind !== null &&
+      filePath === activeApplyRecord.path
     return [
       {
         filePath,
@@ -803,17 +810,21 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   }, [activeApplyRecord, documentDisplayMode, editableKind, previewRevision])
   const applyContent = useMemo(
     () =>
-      activeApplyRecord?.capability === 'ppt' &&
-      activeApplyRecord.previewPath &&
-      documentDisplayMode === 'review' ? (
+      activeApplyRecord &&
+      documentDisplayMode === 'review' &&
+      activeApplyRecord.capability !== 'image' &&
+      !activeApplyRecord.previewPath ? (
+        <div className="flex h-full items-center justify-center text-sm text-[#B3261E]">
+          审核产物缺失或格式不支持
+        </div>
+      ) : activeApplyRecord?.capability === 'ppt' &&
+        activeApplyRecord.previewPath &&
+        documentDisplayMode === 'review' ? (
         <PptDiffViewer record={activeApplyRecord} />
       ) : activeApplyRecord?.capability === 'text_file' &&
         activeApplyRecord.previewPath &&
         documentDisplayMode === 'review' ? (
-        <TextFileDiffViewer
-          previewPath={activeApplyRecord.previewPath}
-          afterSnapshotPath={activeApplyRecord.afterSnapshotPath}
-        />
+        <TextFileDiffViewer previewPath={activeApplyRecord.previewPath} />
       ) : undefined,
     [activeApplyRecord, documentDisplayMode]
   )

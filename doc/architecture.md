@@ -151,3 +151,11 @@ flowchart LR
 4. 需要本地能力时 → Tool Runtime 调用领域服务。
 5. 工作地址内写回 → 记录修改与预览，供 UI 展示和回退。
 6. 最终答复与事件流经 IPC 回到 Renderer；run 终态后 Main 触发系统通知。
+
+## 文件写盘与审核
+
+`AiFileChangeService` 的文件会话统一管理 Word、PPT、Excel 和普通文本；图片沿用历史图片快照。会话以 partnerId、ownerRunId、规范化文件路径归属，由 `AiRunContext` 提供确认写盘、读取会话和收尾入口。工具先完整替换正式文件、立即回读校验，再持久化最新确认工作版本及结构身份；成功前不生成审核，失败不自动恢复正式文件。
+
+首次原始字节 A 按内容寻址保留。主 run 真正完成、失败或取消时，等待在途写入结束，使用 A 与最后确认的 B 生成自包含审核，再保存统一记录并清理工作快照。子任务、yield 和追加消息续接共用 ownerRunId，不触发最终审核。启动从持久化会话为中断 run 补生成审核，不执行 AI、不修改正式文件。
+
+Renderer 的历史审核只读取对应产物，当前文件预览读取正式路径；后续 C 不改变 A→B。Word 应用记录仅投影统一记录并复用统一撤销。目录与持久化字段见 `doc/db/design.md`、`doc/db/tables.md`，工具错误契约见 `doc/ai-harness/tool-design.md`。

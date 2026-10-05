@@ -538,15 +538,14 @@ const applyEdit = async (input: {
       stats: appliedPayload.stats
     })
   } catch (error) {
-    await input.runtime
-      .persistDocId({ sourcePath: input.sourcePath, docId: input.currentDocId })
-      .catch(() => undefined)
+    input.runtime.state.editSessionBySourcePath.delete(input.sourcePath)
+    input.runtime.state.readSessionBySourcePath.delete(input.sourcePath)
     return {
       failure: input.runtime.emitFailure({
         toolName: input.toolName,
         toolCallId: input.toolCallId,
         reason: 'failed',
-        error: `docx session commit failed: ${error instanceof Error ? error.message : String(error)}`,
+        error: `文档已经写入，内部会话更新失败，请重新读取文件并反馈作者修复： ${error instanceof Error ? error.message : String(error)}`,
         resourceContext: input.runtime.buildResourceContext({
           sourcePath: input.sourcePath,
           effectKind: 'mutated',
@@ -555,11 +554,6 @@ const applyEdit = async (input: {
       })
     }
   }
-  input.runtime.input.ctx.trackDocxChanges({
-    previousDocId: input.currentDocId,
-    nextDocId: appliedPayload.newDocId,
-    editSession: input.runtime.getEditSession(input.sourcePath)
-  })
   return {
     previousRevisionRef: revisionUpdate.previousRevisionRef,
     currentRevisionRef: revisionUpdate.currentRevisionRef,
@@ -935,9 +929,8 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
             })
           }
 
-          let registered: Awaited<ReturnType<typeof runtime.registerCreatedDocument>>
           try {
-            registered = await runtime.registerCreatedDocument({
+            await runtime.registerCreatedDocument({
               sourcePath: requestedSourcePath,
               baselineDocId,
               workingDocId,
@@ -945,14 +938,15 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
               persistedStats
             })
           } catch (error) {
-            await fs.rm(requestedSourcePath, { force: true }).catch(() => undefined)
+            runtime.state.editSessionBySourcePath.delete(requestedSourcePath)
+            runtime.state.readSessionBySourcePath.delete(requestedSourcePath)
             return finalizeDocxToolFailure({
               runtime,
               failure: runtime.emitFailure({
                 toolName,
                 toolCallId,
                 reason: 'failed',
-                error: `docx create session commit failed: ${error instanceof Error ? error.message : String(error)}`,
+                error: `文档已经创建，内部会话更新失败，请重新读取文件并反馈作者修复： ${error instanceof Error ? error.message : String(error)}`,
                 resourceContext: runtime.buildResourceContext({
                   sourcePath: requestedSourcePath,
                   effectKind: 'mutated'
@@ -961,16 +955,6 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
               activity: { actionType: input.spec.activityActionType }
             })
           }
-          await runtime.input.ctx.trackDocxOpen({
-            docId: baselineDocId,
-            sourcePath: requestedSourcePath,
-            editSession: registered.session
-          })
-          runtime.input.ctx.trackDocxChanges({
-            previousDocId: baselineDocId,
-            nextDocId: workingDocId,
-            editSession: registered.session
-          })
 
           const result = preCommitResult
 

@@ -2,7 +2,6 @@ import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import type { MarkdownLinkAccessEntry } from '../../../../../../shared/types'
 import {
-  appendDocxApplyArtifactsAndEmitEvents,
   appendFileChangeArtifactsAndEmitEvents,
   buildFileChangesSummaryFromFileChangeRecords,
   mergeArtifactRefs
@@ -33,10 +32,6 @@ export const applyDeliverySideEffects = async (input: {
   finalizing?: boolean
   retainWorkingState?: boolean
 }): Promise<HumanState> => {
-  const docxApplyRecords = await input.ctx.applyDocxRunEdits({
-    retainState: input.retainWorkingState
-  })
-  await input.cache.pptRuntime?.commitAll()
   const fileChangeRecords = await input.ctx.listFileChangeRecords({
     runId: input.ctx.runId,
     participatingOnly: true
@@ -49,23 +44,14 @@ export const applyDeliverySideEffects = async (input: {
     ])
   }
 
-  const docxArtifacts =
-    docxApplyRecords.length > 0
-      ? appendDocxApplyArtifactsAndEmitEvents({
-          existingArtifacts: input.state.execution.artifacts,
-          records: docxApplyRecords,
-          sendEvent: input.ctx.sendEvent,
-          runId: input.ctx.runId,
-          taskId: input.state.task.taskId
-        })
-      : mergeArtifactRefs(input.state.execution.artifacts)
+  const docxArtifacts = mergeArtifactRefs(input.state.execution.artifacts)
   const deliveryRecords = fileChangeRecords
   const artifacts =
     deliveryRecords.length > 0
       ? appendFileChangeArtifactsAndEmitEvents({
           existingArtifacts: docxArtifacts,
           records: deliveryRecords,
-          sendEvent: input.ctx.sendEvent,
+          sendEvent: () => undefined,
           runId: input.ctx.runId,
           taskId: input.state.task.taskId
         })

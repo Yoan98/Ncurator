@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
@@ -31,8 +31,9 @@ describe('ai human mock-llm excel backend', () => {
         const sourcePath = path.join(runtime.workspaceRoot, 'human-report.xlsx')
         const filePath = sourcePath
         await fs.writeFile(filePath, Buffer.from(await workbook.xlsx.writeBuffer()))
-        const runner = createHumanTestRunner(runtime, {
-          structuredOutputScript: {
+        const runner = await createAiServiceTestRunner(runtime, {
+          userInput: '把 human-report.xlsx 中 A 的金额更新为 20，并确认结果。',
+          llmScript: {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
@@ -83,10 +84,7 @@ describe('ai human mock-llm excel backend', () => {
             ]
           }
         })
-        const output = await runner.run({
-          taskId: runtime.taskId,
-          userInput: '把 human-report.xlsx 中 A 的金额更新为 20，并确认结果。'
-        })
+        const output = await runner.run()
         const actual = new ExcelJS.Workbook()
         await actual.xlsx.load((await fs.readFile(filePath)) as never)
         return {

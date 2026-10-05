@@ -46,7 +46,7 @@ describe('ai human live backend', () => {
             streamingModeOverride: 'force_non_stream'
           })
           const output = await runner.run({ taskId: runtime.taskId, userInput: USER_INPUT })
-          const applyRecord = (await runtime.docxApplyStore.listRecords()).items.find(
+          const applyRecord = (await runtime.docxApplyService.listRecords()).items.find(
             (item) => item.run_id === runtime.runId && item.status === 'applied'
           )
           const appliedText = applyRecord ? await readDocxText(reference.absolutePath || '') : ''

@@ -15,6 +15,7 @@ export const createAiServiceTestRunner = async (
   const files = new AiFileChangeService(runtime.storageService.aiFileChange)
   const payload: AiRunStartPayload = {
     runId: options.runId || runtime.runId,
+    ownerRunId: options.ownerRunId,
     partnerId: context.partnerId,
     partnerName: context.partnerName,
     userMessageId: `user-${runtime.runId}`,
@@ -40,6 +41,8 @@ export const createAiServiceTestRunner = async (
     listFileChangeRecords: async (request) => (await files.listRecords(request)).items,
     abortSignal: options.abortSignal,
     isCancelled: () => options.abortSignal?.aborted === true,
+    hasPendingUserMessages: options.hasPendingUserMessages,
+    waitForPendingUserMessageSubmissions: options.waitForPendingUserMessageSubmissions,
     sendEvent: (event) => {
       events.push(event)
       runtime.eventCollector.add(event)

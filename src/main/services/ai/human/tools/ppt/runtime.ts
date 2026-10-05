@@ -1,3 +1,4 @@
+import type { FileChangeIdentity } from '../../../fileChanges/FileChangeSession'
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -38,6 +39,11 @@ import {
   getShapeStrokeWidth,
   getShapeText,
   getShapeTextAnchor,
+  getShapeParagraphCount,
+  getShapeRunCount,
+  getShapeRunFormatEffective,
+  getParagraphAlignment,
+  hasShapeText,
   getShapeTextAutoFit,
   getShapeTextMargins,
   getShapeTextWrap,
@@ -94,13 +100,10 @@ import {
   type SlideData,
   type SlideShapeData
 } from 'pptx-kit'
-import type { AiFileChangeRecord, JsonObject } from '../../../../../../shared/types'
+import type { JsonObject } from '../../../../../../shared/types'
 import { fileExists } from '../docx/review/utils'
 import { resolveToolPath } from '../terminal/commandPolicy'
-import {
-  getPartnerAssetsRootDir,
-  getPartnerRuntimeDir
-} from '../../../../assets/WorkspaceAssetService'
+import { getPartnerAssetsRootDir } from '../../../../assets/WorkspaceAssetService'
 import { PPT_SEARCH_MAX_MATCHES } from './constants'
 import { normalizePptColor, PPT_CANVAS_HEIGHT, PPT_CANVAS_WIDTH } from './color'
 import { renderLatexToSvg } from './formula'
@@ -130,7 +133,6 @@ import type {
   PptRuntimeDocument,
   PptToolRuntime
 } from './types'
-import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../../../wps/officeFileWriteNotify'
 
 export { buildPptDiffManifest } from './diff'
 
@@ -139,52 +141,6 @@ const DEFAULT_HEIGHT = PPT_CANVAS_HEIGHT
 
 const hashBytes = (bytes: Uint8Array | string): string =>
   createHash('sha256').update(bytes).digest('hex')
-
-const replaceFileWithBytes = async (targetPath: string, bytes: Uint8Array): Promise<void> => {
-  await withOfficeFileWrite(targetPath, async () => {
-    await fs.mkdir(path.dirname(targetPath), { recursive: true })
-    const token = randomUUID()
-    const tempPath = `${targetPath}.ncurator-${token}.tmp`
-    const backupPath = `${targetPath}.ncurator-${token}.previous`
-    let hasBackup = false
-    let preserveBackup = false
-    try {
-      await fs.writeFile(tempPath, bytes)
-      try {
-        await fs.copyFile(targetPath, backupPath)
-        hasBackup = true
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-      }
-
-      try {
-        await fs.rename(tempPath, targetPath)
-      } catch {
-        await fs.rm(targetPath, { force: true })
-        await fs.rename(tempPath, targetPath)
-      }
-      notifyOfficeFileWritten(targetPath)
-    } catch (error) {
-      if (hasBackup) {
-        try {
-          await fs.rm(targetPath, { force: true })
-          await fs.rename(backupPath, targetPath)
-          hasBackup = false
-          notifyOfficeFileWritten(targetPath)
-        } catch {
-          // Preserve the original error. The backup remains beside the target for recovery.
-          preserveBackup = true
-        }
-      }
-      throw error
-    } finally {
-      await fs.rm(tempPath, { force: true }).catch(() => undefined)
-      if (hasBackup && !preserveBackup) {
-        await fs.rm(backupPath, { force: true }).catch(() => undefined)
-      }
-    }
-  })
-}
 
 const normalizeHex = (value: string | undefined, fallback = '#FFFFFF'): string => {
   return normalizePptColor(value, fallback) || fallback
@@ -528,6 +484,17 @@ const createPptDiffSlideSnapshots = (presentation: PresentationData): PptDiffSli
         textMargins: getShapeTextMargins(shape),
         textWrap: getShapeTextWrap(shape),
         textAutoFit: getShapeTextAutoFit(shape),
+        textAnchor: getShapeTextAnchor(shape),
+        paragraphs: hasShapeText(shape)
+          ? Array.from({ length: getShapeParagraphCount(shape) }, (_, paragraphIndex) => ({
+              alignment: getParagraphAlignment(shape, paragraphIndex),
+              formats: Array.from(
+                { length: getShapeRunCount(shape, paragraphIndex) },
+                (_, runIndex) =>
+                  getShapeRunFormatEffective(presentation, shape, paragraphIndex, runIndex)
+              )
+            }))
+          : [],
         image: getShapeImageBytes(shape),
         imageCrop: getShapeImageCrop(shape),
         imageOpacity: getShapeImageOpacity(shape),
@@ -1026,6 +993,8 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const exists = await fileExists(sourcePath)
     if (!exists && !allowCreate) throw new Error(`pptx 文件不存在: ${rawPath}`)
     const beforeBytes = exists ? new Uint8Array(await fs.readFile(sourcePath)) : undefined
+    const session = await input.ctx.getFileChangeSession(sourcePath)
+    const identity = session?.identity?.kind === 'ppt' ? session.identity : undefined
     const presentation = beforeBytes ? await loadPresentation(beforeBytes) : createPresentation()
     const document: PptRuntimeDocument = {
       changeId: randomUUID(),
@@ -1035,10 +1004,10 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       lastPersistedBytes: beforeBytes ? new Uint8Array(beforeBytes) : undefined,
       presentation,
       dirty: false,
-      movedSlideIds: new Set(),
-      replacedSlideIds: new Set(),
-      movedElementIds: new Set(),
-      elementLineage: new Map()
+      movedSlideIds: new Set(identity?.movedSlides),
+      replacedSlideIds: new Set(identity?.replacedSlides),
+      movedElementIds: new Set(identity?.movedElements),
+      elementLineage: new Map(identity?.elementLineage)
     }
     documents.set(sourcePath, document)
     return document
@@ -1195,7 +1164,22 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       throw new Error(`PPTX 校验失败：${issues.map((issue) => issue.message).join('; ')}`)
     }
     const afterBytes = await savePresentation(document.presentation)
-    await replaceFileWithBytes(document.sourcePath, afterBytes)
+    const confirmed = await input.ctx.writeFileChange({
+      sourcePath: document.sourcePath,
+      buffer: Buffer.from(afterBytes),
+      capability: 'ppt',
+      expectedChecksum: document.lastPersistedBytes
+        ? hashBytes(document.lastPersistedBytes)
+        : undefined,
+      identity: {
+        kind: 'ppt',
+        movedSlides: [...document.movedSlideIds],
+        replacedSlides: [...document.replacedSlideIds],
+        movedElements: [...document.movedElementIds],
+        elementLineage: [...document.elementLineage]
+      }
+    })
+    document.changeId = confirmed.record.id
     document.lastPersistedBytes = new Uint8Array(afterBytes)
     document.dirty = true
     return getSlides(document.presentation).length
@@ -1206,12 +1190,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const sourcePath = resolvePptPath(args.sourcePath)
     const create = !documents.has(sourcePath) && !(await fileExists(sourcePath))
     const document = await loadDocument(args.sourcePath, create)
-    const presentationSnapshot = await savePresentation(document.presentation)
-    const dirtyBeforeAction = document.dirty
-    const movedSlideIdsBeforeAction = new Set(document.movedSlideIds)
-    const replacedSlideIdsBeforeAction = new Set(document.replacedSlideIds)
-    const movedElementIdsBeforeAction = new Set(document.movedElementIds)
-    const elementLineageBeforeAction = new Map(document.elementLineage)
     try {
       let result: Record<string, unknown>
       if (args.type === 'insert_slide') {
@@ -1316,151 +1294,67 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       await persistDocument(document)
       return result
     } catch (error) {
-      document.presentation = await loadPresentation(presentationSnapshot)
-      document.dirty = dirtyBeforeAction
-      document.movedSlideIds = movedSlideIdsBeforeAction
-      document.replacedSlideIds = replacedSlideIdsBeforeAction
-      document.movedElementIds = movedElementIdsBeforeAction
-      document.elementLineage = elementLineageBeforeAction
-      if (create) documents.delete(sourcePath)
+      documents.delete(sourcePath)
       const message = error instanceof Error ? error.message : String(error)
       throw new Error(`${args.type} 失败：${message}`)
     }
   }
 
-  const commitAll = async (): Promise<AiFileChangeRecord[]> => {
-    const records: AiFileChangeRecord[] = []
-    for (const document of documents.values()) {
-      if (!document.dirty) continue
-      const issues = validatePresentation(document.presentation).filter(
-        (issue) => issue.severity === 'error'
-      )
-      if (issues.length > 0)
-        throw new Error(`pptx 校验失败: ${issues.map((issue) => issue.message).join('; ')}`)
-      const afterBytes = await savePresentation(document.presentation)
-      const afterPresentation = await loadPresentation(afterBytes)
-      const previous = (await input.ctx.listFileChangeRecords({ runId: input.runId })).find(
-        (record) => record.path === document.sourcePath && record.status === 'applied'
-      )
-      if (previous) {
-        document.changeId = previous.id
-        document.beforeBytes =
-          previous.operation === 'created'
-            ? undefined
-            : previous.beforeSnapshotPath
-              ? new Uint8Array(await fs.readFile(previous.beforeSnapshotPath))
-              : document.beforeBytes
-      }
-      const dirs = await ensureAssetDirectory(workspaceRootPath, document.changeId)
-      const beforeExists = Boolean(document.beforeBytes)
-      const beforePresentation = document.beforeBytes
-        ? await loadPresentation(document.beforeBytes)
-        : null
-      const beforeSlides = beforePresentation ? getSlides(beforePresentation) : []
-      const afterSlides = getSlides(afterPresentation)
-      const beforeSnapshots = beforePresentation
-        ? createPptDiffSlideSnapshots(beforePresentation)
-        : []
-      const afterSnapshots = createPptDiffSlideSnapshots(afterPresentation)
-      const operation = beforeExists ? ('updated' as const) : ('created' as const)
-      const netManifest = buildPptDiffManifest({
-        beforeSlides: beforeSnapshots,
-        afterSlides: afterSnapshots,
-        beforeFrames: new Map(),
-        afterFrames: new Map(),
-        operation,
-        movedCandidates: document.movedSlideIds,
-        replacedSlideIds: document.replacedSlideIds,
-        elementLineage: document.elementLineage,
-        movedElementCandidates: document.movedElementIds
-      })
-      if (netManifest.positiveCount === 0 && netManifest.negativeCount === 0) {
-        document.beforeBytes = new Uint8Array(afterBytes)
-        document.lastPersistedBytes = new Uint8Array(afterBytes)
-        document.dirty = false
-        document.movedSlideIds.clear()
-        document.replacedSlideIds.clear()
-        document.movedElementIds.clear()
-        document.elementLineage.clear()
-        continue
-      }
-      const beforeFrames = beforePresentation
-        ? await renderPresentationSlides({
-            presentation: beforePresentation,
-            slideIds: beforeSlides.map(slideIdOf),
-            previewDir: dirs.before,
-            prefix: 'before'
-          })
-        : new Map<string, PptDiffFrame & { hash: string }>()
-      const afterFrames = await renderPresentationSlides({
-        presentation: afterPresentation,
-        slideIds: afterSlides.map(slideIdOf),
-        previewDir: dirs.after,
-        prefix: 'after'
-      })
-      const manifest = buildPptDiffManifest({
-        beforeSlides: beforeSnapshots,
-        afterSlides: afterSnapshots,
-        beforeFrames,
-        afterFrames,
-        operation,
-        movedCandidates: document.movedSlideIds,
-        replacedSlideIds: document.replacedSlideIds,
-        elementLineage: document.elementLineage,
-        movedElementCandidates: document.movedElementIds
-      })
-      await fs.writeFile(dirs.manifest, JSON.stringify(manifest, null, 2), 'utf8')
-      let beforeSnapshotPath: string | undefined
-      let beforeChecksum: string | undefined
-      if (beforeExists && document.beforeBytes) {
-        const snapshotRoot = path.join(
-          getPartnerRuntimeDir(input.partnerId),
-          'file-changes',
-          input.runId
-        )
-        beforeSnapshotPath = path.join(snapshotRoot, `${document.changeId}-${document.sourceName}`)
-        await fs.mkdir(snapshotRoot, { recursive: true })
-        await fs.writeFile(beforeSnapshotPath, document.beforeBytes)
-        beforeChecksum = hashBytes(document.beforeBytes)
-      }
-      const persistedBytes = document.lastPersistedBytes ?? new Uint8Array(afterBytes)
-      const now = Date.now()
-      const record: AiFileChangeRecord = {
-        id: document.changeId,
-        partnerId: input.partnerId,
-        runId: input.runId,
-        status: 'applied',
-        capability: 'ppt',
-        path: document.sourcePath,
-        fileName: document.sourceName,
-        operation,
-        changeCount: manifest.positiveCount + manifest.negativeCount,
-        insertCount: manifest.positiveCount,
-        deleteCount: manifest.negativeCount,
-        beforeSnapshotPath,
-        beforeChecksum,
-        afterChecksum: hashBytes(persistedBytes),
-        previewPath: dirs.manifest,
-        createdAt: now,
-        updatedAt: now
-      }
-      await input.ctx.saveFileChangeRecord(record)
-      document.beforeBytes = new Uint8Array(afterBytes)
-      document.lastPersistedBytes = new Uint8Array(afterBytes)
-      document.dirty = false
-      document.movedSlideIds.clear()
-      document.replacedSlideIds.clear()
-      document.movedElementIds.clear()
-      document.elementLineage.clear()
-      records.push(record)
-    }
-    return records
-  }
-
-  return { input, documents, outline, readSlides, search, render, edit, commitAll }
+  return { input, documents, outline, readSlides, search, render, edit }
 }
 
 export const toPptToolFailure = (sourcePath: string, error: unknown): JsonObject => ({
   sourcePath,
   error: error instanceof Error ? error.message : String(error)
 })
+
+export const materializePptReview = async (input: {
+  before?: Buffer
+  after: Buffer
+  identity?: FileChangeIdentity
+  reviewDir: string
+}) => {
+  const before = input.before ? await loadPresentation(input.before) : null
+  const after = await loadPresentation(input.after)
+  const identity = input.identity?.kind === 'ppt' ? input.identity : undefined
+  const beforeSlides = before ? createPptDiffSlideSnapshots(before) : []
+  const afterSlides = createPptDiffSlideSnapshots(after)
+  const beforeDir = path.join(input.reviewDir, 'before'),
+    afterDir = path.join(input.reviewDir, 'after')
+  await fs.mkdir(beforeDir, { recursive: true })
+  await fs.mkdir(afterDir, { recursive: true })
+  const beforeFrames = before
+    ? await renderPresentationSlides({
+        presentation: before,
+        slideIds: getSlides(before).map(slideIdOf),
+        previewDir: beforeDir,
+        prefix: 'before'
+      })
+    : new Map<string, PptDiffFrame & { hash: string }>()
+  const afterFrames = await renderPresentationSlides({
+    presentation: after,
+    slideIds: getSlides(after).map(slideIdOf),
+    previewDir: afterDir,
+    prefix: 'after'
+  })
+  const manifest = buildPptDiffManifest({
+    beforeSlides,
+    afterSlides,
+    beforeFrames,
+    afterFrames,
+    operation: input.before ? 'updated' : 'created',
+    movedCandidates: new Set(identity?.movedSlides),
+    replacedSlideIds: new Set(identity?.replacedSlides),
+    movedElementCandidates: new Set(identity?.movedElements),
+    elementLineage: new Map(identity?.elementLineage)
+  })
+  const previewPath = path.join(input.reviewDir, 'manifest.json')
+  await fs.writeFile(previewPath, JSON.stringify(manifest))
+  return {
+    changed: manifest.positiveCount + manifest.negativeCount > 0,
+    previewPath,
+    changeCount: manifest.positiveCount + manifest.negativeCount,
+    insertCount: manifest.positiveCount,
+    deleteCount: manifest.negativeCount
+  }
+}

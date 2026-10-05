@@ -138,8 +138,12 @@ describe('ai tool ppt backend', () => {
         const externallyChangedChecksum = createHash('sha256')
           .update(await fs.readFile(targetPath))
           .digest('hex')
-        const records = await harness.runtime.commitAll()
-        const repeatedCommitRecords = await harness.runtime.commitAll()
+        const records = (await harness.ctx.finalizeRunFileChanges()).filter(
+          (record) => record.capability === 'ppt'
+        )
+        const repeatedCommitRecords = (await harness.ctx.finalizeRunFileChanges()).filter(
+          (record) => record.capability === 'ppt'
+        )
         const bytes = new Uint8Array(await fs.readFile(targetPath))
         const presentation = await loadPresentation(bytes)
         const texts = getSlides(presentation).map((slide) => getSlideText(slide))
@@ -242,7 +246,8 @@ describe('ai tool ppt backend', () => {
             result.records[0]!.deleteCount === 0 &&
             result.records[0]!.afterChecksum === result.aiPersistedChecksum &&
             result.records[0]!.afterChecksum !== result.externallyChangedChecksum &&
-            result.repeatedCommitRecords.length === 0 &&
+            result.repeatedCommitRecords.length === 1 &&
+            result.repeatedCommitRecords[0]?.previewPath === result.records[0]?.previewPath &&
             result.slideCount === 2 &&
             result.hasChart &&
             result.texts.some((text) => text.includes('客户反馈周期')) &&

@@ -1,8 +1,22 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { getSlides, getSlideText, loadPresentation } from 'pptx-kit'
+import {
+  getSlides,
+  getSlideText,
+  loadPresentation,
+  createPresentation,
+  addBlankSlide,
+  addSlideTextBox,
+  getSlideSize,
+  emu,
+  setShapeTextFormat,
+  setShapeText,
+  getSlideShapes,
+  getShapeText,
+  setSlideBackground,
+  savePresentation
+} from 'pptx-kit'
 import { describe, it } from 'vitest'
-import { createPptToolRuntime } from '../../../../../src/main/services/ai/human/tools/ppt/runtime'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -53,16 +67,9 @@ const slideSpec = (title: string, body: string, accent: string) => ({
   ]
 })
 
-const createBaselineDeck = async (workspaceRootPath: string, runId: string, taskId: string) => {
-  const runtime = createPptToolRuntime({
-    ctx: { saveFileChangeRecord: async () => undefined } as never,
-    cache: {} as never,
-    runId: `${runId}-baseline`,
-    partnerId: 'ppt-update-baseline',
-    taskId,
-    workspaceRootPath,
-    emitActivity: () => undefined
-  })
+const createBaselineDeck = async (workspaceRootPath: string) => {
+  const presentation = createPresentation()
+  const size = getSlideSize(presentation)
   const sourcePath = path.join(workspaceRootPath, FILE_NAME)
   for (const spec of [
     slideSpec('市场信号', '核心客户需求持续增加，市场窗口已经明确。', '#2563EB'),
@@ -70,8 +77,28 @@ const createBaselineDeck = async (workspaceRootPath: string, runId: string, task
     slideSpec('交付质量', '本季度交付准时率保持在目标区间。', '#16A34A'),
     slideSpec('附录数据', '本页必须保持完全不变，用于验证未修改页面。', '#64748B')
   ]) {
-    await runtime.edit({ sourcePath, ...spec })
+    const slide = addBlankSlide(presentation)
+    setSlideBackground(slide, 'F7F8FA')
+    for (const element of spec.elements) {
+      if (element.type !== 'text') continue
+      const bounds = element.bounds
+      const shape = addSlideTextBox(slide, {
+        x: emu(Math.round((bounds.x * size.width) / 960)),
+        y: emu(Math.round((bounds.y * size.height) / 540)),
+        w: emu(Math.round((bounds.width * size.width) / 960)),
+        h: emu(Math.round((bounds.height * size.height) / 540)),
+        text: element.text
+      })
+      setShapeTextFormat(shape, {
+        font: 'Microsoft YaHei',
+        fontEastAsian: 'Microsoft YaHei',
+        size: element.style.fontSize,
+        color: element.style.color?.replace('#', ''),
+        bold: 'bold' in element.style && element.style.bold
+      })
+    }
   }
+  await fs.writeFile(sourcePath, await savePresentation(presentation))
 }
 
 describe('workbench result e2e', () => {
@@ -98,7 +125,7 @@ describe('workbench result e2e', () => {
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID
           })
-          await createBaselineDeck(setup.workspace.rootPath, runtime.runId, runtime.taskId)
+          await createBaselineDeck(setup.workspace.rootPath)
           const filePath = path.join(setup.workspace.rootPath, FILE_NAME)
           const baselineBytes = await fs.readFile(filePath)
           const startedAtMs = Date.now()
@@ -196,18 +223,42 @@ describe('workbench result e2e', () => {
             )
             .count()
 
+          const firstShape = getSlideShapes(getSlides(updatedPresentation)[0]).find((shape) =>
+            Boolean(getShapeText(shape))
+          )!
+          setShapeText(firstShape, 'EXTERNAL_PPT_C')
+          await fs.writeFile(filePath, await savePresentation(updatedPresentation))
           await documentModeToggle.click()
           await page
             .getByTestId('ppt-preview-viewer')
             .waitFor({ state: 'visible', timeout: 30_000 })
+          await page.getByTestId('ppt-preview-after').locator('img').waitFor({ state: 'visible' })
+          const previewSvg = await page
+            .getByTestId('ppt-preview-after')
+            .locator('img')
+            .evaluate(async (image) => await (await fetch(image.getAttribute('src')!)).text())
           const previewModeTag = ((await documentModeTag.textContent()) || '').trim()
           const reviewViewerHiddenInPreview = !(await viewer.isVisible().catch(() => false))
           await documentModeToggle.click()
           await viewer.waitFor({ state: 'visible', timeout: 30_000 })
           const restoredModeTag = ((await documentModeTag.textContent()) || '').trim()
+          const reviewSvg = (
+            await viewer
+              .locator('img')
+              .evaluateAll(
+                async (images) =>
+                  await Promise.all(
+                    images.map(
+                      async (image) => await (await fetch(image.getAttribute('src')!)).text()
+                    )
+                  )
+              )
+          ).join('\n')
 
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
+          await page.getByText('仍然回退这次修改？').waitFor({ state: 'visible' })
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const revertedBytes = await fs.readFile(filePath)
@@ -217,6 +268,8 @@ describe('workbench result e2e', () => {
             .join('\n')
 
           return {
+            previewSvg,
+            reviewSvg,
             updatedText,
             updatedSlideTexts,
             externalApplicationHintVisible,
@@ -258,6 +311,9 @@ describe('workbench result e2e', () => {
               result.reviewToolbarText.includes('+3') &&
               result.reviewToolbarText.includes('-1') &&
               result.initialModeTag === '审核' &&
+              result.previewSvg.includes('EXTERNAL_PPT_C') &&
+              !result.reviewSvg.includes('EXTERNAL_PPT_C') &&
+              result.reviewSvg.includes('市场信号已确认') &&
               result.previewModeTag === '预览' &&
               result.restoredModeTag === '审核' &&
               result.reviewViewerHiddenInPreview &&

@@ -59,47 +59,47 @@ describe('ai tool ppt professional editing', () => {
           slideId,
           operations: [
             { type: 'duplicate_element', elementId: titleId },
-                {
-                  type: 'add_element',
-                  element: {
-                    type: 'line',
-                    from: { x: 140, y: 250 },
-                    to: { x: 820, y: 250 },
-                    color: '#C18B25',
-                    width: 3,
-                    arrowEnd: true
-                  }
-                },
-                {
-                  type: 'add_element',
-                  element: {
-                    type: 'table',
-                    bounds: { x: 140, y: 300, width: 360, height: 150 },
-                    rows: [
-                      ['指标', '结果'],
-                      ['增长', '18%']
-                    ]
-                  }
-                },
-                {
-                  type: 'add_element',
-                  element: {
-                    type: 'chart',
-                    bounds: { x: 520, y: 300, width: 360, height: 150 },
-                    chartType: 'column',
-                    categories: ['Q1', 'Q2'],
-                    series: [{ name: '收入', values: [12, 18] }]
-                  }
-                },
-                {
-                  type: 'add_element',
-                  element: {
-                    type: 'formula',
-                    bounds: { x: 140, y: 470, width: 360, height: 60 },
-                    latex: 'E=mc^2'
-                  }
-                }
-              ]
+            {
+              type: 'add_element',
+              element: {
+                type: 'line',
+                from: { x: 140, y: 250 },
+                to: { x: 820, y: 250 },
+                color: '#C18B25',
+                width: 3,
+                arrowEnd: true
+              }
+            },
+            {
+              type: 'add_element',
+              element: {
+                type: 'table',
+                bounds: { x: 140, y: 300, width: 360, height: 150 },
+                rows: [
+                  ['指标', '结果'],
+                  ['增长', '18%']
+                ]
+              }
+            },
+            {
+              type: 'add_element',
+              element: {
+                type: 'chart',
+                bounds: { x: 520, y: 300, width: 360, height: 150 },
+                chartType: 'column',
+                categories: ['Q1', 'Q2'],
+                series: [{ name: '收入', values: [12, 18] }]
+              }
+            },
+            {
+              type: 'add_element',
+              element: {
+                type: 'formula',
+                bounds: { x: 140, y: 470, width: 360, height: 60 },
+                latex: 'E=mc^2'
+              }
+            }
+          ]
         })
         const insertedReadback = await harness.invoke<JsonObject>('ppt_read_slides', {
           sourcePath,
@@ -151,10 +151,10 @@ describe('ai tool ppt professional editing', () => {
           sourcePath,
           ranges: [{ type: 'slide_ids', slideIds: [slideId] }]
         })
-        const records = await harness.runtime.commitAll()
-        const presentation = await loadPresentation(
-          new Uint8Array(await fs.readFile(sourcePath))
+        const records = (await harness.ctx.finalizeRunFileChanges()).filter(
+          (record) => record.capability === 'ppt'
         )
+        const presentation = await loadPresentation(new Uint8Array(await fs.readFile(sourcePath)))
         return {
           updatedSlides: updatedReadback.slides,
           duplicated,

@@ -1,6 +1,15 @@
+import { releaseRunFiles } from '../../../../../src/main/services/ai/run/fileLease'
+import type { AiRunContext } from '../../../../../src/main/services/ai/types'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { getSlides, getSlideText, loadPresentation } from 'pptx-kit'
+import {
+  getSlides,
+  getSlideText,
+  loadPresentation,
+  getSlideShapes,
+  getShapeText,
+  getParagraphAlignment
+} from 'pptx-kit'
 import { describe, it } from 'vitest'
 import { createPptToolRuntime } from '../../../../../src/main/services/ai/human/tools/ppt/runtime'
 import type { PptDiffManifest } from '../../../../../src/main/services/ai/human/tools/ppt/types'
@@ -53,6 +62,7 @@ const elementDeck: SlideSpec = {
     labeledText('Resize Original', 280),
     labeledText('Delete Original', 340),
     labeledText('Restore Original', 400),
+    labeledText('Alignment Only', 450),
     {
       type: 'formula',
       latex: 'E=mc^2',
@@ -62,12 +72,13 @@ const elementDeck: SlideSpec = {
 }
 
 const seedDeck = async (
+  ctx: AiRunContext,
   workspaceRootPath: string,
   sourcePath: string,
   slides: SlideSpec[]
 ): Promise<void> => {
   const runtime = createPptToolRuntime({
-    ctx: { saveFileChangeRecord: async () => undefined } as never,
+    ctx,
     cache: {} as never,
     runId: `seed-${sourcePath}`,
     partnerId: 'ppt-diff-seed',
@@ -79,6 +90,8 @@ const seedDeck = async (
   for (const spec of slides) {
     await runtime.edit({ sourcePath: fullPath, type: 'insert_slide', ...spec })
   }
+  await ctx.finalizeRunFileChanges()
+  releaseRunFiles(ctx.runId)
 }
 
 const readManifest = async (previewPath: string): Promise<PptDiffManifest> =>
@@ -96,28 +109,44 @@ describe('ai tool ppt net diff backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        await seedDeck(runtime.workspaceRoot, 'slide-net.pptx', [
-          slideSpec('Chain A'),
-          slideSpec('Delete A'),
-          slideSpec('Keep'),
-          slideSpec('Delete Middle'),
-          slideSpec('Move Me')
-        ])
-        await seedDeck(runtime.workspaceRoot, 'element-net.pptx', [elementDeck])
-        await seedDeck(runtime.workspaceRoot, 'zero-net.pptx', [
-          slideSpec('Zero A'),
-          slideSpec('Zero Middle'),
-          slideSpec('Zero Tail')
-        ])
-        await seedDeck(runtime.workspaceRoot, 'notes-net.pptx', [
-          slideSpec('Notes Final'),
-          slideSpec('Notes Restore')
-        ])
-        await seedDeck(runtime.workspaceRoot, 'replace-net.pptx', [
-          slideSpec('Replace Before', 'Keep body')
-        ])
+        await seedDeck(
+          runtime.createAiRunContext({ runId: `${runtime.runId}-seed` }),
+          runtime.workspaceRoot,
+          'slide-net.pptx',
+          [
+            slideSpec('Chain A'),
+            slideSpec('Delete A'),
+            slideSpec('Keep'),
+            slideSpec('Delete Middle'),
+            slideSpec('Move Me')
+          ]
+        )
+        await seedDeck(
+          runtime.createAiRunContext({ runId: `${runtime.runId}-seed` }),
+          runtime.workspaceRoot,
+          'element-net.pptx',
+          [elementDeck]
+        )
+        await seedDeck(
+          runtime.createAiRunContext({ runId: `${runtime.runId}-seed` }),
+          runtime.workspaceRoot,
+          'zero-net.pptx',
+          [slideSpec('Zero A'), slideSpec('Zero Middle'), slideSpec('Zero Tail')]
+        )
+        await seedDeck(
+          runtime.createAiRunContext({ runId: `${runtime.runId}-seed` }),
+          runtime.workspaceRoot,
+          'notes-net.pptx',
+          [slideSpec('Notes Final'), slideSpec('Notes Restore')]
+        )
+        await seedDeck(
+          runtime.createAiRunContext({ runId: `${runtime.runId}-seed` }),
+          runtime.workspaceRoot,
+          'replace-net.pptx',
+          [slideSpec('Replace Before', 'Keep body')]
+        )
 
-        const harness = createPptToolHarness(runtime)
+        let harness = createPptToolHarness(runtime)
         const slideOutline = await harness.invoke<JsonObject>('ppt_read_outline', {
           sourcePath: path.join(runtime.workspaceRoot, 'slide-net.pptx'),
           ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
@@ -243,6 +272,11 @@ describe('ai tool ppt net diff backend', () => {
               elementId: byText('Layer Original').elementId,
               placement: 'front'
             },
+            {
+              type: 'set_style',
+              elementId: byText('Alignment Only').elementId,
+              style: { textAlign: 'center' }
+            },
             { type: 'delete_element', elementId: byText('Delete Original').elementId },
             {
               type: 'set_text',
@@ -274,6 +308,8 @@ describe('ai tool ppt net diff backend', () => {
           slideId: elementSlide.slideId,
           text: 'Temporary Notes'
         })
+        // Rebuild the production runtime before replacing the formula again. Identity must come from the confirmed session.
+        harness = createPptToolHarness(runtime)
         const elementAfterFirst = await harness.invoke<JsonObject>('ppt_read_slides', {
           sourcePath: path.join(runtime.workspaceRoot, 'element-net.pptx'),
           ranges: [{ type: 'slide_ids', slideIds: [elementSlide.slideId] }]
@@ -421,7 +457,9 @@ describe('ai tool ppt net diff backend', () => {
           ]
         })
 
-        const records = await harness.runtime.commitAll()
+        const records = (await harness.ctx.finalizeRunFileChanges()).filter(
+          (record) => record.capability === 'ppt'
+        )
         const recordByName = new Map(records.map((record) => [record.fileName, record]))
         const slideRecord = recordByName.get('slide-net.pptx')!
         const elementRecord = recordByName.get('element-net.pptx')!
@@ -441,7 +479,22 @@ describe('ai tool ppt net diff backend', () => {
         const finalSlidePresentation = await loadPresentation(
           new Uint8Array(await fs.readFile(path.join(runtime.workspaceRoot, 'slide-net.pptx')))
         )
+        const finalElements = getSlideShapes(
+          getSlides(
+            await loadPresentation(
+              new Uint8Array(
+                await fs.readFile(path.join(runtime.workspaceRoot, 'element-net.pptx'))
+              )
+            )
+          )[0]
+        )
+        const alignment = getParagraphAlignment(
+          finalElements.find((shape) => getShapeText(shape) === 'Alignment Only')!,
+          0
+        )
         return {
+          alignment,
+          alignmentId: byText('Alignment Only').elementId,
           recordNames: records.map((record) => record.fileName).sort(),
           slideRecord,
           elementRecord,
@@ -464,7 +517,12 @@ describe('ai tool ppt net diff backend', () => {
         const elementSlide = result.elementManifest.slides.find((slide) => slide.changed)!
         runtime.assertThat(
           JSON.stringify(result.recordNames) ===
-            JSON.stringify(['element-net.pptx', 'notes-net.pptx', 'replace-net.pptx', 'slide-net.pptx']) &&
+            JSON.stringify([
+              'element-net.pptx',
+              'notes-net.pptx',
+              'replace-net.pptx',
+              'slide-net.pptx'
+            ]) &&
             result.slideManifest.version === 4 &&
             result.slideManifest.positiveCount === 3 &&
             result.slideManifest.negativeCount === 2 &&
@@ -493,15 +551,19 @@ describe('ai tool ppt net diff backend', () => {
           }
         )
         runtime.assertThat(
-          result.elementManifest.version === 4 &&
-            result.elementManifest.positiveCount === 6 &&
+          result.alignment === 'ctr' &&
+            elementSlide.elementChanges.some(
+              (change) => change.afterElementId === result.alignmentId && change.kind === 'modified'
+            ) &&
+            result.elementManifest.version === 4 &&
+            result.elementManifest.positiveCount === 7 &&
             result.elementManifest.negativeCount === 1 &&
-            result.elementRecord.insertCount === 6 &&
+            result.elementRecord.insertCount === 7 &&
             result.elementRecord.deleteCount === 1 &&
-            result.elementRecord.changeCount === 7 &&
+            result.elementRecord.changeCount === 8 &&
             JSON.stringify(elementSlide.changes) === JSON.stringify(['modified']) &&
             elementSlide.elementChanges.filter((change) => change.kind === 'modified').length ===
-              5 &&
+              6 &&
             elementSlide.elementChanges.filter((change) => change.kind === 'added').length === 1 &&
             elementSlide.elementChanges.filter((change) => change.kind === 'deleted').length === 1,
           {

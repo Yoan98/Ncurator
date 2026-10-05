@@ -1,3 +1,4 @@
+import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -20,7 +21,6 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolEventEmitter } from '../utils/toolEvents'
 import { createEditSession } from './review/editSession'
 import { isLegacyDocPath, isReadableWordPath } from './legacyDocPolicy'
-import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../../../wps/officeFileWriteNotify'
 
 type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
 
@@ -359,10 +359,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       cache: createReadSessionCache()
     }
     state.readSessionBySourcePath.set(normalizedSourcePath, session)
-    await input.ctx.trackDocxOpen({
-      docId: workerResponse.payload.docId,
-      sourcePath: normalizedSourcePath
-    })
     return session
   }
 
@@ -500,11 +496,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       if (!(await isSessionFresh(requestedSourcePath, existingEditSession.diskFingerprint))) {
         return { failure: externalChangeFailure({ ...params, sourcePath: requestedSourcePath }) }
       }
-      await input.ctx.trackDocxOpen({
-        docId: existingEditSession.activeDocId,
-        sourcePath: requestedSourcePath,
-        editSession: existingEditSession
-      })
       return buildEditSessionResult(requestedSourcePath, existingEditSession)
     }
 
@@ -536,11 +527,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
 
     try {
       const session = await upgradeReadSessionToEditSession(readSession.sourcePath, 'update')
-      await input.ctx.trackDocxOpen({
-        docId: session.sourceDocId,
-        sourcePath: session.sourcePath,
-        editSession: session
-      })
       return buildEditSessionResult(session.sourcePath, session)
     } catch (error) {
       return {
@@ -672,74 +658,47 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     docId: string
   }): Promise<{ checksum: string; byteSize: number; modifiedAt: number }> => {
     const sourcePath = path.resolve(inputValue.sourcePath)
-    return await withOfficeFileWrite(sourcePath, async () => {
-      await fs.mkdir(path.dirname(sourcePath), { recursive: true })
-      const tempPath = path.join(
-        path.dirname(sourcePath),
-        `.${path.basename(sourcePath)}.ncurator-${randomUUID()}.tmp`
-      )
-      const backupPath = `${tempPath}.previous`
-      let hasBackup = false
-      let preserveBackup = false
-      try {
-        const materialized = await callWorker({
-          action: 'materialize_draft',
-          payload: { docId: inputValue.docId, outPath: tempPath }
-        })
-        if (!materialized.ok) throw new Error(materialized.error)
-        if (materialized.payload.action !== 'materialize_draft') {
-          throw new Error('worker protocol mismatch (materialize_draft)')
-        }
-
-        try {
-          await fs.copyFile(sourcePath, backupPath)
-          hasBackup = true
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-        }
-
-        try {
-          await fs.rename(tempPath, sourcePath)
-        } catch {
-          await fs.rm(sourcePath, { force: true })
-          await fs.rename(tempPath, sourcePath)
-        }
-
-        const [buffer, stat] = await Promise.all([fs.readFile(sourcePath), fs.stat(sourcePath)])
-        const checksum = createHash('sha256').update(buffer).digest('hex')
-        if (checksum !== materialized.payload.checksum) {
-          throw new Error('post-write checksum mismatch')
-        }
-        if (hasBackup) {
-          await fs.rm(backupPath, { force: true })
-          hasBackup = false
-        }
-        notifyOfficeFileWritten(sourcePath)
-        return {
-          checksum,
-          byteSize: buffer.byteLength,
-          modifiedAt: Math.trunc(stat.mtimeMs)
-        }
-      } catch (error) {
-        if (hasBackup) {
-          try {
-            await fs.rm(sourcePath, { force: true })
-            await fs.rename(backupPath, sourcePath)
-            hasBackup = false
-            notifyOfficeFileWritten(sourcePath)
-          } catch {
-            // Preserve the original error. The backup remains beside the target for recovery.
-            preserveBackup = true
-          }
-        }
-        throw error
-      } finally {
-        await fs.rm(tempPath, { force: true }).catch(() => undefined)
-        if (hasBackup && !preserveBackup) {
-          await fs.rm(backupPath, { force: true }).catch(() => undefined)
-        }
-      }
-    })
+    const exportDir = path.join(
+      getPartnerRuntimeDir(input.ctx.partnerId),
+      'file-changes',
+      input.ctx.ownerRunId,
+      'exports'
+    )
+    const tempPath = path.join(exportDir, `${randomUUID()}.docx`)
+    let publishing = false
+    try {
+      await fs.mkdir(exportDir, { recursive: true })
+      const result = await callWorker({
+        action: 'materialize_draft',
+        payload: { docId: inputValue.docId, outPath: tempPath }
+      })
+      if (!result.ok) throw new Error(result.error)
+      if (result.payload.action !== 'materialize_draft')
+        throw new Error('内部程序错误：Word 导出协议异常，请反馈作者修复。文件尚未保存。')
+      const buffer = await fs.readFile(tempPath)
+      if (createHash('sha256').update(buffer).digest('hex') !== result.payload.checksum)
+        throw new Error('Word 导出校验失败，文件尚未保存。')
+      publishing = true
+      const confirmed = await input.ctx.writeFileChange({
+        sourcePath,
+        buffer,
+        capability: 'docx',
+        expectedChecksum: state.editSessionBySourcePath.get(sourcePath)?.diskFingerprint.checksum
+      })
+      return confirmed
+    } catch (error) {
+      state.editSessionBySourcePath.delete(sourcePath)
+      state.readSessionBySourcePath.delete(sourcePath)
+      if (publishing) throw error
+      console.error('[DOCX-EXPORT]', error)
+      const detail = (error instanceof Error ? error.message : String(error))
+        .replace(tempPath, '文档')
+        .replace(/(?:[A-Za-z]:)?[\\/]\S+/g, '文件位置')
+      throw new Error(`文档保存准备失败：${detail}。文件尚未保存。`)
+    } finally {
+      await fs.rm(tempPath, { force: true }).catch(() => undefined)
+      await fs.rmdir(exportDir).catch(() => undefined)
+    }
   }
 
   return {

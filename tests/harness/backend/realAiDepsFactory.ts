@@ -141,7 +141,7 @@ export const createRealAiDepsFactory = async (input: {
   })
 
   const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
-  const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
+  const docxApplyService = new DocxApplyService(aiFileChangeService)
   const terminalSessionIds = new Set<string>()
 
   const seedLlmConfig = async (config: LiveLlmConfig): Promise<void> => {

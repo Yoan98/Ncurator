@@ -1,3 +1,4 @@
+import { appendFileChangeArtifactsAndEmitEvents } from './utils/artifacts'
 import { BrowserWindow } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { AiRunService } from './AiRunService'
@@ -87,6 +88,7 @@ type ActiveQuestion = {
 }
 
 type ActiveRun = {
+  fileChangeOwnerRunId?: string
   run: AiRunRecord
   contentNodes?: ChatMessageContentNode[]
   cancelled: boolean
@@ -160,6 +162,7 @@ const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArti
 
 export class ChatRunService {
   private readonly activeRuns = new Map<string, ActiveRun>()
+  private readonly executions = new Map<string, Promise<void>>()
   private readonly activeApprovals = new Map<string, ActiveApproval>()
   private readonly activeQuestions = new Map<string, ActiveQuestion>()
   private readonly pendingPartnerSubmissions = new Set<string>()
@@ -210,10 +213,39 @@ export class ChatRunService {
   }
 
   public async failInterruptedRuns(): Promise<void> {
-    const interrupted = await this.deps.aiRunStore.listRunsByStatuses(['running', 'continued'])
+    const interrupted = await this.deps.aiRunStore.listRunsByStatuses([
+      ...ACTIVE_RUN_STATUSES,
+      'continued'
+    ])
+    const partners = await this.deps.partnerStore.listPartners()
+    for (const partnerId of new Set([
+      ...partners.map((partner) => partner.id),
+      ...interrupted.map((run) => run.partnerId)
+    ])) {
+      const reviews = await this.deps.aiFileChangeService.sessions
+        .recoverPartner(partnerId)
+        .catch((error) => {
+          console.error('[FILE-REVIEW-RECOVERY]', { partnerId, error })
+          return []
+        })
+      for (const ownerId of new Set(reviews.map((record) => record.runId))) {
+        const owner = await this.deps.aiRunStore.getRun(ownerId)
+        if (!owner) continue
+        owner.artifacts = appendFileChangeArtifactsAndEmitEvents({
+          existingArtifacts: owner.artifacts,
+          records: reviews.filter((record) => record.runId === ownerId),
+          runId: ownerId,
+          taskId: ownerId,
+          sendEvent: () => undefined
+        })
+        await this.deps.aiRunStore.saveRun(owner)
+      }
+    }
     const removedContinuations = new Set<string>()
-    for (const run of interrupted) {
-      if (removedContinuations.has(run.id)) continue
+    for (const interruptedRun of interrupted) {
+      if (removedContinuations.has(interruptedRun.id)) continue
+      const run = await this.deps.aiRunStore.getRun(interruptedRun.id)
+      if (!run) continue
       if (run.status === 'continued' && (run.pendingMessages?.length || 0) === 0) continue
       const pending = run.pendingMessages || []
       const latestQueued = pending[pending.length - 1]
@@ -369,8 +401,11 @@ export class ChatRunService {
       const approval = this.activeApprovals.get(runId)
       approval?.resolve({ accepted: false, error: '当前伙伴已删除' })
       this.activeApprovals.delete(runId)
+      this.activeQuestions.get(runId)?.resolve({ accepted: false, error: '当前伙伴已删除' })
+      this.activeQuestions.delete(runId)
     }
 
+    await Promise.allSettled(affectedRuns.map(([runId]) => this.executions.get(runId)))
     await Promise.all(affectedRuns.map(([, entry]) => entry.eventQueue.catch(() => {})))
     await terminalSessionManager.closeByChatSession(normalizedPartnerId)
     await this.deps.partnerStore.deletePartner(normalizedPartnerId)
@@ -462,13 +497,30 @@ export class ChatRunService {
     }
   }
 
+  private async prepareFileChangeFinalization(
+    runId: string,
+    allowContinuation: boolean
+  ): Promise<boolean> {
+    const entry = this.activeRuns.get(runId)
+    if (!entry) return true
+    // Seal before awaiting registered submissions, so no new message can race review generation.
+    entry.finalizing = true
+    await this.waitForPendingUserMessageSubmissions(runId)
+    if (allowContinuation && (entry.run.pendingMessages?.length || 0) > 0) {
+      entry.finalizing = false
+      return false
+    }
+    return true
+  }
+
   private async enqueueMessage(
     activeRun: ActiveRun,
     payload: ChatSubmitRequest & { partnerId: string; input: string }
   ): Promise<ChatSubmitResponse> {
     const { run } = activeRun
+    if (activeRun.finalizing)
+      return { success: false, error: '当前运行正在结束，请等待完成后再发送。' }
     if (
-      activeRun.finalizing ||
       activeRun.cancelled ||
       (run.status !== 'running' &&
         !(run.status === 'continued' && (run.pendingMessages?.length || 0) > 0)) ||
@@ -644,6 +696,8 @@ export class ChatRunService {
       updatedAt: latest.createdAt
     }
     const child: ActiveRun = {
+      fileChangeOwnerRunId:
+        this.activeRuns.get(previousRun.id)?.fileChangeOwnerRunId || previousRun.id,
       run: continuationRun,
       contentNodes: latest.contentNodes,
       cancelled: false,
@@ -952,9 +1006,7 @@ export class ChatRunService {
     this.activeRuns.set(runId, activeRun)
 
     if (this.deps.autoStartRuns !== false) {
-      void this.startAiRun(runId).catch((error) => {
-        console.error('[CHAT-RUN] start failed:', error)
-      })
+      this.launchRun(runId)
     }
 
     return {
@@ -963,6 +1015,15 @@ export class ChatRunService {
       assistantMessage,
       run
     }
+  }
+
+  private launchRun(runId: string): void {
+    const execution = this.startAiRun(runId)
+      .catch((error) => {
+        console.error('[CHAT-RUN] start failed:', error)
+      })
+      .finally(() => this.executions.delete(runId))
+    this.executions.set(runId, execution)
   }
 
   private async startAiRun(runId: string): Promise<void> {
@@ -983,10 +1044,6 @@ export class ChatRunService {
       createdAt: Date.now(),
       input: run.input
     })
-    this.deps.docxApplyService.beginRun({
-      runId,
-      partnerId: run.partnerId
-    })
 
     const scheduledTaskService =
       typeof this.deps.scheduledTaskService === 'function'
@@ -997,6 +1054,7 @@ export class ChatRunService {
       const result = await AiRunService.getInstance().run(
         {
           runId,
+          ownerRunId: entry.fileChangeOwnerRunId || runId,
           partnerId: run.partnerId,
           partnerName: partner?.name || PRODUCT_NAME_ZH,
           userMessageId: run.userMessageId,
@@ -1027,6 +1085,8 @@ export class ChatRunService {
           listFileChangeRecords: async (request) =>
             (await this.deps.aiFileChangeService.listRecords(request)).items,
           isCancelled: () => Boolean(this.activeRuns.get(runId)?.cancelled),
+          prepareFileChangeFinalization: (allowContinuation) =>
+            this.prepareFileChangeFinalization(runId, allowContinuation),
           hasPendingUserMessages: () =>
             (this.activeRuns.get(runId)?.run.pendingMessages?.length || 0) > 0,
           waitForPendingUserMessageSubmissions: async () =>
@@ -1045,12 +1105,10 @@ export class ChatRunService {
 
       await this.flushRunEvents(runId)
       if (this.activeRuns.get(runId)?.cancelled && result.status !== 'cancelled') {
-        this.deps.docxApplyService.discardRun(runId)
         await this.queueRunEvent(runId, { type: 'run_cancelled', runId })
         return
       }
       if (result.status === 'cancelled') {
-        this.deps.docxApplyService.discardRun(runId)
         await this.queueRunEvent(runId, {
           type: 'run_cancelled',
           runId
@@ -1059,7 +1117,6 @@ export class ChatRunService {
       }
 
       if (result.status === 'failed') {
-        this.deps.docxApplyService.discardRun(runId)
         this.deps.errorLogService?.write({
           module: 'ai-run',
           error: result.error || 'AI run failed',
@@ -1104,7 +1161,6 @@ export class ChatRunService {
       await this.flushRunEvents(runId)
       await this.queueRunEvent(runId, { type: 'run_completed', runId })
     } catch (error) {
-      this.deps.docxApplyService.discardRun(runId)
       if (this.activeRuns.get(runId)?.cancelled) {
         await this.queueRunEvent(runId, {
           type: 'run_cancelled',
@@ -1356,9 +1412,7 @@ export class ChatRunService {
     }
     this.broadcastEvent(projectedEvent)
     if (continuation && this.deps.autoStartRuns !== false) {
-      void this.startAiRun(continuation.run.id).catch((error) => {
-        console.error('[CHAT-RUN] queued continuation start failed:', error)
-      })
+      this.launchRun(continuation.run.id)
     }
   }
 

@@ -1,4 +1,8 @@
 import path from 'node:path'
+import fs from 'node:fs/promises'
+import JSZip from 'jszip'
+import { XMLSerializer } from '@xmldom/xmldom'
+import { readReviewPart } from '../../../../harness/backend/docxReviewAssertions'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -7,7 +11,6 @@ import {
   getWorkbenchLocator,
   getAntMessageText,
   insertWorkbenchReferenceToken,
-  mutateDocxExternally,
   readDocxPlainText,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
@@ -61,7 +64,25 @@ describe('workbench result e2e', () => {
           await applyEntry.click()
           await waitForWorkbenchApplyPanelReady(page)
 
-          await mutateDocxExternally(targetPath, `external-${MARKER}`)
+          const externalBytes = await fs.readFile(targetPath)
+          const externalZip = await JSZip.loadAsync(externalBytes),
+            externalDoc = await readReviewPart(externalBytes)
+          const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+          const body = externalDoc.getElementsByTagNameNS(namespace, 'body')[0]
+          const paragraph = externalDoc.createElementNS(namespace, 'w:p'),
+            run = externalDoc.createElementNS(namespace, 'w:r'),
+            text = externalDoc.createElementNS(namespace, 'w:t')
+          text.textContent = `external-${MARKER}`
+          run.appendChild(text)
+          paragraph.appendChild(run)
+          body.insertBefore(
+            paragraph,
+            Array.from(body.childNodes).find(
+              (node) => node.nodeType === 1 && (node as Element).localName === 'sectPr'
+            ) || null
+          )
+          externalZip.file('word/document.xml', new XMLSerializer().serializeToString(externalDoc))
+          await fs.writeFile(targetPath, await externalZip.generateAsync({ type: 'nodebuffer' }))
           await page.waitForTimeout(800)
           const reviewExternalRefreshNoticeCount = await page
             .getByText('检测到当前文件被外部修改，已自动刷新', { exact: true })
@@ -70,6 +91,18 @@ describe('workbench result e2e', () => {
           const reviewWatchStartCalls = signalsAfterExternalMutation.ipcInvokeEntries.filter(
             (entry) => entry.name === 'fileWatchStart'
           ).length
+          const modeToggle = getWorkbenchLocator(page, workbenchSelectors.documentModeToggle)
+          await modeToggle.click()
+          await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
+            .getByText(`external-${MARKER}`, { exact: false })
+            .waitFor({ state: 'visible', timeout: 30_000 })
+          const previewContainsExternalC = true
+          await modeToggle.click()
+          await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
+            .getByText(`Workbench force revert marker ${MARKER}`, { exact: false })
+            .waitFor({ state: 'visible', timeout: 30_000 })
+          const reviewText =
+            (await getWorkbenchLocator(page, workbenchSelectors.docxViewer).textContent()) || ''
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
@@ -92,6 +125,8 @@ describe('workbench result e2e', () => {
           ).count()
 
           return {
+            previewContainsExternalC,
+            reviewText,
             beforeText,
             afterApplyText,
             warningText,
@@ -106,7 +141,9 @@ describe('workbench result e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            !result.beforeText.includes(MARKER) &&
+            result.previewContainsExternalC &&
+              !result.reviewText.includes(`external-${MARKER}`) &&
+              !result.beforeText.includes(MARKER) &&
               result.afterApplyText.includes(MARKER) &&
               /又发生了变化|丢失之后的修改|恢复到这次修改前/u.test(result.warningText) &&
               result.afterForceRevertText === result.beforeText &&

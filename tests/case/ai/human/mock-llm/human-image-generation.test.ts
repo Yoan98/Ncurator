@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { loadImage } from '@napi-rs/canvas'
 import { describe, it } from 'vitest'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
@@ -27,8 +27,9 @@ describe('ai human mock-llm image generation backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const outputPath = path.join(runtime.workspaceRoot, 'human-generated.png')
-        const runner = createHumanTestRunner(runtime, {
-          structuredOutputScript: {
+        const runner = await createAiServiceTestRunner(runtime, {
+          userInput: '请生成一张 40x30 的蓝色图片 human-generated.png。',
+          llmScript: {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
@@ -52,10 +53,7 @@ describe('ai human mock-llm image generation backend', () => {
             ]
           }
         })
-        const output = await runner.run({
-          taskId: runtime.taskId,
-          userInput: '请生成一张 40x30 的蓝色图片 human-generated.png。'
-        })
+        const output = await runner.run()
         const bytes = await fs.readFile(outputPath)
         const image = await loadImage(bytes)
         return {
@@ -84,7 +82,7 @@ describe('ai human mock-llm image generation backend', () => {
             result.signature === '89504e470d0a1a0a' &&
             result.width === 40 &&
             result.height === 30 &&
-            result.output.deliveryMarkdown.includes('human-generated.png'),
+            result.output.finalDeliveryMarkdown.includes('human-generated.png'),
           {
             name: 'human-image-generation-production-chain',
             message: 'human 应真实走通图片生成、Artifact 和最终交付。',

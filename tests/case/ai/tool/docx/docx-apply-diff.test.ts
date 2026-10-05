@@ -100,7 +100,6 @@ describe('ai tool docx apply and diff backend', () => {
         const before = await fs.readFile(sourcePath)
         const harness = createDocxToolHarness(runtime)
         try {
-          harness.ctx.beginDocxApplyRun()
           const paragraph = (
             await harness.invoke<SearchResult>('docx_search', { sourcePath, query: 'Version A' })
           ).matches[0]!
@@ -226,7 +225,9 @@ describe('ai tool docx apply and diff backend', () => {
             newText: 'Restore A'
           })
 
-          const records = await harness.ctx.applyDocxRunEdits()
+          await harness.ctx.finalizeRunFileChanges()
+          const records = (await runtime.docxApplyService.listRecords({ runId: runtime.runId }))
+            .items
           const record = records.find((candidate) => candidate.source_name === 'apply.docx')
           if (!record) throw new Error('expected apply.docx apply record')
           const diffXml = await documentXml(record.preview_diff_artifact_path)

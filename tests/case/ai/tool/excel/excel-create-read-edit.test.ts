@@ -91,6 +91,7 @@ describe('ai tool excel backend', () => {
         const targetPath = existingSourcePath
         const actual = new ExcelJS.Workbook()
         await actual.xlsx.load((await fs.readFile(targetPath)) as never)
+        await harness.ctx.finalizeRunFileChanges()
         const previewPath = String((await recordOf(existingSourcePath))?.previewPath || '')
         const diff = new ExcelJS.Workbook()
         await diff.xlsx.load((await fs.readFile(previewPath)) as never)
