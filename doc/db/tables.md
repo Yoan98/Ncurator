@@ -58,10 +58,8 @@ Workbench 伙伴。
 | 字段         | 类型    | 说明              |
 | ------------ | ------- | ----------------- |
 | `partner_id` | TEXT PK | 伙伴 id，级联删除 |
-| `state_json` | TEXT    | 版本化 UI 状态    |
+| `state_json` | TEXT    | 版本化 UI 状态；不含未发送的文档选区及关联想法 |
 | `updated_at` | INTEGER | 更新时间          |
-
-Composer 草稿使用 `formatVersion: 2`，普通文字与 @ 引用以 `contentNodes` 保存并派生展示文本；未发送的文档选区片段及其关联想法不写入 `state_json`，仅保留在 Renderer 内存。已发送选区快照写入消息 log 的 `entry_json`，排队时写入既有排队 JSON，不新增列。
 
 ### `workbench_ui_state`
 
@@ -99,7 +97,7 @@ Workbench 单例 UI。
 | `partner_id` | TEXT    | 伙伴 id，级联删除                                                                                                                                                                                                             |
 | `run_id`     | TEXT    | 所属 run                                                                                                                                                                                                                      |
 | `seq`        | INTEGER | 伙伴内顺序                                                                                                                                                                                                                    |
-| `entry_json` | TEXT    | 消息条目；user context 保存引用、附件和可选的结构化 `contentNodes`；`subagent_updated` annotation 保存父派发调用关联、子任务排队及执行状态/工具行动/最新完整公开消息/精简结果（子完整日志仅在内存，流式片段与请求状态不落盘） |
+| `entry_json` | TEXT    | 消息条目；user 保存模型正文及结构化用户正文、引用和附件快照；`subagent_updated` annotation 保存父派发调用关联、子任务排队及执行状态/工具行动/最新完整公开消息/精简结果（子完整日志仅在内存，流式片段与请求状态不落盘） |
 | `created_at` | INTEGER | 创建时间                                                                                                                                                                                                                      |
 
 ### `ai_run`
@@ -127,7 +125,7 @@ Workbench 单例 UI。
 | `failure_raw_message`      | TEXT    | 失败原文                                                     |
 | `pending_approval_json`    | TEXT    | 待审批                                                       |
 | `pending_interaction_json` | TEXT    | 待处理的人机交互                                             |
-| `pending_messages_json`    | TEXT    | 普通运行期间按 FIFO 暂存的追加用户消息；续接或终态归档后清空 |
+| `pending_messages_json`    | TEXT    | 按 FIFO 暂存的追加用户消息快照，含结构化正文与引用、附件；续接或终态归档后清空 |
 | `artifacts_json`           | TEXT    | 产物                                                         |
 | `created_at`               | INTEGER | 创建时间                                                     |
 | `updated_at`               | INTEGER | 更新时间                                                     |

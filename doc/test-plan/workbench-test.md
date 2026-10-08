@@ -324,6 +324,15 @@ pnpm test:update:e2e
 - How：创建伙伴并完成一次真实 AI run；检查胶囊文案与 tooltip；点击胶囊后取消确认并断言消息仍在；再点胶囊并确认清空；断言消息为空、仍在同一伙伴、输入草稿不变。运行中不得出现清空入口。
 - Oracle：有消息且空闲时可见对齐 `WB-SESSION-011-AC8`；确认后列表为空对齐 `WB-SESSION-011-AC1`；不换伙伴 / 草稿对齐 `WB-SESSION-011-AC2`；下次发送无旧上下文对齐 `WB-SESSION-011-AC3`（由清空后 message log 为空保证）；运行中不可用对齐 `WB-SESSION-011-AC4`；文案与 tooltip 对齐 `WB-SESSION-011-AC5`；确认框取消/确认对齐 `WB-SESSION-011-AC6`。换无关新话题用清空消息记录得到干净上下文，对齐 `WB-SESSION-005-AC3`、`WB-SESSION-005-AC4`、`WB-SESSION-011-AC3`。文件回退记录保留由 unit `clear-partner-context-deletes-messages-and-runs-keeps-file-changes` 覆盖 `WB-SESSION-011-AC7`。
 
+#### `docx-selection-reference`
+
+- 测试类型：`e2e / live`；suite `conversation`，group `composer`。
+- What：真实 DOCX 选区、浮层、混合正文、双向同步、定位与草稿生命周期。
+- Why：确保原文准确，引用与想法关联，两侧使用同一内容。
+- How：通过鼠标选取跨段落及单元格文字，保存、双向编辑、跳转和删除；切换伙伴和文件，实际发送后重新编辑历史消息，再刷新 Renderer 检查持久化草稿。
+- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-001-AC1` 的跨段落/单元格原文与跨单元格拒绝，`AC2` 的空内容禁用、Enter 保存和 Esc 关闭，`AC3` 的两侧编辑同步，`AC4` 的定位、重复/重叠选区、删除和编号递增，`AC5` 的伙伴隔离及内存/持久化边界，`AC6` 的接受后清理和历史编辑。刷新后选区消失，普通文字与 @ 引用保留。
+- 待覆盖：页眉页脚/文本框拒绝、Shift+Enter 与 IME、点击外部放弃改动、想法内 @ 混排、关闭资源 Tab、应用进程重启及附件恢复、外部原文变化后的定位提示、提交期间锁定、提交失败保留、排队成功清理及历史复制。
+
 ### 5.2 `run`
 
 #### `ai-process-stream-and-final-answer`
@@ -695,11 +704,3 @@ pnpm test:update:e2e
 - Why：这是定时任务的核心闭环，验证真实调度、真实 AI run 与前端伙伴列表刷新联动。
 - How：在真实 UI 配置一个每天 + 当前系统时间下一分钟的任务；等待到点，轮询绑定伙伴的运行状态并确认当前选中伙伴不变。
 - Oracle：到点往绑定伙伴追加对齐 `ST-RUN-001-AC1`；不改变当前查看伙伴对齐 `ST-RUN-001-AC2`；从定时任务视图点伙伴返回聊天对齐 `ST-VIEW-001-AC2`；伙伴列表刷新对齐 `ST-RUN-002-AC1/AC2`。
-
-#### `docx-selection-reference`
-
-- 测试类型：`e2e`；suite `conversation`，group `composer`。
-- What：真实 DOCX 选区、浮层、混合正文、双向同步、定位与生命周期。
-- Why：确保捕获的原文可靠，引用/想法顺序完整，两侧使用同一内容。
-- How：用真实 DOCX 通过鼠标选取跨段落及单元格文字；保存、双向编辑、跳转、删除；切换伙伴和文件，实际发送后重新编辑历史消息，再刷新验证草稿。
-- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-001-AC1` 至 `AC6` 中的跨段落/单元格原文、空内容禁用、Enter 保存、重复与重叠选区、原子删除、编号递增、伙伴内存隔离、接受后清理和历史编辑；重启丢失选区及关联想法，保留普通文字与 @ 引用。

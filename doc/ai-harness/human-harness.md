@@ -29,7 +29,7 @@ flowchart TD
   START([START]) --> CB[context_budget]
   CB -->|超预算且可压缩| CC[context_compaction]
   CB -->|继续| BR[brain]
-  CB -->|已有运行中追加消息；写入当前 user 后安全让出| END
+  CB -->|已有运行中追加消息；确认当前 user 已保存后安全让出| END
   CC --> CB
   BR -->|无 tool_calls| FD[finalizeDelivery → END]
   BR -->|有 tool_calls| DP[dispatch]
@@ -44,7 +44,7 @@ flowchart TD
   DP -->|队列空| CB
 ```
 
-graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
+graph 从 `context_budget` 进入；当前 `user` 的写入分工见第 2.2 节。
 
 **循环主干**：`context_budget → brain → dispatch → (human_interaction | learning | plan | hand) → dispatch →（队列空）context_budget`。
 
@@ -54,7 +54,7 @@ graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 
 | 节点                         | 调模型         | 写 log                                                                    | 改 runtime cache                                                           |
 | ---------------------------- | -------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `context_budget`             | 否             | 本轮首次进循环时写 `user`（压缩前也会写）                                 | 判定 compaction；发现运行中追加消息时在该边界让出当前 graph                |
+| `context_budget`             | 否             | 仅在当前 `user` 尚未保存时补写（第 2.2 节）                               | 判定 compaction；发现运行中追加消息时在该边界让出当前 graph                |
 | `context_compaction`         | 是（压缩模型） | `compaction_checkpoint`（含摘要）                                         | **整段替换** messages 为 System + 合成 Compact User + tail 原文（第 5 节） |
 | `brain`                      | 是（主模型）   | `thinking_*`；**仅当有 `toolCalls`（或截断 / 内容安全）时写 `assistant`** | 有 tool 时 append assistant；**不** refresh build user                     |
 | `dispatch`                   | 否             | 否                                                                        | 消费 `tool_calls` 队列，路由下一 stage                                     |
@@ -103,8 +103,8 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 - 普通 `running` run 可在 `ai_run.pending_messages_json` 保存多条待处理消息。交互处于审批或提问等待时，Workbench 展示交互卡并移除普通 Composer，Main 同时拒绝追加。
 - Main 在追加消息校验开始前同步登记一次待处理提交。`context_budget` 和 Brain 入口都等待这些提交结束，再检查 `pending_messages_json`；若校验成功且消息已入队，graph 以 `yielded` 结束当前调用。Brain 入口复查用于覆盖 `context_budget` 已通过、Brain 尚未开始的调度间隙；校验失败则原 run 继续。
 - 交接只会在前序工具结果已写入 transcript 且 dispatch 队列清空后发生，因此下一次 brain 不会越过尚未记录的工具结果。Brain 已开始后才到达的追加请求由下一处 `context_budget` 边界处理。
-- 若最终回答已经开始，human graph 正常完成原交付；Main 在 `run_completed` 事件后创建一次续接 run。批次内的 user 按 FIFO 进入 transcript，每条消息保留原始输入、参考资料、附件和结构化 `contentNodes`；最后一条消息决定续接模型、偏好与执行权限。
-- 安全交接时较早的追加消息以 `context_only` run 和 user log 落库，最后一条由续接 run 写入。运行正常结束时自动启动续接；停止、失败和应用重启恢复时只把待处理消息转成普通 user log，不自动调用模型。结构化 `contentNodes` 随每条 user log 一起保存并参与 UI 投影。
+- 若最终回答已经开始，human graph 正常完成原交付；Main 在 `run_completed` 事件后创建一次续接 run。批次内的 user 按 FIFO 进入 transcript，各自保留正文、引用和附件快照；最后一条消息决定续接模型、偏好与执行权限。
+- 安全交接时较早的追加消息以 `context_only` run 和 user log 落库，最后一条由续接 run 写入。运行正常结束时自动启动续接；停止、失败和应用重启恢复时只把待处理消息转成普通 user log，不自动调用模型。
 - 停止若发生在工具调用中途，已落库结果保持原样。`repairInterruptedToolCalls` 只在模型上下文投影中为没有结果的悬空调用补充合成 ToolMessage（“The run was interrupted before this tool call could be executed.”）；不会写成真实工具失败记录。
 
 ---
@@ -134,13 +134,13 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `entry_json` | `ChatMessageLogEntry`                                             |
 | `created_at` | 写入时间                                                          |
 
-**写入入口**：graph 节点 → `AiRunContext.appendMessageLog` → `ChatMessageLogStore.appendBatch`（同 batch 内 `seq` 连续分配）。
+**写入入口**：`ChatRunService` 直接调用 `ChatMessageLogStore.appendBatch`；graph 节点通过 `AiRunContext.appendMessageLog` 调用该入口。同 batch 内 `seq` 连续分配。
 
 #### 四种 `kind`
 
 | `kind`       | 存什么                                        | 谁写                                                                                                            |
 | ------------ | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `user`       | 发给模型的 build 全文 + `context`             | **`context_budget`**（本轮首次进 brain；压缩前也会写）                                                          |
+| `user`       | 发给模型的 build 全文 + `context`             | **`ChatRunService`**（主运行启动前）或 **`context_budget`**（尚无当前 user 的内部运行）                           |
 | `assistant`  | 文本 + `toolCalls[]`（交付另含 `linkAccess`） | **brain**（过程决策 / 截断 / 内容安全 fallback）或 **`finalizeDelivery`**（正常交付）；**同一轮交付正文不叠写** |
 | `tool`       | 工具反馈正文 + 可选 `images[]`                | **`hand` / `plan` / `learning`**（执行结果；不写 assistant）                                                    |
 | `annotation` | 过程与状态事件                                | 见下表                                                                                                          |
@@ -162,9 +162,9 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 #### `entry_json` 示例
 
-**`user`** — `content` 是发给模型的 build 全文；`input` 是人打的字。只表示人说的那次。气泡文案用 `ai_run.input`，不读 `content`。
+**`user`** — `content` 是发给模型的 build 全文；`input` 是用户正文的可读文本。气泡使用 `input` 和结构化正文，不展示 `content`。
 
-`context` 保存当次 `selectedReferences`、`attachments` 和可选的 `contentNodes`，供 Workbench 消息投影还原结构化正文；它们位于既有 `entry_json` 中，不新增 SQLite 列。
+`context` 保存当次引用、附件与结构化正文，供 Workbench 还原用户消息；模型投影直接使用保存的 `content`。
 
 ```json
 {
@@ -295,7 +295,8 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 | 节点 / 步骤              | 写入 `kind` / `eventType`                                                                      | 说明                                                                                                     |
 | ------------------------ | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `context_budget`         | `user`                                                                                         | 本轮首次进循环时写 **build 全文**（`content`）与人打的字（`input`）；压缩前也会写；brain **不**写 `user` |
+| `ChatRunService`         | `user`                                                                                         | 主运行启动前保存 build 全文、可读正文与 context；普通提交在返回接受成功前保存                             |
+| `context_budget`         | `user`                                                                                         | 当前 user 尚未保存时补写；已保存则复用，不重复写入                                                       |
 | `brain`（有 tool_calls） | `thinking_started` → `assistant`（含 `toolCalls`）→ `thinking_completed`                       | 固化主模型过程决策；须在 hand/plan/learning **之前**落库                                                 |
 | `brain`（正常交付）      | `thinking_started` → `thinking_completed`                                                      | **不**写 log `assistant`；Answer 草稿仅事件 / `partial_answer`                                           |
 | `brain`（截断）          | 半截 `assistant`                                                                               | `finish_reason=length`：先写再失败，可 resume                                                            |
@@ -308,7 +309,8 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 ```text
 用户发送
-  → context_budget ──→ user（首次进 brain）
+  → ChatRunService ──→ user（发送快照）
+  → context_budget（内部运行尚无 user 时补写）
   → brain
        ├─ 有 tool_calls ──→ thinking_* + assistant(toolCalls)
        │     → dispatch → learning / plan / hand ──→ tool + annotation
@@ -354,25 +356,11 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 **不进 brain prompt**；工具结果摘要已在 log 的 `tool.content` 中。
 **run 失败不丢记录**：已 `applied` 的修改保持，供 Workbench 展示与回退。
 
-### 2.5 Composer 引用与发送快照
-
-新 run 的参考资料和附件来自 **Composer 当前混合正文中的 `@`、文档选区与附件**，由 `buildBrainUserMessage` 分别渲染进 build user 的「用户引用的文档」「用户添加的附件」段。工作地址列表不进这两段，单独渲染为 build user 的「默认工作区」（位于资料段之上），按设置页现表快照，不进 System。
-
-|        | log 里的 `user.context`            | Composer → build user                                      |
-| ------ | ---------------------------------- | ---------------------------------------------------------- |
-| 作用   | 审计「当时用户说了什么、配了什么」 | 驱动**当前 run** brain 输入                                |
-| 同 run | 首条 build user 的资料段           | Main 接受时冻结 `@`、文档选区、附件与默认工作区快照          |
-| resume | 每条 log `user` 各存各的 snapshot  | 已接受的用户消息沿用各自快照；新增用户消息生成新的快照         |
-
-`contentNodes` 为用户正文唯一真相，普通文字、@引用与 DOCX 选区片段按顺序投影成用户诉求。选区片段包含文件绝对路径、原文、前后文及想法子节点。Main 在接受时补齐引用的索引状态和知识库文档 ID，并保存完整 build user；当前请求、排队续接、归档与历史共用同一构建链。
-
-build user 的引用块统一为「用户引用的文档」：资源按首次出现排列，同一资源地址合并名称、地址、知识库状态和文档 ID；注明整份资源引用或列出选区编号、原文、前后文。不输出类型行和重复的用户想法。@目录和网页仍在该块展示，程序内部保留资源类型。附件仍独立成块。选区不改变 @ 知识库范围，不依赖索引可用性。
-
 ---
 
 ## 3. 投影设计
 
-只投影 **`chat_session_message_log`**。已经压进摘要的旧对话，主模型不再看到原文；还没处理掉的 `user.content` 原样发给模型。本轮新 User 由 `buildBrainUserMessage` 构造后 append。
+只投影 **`chat_session_message_log`**。已经压进摘要的旧对话，主模型不再看到原文；还没处理掉的 `user.content` 原样发给模型。本轮 User 的组装规则见第 3.3 节。
 
 投影分两路：`projectMessageLogRecords` 产出 plan / skill / checkpoint / 过程 tail（**过滤掉 user**）；`projectBrainMessagesFromLog` 再拼 Compact User、历史 build user 与本轮 build user。
 
@@ -469,7 +457,7 @@ flowchart TD
 
 **稳态行为**（同 run、未触发 第 5–6 节）：
 
-- 首次 brain：`[System, User]`，过程为空；ChatSubmit 在接收成功前保存这条 `user` 的 content，brain 复用快照而不重复写入。
+- 首次 brain：`[System, User]`，过程为空；user 的写入分工见第 2.2 节。
 - brain → 工具 → 再 brain：过程末尾 append；**当前 User 一字不改**（技能/计划只在 tool 结果与 `bindTools` 中可见）。
 - 前缀 `[System, User, …已发送过程]` 字节序不变 → 第 4 节缓存命中。System **跨 run 稳定**（无 `current_time`）。
 
@@ -491,12 +479,14 @@ flowchart TD
 
 | 块                | 来源                                                                                    |
 | ----------------- | --------------------------------------------------------------------------------------- |
-| `用户诉求`        | 当时那条 User 对应 run 的 `input`                                                       |
+| `用户诉求`        | 当次用户正文的可读文本                                                                  |
 | `偏好`            | 当时 Composer；`default` 时整块省略                                                     |
 | `默认工作区`      | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
-| `用户引用的文档` | 当时 Composer 的 `@` 与文档选区（第 2.5 节）；空时整块省略                                         |
-| `用户添加的附件`  | 当时 Composer 的附件（第 2.5 节）；空时整块省略                                         |
+| `用户引用的文档`  | 当次消息中的 `@` 引用与文档选区；空时整块省略                                            |
+| `用户添加的附件`  | 当次消息中的附件；空时整块省略                                                          |
 | `当前时间`        | 当时 run 的 `runStartedAt`（历史行不再改）                                              |
+
+引用与附件进入 User，不进 System。知识库范围由显式 `@` 决定，文档选区只作为本轮引用上下文。
 
 annotation 扫描该伙伴**全部**剩余 log（不受 `historyFloorSeq` 限制）：技能从最新 `skill_state_updated` 恢复。计划仍按 `plan_updated` / `finalizing_started` 扫描。清空消息记录会物理删除 log，因此技能 / 计划不会从已删除的历史恢复。
 
@@ -520,7 +510,7 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 
 | UI 元素       | log 来源                                                  | 规则                                                                     |
 | ------------- | --------------------------------------------------------- | ------------------------------------------------------------------------ |
-| 用户气泡      | `ai_run.input`；该 run 的 `user` 行只提供时间与 `context` | 不展示 `user.content`（那是模型稿）；Compact User 不当气泡               |
+| 用户气泡      | log `user.input` 与 `context`                            | 还原可读正文与引用；不展示 `user.content`；Compact User 不当气泡          |
 | 助手气泡      | 该 run 最后一条交付 `assistant`（`toolCalls: []`）        | 经 `finalizeDelivery` 写入；展示 Markdown 正文                           |
 | 运行态 / 错误 | `ai_run`                                                  | `status`、`error`、`failure_code`、`failure_raw_message`、审批、流式草稿 |
 | 文件改动      | `ai_file_change`                                          | Workbench diff / 回退；不进对话正文                                      |
@@ -648,7 +638,7 @@ effectiveWindow = min(256_000, floor(modelContext × 0.8))
 
 - 预算 > **effectiveWindow** 才压。没到线不压。有真实 brain usage 时用 `usage + delta`；compaction 后需等下一轮真实 usage（`post_compaction`）。
 - 去掉从末尾留下的 tail 之后，还剩更早的原文可折。folded 里若只有 Compact User、没有别的原文，视为不可折，避免空转。
-- 仅当前 build user 自身超 **effectiveWindow** → `input_too_long`，不 compaction、不写 log user。
+- 仅当前 build user 自身超 **effectiveWindow** → `input_too_long`，不 compaction、不调 brain；日志边界见第 6.5 节。
 - 无 LLM usage 时 brain 发 `run_warning`（`code: llm_usage_unavailable`），预算改用消息 token estimate；estimate 超 effectiveWindow 且有可折历史时仍可 compaction。
 - 去掉 tail 后没有可折内容，或单组已大于 keep 且前面没有可折跨度 → 不压。
 
@@ -766,8 +756,8 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 
 ### 6.2 核心规则
 
-1. **log**：进 brain 前 append 新 `user` 行（`content` = 当次 build 全文；`input` = 人打的字；含 Composer `context`）。
-2. **brain**：在已有历史末尾 append 新 User（新 run 的 input + Composer + 本 run `current_time`）；**不替换**前面的 User，**不改写**中间过程。
+1. **log**：新 `user` 按第 2.2 节保存（`content` = 当次 build 全文；`input` = 可读正文；含 `context`）。
+2. **brain**：在已有历史末尾 append 本轮 User，按第 3.3 节复用发送快照；**不替换**前面的 User，**不改写**中间过程。
 3. 历史 User = 对应 log 行的 `content`。
 4. 新诉求只出现在 **末尾** 那条 User 的「用户诉求」段。新 User 不抄 Compact User。
 5. 符合 第 4 节：历史前缀不变 → 缓存可命中；打破前缀的是 compaction。
@@ -818,8 +808,8 @@ seq N  user      content=用户诉求：继续把周报写完…
 
 1. 从 log 投影：`seq > historyFloorSeq` 的 `user / assistant / tool`；有 compaction checkpoint 则先合成 Compact User。
 2. System 重渲染但内容跨 run 稳定。
-3. append 新 User = `buildBrainUserMessage`（新 `input`、当前 Composer、本 run `current_time`）。
-4. `context_budget` 将本轮 human user 写入 log（若尚未写入；压缩前也会写）→ brain 或 compaction。
+3. 按第 3.3 节将本轮 User 追加到末尾；已保存的消息复用 log `content`。
+4. `context_budget` 按第 2.2 节补写尚未保存的内部运行 user，再进入 brain 或 compaction。
 5. `buildAvailableTools(learnedSkillIds)`：从最新 `skill_state_updated` 恢复技能后绑定工具。
 
 ### 6.5 边界
@@ -828,7 +818,7 @@ seq N  user      content=用户诉求：继续把周报写完…
 | ------------------------------------ | ----------------------------------------------------------------------------------- |
 | 多次 resume                          | 每次 append 新 build user 在末尾；首条 `User built₁` 保留原始用户诉求               |
 | `output_truncated` / `runtime_limit` | 可继续；半截 assistant 已在 log/tail                                                |
-| `input_too_long`                     | 不写 log user，不调 brain                                                           |
+| `input_too_long`                     | 不调 brain；已接受的主运行 user 保留，尚未写入的内部运行不补写                       |
 | 编辑重发                             | 删除该 `runId` 的 `ai_run` 与全部 message log。已写入文件与 `ai_file_change` 不回滚 |
 | 伙伴隔离                             | 只读本伙伴 log                                                                      |
 | `partial_answer`                     | 仅 UI 草稿，不参与 resume                                                           |
@@ -952,7 +942,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | `process_interrupted` | 任务已中断，可继续对话推进                   | 可空             | 进程/重启打断                                        |
 | `llm_request_failed`  | 模型请求失败                                 | **必留原文**     | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案 |
 | `output_truncated`    | 模型输出达到长度限制，可发送「继续」接着完成 | 可选             | `finish_reason=length`                               |
-| `input_too_long`      | 当前输入超过模型上下文限制，请缩短后重试     | 可空             | 当前 user alone 超窗；**不写** log user，不调 brain  |
+| `input_too_long`      | 当前输入超过模型上下文限制，请缩短后重试     | 可空             | 当前 user alone 超窗；不调 brain，日志边界见第 6.5 节 |
 | `runtime_limit`       | 已达到运行上限，可继续对话推进               | 可空             | 图递归上限                                           |
 | `internal_error`      | 运行遇到内部错误                             | **必留 detail**  | 主动断言（如 compaction bookmark `undefined`）       |
 | `unexpected_error`    | 运行失败，请重试                             | **必留**异常原文 | 未知兜底                                             |
@@ -987,7 +977,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | 应用重启                 | `process_interrupted`          | 活动 run 标记 failed；不自动调模型   |
 | 输出截断                 | `output_truncated`             | 写半截 `assistant` 后失败；可 resume |
 | 图递归上限               | `runtime_limit`                | 可 resume                            |
-| 当前 user 超窗           | `input_too_long`               | **不写** log user，不调 brain        |
+| 当前 user 超窗           | `input_too_long`               | 不调 brain；日志边界见第 6.5 节      |
 | 模型请求失败             | `llm_request_failed`           | 可 resume；详情保留原文              |
 | compaction bookmark 丢失 | `internal_error`               | **硬停**，禁止回 budget 空转         |
 | 审批拒绝                 | hand 写失败 `tool`             | 继续 dispatch / brain                |
