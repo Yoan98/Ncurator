@@ -2,6 +2,10 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type {
+  AiApprovalBatchRequest,
+  AiApprovalBatchResult
+} from '../../../../../src/main/services/ai/types'
 import { ChatRunService } from '../../../../../src/main/services/ai/ChatRunService'
 import { resolveHistoryFloor } from '../../../../../src/main/services/ai/human/memory/transcript'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
@@ -32,19 +36,39 @@ type ChatRunServicePrivate = ChatRunService & {
   queueRunEvent: (runId: string, event: AiRunEvent) => Promise<void>
   requestApprovalBatch: (
     runId: string,
+    request: AiApprovalBatchRequest
+  ) => Promise<AiApprovalBatchResult>
+  requestUserQuestion: (
+    runId: string,
     request: {
       taskId: string
-      batchId: string
-      items: Array<{ itemId: string; title: string; description: string }>
+      interactionId: string
+      toolCallId: string
+      questions: import('../../../../../src/shared/types').UserQuestion[]
     }
-  ) => Promise<
-    | {
-        accepted: true
-        decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide' }>
-      }
-    | { accepted: false; error: string }
-  >
+  ) => Promise<{ accepted: boolean }>
 }
+
+const approvalItem = (itemId: string) => ({
+  itemId,
+  order: 1,
+  toolName: 'terminal_run',
+  command: `echo ${itemId}`,
+  commandExplanation: '创建核对结果',
+  reason: '需要用户确认'
+})
+const approvalRequest = (
+  runId: string,
+  batchId: string,
+  signal?: AbortSignal
+): AiApprovalBatchRequest => ({
+  runId: `child-${batchId}`,
+  taskId: `task-${batchId}`,
+  batchId,
+  items: [approvalItem(`item-${batchId}`)],
+  abortSignal: signal,
+  source: { childRunId: `child-${batchId}`, name: batchId, parentToolCallId: `delegate-${runId}` }
+})
 
 const tempRoots: string[] = []
 const activeStorages: StorageService[] = []
@@ -64,6 +88,7 @@ const waitForCondition = async (
 const createTestService = async (options?: {
   autoStartRuns?: boolean
   onRunTerminal?: (run: AiRunRecord, status: 'completed' | 'failed' | 'cancelled') => void
+  observeEvent?: (event: AiRunEvent) => void
 }): Promise<TestService> => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'ncurator-chat-run-'))
   const workspaceRoot = path.join(root, 'workspace')
@@ -96,6 +121,7 @@ const createTestService = async (options?: {
     runResourceManager: new AiRunResourceManager(),
     broadcastEvent: (event) => {
       events.push(event)
+      options?.observeEvent?.(event)
     },
     autoStartRuns: options?.autoStartRuns ?? false,
     onRunTerminal: options?.onRunTerminal
@@ -409,7 +435,7 @@ describe('unit ai persistence backend', () => {
     expect(await internals.prepareFileChangeFinalization(run.id, true)).toBe(true)
     const payload = {
       partnerId: 'partner-1',
-      input: 'late message',
+      contentNodes: [{ kind: 'text' as const, text: 'late message' }],
       mainModel: { configId: 'mock-config', modelName: 'mock-model' }
     }
     expect((await setup.service.submit(payload)).success).toBe(false)
@@ -420,9 +446,14 @@ describe('unit ai persistence backend', () => {
     const nextInternals = nextSetup.service as ChatRunServicePrivate
     expect((await nextSetup.service.submit(payload)).queued).toBe(true)
     expect(await nextInternals.prepareFileChangeFinalization(next.id, true)).toBe(false)
-    expect((await nextSetup.service.submit({ ...payload, input: 'queued again' })).queued).toBe(
-      true
-    )
+    expect(
+      (
+        await nextSetup.service.submit({
+          ...payload,
+          contentNodes: [{ kind: 'text', text: 'queued again' }]
+        })
+      ).queued
+    ).toBe(true)
     expect(await nextInternals.prepareFileChangeFinalization(next.id, false)).toBe(true)
     expect((await nextSetup.service.submit(payload)).success).toBe(false)
   })
@@ -531,9 +562,10 @@ describe('unit ai persistence backend', () => {
     const service = setup.service as ChatRunServicePrivate
 
     const result = await service.requestApprovalBatch(run.id, {
+      runId: run.id,
       taskId: 'task-1',
       batchId: 'batch-1',
-      items: [{ itemId: 'item-1', title: '创建文件', description: '创建测试文件' }]
+      items: [approvalItem('item-1')]
     })
 
     expect(result).toEqual({
@@ -551,9 +583,10 @@ describe('unit ai persistence backend', () => {
     const run = await submitAiRun(setup)
     const service = setup.service as ChatRunServicePrivate
     const approvalPromise = service.requestApprovalBatch(run.id, {
+      runId: run.id,
       taskId: 'task-1',
       batchId: 'batch-1',
-      items: [{ itemId: 'item-1', title: '创建文件', description: '创建测试文件' }]
+      items: [approvalItem('item-1')]
     })
 
     await waitForCondition(() =>
@@ -566,6 +599,329 @@ describe('unit ai persistence backend', () => {
       decisions: [{ itemId: 'item-1', action: 'approve' }]
     })
     await expect(approvalPromise).resolves.toMatchObject({ accepted: true })
+  })
+
+  it('does-not-register-new-approval-waiters-for-a-finished-executor', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const service = setup.service as ChatRunServicePrivate
+    await service.queueRunEvent(run.id, { type: 'run_completed', runId: run.id })
+    await expect(
+      service.requestApprovalBatch(run.id, approvalRequest(run.id, 'expired'))
+    ).resolves.toMatchObject({ accepted: false })
+    expect((await setup.storage.aiRun.getRun(run.id))?.status).toBe('completed')
+    expect(setup.events.some((event) => event.type === 'approval_batch_required')).toBe(false)
+  })
+
+  it('approval-fifo-commits-decision-log-and-next-source-before-waking-executor', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const service = setup.service as ChatRunServicePrivate
+    const first = service.requestApprovalBatch(run.id, approvalRequest(run.id, 'first'))
+    const second = service.requestApprovalBatch(run.id, approvalRequest(run.id, 'second'))
+    await waitForCondition(() =>
+      setup.events.some((event) => event.type === 'approval_batch_required')
+    )
+    expect(setup.events.filter((event) => event.type === 'approval_batch_required')).toHaveLength(1)
+    const required = setup.events.find((event) => event.type === 'approval_batch_required')!
+    expect(required).toMatchObject({ source: { childRunId: 'child-first', name: 'first' } })
+    await service.queueRunEvent(run.id, {
+      type: 'subagent_updated',
+      runId: run.id,
+      createdAt: Date.now(),
+      update: {
+        toolCallId: 'delegate',
+        childRunId: 'other',
+        name: '其他',
+        task: '独立任务',
+        status: 'running'
+      }
+    })
+    expect((await setup.storage.aiRun.getRun(run.id))?.status).toBe('waiting_approval')
+    const response = await setup.service.decideApprovalBatch({
+      runId: run.id,
+      batchId: 'first',
+      decisions: [{ itemId: 'item-first', action: 'approve' }]
+    })
+    expect(response.success).toBe(true)
+    await expect(first).resolves.toMatchObject({
+      accepted: true,
+      decisions: [{ action: 'approve' }]
+    })
+    const stored = await setup.storage.aiRun.getRun(run.id)
+    expect(stored).toMatchObject({
+      status: 'waiting_approval',
+      pendingApproval: { batchId: 'second', source: { childRunId: 'child-second' } }
+    })
+    expect(stored?.pendingInteraction).toMatchObject({ source: { childRunId: 'child-second' } })
+    const logs = await setup.storage.chatMessageLog.listByRun(run.id)
+    expect(
+      logs.find(
+        (record) =>
+          record.entry.kind === 'annotation' && record.entry.eventType === 'approval_decided'
+      )?.entry
+    ).toMatchObject({ payload: { batchId: 'first', source: { name: 'first' } } })
+    expect(
+      (await setup.service.getPartnerSnapshot('partner-1')).activeRuns[0].pendingApproval
+    ).toMatchObject({ source: { childRunId: 'child-second' } })
+    expect(
+      (
+        await setup.service.decideApprovalBatch({
+          runId: run.id,
+          batchId: 'first',
+          decisions: [{ itemId: 'item-first', action: 'approve' }]
+        })
+      ).success
+    ).toBe(false)
+    expect(
+      (
+        await setup.service.decideApprovalBatch({
+          runId: run.id,
+          batchId: 'second',
+          decisions: [{ itemId: 'item-first', action: 'approve' }]
+        })
+      ).success
+    ).toBe(false)
+    expect(
+      (
+        await setup.service.decideApprovalBatch({
+          runId: run.id,
+          batchId: 'second',
+          decisions: [{ itemId: 'item-second', action: 'guide', message: '改为只读取' }]
+        })
+      ).success
+    ).toBe(true)
+    await expect(second).resolves.toMatchObject({
+      accepted: true,
+      decisions: [{ action: 'guide' }]
+    })
+    expect((await setup.storage.aiRun.getRun(run.id))?.pendingApproval).toBeUndefined()
+  })
+
+  it('approval-failed-transaction-retains-card-and-waiter-for-retry', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const service = setup.service as ChatRunServicePrivate
+    let woke = false
+    const first = service
+      .requestApprovalBatch(run.id, approvalRequest(run.id, 'retry'))
+      .then((value) => {
+        woke = true
+        return value
+      })
+    await waitForCondition(() =>
+      setup.events.some((event) => event.type === 'approval_batch_required')
+    )
+    // Inject a real SQLite constraint failure inside the decision transaction.
+    const sqlite = (
+      setup.storage.aiRun as object as {
+        sqlite: import('../../../../../src/main/services/storage/sqlite/SqliteCore').SqliteCore
+      }
+    ).sqlite
+    sqlite
+      .prepare(
+        `CREATE TRIGGER fail_approval_decision BEFORE UPDATE ON ai_run BEGIN SELECT RAISE(ABORT, 'approval write failed'); END`
+      )
+      .run()
+    const decision = {
+      runId: run.id,
+      batchId: 'retry',
+      decisions: [{ itemId: 'item-retry', action: 'approve' as const }]
+    }
+    expect((await setup.service.decideApprovalBatch(decision)).success).toBe(false)
+    expect(woke).toBe(false)
+    expect((await setup.storage.aiRun.getRun(run.id))?.pendingApproval?.batchId).toBe('retry')
+    expect(
+      (await setup.storage.chatMessageLog.listByRun(run.id)).some(
+        (record) =>
+          record.entry.kind === 'annotation' && record.entry.eventType === 'approval_decided'
+      )
+    ).toBe(false)
+    sqlite.prepare('DROP TRIGGER fail_approval_decision').run()
+    expect((await setup.service.decideApprovalBatch(decision)).success).toBe(true)
+    await expect(first).resolves.toMatchObject({ accepted: true })
+  })
+
+  it('approval-rejects-a-persisted-source-that-no-longer-matches-executor', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const internal = setup.service as ChatRunServicePrivate
+    const waiting = internal.requestApprovalBatch(run.id, approvalRequest(run.id, 'source'))
+    await waitForCondition(() =>
+      setup.events.some((event) => event.type === 'approval_batch_required')
+    )
+    const saved = (await setup.storage.aiRun.getRun(run.id))!
+    await setup.storage.aiRun.saveRun({
+      ...saved,
+      pendingApproval: {
+        ...saved.pendingApproval!,
+        source: { ...saved.pendingApproval!.source!, childRunId: 'wrong-executor' }
+      }
+    })
+    expect(
+      (
+        await setup.service.decideApprovalBatch({
+          runId: run.id,
+          batchId: 'source',
+          decisions: [{ itemId: 'item-source', action: 'approve' }]
+        })
+      ).success
+    ).toBe(false)
+    await setup.service.cancelRun(run.id)
+    await expect(waiting).resolves.toMatchObject({ accepted: false })
+  })
+
+  it('approval-question-order-cancellation-and-registration-races', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const service = setup.service as ChatRunServicePrivate
+    const question = service.requestUserQuestion(run.id, {
+      taskId: 'question-task',
+      interactionId: 'question',
+      toolCallId: 'question-tool',
+      questions: [
+        {
+          id: 'q',
+          question: '选择输入',
+          multiSelect: false,
+          options: [{ id: 'a', label: '选项', description: '使用此输入' }]
+        }
+      ]
+    })
+    const hiddenController = new AbortController()
+    const hidden = service.requestApprovalBatch(
+      run.id,
+      approvalRequest(run.id, 'hidden-behind-question', hiddenController.signal)
+    )
+    await waitForCondition(
+      async () => (await setup.storage.aiRun.getRun(run.id))?.status === 'waiting_approval'
+    )
+    expect((await setup.storage.aiRun.getRun(run.id))?.pendingInteraction?.kind).toBe('question')
+    expect((await setup.storage.aiRun.getRun(run.id))?.pendingApproval).toBeUndefined()
+    hiddenController.abort()
+    await expect(hidden).resolves.toMatchObject({ accepted: false })
+    expect((await setup.storage.aiRun.getRun(run.id))?.status).toBe('waiting_human')
+    const controller = new AbortController()
+    const first = service.requestApprovalBatch(
+      run.id,
+      approvalRequest(run.id, 'cancel', controller.signal)
+    )
+    const second = service.requestApprovalBatch(run.id, approvalRequest(run.id, 'next'))
+    await waitForCondition(
+      async () => (await setup.storage.aiRun.getRun(run.id))?.status === 'waiting_approval'
+    )
+    expect(setup.events.some((event) => event.type === 'approval_batch_required')).toBe(false)
+    expect(
+      (
+        await setup.service.submitHumanInteraction({
+          runId: run.id,
+          interactionId: 'question',
+          answers: { answers: [{ questionId: 'q', selectedOptionIds: ['a'] }] }
+        })
+      ).success
+    ).toBe(true)
+    await question
+    expect((await setup.storage.aiRun.getRun(run.id))?.pendingApproval?.batchId).toBe('cancel')
+    controller.abort()
+    await expect(first).resolves.toMatchObject({ accepted: false })
+    await waitForCondition(
+      async () => (await setup.storage.aiRun.getRun(run.id))?.pendingApproval?.batchId === 'next'
+    )
+    const immediatelyCancelled = new AbortController()
+    const third = service.requestApprovalBatch(
+      run.id,
+      approvalRequest(run.id, 'race', immediatelyCancelled.signal)
+    )
+    immediatelyCancelled.abort()
+    await expect(third).resolves.toMatchObject({ accepted: false })
+    expect(
+      setup.events.some(
+        (event) => event.type === 'approval_batch_required' && event.batchId === 'race'
+      )
+    ).toBe(false)
+    expect((await setup.service.cancelRun(run.id)).success).toBe(true)
+    await expect(second).resolves.toMatchObject({ accepted: false })
+    expect((await setup.storage.aiRun.getRun(run.id))?.pendingApproval).toBeUndefined()
+    expect(
+      (
+        await setup.service.decideApprovalBatch({
+          runId: run.id,
+          batchId: 'next',
+          decisions: [{ itemId: 'item-next', action: 'approve' }]
+        })
+      ).success
+    ).toBe(false)
+  })
+
+  it('accepts-an-immediate-decision-from-the-approval-publication-callback', async () => {
+    let submitted: ReturnType<ChatRunService['decideApprovalBatch']> | undefined
+    const setup = await createTestService({
+      observeEvent: (event) => {
+        if (event.type !== 'approval_batch_required') return
+        submitted = setup.service.decideApprovalBatch({
+          runId: event.runId,
+          batchId: event.batchId,
+          decisions: event.items.map((item) => ({ itemId: item.itemId, action: 'approve' }))
+        })
+      }
+    })
+    const run = await submitAiRun(setup)
+    const waiting = (setup.service as ChatRunServicePrivate).requestApprovalBatch(
+      run.id,
+      approvalRequest(run.id, 'immediate')
+    )
+    await expect(waiting).resolves.toMatchObject({ accepted: true })
+    await expect(submitted).resolves.toMatchObject({ success: true })
+  })
+
+  it('approval-waiter-is-registered-before-publish-and-isolated-by-partner', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const otherPartner = {
+      ...(await seedPartner(setup.storage)),
+      id: 'partner-2',
+      name: '另一个伙伴'
+    }
+    await setup.storage.partner.savePartner(otherPartner)
+    const other = await setup.service.submit({
+      partnerId: otherPartner.id,
+      contentNodes: [{ kind: 'text', text: '另一个任务' }],
+      executionPermission: 'review',
+      mainModel: { configId: 'mock-config', modelName: 'mock-model' }
+    })
+    const service = setup.service as ChatRunServicePrivate
+    const first = service.requestApprovalBatch(run.id, approvalRequest(run.id, 'own'))
+    const second = service.requestApprovalBatch(
+      other.run!.id,
+      approvalRequest(other.run!.id, 'other')
+    )
+    await waitForCondition(
+      () => setup.events.filter((event) => event.type === 'approval_batch_required').length === 2
+    )
+    expect(
+      (
+        await setup.service.decideApprovalBatch({
+          runId: other.run!.id,
+          batchId: 'own',
+          decisions: [{ itemId: 'item-own', action: 'approve' }]
+        })
+      ).success
+    ).toBe(false)
+    const decision = setup.service.decideApprovalBatch({
+      runId: run.id,
+      batchId: 'own',
+      decisions: [{ itemId: 'item-own', action: 'reject' }]
+    })
+    expect((await decision).success).toBe(true)
+    await expect(first).resolves.toMatchObject({
+      accepted: true,
+      decisions: [{ action: 'reject' }]
+    })
+    expect((await setup.storage.aiRun.getRun(other.run!.id))?.pendingApproval?.batchId).toBe(
+      'other'
+    )
+    await setup.service.cancelRun(other.run!.id)
+    await expect(second).resolves.toMatchObject({ accepted: false })
   })
 
   it('run-events-update-assistant-message-and-run', async () => {

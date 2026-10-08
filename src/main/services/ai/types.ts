@@ -20,6 +20,7 @@ import type { z } from 'zod/v4'
 import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
+  AiApprovalSource,
   AskUserQuestionInput,
   AskUserQuestionResult,
   AiLlmIoRecord,
@@ -100,6 +101,8 @@ export type AiApprovalBatchRequest = {
   taskId: string
   batchId: string
   items: AiApprovalBatchItem[]
+  source?: AiApprovalSource
+  abortSignal?: AbortSignal
   internal?: boolean
   stage?: AiRunEventStage
 }

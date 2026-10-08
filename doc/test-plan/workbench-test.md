@@ -4,17 +4,6 @@
 
 `result/apply` E2E 覆盖四类文件正式 A→B 后外部修改为 C：审核始终展示 A→B，预览展示 C；删除临时工作快照后仍可审核及展开文本未变行。审核只消费长期产物，缺失、损坏、不支持时明确报错，不回退到当前文件。Excel 空白样式、行高列宽及合并区域保留；PPT 备注只显示修改标记。完成、失败、取消后展示已保存变化；强制撤销和两轮回退恢复原始字节。
 
-## 一次性子任务专项
-
-#### `subagent-delegation-browser-sidecar`
-
-- 测试类型：e2e / live；suite `run`，group `subagent`；serviceMode `real`。
-- What：一个 case 分四阶段验证并行网页任务与 sidecar、竖排头像列表与最新消息悬浮云、统一回退、停止、异常退出后的续聊。
-- Why：覆盖共享浏览器/sidecar、背景 UI 和临时实例生命周期之间的真实交互风险。
-- How：全部配置和产品动作走 UI，通过 UI 选择完全访问；专项关闭 harness 的 localhost HTTP 快路，确保 JS 页面走真实 sidecar。一次派发三个任务以覆盖灰色排队行和「我在排队」，两个子任务在同 URL 独立标签提交不同内容，保留各自表单页面，并通过网页资料工具读取真实 JS 渲染页面，其中一项同时做真实搜索；悬浮和键盘聚焦子任务、检查竖排布局、头像动画、最新一条真实流式消息、请求尾部呼吸黑球、换行和隐藏滚动条及自动滚底，移开后关闭；预先选中文本资源，子任务期间折叠面板并切伙伴，等待目标伙伴的实际内容恢复后核对折叠状态和选中资源不变；主修改入口回退；真实待加载页面用于停止和进程中断阶段，两阶段明确要求不同的独立文件和内容；中断前先核对实际文件 bytes，不以子任务完成文案替代落盘证据。测试 harness 杀死自己的真实应用进程，以同 userData 重启。网页是实际输入；observer/只读 IPC/日志只取证，不替代产品输出或写状态；不增加生产故障开关。
-- Oracle：覆盖 `WB-SUBAGENT-001` 全部验收项；标签不串，sidecar 搜索和抓取成功且串行，子 ToolMessage 必须包含实际 JS 渲染正文而非脚本源码；背景任务不抢选择/面板；竖排子任务只有头像、名称；排队置灰且无动画，运行头像动画、完成停止；云面最大 220×96px，仅有最新消息，执行过程使用公开文本，完成展示实际最终结果，长文本换行不省略、自动滚底、滚动条隐藏；真实模型请求期间有呼吸黑球，工具执行及终态没有黑球，无独立伙伴与修改入口；主回退正确；停止后子资源清理且已保存文件保留；重启已完成结果保留、未完成显示中断，用户续聊创建新子实例。
-- 最新验证：2026-09-30 源码真实 E2E（qwen3.8-flash）四阶段全部通过，耗时 637s；raw logs：`tests/logs/workbench/run/subagent/subagent-delegation-browser-sidecar/20260930-224752-456`。三项一次派发、独立标签、真实 JS 抓取/搜索、悬浮流式云及排队/完成态、背景切换、主修改回退、停止清理、异常退出保留与新子实例续聊均通过。人工完成度评分 92/100：事实与文件落盘正确，来源和中断边界说明完整；主伙伴重复复核较多、交接篇幅偏长扣分。74 次模型调用，输入/输出 931,845 / 33,247 token，缓存读 840,192（90.2%）；这是本次调用统计，不作为子任务必然节省 token 的证明。
-
 ## 1. 总体目标
 
 - 本计划定义 Workbench 用户可见交互的测试范围，并对齐 [workbench.md](../prd/workbench.md) 的 `WB-*` 需求和验收编号。
@@ -327,13 +316,31 @@ pnpm test:update:e2e
 #### `docx-selection-reference`
 
 - 测试类型：`e2e / live`；suite `conversation`，group `composer`。
-- What：真实 DOCX 选区、浮层、混合正文、双向同步、定位与草稿生命周期。
+- What：真实 DOCX 选区、AI 编辑入口与紧凑输入条、紫色高亮与编号避让、混合正文、双向同步、定位与草稿生命周期。
 - Why：确保原文准确，引用与想法关联，两侧使用同一内容。
-- How：通过鼠标选取跨段落及单元格文字，保存、双向编辑、跳转和删除；切换伙伴和文件，实际发送后重新编辑历史消息，再刷新 Renderer 检查持久化草稿。
-- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-001-AC1` 的跨段落/单元格原文与跨单元格拒绝，`AC2` 的空内容禁用、Enter 保存和 Esc 关闭，`AC3` 的两侧编辑同步，`AC4` 的定位、重复/重叠选区、删除和编号递增，`AC5` 的伙伴隔离及内存/持久化边界，`AC6` 的接受后清理和历史编辑。刷新后选区消失，普通文字与 @ 引用保留。
-- 待覆盖：页眉页脚/文本框拒绝、Shift+Enter 与 IME、点击外部放弃改动、想法内 @ 混排、关闭资源 Tab、应用进程重启及附件恢复、外部原文变化后的定位提示、提交期间锁定、提交失败保留、排队成功清理及历史复制。
+- How：通过鼠标选取跨段落及单元格文字，确认先展示 AI 编辑再点击打开输入条；滚动到预览底部检查浮层翻转，缩放后核对浮层边界和未保存输入，读取浏览器高亮和编号与文字的实际矩形；保存、双向编辑、跳转和删除；切换伙伴和文件，实际发送后重新编辑历史消息，再刷新 Renderer 检查持久化草稿。
+- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-001-AC1` 的跨段落/单元格原文与跨单元格拒绝，`WB-DOCUMENT-REFERENCE-001-AC2` 的两阶段入口、输入后保留紫色高亮、浮层边界/翻转/滚动/缩放、空内容禁用、Enter 保存、Shift+Enter 换行和 Esc/外部点击关闭，`WB-DOCUMENT-REFERENCE-001-AC3` 的图标编号胶囊和两侧编辑同步，`WB-DOCUMENT-REFERENCE-001-AC4` 的末行编号不遮字、定位、重复/重叠选区、删除和编号递增，`WB-DOCUMENT-REFERENCE-001-AC5` 的伙伴隔离及内存/持久化边界，`WB-DOCUMENT-REFERENCE-001-AC6` 的接受后清理和历史编辑。刷新后选区消失，普通文字与 @ 引用保留。
+- 待覆盖：页眉页脚/文本框拒绝、IME、想法内 @ 混排、关闭资源 Tab、应用进程重启及附件恢复、外部原文变化后的定位提示、提交期间锁定、提交失败保留、排队成功清理及历史复制。
 
 ### 5.2 `run`
+
+#### `subagent-delegation-browser-sidecar`
+
+- 测试类型：e2e / live；suite `run`，group `subagent`；serviceMode `real`。
+- What：并行浏览器与 sidecar、子任务头像和悬浮云、主文件回退，以及运行停止与崩溃续聊。
+- Why：覆盖独立标签、共享 sidecar、背景 UI 和临时实例资源之间的真实交互风险。
+- How：真实 UI 配置模型和完全访问权限、发送、切伙伴、悬浮及回退。三项任务分别提交独立表单、读取 JS 资料和真实搜索；另以独立伙伴分别运行停止、崩溃阶段，保存文件的子任务完成时中断另一个待加载网页，再续聊创建新实例。真实网站为输入，禁用 localhost 抓取快路；observer、只读 IPC 和原生视图检查只取证；harness 仅终止自身应用进程并以同 userData 重启。
+- Oracle：对齐 `WB-SUBAGENT-001-AC1`、`WB-SUBAGENT-001-AC2`、`WB-SUBAGENT-001-AC3`、`WB-SUBAGENT-001-AC4`、`WB-SUBAGENT-001-AC5`、`WB-SUBAGENT-001-AC6`、`WB-SUBAGENT-001-AC7`。标签和页面结果不串；后台视图隐藏、viewport 有效、真实截图有效且不遮挡界面；sidecar 完成 JS 抓取与搜索；切换和折叠不抢选择。竖排头像/名称、排队灰态、运行及完成头像状态、最新消息流式云与黑球、隐藏滚动条和自动滚底符合 PRD。修改归主回答且真实 UI 回退恢复磁盘。停止释放控制并保留文件；重启保留完成记录、未完成投影中断；续聊创建新实例并使用新的网页输入。
+- 最新验证：2026-10-08 真实 qwen3.8-flash 三阶段全部通过，耗时 1168s；raw logs：`tests/logs/workbench/run/subagent/subagent-delegation-browser-sidecar/20261008-163711-106`。独立表单提交、JS 资料与真实搜索、后台视图/截图、悬浮云、主修改回退、加载中停止、崩溃重启及新实例续聊均通过。人工完成度 90/100：事实和磁盘交付准确；反复核对与报告篇幅使耗时偏高。主 31 次调用，输入/输出 391,531 / 16,943 token；子 67 次调用，输入/输出 528,108 / 24,154 token；缓存读 754,944（82.1%）。
+
+#### `subagent-approval-flow`
+
+- 测试类型：e2e / live；suite `run`，group `subagent`；serviceMode `real`。
+- What：子任务共用人工审批的来源、FIFO、允许/拒绝/指导、同实例继续，以及等待中的停止与恢复。
+- Why：验证决定返回正确执行者、落盘前无副作用、界面恢复和旧审批失效。
+- How：真实 UI 配置审核权限；各阶段建立独立伙伴和临时文件范围，分别派发两项清理请求。输入明确尚未确认可删除范围、尚未授权删除，候选操作须用户在操作审核卡决定，不附带与候选操作冲突的保留要求。经真实模型与审核进入两项等待后，通过 UI 允许/拒绝、指导/拒绝、切伙伴及刷新；另覆盖等待时停止和异常退出，续聊用新子实例创建文本报告。harness 保留刷新前真实事件/I/O，只读 IPC 取当前批次；模型、审核和审批结果均不注入。自动审核、规则直通、完全访问及异常转人工分支由 AI 回归覆盖。
+- Oracle：对齐 `WB-SUBAGENT-001-AC8`、`WB-SUBAGENT-001-AC9`，以及 `WB-SUBAGENT-001-AC2` 的审批等待态。仅一个可操作批次，来源及指导 placeholder 准确；两项等待时主状态保持 waiting_approval，头像静止、云为「等待你审核操作」且无黑球。决定前目录未删除；允许后原 childRunId 继续、命令只执行一次，拒绝/指导不执行原命令；下一批不串来源并清空草稿。切换/刷新保留当前批次；停止清除等待、未执行命令且保留先前文件；重启旧审批失效、子任务中断，续聊创建新实例。同步回归主审批 `approval-batch-flow` 和 `stop-running-or-approval-run`。
+- 最新验证：2026-10-08 真实 qwen3.8-flash 未通过，耗时 104s；raw logs：`tests/logs/workbench/run/subagent/subagent-approval-flow/20261008-163302-664`。模型只读检查后返回候选说明，没有提交清理工具调用，未进入人工审批；目录未删除，先前文本文件已保存。审批 UI 阶段尚未验证，验收完成度 0/100。
 
 #### `ai-process-stream-and-final-answer`
 
@@ -403,6 +410,8 @@ pnpm test:update:e2e
 - Oracle：只读轮至少有一个 `terminal_step_started`，没有 `human.terminal_review` 调用、审批事件或审批卡，且 workspace 文件树和文件内容前后相同。创建轮的真实审核输出必须对实际 terminal command 返回 `auto_approve` 与非空 reason；无审批事件/卡片，终端确实执行且命名目录存在。三个删除轮都必须有完成态 `human.terminal_review` 输出，decision 为 `needs_human_review`、reason 非空；decision 的 `commandId` 与审批项 `itemId` 对应，审批项命令与该轮要求执行的命令一致（Windows 可由 `powershell -NoProfile -Command` 透明包装，但命令体须逐字一致），并真实出现审批卡。卡片等待态及布局对齐 `WB-BLOCKER-001-AC1`、`WB-BLOCKER-001-AC2`、`WB-BLOCKER-001-AC3`、`WB-BLOCKER-001-AC4`、`WB-BLOCKER-001-AC6`。同意轮记录 `approve` 并执行待审命令，目标临时目录被删除且其余 workspace 文件树不变；拒绝轮记录 `reject`，待审删除命令未启动或执行（允许审批前只读核验），两份文件及内容保持原样；指导轮记录 `guide`、run 正常完成、没有执行删除命令，两份文件及内容保持原样，刷新后 Activity 中仍显示指导结果，对齐 `WB-BLOCKER-001-AC7`。审批决定文字须与实际 UI 动作相符。只读查询对齐 `WB-BLOCKER-001-AC13`；自动通过、人工决策后的影响范围和完全访问边界共同覆盖 `WB-BLOCKER-001-AC5`、`WB-BLOCKER-001-AC14`。AI backend case `hand-terminal-approval-batch`、`hand-terminal-ai-review-auto-approve`、`hand-terminal-ai-review-failure`、`hand-terminal-ai-review-incomplete` 继续覆盖稳定分类与失败回退契约。完全访问轮真实创建目标文件且没有审核调用、审批事件或审批卡片。记录模型、耗时、完成度评分和失败归因。
 - Oracle：在发送前安装只读 DOM 观察记录 `正在审核终端命令` 是否出现；审核期间尚无 `terminal_step_started`；从审核到执行 / 人工等待 / 拒绝，同一命令只对应一个 Activity 工具项且只计一次，对齐 `WB-BLOCKER-001-AC15`。AI 自动通过和转人工结果、人工同意/拒绝/指导结果均显示在命令项下带内嵌竖线的审核结果区域；审核区域只对 AI / 人工审核产生，不展示内部 reason。审核期间流光动效只在 Activity header，展开后的命令行没有流光动效。刷新后过程与审核结论从持久化日志恢复，拒绝或指导显示「命令未执行」，不显示为工具执行失败。Activity header 在成功、失败和部分失败状态下均保持中性灰色层级（流光期间可使用正文色），展开后的失败工具行保留红色提示，对齐 `WB-COMPOSER-009-AC16`。
 
+- 最新验证：2026-10-08 真实 qwen3.8-flash 六轮通过，耗时 178s；raw logs：`tests/logs/workbench/run/blocker/approval-batch-flow/20261008-163711-107`。只读直通、AI 自动放行、人工允许/拒绝/指导、刷新恢复和完全访问均通过；人工完成度 96/100，决定后执行与文件范围符合预期，个别说明偏长扣分。
+
 #### `stop-running-or-approval-run`
 
 - 测试类型：`e2e`
@@ -410,6 +419,8 @@ pnpm test:update:e2e
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
 - How：E2E 发送真实长任务；随后在隔离 workspace 中准备 `cache.tmp` 和 `keep.txt`，要求原样运行会删除整个目录的完整命令，同时明确目标只删除 `cache.tmp` 并保留 `keep.txt`。使用真实模型和 UI，不注入审核结果；发送前安装只读 DOM 观察审核期间 header 与命令项的流光状态。若模型通过提问卡澄清范围，E2E 通过真实卡片选择原样执行。只有收到当前 run 的 `approval_batch_required` 且审批卡可见后才点击停止；命令未进入审批等待或 run 已结束时立即以事件证据失败，不继续等待一个永远不会出现的审批卡。
 - Oracle：运行中停止入口和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中唯一主按钮转圈且禁用，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`；取消后用时停止递增、过程默认收起且仍可展开，对齐 `WB-COMPOSER-016-AC2`；审批等待时普通输入框和 Composer 主按钮均不存在，且不显示「需要你的协助」，对齐 `WB-COMPOSER-017-AC4`、`WB-SESSION-014-AC1`。真实审核期间 Activity header 有流光，展开命令项没有流光；取消审批 run 后清除等待卡和运行态，待审删除命令没有 `terminal_step_started`，`cache.tmp` 与 `keep.txt` 均原样保留，对齐 `WB-BLOCKER-001-AC10`。
+
+- 最新验证：2026-10-08 真实 qwen3.8-flash 通过，耗时 61s；raw logs：`tests/logs/workbench/run/blocker/stop-running-or-approval-run/20261008-163711-106`。普通任务和审批等待停止均收口，待审删除未执行、文件保持原样；人工完成度 100/100。
 
 #### `interrupted-task-resume-flow`
 
@@ -651,7 +662,9 @@ pnpm test:update:e2e
 - What：模糊任务触发 AI 提问，提问卡与审批卡的左上标题直接展示当前问题或当前操作说明，右上当前项数量位于左右箭头前；等待时普通 Composer 与其主按钮均不存在，不能排队。提问卡每题只接受 2 至 4 个 AI 选项，以圆形/方形控件区分单选/多选但不展示类型文字 Tag，显示推荐 Tag，用户完成 A/B/C/D、其他输入和多问题切换，普通单选自动跳到下一题；回答前不显示写入结果，提交后 run 恢复；同一回复包含多个提问时逐张展示，后一张不继承前一张状态，全部回答后才继续 AI。
 - Why：问题和答案是任务定义的一部分，必须在真实 UI 中可操作、可恢复、可追溯，不能只在 IPC 或 backend 日志中存在。
 - How：通过真实 Workbench UI 发送存在结果歧义的任务，等待 `human_interaction_required`；按实际返回的 1 至 3 个问题检查 A/B/C/D、其他输入和 pending 卡片，刷新后继续选择自定义答案并提交；若同一 run 再次产生 `human_interaction_required`，继续完成该 interaction；最终展开 Activity 检查问答投影。审批展示由 `approval-batch-flow` 同时覆盖。
-- Oracle：composer 上方出现统一交互卡片，普通输入框与 Composer 发送按钮数量都为 0；交互卡的独立停止按钮可用。左上标题直接显示当前问题或当前操作说明，右上操作区按「问题/审批 1 / N」、左右箭头、停止按钮的顺序排列，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停按钮，对齐 `WB-BLOCKER-001-AC9`、`WB-COMPOSER-017-AC4`；每题 2 至 4 个 AI 选项、单选/多选控件、无类型文字 Tag、推荐 Tag 和自动跳题对齐 `WB-BLOCKER-001-AC11`；刷新后 pending 问题可恢复；新的 interaction 从首题和空选择开始；提交前无写入；连续提问全部提交后 run 恢复并完成，对齐 `WB-BLOCKER-001-AC12`；Activity 对应工具行下显示问题与答案，AI / 人工审核结果显示在对应工具项的内嵌层级，无审核时不出现审核结果区域；不使用旧图标前缀或 hover 替换工具文案。等待回答时侧栏显示「需要你的协助」标签，刷新后仍显示，run 完成后消失；审批等待不显示该标签，对齐 `WB-SESSION-014`。
+- Oracle：composer 上方出现统一交互卡片，普通输入框与 Composer 发送按钮数量都为 0；交互卡的独立停止按钮可用。左上标题直接显示当前问题或当前操作说明，右上操作区按「问题/审批 1 / N」、左右箭头、停止按钮的顺序排列，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停按钮，对齐 `WB-BLOCKER-001-AC9`、`WB-COMPOSER-017-AC4`；每题 2 至 4 个 AI 选项、单选/多选控件、无类型文字 Tag、推荐 Tag 和自动跳题对齐 `WB-BLOCKER-001-AC11`；刷新后 pending 问题可恢复；新的 interaction 从首题和空选择开始；提交前无写入；连续提问全部提交后 run 恢复并完成，对齐 `WB-BLOCKER-001-AC12`；Activity 对应工具行下显示问题与答案，AI / 人工审核结果显示在对应工具项的内嵌层级，无审核时不出现审核结果区域；不使用旧图标前缀或 hover 替换工具文案。等待回答时侧栏显示「需要你的协助」标签，刷新后仍显示，run 完成后消失；仅等待审批而无待答问题时不显示该标签，对齐 `WB-SESSION-014`。
+
+- 最新验证：2026-10-08 源码真实 E2E（qwen3.8-flash）通过，126s；raw logs：`tests/logs/workbench/run/blocker/human-interaction-question-card/20261008-130513-897`。切伙伴及刷新恢复问题与协助提示、提交后继续并完成文件修改，原始问题及 I/O 记录完整保留。人工完成度评分 96/100：用户选择落实、布局与恢复符合 Oracle；交付解释偏长。
 
 ### 5.4 `scheduled-task`
 

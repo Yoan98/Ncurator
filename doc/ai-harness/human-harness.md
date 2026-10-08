@@ -4,20 +4,6 @@ human graph 的消息与上下文设计约束。修改 `src/main/services/ai/hum
 
 ---
 
-## 一次性子运行
-
-主子运行均调用 `AiRunService.run` 和相同 human graph。`runId` 标识执行实例，`ownerRunId` 标识持久数据与文件产物归属；子运行带父派发 `toolCallId`，不创建 `ai_run` 或伙伴行。派发任务数不设上限；父运行 FIFO 队列默认同时执行两个实例（由 `SUBAGENT_EXECUTION_CONCURRENCY` 控制），排队时只分配任务标识、持久化排队状态，轮到后再创建内存 transcript 和运行资源，不增加另一套 graph/模型循环。
-
-`AiTranscript` 提供相同 append/load 契约：主运行读写 SQLite，子运行读写独立内存记录（独立 seq、计划、技能、compaction checkpoint）。相同投影/预算/压缩入口消费两种适配。子完整日志随实例释放；名称、ID 和任务放在派发输入/事件，不改变固定 System。模型配置在派发时继承父运行已解析快照；工具顺序保持稳定，缓存命中仍由供应商决定。
-
-子运行只向父侧持久化 `subagent_updated` annotation：名字、任务、状态、工具行动与有界结果。行动文本优先复用该轮工具调用附带的公开 assistant 文本；无附带说明时复用公共工具过程文案，不生成新的模型摘要。Main 与 Renderer 共用工具过程文案映射，只保存最终可读文本而不保存子完整工具入参；最终交付保存在子终态结果并在小云展示。公开 brain 文本通过独立 `subagent_stream` 事件流式投递，只更新对应子展示态，不逐片段落盘；完整公开消息在轮结束时保存 annotation。公共 LLM 执行链每次实际请求（包括重试）发布请求开始/结束状态，子侧汇集为实时呼吸圆球状态，重试等待时隐藏。回答流、thinking、skill、plan、compaction 和子终态不直接投递到父状态。annotation 不参与模型上下文；所有子任务收口后通过一条父 ToolMessage 投递结果。子 I/O 保持实际 runId，并记录 ownerRunId / parentToolCallId 供诊断关联。
-
-子任务禁用派发、提问和定时任务管理，策略同时用于工具目录/绑定及执行入口；人工审批需求直接交回主伙伴。子实例 finally 释放 worker、浏览器控制、终端与文件会话锁，不能删除已持久化的产物。相同路径的文档工作态在同一执行者内排他持有；跨执行冲突明确交回串行处理，避免持有多个文件时相互等待。
-
-悬空派发调用修复只发生在模型投影：已持久化子终态/结果保持原样，其余补「执行被中断，未收到完整结果」。不写虚构 tool 行、不自动重派。UI 从同一主日志恢复卡片，对终态主 run 下未结束（排队或执行中）的子卡片显示中断，清除瞬时请求状态。
-
-派发前主运行释放已提交的文档工作会话及文件租约，返回后重新读取最新文件；子运行之间仍保持排他租约，冲突交回主伙伴串行处理。
-
 ## 1. Graph 流转
 
 human graph 是单次 AI run 的 LangGraph 编排；**每轮调主模型前必过 `context_budget`**。节点只通过 `AiRunContext.appendMessageLog` 写 transcript，通过 `HumanRuntimeCache.messages` 维护 brain 侧运行时消息序。
@@ -107,6 +93,16 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 - 安全交接时较早的追加消息以 `context_only` run 和 user log 落库，最后一条由续接 run 写入。运行正常结束时自动启动续接；停止、失败和应用重启恢复时只把待处理消息转成普通 user log，不自动调用模型。
 - 停止若发生在工具调用中途，已落库结果保持原样。`repairInterruptedToolCalls` 只在模型上下文投影中为没有结果的悬空调用补充合成 ToolMessage（“The run was interrupted before this tool call could be executed.”）；不会写成真实工具失败记录。
 
+### 1.7 一次性子运行
+
+- **执行**：共用 `AiRunService.run`、human graph 和工具链；继承父配置，独立上下文。任务数不限，`SUBAGENT_EXECUTION_CONCURRENCY` 默认 2，其余 FIFO 排队，轮到才创建实例。工具目录、绑定与入口均禁止再次派发、提问及定时任务管理。
+- **转录**：`AiTranscript` 的 SQLite / 内存适配共用投影、预算和压缩。`runId` 标识实例，`ownerRunId` 归属主运行，`parentToolCallId` 关联派发；不建子运行或伙伴行。子完整转录结束释放，父 annotation 保留状态、公开行动、完整公开消息和有界结果，不进主模型；全部收口后返回一条 ToolMessage。流式事件仅更新展示态，子过程和终态不改变父状态；I/O 保留父子关联。
+- **审批**：共用 hand 的规则检查和 AI 审核，输入为当前执行者的任务。主任务内 FIFO、一次一个批次，已有问题优先；有待审批时父状态为 `waiting_approval`。先登记等待器再发布；决定、关联日志及下一批快照同事务提交后恢复原 hand。等待保留实例并占名额，不调用模型；拒绝/指导跳过原操作。当前批次存主 `ai_run`，队列和等待器留 Main；取消不伪造用户决定。
+- **文件**：派发前释放父已提交文档会话，返回后重读；跨执行租约互斥，冲突交回父运行。修改和产物从产生时归主运行。
+- **结束与恢复**：finally 释放上下文及执行资源，保留落盘产物。Renderer 刷新恢复当前审批；应用重启不恢复子实例或旧审批，未完成状态投影为中断。悬空派发只在模型投影补中断反馈，保留真实结果，不写虚构 tool 行、不自动重派。
+
+名称、执行 ID 和时间不进入固定 System，消息只追加、工具排序稳定；供应商缓存按实际 I/O 记录。
+
 ---
 
 ## 2. 数据源
@@ -156,6 +152,9 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `compaction_checkpoint`                   | `{ compactBlockId, throughSeq, sourceMessageCount, summary }`                                                             | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User                                                                           |
 | `finalizing_started`                      | `{}`                                                                                                                      | 投影时**清空** plan                                                                                                                                                         |
 | `human_interaction_resolved`              | `{ interactionId, kind, result }`                                                                                         | UI Activity：在对应工具行下按顺序展示问题与答案                                                                                                                             |
+| `approval_requested` | `{ batchId, taskId, source?, items }` | 主日志内审批来源和原操作；不参与主模型上下文，不生成主工具项 |
+| `approval_decided` | `{ batchId, taskId, source?, decisions }` | 用户决定与下一批快照同事务提交；按批次关联原请求 |
+| `approval_cancelled` | `{ batchId, taskId, source?, reason }` | 停止或执行者取消记录，不伪造拒绝决定 |
 | `approval_batch_resolved`                 | `{ batchId, notExecutedToolCallIds?, items: [{ toolCallId, toolName, command, commandExplanation?, action, message? }] }` | 人工审批的同意、拒绝或指导结果按 `toolCallId` 投影到原工具项下的内嵌审核结果区域                                                                                            |
 | `terminal_review_started`                 | `{ reviewId, commandIds }`                                                                                                | 持久化 AI 终端审核开始；用 assistant toolCalls 中的同一 `toolCallId` 在 Activity 显示审核中                                                                                 |
 | `terminal_review_resolved`                | `{ reviewId, decisions: [{ commandId, decision, reason }] }`                                                              | `terminal_run` 副作用命中后的 AI 审核结论；按 `commandId` 投影到同一工具项下的内嵌审核结果区域；reason 记录逐项判断依据但不投影到 UI，命令编号对应 hand 批次中的 toolCallId |
@@ -328,7 +327,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 | 字段（要点）                                                      | 用途                                                                     |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `status`                                                          | `running` / `waiting_human` / `completed` / `failed` / `cancelled`       |
+| `status`                                                          | `running` / `waiting_human` / `waiting_approval` / `continued` / `context_only` / `completed` / `failed` / `cancelled`       |
 | `input`                                                           | 本轮用户输入原文                                                         |
 | `partial_answer` / `partial_answer_role`                          | 流式 UI 草稿；**不参与** resume 与下次 brain                             |
 | `final_answer` / `error` / `failure_code` / `failure_raw_message` | 终态展示（短标题 + 原文详情）                                            |

@@ -180,8 +180,21 @@ export const createSubagentDispatcher = (
                 waitForPendingUserMessageSubmissions: undefined,
                 abortSignal: controller.signal,
                 isCancelled: () => controller.signal.aborted || deps.isCancelled(),
-                requestApprovalBatch: async () =>
-                  needParent('子任务需要人工审批，请由主伙伴继续处理'),
+                requestApprovalBatch: async (request) => {
+                  base = { ...base, status: 'waiting_approval' }
+                  stream({ requesting: false })
+                  await publish(base)
+                  const result = await deps.requestApprovalBatch({
+                    ...request,
+                    source: { childRunId, name: task.name, parentToolCallId: toolCallId },
+                    abortSignal: controller.signal
+                  })
+                  if (!controller.signal.aborted && !deps.isCancelled()) {
+                    base = { ...base, status: 'running' }
+                    await publish(base)
+                  }
+                  return result
+                },
                 requestUserQuestion: async () => needParent('子任务需要用户协助，请由主伙伴询问'),
                 sendEvent: (event) => {
                   // The thought event is public assistant text accompanying this round of tool calls.

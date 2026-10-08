@@ -1,24 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DocRendererProps, IDocument } from 'react-doc-viewer'
+import type { DocRendererProps } from 'react-doc-viewer'
 import '@js-preview/docx/lib/index.css'
 import './index.css'
 import DocxSelectionLayer from './DocxSelectionLayer'
 import { workbenchSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
-
-type DocViewerMetadata = {
-  anchorName?: string
-  pageNumber?: number
-  allowDocumentSelection?: boolean
-}
-
-type DocViewerDocument = Omit<IDocument, 'fileData'> & {
-  file?: File | Blob
-  fileName?: string
-  filePath?: string
-  fileData?: string | ArrayBuffer | Blob | File
-  metadata?: DocViewerMetadata
-}
+import type { LoadedFileRenderDocument } from './types'
 
 type BrowserProcessShim = {
   env: Record<string, string | undefined>
@@ -95,9 +82,12 @@ const scrollToAnchor = (container: HTMLDivElement, anchorName?: string): void =>
   })
 }
 
-const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
-  const currentDocument = mainState.currentDocument as DocViewerDocument | undefined
-  const containerRef = useRef<HTMLDivElement | null>(null)
+export const DocxPreview = ({
+  document: currentDocument
+}: {
+  document?: LoadedFileRenderDocument
+}) => {
+  const [container, setContainer] = useState<HTMLDivElement | null>(null)
   const lastRenderedKeyRef = useRef<string | null>(null)
   const [renderRevision, setRenderRevision] = useState(0)
   const [renderError, setRenderError] = useState<string | null>(null)
@@ -110,7 +100,6 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
   )
 
   useEffect(() => {
-    const container = containerRef.current
     if (!container || !currentDocument) return
     if (lastRenderedKeyRef.current === renderKey && container.childNodes.length > 0) {
       scrollToAnchor(container, anchorName)
@@ -154,7 +143,7 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
       }
 
       setRenderRevision(0)
-      container.innerHTML = ''
+      container.replaceChildren()
       const jsPreviewDocx = await loadDocxPreview()
       if (cancelled) return
       const previewer = jsPreviewDocx.init(container)
@@ -182,7 +171,15 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
     return () => {
       cancelled = true
     }
-  }, [anchorName, currentDocument, documentFile, documentFileData, documentUri, renderKey])
+  }, [
+    anchorName,
+    container,
+    currentDocument,
+    documentFile,
+    documentFileData,
+    documentUri,
+    renderKey
+  ])
 
   if (!currentDocument) return null
 
@@ -191,12 +188,12 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
       className="relative h-full w-full bg-[#F7F7F5]"
       data-testid={workbenchSelectors.docxViewer}
     >
-      <div ref={containerRef} className="docx-content h-full w-full overflow-auto px-3 py-3" />
+      <div ref={setContainer} className="docx-content h-full w-full overflow-auto px-3 py-3" />
       {currentDocument.metadata?.allowDocumentSelection &&
       currentDocument.filePath &&
       !renderError ? (
         <DocxSelectionLayer
-          container={containerRef.current}
+          container={container}
           filePath={currentDocument.filePath}
           revision={renderRevision}
         />
@@ -211,6 +208,10 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
     </div>
   )
 }
+
+const CustomDocxRenderer = ({ mainState }: DocRendererProps) => (
+  <DocxPreview document={mainState.currentDocument} />
+)
 
 CustomDocxRenderer.fileTypes = [
   'docx',

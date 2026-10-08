@@ -448,6 +448,18 @@ export const launchElectronApp = async (input: {
 
   const consoleEntries: E2EConsoleEntry[] = []
   const lifecycleEntries: E2ELifecycleEntry[] = []
+  const aiRunEventEntries = new Map<string, E2EAiRunEventEntry>()
+  const llmIoEntries = new Map<string, E2ELlmIoEntry>()
+  const observerSink: ElectronSignalSink = {
+    onAiRunEvent: (entry) => {
+      aiRunEventEntries.set(entry.id, entry)
+      input.signalSink?.onAiRunEvent?.(entry)
+    },
+    onLlmIo: (entry) => {
+      llmIoEntries.set(entry.record.callId, entry)
+      input.signalSink?.onLlmIo?.(entry)
+    }
+  }
   const recordLifecycle = (name: string, data?: JsonValue): void => {
     const entry = {
       ts: new Date().toISOString(),
@@ -580,10 +592,10 @@ export const launchElectronApp = async (input: {
 
   await page.waitForLoadState('domcontentloaded')
   assertLaunchedWorkbenchApp(page)
-  await installPageObservers(page, input.signalSink)
+  await installPageObservers(page, observerSink)
   page.on('framenavigated', (frame) => {
     if (frame !== page.mainFrame()) return
-    void installPageObservers(page, input.signalSink).catch(() => undefined)
+    void installPageObservers(page, observerSink).catch(() => undefined)
   })
   await page.evaluate((processId) => {
     const currentWindow = window as E2EWindow
@@ -629,9 +641,14 @@ export const launchElectronApp = async (input: {
         }
       }
 
+      // Keep observed evidence across Renderer reloads; page-local arrays start afresh.
+      // Merge the snapshot too, so collection cannot race a pending exposed callback.
+      for (const entry of state.aiRunEventEntries) aiRunEventEntries.set(entry.id, entry)
+      for (const entry of state.llmIoEntries || []) llmIoEntries.set(entry.record.callId, entry)
       return {
         ...state,
-        llmIoEntries: state.llmIoEntries || [],
+        aiRunEventEntries: [...aiRunEventEntries.values()],
+        llmIoEntries: [...llmIoEntries.values()],
         consoleEntries,
         lifecycleEntries
       }

@@ -3,6 +3,7 @@ import { Button, Spin } from 'antd'
 import { HiArrowUp, HiChevronLeft, HiChevronRight, HiStop } from 'react-icons/hi2'
 
 type WorkbenchInteractionCardProps = {
+  source?: React.ReactNode
   title: string
   itemLabel: string
   currentIndex: number
@@ -21,6 +22,7 @@ type WorkbenchInteractionCardProps = {
 }
 
 export const WorkbenchInteractionCard: React.FC<WorkbenchInteractionCardProps> = ({
+  source,
   title,
   itemLabel,
   currentIndex,
@@ -41,6 +43,9 @@ export const WorkbenchInteractionCard: React.FC<WorkbenchInteractionCardProps> =
     className="nc-timeline-layout-anchor min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-white shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
     data-testid={cardTestId}
   >
+    {source ? (
+      <div className="flex items-center gap-2 px-5 pt-4 text-[13px] text-[#787774]">{source}</div>
+    ) : null}
     <div className="flex items-start justify-between gap-3 px-5 pt-4">
       <div
         className="min-w-0 flex-1 break-words text-[15px] font-semibold leading-6 text-[#37352F]"

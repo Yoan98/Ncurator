@@ -13,6 +13,7 @@ export const chatSelectors = {
   rightPanelArtifacts: 'chat-right-panel-artifacts',
   rightPanelJson: 'chat-right-panel-json',
   approvalBatchCard: 'chat-approval-batch-card',
+  approvalBatchSource: 'approval-batch-source',
   approvalBatchApproveButton: 'chat-approval-batch-approve-button',
   approvalBatchDenyButton: 'chat-approval-batch-deny-button',
   approvalBatchGuideInput: 'chat-approval-batch-guide-input',

@@ -1,3 +1,4 @@
+import { PARTNER_AVATAR_SHAPES, PARTNER_AVATAR_COLORS } from '../../../../shared/types'
 import type {
   AiRunEvent,
   AssistantProcessDisplay,
@@ -27,6 +28,16 @@ import type {
   AssistantToolName,
   WorkbenchFileRef
 } from './types'
+
+export const getSubagentAvatar = (runId: string) => {
+  let seed = 2166136261
+  for (const character of runId) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619)
+  seed >>>= 0
+  return {
+    shape: PARTNER_AVATAR_SHAPES[seed % PARTNER_AVATAR_SHAPES.length],
+    color: PARTNER_AVATAR_COLORS[(seed >>> 8) % PARTNER_AVATAR_COLORS.length]
+  }
+}
 
 const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number | undefined => {
   if (!metadata) return undefined
@@ -690,7 +701,10 @@ export const reduceAssistantProcessGroups = (
       if (index < 0) actions.push(event.update.action)
       else actions[index] = { ...actions[index], ...event.update.action }
     }
-    const active = event.update.status === 'running' || event.update.status === 'queued'
+    const active =
+      event.update.status === 'running' ||
+      event.update.status === 'queued' ||
+      event.update.status === 'waiting_approval'
     const child = {
       ...previous,
       ...event.update,
@@ -698,7 +712,7 @@ export const reduceAssistantProcessGroups = (
       message: active
         ? (event.update.message ?? event.update.action?.text ?? previous?.message)
         : event.update.result,
-      requesting: active ? previous?.requesting : false
+      requesting: event.update.status === 'running' ? previous?.requesting : false
     }
     const subagents = group.subagents?.some((item) => item.childRunId === child.childRunId)
       ? group.subagents.map((item) => (item.childRunId === child.childRunId ? child : item))

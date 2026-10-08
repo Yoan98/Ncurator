@@ -95,9 +95,6 @@ const executeHandCalls = async (input: {
         args: toolCall.args
       })
     )
-    // Persist each tool's disk effects before the next tool can wait, fail or be cancelled.
-    if (input.cache.currentState) {
-    }
   }
   return results
 }

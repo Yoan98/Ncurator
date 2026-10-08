@@ -3046,18 +3046,18 @@ export function registerHandlers(services: {
         activePartnerIds,
         unreadCompletedPartnerIds,
         latestUserInputs,
-        waitingHumanRuns
+        waitingInteractionRuns
       ] = await Promise.all([
         partnerStore.listPartners(),
         aiRunStore.listPartnerIdsByRunStatuses(['running', 'waiting_human', 'waiting_approval']),
         partnerStore.listUnreadCompletedPartnerIds(),
         aiRunStore.listLatestUserInputs(),
-        aiRunStore.listRunsByStatuses(['waiting_human'])
+        aiRunStore.listRunsByStatuses(['waiting_human', 'waiting_approval'])
       ])
       const activePartnerIdSet = new Set(activePartnerIds)
       const unreadCompletedPartnerIdSet = new Set(unreadCompletedPartnerIds)
       const assistancePartnerIdSet = new Set(
-        waitingHumanRuns
+        waitingInteractionRuns
           .filter((run) => run.pendingInteraction?.kind === 'question')
           .map((run) => run.partnerId)
       )

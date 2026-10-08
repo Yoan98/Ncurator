@@ -22,7 +22,7 @@ const selectText = async (
   start: number,
   endParagraph: number,
   end: number,
-  options: { selector?: string; popup?: boolean } = {}
+  options: { selector?: string; popup?: boolean; editor?: boolean } = {}
 ) => {
   await page
     .locator('.docx-content')
@@ -68,9 +68,81 @@ const selectText = async (
   await page.mouse.down()
   await page.mouse.move(bounds.end.x, bounds.end.y, { steps: 12 })
   await page.mouse.up()
-  if (options.popup !== false)
-    await page.getByTestId('docx-selection-popup').waitFor({ state: 'visible' })
+  if (options.popup !== false) {
+    await page.getByTestId('docx-selection-ai-edit').waitFor({ state: 'visible' })
+    if (options.editor !== false) {
+      await page.getByTestId('docx-selection-ai-edit').click()
+      await page.getByTestId('docx-selection-thought').waitFor({ state: 'visible' })
+    }
+  }
 }
+
+const observeSelectionUi = (page: Page) =>
+  page.evaluate(() => {
+    const viewer = document.querySelector('.docx-content')!
+    const viewport = viewer.getBoundingClientRect()
+    const popup = document.querySelector<HTMLElement>('[data-testid="docx-selection-popup"]')
+    const floating = popup?.getBoundingClientRect()
+    const active = [...CSS.highlights].find(
+      ([key, highlight]) => key.endsWith('-active') && highlight.size > 0
+    )
+    const range = active && [...active[1]].find((item) => item instanceof Range)
+    const editor = document.querySelector('[data-testid="docx-selection-thought"]')
+    return {
+      quote: range instanceof Range ? range.toString() : '',
+      background: active
+        ? getComputedStyle(viewer, '::highlight(' + active[0] + ')').backgroundColor
+        : '',
+      decoration: active
+        ? getComputedStyle(viewer, '::highlight(' + active[0] + ')').textDecorationLine
+        : '',
+      focused: document.activeElement === editor,
+      editorVisible: Boolean(editor),
+      popupExists: Boolean(popup),
+      scrollTop: viewer.scrollTop,
+      placement: popup?.dataset.placement,
+      height: floating?.height || 0,
+      withinViewport: Boolean(
+        floating &&
+        floating.left >= viewport.left &&
+        floating.right <= viewport.right &&
+        floating.top >= viewport.top &&
+        floating.bottom <= viewport.bottom
+      ),
+      placeholder: editor?.getAttribute('data-placeholder'),
+      saveIcon: Boolean(document.querySelector('[data-testid="docx-selection-save"] svg'))
+    }
+  })
+
+const markersAvoidText = (page: Page) =>
+  page.evaluate(() => {
+    const viewer = document.querySelector('.docx-content')!
+    const rects: DOMRect[] = []
+    const range = document.createRange()
+    for (const paragraph of viewer.querySelectorAll('article p')) {
+      const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT)
+      let node = walker.nextNode()
+      while (node) {
+        range.selectNodeContents(node)
+        rects.push(...range.getClientRects())
+        node = walker.nextNode()
+      }
+    }
+    const markers = [...document.querySelectorAll('[data-testid="docx-selection-marker"]')]
+    return (
+      markers.length > 0 &&
+      markers.every((marker) => {
+        const badge = marker.getBoundingClientRect()
+        return !rects.some(
+          (text) =>
+            badge.left < text.right &&
+            text.left < badge.right &&
+            badge.top < text.bottom &&
+            text.top < badge.bottom
+        )
+      })
+    )
+  })
 
 describe('workbench conversation e2e', () => {
   it(
@@ -95,15 +167,38 @@ describe('workbench conversation e2e', () => {
             .locator('.docx-content article p')
             .first()
             .waitFor({ state: 'visible', timeout: 30_000 })
+          await selectText(page, 0, 0, 1, 8, { editor: false })
+          const actionUi = await observeSelectionUi(page)
+          await runtime.captureScreenshot({
+            name: 'selection-action',
+            message: '紫色选区与 AI 编辑入口'
+          })
+          await page.getByTestId('docx-selection-ai-edit').click()
+          await page.getByTestId('docx-selection-thought').waitFor({ state: 'visible' })
+          const inputUi = await observeSelectionUi(page)
+          await page.getByTestId('docx-selection-thought').fill('第一行')
+          await page.getByTestId('docx-selection-thought').press('Shift+Enter')
+          await page.keyboard.type('第二行')
+          const multilineText = await page.getByTestId('docx-selection-thought').innerText()
+          const multilineUi = await observeSelectionUi(page)
+          await runtime.assertThat(
+            multilineText === '第一行\n第二行' && multilineUi.height > inputUi.height,
+            {
+              name: 'selection-editor-line-break',
+              message: 'Shift+Enter 后继续输入应位于新行，输入条随内容增高。',
+              data: { multilineText, multilineUi }
+            }
+          )
+          await page.getByTestId('docx-selection-thought').press('Escape')
+          const escapeCancelled = (await page.getByTestId('docx-selection-popup').count()) === 0
           await selectText(page, 0, 0, 1, 8)
-          const excerpt = await page
-            .getByTestId('docx-selection-popup')
-            .locator('.whitespace-pre-wrap')
-            .first()
-            .textContent()
+          await page.getByTestId('docx-selection-thought').fill('不保存的输入')
+          await page.locator('.docx-content').click({ position: { x: 5, y: 5 } })
+          const outsideCancelled = (await page.getByTestId('docx-selection-popup').count()) === 0
+          await selectText(page, 0, 0, 1, 8)
           await runtime.captureScreenshot({
             name: 'selection-popup',
-            message: 'DOCX 跨段落原文与想法输入框'
+            message: 'DOCX 紫色原文高亮与紧凑保存输入条'
           })
           const emptyDisabled = await page.getByTestId('docx-selection-save').isDisabled()
           await page
@@ -112,9 +207,79 @@ describe('workbench conversation e2e', () => {
           await page.getByTestId('docx-selection-thought').press('Enter')
           const composer = getWorkbenchLocator(page, workbenchSelectors.input)
           await composer.locator('[data-role="document-selection-token"]').waitFor()
+          const excerpt = (
+            await composer.locator('[data-role="document-selection-token"]').getAttribute('title')
+          )
+            ?.split('\n')
+            .slice(1)
+            .join('\n')
           const label = await composer
             .locator('[data-role="document-selection-token"]')
-            .textContent()
+            .getAttribute('aria-label')
+          const tokenIcon =
+            (await composer.locator('[data-role="document-selection-token"] svg').count()) === 1
+          const markerClear = await markersAvoidText(page)
+          await selectText(page, 1, 8, 1, 16)
+          await page.getByTestId('docx-selection-thought').fill('临时相邻引用')
+          await page.getByTestId('docx-selection-save').click()
+          const adjacentMarkersClear =
+            (await page.getByTestId('docx-selection-marker').count()) === 2 &&
+            (await markersAvoidText(page))
+          await page.getByTestId('docx-selection-marker').last().click()
+          await page.getByRole('button', { name: '删除引用', exact: true }).click()
+
+          const windowHandle = await runtime.electronApp.browserWindow(page)
+          const originalSize = await windowHandle.evaluate((window) => window.getSize())
+          await windowHandle.evaluate((window) => window.setSize(1100, 720))
+          await selectText(page, 9, 0, 9, 2)
+          await page.getByTestId('docx-selection-thought').fill('缩放保留此输入')
+          const scroll = await page.evaluate(() => {
+            const viewer = document.querySelector('.docx-content')!
+            const viewport = viewer.getBoundingClientRect()
+            const active = [...CSS.highlights].find(
+              ([key, highlight]) => key.endsWith('-active') && highlight.size
+            )
+            const range = active && [...active[1]].find((item) => item instanceof Range)
+            const end = range instanceof Range ? [...range.getClientRects()].at(-1) : null
+            if (!end) throw new Error('选区未高亮')
+            return {
+              x: viewport.left + 5,
+              y: viewport.top + 20,
+              delta: end.bottom - (viewport.bottom - 12)
+            }
+          })
+          await page.mouse.move(scroll.x, scroll.y)
+          await page.mouse.wheel(0, scroll.delta)
+          await page.waitForFunction(
+            () =>
+              document.querySelector<HTMLElement>('[data-testid="docx-selection-popup"]')?.dataset
+                .placement === 'above'
+          )
+          const flippedUi = await observeSelectionUi(page)
+          await runtime.captureScreenshot({
+            name: 'selection-flipped',
+            message: '预览底部选区的输入条向上避让'
+          })
+          await windowHandle.evaluate(
+            (window, size) => window.setSize(size[0], size[1]),
+            originalSize
+          )
+          await windowHandle.dispose()
+          await page.locator('.docx-content article p').nth(9).scrollIntoViewIfNeeded()
+          await runtime.captureScreenshot({
+            name: 'selection-resized',
+            message: '窗口恢复后的选区和输入条'
+          })
+          await runtime.assertThat((await observeSelectionUi(page)).editorVisible, {
+            name: 'selection-editor-survives-resize',
+            message: '窗口缩放后编辑输入条仍存在。',
+            data: await observeSelectionUi(page)
+          })
+          await page.getByTestId('docx-selection-thought').waitFor({ state: 'visible' })
+          const resizedUi = await observeSelectionUi(page)
+          const resizedText = await page.getByTestId('docx-selection-thought').textContent()
+          await page.getByTestId('docx-selection-thought').press('Escape')
+          await composer.locator('[data-role="document-selection-token"]').click()
           await composer.locator('[data-role="document-selection-thought"]').click()
           await page.keyboard.press('End')
           await page.keyboard.type(' 重点说明谨慎表述。')
@@ -152,11 +317,7 @@ describe('workbench conversation e2e', () => {
             .first()
             .waitFor({ state: 'visible', timeout: 30_000 })
           await selectText(page, 0, 0, 0, 2, { selector: 'article td p' })
-          const cellQuote = await page
-            .getByTestId('docx-selection-popup')
-            .locator('.whitespace-pre-wrap')
-            .first()
-            .textContent()
+          const cellQuote = (await observeSelectionUi(page)).quote
           await page.getByTestId('docx-selection-thought').fill('解释这个表格字段。')
           await page.getByTestId('docx-selection-save').click()
           await composer
@@ -177,7 +338,7 @@ describe('workbench conversation e2e', () => {
           const monotonicLabel = await composer
             .locator('[data-role="document-selection-token"]')
             .last()
-            .textContent()
+            .getAttribute('aria-label')
           await page.getByTestId('docx-selection-marker').click()
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
           await composer.locator('[data-role="document-selection-token"]').click()
@@ -208,6 +369,13 @@ describe('workbench conversation e2e', () => {
           )
             .last()
             .textContent()
+          const historyLabel = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.userMessageReferences
+          )
+            .last()
+            .locator('[data-role="document-selection-token"]')
+            .getAttribute('aria-label')
           await page
             .locator(`[data-testid^="${workbenchSelectors.userMessageEditButtonPrefix}-"]`)
             .last()
@@ -255,6 +423,18 @@ describe('workbench conversation e2e', () => {
 
           return {
             excerpt,
+            actionUi,
+            inputUi,
+            multilineUi,
+            multilineText,
+            escapeCancelled,
+            outsideCancelled,
+            tokenIcon,
+            markerClear,
+            adjacentMarkersClear,
+            flippedUi,
+            resizedUi,
+            resizedText,
             emptyDisabled,
             label,
             synchronized,
@@ -263,6 +443,7 @@ describe('workbench conversation e2e', () => {
             count,
             markerCount,
             historyText,
+            historyLabel,
             overlapRejected,
             otherPartnerEmpty,
             memoryRestored,
@@ -280,20 +461,20 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             Boolean(result.excerpt?.includes('客户周会纪要\n会议背景')) &&
               result.emptyDisabled &&
-              result.label === '[客户周会纪要.docx · 1]' &&
+              result.label === '客户周会纪要.docx · 1' &&
               result.synchronized &&
               result.located.includes('客户周会纪要') &&
               result.count === 1 &&
               result.repeatedThought?.includes('风险控制建议') === true &&
               result.markerCount === 0 &&
-              result.historyText?.includes('[客户周会纪要.docx · 1]') === true &&
+              result.historyLabel === '客户周会纪要.docx · 1' &&
               result.overlapRejected &&
               result.otherPartnerEmpty &&
               result.memoryRestored &&
               result.cellQuote === '模式' &&
               result.atomicDeleted &&
               result.crossCellRejected &&
-              result.monotonicLabel === '[人工智能探究课堂PRD.docx · 2]' &&
+              result.monotonicLabel === '人工智能探究课堂PRD.docx · 2' &&
               result.historyRestored &&
               result.storedSelections === 0 &&
               result.restartedSelections === 0 &&
@@ -302,6 +483,33 @@ describe('workbench conversation e2e', () => {
             {
               name: 'docx-selection-reference-real-flow',
               message: '跨段落选区、双向编辑、定位、重复选择和成功提交清理应通过真实 UI 完成。',
+              data: result
+            }
+          )
+          await runtime.assertThat(
+            !result.actionUi.editorVisible &&
+              result.actionUi.withinViewport &&
+              result.inputUi.focused &&
+              result.inputUi.quote === result.actionUi.quote &&
+              result.inputUi.background === 'rgb(219, 197, 246)' &&
+              result.inputUi.decoration === 'none' &&
+              result.inputUi.placeholder === '描述编辑内容' &&
+              result.inputUi.saveIcon &&
+              result.inputUi.height <= 50 &&
+              result.multilineText === '第一行\n第二行' &&
+              result.multilineUi.height > result.inputUi.height &&
+              result.escapeCancelled &&
+              result.outsideCancelled &&
+              result.tokenIcon &&
+              result.markerClear &&
+              result.adjacentMarkersClear &&
+              result.flippedUi.placement === 'above' &&
+              result.flippedUi.withinViewport &&
+              result.resizedUi.withinViewport &&
+              result.resizedText === '缩放保留此输入',
+            {
+              name: 'docx-selection-edit-ui',
+              message: 'AI 编辑入口、紧凑输入条、紫色高亮、碰撞翻转与编号避让应符合真实预览布局。',
               data: result
             }
           )

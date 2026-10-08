@@ -145,7 +145,8 @@ import {
   formatRelativeTime,
   applyQuestionInteractionResult,
   reduceAssistantProcessGroups,
-  reduceAssistantProcessThoughts
+  reduceAssistantProcessThoughts,
+  getSubagentAvatar
 } from '../components/workbench/utils'
 import {
   clipPartnerListPreview,
@@ -479,6 +480,10 @@ const reduceAssistantTurnByRunEvent = (
     }
   }
 
+  if (event.type === 'approval_batch_cancelled') {
+    next = { ...next, waitingApproval: false, pendingApprovalItems: [] }
+  }
+
   if (event.type === 'approval_batch_decision') {
     if (!event.internal) {
       const decisionByItemId = new Map(
@@ -502,7 +507,9 @@ const reduceAssistantTurnByRunEvent = (
         ...next,
         waitingApproval: false,
         pendingApprovalItems: [],
-        approvalReviews: [...next.approvalReviews, ...nextReviews]
+        approvalReviews: event.source
+          ? next.approvalReviews
+          : [...next.approvalReviews, ...nextReviews]
       }
     }
   }
@@ -3546,18 +3553,11 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      if (event.type === 'approval_batch_decision') {
+      if (event.type === 'approval_batch_decision' || event.type === 'approval_batch_cancelled') {
         if (event.internal) return
         setApprovalSubmitting(false)
-        const allApproved = event.decisions.every((decision) => decision.action === 'approve')
-        if (allApproved) {
-          setLoading(true)
-        } else {
-          setPendingApprovalBatch(null)
-          setApprovalCurrentIndex(0)
-          setApprovalDraftDecisions({})
-          setLoading(false)
-        }
+        setPendingApprovalBatch((current) => (current?.batchId === event.batchId ? null : current))
+        setLoading(true)
         return
       }
 
@@ -4118,12 +4118,6 @@ const ChatPage: React.FC = () => {
     }))
   }
 
-  const clearApprovalState = (): void => {
-    setPendingApprovalBatch(null)
-    setApprovalCurrentIndex(0)
-    setApprovalDraftDecisions({})
-  }
-
   const submitHumanQuestion = async (answers: {
     answers: AskUserQuestionAnswer[]
   }): Promise<void> => {
@@ -4137,8 +4131,7 @@ const ChatPage: React.FC = () => {
       emitErrorMessage(response.error || '提交问题回答失败')
       return
     }
-    setPendingQuestion(null)
-    setLoading(true)
+    // Resolution events own dismissal; a queued approval or question may already be visible.
   }
 
   const flushApprovalBatch = async (
@@ -4168,14 +4161,7 @@ const ChatPage: React.FC = () => {
         emitErrorMessage(response.error || '审核提交失败')
         return
       }
-      const allApproved = decisions.every((decision) => decision.action === 'approve')
-      clearApprovalState()
-      if (allApproved) {
-        setLoading(true)
-      } else {
-        setLoading(false)
-      }
-      setApprovalSubmitting(false)
+      // The decision event owns dismissal. A next batch may arrive before this IPC reply.
     } catch (error) {
       setApprovalSubmitting(false)
       emitErrorMessage(error instanceof Error ? error.message : '审核提交失败')
@@ -5163,6 +5149,22 @@ const ChatPage: React.FC = () => {
                           ) : pendingApprovalBatch ? (
                             pendingApprovalBatch && currentApprovalItem ? (
                               <WorkbenchInteractionCard
+                                key={pendingApprovalBatch.batchId}
+                                source={
+                                  pendingApprovalBatch.source ? (
+                                    <>
+                                      <PartnerAvatar
+                                        {...getSubagentAvatar(
+                                          pendingApprovalBatch.source.childRunId
+                                        )}
+                                        size={24}
+                                      />
+                                      <span data-testid={chatSelectors.approvalBatchSource}>
+                                        {pendingApprovalBatch.source.name}
+                                      </span>
+                                    </>
+                                  ) : undefined
+                                }
                                 title={currentApprovalItem.commandExplanation}
                                 itemLabel="审批"
                                 currentIndex={approvalCurrentIndex}
@@ -5188,7 +5190,9 @@ const ChatPage: React.FC = () => {
                                       approvalDraftDecisions[currentApprovalItem.itemId]?.message ||
                                       ''
                                     }
-                                    placeholder={buildPartnerGuidePlaceholder(currentPartner?.name)}
+                                    placeholder={buildPartnerGuidePlaceholder(
+                                      pendingApprovalBatch.source?.name || currentPartner?.name
+                                    )}
                                     submitting={approvalSubmitting}
                                     inputDisabled={cancellingRun}
                                     disabled={approvalSubmitDisabled || cancellingRun}

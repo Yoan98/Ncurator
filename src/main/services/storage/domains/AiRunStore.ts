@@ -1,12 +1,15 @@
 import type {
   AiArtifactRef,
+  AiApprovalSource,
   AiRunApprovalBatchDecisionRequest,
   AiRunRecord,
   AiRunStatus,
   ChatAttachment,
+  ChatMessageLogAnnotationEntry,
   SelectedReference
 } from '../../../../shared/types'
 import type { SqliteCore } from '../sqlite/SqliteCore'
+import { ChatMessageLogStore } from './ChatMessageLogStore'
 import {
   buildInClause,
   buildWhere,
@@ -88,7 +91,7 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   failureRawMessage: row.failure_raw_message ? String(row.failure_raw_message) : undefined,
   pendingApproval: parseJsonObject<AiRunRecord['pendingApproval']>(row.pending_approval_json),
   pendingInteraction: parseJsonObject<AiRunRecord['pendingInteraction']>(
-    row.pending_interaction_json || row.pending_approval_json
+    row.pending_interaction_json
   ),
   pendingMessages: parseJsonArray<NonNullable<AiRunRecord['pendingMessages']>[number]>(
     row.pending_messages_json
@@ -164,7 +167,7 @@ export class AiRunStore {
         error: record.error || null,
         failure_code: record.failureCode || null,
         failure_raw_message: record.failureRawMessage || null,
-        pending_approval_json: jsonStringify(record.pendingInteraction || record.pendingApproval),
+        pending_approval_json: jsonStringify(record.pendingApproval),
         pending_interaction_json: jsonStringify(record.pendingInteraction),
         pending_messages_json: jsonStringify(record.pendingMessages),
         artifacts_json: jsonStringify(record.artifacts),
@@ -288,48 +291,139 @@ export class AiRunStore {
     return rows.map((row) => toRequiredString(row.partner_id)).filter(Boolean)
   }
 
+  private saveApprovalState(
+    run: AiRunRecord,
+    pendingApproval: AiRunRecord['pendingApproval'] | null | undefined,
+    entries: ChatMessageLogAnnotationEntry[],
+    statusOverride?: AiRunStatus
+  ): AiRunRecord {
+    const now = Date.now()
+    new ChatMessageLogStore(this.sqlite).appendBatchSync({
+      partnerId: run.partnerId,
+      runId: run.id,
+      entries,
+      createdAt: now
+    })
+    // Undefined records a queued request without replacing a visible question or approval.
+    if (pendingApproval === undefined && statusOverride === undefined) return run
+    const approval =
+      pendingApproval === undefined ? run.pendingApproval : pendingApproval || undefined
+    const pendingInteraction: AiRunRecord['pendingInteraction'] =
+      pendingApproval === undefined
+        ? run.pendingInteraction
+        : pendingApproval
+          ? {
+              kind: 'approval',
+              interactionId: pendingApproval.batchId,
+              batchId: pendingApproval.batchId,
+              items: pendingApproval.items,
+              source: pendingApproval.source
+            }
+          : undefined
+    const status =
+      statusOverride ??
+      (pendingApproval === undefined
+        ? run.status
+        : pendingApproval
+          ? 'waiting_approval'
+          : 'running')
+    this.sqlite
+      .prepare(
+        `
+      UPDATE ai_run SET status = @status, pending_approval_json = @approval,
+        pending_interaction_json = @interaction, updated_at = @now WHERE id = @id
+    `
+      )
+      .run({
+        id: run.id,
+        status,
+        approval: jsonStringify(approval),
+        interaction: jsonStringify(pendingInteraction),
+        now
+      })
+    return {
+      ...run,
+      status,
+      pendingApproval: approval,
+      pendingInteraction,
+      updatedAt: now
+    }
+  }
+
+  public async saveApprovalTransition(input: {
+    runId: string
+    pendingApproval?: AiRunRecord['pendingApproval'] | null
+    entries: ChatMessageLogAnnotationEntry[]
+    status?: AiRunStatus
+  }): Promise<AiRunRecord> {
+    return this.sqlite.transaction(() => {
+      const row = this.sqlite.prepare('SELECT * FROM ai_run WHERE id = ?').get(input.runId) as
+        | AiRunRow
+        | undefined
+      if (!row) throw new Error('run not found')
+      return this.saveApprovalState(
+        toRunRecord(row),
+        input.pendingApproval,
+        input.entries,
+        input.status
+      )
+    })
+  }
+
   public async decideApprovalBatchTransaction(input: {
     runId: string
     request: AiRunApprovalBatchDecisionRequest
+    source?: AiApprovalSource
+    nextApproval?: AiRunRecord['pendingApproval']
   }): Promise<{ ok: boolean; run?: AiRunRecord; error?: string }> {
     return this.sqlite.transaction(() => {
-      const runRow = this.sqlite.prepare('SELECT * FROM ai_run WHERE id = ?').get(input.runId) as
+      const row = this.sqlite.prepare('SELECT * FROM ai_run WHERE id = ?').get(input.runId) as
         | AiRunRow
         | undefined
-      if (!runRow) return { ok: false, error: 'run not found' }
-      const run = toRunRecord(runRow)
+      if (!row) return { ok: false, error: 'run not found' }
+      const run = toRunRecord(row)
+      const batch = run.pendingApproval
       if (
-        (run.status !== 'waiting_human' && run.status !== 'waiting_approval') ||
-        !run.pendingApproval
+        run.status !== 'waiting_approval' ||
+        !batch ||
+        batch.batchId !== input.request.batchId ||
+        input.request.runId !== input.runId
       ) {
         return { ok: false, error: 'approval batch not found' }
       }
-      if (run.pendingApproval.batchId !== input.request.batchId) {
-        return { ok: false, error: 'approval batch not found' }
+      if (
+        batch.source?.childRunId !== input.source?.childRunId ||
+        batch.source?.name !== input.source?.name ||
+        batch.source?.parentToolCallId !== input.source?.parentToolCallId
+      ) {
+        return { ok: false, error: 'approval source does not match executor' }
       }
-
-      const now = Date.now()
-      this.sqlite
-        .prepare(
-          `
-          UPDATE ai_run
-          SET status = 'running',
-              pending_approval_json = NULL,
-              pending_interaction_json = NULL,
-              updated_at = @updated_at
-          WHERE id = @id
-        `
+      const itemIds = new Set(batch.items.map((item) => item.itemId))
+      const decisions = input.request.decisions
+      if (
+        decisions.length !== itemIds.size ||
+        decisions.some(
+          (decision) =>
+            !itemIds.delete(decision.itemId) ||
+            !['approve', 'reject', 'guide'].includes(decision.action) ||
+            (decision.action === 'guide' && !decision.message?.trim())
         )
-        .run({ id: run.id, updated_at: now })
-
+      )
+        return { ok: false, error: 'invalid approval decisions' }
       return {
         ok: true,
-        run: {
-          ...run,
-          status: 'running',
-          pendingApproval: undefined,
-          updatedAt: now
-        }
+        run: this.saveApprovalState(run, input.nextApproval || null, [
+          {
+            kind: 'annotation',
+            eventType: 'approval_decided',
+            payload: {
+              batchId: batch.batchId,
+              taskId: batch.taskId,
+              source: batch.source,
+              decisions
+            }
+          }
+        ])
       }
     })
   }

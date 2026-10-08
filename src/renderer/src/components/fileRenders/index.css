@@ -13,6 +13,11 @@
   overflow-x: hidden;
 }
 
+.docx-content ::selection {
+  background: #dbc5f6;
+  color: inherit;
+}
+
 .docx-content .docx-wrapper {
   box-sizing: border-box !important;
   width: 100% !important;

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Tooltip } from 'antd'
 import PartnerAvatar from './PartnerAvatar'
-import { PARTNER_AVATAR_SHAPES, PARTNER_AVATAR_COLORS } from '../../../../shared/types'
 import { FaSpider } from 'react-icons/fa'
 import { PiBrowsers, PiEyes } from 'react-icons/pi'
 import { TbMoodConfuzed } from 'react-icons/tb'
@@ -42,6 +41,7 @@ import {
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
+  getSubagentAvatar,
   resolveAssistantExecutionIcon,
   resolveQuestionInteraction,
   shouldShowAssistantApplyTargets,
@@ -294,16 +294,6 @@ const AssistantProcessThoughtView: React.FC<{
   )
 }
 
-const subagentAvatar = (runId: string) => {
-  let seed = 2166136261
-  for (const character of runId) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619)
-  seed >>>= 0
-  return {
-    shape: PARTNER_AVATAR_SHAPES[seed % PARTNER_AVATAR_SHAPES.length],
-    color: PARTNER_AVATAR_COLORS[(seed >>> 8) % PARTNER_AVATAR_COLORS.length]
-  }
-}
-
 const SubagentThought: React.FC<{ child: SubagentTaskView; open: boolean }> = ({ child, open }) => {
   const contentRef = useRef<HTMLDivElement>(null)
   const active = child.status === 'running'
@@ -314,6 +304,7 @@ const SubagentThought: React.FC<{ child: SubagentTaskView; open: boolean }> = ({
         ? child.message || ''
         : child.result ||
           {
+            waiting_approval: '等待你审核操作',
             completed: '任务已完成',
             failed: '执行失败',
             cancelled: '已停止',
@@ -383,7 +374,7 @@ const SubagentTaskRow: React.FC<{ child: SubagentTaskView }> = ({ child }) => {
       >
         <span className={child.status === 'queued' ? 'grayscale opacity-40' : undefined}>
           <PartnerAvatar
-            {...subagentAvatar(child.childRunId)}
+            {...getSubagentAvatar(child.childRunId)}
             size={32}
             animated={child.status === 'running'}
             animationSeed={child.childRunId}

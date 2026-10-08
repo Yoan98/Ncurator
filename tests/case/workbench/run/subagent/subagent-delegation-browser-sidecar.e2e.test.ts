@@ -154,6 +154,7 @@ describe('subagent browser and sidecar real UI', () => {
           const config = path.join(setup.workspace.rootPath, 'subagent-checkout-config.ts')
           const baseline = await fs.readFile(config, 'utf8')
           const report = path.join(setup.workspace.rootPath, '网页交接.md')
+          const screenshot = path.join(setup.workspace.rootPath, '表单核验.png')
           const initialPanelToggle = getWorkbenchLocator(
             runtime.page,
             workbenchSelectors.contentPanelToggle
@@ -179,10 +180,21 @@ describe('subagent browser and sidecar real UI', () => {
             .locator('button[aria-current="page"]')
             .waitFor({ state: 'visible' })
           expect(await selectedResource.locator('button[aria-current="page"]').count()).toBe(1)
+          await selectWorkbenchModel(runtime.page, setup.env.modelName)
+          await waitUntil(
+            async () =>
+              !(
+                await getWorkbenchLocator(
+                  runtime.page,
+                  workbenchSelectors.modelSelect
+                ).textContent()
+              )?.includes('选择模型'),
+            10_000
+          )
           const started = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
-            `请一次派发三位临时帮手分头处理，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
+            `请一次派发三位临时帮手分头处理，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
           )
           await waitUntil(async () =>
             (await updates(runtime, started)).some((event) => event.update.status === 'running')
@@ -223,10 +235,13 @@ describe('subagent browser and sidecar real UI', () => {
               .first()
               .evaluate((group) => getComputedStyle(group).flexDirection)
           ).toBe('column')
-          await childRow.hover()
-          await runtime.page
-            .locator('[data-testid="subagent-thought"]:visible')
-            .waitFor({ state: 'visible' })
+          await waitUntil(async () => {
+            if (await runtime.page.locator('[data-testid="subagent-thought"]:visible').isVisible())
+              return true
+            await runtime.page.mouse.move(0, 0)
+            await childRow.hover()
+            return false
+          }, 10_000)
           await waitUntil(
             async () =>
               runtime.page
@@ -306,29 +321,59 @@ describe('subagent browser and sidecar real UI', () => {
             async () => (await runtime.page.getByTestId('subagent-task').count()) === 3,
             10_000
           )
-          let pageGeometry: Array<{ id: number; viewport: number[]; instance: string }> = []
+          let pageGeometry: Array<{
+            id: number
+            viewport: number[]
+            instance: string
+            drawn: boolean
+          }> = []
           await waitUntil(async () => {
-            pageGeometry = await runtime.electronApp.evaluate(async ({ webContents }, prefix) => {
-              const pages = webContents
-                .getAllWebContents()
-                .filter((contents) => contents.getURL() === `${prefix}/`)
-              return Promise.all(
-                pages.map(async (contents) => ({
-                  id: contents.id,
-                  ...(await contents.executeJavaScript(
-                    '({ viewport: [innerWidth, innerHeight], instance: sessionStorage.instance })'
-                  ))
-                }))
-              )
-            }, site.url)
+            pageGeometry = await runtime.electronApp.evaluate(
+              async ({ BrowserWindow, WebContentsView, webContents }, prefix) => {
+                const windows = BrowserWindow.getAllWindows()
+                const visibleWindows = windows.filter(
+                  (window) => window.isVisible() && !window.getParentWindow()
+                )
+                if (visibleWindows.length !== 1)
+                  throw new Error(
+                    `后台标签不应创建用户可见的独立窗口：${JSON.stringify(visibleWindows.map((window) => ({ id: window.id, url: window.webContents.getURL() })))}`
+                  )
+                const pages = webContents
+                  .getAllWebContents()
+                  .filter((contents) => contents.getURL() === `${prefix}/`)
+                if (
+                  pages.some((contents) =>
+                    windows.some((window) => window.webContents.id === contents.id)
+                  )
+                )
+                  throw new Error('表单标签应属于内嵌视图，不能成为独立窗口')
+                return Promise.all(
+                  pages.map(async (contents) => ({
+                    id: contents.id,
+                    drawn: windows.some((window) =>
+                      window.contentView.children.some(
+                        (view) =>
+                          view instanceof WebContentsView &&
+                          view.webContents.id === contents.id &&
+                          view.getVisible()
+                      )
+                    ),
+                    ...(await contents.executeJavaScript(
+                      '({ viewport: [innerWidth, innerHeight], instance: sessionStorage.instance })'
+                    ))
+                  }))
+                )
+              },
+              site.url
+            )
             return (
               pageGeometry.length >= 2 &&
-              pageGeometry.every((page) => page.viewport.every((size) => size > 0))
+              pageGeometry.every((page) => !page.drawn && page.viewport.every((size) => size > 0))
             )
           }, 90_000)
           runtime.signal({
             name: 'subagent-page-geometry',
-            message: '独立后台标签保持有效 viewport',
+            message: '独立后台标签隐藏显示且保持有效 viewport，未创建额外窗口',
             data: pageGeometry
           })
           await waitUntil(async () => {
@@ -361,6 +406,10 @@ describe('subagent browser and sidecar real UI', () => {
           expect(site.receipts).toContain('ALPHA_731')
           expect(site.receipts).toContain('BETA_892')
           expect(site.instances.get('ALPHA_731')).not.toBe(site.instances.get('BETA_892'))
+          const image = await fs.readFile(screenshot)
+          expect([...image.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+          expect(image.readUInt32BE(16)).toBeGreaterThan(0)
+          expect(image.readUInt32BE(20)).toBeGreaterThan(0)
           expect(site.rendered).toEqual(expect.arrayContaining(['31415', '27182']))
           const subagentEvents = await updates(runtime, started)
           const webCallIds = new Set(
@@ -499,6 +548,12 @@ describe('subagent browser and sidecar real UI', () => {
           expect(await fs.readFile(config, 'utf8')).toBe(baseline)
 
           const runInterruptedPhase = async (crash: boolean) => {
+            const phasePartner = await createPartnerThroughWorkbenchUi(
+              runtime.page,
+              crash ? '崩溃恢复' : '停止恢复'
+            )
+            await selectWorkbenchModel(runtime.page, setup.env.modelName)
+            await selectWorkbenchExecutionPermission(runtime.page, '完全访问')
             const start = Date.now()
             const slowBefore = site.getSlowRequests()
             const saved = path.join(setup.workspace.rootPath, crash ? '崩溃前.txt' : '停止前.txt')
@@ -517,7 +572,7 @@ describe('subagent browser and sidecar real UI', () => {
             if (crash) {
               await runtime.restartApp({ crash: true })
               await getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.partnerItemPrefix)
-                .filter({ hasText: primary })
+                .filter({ hasText: phasePartner })
                 .click()
               await getWorkbenchPrefixLocator(
                 runtime.page,
@@ -603,17 +658,17 @@ describe('subagent browser and sidecar real UI', () => {
           await runInterruptedPhase(true)
           const signals = await runtime.collectSignals()
           await assertNoWorkbenchFakeSignals(runtime, signals)
-          return { evidence, receipts: site.receipts, phases: 4 }
+          return { evidence, receipts: site.receipts, phases: 3 }
         },
         assert: async (result, runtime) => {
-          runtime.assertThat(result.phases === 4, {
-            name: 'subagent-four-phases',
-            message: '独立网页与 sidecar、悬浮云与回退、停止、异常退出与续聊均通过真实 UI',
+          runtime.assertThat(result.phases === 3, {
+            name: 'subagent-browser-lifecycle-phases',
+            message: '浏览器与 sidecar、回退、停止和崩溃续聊通过真实 UI',
             data: { receipts: result.receipts }
           })
         }
       })
     },
-    2_400_000
+    1_800_000
   )
 })

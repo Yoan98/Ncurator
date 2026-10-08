@@ -60,7 +60,8 @@ export const repairInterruptedToolCalls = (
                             childIndex >= 0 ? remainingChildren.splice(childIndex, 1)[0] : undefined
                           return completed &&
                             completed.status !== 'running' &&
-                            completed.status !== 'queued'
+                            completed.status !== 'queued' &&
+                            completed.status !== 'waiting_approval'
                             ? completed
                             : {
                                 ...task,

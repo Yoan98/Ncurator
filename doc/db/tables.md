@@ -89,16 +89,16 @@ Workbench 单例 UI。
 
 ### `chat_session_message_log`
 
-伙伴消息转录（表名历史保留）。
+伙伴消息转录。
 
-| 字段         | 类型    | 说明                                                                                                                                                                                                                          |
-| ------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`         | TEXT PK | 条目 id                                                                                                                                                                                                                       |
-| `partner_id` | TEXT    | 伙伴 id，级联删除                                                                                                                                                                                                             |
-| `run_id`     | TEXT    | 所属 run                                                                                                                                                                                                                      |
-| `seq`        | INTEGER | 伙伴内顺序                                                                                                                                                                                                                    |
-| `entry_json` | TEXT    | 消息条目；user 保存模型正文及结构化用户正文、引用和附件快照；`subagent_updated` annotation 保存父派发调用关联、子任务排队及执行状态/工具行动/最新完整公开消息/精简结果（子完整日志仅在内存，流式片段与请求状态不落盘） |
-| `created_at` | INTEGER | 创建时间                                                                                                                                                                                                                      |
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | TEXT PK | 条目 id |
+| `partner_id` | TEXT | 伙伴 id，级联删除 |
+| `run_id` | TEXT | 所属 run |
+| `seq` | INTEGER | 伙伴内顺序 |
+| `entry_json` | TEXT | 消息正文、引用与附件快照，工具消息及 annotation |
+| `created_at` | INTEGER | 创建时间 |
 
 ### `ai_run`
 
@@ -123,8 +123,8 @@ Workbench 单例 UI。
 | `error`                    | TEXT    | 短错误标题                                                   |
 | `failure_code`             | TEXT    | 失败码                                                       |
 | `failure_raw_message`      | TEXT    | 失败原文                                                     |
-| `pending_approval_json`    | TEXT    | 待审批                                                       |
-| `pending_interaction_json` | TEXT    | 待处理的人机交互                                             |
+| `pending_approval_json`    | TEXT    | 当前可操作审批批次，含可选子来源 `source` |
+| `pending_interaction_json` | TEXT    | 当前提问或审批；审批包含批次及可选子来源 |
 | `pending_messages_json`    | TEXT    | 按 FIFO 暂存的追加用户消息快照，含结构化正文与引用、附件；续接或终态归档后清空 |
 | `artifacts_json`           | TEXT    | 产物                                                         |
 | `created_at`               | INTEGER | 创建时间                                                     |
@@ -133,15 +133,13 @@ Workbench 单例 UI。
 
 ### `ai_file_change`
 
-子任务产生的记录归主伙伴和主 ownerRunId；同主 run / 路径复用首次基线与最后状态。
-
 工作地址内文件修改记录。
 
 | 字段                    | 类型    | 说明              |
 | ----------------------- | ------- | ----------------- |
 | `id`                    | TEXT PK | 记录 id           |
 | `partner_id`            | TEXT    | 伙伴 id，级联删除 |
-| `run_id`                | TEXT    | 所属 run          |
+| `run_id`                | TEXT    | 归属主 run，含子任务修改 |
 | `status`                | TEXT    | 状态              |
 | `capability`            | TEXT    | 能力类型          |
 | `path`                  | TEXT    | 文件路径          |
@@ -168,8 +166,6 @@ Workbench 单例 UI。
 | `last_error`            | TEXT    | 最近错误          |
 
 ### `docx_apply`
-
-文件会话和持久 run_id 统一归属主 ownerRunId；连续编辑保留首次原始快照及最后确认工作版本，真正收尾生成净修改审核。
 
 DOCX 应用记录表；当前应用/回退接口投影 `ai_file_change`，不再写入独立记录。
 

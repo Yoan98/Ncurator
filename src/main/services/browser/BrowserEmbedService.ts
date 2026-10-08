@@ -159,10 +159,39 @@ const loadWebContentsUrl = async (
   url: string,
   signal?: AbortSignal
 ): Promise<void> => {
-  await raceAbort(contents.loadURL(url), signal, () => {
+  await loadWebContentsNavigation(contents, () => contents.loadURL(url), signal)
+}
+
+const loadWebContentsNavigation = async (
+  contents: WebContents,
+  startLoad: () => Promise<void>,
+  signal?: AbortSignal
+): Promise<void> => {
+  if (signal?.aborted) throw createCancelledError()
+  const stop = (): void => {
     if (!contents.isDestroyed()) contents.stop()
-  })
-  await waitForWebContentsLoad(contents, signal)
+  }
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    await raceAbort(
+      Promise.race([
+        (async () => {
+          await startLoad()
+          await waitForWebContentsLoad(contents, signal)
+        })(),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            reject(new Error('浏览器页面加载超时'))
+            stop()
+          }, EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS)
+        })
+      ]),
+      signal,
+      stop
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 const loadUrlOnce = async (
@@ -269,12 +298,34 @@ const waitForUsableDocument = async (
   signal?: AbortSignal
 ): Promise<DocumentInspection> => {
   const deadline = Date.now() + EMBEDDED_BROWSER_PAGE_CONTENT_WAIT_MS
-  let last = await inspectDocument(contents)
+  const inspect = async (): Promise<DocumentInspection> => {
+    // Electron can defer script execution forever when a navigation stopped before DOM creation.
+    const blank: DocumentInspection = {
+      status: 'blank',
+      url: contents.getURL(),
+      title: contents.getTitle().trim()
+    }
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await raceAbort(
+        Promise.race([
+          inspectDocument(contents),
+          new Promise<DocumentInspection>((resolve) => {
+            timeout = setTimeout(() => resolve(blank), Math.max(0, deadline - Date.now()))
+          })
+        ]),
+        signal
+      )
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+  let last = await inspect()
   if (last.status !== 'blank') return last
   while (Date.now() < deadline) {
     await raceAbort(sleep(EMBEDDED_BROWSER_PAGE_CONTENT_POLL_MS), signal)
     if (contents.isDestroyed()) return last
-    last = await inspectDocument(contents)
+    last = await inspect()
     if (last.status !== 'blank') return last
   }
   return last
@@ -498,7 +549,7 @@ export class BrowserEmbedService implements BrowserUseService {
     runtime.persisted.updatedAt = Date.now()
     this.stateStore.save(runtime.persisted)
     this.applyAllVisibility()
-    if (!runtime.view) void this.ensureReady(runtime)
+    if (!runtime.view) this.prepareView(runtime)
     this.emitState(runtime)
     return this.toState(runtime)
   }
@@ -559,9 +610,7 @@ export class BrowserEmbedService implements BrowserUseService {
       runtime.ready = null
       runtime.attached = false
       runtime.visible = false
-      void this.ensureReady(runtime).then(() => {
-        if (this.presentedTabId === tabId) this.applyAllVisibility()
-      })
+      this.prepareView(runtime)
     } else {
       // 后台加载完成后再挂载时，强制重绘，避免地址栏有 URL 但视口白屏。
       this.forcePresentedPaint(runtime)
@@ -655,7 +704,7 @@ export class BrowserEmbedService implements BrowserUseService {
     if (runtime.view) {
       runtime.view.webContents.reload()
     } else {
-      void this.ensureReady(runtime)
+      this.prepareView(runtime)
     }
   }
 
@@ -785,7 +834,7 @@ export class BrowserEmbedService implements BrowserUseService {
       runtime.lastNavigateRaw = input.url
       runtime.navGeneration += 1
       runtime.showingNetError = false
-      const view = await this.ensureReady(runtime)
+      const view = await this.ensureReady(runtime, input.abortSignal)
       if (input.abortSignal?.aborted) throw createCancelledError()
       const primaryUrl = plan.url
       runtime.pendingNavigateUrl = primaryUrl
@@ -922,9 +971,21 @@ export class BrowserEmbedService implements BrowserUseService {
     return this.presentedTabId === tabId && this.presentationId === presentationId
   }
 
-  private async ensureReady(runtime: BrowserTabRuntime): Promise<WebContentsView> {
+  private prepareView(runtime: BrowserTabRuntime): void {
+    void this.ensureReady(runtime).catch((error) => {
+      console.warn('[BROWSER] Failed to restore tab:', error)
+    })
+  }
+
+  private async ensureReady(
+    runtime: BrowserTabRuntime,
+    signal?: AbortSignal
+  ): Promise<WebContentsView> {
+    if (signal?.aborted) throw createCancelledError()
     if (runtime.ready) {
-      await runtime.ready
+      await raceAbort(runtime.ready, signal, () => {
+        if (runtime.view && !runtime.view.webContents.isDestroyed()) runtime.view.webContents.stop()
+      })
       if (runtime.view && !runtime.view.webContents.isDestroyed()) return runtime.view
       runtime.view = null
       runtime.ready = null
@@ -953,7 +1014,7 @@ export class BrowserEmbedService implements BrowserUseService {
     this.bindViewEvents(runtime, view)
     this.applyAllVisibility()
     try {
-      await this.restoreRuntime(runtime, view)
+      await this.restoreRuntime(runtime, view, signal)
     } finally {
       resolveReady?.()
       if (this.presentedTabId === runtime.persisted.id) this.applyAllVisibility()
@@ -1013,7 +1074,11 @@ export class BrowserEmbedService implements BrowserUseService {
     })
   }
 
-  private async restoreRuntime(runtime: BrowserTabRuntime, view: WebContentsView): Promise<void> {
+  private async restoreRuntime(
+    runtime: BrowserTabRuntime,
+    view: WebContentsView,
+    signal?: AbortSignal
+  ): Promise<void> {
     const restoredZoom = clampZoomFactor(runtime.persisted.zoomFactor || 1)
     const restoredHistory = runtime.persisted.history
       ? {
@@ -1026,13 +1091,17 @@ export class BrowserEmbedService implements BrowserUseService {
     try {
       view.webContents.setZoomFactor(restoredZoom)
       if (restoredHistory?.entries.length) {
-        await view.webContents.navigationHistory.restore({
-          entries: restoredHistory.entries,
-          index: restoredHistory.index
-        })
-        await waitForWebContentsLoad(view.webContents)
+        await loadWebContentsNavigation(
+          view.webContents,
+          () =>
+            view.webContents.navigationHistory.restore({
+              entries: restoredHistory.entries,
+              index: restoredHistory.index
+            }),
+          signal
+        )
       } else if (runtime.persisted.url) {
-        await loadWebContentsUrl(view.webContents, runtime.persisted.url)
+        await loadWebContentsUrl(view.webContents, runtime.persisted.url, signal)
       }
       // Navigation restore often resets zoom to 1; re-apply the persisted factor after load.
       view.webContents.setZoomFactor(restoredZoom)
@@ -1076,14 +1145,14 @@ export class BrowserEmbedService implements BrowserUseService {
             }
           : { x: 0, y: 0, width: 1280, height: 800 }
         const becomingVisible = (visible && !runtime.visible) || !runtime.attached
-        // Background pages stay inside the native surface, behind the app's own view.
-        // Moving them outside the window clips their viewport to zero on macOS.
-        if (!runtime.attached || runtime.visible !== visible) {
-          this.mainWindow.contentView.addChildView(runtime.view, visible ? undefined : 0)
+        // BrowserWindow's own page is not a child of contentView. An index of zero
+        // still overlays it, so background pages must be hidden, keeping their bounds.
+        if (!runtime.attached || (visible && !runtime.visible)) {
+          this.mainWindow.contentView.addChildView(runtime.view)
           runtime.attached = true
         }
         runtime.view.setBounds(nextBounds)
-        runtime.view.setVisible(true)
+        runtime.view.setVisible(visible)
         if (becomingVisible) {
           runtime.view.webContents.invalidate()
         }
@@ -1226,7 +1295,7 @@ export class BrowserEmbedService implements BrowserUseService {
     runtime: BrowserTabRuntime
   ): Promise<BrowserUseRunResult> {
     const signal = input.abortSignal
-    const view = await this.ensureReady(runtime)
+    const view = await this.ensureReady(runtime, signal)
     await waitForWebContentsLoad(view.webContents, signal)
     const usable = await waitForUsableDocument(view.webContents, signal)
     const tabId = runtime.persisted.id

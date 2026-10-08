@@ -25,12 +25,10 @@ import type { BrowserEmbedService } from '../browser/BrowserEmbedService'
 import type { WebCrawlerService } from '../webCrawler/types'
 import type { TelemetryService } from '../telemetry/TelemetryService'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
-import type { AiRunDeps } from './types'
+import type { AiRunDeps, AiApprovalBatchRequest, AiApprovalBatchResult } from './types'
 import { PRODUCT_NAME_ZH } from '../../../shared/constants'
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type {
-  AiApprovalBatchDecision,
-  AiApprovalBatchItem,
   AiArtifactRef,
   AiExecutionPermission,
   AiLlmIoRecord,
@@ -63,20 +61,9 @@ import { projectAiConversationMessages } from '../../../shared/workbench/convers
 import { buildBrainUserMessageForInput } from './human/prompts/brain'
 
 type ActiveApproval = {
-  batchId: string
-  taskId: string
-  itemIds: string[]
-  items: AiApprovalBatchItem[]
-  internal?: boolean
-  stage?: AiRunEvent['stage']
-  resolve: (
-    result:
-      | {
-          accepted: true
-          decisions: AiApprovalBatchDecision[]
-        }
-      | { accepted: false; error: string }
-  ) => void
+  event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+  abortSignal?: AbortSignal
+  settle: (result: AiApprovalBatchResult) => void
 }
 
 type ActiveQuestion = {
@@ -123,6 +110,7 @@ type ChatRunServiceDeps = {
     | (() => import('../scheduler/ScheduledTaskService').ScheduledTaskService | undefined)
   telemetryService?: TelemetryService
   errorLogService?: AppErrorLogService
+  llmDriver?: AiRunDeps['llmDriver']
   recordLlmIo?: (record: AiLlmIoRecord) => void
   broadcastEvent?: (event: AiRunEvent) => void
   autoStartRuns?: boolean
@@ -165,7 +153,7 @@ const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArti
 export class ChatRunService {
   private readonly activeRuns = new Map<string, ActiveRun>()
   private readonly executions = new Map<string, Promise<void>>()
-  private readonly activeApprovals = new Map<string, ActiveApproval>()
+  private readonly activeApprovals = new Map<string, ActiveApproval[]>()
   private readonly activeQuestions = new Map<string, ActiveQuestion>()
   private readonly pendingPartnerSubmissions = new Set<string>()
 
@@ -401,7 +389,7 @@ export class ChatRunService {
       entry.abortController.abort()
       this.clearProjectionFlush(runId)
       const approval = this.activeApprovals.get(runId)
-      approval?.resolve({ accepted: false, error: '当前伙伴已删除' })
+      approval?.forEach((pending) => pending.settle({ accepted: false, error: '当前伙伴已删除' }))
       this.activeApprovals.delete(runId)
       this.activeQuestions.get(runId)?.resolve({ accepted: false, error: '当前伙伴已删除' })
       this.activeQuestions.delete(runId)
@@ -811,9 +799,7 @@ export class ChatRunService {
     entry.cancelled = true
     entry.abortController.abort()
     await terminalSessionManager.stopByRun(normalizedRunId)
-    const approval = this.activeApprovals.get(normalizedRunId)
-    approval?.resolve({ accepted: false, error: '已取消' })
-    this.activeApprovals.delete(normalizedRunId)
+    await this.closeApprovalQueue(normalizedRunId, '已取消')
     const question = this.activeQuestions.get(normalizedRunId)
     question?.resolve({ accepted: false, error: '已取消' })
     this.activeQuestions.delete(normalizedRunId)
@@ -866,6 +852,7 @@ export class ChatRunService {
       resolvedAt: Date.now()
     })
     this.activeQuestions.delete(runId)
+    await this.advanceApprovalQueue(runId)
     pending.resolve({ accepted: true, result: payload.answers })
     return { success: true }
   }
@@ -877,71 +864,67 @@ export class ChatRunService {
     const batchId = String(payload?.batchId || '').trim()
     if (!runId || !batchId) return { success: false, error: 'runId and batchId are required' }
 
-    const pending = this.activeApprovals.get(runId)
-    if (!pending) return { success: false, error: '当前运行已结束' }
-    if (pending.batchId !== batchId) return { success: false, error: 'approval batch not found' }
-
-    const decisions = Array.isArray(payload?.decisions) ? payload.decisions : []
-    if (decisions.length !== pending.itemIds.length) {
-      return { success: false, error: 'each approval item must have exactly one decision' }
-    }
-
-    const seenIds = new Set<string>()
-    for (const decision of decisions) {
-      const itemId = String(decision?.itemId || '').trim()
-      const action = String(decision?.action || '').trim()
-      if (!itemId || !pending.itemIds.includes(itemId) || seenIds.has(itemId)) {
-        return { success: false, error: 'invalid approval decision items' }
+    return this.queueRunOperation(runId, async () => {
+      const run = await this.getMutableRun(runId)
+      const queue = this.activeApprovals.get(runId) || []
+      const pending = queue.find((item) => item.event.batchId === run?.pendingApproval?.batchId)
+      if (
+        !run ||
+        !pending ||
+        this.activeRuns.get(runId)?.cancelled ||
+        pending.abortSignal?.aborted
+      ) {
+        return { success: false, error: '当前审批已结束' }
       }
-      if (action !== 'approve' && action !== 'reject' && action !== 'guide') {
-        return { success: false, error: 'invalid approval decision action' }
+      if (pending.event.batchId !== batchId)
+        return { success: false, error: 'approval batch not found' }
+      const decisions = Array.isArray(payload.decisions) ? payload.decisions : []
+      const itemIds = new Set(pending.event.items.map((item) => item.itemId))
+      if (
+        decisions.length !== itemIds.size ||
+        decisions.some(
+          (decision) =>
+            !itemIds.delete(decision.itemId) ||
+            !['approve', 'reject', 'guide'].includes(decision.action) ||
+            (decision.action === 'guide' && !decision.message?.trim())
+        )
+      )
+        return { success: false, error: 'invalid approval decisions' }
+      const normalizedDecisions = decisions.map((decision) => ({
+        itemId: decision.itemId,
+        action: decision.action,
+        message: decision.message?.trim()
+      }))
+      const next = queue.find((item) => item !== pending && !item.abortSignal?.aborted)
+      try {
+        const persisted = await this.deps.aiRunStore.decideApprovalBatchTransaction({
+          runId,
+          request: { runId, batchId, decisions: normalizedDecisions },
+          source: pending.event.source,
+          nextApproval: next?.event
+        })
+        if (!persisted.ok || !persisted.run)
+          return { success: false, error: persisted.error || 'approval failed' }
+        this.applyApprovalSnapshot(run, persisted.run)
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) }
       }
-      if (action === 'guide' && !String(decision?.message || '').trim()) {
-        return { success: false, error: 'guide decision requires non-empty message' }
-      }
-      seenIds.add(itemId)
-    }
-
-    const normalizedDecisions = decisions.map((decision) => ({
-      itemId: String(decision.itemId).trim(),
-      action: decision.action,
-      message: typeof decision.message === 'string' ? decision.message.trim() : undefined
-    }))
-    const decisionEvent: AiRunEvent = {
-      type: 'approval_batch_decision',
-      runId,
-      taskId: pending.taskId,
-      batchId,
-      decisions: normalizedDecisions,
-      decidedAt: Date.now(),
-      internal: pending.internal,
-      stage: pending.stage
-    }
-    const persisted = await this.deps.aiRunStore.decideApprovalBatchTransaction({
-      runId,
-      request: payload
+      this.removeApproval(runId, pending)
+      this.broadcastEvent({
+        type: 'approval_batch_decision',
+        runId,
+        taskId: pending.event.taskId,
+        batchId,
+        source: pending.event.source,
+        decisions: normalizedDecisions,
+        decidedAt: Date.now(),
+        internal: pending.event.internal,
+        stage: pending.event.stage
+      })
+      if (next) this.broadcastEvent(next.event)
+      pending.settle({ accepted: true, decisions: normalizedDecisions })
+      return { success: true }
     })
-    if (!persisted.ok) return { success: false, error: persisted.error || 'approval failed' }
-
-    const entry = this.activeRuns.get(runId)
-    if (entry) {
-      entry.run = {
-        ...entry.run,
-        ...(persisted.run || {}),
-        status: 'running',
-        pendingApproval: undefined,
-        pendingInteraction: undefined
-      }
-    }
-
-    this.activeApprovals.delete(runId)
-    this.broadcastEvent(decisionEvent)
-    pending.resolve({
-      accepted: true,
-      decisions: normalizedDecisions
-    })
-
-    return { success: true }
   }
 
   private async buildRunSnapshot(run: AiRunRecord) {
@@ -1172,6 +1155,7 @@ export class ChatRunService {
           abortSignal: this.activeRuns.get(runId)?.abortController.signal,
           sendEvent,
           recordLlmIo: this.deps.recordLlmIo,
+          llmDriver: this.deps.llmDriver,
           requestApprovalBatch: async (request) => await this.requestApprovalBatch(runId, request),
           requestUserQuestion: async (request) => await this.requestUserQuestion(runId, request),
           browserUseService: this.deps.browserUseService,
@@ -1267,9 +1251,7 @@ export class ChatRunService {
       })
     } finally {
       await this.deps.runResourceManager.releaseRun(runId)
-      const approval = this.activeApprovals.get(runId)
-      approval?.resolve({ accepted: false, error: 'run closed' })
-      this.activeApprovals.delete(runId)
+      await this.closeApprovalQueue(runId, 'run closed')
       const question = this.activeQuestions.get(runId)
       question?.resolve({ accepted: false, error: 'run closed' })
       this.activeQuestions.delete(runId)
@@ -1279,75 +1261,205 @@ export class ChatRunService {
     }
   }
 
+  private applyApprovalSnapshot(run: AiRunRecord, saved: AiRunRecord): void {
+    run.status = saved.status
+    run.pendingApproval = saved.pendingApproval
+    run.pendingInteraction = saved.pendingInteraction
+    run.updatedAt = saved.updatedAt
+  }
+
+  private removeApproval(runId: string, pending: ActiveApproval): void {
+    const queue = (this.activeApprovals.get(runId) || []).filter((item) => item !== pending)
+    if (queue.length) this.activeApprovals.set(runId, queue)
+    else this.activeApprovals.delete(runId)
+  }
+
+  private async advanceApprovalQueue(runId: string): Promise<void> {
+    await this.queueRunOperation(runId, async () => {
+      const run = await this.getMutableRun(runId)
+      if (!run || this.activeRuns.get(runId)?.cancelled) return
+      const next = this.activeApprovals.get(runId)?.find((item) => !item.abortSignal?.aborted)
+      if (run.pendingInteraction) {
+        if (run.pendingInteraction.kind === 'question') {
+          const status = next ? 'waiting_approval' : 'waiting_human'
+          if (run.status !== status) {
+            const saved = await this.deps.aiRunStore.saveApprovalTransition({
+              runId,
+              status,
+              entries: []
+            })
+            this.applyApprovalSnapshot(run, saved)
+          }
+        }
+        return
+      }
+      if (!next) return
+      const saved = await this.deps.aiRunStore.saveApprovalTransition({
+        runId,
+        pendingApproval: next.event,
+        entries: []
+      })
+      this.applyApprovalSnapshot(run, saved)
+      this.broadcastEvent(next.event)
+    })
+  }
+
+  private async cancelApproval(
+    runId: string,
+    pending: ActiveApproval,
+    reason: string,
+    advance = true
+  ): Promise<void> {
+    await this.queueRunOperation(runId, async () => {
+      const queue = this.activeApprovals.get(runId) || []
+      if (!queue.includes(pending)) return
+      const run = await this.getMutableRun(runId)
+      const visible = run?.pendingApproval?.batchId === pending.event.batchId
+      const next =
+        advance && !this.activeRuns.get(runId)?.cancelled
+          ? queue.find((item) => item !== pending && !item.abortSignal?.aborted)
+          : undefined
+      try {
+        if (run) {
+          const saved = await this.deps.aiRunStore.saveApprovalTransition({
+            runId,
+            pendingApproval: visible ? next?.event || null : undefined,
+            status:
+              !visible && this.activeQuestions.has(runId)
+                ? queue.some((item) => item !== pending && !item.abortSignal?.aborted)
+                  ? 'waiting_approval'
+                  : 'waiting_human'
+                : undefined,
+            entries: [
+              {
+                kind: 'annotation',
+                eventType: 'approval_cancelled',
+                payload: {
+                  batchId: pending.event.batchId,
+                  taskId: pending.event.taskId,
+                  source: pending.event.source,
+                  reason
+                }
+              }
+            ]
+          })
+          this.applyApprovalSnapshot(run, saved)
+        }
+        if (visible)
+          this.broadcastEvent({
+            type: 'approval_batch_cancelled',
+            runId,
+            taskId: pending.event.taskId,
+            batchId: pending.event.batchId,
+            source: pending.event.source,
+            reason,
+            cancelledAt: Date.now()
+          })
+        if (visible && next) this.broadcastEvent(next.event)
+      } finally {
+        this.removeApproval(runId, pending)
+        pending.settle({ accepted: false, error: reason })
+      }
+    })
+  }
+
+  private async closeApprovalQueue(runId: string, reason: string): Promise<void> {
+    const queue = [...(this.activeApprovals.get(runId) || [])]
+    const results = await Promise.allSettled(
+      queue.map((pending) => this.cancelApproval(runId, pending, reason, false))
+    )
+    for (const result of results)
+      if (result.status === 'rejected')
+        console.error('[CHAT-RUN] approval queue cleanup failed:', result.reason)
+  }
+
   private async requestApprovalBatch(
     runId: string,
-    request: {
-      taskId: string
-      batchId: string
-      items: AiApprovalBatchItem[]
-      internal?: boolean
-      stage?: AiRunEvent['stage']
+    request: AiApprovalBatchRequest
+  ): Promise<AiApprovalBatchResult> {
+    const entry = this.activeRuns.get(runId)
+    const signal = request.abortSignal || entry?.abortController.signal
+    if (!entry || entry.finalizing || entry.cancelled || entry.deleted || signal?.aborted) {
+      return { accepted: false, error: '当前运行已结束' }
     }
-  ): Promise<
-    | {
-        accepted: true
-        decisions: AiApprovalBatchDecision[]
-      }
-    | { accepted: false; error: string }
-  > {
-    if (this.activeRuns.get(runId)?.cancelled) return { accepted: false, error: '当前运行已结束' }
-    const run = await this.getMutableRun(runId)
-    if (run?.executionPermission === 'full_access') {
+    const run = entry.run
+    if (run.executionPermission === 'full_access') {
       return {
         accepted: true,
         decisions: request.items.map((item) => ({ itemId: item.itemId, action: 'approve' }))
       }
     }
-    if (this.activeApprovals.has(runId) || this.activeQuestions.has(runId)) {
-      return { accepted: false, error: '已有待处理的人机交互' }
+    if (this.activeApprovals.get(runId)?.some((item) => item.event.batchId === request.batchId)) {
+      return { accepted: false, error: 'duplicate approval batch' }
     }
-
-    await this.queueRunEvent(runId, {
+    const event: Extract<AiRunEvent, { type: 'approval_batch_required' }> = {
       type: 'approval_batch_required',
       runId,
       taskId: request.taskId,
       batchId: request.batchId,
       items: request.items,
+      source: request.source,
       createdAt: Date.now(),
       internal: request.internal,
       stage: request.stage
-    })
-
-    return await new Promise((resolve) => {
-      this.activeApprovals.set(runId, {
-        batchId: request.batchId,
-        taskId: request.taskId,
-        itemIds: request.items.map((item) => item.itemId),
-        items: request.items,
-        internal: request.internal,
-        stage: request.stage,
-        resolve: (result) => {
-          this.activeApprovals.delete(runId)
-          if (!result.accepted) {
-            void this.queueRunEvent(runId, {
-              type: 'approval_batch_decision',
-              runId,
-              taskId: request.taskId,
-              batchId: request.batchId,
-              decisions: request.items.map((item) => ({
-                itemId: item.itemId,
-                action: 'reject' as const,
-                message: result.error
-              })),
-              decidedAt: Date.now(),
-              internal: request.internal,
-              stage: request.stage
-            })
-          }
-          resolve(result)
+    }
+    let pending: ActiveApproval
+    const result = new Promise<AiApprovalBatchResult>((resolve) => {
+      const cancel = (): void => {
+        void this.cancelApproval(runId, pending, '已取消').catch((error) => {
+          console.error('[CHAT-RUN] approval cancellation failed:', error)
+        })
+      }
+      pending = {
+        event,
+        abortSignal: signal,
+        settle: (value) => {
+          signal?.removeEventListener('abort', cancel)
+          resolve(value)
         }
-      })
+      }
+      // Register the executor before a card can be published or a user can reply.
+      this.activeApprovals.set(runId, [...(this.activeApprovals.get(runId) || []), pending])
+      signal?.addEventListener('abort', cancel, { once: true })
     })
+    try {
+      await this.queueRunOperation(runId, async () => {
+        if (signal?.aborted || this.activeRuns.get(runId)?.cancelled) return
+        const current = await this.getMutableRun(runId)
+        if (!current) throw new Error('run not found')
+        const visible = !current.pendingInteraction && !this.activeQuestions.has(runId)
+        const saved = await this.deps.aiRunStore.saveApprovalTransition({
+          runId,
+          pendingApproval: visible ? event : undefined,
+          status: 'waiting_approval',
+          entries: [
+            {
+              kind: 'annotation',
+              eventType: 'approval_requested',
+              payload: {
+                batchId: event.batchId,
+                taskId: event.taskId,
+                source: event.source,
+                items: event.items
+              }
+            }
+          ]
+        })
+        this.applyApprovalSnapshot(current, saved)
+        if (visible) this.broadcastEvent(event)
+      })
+      if (signal?.aborted || this.activeRuns.get(runId)?.cancelled) {
+        await this.cancelApproval(runId, pending!, '已取消')
+      }
+    } catch (error) {
+      this.removeApproval(runId, pending!)
+      pending!.settle({
+        accepted: false,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      await this.advanceApprovalQueue(runId)
+    }
+    return result
   }
 
   private async requestUserQuestion(
@@ -1405,21 +1517,22 @@ export class ChatRunService {
     return await resultPromise
   }
 
-  private queueRunEvent(runId: string, event: AiRunEvent): Promise<void> {
+  private queueRunOperation<T>(runId: string, operation: () => Promise<T>): Promise<T> {
     const entry = this.activeRuns.get(runId)
-    if (entry?.deleted) return Promise.resolve()
-    const previous = entry?.eventQueue || Promise.resolve()
-    const next = previous
-      .catch(() => {})
-      .then(async () => {
-        await this.persistProjectAndBroadcastEvent(runId, event)
-      })
-    if (entry) {
-      entry.eventQueue = next.catch((error) => {
-        console.error('[CHAT-RUN] event queue failed:', error)
-      })
-    }
+    const next = (entry?.eventQueue || Promise.resolve()).catch(() => {}).then(operation)
+    if (entry)
+      entry.eventQueue = next.then(
+        () => {},
+        (error) => {
+          console.error('[CHAT-RUN] event queue failed:', error)
+        }
+      )
     return next
+  }
+
+  private queueRunEvent(runId: string, event: AiRunEvent): Promise<void> {
+    if (this.activeRuns.get(runId)?.deleted) return Promise.resolve()
+    return this.queueRunOperation(runId, () => this.persistProjectAndBroadcastEvent(runId, event))
   }
 
   private async flushRunEvents(runId: string): Promise<void> {
@@ -1557,20 +1670,24 @@ export class ChatRunService {
         kind: 'approval',
         interactionId: event.batchId,
         batchId: event.batchId,
-        items: event.items
+        items: event.items,
+        source: event.source
       }
       run.updatedAt = now
-    } else if (event.type === 'approval_batch_decision') {
+    } else if (
+      (event.type === 'approval_batch_decision' || event.type === 'approval_batch_cancelled') &&
+      run.pendingApproval?.batchId === event.batchId
+    ) {
       run.status = 'running'
       run.pendingApproval = undefined
       run.pendingInteraction = undefined
       run.updatedAt = now
     } else if (event.type === 'human_interaction_required') {
-      run.status = 'waiting_human'
+      run.status = this.activeApprovals.has(runId) ? 'waiting_approval' : 'waiting_human'
       run.pendingInteraction = event.interaction
       run.updatedAt = now
     } else if (event.type === 'human_interaction_resolved') {
-      run.status = 'running'
+      run.status = this.activeApprovals.has(runId) ? 'waiting_approval' : 'running'
       run.pendingInteraction = undefined
       run.updatedAt = now
     } else if (event.type === 'run_completed') {

@@ -1268,6 +1268,7 @@ export type PendingHumanInteraction =
       interactionId: string
       items: AiApprovalBatchItem[]
       batchId?: string
+      source?: AiApprovalSource
     }
 
 export type AiRunHumanInteractionRequest = {
@@ -1445,6 +1446,12 @@ export type AiApprovalBatchItem = {
   reason: string
 }
 
+export type AiApprovalSource = {
+  childRunId: string
+  name: string
+  parentToolCallId: string
+}
+
 export type AiApprovalBatchDecision = {
   itemId: string
   action: 'approve' | 'reject' | 'guide'
@@ -1611,6 +1618,7 @@ export type AiRunFailureSource = 'provider' | 'internal'
 export type SubagentTaskStatus =
   | 'queued'
   | 'running'
+  | 'waiting_approval'
   | 'completed'
   | 'failed'
   | 'cancelled'
@@ -1887,6 +1895,7 @@ type AiRunEventPayload =
       taskId: string
       batchId: string
       items: AiApprovalBatchItem[]
+      source?: AiApprovalSource
       createdAt: number
     }
   | {
@@ -1895,7 +1904,17 @@ type AiRunEventPayload =
       taskId: string
       batchId: string
       decisions: AiApprovalBatchDecision[]
+      source?: AiApprovalSource
       decidedAt: number
+    }
+  | {
+      type: 'approval_batch_cancelled'
+      runId: string
+      taskId: string
+      batchId: string
+      source?: AiApprovalSource
+      reason: string
+      cancelledAt: number
     }
   | {
       type: 'llm_stream_delta'
@@ -2072,6 +2091,31 @@ export type ChatMessageLogPlanItem = {
 
 export type ChatMessageLogAnnotationEntry =
   | { kind: 'annotation'; eventType: 'subagent_updated'; payload: SubagentUpdate }
+  | {
+      kind: 'annotation'
+      eventType: 'approval_requested'
+      payload: {
+        batchId: string
+        taskId: string
+        source?: AiApprovalSource
+        items: AiApprovalBatchItem[]
+      }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'approval_decided'
+      payload: {
+        batchId: string
+        taskId: string
+        source?: AiApprovalSource
+        decisions: AiApprovalBatchDecision[]
+      }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'approval_cancelled'
+      payload: { batchId: string; taskId: string; source?: AiApprovalSource; reason: string }
+    }
   | {
       kind: 'annotation'
       eventType: 'thinking_started' | 'thinking_completed' | 'finalizing_started'

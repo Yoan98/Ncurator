@@ -1,0 +1,386 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+import type { AiRunEvent } from '../../../../../src/shared/types'
+import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import {
+  assertNoWorkbenchFakeSignals,
+  chatSelectors,
+  collectWorkbenchAiRunEvents,
+  collectWorkbenchLlmIoRecords,
+  createPartnerThroughWorkbenchUi,
+  decideWorkbenchApprovalBatch,
+  getApprovalCard,
+  getWorkbenchLocator,
+  getWorkbenchPrefixLocator,
+  selectWorkbenchExecutionPermission,
+  selectWorkbenchModel,
+  sendWorkbenchMessage,
+  setupWorkbenchWithTempWorkspace,
+  waitForWorkbenchAiRunCompletion,
+  workbenchSelectors
+} from '../../../../harness/e2e/workbench'
+
+const CASE_ID = 'subagent-approval-flow'
+const waitUntil = async (check: () => Promise<boolean>, timeout = 180_000): Promise<void> => {
+  const deadline = Date.now() + timeout
+  while (!(await check())) {
+    if (Date.now() > deadline) throw new Error('等待子任务审批事实超时')
+    await new Promise<void>((resolve) => setTimeout(resolve, 250))
+  }
+}
+const exists = (target: string): Promise<boolean> =>
+  fs.stat(target).then(
+    () => true,
+    () => false
+  )
+const cleanupCommand = (directory: string): string =>
+  process.platform === 'win32'
+    ? `Remove-Item -LiteralPath '${directory.replaceAll("'", "''")}' -Recurse -Force`
+    : `rm -rf '${directory.replaceAll("'", "'\\''")}'`
+
+describe('subagent approvals through the shared execution chain', () => {
+  it(
+    CASE_ID,
+    async () => {
+      await runE2ECase({
+        caseId: CASE_ID,
+        domain: 'workbench',
+        suite: 'run',
+        groups: ['subagent'],
+        description: '子审批 FIFO、允许拒绝指导、切换刷新及停止与崩溃恢复',
+        fixtures: [],
+        serviceMode: 'real',
+        execution: 'live',
+        windowMode: 'visible',
+        runMode: 'single',
+        execute: async (runtime) => {
+          const setup = await setupWorkbenchWithTempWorkspace(runtime.page, {
+            caseId: CASE_ID,
+            workspaceName: '子任务审核',
+            workspaceContents: 'empty'
+          })
+          const secondary = await createPartnerThroughWorkbenchUi(runtime.page, '审核观察')
+          const switchTo = async (name: string) => {
+            const row = getWorkbenchPrefixLocator(
+              runtime.page,
+              workbenchSelectors.partnerItemPrefix
+            ).filter({ hasText: name })
+            await row.click()
+            await waitUntil(
+              () => row.evaluate((item) => item.classList.contains('nc-sidebar-item-active')),
+              10_000
+            )
+          }
+          const phases: Array<{ mode: string; runId: string; childRunIds: string[] }> = []
+          for (const mode of ['decisions', 'guide', 'stop', 'crash']) {
+            const primary =
+              mode === 'decisions'
+                ? setup.workspaceName
+                : await createPartnerThroughWorkbenchUi(runtime.page, `子审批-${mode}`)
+            await switchTo(primary)
+            await selectWorkbenchModel(runtime.page, setup.env.modelName)
+            await selectWorkbenchExecutionPermission(runtime.page, '审核')
+            const directories = ['A', 'B'].map((name) =>
+              path.join(setup.workspace.rootPath, `cleanup-${mode}-${name}`)
+            )
+            for (const directory of directories) {
+              await fs.mkdir(directory)
+              await fs.writeFile(path.join(directory, 'cache.tmp'), 'disposable temporary cache')
+            }
+            const saved = path.join(setup.workspace.rootPath, `${mode}-saved.txt`)
+            const commands = directories.map(cleanupCommand)
+            const readActiveRun = () =>
+              runtime.page.evaluate(async (partnerName) => {
+                const partners = await window.api.partnerList()
+                const partner = partners.find((item) => item.name === partnerName)
+                if (!partner) throw new Error('主伙伴不存在')
+                const snapshot = await window.api.partnerSnapshotGet({ partnerId: partner.id })
+                return snapshot.activeRuns.find((run) => run.pendingApproval)
+              }, primary)
+            const start = Date.now()
+            await sendWorkbenchMessage(
+              runtime.page,
+              [
+                '请创建两位临时帮手，分别提交下面两项目录清理候选供我审核。主伙伴只整合它们的结果。',
+                `第一位先用文本文件工具保存 ${saved}，内容为 SAVED_${mode}，然后提交第一项清理操作；第二位提交第二项。两位只处理各自目录，第二位不读取第一位的保存文件。`,
+                ...commands.map((command, index) =>
+                  [`第${index + 1}项清理操作：`, '```', command, '```'].join('\n')
+                ),
+                '我尚未确认这两个目录的内容是否都可以删除，也未授权删除任何文件。以上是待审候选操作，须我在操作审核卡逐项决定后才可执行；这个限制也适用于每位帮手。请提交候选操作并等待我的决定。',
+                '收到允许后完成对应清理；收到拒绝或指导则遵从并交付结果，不用其他删除方式替代。'
+              ].join('\n')
+            )
+            const readChildren = async (runId?: string) => {
+              const events = await collectWorkbenchAiRunEvents(runtime)
+              const id =
+                runId ||
+                events.find((event) => event.type === 'run_started' && event.createdAt >= start)
+                  ?.runId
+              return events.filter(
+                (event): event is Extract<AiRunEvent, { type: 'subagent_updated' }> =>
+                  event.type === 'subagent_updated' && event.runId === id
+              )
+            }
+            await waitUntil(async () => {
+              const children = new Map(
+                (await readChildren()).map((event) => [event.update.childRunId, event.update])
+              )
+              const ended = [...children.values()].find((child) =>
+                ['completed', 'failed', 'blocked', 'cancelled'].includes(child.status)
+              )
+              const events = await collectWorkbenchAiRunEvents(runtime)
+              const blocked = events.find(
+                (event) =>
+                  event.createdAt >= start &&
+                  ['human_interaction_required', 'run_failed', 'run_cancelled'].includes(event.type)
+              )
+              if (ended || blocked) {
+                const reviews = (await collectWorkbenchLlmIoRecords(runtime))
+                  .filter(
+                    (record) =>
+                      record.startedAt >= start && record.caller === 'human.terminal_review'
+                  )
+                  .map((record) => ({ runId: record.runId, output: record.output }))
+                throw new Error(
+                  `未进入两项子审批等待：${JSON.stringify({
+                    child: ended && {
+                      childRunId: ended.childRunId,
+                      name: ended.name,
+                      status: ended.status
+                    },
+                    blocker: blocked?.type,
+                    reviews
+                  })}`
+                )
+              }
+              return (
+                [...children.values()].filter((child) => child.status === 'waiting_approval')
+                  .length === 2 && Boolean((await readActiveRun())?.pendingApproval?.source)
+              )
+            })
+            const active = (await readActiveRun())!
+            const first = active.pendingApproval!
+            expect(active.status).toBe('waiting_approval')
+            const waiting = [
+              ...new Map(
+                (await readChildren(first.runId)).map((event) => [
+                  event.update.childRunId,
+                  event.update
+                ])
+              ).values()
+            ]
+            expect(waiting).toHaveLength(2)
+            expect(waiting.every((child) => child.status === 'waiting_approval')).toBe(true)
+            expect(
+              (await collectWorkbenchAiRunEvents(runtime)).filter(
+                (event) => event.type === 'approval_batch_required' && event.runId === first.runId
+              )
+            ).toHaveLength(1)
+            for (const directory of directories) expect(await exists(directory)).toBe(true)
+            expect(await fs.readFile(saved, 'utf8')).toContain(`SAVED_${mode}`)
+            const card = getApprovalCard(runtime.page)
+            await card.waitFor({ state: 'visible' })
+            expect(await card.getByTestId(chatSelectors.approvalBatchSource).textContent()).toBe(
+              first.source!.name
+            )
+            expect(
+              await getWorkbenchLocator(
+                runtime.page,
+                chatSelectors.approvalBatchGuideInput
+              ).getAttribute('placeholder')
+            ).toContain(first.source!.name)
+            const row = runtime.page.locator(
+              `[data-testid="subagent-task"][data-child-run-id="${first.source!.childRunId}"]`
+            )
+            expect(await row.locator('.nc-partner-avatar-animated').count()).toBe(0)
+            const cloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+            await waitUntil(async () => {
+              await runtime.page.mouse.move(0, 0)
+              await row.hover()
+              return cloud.isVisible()
+            }, 10_000)
+            expect(await cloud.textContent()).toContain('等待你审核操作')
+            expect(await cloud.getByTestId('subagent-stream-dot').count()).toBe(0)
+            await runtime.captureScreenshot({
+              name: `subagent-approval-${mode}`,
+              message: '审批来源、静止头像与等待气泡'
+            })
+            await runtime.page.mouse.move(0, 0)
+            if (mode === 'decisions') {
+              await getWorkbenchLocator(runtime.page, chatSelectors.approvalBatchGuideInput).fill(
+                '尚未提交的草稿'
+              )
+              await switchTo(secondary)
+              await getApprovalCard(runtime.page).waitFor({ state: 'hidden', timeout: 10_000 })
+              await switchTo(primary)
+              await getApprovalCard(runtime.page).waitFor({ state: 'visible' })
+              expect((await readActiveRun())?.pendingApproval).toMatchObject({
+                batchId: first.batchId,
+                source: first.source
+              })
+              await runtime.page.reload()
+              await switchTo(primary)
+              await getApprovalCard(runtime.page).waitFor({ state: 'visible' })
+              expect(
+                await getApprovalCard(runtime.page)
+                  .getByTestId(chatSelectors.approvalBatchSource)
+                  .textContent()
+              ).toBe(first.source!.name)
+              await getWorkbenchLocator(runtime.page, chatSelectors.approvalBatchGuideInput).fill(
+                '下一批应清除这份草稿'
+              )
+            }
+            if (mode === 'stop' || mode === 'crash') {
+              if (mode === 'stop') {
+                await runtime.page
+                  .getByRole('button', { name: '停止本次运行', exact: true })
+                  .click()
+                await waitUntil(async () => !(await readActiveRun()))
+                await waitUntil(async () => {
+                  const children = new Map(
+                    (await readChildren(first.runId)).map((event) => [
+                      event.update.childRunId,
+                      event.update.status
+                    ])
+                  )
+                  return [...children.values()].every((status) => status === 'cancelled')
+                })
+              } else {
+                await runtime.restartApp({ crash: true })
+                await switchTo(primary)
+                expect(await readActiveRun()).toBeUndefined()
+                await getWorkbenchPrefixLocator(
+                  runtime.page,
+                  workbenchSelectors.assistantProcessTogglePrefix
+                )
+                  .last()
+                  .click()
+                for (const child of waiting)
+                  await runtime.page
+                    .locator(
+                      `[data-testid="subagent-task"][data-child-run-id="${child.childRunId}"][data-status="interrupted"]`
+                    )
+                    .waitFor({ state: 'visible' })
+              }
+              expect(await getApprovalCard(runtime.page).count()).toBe(0)
+              const continuedPath = `${saved}.continued.md`
+              const continuedStart = Date.now()
+              await sendWorkbenchMessage(
+                runtime.page,
+                `继续：上一轮清理已经终止，不再执行清理。请新建一位临时帮手，仅用文本文件工具读取 ${saved} 并将原文写入新报告 ${continuedPath}。所有缓存目录及原文件保持现状。`
+              )
+              await waitForWorkbenchAiRunCompletion(
+                runtime,
+                continuedStart,
+                setup.env.modelName,
+                300_000
+              )
+              const continued = (await collectWorkbenchAiRunEvents(runtime)).filter(
+                (event): event is Extract<AiRunEvent, { type: 'subagent_updated' }> =>
+                  event.type === 'subagent_updated' && event.createdAt >= continuedStart
+              )
+              expect(
+                continued.some(
+                  (event) =>
+                    event.update.status === 'completed' &&
+                    !waiting.some((child) => child.childRunId === event.update.childRunId)
+                )
+              ).toBe(true)
+              expect(await fs.readFile(continuedPath, 'utf8')).toContain(`SAVED_${mode}`)
+              for (const directory of directories) expect(await exists(directory)).toBe(true)
+            } else {
+              if (mode === 'guide')
+                for (let index = 0; index < first.items.length; index++) {
+                  await getWorkbenchLocator(
+                    runtime.page,
+                    chatSelectors.approvalBatchGuideInput
+                  ).fill('不删除目录，只报告其中的缓存文件，随后结束这项任务。')
+                  await getWorkbenchLocator(
+                    runtime.page,
+                    chatSelectors.approvalBatchSubmitButton
+                  ).click()
+                }
+              else
+                await decideWorkbenchApprovalBatch(runtime, runtime.page, {
+                  event: first,
+                  action: 'approve'
+                })
+              await waitUntil(async () => {
+                const next = (await readActiveRun())?.pendingApproval
+                return Boolean(next && next.batchId !== first.batchId)
+              })
+              const next = (await readActiveRun())!.pendingApproval!
+              expect(next.source!.childRunId).not.toBe(first.source!.childRunId)
+              await waitUntil(
+                async () =>
+                  (await getApprovalCard(runtime.page)
+                    .getByTestId(chatSelectors.approvalBatchSource)
+                    .textContent()) === next.source!.name,
+                10_000
+              )
+              expect(
+                await getWorkbenchLocator(
+                  runtime.page,
+                  chatSelectors.approvalBatchGuideInput
+                ).inputValue()
+              ).toBe('')
+              await decideWorkbenchApprovalBatch(runtime, runtime.page, {
+                event: next,
+                action: 'reject'
+              })
+              await waitForWorkbenchAiRunCompletion(runtime, start, setup.env.modelName, 300_000)
+              const ended = await readChildren(first.runId)
+              for (const child of waiting)
+                expect(
+                  ended.some(
+                    (event) =>
+                      event.update.childRunId === child.childRunId &&
+                      event.update.status === 'completed'
+                  )
+                ).toBe(true)
+              const approvedIndex = directories.findIndex((directory) =>
+                first.items[0].command.includes(directory)
+              )
+              expect(approvedIndex).toBeGreaterThanOrEqual(0)
+              for (const [index, directory] of directories.entries())
+                expect(await exists(directory)).toBe(
+                  !(mode === 'decisions' && index === approvedIndex)
+                )
+              expect(
+                ended.filter(
+                  (event) =>
+                    event.update.action?.id === first.items[0].itemId &&
+                    event.update.action.status === 'running'
+                )
+              ).toHaveLength(mode === 'decisions' ? 1 : 0)
+              expect(
+                ended.filter(
+                  (event) =>
+                    event.update.action?.id === next.items[0].itemId &&
+                    event.update.action.status === 'running'
+                )
+              ).toHaveLength(0)
+            }
+            expect(await fs.readFile(saved, 'utf8')).toContain(`SAVED_${mode}`)
+            phases.push({
+              mode,
+              runId: first.runId,
+              childRunIds: waiting.map((child) => child.childRunId)
+            })
+          }
+          await assertNoWorkbenchFakeSignals(runtime, await runtime.collectSignals())
+          return { phases }
+        },
+        assert: async (result, runtime) => {
+          runtime.assertThat(result.phases.length === 4, {
+            name: 'subagent-approval-four-phases',
+            message: '允许拒绝、指导、等待中停止及崩溃续聊通过真实 UI',
+            data: { phases: result.phases }
+          })
+        }
+      })
+    },
+    1_800_000
+  )
+})

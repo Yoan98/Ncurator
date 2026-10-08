@@ -44,11 +44,13 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 - How：自然语言任务经生产 `AiRunService.run`；现有 XLSX、DOCX 和固定配置 fixture 复制到临时 workspace；真实模型、终端、工具和存储。保留主子 LLM I/O、事件、耗时与 token/cache 数据。
 - Oracle：三项子任务完成；终端产出数值事实；源经营表不变；配置与 DOCX 指定修改落盘且保护内容不变；主报告包含核对事实与依据；文件记录均归主 run。执行者根据 raw logs 评估完成度、准确性、依据和整合质量，回写 0–100 分，不设自动评分门槛。
 
+- 最新验证：2026-10-08 真实 qwen3.8-flash 通过，耗时 523s；raw logs：`tests/logs/ai/human/live/human-subagent-collaboration-live/20261008-163025-802-a4417b2c`。三项完成，销售/退货/净额为 91,824,000 / 422,000 / 91,402,000；源表、配置保护项及 DOCX 其余正文保持，主报告与主文件记录正确。人工质量评分 88/100：事实、依据和文件交付完整；报告 146 行、8.7KB，重复计算复核及一次无副作用的重复 DOCX 编辑，效率与简洁性扣分。主 17 次调用，输入/输出 348,127 / 11,363 token；子 31 次调用，输入/输出 436,122 / 26,090 token；总缓存读 671,744（85.7%），不据此推断子任务必然节省总 token。
+
 #### `human-subagent-isolation`
 
 - 测试类型：backend / mock-llm。
 - What：超出并发额度的批量派发、FIFO 排队、独立上下文、工具策略、公开流式消息与结果汇集。
-- Why：子任务不能读主聊天、再次派发或等待用户；子事件不能终止主 run。
+- Why：子任务不能读主聊天、再次派发或主动询问用户；子事件不能终止主 run。
 - How：生产 `AiRunService.run`，只脚本化 LLM 决策，其他依赖使用真实服务与存储。
 - Oracle：一次提交超过 2 项仍被接受，峰值并发为默认 2，排队任务仅在前序释放后启动，全部结果进入主工具消息；公开文本真实流式投递，实际请求状态成对开关且原始推理不转发；子完整日志不入 SQLite；状态与精简行动 annotation 持久化；受限工具不可绑定和执行。
 
@@ -68,13 +70,22 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 - How：生产运行、公共 compaction 节点与投影入口；只脚本化 LLM 决策，日志与存储真实。
 - Oracle：子 compaction 不污染主计划/技能；已完成子结果进入合成反馈，排队及运行中任务均标记中断；修复不写真实 tool 行、不自动派发。
 
+#### `human-subagent-approval`
+
+- 测试类型：backend / mock-llm；在现有 human-subagent 文件扩展。
+- What：子实例审批等待、同实例允许/拒绝/指导、主任务 FIFO、取消和中断修复。
+- Why：避免人工审批导致子实例提前结束、并发决定串任务、提交前执行或取消后执行。
+- How：生产 ChatRunService → AiRunService，透传既有 AiLlmDriver，只脚本化 brain 与 terminal_review；真实 SQLite、审批入口、终端、文件和资源管理。通过生产决定入口操作，不替换执行器或审批服务。
+- Oracle：同一 childRunId 在决定后继续；允许只执行一次，拒绝/指导不执行原命令；等待前磁盘无副作用；两个子审批 FIFO、第三项仍排队；事务提交后执行，重复/过期决定无效；取消清理全部等待并保留先前文件；子 brain 上下文独立，审核使用当前子任务输入，共用主运行的审核入口；文件归属隔离；规则直通、AI 自动通过、审核异常转人工及完全访问均覆盖。
+- 最新验证：2026-10-08 生产 ChatRunService 链路通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-approval/20261008-162947-016-d1ce3e5a`。允许、拒绝、指导、FIFO、停止及中断修复通过；子审核与 brain 均使用子任务输入，主上下文保持隔离。规则直通、AI 自动通过、审核异常转人工及完全访问均通过。
+
 ## 最新 Live 评估
 
 跨 run 缓存用例从已完成落盘的 LLM 日志按真实 `runId` 选择上一轮末次有效 brain 和下一轮首次 brain；禁止按日志数组长度切分轮次。断言记录双方 runId/callId、历史消息前缀和工具定义是否一致，以及服务端返回的缓存复用率。保留 85% 门槛；低命中与前缀改写分开归因，不用延时或降低门槛掩盖失败。
 
 | caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                                  | 简短依据                                                                                                                                                                                                                                                         |
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| human-subagent-collaboration-live                   | 完成 |            93 | deepseek-flash                   | 2026-10-05 15:04 CST | tests/logs/ai/human/live/human-subagent-collaboration-live/20261005-150459-302-7e8af28d                   | 三项子任务完成，核算 91,824,000 / 422,000 / 91,402,000；配置和 Word 修改归主 run，正式文件与独立审核解析、B 清理通过。78s。                                                                                                                                      |
+| human-subagent-collaboration-live | 完成 | 88 | qwen3.8-flash | 2026-10-08 16:30 CST | tests/logs/ai/human/live/human-subagent-collaboration-live/20261008-163025-802-a4417b2c | 三项完成，金额和文件正确，保护项保持，主文件归属正确。523s；报告偏长、重复复核及一次重复编辑扣分，缓存读 85.7%。 |
 | human-risk-report-draft-live                        | 完成 |            94 | deepseek-flash                   | 2026-10-05 15:05 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20261005-150552-320-b3053e8c                        | 11 次 Word 编辑交付新周报，来源文件保护和先生成后舍弃的草稿清理通过；独立审核可解析、确认 B 保留。73s。                                                                                                                                                          |
 | human-context-compaction-natural-trigger-live       | 完成 |            90 | qwen3.8-flash                    | 2026-09-12 13:38 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260912-130017-162                | 去掉 discard/digest 后四断言通过（2269s）。Run1 未压；Run2 预算 36297 过 36k，半截 throughSeq=75 后多次历史压（112/136/182/235/283/304）并交付；Run3 再压 333/366（半截）/376/397/437。`historyFloorKind` 仅 none/compaction。跨 run 缓存 0.993（35840/36101）。 |
 | human-excel-read-weekly-review-live                 | 完成 |            91 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                          | Oracle 通过；四表结构/公式/退货异常/口径不对等讲清；6×excel_read。过程仍 6×terminal 验算略多。缓存 83.6%。                                                                                                                                                       |

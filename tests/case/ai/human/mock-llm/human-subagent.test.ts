@@ -8,12 +8,16 @@ import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/hum
 import { createInitialHumanState } from '../../../../../src/main/services/ai/human/state/schema'
 import { describe, it, expect } from 'vitest'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
+import {
+  createAiServiceTestRunner,
+  createChatServiceTestRunner
+} from '../../../../harness/backend/aiServiceHarness'
 import type { ScriptedLlmCall, ScriptedLlmStep } from '../../../../harness/backend/test-types'
 import {
   buildCompleteTaskDecision,
   buildToolDecision,
-  buildLearnSkillsDecision
+  buildLearnSkillsDecision,
+  collectTerminalReviewCommandIds
 } from '../testUtils'
 import {
   projectMessageLogRecords,
@@ -40,6 +44,351 @@ const steps = (
 const isChild = (call: ScriptedLlmCall): boolean => /用户诉求：\n(?:CHILD_|PHASE_)/.test(call.user)
 
 describe('temporary subagents through production AiRunService', () => {
+  it('human-subagent-approval', async () => {
+    await runBackendCase({
+      caseId: 'human-subagent-approval',
+      domain: 'ai',
+      suite: 'human',
+      groups: ['mock-llm'],
+      harnessMode: 'mock-llm',
+      fixtures: [],
+      runMode: 'single',
+      description: '生产提交、同实例审批续跑、FIFO、拒绝指导和取消清理',
+      execute: async (runtime) => {
+        const waitFor = async (check: () => boolean | Promise<boolean>) => {
+          const deadline = Date.now() + 90000
+          while (!(await check())) {
+            if (Date.now() > deadline) throw new Error('approval evidence timed out')
+            await new Promise<void>((resolve) => setTimeout(resolve, 20))
+          }
+        }
+        const exists = async (target: string) =>
+          fs.stat(target).then(
+            () => true,
+            () => false
+          )
+        const results: Array<{
+          mode: string
+          status?: string
+          approvals: number
+          reviewCalls: number
+          executed: boolean
+        }> = []
+        for (const mode of [
+          'approve',
+          'reject',
+          'guide',
+          'auto',
+          'rule',
+          'review_error',
+          'full_access'
+        ]) {
+          const target = path.join(runtime.workspaceRoot, mode)
+          let rootCalls = 0
+          let childCalls = 0
+          const childInputs: string[] = []
+          const runner = await createChatServiceTestRunner(runtime, {
+            partnerId: `approval-${mode}`,
+            userInput: 'PARENT_SECRET 独立完成任务',
+            executionPermission: mode === 'full_access' ? 'full_access' : 'review',
+            llmScript: {
+              'human.brain': steps((call) => {
+                if (!isChild(call))
+                  return ++rootCalls === 1
+                    ? delegate([
+                        { name: '公式海豹', task: `CHILD_${mode.toUpperCase()} 独立创建核对目录` }
+                      ])
+                    : complete('收到独立任务结果')
+                childInputs.push(call.user)
+                childCalls += 1
+                return childCalls === 1
+                  ? buildToolDecision({
+                      toolName: 'terminal_run',
+                      args: {
+                        command:
+                          mode === 'rule'
+                            ? process.platform === 'win32'
+                              ? 'Get-Location'
+                              : 'pwd'
+                            : `mkdir "${target}"`,
+                        commandExplanation: '创建核对目录'
+                      },
+                      summary: '创建任务结果目录'
+                    })
+                  : complete('RESULT 独立任务处理完成')
+              }),
+              'human.terminal_review': Array.from({ length: 8 }, () => (call: ScriptedLlmCall) => {
+                if (mode === 'review_error') throw new Error('review provider unavailable')
+                return {
+                  decisions: collectTerminalReviewCommandIds(call.user).map((commandId) => ({
+                    commandId,
+                    decision: mode === 'auto' ? 'auto_approve' : 'needs_human_review',
+                    reason: '授权范围待确认'
+                  }))
+                }
+              })
+            }
+          })
+          const run = await runner.submit()
+          try {
+            const manual = ['approve', 'reject', 'guide', 'review_error'].includes(mode)
+            if (manual) {
+              await waitFor(() =>
+                runner.events.some((event) => event.type === 'approval_batch_required')
+              )
+              const request = runner.events.find(
+                (event) => event.type === 'approval_batch_required'
+              )!
+              if (request.type !== 'approval_batch_required') throw new Error('missing approval')
+              expect(await exists(target)).toBe(false)
+              expect(request.runId).toBe(run.runId)
+              expect(request.source?.name).toBe('公式海豹')
+              const childId = request.source!.childRunId
+              expect(
+                runner.events.some(
+                  (event) =>
+                    event.type === 'subagent_updated' &&
+                    event.update.childRunId === childId &&
+                    event.update.status === 'waiting_approval'
+                )
+              ).toBe(true)
+              const action = mode === 'reject' ? 'reject' : mode === 'guide' ? 'guide' : 'approve'
+              expect(
+                (
+                  await runner.service.decideApprovalBatch({
+                    runId: run.runId,
+                    batchId: request.batchId,
+                    decisions: request.items.map((item) => ({
+                      itemId: item.itemId,
+                      action,
+                      message: action === 'guide' ? '不要创建目录，仅报告现状' : undefined
+                    }))
+                  })
+                ).success
+              ).toBe(true)
+              await run.wait()
+              expect(
+                runner.events.some(
+                  (event) =>
+                    event.type === 'subagent_updated' &&
+                    event.update.childRunId === childId &&
+                    event.update.status === 'completed'
+                )
+              ).toBe(true)
+              if (action === 'guide')
+                expect(childInputs.at(-1)).toContain('不要创建目录，仅报告现状')
+              if (action === 'reject') expect(childInputs.at(-1)).toMatch(/拒绝|reject/)
+              const logs = await runtime.storageService.chatMessageLog.listByRun(run.runId)
+              expect(
+                logs.find(
+                  (record) =>
+                    record.entry.kind === 'annotation' &&
+                    record.entry.eventType === 'approval_decided'
+                )?.entry
+              ).toMatchObject({ payload: { source: { childRunId: childId } } })
+              expect(
+                (
+                  await runner.service.decideApprovalBatch({
+                    runId: run.runId,
+                    batchId: request.batchId,
+                    decisions: request.items.map((item) => ({
+                      itemId: item.itemId,
+                      action: 'approve'
+                    }))
+                  })
+                ).success
+              ).toBe(false)
+            }
+            const stored = await run.wait()
+            expect(childInputs.every((input) => !input.includes('PARENT_SECRET'))).toBe(true)
+            for (const record of runner.io.filter(
+              (item) => item.caller === 'human.terminal_review'
+            )) {
+              expect(record.user).toContain(
+                `用户原话：\nCHILD_${mode.toUpperCase()} 独立创建核对目录`
+              )
+              expect(record.user).not.toContain('PARENT_SECRET')
+            }
+            const executed = await exists(target)
+            expect(executed).toBe(!['reject', 'guide', 'rule'].includes(mode))
+            const actions = runner.events.filter(
+              (event) =>
+                event.type === 'subagent_updated' &&
+                event.update.action?.toolName === 'terminal_run' &&
+                event.update.action.status === 'completed'
+            )
+            expect(actions).toHaveLength(['reject', 'guide'].includes(mode) ? 0 : 1)
+            const approvals = runner.events.filter(
+              (event) => event.type === 'approval_batch_required'
+            ).length
+            const reviewCalls = runner.io.filter(
+              (record) => record.caller === 'human.terminal_review' && record.status === 'completed'
+            ).length
+            if (!manual) expect(approvals).toBe(0)
+            if (mode === 'rule' || mode === 'full_access') expect(reviewCalls).toBe(0)
+            results.push({ mode, status: stored?.status, executed, approvals, reviewCalls })
+          } finally {
+            await runner.service.cancelRun(run.runId)
+            await run.wait()
+          }
+        }
+
+        // Two retained executors fill the quota. A third starts after a user decision.
+        const targets = ['FIRST', 'SECOND', 'THIRD'].map((name) => ({
+          name,
+          path: path.join(runtime.workspaceRoot, name)
+        }))
+        let rootCalls = 0
+        const childCalls = new Map<string, number>()
+        const baseline = path.join(runtime.workspaceRoot, 'before-stop.txt')
+        await fs.writeFile(baseline, 'original protected')
+        const runner = await createChatServiceTestRunner(runtime, {
+          partnerId: 'approval-fifo',
+          userInput: '三项独立核对',
+          executionPermission: 'review',
+          llmScript: {
+            'human.brain': steps((call) => {
+              if (!isChild(call))
+                return ++rootCalls === 1
+                  ? delegate(targets.map(({ name }) => ({ name, task: `CHILD_${name} 核对` })))
+                  : complete('结果汇总')
+              const name = call.user.match(/用户诉求：\nCHILD_([A-Z]+)/)![1]
+              const count = (childCalls.get(name) || 0) + 1
+              childCalls.set(name, count)
+              if (name === 'FIRST' && count === 1)
+                return buildToolDecision({
+                  toolName: 'text_file_edit',
+                  args: {
+                    action: 'edit',
+                    sourcePath: baseline,
+                    edits: [{ oldText: 'original', newText: 'saved' }]
+                  },
+                  summary: '保存已有修改'
+                })
+              if (count === (name === 'FIRST' ? 2 : 1))
+                return buildToolDecision({
+                  toolName: 'terminal_run',
+                  args: {
+                    command: `mkdir "${targets.find((item) => item.name === name)!.path}"`,
+                    commandExplanation: '创建核对结果目录'
+                  },
+                  summary: '准备核对目录'
+                })
+              return complete(`RESULT_${name}`)
+            }),
+            'human.terminal_review': Array.from({ length: 8 }, () => (call: ScriptedLlmCall) => ({
+              decisions: collectTerminalReviewCommandIds(call.user).map((commandId) => ({
+                commandId,
+                decision: 'needs_human_review',
+                reason: '等待授权'
+              }))
+            }))
+          }
+        })
+        const run = await runner.submit()
+        try {
+          await waitFor(
+            async () =>
+              (await runtime.storageService.chatMessageLog.listByRun(run.runId)).filter(
+                (record) =>
+                  record.entry.kind === 'annotation' &&
+                  record.entry.eventType === 'approval_requested'
+              ).length === 2
+          )
+          expect(childCalls.has('THIRD')).toBe(false)
+          expect(
+            runner.events.filter((event) => event.type === 'approval_batch_required')
+          ).toHaveLength(1)
+          const current = (await runtime.storageService.aiRun.getRun(run.runId))!.pendingApproval!
+          expect(
+            await exists(targets.find((item) => item.name === current.source!.name)!.path)
+          ).toBe(false)
+          expect(
+            (
+              await runner.service.decideApprovalBatch({
+                runId: run.runId,
+                batchId: current.batchId,
+                decisions: current.items.map((item) => ({ itemId: item.itemId, action: 'approve' }))
+              })
+            ).success
+          ).toBe(true)
+          await waitFor(
+            async () =>
+              childCalls.has('THIRD') &&
+              (await runtime.storageService.chatMessageLog.listByRun(run.runId)).filter(
+                (record) =>
+                  record.entry.kind === 'annotation' &&
+                  record.entry.eventType === 'approval_requested'
+              ).length === 3
+          )
+          const pending = (await runtime.storageService.aiRun.getRun(run.runId))!.pendingApproval!
+          expect(pending.source!.childRunId).not.toBe(current.source!.childRunId)
+          const snapshot = await runner.service.getPartnerSnapshot(runner.partnerId)
+          expect(snapshot.activeRuns[0].pendingApproval?.source).toEqual(pending.source)
+          const records = await runtime.storageService.chatMessageLog.listByRun(run.runId)
+          const repaired = repairInterruptedToolCalls(
+            messagesFromLogEntries(records.map((record) => record.entry)),
+            records
+          )
+          expect(
+            repaired
+              .filter((message) => message.getType() === 'tool')
+              .map((message) => message.content)
+              .join(' ')
+          ).toContain('interrupted')
+          await runner.service.cancelRun(run.runId)
+          const stored = await run.wait()
+          expect(stored?.status).toBe('cancelled')
+          expect(stored?.pendingApproval).toBeUndefined()
+          expect(
+            (
+              await runner.service.decideApprovalBatch({
+                runId: run.runId,
+                batchId: pending.batchId,
+                decisions: pending.items.map((item) => ({ itemId: item.itemId, action: 'approve' }))
+              })
+            ).success
+          ).toBe(false)
+          expect(await fs.readFile(baseline, 'utf8')).toBe('saved protected')
+          const changes = (
+            await runtime.storageService.aiFileChange.listRecords({ runId: run.runId })
+          ).items
+          expect(changes).toHaveLength(1)
+          expect(changes[0]).toMatchObject({ runId: run.runId, partnerId: runner.partnerId })
+          expect(
+            await exists(targets.find((item) => item.name === pending.source!.name)!.path)
+          ).toBe(false)
+          expect(
+            runner.events.filter(
+              (event) => event.type === 'subagent_updated' && event.update.status === 'cancelled'
+            )
+          ).toHaveLength(2)
+          expect(
+            (await runtime.storageService.chatMessageLog.listByRun(run.runId)).filter(
+              (record) =>
+                record.entry.kind === 'annotation' &&
+                record.entry.eventType === 'approval_cancelled'
+            )
+          ).toHaveLength(2)
+        } finally {
+          await runner.service.cancelRun(run.runId)
+          await run.wait()
+        }
+        return { results, events: runner.events }
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(
+          result.results.every((item) => item.status === 'completed'),
+          {
+            name: 'approval-public-execution-chain',
+            message: '允许拒绝指导与自动放行均完成原子任务',
+            data: result.results
+          }
+        )
+      }
+    })
+  })
+
   it('human-subagent-isolation', async () => {
     await runBackendCase({
       caseId: 'human-subagent-isolation',

@@ -1,10 +1,12 @@
 import { v4 as uuidv4 } from 'uuid'
-import type {
-  ChatMessageLogEntry,
-  ChatMessageLogRecord
-} from '../../../../shared/types'
+import type { ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../shared/types'
 import type { SqliteCore } from '../sqlite/SqliteCore'
-import { jsonStringify, parseJsonObject, toRequiredNumber, toRequiredString } from '../sqlite/sqliteUtils'
+import {
+  jsonStringify,
+  parseJsonObject,
+  toRequiredNumber,
+  toRequiredString
+} from '../sqlite/sqliteUtils'
 
 type ChatMessageLogRow = {
   id?: unknown
@@ -37,6 +39,15 @@ export class ChatMessageLogStore {
     entries: ChatMessageLogEntry[]
     createdAt?: number
   }): Promise<ChatMessageLogRecord[]> {
+    return this.appendBatchSync(input)
+  }
+
+  public appendBatchSync(input: {
+    partnerId: string
+    runId: string
+    entries: ChatMessageLogEntry[]
+    createdAt?: number
+  }): ChatMessageLogRecord[] {
     if (input.entries.length === 0) return []
     return this.sqlite.transaction(() => {
       const nextSeqRow = this.sqlite

@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, WebContentsView } from 'electron'
 import { BrowserEmbedService } from '../../../../src/main/services/browser/BrowserEmbedService'
 import { BROWSER_CURSOR_OVERLAY_ID } from '../../../../src/main/services/browser/BrowserActionVisualizer'
 import { AiRunResourceManager } from '../../../../src/main/services/ai/run/AiRunResourceManager'
-import type { BrowserTabStateStore } from '../../../../src/main/services/storage/domains/BrowserTabStateStore'
+import type {
+  BrowserTabStateStore,
+  PersistedBrowserTabState
+} from '../../../../src/main/services/storage/domains/BrowserTabStateStore'
 import type { CdpEndpointService } from '../../../../src/main/services/browser/CdpEndpointService'
+import {
+  EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS,
+  EMBEDDED_BROWSER_PAGE_CONTENT_WAIT_MS
+} from '../../../../src/main/services/browser/constants'
 
 const createMockStateStore = (): BrowserTabStateStore => ({
   listByOwner: vi.fn().mockReturnValue([]),
@@ -45,9 +52,180 @@ const getBrowserInternals = (service: BrowserEmbedService) =>
     tabs: Map<string, object>
     runTabMap: Map<string, Set<string>>
     trackRunTab: (runId: string, tabId: string) => void
+    applyAllVisibility: () => void
+    restoreRuntime: (
+      runtime: { persisted: PersistedBrowserTabState; restoring: boolean },
+      view: WebContentsView,
+      signal?: AbortSignal
+    ) => Promise<void>
   }
 
+const createPendingRestore = (history: boolean) => {
+  const stateStore = createMockStateStore()
+  const service = new BrowserEmbedService(
+    createMockMainWindow(),
+    createMockCdpEndpointService(),
+    stateStore
+  )
+  const load = vi.fn(() => new Promise<void>(() => {}))
+  const stop = vi.fn()
+  const runtime = {
+    persisted: {
+      id: 'restored-tab',
+      ownerId: 'partner',
+      url: 'https://example.com/slow',
+      zoomFactor: 1,
+      position: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      ...(history ? { history: { entries: [{ url: 'https://example.com/slow' }], index: 0 } } : {})
+    },
+    restoring: false
+  }
+  const view = {
+    webContents: {
+      isDestroyed: () => false,
+      setZoomFactor: vi.fn(),
+      navigationHistory: { restore: load },
+      loadURL: load,
+      stop
+    }
+  } as unknown as WebContentsView
+  const controller = new AbortController()
+  return {
+    runtime,
+    controller,
+    load,
+    stop,
+    stateStore,
+    restore: () => getBrowserInternals(service).restoreRuntime(runtime, view, controller.signal)
+  }
+}
+
+const createPendingDocument = () => {
+  const cdp = createMockCdpEndpointService()
+  const service = new BrowserEmbedService(createMockMainWindow(), cdp, createMockStateStore())
+  const executeJavaScript = vi.fn(() => new Promise<void>(() => {}))
+  getBrowserInternals(service).tabs.set('unfinished-document', {
+    persisted: { id: 'unfinished-document' },
+    ready: Promise.resolve(),
+    view: {
+      webContents: {
+        isDestroyed: () => false,
+        isLoadingMainFrame: () => false,
+        getURL: () => 'https://example.com/slow',
+        getTitle: () => '',
+        executeJavaScript
+      }
+    }
+  })
+  const controller = new AbortController()
+  const run = () =>
+    service.run({
+      action: 'extract',
+      tabId: 'unfinished-document',
+      instruction: '读取页面内容',
+      abortSignal: controller.signal,
+      llmConfig: {
+        id: 'unit',
+        name: 'unit',
+        providerKind: 'openai-compatible',
+        api_key: '',
+        base_url: 'https://example.com',
+        model_name: 'unit'
+      }
+    })
+  return { run, controller, cdp, executeJavaScript }
+}
+
 describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
+  it('hides controlled background views while keeping their usable bounds', () => {
+    const window = createMockMainWindow()
+    const service = new BrowserEmbedService(
+      window,
+      createMockCdpEndpointService(),
+      createMockStateStore()
+    )
+    const view = {
+      setBounds: vi.fn(),
+      setVisible: vi.fn(),
+      webContents: { isDestroyed: () => false, invalidate: vi.fn() }
+    }
+    const internals = getBrowserInternals(service)
+    internals.tabs.set('background-tab', { view, attached: false, visible: false })
+    internals.trackRunTab('child-run', 'background-tab')
+    internals.applyAllVisibility()
+    expect(window.contentView.addChildView).toHaveBeenCalledWith(view)
+    expect(view.setVisible).toHaveBeenLastCalledWith(false)
+    expect(view.setBounds).toHaveBeenCalledWith({ x: 0, y: 0, width: 1280, height: 800 })
+  })
+
+  it.each([false, true])('bounds stalled restored navigation (history=%s)', async (history) => {
+    vi.useFakeTimers()
+    try {
+      const pending = createPendingRestore(history)
+      const response = pending.restore()
+      const failed = expect(response).rejects.toThrow('浏览器页面加载超时')
+      await vi.advanceTimersByTimeAsync(EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS + 1)
+      await failed
+      expect(pending.load).toHaveBeenCalledOnce()
+      expect(pending.stop).toHaveBeenCalledOnce()
+      expect(pending.runtime.restoring).toBe(false)
+      expect(pending.stateStore.save).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([false, true])('cancels stalled restored navigation (history=%s)', async (history) => {
+    vi.useFakeTimers()
+    try {
+      const pending = createPendingRestore(history)
+      const response = pending.restore()
+      const cancelled = expect(response).rejects.toThrow('cancelled')
+      pending.controller.abort()
+      await cancelled
+      expect(pending.stop).toHaveBeenCalledOnce()
+      expect(pending.runtime.restoring).toBe(false)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds content inspection when an unfinished document never executes JavaScript', async () => {
+    vi.useFakeTimers()
+    try {
+      const pending = createPendingDocument()
+      const response = pending.run()
+      await vi.advanceTimersByTimeAsync(EMBEDDED_BROWSER_PAGE_CONTENT_WAIT_MS + 1)
+      expect(await response).toMatchObject({ action: 'extract', error: expect.any(String) })
+      expect(pending.executeJavaScript).toHaveBeenCalledOnce()
+      expect(pending.cdp.registerTarget).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels an unfinished document inspection without waiting for its script or deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const pending = createPendingDocument()
+      const response = pending.run()
+      const cancelled = expect(response).rejects.toThrow('cancelled')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(pending.executeJavaScript).toHaveBeenCalledOnce()
+      pending.controller.abort()
+      await cancelled
+      expect(pending.cdp.registerTarget).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('releases cursor on registered tabs when releaseRun is called', async () => {
     const stateStore = createMockStateStore()
     const cdpService = createMockCdpEndpointService()

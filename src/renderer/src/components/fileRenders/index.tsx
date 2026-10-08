@@ -3,7 +3,7 @@ import { Empty, Modal, Spin } from 'antd'
 import DocViewer from 'react-doc-viewer'
 import CustomPDFRenderer from './pdf'
 import { CustomMarkdownRenderer, CustomPlainTextRenderer } from './markdown'
-import CustomDocxRenderer from './docx'
+import CustomDocxRenderer, { DocxPreview } from './docx'
 import CustomPptxRenderer from './pptx'
 import CustomImageRenderer from './image'
 import CustomXlsxRenderer from './xlsx'
@@ -225,19 +225,24 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
 
   return (
     <div className={`h-full overflow-hidden ${surfaceClassName}`}>
-      <DocViewer
-        className="h-full w-full"
-        style={{ height: '100%', width: '100%' }}
-        documents={loadedDocuments}
-        pluginRenderers={renderers}
-        config={{
-          header: {
-            disableHeader: true,
-            disableFileName: true,
-            retainURLParams: false
-          }
-        }}
-      />
+      {loadedDocuments.length === 1 && loadedDocuments[0].fileType === 'docx' ? (
+        // DocViewer remounts its renderer on window resize, losing the active selection editor.
+        <DocxPreview document={loadedDocuments[0]} />
+      ) : (
+        <DocViewer
+          className="h-full w-full"
+          style={{ height: '100%', width: '100%' }}
+          documents={loadedDocuments}
+          pluginRenderers={renderers}
+          config={{
+            header: {
+              disableHeader: true,
+              disableFileName: true,
+              retainURLParams: false
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

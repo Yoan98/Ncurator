@@ -26,6 +26,7 @@ type Props = {
   dataTestId?: string
   /** Extra classes for the editable surface (e.g. max-height + overflow for forms). */
   editorClassName?: string
+  variant?: 'field' | 'inline'
 }
 type MentionContext = { textNode: Text; caretOffset: number; triggerIndex: number; query: string }
 
@@ -37,6 +38,7 @@ const ComposerInputEditor: React.FC<Props> = ({
   placeholder,
   dataTestId,
   editorClassName,
+  variant = 'field',
   disabled = false,
   onSubmit
 }) => {
@@ -152,7 +154,7 @@ const ComposerInputEditor: React.FC<Props> = ({
   }
 
   return (
-    <div className="relative">
+    <div className={`relative ${variant === 'inline' ? 'min-w-0 flex-1' : ''}`}>
       {mentionQuery !== null ? (
         <ReferenceMentionPanel
           loading={false}
@@ -170,10 +172,16 @@ const ComposerInputEditor: React.FC<Props> = ({
         suppressContentEditableWarning
         role="textbox"
         aria-multiline="true"
+        aria-label={placeholder}
         data-testid={dataTestId}
         data-placeholder={placeholder}
-        className={`block min-h-[72px] whitespace-pre-wrap break-words rounded-[6px] border border-[#E5E4E0] px-3 py-2 text-[14px] leading-6 text-[#37352F] outline-none empty:before:pointer-events-none empty:before:text-[#9B9A97] empty:before:content-[attr(data-placeholder)] ${editorClassName || ''}`}
-        onInput={sync}
+        className={`block whitespace-pre-wrap break-words leading-6 text-[#37352F] outline-none empty:before:pointer-events-none empty:before:text-[#9B9A97] empty:before:content-[attr(data-placeholder)] ${variant === 'inline' ? 'min-h-8 px-2 py-1 text-[15px]' : 'min-h-[72px] rounded-[6px] border border-[#E5E4E0] px-3 py-2 text-[14px]'} ${editorClassName || ''}`}
+        onInput={() => {
+          editorRef.current
+            ?.querySelectorAll('[data-role="composer-caret-anchor"]')
+            .forEach((anchor) => anchor.remove())
+          sync()
+        }}
         onCompositionStart={() => {
           composingRef.current = true
         }}
@@ -244,9 +252,21 @@ const ComposerInputEditor: React.FC<Props> = ({
             if (!selection?.rangeCount || !editorRef.current?.contains(selection.anchorNode)) return
             const range = selection.getRangeAt(0)
             range.deleteContents()
-            const newline = document.createTextNode('\n')
+            const newline = document.createElement('br')
             range.insertNode(newline)
-            moveCaretToTextNode(newline, 1)
+            // A trailing line break needs a second BR for Chromium to place the caret below it.
+            if (
+              !newline.nextSibling?.textContent &&
+              !(newline.nextSibling instanceof HTMLBRElement)
+            ) {
+              const anchor = document.createElement('br')
+              anchor.dataset.role = 'composer-caret-anchor'
+              newline.after(anchor)
+            }
+            range.setStartAfter(newline)
+            range.collapse(true)
+            selection.removeAllRanges()
+            selection.addRange(range)
             sync()
             return
           }

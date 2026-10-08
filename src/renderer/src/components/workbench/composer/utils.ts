@@ -1,4 +1,4 @@
-import { chatContentText, chatReferences } from '../../../../../shared/chatContent'
+import { chatContentText, chatReferences, selectionLabel } from '../../../../../shared/chatContent'
 import type {
   ChatMessageContentNode,
   DocumentSelectionNode,
@@ -6,7 +6,15 @@ import type {
 } from '../../../../../shared/types'
 import type { ComposerDraftValue, ComposerNode } from './types'
 import { getReferenceKey, pruneReferencesByWorkspace } from '../../../utils/reference'
-import { getReferenceVisualSpec } from './referenceVisuals'
+import {
+  getReferenceVisualSpec,
+  INLINE_TOKEN_LABEL_CLASS_NAME,
+  REFERENCE_TOKEN_CLASS_NAME,
+  SELECTION_DOCUMENT_ICON_PATH,
+  SELECTION_NUMBER_CLASS_NAME,
+  SELECTION_TOKEN_CLASS_NAME,
+  selectionFileName
+} from './referenceVisuals'
 
 export const createTextNode = (text = ''): ComposerNode => ({
   id: crypto.randomUUID(),
@@ -206,8 +214,9 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
 export const createScopeTokenElement = (scope: SelectedReference): HTMLElement => {
   const visualSpec = getReferenceVisualSpec(scope)
   const token = document.createElement('span')
-  token.className = `inline-flex max-w-full items-baseline gap-[2px] align-baseline text-[0.9em] font-medium leading-[inherit] ${visualSpec.labelClassName}`
+  token.className = `${REFERENCE_TOKEN_CLASS_NAME} ${visualSpec.labelClassName}`
   token.contentEditable = 'false'
+  token.title = scope.name
   referenceElements.set(token, scope)
   token.dataset.role = 'scope-token'
   token.dataset.scopeKey = getScopeKey(scope)
@@ -215,7 +224,7 @@ export const createScopeTokenElement = (scope: SelectedReference): HTMLElement =
   appendReferenceIcon(token, scope)
 
   const label = document.createElement('span')
-  label.className = 'max-w-[180px] truncate font-medium'
+  label.className = INLINE_TOKEN_LABEL_CLASS_NAME
   label.textContent = scope.name
   token.appendChild(label)
 
@@ -242,10 +251,36 @@ export const renderComposerNodesToEditor = (editor: HTMLElement, nodes: Composer
       token.contentEditable = 'false'
       token.dataset.role = 'document-selection-token'
       token.dataset.selectionId = node.selection.id
-      token.className = 'cursor-pointer text-[0.9em] font-medium text-[#2F5F8F]'
-      token.style.marginRight = '0.25em'
-      token.textContent = `[${node.selection.filePath.split(/[/\\]/).pop()} · ${node.selection.number}]`
-      token.title = node.selection.selectedText
+      token.className = SELECTION_TOKEN_CLASS_NAME
+      token.title = selectionLabel(node.selection) + '\n' + node.selection.selectedText
+      token.setAttribute('role', 'button')
+      token.setAttribute('aria-label', selectionLabel(node.selection))
+      token.tabIndex = 0
+      token.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        event.stopPropagation()
+        token.click()
+      })
+      const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      icon.setAttribute('viewBox', '0 0 18 18')
+      icon.setAttribute('fill', 'none')
+      icon.setAttribute('stroke', 'currentColor')
+      icon.setAttribute('stroke-width', '1.4')
+      icon.setAttribute('stroke-linecap', 'round')
+      icon.setAttribute('stroke-linejoin', 'round')
+      icon.setAttribute('aria-hidden', 'true')
+      icon.setAttribute('class', 'relative top-[0.1em] h-[1em] w-[1em] shrink-0 self-center')
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+      path.setAttribute('d', SELECTION_DOCUMENT_ICON_PATH)
+      icon.appendChild(path)
+      const label = document.createElement('span')
+      label.className = INLINE_TOKEN_LABEL_CLASS_NAME
+      label.textContent = selectionFileName(node.selection)
+      const number = document.createElement('span')
+      number.className = SELECTION_NUMBER_CLASS_NAME
+      number.textContent = String(node.selection.number)
+      token.append(icon, label, number)
       fragment.appendChild(token)
       const thought = document.createElement('span')
       thought.dataset.role = 'document-selection-thought'

@@ -272,7 +272,9 @@ export const projectProcessGroups = (input: {
   for (const group of projectedGroups) {
     if (input.runFinished && group.subagents)
       group.subagents = group.subagents.map((child) =>
-        child.status === 'running' || child.status === 'queued'
+        child.status === 'running' ||
+        child.status === 'queued' ||
+        child.status === 'waiting_approval'
           ? {
               ...child,
               requesting: false,
