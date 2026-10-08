@@ -101,7 +101,8 @@ describe('subagent approvals through the shared execution chain', () => {
                 command,
                 '```',
                 '本次操作必须先由我在人工审批卡中确认，当前尚未授权删除目录或其中任何文件，目录内可删除的范围尚未确认。请实际调用工具请求执行，让现有审核流程处理授权；只在回答中展示命令，不算完成此步骤。',
-                '收到允许后完成清理；收到拒绝或指导后按反馈处理，不换一种方式删除。简要交付本任务的文件和目录结果。'
+                `你的任务范围仅为 ${directories[index]}${index === 0 ? ` 和 ${saved}` : ''}。只核对本任务的路径，不列出或读取工作区其他文件及目录。`,
+                '收到允许后完成清理；收到拒绝或指导后按反馈结束，不换一种方式删除。最终简要报告本任务的审批决定、目标目录状态及本任务保存的文件（如有）。'
               ].join('\n')
             }))
             const readActiveRun = () =>
@@ -116,7 +117,7 @@ describe('subagent approvals through the shared execution chain', () => {
             await sendWorkbenchMessage(
               runtime.page,
               [
-                '请一次调用 delegate_to_subagent，使用下面参数派发两个独立任务。主伙伴等待子任务结果后整合交付。',
+                '请一次调用 delegate_to_subagent，使用下面参数派发两个独立任务。主伙伴等待子任务结果后，仅汇总本次审批决定和交付结果，不接管或重试清理；拒绝和指导均视为该项已处理。',
                 '各 task 字段是完整任务原文，请原样传递给对应子 agent，保留具体命令、绝对路径及授权条件。',
                 '```json',
                 JSON.stringify({ tasks }, null, 2),

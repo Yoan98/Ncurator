@@ -1315,8 +1315,9 @@ describe('workbench run e2e', () => {
             !result.createScenario.unexpectedApprovalRejected &&
             hasSuccessfulTerminalResult(
               result.createScenario.terminalCommandsStarted,
-              result.createScenario.terminalResults,
-              result.createScenario.expectedCommand
+              result.createScenario.terminalResults.filter((terminalResult) =>
+                terminalResult.command.includes(result.createScenario.expectedCommand)
+              )
             ) &&
             result.createScenario.outputPathExists &&
             result.createScenario.changedWorkspacePaths.length === 1 &&
@@ -1365,7 +1366,7 @@ describe('workbench run e2e', () => {
             normalizedFullAccessFileContents === 'full-access-by-workbench-e2e\n'
           const createScenarioFailureMessage = createScenarioAutoApproved
             ? ''
-            : `创建目录轮未自动通过：${JSON.stringify({
+            : `创建目录轮未满足审核与执行验收：${JSON.stringify({
                 expectedCommand: result.createScenario.expectedCommand,
                 reviewDecisions: result.createScenario.reviewDecisions,
                 approvalItems: result.createScenario.approvalItems,
@@ -1418,7 +1419,7 @@ describe('workbench run e2e', () => {
               name: 'workbench-terminal-review-real-multi-run-flows',
               message:
                 createScenarioFailureMessage +
-                '只读轮应无文件变化且绕过审核；创建轮应由 AI 审核自动通过并真实创建目录；三个范围冲突删除轮都必须经 AI 审核转人工，再按 UI 同意、拒绝或指导；完全访问应真实写入且跳过审核。',
+                '只读轮应无文件变化且绕过审核；创建轮应由 AI 审核自动通过并真实创建目录；三个待授权删除轮都必须经 AI 审核转人工，再按 UI 同意、拒绝或指导；完全访问应真实写入且跳过审核。',
               data: result
             }
           )
