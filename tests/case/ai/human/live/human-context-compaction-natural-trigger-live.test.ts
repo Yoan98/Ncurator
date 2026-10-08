@@ -102,9 +102,7 @@ const pickCompactionCut = (
   isSplitTurn: event.isSplitTurn,
   foldedCount: event.foldedCount,
   tailCount: event.tailCount,
-  ...(event.type === 'context_compaction_completed'
-    ? { compactBlockId: event.compactBlockId }
-    : {})
+  ...(event.type === 'context_compaction_completed' ? { compactBlockId: event.compactBlockId } : {})
 })
 
 const hasValidCompactionCut = (
@@ -237,20 +235,28 @@ describe('ai human live backend', () => {
               modelContextWindowTokens: LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS
             }
           }
-          const run1Output = await createHumanTestRunner(runtime, runnerOptions).run({
+          const run1Output = await createHumanTestRunner(runtime, {
+            ...runnerOptions,
+            runId: `${runtime.runId}-run-1`
+          }).run({
             taskId: `${runtime.taskId}-run-1`,
             userInput: HUMAN_CONTEXT_COMPACTION_RUN1_USER_INPUT
           })
           const run1Events = runtime.eventCollector.snapshot()
-          const run1LlmIo = runtime.eventCollector.snapshotLlmIo()
-          const run2Output = await createHumanTestRunner(runtime, runnerOptions).run({
+          const run1LlmIo = await runtime.eventCollector.snapshotLlmIo()
+          const run2Output = await createHumanTestRunner(runtime, {
+            ...runnerOptions,
+            runId: `${runtime.runId}-run-2`
+          }).run({
             taskId: `${runtime.taskId}-run-2`,
             userInput: HUMAN_CONTEXT_COMPACTION_USER_INPUT
           })
           const afterRun2Events = runtime.eventCollector.snapshot()
-          const afterRun2LlmIo = runtime.eventCollector.snapshotLlmIo()
+          const afterRun2LlmIo = await runtime.eventCollector.snapshotLlmIo()
           const run2Events = afterRun2Events.slice(run1Events.length)
-          const run2LlmIo = afterRun2LlmIo.slice(run1LlmIo.length)
+          const run2LlmIo = afterRun2LlmIo.filter(
+            (record) => record.runId === `${runtime.runId}-run-2`
+          )
           const run2Compacted =
             collectRunCompaction({
               events: run2Events,
@@ -270,12 +276,15 @@ describe('ai human live backend', () => {
               run3LlmIo: []
             }
           }
-          const run3Output = await createHumanTestRunner(runtime, runnerOptions).run({
+          const run3Output = await createHumanTestRunner(runtime, {
+            ...runnerOptions,
+            runId: `${runtime.runId}-run-3`
+          }).run({
             taskId: `${runtime.taskId}-run-3`,
             userInput: HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT
           })
           const allEvents = runtime.eventCollector.snapshot()
-          const allLlmIo = runtime.eventCollector.snapshotLlmIo()
+          const allLlmIo = await runtime.eventCollector.snapshotLlmIo()
           return {
             workspaceSeed,
             run1Output,
@@ -286,7 +295,7 @@ describe('ai human live backend', () => {
             run3Events: allEvents.slice(afterRun2Events.length),
             run1LlmIo,
             run2LlmIo,
-            run3LlmIo: allLlmIo.slice(afterRun2LlmIo.length)
+            run3LlmIo: allLlmIo.filter((record) => record.runId === `${runtime.runId}-run-3`)
           }
         },
         assert: async (result, runtime) => {
@@ -340,6 +349,8 @@ describe('ai human live backend', () => {
             (run2Docx.toolNames.some((toolName) => toolName.startsWith('docx_')) ||
               run2Docx.toolNames.includes('text_file_edit'))
           const run3PrefixCache = collectContinuationPrefixCacheReuse({
+            previousRunId: `${runtime.runId}-run-2`,
+            nextRunId: `${runtime.runId}-run-3`,
             previousLlmIo: result.run2LlmIo,
             nextLlmIo: result.run3LlmIo
           })
@@ -415,9 +426,7 @@ describe('ai human live backend', () => {
             run3FirstBrainRoles[1] !== 'tool'
           const run3HistorySatisfied =
             run3Compaction.summaries.length > 0 &&
-            (REQUIRED_COMPACTION_HEADINGS.every((heading) =>
-              latestRun3Summary.includes(heading)
-            ) ||
+            (REQUIRED_COMPACTION_HEADINGS.every((heading) => latestRun3Summary.includes(heading)) ||
               latestRun3Summary.includes('**Turn Context (split turn):**')) &&
             !latestRun3Summary.includes('记忆时间线：') &&
             (latestRun3Summary.includes(expectedLastWeekDocAnchor) ||
@@ -459,7 +468,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(run3PrefixCache.satisfied, {
             name: 'human-live-context-compaction-run3-reuses-run2-prefix-cache',
             message:
-              '发第三次 user 续跑时，Run3 首次 brain 的 cachedInputTokens 应明显复用 Run2 末次 brain 的 inputTokens 前缀；低于公用跨 run 比例门槛说明前缀被改写或缓存未命中。',
+              '发第三次 user 续跑时，Run3 首次 brain 的 cachedInputTokens 应明显复用 Run2 末次 brain 的 inputTokens 前缀；历史消息前缀和工具定义须一致，服务端缓存复用率须达到公用门槛；低命中按实际请求日志独立归因。',
             data: continuationPrefixCacheAssertionData(run3PrefixCache)
           })
         }

@@ -436,24 +436,6 @@ const applyEdit = async (input: {
   currentRevisionRef: string
   compiled: CompiledEdit
 }): Promise<ApplyEditResult> => {
-  const cloned = input.runtime.cloneActiveReplaySession(input.sourcePath)
-  if (!cloned.ok) {
-    return {
-      failure: input.runtime.emitFailure({
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        reason: 'failed',
-        error: cloned.error,
-        resourceContext: input.runtime.buildResourceContext({
-          sourcePath: input.sourcePath,
-          effectKind: 'mutated',
-          currentRevisionRef: input.currentRevisionRef
-        })
-      })
-    }
-  }
-
-  const tempSession = cloned.session
   const operations = input.compiled.operations
   const positionedFailure = await failIfAnyPositionedNodes({
     runtime: input.runtime,
@@ -498,21 +480,6 @@ const applyEdit = async (input: {
     nextDocId: appliedPayload.newDocId,
     operation: operations[0]!
   })
-  const reviewOps = await input.runtime.expandOpsForReview(input.currentDocId, operations)
-  const review = {
-    ops: reviewOps,
-    createdNodesByOperation: reviewOps.map((_, index) => (index === 0 ? createdNodes : [])),
-    opNextDocIds: reviewOps.map(() => appliedPayload.newDocId)
-  }
-  for (const reviewOp of review.ops) {
-    await input.runtime.applyTempRevisionToReplaySession({
-      session: tempSession,
-      revisionRef: 'write-temp',
-      op: reviewOp,
-      createdNodes,
-      nextDocId: appliedPayload.newDocId
-    })
-  }
   let result: WriteToolResult
   try {
     result = await buildWriteToolResult({
@@ -567,25 +534,18 @@ const applyEdit = async (input: {
       sourcePath: input.sourcePath,
       previousDocId: input.currentDocId,
       nextDocId: appliedPayload.newDocId,
-      ops: review.ops,
-      createdNodes,
-      createdNodesByOperation: review.createdNodesByOperation,
-      opNextDocIds: review.opNextDocIds,
-      changedNodes: appliedPayload.changedNodes,
       persistedStats,
-      stats: appliedPayload.stats,
-      summary: input.compiled.summary
+      stats: appliedPayload.stats
     })
   } catch (error) {
-    await input.runtime
-      .persistDocId({ sourcePath: input.sourcePath, docId: input.currentDocId })
-      .catch(() => undefined)
+    input.runtime.state.editSessionBySourcePath.delete(input.sourcePath)
+    input.runtime.state.readSessionBySourcePath.delete(input.sourcePath)
     return {
       failure: input.runtime.emitFailure({
         toolName: input.toolName,
         toolCallId: input.toolCallId,
         reason: 'failed',
-        error: `docx session commit failed: ${error instanceof Error ? error.message : String(error)}`,
+        error: `文档已经写入，内部会话更新失败，请重新读取文件并反馈作者修复： ${error instanceof Error ? error.message : String(error)}`,
         resourceContext: input.runtime.buildResourceContext({
           sourcePath: input.sourcePath,
           effectKind: 'mutated',
@@ -594,13 +554,6 @@ const applyEdit = async (input: {
       })
     }
   }
-  input.runtime.input.ctx.trackDocxChanges({
-    previousDocId: input.currentDocId,
-    nextDocId: appliedPayload.newDocId,
-    changedNodes: appliedPayload.changedNodes,
-    createdNodes,
-    replaySession: input.runtime.getReplaySession(input.sourcePath)
-  })
   return {
     previousRevisionRef: revisionUpdate.previousRevisionRef,
     currentRevisionRef: revisionUpdate.currentRevisionRef,
@@ -773,7 +726,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
 
       const sourceExists = Boolean(
         runtime.getReadSession(requestedSourcePath) ||
-        runtime.getReplaySession(requestedSourcePath) ||
+        runtime.getEditSession(requestedSourcePath) ||
         (await documentExists(requestedSourcePath))
       )
       if (!sourceExists) {
@@ -976,25 +929,24 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
             })
           }
 
-          let registered: Awaited<ReturnType<typeof runtime.registerCreatedDocument>>
           try {
-            registered = await runtime.registerCreatedDocument({
+            await runtime.registerCreatedDocument({
               sourcePath: requestedSourcePath,
               baselineDocId,
               workingDocId,
               stats: workingOpen.payload.stats,
-              persistedStats,
-              summary: operation.type
+              persistedStats
             })
           } catch (error) {
-            await fs.rm(requestedSourcePath, { force: true }).catch(() => undefined)
+            runtime.state.editSessionBySourcePath.delete(requestedSourcePath)
+            runtime.state.readSessionBySourcePath.delete(requestedSourcePath)
             return finalizeDocxToolFailure({
               runtime,
               failure: runtime.emitFailure({
                 toolName,
                 toolCallId,
                 reason: 'failed',
-                error: `docx create session commit failed: ${error instanceof Error ? error.message : String(error)}`,
+                error: `文档已经创建，内部会话更新失败，请重新读取文件并反馈作者修复： ${error instanceof Error ? error.message : String(error)}`,
                 resourceContext: runtime.buildResourceContext({
                   sourcePath: requestedSourcePath,
                   effectKind: 'mutated'
@@ -1003,18 +955,6 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
               activity: { actionType: input.spec.activityActionType }
             })
           }
-          runtime.input.ctx.trackDocxOpen({
-            docId: baselineDocId,
-            sourcePath: requestedSourcePath,
-            replaySession: registered.session
-          })
-          runtime.input.ctx.trackDocxChanges({
-            previousDocId: baselineDocId,
-            nextDocId: workingDocId,
-            changedNodes: registered.changedNodes || [],
-            createdNodes: registered.createdNodes || [],
-            replaySession: registered.session
-          })
 
           const result = preCommitResult
 
@@ -1046,7 +986,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
         }
       }
 
-      const sessionResult = await runtime.ensureReplaySession({
+      const sessionResult = await runtime.ensureEditSession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath

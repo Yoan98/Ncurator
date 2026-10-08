@@ -168,46 +168,25 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     scheduledTaskService: deps.scheduledTaskService,
     appendMessageLog,
     loadMessageLog,
-    trackDocxOpen: ({ docId, sourcePath, replaySession }) => {
-      deps.docxApplyService.registerDocxOpen({
-        runId: payload.runId,
-        docId,
-        sourcePath,
-        replaySession
-      })
-    },
-    trackDocxChanges: ({ previousDocId, nextDocId, changedNodes, createdNodes, replaySession }) => {
-      deps.docxApplyService.registerDocxChanges({
-        runId: payload.runId,
-        previousDocId,
-        nextDocId,
-        changedNodes,
-        createdNodes,
-        replaySession
-      })
-    },
     resolveDocxOpenTarget: async (sourcePath) =>
       await deps.docxApplyService.resolveDocxOpenTarget(sourcePath),
-    beginDocxApplyRun: () => {
-      deps.docxApplyService.beginRun({
-        runId: payload.runId,
-        partnerId: payload.partnerId,
+    writeFileChange: async (input) => {
+      const result = await deps.docxApplyService.fileChanges.sessions.write(
+        payload.partnerId,
         ownerRunId,
-        inputText: String(payload.input || '')
-      })
+        input
+      )
+      touchedPaths.add(result.record.path)
+      return result
     },
-    applyDocxRunEdits: async (options) => {
-      const records = await deps.docxApplyService.applyRunEdits({
-        retainState: options?.retainState,
-        runId: payload.runId,
-        partnerId: payload.partnerId
-      })
-      records.forEach((record) => touchedPaths.add(record.source_path))
-      return records
-    },
-    discardDocxApplyRun: () => {
-      deps.docxApplyService.discardRun(payload.runId)
-    },
+    getFileChangeSession: async (sourcePath) =>
+      await deps.docxApplyService.fileChanges.sessions.read(
+        payload.partnerId,
+        ownerRunId,
+        sourcePath
+      ),
+    finalizeRunFileChanges: async () =>
+      await deps.docxApplyService.fileChanges.sessions.finalize(payload.partnerId, ownerRunId),
     saveFileChangeRecord: async (record) => {
       touchedPaths.add(record.path)
       record.runId = ownerRunId

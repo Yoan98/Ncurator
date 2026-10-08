@@ -1,5 +1,6 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { BaseMessage } from '@langchain/core/messages'
+import type { ChatMessageImageRef } from '../../../../shared/types'
 import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
 import type { DocxToolRuntime } from './tools/docx/runtime'
@@ -90,6 +91,10 @@ export type HumanRuntimeCache = {
   excelRuntime?: ExcelToolRuntime
   toolCallCount: number
   messages?: BaseMessage[]
+  conversationProjection?: {
+    pendingToolCallIds: Set<string>
+    pendingImages: ChatMessageImageRef[]
+  }
   currentUserMessageIndex?: number
   currentUserLogAppended?: boolean
   currentState?: HumanState

@@ -1,3 +1,8 @@
+import type {
+  FileChangeWrite,
+  FileChangeSession,
+  ConfirmedFileWrite
+} from './fileChanges/FileChangeSession'
 import type { PartnerStore } from '../storage/domains/PartnerStore'
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
@@ -10,9 +15,7 @@ import type {
   AiLlmToolCallResult
 } from './llmExecutor'
 import type { WebCrawlerService } from '../webCrawler/types'
-import type { DocxChangedNode, DocxCreatedNode, DocxReplaySession } from './human/tools/docx/types'
 import type { DocxApplyService } from './human/tools/docx/review/DocxApplyService'
-import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
 import type {
   AiApprovalBatchDecision,
@@ -34,7 +37,6 @@ import type {
   BrainContextBudgetSnapshot,
   ChatMessageLogEntry,
   ChatMessageLogRecord,
-  DocxApplyRecord,
   SelectedReference,
   WorkbenchSelectedModel
 } from '../../../shared/types'
@@ -331,6 +333,7 @@ export type AiRunDeps = {
   }) => Promise<AiFileChangeRecord[]>
   isCancelled: () => boolean
   hasPendingUserMessages?: () => boolean
+  prepareFileChangeFinalization?: (allowContinuation: boolean) => Promise<boolean>
   waitForPendingUserMessageSubmissions?: () => Promise<void>
   abortSignal?: AbortSignal
   sendEvent: (event: AiRunEvent) => void
@@ -431,22 +434,12 @@ export type AiRunContext = {
   scheduledTaskService?: import('../scheduler/ScheduledTaskService').ScheduledTaskService
   appendMessageLog: (entries: ChatMessageLogEntry[], options?: { runId?: string }) => Promise<void>
   loadMessageLog: () => Promise<ChatMessageLogRecord[]>
-  trackDocxOpen: (input: {
-    docId: string
+  resolveDocxOpenTarget: (
     sourcePath: string
-    replaySession?: DocxReplaySession
-  }) => void
-  trackDocxChanges: (input: {
-    previousDocId: string
-    nextDocId: string
-    changedNodes: DocxChangedNode[]
-    createdNodes: DocxCreatedNode[]
-    replaySession?: DocxReplaySession
-  }) => void
-  resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
-  beginDocxApplyRun: () => void
-  applyDocxRunEdits: (options?: { retainState?: boolean }) => Promise<DocxApplyRecord[]>
-  discardDocxApplyRun: () => void
+  ) => Promise<{ openPath: string; trackedSourcePath: string }>
+  writeFileChange: (input: FileChangeWrite) => Promise<ConfirmedFileWrite>
+  getFileChangeSession: (sourcePath: string) => Promise<FileChangeSession | undefined>
+  finalizeRunFileChanges: () => Promise<AiFileChangeRecord[]>
   saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
   listFileChangeRecords: (input: {
     runId: string

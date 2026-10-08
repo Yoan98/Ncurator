@@ -18,9 +18,9 @@ const findNodeByType = (node: IdentityNode, type: string): IdentityNode | undefi
   return undefined
 }
 
-describe('DOCX v2 stable node identity', () => {
+describe('DOCX stable node identity', () => {
   it('changes nodeId across node types and preserves it for visual-to-visual replacement', async () => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-type-identity-v2-'))
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-type-identity-'))
     const filePath = path.join(tempDir, 'types.docx')
     const imagePath = path.join(tempDir, 'pixel.png')
     const runId = randomUUID()
@@ -67,7 +67,11 @@ describe('DOCX v2 stable node identity', () => {
         action: 'get_node',
         payload: { docId: opened.payload.docId, nodeId: paragraphId }
       })
-      if (!before.ok || before.payload.action !== 'get_node' || before.payload.node.type !== 'paragraph') {
+      if (
+        !before.ok ||
+        before.payload.action !== 'get_node' ||
+        before.payload.node.type !== 'paragraph'
+      ) {
         throw new Error('paragraph missing')
       }
       const originalRunId = before.payload.node.children.find((node) => node.type === 'run')!.nodeId
@@ -178,7 +182,7 @@ describe('DOCX v2 stable node identity', () => {
   })
 
   it('keeps header identity when document_end adds a body node', async () => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-story-identity-v2-'))
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-story-identity-'))
     const filePath = path.join(tempDir, 'story.docx')
     const runId = randomUUID()
     try {
@@ -276,7 +280,7 @@ describe('DOCX v2 stable node identity', () => {
   })
 
   it('keeps anchor identity and assigns new ids for before and after insertions', async () => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-anchor-identity-v2-'))
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-anchor-identity-'))
     const filePath = path.join(tempDir, 'anchors.docx')
     const runId = randomUUID()
     try {
@@ -383,7 +387,7 @@ describe('DOCX v2 stable node identity', () => {
   })
 
   it('does not give an existing identical run id to a new inside_start run', async () => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-run-identity-v2-'))
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-run-identity-'))
     const filePath = path.join(tempDir, 'runs.docx')
     const runId = randomUUID()
     try {
@@ -475,7 +479,7 @@ describe('DOCX v2 stable node identity', () => {
   })
 
   it('preserves existing row and cell nodeIds after inserting a row', async () => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-node-identity-v2-'))
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-node-identity-'))
     const filePath = path.join(tempDir, 'table.docx')
     const runId = randomUUID()
     try {

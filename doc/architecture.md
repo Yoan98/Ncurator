@@ -8,6 +8,8 @@
 - Renderer: React v19 · React Router DOM v7 · Ant Design v5 · Tailwind CSS v4 + Less
 - Main: LangChain JS · LangGraph JS · @huggingface/transformers v3 · SQLite + better-sqlite3 · LanceDB · pdf-parse · mammoth · @node-rs/jieba
 
+PPT 普通预览与历史审核均由 `pptx-kit-preview` 生成 SVG，共用 Canvas 字体宽度测量和明确的中西文字体回退列表；Renderer 使用浏览器 Canvas，Main 使用本地 Canvas。历史审核保存生成后的 SVG，后续渲染只读取该产物。
+
 ## 系统分层
 
 NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌入、索引、检索、AI 编排和持久化都优先在本地完成。
@@ -131,16 +133,16 @@ Workbench 消息正文使用统一的 `contentNodes`：普通文本、`@` 引用
 
 ## 领域能力（概要）
 
-| 领域                  | 思路                                                                                                                                                                    |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DOCX                  | 文档聚合模型 + story 内容树；root、可编辑子节点和 visual 共用一个 `nodesById`，visual 只使用 `nodeId`；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核         |
-| PDF                   | `pdf_outline` 元数据与书签；页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                             |
-| PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 支持 `detail=full` 或 `detail=images`                                                    |
-| Excel                 | 工作表地图 + A1 范围；`excel_read` 四种 type（workbook / range / style / search）；`excel_edit` 一次一个 type；写回成功时结构化 `data` 多为 `{}`，模型侧另有 prose 确认 |
-| KB                    | 混合召回检索全部已索引文件地址与全局网页                                                                                                                                |
-| Image                 | 外部 skill；需 `learn_skill`；按绝对路径生成或更新 PNG / JPEG / WebP                                                                                                    |
-| Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                                    |
-| 定时任务              | 独立主区配置与启用开关；到点向绑定伙伴追加任务描述，并读取伙伴最新 Composer 配置                                                                                        |
+| 领域                  | 思路                                                                                                                                                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DOCX                  | 文档聚合模型 + story 内容树；root、可编辑子节点和 visual 共用一个 `nodesById`，visual 只使用 `nodeId`；读写拆成两个 skill；首次基线 / 最终文件双态 + 独立首尾净比较；块级顺序、字符级 Diff 和局部格式标记共用比较结果 |
+| PDF                   | `pdf_outline` 元数据与书签；页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                                                                           |
+| PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 支持 `detail=full` 或 `detail=images`                                                                                                  |
+| Excel                 | 工作表地图 + A1 范围；`excel_read` 四种 type（workbook / range / style / search）；`excel_edit` 一次一个 type；写回成功时结构化 `data` 多为 `{}`，模型侧另有 prose 确认                                               |
+| KB                    | 混合召回检索全部已索引文件地址与全局网页                                                                                                                                                                              |
+| Image                 | 外部 skill；需 `learn_skill`；按绝对路径生成或更新 PNG / JPEG / WebP                                                                                                                                                  |
+| Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                                                                                  |
+| 定时任务              | 独立主区配置与启用开关；到点向绑定伙伴追加任务描述，并读取伙伴最新 Composer 配置                                                                                                                                      |
 
 各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准；工具契约见 `ai-harness/tool-design.md`，活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，不入库）。
 
@@ -156,3 +158,11 @@ Workbench 消息正文使用统一的 `contentNodes`：普通文本、`@` 引用
 4. 需要本地能力时 → Tool Runtime 调用领域服务。
 5. 工作地址内写回 → 记录修改与预览，供 UI 展示和回退。
 6. 最终答复与事件流经 IPC 回到 Renderer；run 终态后 Main 触发系统通知。
+
+## 文件写盘与审核
+
+`AiFileChangeService` 的文件会话统一管理 Word、PPT、Excel 和普通文本；图片沿用历史图片快照。会话以 partnerId、ownerRunId、规范化文件路径归属，由 `AiRunContext` 提供确认写盘、读取会话和收尾入口。工具先完整替换正式文件、立即回读校验，再持久化最新确认工作版本及结构身份；成功前不生成审核，失败不自动恢复正式文件。
+
+首次原始字节 A 按内容寻址保留。主 run 真正完成、失败或取消时，等待在途写入结束，使用 A 与最后确认的 B 生成自包含审核，再保存统一记录并清理工作快照。子任务、yield 和追加消息续接共用 ownerRunId，不触发最终审核。启动从持久化会话为中断 run 补生成审核，不执行 AI、不修改正式文件。
+
+Renderer 的历史审核只读取对应产物，当前文件预览读取正式路径；后续 C 不改变 A→B。Word 应用记录仅投影统一记录并复用统一撤销。目录与持久化字段见 `doc/db/design.md`、`doc/db/tables.md`，工具错误契约见 `doc/ai-harness/tool-design.md`。

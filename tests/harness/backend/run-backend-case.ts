@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { readdir } from 'node:fs/promises'
 import { collectBackendRunArtifacts } from './artifactCollector'
@@ -19,6 +20,7 @@ import {
   createIsolatedWorkspace
 } from './workspaceManager'
 import { EventCollector } from '../core/eventCollector'
+import type { AiFileChangeRecord } from '../../../src/shared/types'
 import {
   TEST_LOG_SCHEMA_VERSION,
   type TestDomain,
@@ -123,7 +125,7 @@ export const runBackendCase = async <TResult>(
   const liveConfig = definition.harnessMode === 'live' ? loadLiveLlmConfigFromEnv() : null
   const runtimeModelName = liveConfig?.model_name || definition.runtimeModelName || null
   const startedAtMs = Date.now()
-  const runId = createRunId(startedAtMs)
+  const runId = `${createRunId(startedAtMs)}-${randomUUID().slice(0, 8)}`
   const scope = buildRunScope({
     domain: definition.domain,
     suite: definition.suite,
@@ -141,6 +143,7 @@ export const runBackendCase = async <TResult>(
   })
   const eventCollector = new EventCollector({
     sink: {
+      flush: streamingLogWriter.flush,
       onRuntimeEvent: (event) => {
         streamingLogWriter.appendRuntimeEvent(event)
       },
@@ -155,6 +158,7 @@ export const runBackendCase = async <TResult>(
   let fixtureBindings: FixtureBinding[] = []
   let status: TestRunStatus = 'failed'
   let runtime: BackendTestRuntime | undefined
+  let fileChangeRecords: AiFileChangeRecord[] = []
   let annotationArtifacts: Awaited<ReturnType<typeof collectMessageLogAnnotationArtifact>> = []
   const counters = {
     steps: 0,
@@ -243,6 +247,7 @@ export const runBackendCase = async <TResult>(
       status = 'passed'
     } finally {
       try {
+        fileChangeRecords = (await runtime.storageService.aiFileChange.listRecords()).items
         if (definition.messageLogAnnotationPartnerIds) {
           annotationArtifacts = await collectMessageLogAnnotationArtifact({
             scope,
@@ -273,7 +278,8 @@ export const runBackendCase = async <TResult>(
           caseId: definition.caseId,
           runId,
           workspaceRoot,
-          runtimeEventsPath: streamingLogWriter.paths.runtimeEventsPath
+          runtimeEventsPath: streamingLogWriter.paths.runtimeEventsPath,
+          fileChangeRecords
         })
       : []
     const emptySeedManifest: BackendSeedManifest = {

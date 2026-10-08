@@ -154,12 +154,10 @@ describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live runti
             return {
               output,
               events: runtime.eventCollector.snapshot(),
-              reviewCallCount: runtime.eventCollector
-                .snapshotLlmIo()
-                .filter(
-                  (record) =>
-                    record.caller === 'human.terminal_review' && record.status === 'completed'
-                ).length,
+              reviewCallCount: (await runtime.eventCollector.snapshotLlmIo()).filter(
+                (record) =>
+                  record.caller === 'human.terminal_review' && record.status === 'completed'
+              ).length,
               reviewDecisions,
               outOfScopeReview,
               terminalCallCountBeforeOutOfScopeReview,

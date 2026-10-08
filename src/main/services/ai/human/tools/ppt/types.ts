@@ -1,5 +1,5 @@
 import type { PresentationData } from 'pptx-kit'
-import type { AiFileChangeRecord, JsonObject } from '../../../../../../shared/types'
+import type { JsonObject } from '../../../../../../shared/types'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 
 export type PptBounds = {
@@ -100,5 +100,4 @@ export type PptToolRuntime = {
   search: (args: unknown) => Promise<Record<string, unknown>>
   render: (args: unknown) => Promise<Record<string, unknown>>
   edit: (args: unknown) => Promise<Record<string, unknown>>
-  commitAll: () => Promise<AiFileChangeRecord[]>
 }

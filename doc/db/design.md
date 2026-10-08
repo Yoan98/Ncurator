@@ -25,7 +25,6 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 - `document.active_generation_id` 只用于写后删旧 chunk 与孤儿清理，不进入检索 `where`。
 - 外键级联与无 CASCADE 绑定以当前 schema / migration 为准。
 
-
 ## SQLite Migration
 
 ### 当前边界
@@ -116,3 +115,22 @@ LanceDB fragment 是一次或多次写入形成的数据片段，不等于一行
 - chunk 写入必须批量进行。
 - 慢查询优先检查 workspace 过滤、source type 过滤、documentIds 过滤和 fragment 数量。
 - 不用缓存掩盖错误的数据边界。
+
+## 文件版本持久化
+
+文件会话和结构身份是 Main 内部元数据，不新增业务表。使用现有 `ai_file_change` 保存首次 A 的对象引用、最终确认 B 的校验、审核路径、统计、撤销状态和错误；Word 应用记录通过统一记录投影，不再维护另一套基线及撤销。
+
+```text
+userData/
+├── app.sqlite
+└── partners/{partnerId}/
+    ├── objects/sha256/...                         原始 A，内容去重
+    └── runtime/file-changes/{ownerRunId}/{changeId}/
+        ├── working-{version}.{ext}                唯一最新确认 B，临时
+        ├── pending.json                          会话和结构身份，临时
+        └── review/{artifactId}/                   自包含审核，长期
+```
+
+每次发布使用新的工作版本路径，确认后清理上一份。每次审核使用独立产物路径并更新记录引用，避免同路径覆盖和缓存陈旧。Word 保存 review.docx，Excel 保存 review.xlsx，PPT 保存 manifest.json、前后 SVG 与必要资源，文本保存含完整有序行及旧新行数的 review.json。全部资源和记录保存成功后清理工作版本及 pending；失败保留输入，以便重启补生成或重复收尾。已有文件零净变化移除本轮记录，新建空文件仍保留。
+
+内容审核完成后 after_snapshot_path/after_object_hash 为空；图片继续保留历史图片快照。原始 A 保留用于撤销。清空消息保留回退记录和资源；删除伙伴等待运行写入及收尾结束，再清理对应目录。只清理本次产生且无引用的文件。旧审核不迁移、不从当前文件重建，旧记录不删除。

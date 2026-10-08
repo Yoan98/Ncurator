@@ -20,10 +20,7 @@ import { buildDispatchQueue } from '../dispatch'
 import { appendToolFeedback } from '../../shared/toolFeedback'
 import { appendLogEntriesToCache } from '../../memory/conversationLogMessages'
 import { formatZodErrorForTool, type ZodIssueLike } from '../../shared/schemaError'
-import {
-  normalizeToolCallArgs,
-  repairBooleanStringToolArgs
-} from '../../shared/toolArgsNormalize'
+import { normalizeToolCallArgs, repairBooleanStringToolArgs } from '../../shared/toolArgsNormalize'
 import { estimateMessagesForContext, projectMessagesForMainModel } from '../../memory/multimodal'
 import {
   emitAssistantProcessThought,
@@ -76,6 +73,7 @@ export const createBrainNode = (input: {
         ...brainProjection.messages
       ]
       input.cache.messages = messages
+      input.cache.conversationProjection = undefined
       input.cache.currentUserMessageIndex = brainProjection.currentUserMessageIndex + 1
     }
 
@@ -356,9 +354,7 @@ export const createBrainNode = (input: {
       }
 
       const hasAnyToolCall =
-        executableCalls.length > 0 ||
-        unrecoverableCalls.length > 0 ||
-        schemaInvalidCalls.length > 0
+        executableCalls.length > 0 || unrecoverableCalls.length > 0 || schemaInvalidCalls.length > 0
       if (hasAnyToolCall) classifyStreamAsThought()
       input.ctx.sendEvent({
         type: 'assistant_brain_stream_completed',

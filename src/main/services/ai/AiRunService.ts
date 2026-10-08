@@ -1,3 +1,4 @@
+import { appendFileChangeArtifactsAndEmitEvents } from './utils/artifacts'
 import { SubagentBlockedError } from './run/toolPolicy'
 import { createSubagentDispatcher } from './run/subagents'
 import { releaseRunFiles } from './run/fileLease'
@@ -30,6 +31,49 @@ export class AiRunService {
   }
 
   public async run(payload: AiRunStartPayload, deps: AiRunDeps): Promise<AiRunState> {
+    const finalizeFiles = async (allowContinuation = false) => {
+      if (payload.parentToolCallId) return []
+      if (
+        allowContinuation &&
+        !deps.prepareFileChangeFinalization &&
+        deps.hasPendingUserMessages?.()
+      )
+        return []
+      if (
+        deps.prepareFileChangeFinalization &&
+        !(await deps.prepareFileChangeFinalization(allowContinuation))
+      )
+        return []
+      try {
+        const records = await deps.docxApplyService.fileChanges.sessions.finalize(
+          payload.partnerId,
+          payload.ownerRunId || payload.runId
+        )
+        return appendFileChangeArtifactsAndEmitEvents({
+          records,
+          runId: payload.runId,
+          taskId: payload.runId,
+          sendEvent: deps.sendEvent
+        })
+      } catch (error) {
+        // Preserve the execution outcome; durable inputs remain available for recovery.
+        console.error('[FILE-REVIEW-FINALIZE]', {
+          ownerRunId: payload.ownerRunId || payload.runId,
+          error
+        })
+        const records = (
+          await deps.docxApplyService.fileChanges
+            .listRecords({ runId: payload.ownerRunId || payload.runId })
+            .catch(() => ({ items: [] }))
+        ).items
+        return appendFileChangeArtifactsAndEmitEvents({
+          records,
+          runId: payload.runId,
+          taskId: payload.runId,
+          sendEvent: deps.sendEvent
+        })
+      }
+    }
     try {
       await runAiRuntimePreflight(deps)
       const ctx = createAiRunContext(payload, {
@@ -60,14 +104,23 @@ export class AiRunService {
           finalArtifacts: output.artifacts || []
         })
       }
+      await deps.waitForPendingUserMessageSubmissions?.()
+      const fileArtifacts = await finalizeFiles(true)
       return createCompletedAiRunState({
         runId: payload.runId,
         partnerId: payload.partnerId,
         input: String(payload.input || ''),
         finalDeliveryMarkdown: output.deliveryMarkdown,
-        finalArtifacts: output.artifacts || []
+        finalArtifacts:
+          payload.parentToolCallId || deps.hasPendingUserMessages?.()
+            ? output.artifacts || []
+            : [
+                ...(output.artifacts || []).filter((artifact) => !artifact.applyId),
+                ...fileArtifacts
+              ]
       })
     } catch (e) {
+      await finalizeFiles()
       if (payload.parentToolCallId && e instanceof SubagentBlockedError)
         return {
           ...createFailedAiRunState({

@@ -141,7 +141,7 @@ export const createRealAiDepsFactory = async (input: {
   })
 
   const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
-  const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
+  const docxApplyService = new DocxApplyService(aiFileChangeService)
   const terminalSessionIds = new Set<string>()
 
   const seedLlmConfig = async (config: LiveLlmConfig): Promise<void> => {
@@ -197,6 +197,7 @@ export const createRealAiDepsFactory = async (input: {
     const ctx = createAiRunContext(
       {
         runId,
+        ownerRunId: contextInput.ownerRunId,
         partnerId,
         partnerName: 'backend test partner',
         userMessageId: contextInput.userMessageId || `test-user-message-${runId}`,

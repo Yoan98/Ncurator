@@ -1,18 +1,14 @@
+import type { ExcelSheetAxes, FileChangeIdentity } from '../../../fileChanges/FileChangeSession'
 import ExcelJS from 'exceljs'
-import { diffArrays } from 'diff'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import type { JsonObject } from '../../../../../../shared/types'
 import { resolveToolPath } from '../terminal/commandPolicy'
-import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
-import { createToolEventEmitter } from '../utils/toolEvents'
-import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
-import type { ExcelCapabilityToolsInput, ExcelRuntimeState, ExcelToolRuntime } from './types'
+import type { ExcelCapabilityToolsInput, ExcelToolRuntime } from './types'
 import type { ExcelEditInput, ExcelReadInput, ExcelStyle } from './toolSchemas'
 import { toExcelArgb, toExcelRgb } from './color'
 import { EXCEL_SEARCH_MAX_MATCHES } from './constants'
-import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../../../wps/officeFileWriteNotify'
 
 const EXCEL_READ_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xltx', '.xltm'])
 const EXCEL_WRITE_EXTENSIONS = new Set(['.xlsx'])
@@ -32,13 +28,6 @@ const assertExcelPath = (sourcePath: string, mode: 'read' | 'write'): void => {
 const hashBytes = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
 
 const toJsonObject = (value: unknown): JsonObject => JSON.parse(JSON.stringify(value)) as JsonObject
-
-const getStyleId = (cell: ExcelJS.Cell): number => {
-  const candidate: unknown = cell
-  if (!candidate || typeof candidate !== 'object' || !('styleId' in candidate)) return 0
-  const value = (candidate as { styleId?: unknown }).styleId
-  return typeof value === 'number' ? value : 0
-}
 
 const getFormula = (value: unknown): string | undefined => {
   if (!value || typeof value !== 'object') return undefined
@@ -102,555 +91,227 @@ const loadWorkbook = async (bytes: Uint8Array): Promise<ExcelJS.Workbook> => {
 
 const readBytes = async (sourcePath: string): Promise<Buffer> => await fs.readFile(sourcePath)
 
-const atomicReplace = async (sourcePath: string, bytes: Buffer): Promise<void> => {
-  await withOfficeFileWrite(sourcePath, async () => {
-    const tempPath = `${sourcePath}.${randomUUID()}.tmp`
-    await fs.writeFile(tempPath, bytes)
-    await fs.rename(tempPath, sourcePath).catch(async (error) => {
-      await fs.rm(tempPath, { force: true }).catch(() => undefined)
-      throw error
-    })
-    notifyOfficeFileWritten(sourcePath)
-  })
-}
-
-const cellKey = (sheetName: string, address: string): string => `${sheetName}\u0000${address}`
-
-const collectCellMap = (workbook: ExcelJS.Workbook): Map<string, ExcelJS.Cell> => {
-  const cells = new Map<string, ExcelJS.Cell>()
-  for (const sheet of workbook.worksheets) {
-    const maxRow = Math.max(sheet.rowCount, 1)
-    const maxColumn = Math.max(sheet.columnCount, 1)
-    for (let row = 1; row <= maxRow; row += 1) {
-      for (let column = 1; column <= maxColumn; column += 1) {
-        const cell = sheet.getCell(row, column)
-        if (
-          (cell.value !== null && cell.value !== undefined && cell.value !== '') ||
-          getStyleId(cell) > 0
-        ) {
-          cells.set(cellKey(sheet.name, cell.address), cell)
-        }
-      }
-    }
-  }
-  return cells
-}
-
-const styleFingerprint = (cell: ExcelJS.Cell): string => JSON.stringify(cell.style || {})
-
 type CellChange = { sheetName: string; address: string; kind: 'added' | 'modified' | 'deleted' }
 
-type RowAlignment = {
-  kind: 'equal' | 'modified' | 'inserted' | 'deleted'
-  beforeRow?: number
-  afterRow?: number
-}
-
-const compareWorkbooks = (
-  before: ExcelJS.Workbook | null,
-  after: ExcelJS.Workbook
-): CellChange[] => {
-  const beforeCells = before ? collectCellMap(before) : new Map<string, ExcelJS.Cell>()
-  const afterCells = collectCellMap(after)
-  const keys = new Set([...beforeCells.keys(), ...afterCells.keys()])
-  const changes: CellChange[] = []
-  for (const key of keys) {
-    const beforeCell = beforeCells.get(key)
-    const afterCell = afterCells.get(key)
-    if (!beforeCell && afterCell) {
-      const [sheetName, address] = key.split('\u0000')
-      changes.push({ sheetName, address, kind: 'added' })
-      continue
-    }
-    if (beforeCell && !afterCell) {
-      const [sheetName, address] = key.split('\u0000')
-      changes.push({ sheetName, address, kind: 'deleted' })
-      continue
-    }
-    if (
-      beforeCell &&
-      afterCell &&
-      (JSON.stringify(beforeCell.value) !== JSON.stringify(afterCell.value) ||
-        styleFingerprint(beforeCell) !== styleFingerprint(afterCell))
-    ) {
-      const [sheetName, address] = key.split('\u0000')
-      const beforeHasValue =
-        beforeCell.value !== null && beforeCell.value !== undefined && beforeCell.value !== ''
-      const afterHasValue =
-        afterCell.value !== null && afterCell.value !== undefined && afterCell.value !== ''
-      changes.push({
-        sheetName,
-        address,
-        kind: beforeHasValue && !afterHasValue ? 'deleted' : 'modified'
-      })
-    }
-  }
-  return changes.sort((a, b) =>
-    `${a.sheetName}!${a.address}`.localeCompare(`${b.sheetName}!${b.address}`)
-  )
-}
-
-const mergeChanges = (changes: CellChange[], forced: CellChange[]): CellChange[] => {
-  const merged = new Map<string, CellChange>()
-  for (const change of [...changes, ...forced]) {
-    const key = cellKey(change.sheetName, change.address)
-    const existing = merged.get(key)
-    if (!existing || change.kind === 'deleted') merged.set(key, change)
-  }
-  return Array.from(merged.values()).sort((left, right) =>
-    `${left.sheetName}!${left.address}`.localeCompare(`${right.sheetName}!${right.address}`)
-  )
-}
-
-const setBorder = (cell: ExcelJS.Cell, color: string): void => {
-  const border = { style: 'medium' as const, color: { argb: color } }
-  cell.style = {
-    ...JSON.parse(JSON.stringify(cell.style || {})),
-    border: { top: border, right: border, bottom: border, left: border }
-  }
-}
-
 const cloneModel = <T>(value: T): T => structuredClone(value)
-
 const cellFingerprint = (cell: ExcelJS.Cell): string =>
   JSON.stringify({ value: cell.value, style: cell.style || {} })
-
-const rowSignature = (sheet: ExcelJS.Worksheet, rowNumber: number, maxColumn: number): string => {
-  const row = sheet.getRow(rowNumber)
-  const payload = {
-    height: row.height || null,
-    hidden: row.hidden,
-    outlineLevel: row.outlineLevel,
-    cells: Array.from({ length: maxColumn }, (_, index) => cellFingerprint(row.getCell(index + 1)))
-  }
-  return createHash('sha256').update(JSON.stringify(payload)).digest('hex')
+const setBorder = (cell: ExcelJS.Cell, color: string): void => {
+  const border = { style: 'medium' as const, color: { argb: color } }
+  cell.border = { top: border, right: border, bottom: border, left: border }
 }
-
-const rowSimilarity = (
-  before: ExcelJS.Worksheet,
-  beforeRow: number,
-  after: ExcelJS.Worksheet,
-  afterRow: number,
-  maxColumn: number
-): number => {
-  if (maxColumn <= 0) return 0
-  let equalCells = 0
-  for (let column = 1; column <= maxColumn; column += 1) {
-    if (
-      cellFingerprint(before.getCell(beforeRow, column)) ===
-      cellFingerprint(after.getCell(afterRow, column))
-    ) {
-      equalCells += 1
-    }
+const sheetBounds = (sheet: ExcelJS.Worksheet) => {
+  const model = sheet.model as ExcelJS.WorksheetModel & {
+    rows: { number: number }[]
+    cols?: { max: number }[]
   }
-  return equalCells / maxColumn
-}
-
-const alignChangedRows = (input: {
-  before: ExcelJS.Worksheet
-  after: ExcelJS.Worksheet
-  beforeRows: number[]
-  afterRows: number[]
-  maxColumn: number
-}): RowAlignment[] => {
-  const { beforeRows, afterRows } = input
-  if (beforeRows.length === 0) {
-    return afterRows.map((afterRow) => ({ kind: 'inserted', afterRow }))
-  }
-  if (afterRows.length === 0) {
-    return beforeRows.map((beforeRow) => ({ kind: 'deleted', beforeRow }))
-  }
-  if (beforeRows.length === afterRows.length || beforeRows.length * afterRows.length > 10_000) {
-    const paired = Math.min(beforeRows.length, afterRows.length)
-    return [
-      ...Array.from({ length: paired }, (_, index) => ({
-        kind: 'modified' as const,
-        beforeRow: beforeRows[index],
-        afterRow: afterRows[index]
-      })),
-      ...beforeRows.slice(paired).map((beforeRow) => ({ kind: 'deleted' as const, beforeRow })),
-      ...afterRows.slice(paired).map((afterRow) => ({ kind: 'inserted' as const, afterRow }))
-    ]
-  }
-
-  const rows = beforeRows.length
-  const columns = afterRows.length
-  const costs = Array.from({ length: rows + 1 }, () => Array<number>(columns + 1).fill(0))
-  const moves = Array.from({ length: rows + 1 }, () =>
-    Array<'pair' | 'delete' | 'insert' | null>(columns + 1).fill(null)
-  )
-  for (let row = 1; row <= rows; row += 1) {
-    costs[row][0] = row
-    moves[row][0] = 'delete'
-  }
-  for (let column = 1; column <= columns; column += 1) {
-    costs[0][column] = column
-    moves[0][column] = 'insert'
-  }
-  for (let row = 1; row <= rows; row += 1) {
-    for (let column = 1; column <= columns; column += 1) {
-      const similarity = rowSimilarity(
-        input.before,
-        beforeRows[row - 1],
-        input.after,
-        afterRows[column - 1],
-        input.maxColumn
-      )
-      const pairCost = costs[row - 1][column - 1] + 1 - similarity * 0.5
-      const deleteCost = costs[row - 1][column] + 1
-      const insertCost = costs[row][column - 1] + 1
-      if (pairCost <= deleteCost && pairCost <= insertCost) {
-        costs[row][column] = pairCost
-        moves[row][column] = 'pair'
-      } else if (deleteCost <= insertCost) {
-        costs[row][column] = deleteCost
-        moves[row][column] = 'delete'
-      } else {
-        costs[row][column] = insertCost
-        moves[row][column] = 'insert'
-      }
-    }
-  }
-
-  const reversed: RowAlignment[] = []
-  let row = rows
-  let column = columns
-  while (row > 0 || column > 0) {
-    const move = moves[row][column]
-    if (move === 'pair') {
-      reversed.push({
-        kind: 'modified',
-        beforeRow: beforeRows[row - 1],
-        afterRow: afterRows[column - 1]
-      })
-      row -= 1
-      column -= 1
-    } else if (move === 'delete') {
-      reversed.push({ kind: 'deleted', beforeRow: beforeRows[row - 1] })
-      row -= 1
-    } else {
-      reversed.push({ kind: 'inserted', afterRow: afterRows[column - 1] })
-      column -= 1
-    }
-  }
-  return reversed.reverse()
-}
-
-const isTrailingEmptyRow = (
-  sheet: ExcelJS.Worksheet,
-  rowNumber: number,
-  maxColumn: number
-): boolean => {
-  const row = sheet.getRow(rowNumber)
-  if (row.height || row.hidden || row.outlineLevel) return false
-  for (let column = 1; column <= maxColumn; column += 1) {
-    const cell = row.getCell(column)
-    if (cell.value !== null && cell.value !== undefined && cell.value !== '') return false
-    if (getStyleId(cell) > 0 || JSON.stringify(cell.style || {}) !== '{}') return false
-  }
-  return true
-}
-
-const alignWorksheetRows = (
-  before: ExcelJS.Worksheet,
-  after: ExcelJS.Worksheet
-): RowAlignment[] => {
-  const maxColumn = Math.max(before.columnCount, after.columnCount, 1)
-  const beforeRows = Array.from({ length: before.rowCount }, (_, index) => index + 1)
-  const afterRows = Array.from({ length: after.rowCount }, (_, index) => index + 1)
-  while (
-    beforeRows.length > 0 &&
-    isTrailingEmptyRow(before, beforeRows[beforeRows.length - 1], maxColumn)
-  ) {
-    beforeRows.pop()
-  }
-  while (
-    afterRows.length > 0 &&
-    isTrailingEmptyRow(after, afterRows[afterRows.length - 1], maxColumn)
-  ) {
-    afterRows.pop()
-  }
-  const beforeSignatures = beforeRows.map((row) => rowSignature(before, row, maxColumn))
-  const afterSignatures = afterRows.map((row) => rowSignature(after, row, maxColumn))
-  const alignment: RowAlignment[] = []
-  let beforeOffset = 0
-  let afterOffset = 0
-  let pendingBefore: number[] = []
-  let pendingAfter: number[] = []
-  const flushPending = (): void => {
-    alignment.push(
-      ...alignChangedRows({
-        before,
-        after,
-        beforeRows: pendingBefore,
-        afterRows: pendingAfter,
-        maxColumn
-      })
-    )
-    pendingBefore = []
-    pendingAfter = []
-  }
-
-  for (const part of diffArrays(beforeSignatures, afterSignatures)) {
-    if (part.removed) {
-      pendingBefore.push(
-        ...Array.from({ length: part.count || 0 }, (_, index) => beforeOffset + index + 1)
-      )
-      beforeOffset += part.count || 0
-      continue
-    }
-    if (part.added) {
-      pendingAfter.push(
-        ...Array.from({ length: part.count || 0 }, (_, index) => afterOffset + index + 1)
-      )
-      afterOffset += part.count || 0
-      continue
-    }
-    flushPending()
-    for (let index = 0; index < (part.count || 0); index += 1) {
-      alignment.push({
-        kind: 'equal',
-        beforeRow: beforeOffset + index + 1,
-        afterRow: afterOffset + index + 1
-      })
-    }
-    beforeOffset += part.count || 0
-    afterOffset += part.count || 0
-  }
-  flushPending()
-  return alignment
-}
-
-const copyRow = (source: ExcelJS.Row, target: ExcelJS.Row, maxColumn: number): void => {
-  target.height = source.height
-  target.hidden = source.hidden
-  target.outlineLevel = source.outlineLevel
-  for (let column = 1; column <= maxColumn; column += 1) {
-    const sourceCell = source.getCell(column)
-    const targetCell = target.getCell(column)
-    targetCell.value = cloneModel(sourceCell.value) as ExcelJS.CellValue
-    targetCell.style = cloneModel(sourceCell.style || {})
-    targetCell.dataValidation = cloneModel(sourceCell.dataValidation || {})
-    if (sourceCell.note) targetCell.note = cloneModel(sourceCell.note)
-  }
-}
-
-const sheetUsedBounds = (
-  sheet: ExcelJS.Worksheet
-): { top: number; left: number; bottom: number; right: number } => {
-  if (sheet.actualRowCount === 0 || sheet.actualColumnCount === 0) {
-    return { top: 1, left: 1, bottom: 1, right: 1 }
-  }
-  const dimensions = sheet.dimensions
   return {
-    top: dimensions.top,
-    left: dimensions.left,
-    bottom: dimensions.bottom,
-    right: dimensions.right
+    rows: Math.max(
+      sheet.rowCount,
+      ...model.rows.map((row) => row.number),
+      ...model.merges.map((range) => parseRange(range).bottom),
+      1
+    ),
+    columns: Math.max(
+      sheet.columnCount,
+      ...(model.cols || []).map((col) => col.max),
+      ...model.merges.map((range) => parseRange(range).right),
+      1
+    )
   }
 }
-
-const setUsedRangeBorder = (sheet: ExcelJS.Worksheet, color: string): void => {
-  const bounds = sheetUsedBounds(sheet)
-  for (let row = bounds.top; row <= bounds.bottom; row += 1) {
-    for (let column = bounds.left; column <= bounds.right; column += 1) {
-      setBorder(sheet.getCell(row, column), color)
+type AxisPair = { before?: number; after?: number }
+const extendAxis = (axis: (number | null)[], size: number): void => {
+  let next = Math.max(0, ...axis.filter((value): value is number => value !== null)) + 1
+  while (axis.length < size) axis.push(next++)
+}
+const alignAxis = (axis: (number | null)[], beforeSize: number, afterSize: number): AxisPair[] => {
+  const current = [...axis]
+  extendAxis(current, afterSize)
+  const size = Math.max(beforeSize, ...current.filter((value): value is number => value !== null))
+  const present = new Set(current)
+  const result: AxisPair[] = []
+  let old = 1
+  current.forEach((origin, index) => {
+    if (origin !== null) {
+      while (old < origin) {
+        if (!present.has(old)) result.push({ before: old })
+        old++
+      }
+      old = origin + 1
     }
-  }
-}
-
-type WorksheetModelWithInternals = ExcelJS.WorksheetModel & {
-  mergeCells?: string[]
-  merges?: string[]
-  rows?: unknown[]
-  cols?: unknown[]
-  state?: ExcelJS.WorksheetState
-}
-
-type WorkbookInternalModel = Omit<ExcelJS.WorkbookModel, 'worksheets' | 'sheets'> & {
-  worksheets: WorksheetModelWithInternals[]
-  sheets: WorksheetModelWithInternals[]
-}
-
-const cloneWorksheetModel = (sheet: ExcelJS.Worksheet, id: number): WorksheetModelWithInternals => {
-  const model = cloneModel(sheet.model) as WorksheetModelWithInternals
-  model.id = id
-  model.name = sheet.name
-  model.state = sheet.state
-  model.mergeCells = cloneModel(model.merges || model.mergeCells || [])
-  return model
-}
-
-const buildDiffBaseWorkbook = (
-  before: ExcelJS.Workbook | null,
-  after: ExcelJS.Workbook,
-  sheetLineage: ReadonlyMap<string, string | null>
-): ExcelJS.Workbook => {
-  const afterSheets = new Map(after.worksheets.map((sheet) => [sheet.name, sheet]))
-  const afterNameByBaselineName = new Map<string, string>()
-  sheetLineage.forEach((baselineName, afterName) => {
-    if (baselineName) afterNameByBaselineName.set(baselineName, afterName)
+    result.push({ before: origin ?? undefined, after: index + 1 })
   })
-  const orderedSheets: Array<{ outputName: string; source: ExcelJS.Worksheet }> = []
-  for (const sheet of before?.worksheets || []) {
-    const afterName = afterNameByBaselineName.get(sheet.name)
-    const afterSheet = afterName ? afterSheets.get(afterName) : undefined
-    orderedSheets.push({ outputName: afterName || sheet.name, source: afterSheet || sheet })
+  while (old <= size) {
+    if (!present.has(old)) result.push({ before: old })
+    old++
   }
-  for (const sheet of after.worksheets) {
-    if (sheetLineage.get(sheet.name) === null) {
-      orderedSheets.push({ outputName: sheet.name, source: sheet })
-    }
-  }
-
-  const diffWorkbook = new ExcelJS.Workbook()
-  const baseModel = cloneModel(after.model) as ExcelJS.WorkbookModel
-  const worksheets = orderedSheets.map((entry, index) => {
-    const model = cloneWorksheetModel(entry.source, index + 1)
-    model.name = entry.outputName
-    return model
-  })
-  const workbookModel = { ...baseModel }
-  const diffModel: WorkbookInternalModel = {
-    ...workbookModel,
-    worksheets,
-    sheets: worksheets
-  }
-  Reflect.set(diffWorkbook, 'model', diffModel)
-  return diffWorkbook
+  return result
 }
-
+const legalDeletedName = (name: string, used: Set<string>): string => {
+  let index = 1,
+    output = ''
+  do {
+    const suffix = index === 1 ? '（已删除）' : `（已删除${index}）`
+    output = name.slice(0, 31 - suffix.length) + suffix
+    index++
+  } while (used.has(output.toLowerCase()))
+  used.add(output.toLowerCase())
+  return output
+}
 const buildDiffWorkbook = async (input: {
   before: ExcelJS.Workbook | null
   after: ExcelJS.Workbook
   sheetLineage: ReadonlyMap<string, string | null>
+  axes?: ExcelSheetAxes[]
 }): Promise<{ bytes: Buffer; changes: CellChange[] }> => {
-  const diffWorkbook = buildDiffBaseWorkbook(input.before, input.after, input.sheetLineage)
-  const beforeSheetNames = new Set(input.before?.worksheets.map((sheet) => sheet.name) || [])
+  const review = new ExcelJS.Workbook()
   const changes: CellChange[] = []
-  const afterNameByBaselineName = new Map<string, string>()
-  input.sheetLineage.forEach((baselineName, afterName) => {
-    if (baselineName) afterNameByBaselineName.set(baselineName, afterName)
-  })
-
-  for (const sheetName of beforeSheetNames) {
-    if (afterNameByBaselineName.has(sheetName)) continue
-    const sheet = diffWorkbook.getWorksheet(sheetName)
-    if (!sheet) continue
-    sheet.properties.tabColor = { argb: RED }
-    setUsedRangeBorder(sheet, RED)
-    const bounds = sheetUsedBounds(sheet)
-    for (let row = bounds.top; row <= bounds.bottom; row += 1) {
-      for (let column = bounds.left; column <= bounds.right; column += 1) {
-        changes.push({ sheetName, address: sheet.getCell(row, column).address, kind: 'deleted' })
-      }
-    }
+  const names = new Set(input.after.worksheets.map((sheet) => sheet.name.toLowerCase()))
+  const outputs: { before?: ExcelJS.Worksheet; after?: ExcelJS.Worksheet; name: string }[] = []
+  for (const before of input.before?.worksheets || []) {
+    const finalName = [...input.sheetLineage].find(([, baseline]) => baseline === before.name)?.[0]
+    const after = finalName ? input.after.getWorksheet(finalName) : undefined
+    outputs.push({ before, after, name: after?.name || legalDeletedName(before.name, names) })
   }
-
-  for (const [sheetName, baselineName] of input.sheetLineage) {
-    if (baselineName !== null) continue
-    const sheet = diffWorkbook.getWorksheet(sheetName)
-    if (!sheet) continue
-    sheet.properties.tabColor = { argb: GREEN }
-    setUsedRangeBorder(sheet, GREEN)
-    const bounds = sheetUsedBounds(sheet)
-    for (let row = bounds.top; row <= bounds.bottom; row += 1) {
-      for (let column = bounds.left; column <= bounds.right; column += 1) {
-        changes.push({ sheetName, address: sheet.getCell(row, column).address, kind: 'added' })
-      }
-    }
+  for (const after of input.after.worksheets) {
+    if (input.sheetLineage.get(after.name) === null) outputs.push({ after, name: after.name })
   }
-
-  for (const beforeSheetName of beforeSheetNames) {
-    const afterSheetName = afterNameByBaselineName.get(beforeSheetName)
-    if (!afterSheetName) continue
-    const beforeSheet = input.before?.getWorksheet(beforeSheetName)
-    const afterSheet = input.after.getWorksheet(afterSheetName)
-    const diffSheet = diffWorkbook.getWorksheet(afterSheetName)
-    if (!beforeSheet || !afterSheet || !diffSheet) continue
-    if (beforeSheetName !== afterSheetName) {
-      diffSheet.properties.tabColor = { argb: GREEN }
-    }
-    const alignment = alignWorksheetRows(beforeSheet, afterSheet)
-    let outputRow = 1
-    for (const entry of alignment) {
-      if (entry.kind === 'deleted') diffSheet.spliceRows(outputRow, 0, [])
-      outputRow += 1
-    }
-
-    const maxColumn = Math.max(beforeSheet.columnCount, afterSheet.columnCount, 1)
-    outputRow = 1
-    for (const entry of alignment) {
-      const sourceRow =
-        entry.kind === 'deleted'
-          ? beforeSheet.getRow(entry.beforeRow!)
-          : afterSheet.getRow(entry.afterRow!)
-      copyRow(sourceRow, diffSheet.getRow(outputRow), maxColumn)
-
-      if (entry.kind === 'deleted' || entry.kind === 'inserted') {
-        const kind = entry.kind === 'deleted' ? 'deleted' : 'added'
-        const color = entry.kind === 'deleted' ? RED : GREEN
-        for (let column = 1; column <= maxColumn; column += 1) {
-          const cell = diffSheet.getCell(outputRow, column)
-          setBorder(cell, color)
-          changes.push({ sheetName: afterSheetName, address: cell.address, kind })
-        }
-        outputRow += 1
-        continue
-      }
-
-      if (entry.kind === 'modified') {
-        let rowHasCellChange = false
-        for (let column = 1; column <= maxColumn; column += 1) {
-          const beforeCell = beforeSheet.getCell(entry.beforeRow!, column)
-          const afterCell = afterSheet.getCell(entry.afterRow!, column)
-          if (cellFingerprint(beforeCell) === cellFingerprint(afterCell)) continue
-          const diffCell = diffSheet.getCell(outputRow, column)
-          const beforeHasValue =
-            beforeCell.value !== null && beforeCell.value !== undefined && beforeCell.value !== ''
-          const afterHasValue =
-            afterCell.value !== null && afterCell.value !== undefined && afterCell.value !== ''
-          const kind = beforeHasValue && !afterHasValue ? 'deleted' : 'modified'
-          if (kind === 'deleted') {
-            diffCell.value = cloneModel(beforeCell.value) as ExcelJS.CellValue
-            diffCell.style = cloneModel(beforeCell.style || {})
-          }
-          setBorder(diffCell, kind === 'deleted' ? RED : GREEN)
-          changes.push({ sheetName: afterSheetName, address: diffCell.address, kind })
-          rowHasCellChange = true
-        }
-        const beforeRow = beforeSheet.getRow(entry.beforeRow!)
-        const afterRow = afterSheet.getRow(entry.afterRow!)
-        if (
-          !rowHasCellChange &&
-          (beforeRow.height !== afterRow.height ||
-            beforeRow.hidden !== afterRow.hidden ||
-            beforeRow.outlineLevel !== afterRow.outlineLevel)
-        ) {
-          const markerCell = diffSheet.getCell(outputRow, 1)
-          setBorder(markerCell, GREEN)
-          changes.push({ sheetName: afterSheetName, address: markerCell.address, kind: 'modified' })
-        }
-      }
-      outputRow += 1
-    }
-
-    const maxLayoutColumn = Math.max(beforeSheet.columnCount, afterSheet.columnCount, 1)
-    for (let column = 1; column <= maxLayoutColumn; column += 1) {
-      if (beforeSheet.getColumn(column).width === afterSheet.getColumn(column).width) continue
-      const markerCell = diffSheet.getCell(1, column)
+  for (const output of outputs) {
+    const { before, after } = output
+    const sheet = review.addWorksheet(output.name)
+    const source = after || before!
+    // Keep workbook and worksheet properties, styles, formulas and dimensions; rows are rebuilt with logical axes.
+    sheet.properties = cloneModel(source.properties)
+    sheet.pageSetup = cloneModel(source.pageSetup)
+    sheet.views = cloneModel(source.views)
+    const oldBounds = before ? sheetBounds(before) : { rows: 0, columns: 0 }
+    const newBounds = after ? sheetBounds(after) : { rows: 0, columns: 0 }
+    const identity = input.axes?.find((axis) => axis.sheet === after?.name)
+    const rowAxes =
+      identity?.rows || Array.from({ length: newBounds.rows }, (_, i) => (before ? i + 1 : null))
+    const colAxes =
+      identity?.columns ||
+      Array.from({ length: newBounds.columns }, (_, i) => (before ? i + 1 : null))
+    const rows = !after
+      ? Array.from({ length: oldBounds.rows }, (_, i) => ({ before: i + 1 }) as AxisPair)
+      : alignAxis(rowAxes, oldBounds.rows, newBounds.rows)
+    const columns = !after
+      ? Array.from({ length: oldBounds.columns }, (_, i) => ({ before: i + 1 }) as AxisPair)
+      : alignAxis(colAxes, oldBounds.columns, newBounds.columns)
+    const mark = (row: number, col: number, kind: CellChange['kind']) => {
+      const cell = sheet.getCell(row, col)
+      setBorder(cell, kind === 'deleted' ? RED : GREEN)
       if (
         !changes.some(
-          (change) => change.sheetName === afterSheetName && change.address === markerCell.address
+          (change) => change.sheetName === sheet.name && change.address === cell.address
         )
-      ) {
-        setBorder(markerCell, GREEN)
-        changes.push({ sheetName: afterSheetName, address: markerCell.address, kind: 'modified' })
-      }
+      )
+        changes.push({ sheetName: sheet.name, address: cell.address, kind })
     }
+    columns.forEach((pair, col) => {
+      const sourceColumn = pair.after
+        ? after?.getColumn(pair.after)
+        : before?.getColumn(pair.before!)
+      if (sourceColumn) {
+        sheet.getColumn(col + 1).width = sourceColumn.width
+        sheet.getColumn(col + 1).hidden = sourceColumn.hidden
+        sheet.getColumn(col + 1).outlineLevel = sourceColumn.outlineLevel
+      }
+      if (pair.before && pair.after && before && after) {
+        const old = before.getColumn(pair.before),
+          next = after.getColumn(pair.after)
+        if (
+          old.width !== next.width ||
+          old.hidden !== next.hidden ||
+          old.outlineLevel !== next.outlineLevel
+        )
+          mark(1, col + 1, 'modified')
+      }
+    })
+    rows.forEach((rowPair, rowIndex) => {
+      const sourceRow = rowPair.after
+        ? after?.getRow(rowPair.after)
+        : before?.getRow(rowPair.before!)
+      const row = sheet.getRow(rowIndex + 1)
+      if (sourceRow) {
+        row.height = sourceRow.height
+        row.hidden = sourceRow.hidden
+        row.outlineLevel = sourceRow.outlineLevel
+      }
+      columns.forEach((colPair, colIndex) => {
+        const old =
+          before && rowPair.before && colPair.before
+            ? before.getCell(rowPair.before, colPair.before)
+            : undefined
+        const next =
+          after && rowPair.after && colPair.after
+            ? after.getCell(rowPair.after, colPair.after)
+            : undefined
+        const cell = sheet.getCell(rowIndex + 1, colIndex + 1)
+        const sourceCell = next || old
+        const border = cell.border
+        if (sourceCell) {
+          cell.value = cloneModel(sourceCell.value)
+          cell.style = cloneModel(sourceCell.style)
+        }
+        if (border?.top?.color) cell.border = border
+        if (!before || !rowPair.before || !colPair.before) mark(rowIndex + 1, colIndex + 1, 'added')
+        else if (!after || !rowPair.after || !colPair.after)
+          mark(rowIndex + 1, colIndex + 1, 'deleted')
+        else if (old && next && cellFingerprint(old) !== cellFingerprint(next)) {
+          const deleted =
+            old.value !== null && old.value !== '' && (next.value === null || next.value === '')
+          if (deleted) {
+            cell.value = cloneModel(old.value)
+            cell.style = cloneModel(old.style)
+          }
+          mark(rowIndex + 1, colIndex + 1, deleted ? 'deleted' : 'modified')
+        }
+      })
+      if (before && after && rowPair.before && rowPair.after) {
+        const old = before.getRow(rowPair.before),
+          next = after.getRow(rowPair.after)
+        if (
+          old.height !== next.height ||
+          old.hidden !== next.hidden ||
+          old.outlineLevel !== next.outlineLevel
+        )
+          mark(rowIndex + 1, 1, 'modified')
+      }
+    })
+    const mapMerge = (range: string, side: 'before' | 'after') => {
+      const bounds = parseRange(range)
+      const rr = rows
+        .map((pair, index) => ({ value: pair[side], index }))
+        .filter((item) => item.value && item.value >= bounds.top && item.value <= bounds.bottom)
+      const cc = columns
+        .map((pair, index) => ({ value: pair[side], index }))
+        .filter((item) => item.value && item.value >= bounds.left && item.value <= bounds.right)
+      if (!rr.length || !cc.length) return undefined
+      return `${columnLetters(cc[0].index + 1)}${rr[0].index + 1}:${columnLetters(cc[cc.length - 1].index + 1)}${rr[rr.length - 1].index + 1}`
+    }
+    const oldMerges = new Set(
+      (before?.model.merges || [])
+        .map((range) => mapMerge(range, 'before'))
+        .filter((value): value is string => Boolean(value))
+    )
+    const newMerges = new Set(
+      (after?.model.merges || [])
+        .map((range) => mapMerge(range, 'after'))
+        .filter((value): value is string => Boolean(value))
+    )
+    for (const range of new Set([...oldMerges, ...newMerges])) {
+      const bounds = parseRange(range)
+      if (!oldMerges.has(range) || !newMerges.has(range))
+        mark(bounds.top, bounds.left, newMerges.has(range) ? 'modified' : 'deleted')
+      if (newMerges.has(range) || !after) sheet.mergeCells(range)
+    }
+    if (before && after && before.name !== after.name) mark(1, 1, 'modified')
+    if (changes.some((change) => change.sheetName === sheet.name))
+      sheet.properties.tabColor = { argb: after ? GREEN : RED }
   }
-  const bytes = await diffWorkbook.xlsx.writeBuffer()
-  return { bytes: Buffer.from(bytes), changes }
+  return { bytes: Buffer.from(await review.xlsx.writeBuffer()), changes }
 }
 
 const applyStyle = (cell: ExcelJS.Cell, style: ExcelStyle | undefined): void => {
@@ -773,15 +434,13 @@ const applyOperation = (input: {
   workbook: ExcelJS.Workbook
   operation: ExcelEditInput
   sheetLineage: Map<string, string | null>
-  forcedChanges: CellChange[]
 }): void => {
-  const { workbook, operation, sheetLineage, forcedChanges } = input
+  const { workbook, operation, sheetLineage } = input
   if (operation.type === 'add_sheet') {
     if (workbook.getWorksheet(operation.sheetName))
       throw new Error(`工作表已存在: ${operation.sheetName}`)
     workbook.addWorksheet(operation.sheetName)
     sheetLineage.set(operation.sheetName, null)
-    forcedChanges.push({ sheetName: operation.sheetName, address: 'A1', kind: 'added' })
     return
   }
   if (operation.type === 'delete_sheet') {
@@ -789,7 +448,6 @@ const applyOperation = (input: {
     if (workbook.worksheets.length === 1) throw new Error('Excel 最终必须至少保留一个工作表')
     workbook.removeWorksheet(sheet.id)
     sheetLineage.delete(sheet.name)
-    forcedChanges.push({ sheetName: sheet.name, address: 'A1', kind: 'deleted' })
     return
   }
   if (operation.type === 'rename_sheet') {
@@ -801,10 +459,6 @@ const applyOperation = (input: {
     const baselineName = sheetLineage.get(previousName) ?? null
     sheetLineage.delete(previousName)
     sheetLineage.set(sheet.name, baselineName)
-    forcedChanges.push(
-      { sheetName: previousName, address: 'A1', kind: 'deleted' },
-      { sheetName: sheet.name, address: 'A1', kind: 'added' }
-    )
     return
   }
 
@@ -842,35 +496,64 @@ const applyOperation = (input: {
     return
   }
   if (operation.type === 'merge_cells') {
-    const firstCell = sheet.getCell(operation.range.split(':')[0])
-    const wasMerged = firstCell.isMerged
     sheet.mergeCells(operation.range)
-    if (!wasMerged)
-      forcedChanges.push({ sheetName: sheet.name, address: firstCell.address, kind: 'modified' })
     return
   }
   if (operation.type === 'unmerge_cells') {
     const firstCell = sheet.getCell(operation.range.split(':')[0])
     if (!firstCell.isMerged) return
     sheet.unMergeCells(operation.range)
-    forcedChanges.push({ sheetName: sheet.name, address: firstCell.address, kind: 'modified' })
     return
   }
-  if (operation.type === 'insert_rows') {
-    sheet.spliceRows(operation.startRow, 0, ...Array.from({ length: operation.count }, () => []))
-    return
-  }
-  if (operation.type === 'delete_rows') {
-    sheet.spliceRows(operation.startRow, operation.count)
-    return
-  }
-  if (operation.type === 'insert_columns') {
-    const startColumn = toColumnNumber(operation.startColumn)
-    sheet.spliceColumns(startColumn, 0, ...Array.from({ length: operation.count }, () => []))
-    return
-  }
-  if (operation.type === 'delete_columns') {
-    sheet.spliceColumns(toColumnNumber(operation.startColumn), operation.count)
+  if (
+    operation.type === 'insert_rows' ||
+    operation.type === 'delete_rows' ||
+    operation.type === 'insert_columns' ||
+    operation.type === 'delete_columns'
+  ) {
+    const rows = operation.type === 'insert_rows' || operation.type === 'delete_rows'
+    const inserting = operation.type === 'insert_rows' || operation.type === 'insert_columns'
+    const start =
+      'startRow' in operation ? operation.startRow : toColumnNumber(operation.startColumn)
+    const merges = [...sheet.model.merges].map(parseRange)
+    for (const range of [...sheet.model.merges]) sheet.unMergeCells(range)
+    if (rows)
+      sheet.spliceRows(
+        start,
+        inserting ? 0 : operation.count,
+        ...Array.from({ length: inserting ? operation.count : 0 }, () => [])
+      )
+    else
+      sheet.spliceColumns(
+        start,
+        inserting ? 0 : operation.count,
+        ...Array.from({ length: inserting ? operation.count : 0 }, () => [])
+      )
+    const transform = (lo: number, hi: number): [number, number] | undefined => {
+      if (inserting)
+        return [lo >= start ? lo + operation.count : lo, hi >= start ? hi + operation.count : hi]
+      const last = start + operation.count - 1
+      if (lo >= start && hi <= last) return undefined
+      return [
+        lo > last ? lo - operation.count : lo >= start ? start : lo,
+        hi > last ? hi - operation.count : hi >= start ? start - 1 : hi
+      ]
+    }
+    for (const range of merges) {
+      const span = transform(rows ? range.top : range.left, rows ? range.bottom : range.right)
+      if (!span || span[1] < span[0]) continue
+      if (rows) {
+        range.top = span[0]
+        range.bottom = span[1]
+      } else {
+        range.left = span[0]
+        range.right = span[1]
+      }
+      if (range.top !== range.bottom || range.left !== range.right)
+        sheet.mergeCells(
+          `${columnLetters(range.left)}${range.top}:${columnLetters(range.right)}${range.bottom}`
+        )
+    }
     return
   }
   if (operation.type === 'set_style') {
@@ -883,27 +566,11 @@ const applyOperation = (input: {
     return
   }
   if (operation.type === 'set_column_width') {
-    const targetColumn = sheet.getColumn(operation.column)
-    const previousWidth = targetColumn.width
-    targetColumn.width = operation.width
-    const column =
-      typeof operation.column === 'number'
-        ? columnLetters(operation.column)
-        : String(operation.column).toUpperCase()
-    if (previousWidth !== targetColumn.width)
-      forcedChanges.push({ sheetName: sheet.name, address: `${column}1`, kind: 'modified' })
+    sheet.getColumn(operation.column).width = operation.width
     return
   }
   if (operation.type === 'set_row_height') {
-    const row = sheet.getRow(operation.row)
-    const previousHeight = row.height
-    row.height = operation.height
-    if (previousHeight !== row.height)
-      forcedChanges.push({
-        sheetName: sheet.name,
-        address: `A${String(operation.row)}`,
-        kind: 'modified'
-      })
+    sheet.getRow(operation.row).height = operation.height
     return
   }
   const range = parseRange(operation.range)
@@ -913,31 +580,12 @@ const applyOperation = (input: {
       const text = sheet.getCell(row, column).text || ''
       maxLength = Math.max(maxLength, Array.from(text).length + 2)
     }
-    const targetColumn = sheet.getColumn(column)
-    const previousWidth = targetColumn.width
-    targetColumn.width = Math.min(maxLength, 60)
-    if (previousWidth !== targetColumn.width) {
-      forcedChanges.push({
-        sheetName: sheet.name,
-        address: `${columnLetters(column)}1`,
-        kind: 'modified'
-      })
-    }
+    sheet.getColumn(column).width = Math.min(maxLength, 60)
   }
 }
 
 export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelToolRuntime => {
-  const state: ExcelRuntimeState = {
-    toolEvents: createToolEventEmitter({
-      ctx: input.ctx,
-      runId: input.runId,
-      taskId: input.taskId
-    }),
-    recordsByPath: new Map(),
-    baselineBytesByPath: new Map(),
-    currentBytesByPath: new Map(),
-    sheetLineageByPath: new Map()
-  }
+  const currentBytesByPath = new Map<string, Buffer>()
   const resolvePath = (rawPath: string, mode: 'read' | 'write' = 'read'): string => {
     const resolved = resolveToolPath(rawPath)
     if (!resolved) throw new Error('Excel 文件路径无效')
@@ -948,7 +596,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
   const getWorkbook = async (
     sourcePath: string
   ): Promise<{ workbook: ExcelJS.Workbook; bytes: Buffer }> => {
-    const cached = state.currentBytesByPath.get(sourcePath)
+    const cached = currentBytesByPath.get(sourcePath)
     const bytes = cached || (await readBytes(sourcePath))
     return { workbook: await loadWorkbook(bytes), bytes }
   }
@@ -1031,120 +679,75 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       .stat(sourcePath)
       .then(() => true)
       .catch(() => false)
-    const cachedBytes = state.currentBytesByPath.get(sourcePath)
+    const cachedBytes = currentBytesByPath.get(sourcePath)
     if (cachedBytes && exists) {
       const diskBytes = await readBytes(sourcePath)
       if (hashBytes(diskBytes) !== hashBytes(cachedBytes)) {
+        currentBytesByPath.delete(sourcePath)
         throw new Error(`Excel 文件在操作期间发生变化，请重新读取后再编辑: ${args.sourcePath}`)
       }
     }
     const beforeBytes = cachedBytes || (exists ? await readBytes(sourcePath) : undefined)
-    if (!state.baselineBytesByPath.has(sourcePath)) {
-      const existing = (await input.ctx.listFileChangeRecords({ runId: input.runId })).find(
-        (record) => record.path === sourcePath && record.status === 'applied'
-      )
-      state.baselineBytesByPath.set(
-        sourcePath,
-        existing
-          ? existing.operation === 'created'
-            ? undefined
-            : existing.beforeSnapshotPath
-              ? await readBytes(existing.beforeSnapshotPath)
-              : beforeBytes
-          : beforeBytes
-      )
-      if (existing) state.recordsByPath.set(sourcePath, existing)
-    }
     const workbook = beforeBytes ? await loadWorkbook(beforeBytes) : new ExcelJS.Workbook()
-    const sheetLineage = new Map(
-      state.sheetLineageByPath.get(sourcePath) ||
-        workbook.worksheets.map((sheet) => [sheet.name, sheet.name] as const)
+    const session = await input.ctx.getFileChangeSession(sourcePath)
+    const sheetLineage = new Map<string, string | null>(
+      session?.identity?.kind === 'excel'
+        ? session.identity.sheets
+        : workbook.worksheets.map((sheet) => [sheet.name, sheet.name])
     )
-    const forcedChanges: CellChange[] = []
-    applyOperation({ workbook, operation: args, sheetLineage, forcedChanges })
+    const axes: ExcelSheetAxes[] =
+      session?.identity?.kind === 'excel' ? structuredClone(session.identity.axes) : []
+    for (const sheet of workbook.worksheets) {
+      const bounds = sheetBounds(sheet)
+      let axis = axes.find((item) => item.sheet === sheet.name)
+      if (!axis) {
+        axis = { sheet: sheet.name, rows: [], columns: [] }
+        axes.push(axis)
+      }
+      extendAxis(axis.rows, bounds.rows)
+      extendAxis(axis.columns, bounds.columns)
+    }
+    if ('sheetName' in args) {
+      const axis = axes.find((item) => item.sheet === args.sheetName)
+      if (axis) {
+        if (args.type === 'rename_sheet') axis.sheet = args.newName
+        else if (args.type === 'delete_sheet') axes.splice(axes.indexOf(axis), 1)
+        else if (args.type === 'insert_rows' || args.type === 'delete_rows') {
+          extendAxis(axis.rows, args.startRow + args.count)
+          axis.rows.splice(
+            args.startRow - 1,
+            args.type === 'delete_rows' ? args.count : 0,
+            ...Array.from({ length: args.type === 'insert_rows' ? args.count : 0 }, () => null)
+          )
+        } else if (args.type === 'insert_columns' || args.type === 'delete_columns') {
+          const start = toColumnNumber(args.startColumn)
+          extendAxis(axis.columns, start + args.count)
+          axis.columns.splice(
+            start - 1,
+            args.type === 'delete_columns' ? args.count : 0,
+            ...Array.from({ length: args.type === 'insert_columns' ? args.count : 0 }, () => null)
+          )
+        }
+      }
+    }
+    applyOperation({ workbook, operation: args, sheetLineage })
     if (workbook.worksheets.length === 0) throw new Error('Excel 最终必须至少保留一个工作表')
     workbook.calcProperties.fullCalcOnLoad = true
     const afterBytes = Buffer.from(await workbook.xlsx.writeBuffer())
-    const beforeWorkbook = beforeBytes ? await loadWorkbook(beforeBytes) : null
-    const afterWorkbook = await loadWorkbook(afterBytes)
-    const operationChanges = mergeChanges(
-      compareWorkbooks(beforeWorkbook, afterWorkbook),
-      forcedChanges
-    )
-    if (operationChanges.length === 0) return toJsonObject({})
-    await fs.mkdir(path.dirname(sourcePath), { recursive: true })
-    const baseline = state.baselineBytesByPath.get(sourcePath)
-    const baselineWorkbook = baseline ? await loadWorkbook(baseline) : null
-    const diffResult = await buildDiffWorkbook({
-      before: baselineWorkbook,
-      after: afterWorkbook,
-      sheetLineage
-    })
-    const cumulativeChanges = diffResult.changes
-    const changeId = state.recordsByPath.get(sourcePath)?.id || randomUUID()
-    const snapshotRoot = path.join(
-      getPartnerRuntimeDir(input.partnerId),
-      'file-changes',
-      input.runId
-    )
-    await fs.mkdir(snapshotRoot, { recursive: true })
-    const beforeSnapshotPath = baseline
-      ? path.join(snapshotRoot, `${changeId}-${path.basename(sourcePath)}`)
-      : undefined
-    if (baseline && beforeSnapshotPath) await fs.writeFile(beforeSnapshotPath, baseline)
-    const previewPath = path.join(snapshotRoot, `${changeId}-${randomUUID()}.diff.xlsx`)
-    await fs.writeFile(previewPath, diffResult.bytes)
-    await atomicReplace(sourcePath, afterBytes)
-    const now = Date.now()
-    const record = {
-      id: changeId,
-      partnerId: input.partnerId,
-      runId: input.runId,
-      status: 'applied' as const,
-      capability: 'excel' as const,
-      path: sourcePath,
-      fileName: path.basename(sourcePath),
-      operation: baseline ? ('updated' as const) : ('created' as const),
-      source: 'excel_tool' as const,
-      beforePath: baseline ? sourcePath : undefined,
-      afterPath: sourcePath,
-      changeCount: cumulativeChanges.length,
-      insertCount: cumulativeChanges.filter((item) => item.kind !== 'deleted').length,
-      deleteCount: cumulativeChanges.filter((item) => item.kind === 'deleted').length,
-      beforeSnapshotPath,
-      afterSnapshotPath: undefined,
-      beforeChecksum: baseline ? hashBytes(baseline) : undefined,
-      afterChecksum: hashBytes(afterBytes),
-      previewPath,
-      runSummary: 'Excel 文件修改',
-      createdAt: state.recordsByPath.get(sourcePath)?.createdAt || now,
-      updatedAt: now
-    }
     try {
-      await input.ctx.saveFileChangeRecord(record)
+      await input.ctx.writeFileChange({
+        sourcePath,
+        buffer: afterBytes,
+        capability: 'excel',
+        expectedChecksum: beforeBytes ? hashBytes(beforeBytes) : undefined,
+        identity: { kind: 'excel', sheets: [...sheetLineage], axes }
+      })
+      currentBytesByPath.set(sourcePath, afterBytes)
     } catch (error) {
-      if (beforeBytes) await atomicReplace(sourcePath, beforeBytes).catch(() => undefined)
-      else await fs.rm(sourcePath, { force: true }).catch(() => undefined)
-      await fs.rm(previewPath, { force: true }).catch(() => undefined)
-      if (beforeSnapshotPath)
-        await fs.rm(beforeSnapshotPath, { force: true }).catch(() => undefined)
+      currentBytesByPath.delete(sourcePath)
       throw error
     }
-    state.currentBytesByPath.set(sourcePath, afterBytes)
-    state.recordsByPath.set(sourcePath, record)
-    state.sheetLineageByPath.set(sourcePath, sheetLineage)
-    emitFileArtifactEvent({
-      ctx: input.ctx,
-      runId: input.runId,
-      taskId: input.taskId,
-      capability: 'excel',
-      artifactPath: sourcePath,
-      operation: record.operation,
-      applyId: record.id,
-      changeCount: record.changeCount,
-      insertCount: record.insertCount,
-      deleteCount: record.deleteCount
-    })
+
     return toJsonObject({})
   }
 
@@ -1155,3 +758,35 @@ export const toExcelToolFailure = (sourcePath: string, error: unknown): JsonObje
   sourcePath,
   error: error instanceof Error ? error.message : String(error)
 })
+
+export const materializeExcelReview = async (input: {
+  before?: Buffer
+  after: Buffer
+  identity?: Extract<FileChangeIdentity, { kind: 'excel' }>
+  reviewDir: string
+}) => {
+  const before = input.before ? await loadWorkbook(input.before) : null
+  const after = await loadWorkbook(input.after)
+  const sheets = new Map<string, string | null>(
+    input.identity?.sheets ||
+      after.worksheets.map((sheet) => [
+        sheet.name,
+        before?.getWorksheet(sheet.name) ? sheet.name : null
+      ])
+  )
+  const result = await buildDiffWorkbook({
+    before,
+    after,
+    sheetLineage: sheets,
+    axes: input.identity?.axes
+  })
+  const previewPath = path.join(input.reviewDir, 'review.xlsx')
+  await fs.writeFile(previewPath, result.bytes)
+  return {
+    changed: result.changes.length > 0,
+    previewPath,
+    changeCount: result.changes.length,
+    insertCount: result.changes.filter((change) => change.kind !== 'deleted').length,
+    deleteCount: result.changes.filter((change) => change.kind === 'deleted').length
+  }
+}

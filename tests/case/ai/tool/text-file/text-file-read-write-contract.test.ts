@@ -65,6 +65,8 @@ describe('ai tool text-file backend', () => {
           newText: 'API_BASE_URL'
         })
         const finalContent = await fs.readFile(sourcePath, 'utf-8')
+        const beforeClose = await harness.ctx.listFileChangeRecords({ runId: runtime.runId })
+        await harness.ctx.finalizeRunFileChanges()
         const records = await harness.ctx.listFileChangeRecords({ runId: runtime.runId })
         const configRecord = records.find((record) => record.path === sourcePath)
         const textFileArtifacts = runtime.eventCollector
@@ -83,7 +85,8 @@ describe('ai tool text-file backend', () => {
           recordCount: records.length,
           configCapability: configRecord?.capability,
           configChangeCount: configRecord?.changeCount,
-          hasEagerPreview: Boolean(configRecord?.previewPath),
+          hasEagerPreview: beforeClose.some((record) => Boolean(record.previewPath)),
+          hasFinalPreview: Boolean(configRecord?.previewPath),
           fileArtifactCount: textFileArtifacts.length,
           configApplyIds
         }
@@ -107,13 +110,14 @@ describe('ai tool text-file backend', () => {
             result.recordCount === 2 &&
             result.configCapability === 'text_file' &&
             result.configChangeCount === 8 &&
-            result.hasEagerPreview === true &&
-            result.fileArtifactCount === 3 &&
-            result.configApplyIds.length === 2 &&
-            new Set(result.configApplyIds).size === 1,
+            result.hasEagerPreview === false &&
+            result.hasFinalPreview === true &&
+            result.fileArtifactCount === 0 &&
+            result.configApplyIds.length === 0 &&
+            new Set(result.configApplyIds).size === 0,
           {
             name: 'text-file-read-write-result-and-diff',
-            message: '文本工具应写入正确内容并保存修改元数据，保存时即生成 diff 预览。',
+            message: '文本工具应写入正确内容并保存修改元数据，主 run 收尾才生成 diff 预览。',
             data: result
           }
         )

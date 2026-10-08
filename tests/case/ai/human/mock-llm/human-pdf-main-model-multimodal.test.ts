@@ -1,4 +1,7 @@
 import { describe, it } from 'vitest'
+import { AIMessage, type BaseMessage } from '@langchain/core/messages'
+import { messagesFromLogEntries } from '../../../../../src/main/services/ai/human/memory/conversationLogMessages'
+import { projectMessagesForMainModel } from '../../../../../src/main/services/ai/human/memory/multimodal'
 import { createPdfToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -35,8 +38,21 @@ describe('ai human mock-llm backend', () => {
         await pdfHarness.release()
         const pageImagePath = prepared.pages[0]!.pageImagePath
 
+        let imageBatchMessages: BaseMessage[] = []
         const runner = createHumanTestRunner(runtime, {
           selectedReferences: [reference],
+          chatToolsWrapper: (chatTools) => async (request) => {
+            if (request.caller === 'human.brain') {
+              const index = request.messages.findIndex(
+                (message) =>
+                  AIMessage.isInstance(message) &&
+                  message.tool_calls?.length === 3 &&
+                  message.tool_calls[0]?.name === 'read_image'
+              )
+              if (index >= 0) imageBatchMessages = request.messages.slice(index)
+            }
+            return chatTools(request)
+          },
           structuredOutputScript: {
             'human.brain': [
               {
@@ -67,7 +83,11 @@ describe('ai human mock-llm backend', () => {
                   thought: { next: '使用上一轮返回的页面图片路径读取图片。' },
                   nextAction: {
                     action: 'hand',
-                    calls: [{ toolName: 'read_image', args: { paths: [pageImagePath] } }]
+                    calls: [
+                      { toolName: 'read_image', args: { paths: [pageImagePath] } },
+                      { toolName: 'learn_skill', args: { skillIds: ['ppt-read'] } },
+                      { toolName: 'read_image', args: { paths: [pageImagePath] } }
+                    ]
                   }
                 }
               },
@@ -84,7 +104,28 @@ describe('ai human mock-llm backend', () => {
           taskId: runtime.taskId,
           userInput: '结合第1页文字和第9页图形说明训练闭环与过度拟合。'
         })
-        return { output, events: runtime.eventCollector.snapshot(), pageImagePath }
+        const records = await runner.ctx.loadMessageLog()
+        const batchIndex = records.findIndex(
+          (record) =>
+            record.entry.kind === 'assistant' &&
+            record.entry.toolCalls.length === 3 &&
+            record.entry.toolCalls[0]?.name === 'read_image'
+        )
+        const batchEntries = records
+          .slice(batchIndex)
+          .filter((record) => record.entry.kind !== 'annotation')
+          .slice(0, 4)
+          .map((record) => record.entry)
+        const rebuilt = await projectMessagesForMainModel(messagesFromLogEntries(batchEntries))
+        return {
+          output,
+          events: runtime.eventCollector.snapshot(),
+          pageImagePath,
+          imageBatchRoles: imageBatchMessages.map((message) => message.getType()),
+          cacheMatchesLog:
+            JSON.stringify(imageBatchMessages.map((message) => message.toDict())) ===
+            JSON.stringify(rebuilt.map((message) => message.toDict()))
+        }
       },
       assert: async (result, runtime) => {
         const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
@@ -92,6 +133,8 @@ describe('ai human mock-llm backend', () => {
 
         runtime.assertThat(
           result.output.status === 'completed' &&
+            result.cacheMatchesLog &&
+            result.imageBatchRoles.join(',') === 'ai,tool,tool,tool,human' &&
             starts.some((event) => event.toolName === 'pdf_read_pages') &&
             starts.some((event) => event.toolName === 'read_image') &&
             toolResults.some(

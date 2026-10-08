@@ -4,6 +4,7 @@ import { readJsonLinesSync } from './read-run-log'
 type EventCollectorSink = {
   onRuntimeEvent?: (event: AiRunEvent) => void
   onLlmIo?: (record: AiLlmIoRecord) => void
+  flush?: () => Promise<void>
 }
 
 type EventCollectorOptions = {
@@ -50,7 +51,8 @@ export class EventCollector {
     return this.runtimeEventsPath ? readJsonLinesSync<AiRunEvent>(this.runtimeEventsPath) : []
   }
 
-  public snapshotLlmIo(): AiLlmIoRecord[] {
+  public async snapshotLlmIo(): Promise<AiLlmIoRecord[]> {
+    await this.sink?.flush?.()
     if (this.llmIoList) {
       return [...this.llmIoList]
     }

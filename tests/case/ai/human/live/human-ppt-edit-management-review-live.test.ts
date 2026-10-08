@@ -1,3 +1,4 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -8,17 +9,14 @@ import {
   validatePresentation
 } from 'pptx-kit'
 import { describe, it } from 'vitest'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
 const FIXTURE_PATH = 'tests/fixtures/workspace/品牌策略提案.pptx' as const
 const WORKSPACE_RELATIVE = '品牌策略提案.pptx'
 
-const PROTECTED_MARKERS = [
-  '议程 关于品牌 市场分析',
-  '成为现代、有意义出行的首选目的地'
-] as const
+const PROTECTED_MARKERS = ['议程 关于品牌 市场分析', '成为现代、有意义出行的首选目的地'] as const
 
 describe('ai human live ppt edit backend', () => {
   it('human-ppt-edit-management-review-live', async () => {
@@ -47,17 +45,19 @@ describe('ai human live ppt edit backend', () => {
               PROTECTED_MARKERS.some((marker) => text.replace(/\s+/gu, ' ').includes(marker))
             )
           const eventOffset = runtime.eventCollector.snapshot().length
-          const output = await createHumanTestRunner(runtime, {}).run({
-            taskId: runtime.taskId,
-            userInput: [
-              `请更新工作区里的《${WORKSPACE_RELATIVE}》：`,
-              '1）在封面后新增一页「执行摘要」，概括品牌定位与核心策略；',
-              '2）把封面汇报人从「王晨」改为「李然」；',
-              '3）把「关于品牌」页里的「成立于 2002 年」改为「成立于 2015 年」。',
-              '「议程」页和「品牌愿景」页（含「成为现代、有意义出行的首选目的地」）保持完全不动。',
-              '完成后确认文件可正常读取。'
-            ].join('')
-          })
+          const output = await (
+            await createAiServiceTestRunner(runtime, {
+              userInput: [
+                `请更新工作区里的《${WORKSPACE_RELATIVE}》：`,
+                '1）在封面后新增一页「执行摘要」，概括品牌定位与核心策略；',
+                '2）把封面汇报人从「王晨」改为「李然」；',
+                '3）把「关于品牌」页里的「成立于 2002 年」改为「成立于 2015 年」。',
+                '「议程」页和「品牌愿景」页（含「成为现代、有意义出行的首选目的地」）保持完全不动。',
+                '完成后确认文件可正常读取。'
+              ].join('')
+            })
+          ).run()
+          await assertRunFileReviews(runtime, output)
           const presentation = await loadPresentation(new Uint8Array(await fs.readFile(sourcePath)))
           const texts = getSlides(presentation).map((slide) => getSlideText(slide))
           return {
@@ -80,7 +80,7 @@ describe('ai human live ppt edit backend', () => {
         assert: async (result, runtime) => {
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
           const toolNames = starts.map((event) => event.toolName)
-          const artifacts = (result.output.artifacts || []).filter(
+          const artifacts = (result.output.finalArtifacts || []).filter(
             (artifact) => artifact.kind === 'file' && artifact.capability === 'ppt'
           )
           const joined = result.texts.join('\n')

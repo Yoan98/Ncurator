@@ -1,8 +1,9 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildSelectedDocxFixtureReferences,
@@ -78,13 +79,12 @@ describe('ai human live backend', () => {
               async (fixtureDoc) => await fileHash(fixtureDoc.workspacePath)
             )
           )
-          const runner = createHumanTestRunner(runtime, {
-            selectedReferences: buildSelectedDocxFixtureReferences(runtime, fixturePaths)
-          })
-          const output = await runner.run({
-            taskId: runtime.taskId,
+          const runner = await createAiServiceTestRunner(runtime, {
+            selectedReferences: buildSelectedDocxFixtureReferences(runtime, fixturePaths),
             userInput: HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT
           })
+          const output = await runner.run()
+          await assertRunFileReviews(runtime, output)
 
           return {
             configurationMissing: false,
@@ -171,8 +171,8 @@ describe('ai human live backend', () => {
           const errorMessages = collectToolErrorMessages(events)
           const safeEditCompleted =
             safeWriteResults.some((event) => event.result?.ok === true) &&
-            countDocxApplyArtifacts(result.output?.artifacts) >= 1 &&
-            countDocxFileArtifacts(result.output?.artifacts) >= 1
+            countDocxApplyArtifacts(result.output?.finalArtifacts) >= 1 &&
+            countDocxFileArtifacts(result.output?.finalArtifacts) >= 1
           runtime.assertThat(
             result.output?.status === 'completed' &&
               result.fixtureDocs.every((fixtureDoc) =>

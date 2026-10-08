@@ -877,17 +877,11 @@ export type TextFileDiffLine =
   | { type: 'remove'; oldLine: number; text: string }
   | { type: 'add'; newLine: number; text: string }
 
-export interface TextFileDiffHunk {
-  oldStart: number
-  newStart: number
-  lines: TextFileDiffLine[]
-}
-
 export interface TextFileDiffArtifact {
-  version: 2
+  version: 3
   oldLineCount: number
   newLineCount: number
-  hunks: TextFileDiffHunk[]
+  lines: TextFileDiffLine[]
 }
 
 export interface AiFileChangeRecord {

@@ -260,47 +260,6 @@ export type DocxOpenStats = {
 
 export type DocxCapabilityToolsInput = WorkspaceCapabilityBuildInput<DocxToolContext>
 
-export type DocxRevision = {
-  revisionRef: string
-  docId: string
-  parentRevisionRef?: string
-  createdAt: number
-  summary?: string
-  changedNodes?: DocxChangedNode[]
-  ops?: DocxOperation[]
-  createdNodes?: DocxCreatedNode[]
-  createdNodesByOperation?: DocxCreatedNode[][]
-  opNextDocIds?: string[]
-}
-
-export type DocxReplaySnapshotNode = {
-  nodeId: string
-  nodeIndex: number
-  kind: 'paragraph' | 'table' | 'content_control' | 'revision'
-  story: DocxStoryRef
-  rawXml: string
-  spec: DocxNodeSpec
-  structureFingerprint: string
-  visuals: Array<{ nodeId: string; kind: DocxVisualKind }>
-  tableCellNodeIds: string[]
-  tableCells?: Array<{
-    nodeId: string
-    row: number
-    col: number
-    text: string
-    rawXml: string
-    structureFingerprint: string
-    visuals: Array<{ nodeId: string; kind: DocxVisualKind }>
-  }>
-}
-
-export type DocxReplaySnapshot = {
-  packageFingerprint: string
-  nodes: DocxReplaySnapshotNode[]
-  nodeById: Map<string, DocxReplaySnapshotNode>
-  tableNodeIdByCellNodeId: Map<string, string>
-}
-
 export type DocxReadSessionCache = {
   outlineByCacheKey: Map<string, { nodes: DocxOutlineNode[] }>
   detailByNodeId: Map<string, DocxDetailedNode>
@@ -321,7 +280,7 @@ export type DocxDiskFingerprint = {
   modifiedAt: number
 }
 
-export type DocxReplaySession = {
+export type DocxEditSession = {
   sourcePath: string
   targetMode: 'update' | 'create'
   sourceDocId: string
@@ -330,58 +289,12 @@ export type DocxReplaySession = {
   nextRevisionNumber: number
   stats: DocxOpenStats
   diskFingerprint: DocxDiskFingerprint
-  sourceSnapshot: DocxReplaySnapshot
-  activeSnapshot: DocxReplaySnapshot
   docIdByRevisionRef: Map<string, string>
   revisionRefByDocId: Map<string, string>
-  revisionByDocId: Map<string, DocxRevision>
-  nodeById: Map<string, DocxReplayNode>
-  rootNodeIds: string[]
-}
-
-export type DocxReviewState =
-  | 'normal'
-  | 'formatted'
-  | 'inserted'
-  | 'deleted'
-  | 'replaced-old'
-  | 'replaced-new'
-
-export type DocxTableCellReviewChange = {
-  rowIndex: number
-  colIndex: number
-  kind: 'formatted' | 'replaced'
-  before: DocxTableCellSpec
-  after: DocxTableCellSpec
-}
-
-export type DocxReplayNode = {
-  reviewId: string
-  nodeId: string
-  nodeIndex: number
-  kind: 'paragraph' | 'table' | 'content_control' | 'revision'
-  story: DocxStoryRef
-  sourceOrigin: 'source' | 'generated'
-  reviewState: DocxReviewState
-  parentNodeId?: string
-  sourceNodeId?: string
-  currentNodeId?: string
-  predecessorNodeId?: string
-  successorNodeId?: string
-  replacedFromNodeId?: string
-  anchorFromNodeId?: string
-  anchorSide?: 'before' | 'after'
-  spec: DocxNodeSpec
-  structureFingerprint: string
-  visualNodeIds: string[]
-  createdRevisionRef: string
-  changedRevisionRef?: string
-  reviewQueries?: string[]
-  tableCellChanges?: DocxTableCellReviewChange[]
 }
 
 export type DocxCapabilityToolsRuntimeState = {
   sourcePathByDocId: Map<string, string>
   readSessionBySourcePath: Map<string, DocxReadSession>
-  replaySessionBySourcePath: Map<string, DocxReplaySession>
+  editSessionBySourcePath: Map<string, DocxEditSession>
 }

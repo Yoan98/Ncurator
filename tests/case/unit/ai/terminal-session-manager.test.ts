@@ -59,7 +59,23 @@ const finishCommand = async (
       chatSessionId,
       workspaceId
     }))
-  return { exitCode, output: result.output }
+  let output = result.output
+  if (result.exitCode === null || result.hasMoreOutput) {
+    let cursor = result.readEndPosition,
+      hasMore = true
+    while (hasMore) {
+      const next = await manager.read({
+        terminalId: result.terminalId,
+        chatSessionId,
+        workspaceId,
+        readEndPosition: cursor
+      })
+      output += next.output
+      cursor = next.readEndPosition
+      hasMore = next.hasMoreOutput
+    }
+  }
+  return { exitCode, output }
 }
 
 afterEach(async () => {
@@ -266,6 +282,7 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       runId: 'run-env',
       command: 'node --version'
     })
+    const nodeCompleted = await finishCommand(manager, nodeResult, 'chat-env', 'workspace-env')
     const pythonResult = await manager.run({
       chatSessionId: 'chat-env',
       workspaceId: 'workspace-env',
@@ -274,7 +291,6 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       runId: 'run-env',
       command: 'python3 --version'
     })
-    const nodeCompleted = await finishCommand(manager, nodeResult, 'chat-env', 'workspace-env')
     const pythonCompleted = await finishCommand(manager, pythonResult, 'chat-env', 'workspace-env')
 
     expect(nodeCompleted.exitCode).toBe(0)
@@ -299,6 +315,12 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       runId: 'run-python',
       command: 'node --version'
     })
+    const nodeCompleted = await finishCommand(
+      manager,
+      nodeResult,
+      'chat-python',
+      'workspace-python'
+    )
     const pythonResult = await manager.run({
       chatSessionId: 'chat-python',
       workspaceId: 'workspace-python',
@@ -307,12 +329,6 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       runId: 'run-python',
       command: 'python3 --version'
     })
-    const nodeCompleted = await finishCommand(
-      manager,
-      nodeResult,
-      'chat-python',
-      'workspace-python'
-    )
     const pythonCompleted = await finishCommand(
       manager,
       pythonResult,
@@ -340,6 +356,7 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       runId: 'run-empty',
       command: 'node --version'
     })
+    const nodeCompleted = await finishCommand(manager, nodeResult, 'chat-empty', 'workspace-empty')
     const pythonResult = await manager.run({
       chatSessionId: 'chat-empty',
       workspaceId: 'workspace-empty',
@@ -348,7 +365,6 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       runId: 'run-empty',
       command: 'python3 --version'
     })
-    const nodeCompleted = await finishCommand(manager, nodeResult, 'chat-empty', 'workspace-empty')
     const pythonCompleted = await finishCommand(
       manager,
       pythonResult,

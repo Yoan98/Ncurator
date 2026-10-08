@@ -11,9 +11,7 @@ export const CROSS_RUN_PREFIX_CACHE_MIN_RATIO = 0.85
 const lastBrainRecord = (records: readonly AiLlmIoRecord[]): AiLlmIoRecord | undefined =>
   [...records].reverse().find((record) => record.caller === 'human.brain')
 
-const lastBrainRecordWithUsage = (
-  records: readonly AiLlmIoRecord[]
-): AiLlmIoRecord | undefined =>
+const lastBrainRecordWithUsage = (records: readonly AiLlmIoRecord[]): AiLlmIoRecord | undefined =>
   [...records]
     .reverse()
     .find(
@@ -35,6 +33,7 @@ export type ContinuationPrefixCacheReuse = {
   nextFirstCacheHitRate: number | null | undefined
   reuseRatio: number | undefined
   requestWireDiff: ReturnType<typeof diffChatToolsRequestWire>
+  prefixPreserved: boolean
   minRatio: number
   satisfied: boolean
 }
@@ -44,14 +43,33 @@ export type ContinuationPrefixCacheReuse = {
  * previous 优先取带有效 usage 的末次 brain（中断 resume 场景下失败调用可能无 usage）。
  */
 export const collectContinuationPrefixCacheReuse = (input: {
+  previousRunId: string
+  nextRunId: string
   previousLlmIo: readonly AiLlmIoRecord[]
   nextLlmIo: readonly AiLlmIoRecord[]
   minRatio?: number
 }): ContinuationPrefixCacheReuse => {
   const minRatio = input.minRatio ?? CROSS_RUN_PREFIX_CACHE_MIN_RATIO
+  if (input.previousRunId === input.nextRunId) {
+    throw new Error('Cross-run cache comparison requires two distinct run IDs.')
+  }
+  const previousRecords = input.previousLlmIo.filter(
+    (record) => record.runId === input.previousRunId
+  )
+  const nextRecords = input.nextLlmIo.filter((record) => record.runId === input.nextRunId)
   const previousLastBrain =
-    lastBrainRecordWithUsage(input.previousLlmIo) || lastBrainRecord(input.previousLlmIo)
-  const nextFirstBrain = firstBrainRecord(input.nextLlmIo)
+    lastBrainRecordWithUsage(previousRecords) || lastBrainRecord(previousRecords)
+  const nextFirstBrain = firstBrainRecord(nextRecords)
+  const previousWire = previousLastBrain?.requestWire
+  const nextWire = nextFirstBrain?.requestWire
+  const prefixPreserved = Boolean(
+    previousWire &&
+    nextWire &&
+    JSON.stringify(previousWire.tools) === JSON.stringify(nextWire.tools) &&
+    previousWire.messages.length <= nextWire.messages.length &&
+    JSON.stringify(previousWire.messages) ===
+      JSON.stringify(nextWire.messages.slice(0, previousWire.messages.length))
+  )
   const previousLastInputTokens = previousLastBrain?.usage?.inputTokens
   const nextFirstCachedInputTokens = nextFirstBrain?.usage?.cachedInputTokens
   const nextFirstInputTokens = nextFirstBrain?.usage?.inputTokens
@@ -77,9 +95,10 @@ export const collectContinuationPrefixCacheReuse = (input: {
       previousLastBrain?.requestWire,
       nextFirstBrain?.requestWire
     ),
+    prefixPreserved,
     minRatio,
     satisfied:
-      hasUsageSignal && typeof reuseRatio === 'number' && reuseRatio >= minRatio
+      prefixPreserved && hasUsageSignal && typeof reuseRatio === 'number' && reuseRatio >= minRatio
   }
 }
 
@@ -87,6 +106,11 @@ export const continuationPrefixCacheAssertionData = (
   reuse: ContinuationPrefixCacheReuse
 ): Record<string, unknown> => ({
   minRatio: reuse.minRatio,
+  previousRunId: reuse.previousLastBrain?.runId,
+  nextRunId: reuse.nextFirstBrain?.runId,
+  previousCallId: reuse.previousLastBrain?.callId,
+  nextCallId: reuse.nextFirstBrain?.callId,
+  prefixPreserved: reuse.prefixPreserved,
   previousLastInputTokens: reuse.previousLastInputTokens,
   nextFirstCachedInputTokens: reuse.nextFirstCachedInputTokens,
   nextFirstInputTokens: reuse.nextFirstInputTokens,

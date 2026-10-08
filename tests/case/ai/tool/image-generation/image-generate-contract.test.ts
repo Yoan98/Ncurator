@@ -64,7 +64,16 @@ describe('ai tool image-generation backend', () => {
           .snapshot()
           .filter((event) => event.type === 'file_artifact' && event.capability === 'image')
 
+        await harness.ctx.finalizeRunFileChanges()
+        const historical = (await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).find(
+          (record) => record.id === generatedRecord?.id
+        )!
+        const historicalPixelsConfirmed =
+          Boolean(historical.afterSnapshotPath) &&
+          (await fs.readFile(historical.afterSnapshotPath!)).equals(png) &&
+          !historical.previewPath
         return {
+          historicalPixelsConfirmed,
           pngResult,
           pngSignature: png.subarray(0, 8).toString('hex'),
           jpegSignature: jpeg.subarray(0, 3).toString('hex'),
@@ -103,16 +112,15 @@ describe('ai tool image-generation backend', () => {
             result.decodedDimensions.every(([width, height]) => width === 32 && height === 24) &&
             result.recordCount === 4 &&
             result.generatedOperation === 'created' &&
-            result.generatedChangeCount === 2 &&
+            result.generatedChangeCount === 1 &&
             result.existingOperation === 'updated' &&
             result.existingSource === 'image_tool' &&
-            result.existingChangeCount === 2 &&
+            result.existingChangeCount === 1 &&
             result.existingSnapshot === 'original-image' &&
-            result.artifactCount === 6 &&
-            result.generatedApplyIds.length === 2 &&
-            new Set(result.generatedApplyIds).size === 1 &&
-            result.existingApplyIds.length === 2 &&
-            new Set(result.existingApplyIds).size === 1 &&
+            result.artifactCount === 0 &&
+            result.generatedApplyIds.length === 0 &&
+            result.existingApplyIds.length === 0 &&
+            result.historicalPixelsConfirmed &&
             result.activityStatuses.filter((status) => status === 'completed').length === 6,
           {
             name: 'image-generate-formats-and-file-records',

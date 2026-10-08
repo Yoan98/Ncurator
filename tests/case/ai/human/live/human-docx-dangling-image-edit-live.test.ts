@@ -1,3 +1,4 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import {
@@ -5,7 +6,7 @@ import {
   loadDocxBundle
 } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { buildSelectedDocxFixtureReferences } from '../../../../harness/backend/aiLiveTestData'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
@@ -22,7 +23,8 @@ const readDocxText = async (filePath: string): Promise<string> => {
 }
 
 const countDurationEstimates = (text: string): number =>
-  text.match(/\d+(?:\s*[-~至到]\s*\d+)?\s*(?:天|人日|工作日|小时)/g)?.length || 0
+  text.match(/\d+(?:\.\d+)?(?:\s*[-~至到]\s*\d+(?:\.\d+)?)?\s*(?:人天|人日|工作日|小时|天)/g)
+    ?.length || 0
 
 describe('ai human live backend', () => {
   it('human-docx-dangling-image-edit-live', async () => {
@@ -41,14 +43,16 @@ describe('ai human live backend', () => {
           await runtime.seedLlmConfig(primaryConfig)
           const reference = buildSelectedDocxFixtureReferences(runtime, [FIXTURE_PATH])[0]!
           const sourceText = await readDocxText(reference.absolutePath || '')
-          const runner = createHumanTestRunner(runtime, {
+          const runner = await createAiServiceTestRunner(runtime, {
             selectedReferences: [reference],
-            streamingModeOverride: 'force_non_stream'
+            streamingModeOverride: 'force_non_stream',
+            userInput: USER_INPUT
           })
-          const output = await runner.run({ taskId: runtime.taskId, userInput: USER_INPUT })
-          const applyRecord = (await runtime.docxApplyStore.listRecords()).items.find(
-            (item) => item.run_id === runtime.runId && item.status === 'applied'
-          )
+          const output = await runner.run()
+          await assertRunFileReviews(runtime, output)
+          const applyRecord = (
+            await runtime.storageService.aiFileChange.listRecords({ runId: runtime.runId })
+          ).items.find((item) => item.path === reference.absolutePath && item.status === 'applied')
           const appliedText = applyRecord ? await readDocxText(reference.absolutePath || '') : ''
           return {
             output,
@@ -70,10 +74,10 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.output?.status === 'completed' &&
               toolNames.includes('docx_read_outline') &&
-              toolNames.includes('docx_read_nodes') &&
+              toolNames.some((name) => name === 'docx_read_nodes' || name === 'docx_search') &&
               toolNames.includes('read_image') &&
               docxEditSucceeded &&
-              result.output?.artifacts?.some(
+              result.output?.finalArtifacts?.some(
                 (item) => item.kind === 'file' && item.capability === 'docx'
               ) === true &&
               result.appliedText.length > 0 &&
@@ -88,7 +92,7 @@ describe('ai human live backend', () => {
                 docxEditSucceeded,
                 sourceDurationCount,
                 appliedDurationCount,
-                artifacts: result.output?.artifacts
+                artifacts: result.output?.finalArtifacts
               }
             }
           )

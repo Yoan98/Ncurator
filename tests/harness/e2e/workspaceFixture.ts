@@ -47,7 +47,7 @@ const removeTemporaryWorkspace = async (rootPath: string): Promise<void> => {
   }
 }
 
-export const copyE2EWorkspaceFixture = async (
+export const createEmptyE2EWorkspace = async (
   caseId: string,
   scope: 'settings' | 'workbench'
 ): Promise<TemporaryE2EWorkspace> => {
@@ -57,6 +57,22 @@ export const copyE2EWorkspaceFixture = async (
     path.join(tempRoot, `ncurator-${scope}-${sanitizePathPart(caseId)}-`)
   )
   const rootPath = await realpath(createdRootPath)
+  registerE2EResource({
+    name: `${scope}-workspace:${rootPath}`,
+    phase: 'after-app-close',
+    dispose: async () => {
+      await removeTemporaryWorkspace(rootPath)
+    }
+  })
+  return { rootPath }
+}
+
+export const copyE2EWorkspaceFixture = async (
+  caseId: string,
+  scope: 'settings' | 'workbench'
+): Promise<TemporaryE2EWorkspace> => {
+  const workspace = await createEmptyE2EWorkspace(caseId, scope)
+  const { rootPath } = workspace
   try {
     await cp(E2E_WORKSPACE_FIXTURE_ROOT, rootPath, {
       recursive: true,
@@ -68,13 +84,5 @@ export const copyE2EWorkspaceFixture = async (
     throw error
   }
 
-  registerE2EResource({
-    name: `${scope}-workspace:${rootPath}`,
-    phase: 'after-app-close',
-    dispose: async () => {
-      await removeTemporaryWorkspace(rootPath)
-    }
-  })
-
-  return { rootPath }
+  return workspace
 }

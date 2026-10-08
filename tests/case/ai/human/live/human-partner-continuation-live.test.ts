@@ -121,16 +121,16 @@ describe('ai human live backend', () => {
 
           await runtime.seedLlmConfig(liveConfig)
           await runtime.chatStore.savePartner({
-          id: PARTNER_ID,
-          name: 'live partner continuation test',
-          avatar_shape: 'circle',
-          avatar_color: 'blue',
-          created_at: Date.now(),
-          updated_at: Date.now(),
-          last_viewed_at: Date.now(),
-          pinned: false,
-          pinned_at: null
-        })
+            id: PARTNER_ID,
+            name: 'live partner continuation test',
+            avatar_shape: 'circle',
+            avatar_color: 'blue',
+            created_at: Date.now(),
+            updated_at: Date.now(),
+            last_viewed_at: Date.now(),
+            pinned: false,
+            pinned_at: null
+          })
 
           const run1Result = await AiRunService.getInstance().run(
             {
@@ -144,7 +144,7 @@ describe('ai human live backend', () => {
             },
             await buildAiRunDeps({ runtime })
           )
-          const run1LlmIo = runtime.eventCollector.snapshotLlmIo()
+          const run1LlmIo = await runtime.eventCollector.snapshotLlmIo()
 
           let run2BrainMessages: BaseMessage[] | null = null
           const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> =
@@ -169,7 +169,9 @@ describe('ai human live backend', () => {
 
           const run2Id = `${runtime.runId}-run-2`
           const run2Events = runtime.eventCollector.snapshot()
-          const run2LlmIo = runtime.eventCollector.snapshotLlmIo().slice(run1LlmIo.length)
+          const run2LlmIo = (await runtime.eventCollector.snapshotLlmIo()).filter(
+            (record) => record.runId === run2Id
+          )
           const run2LastMessage = run2BrainMessages
             ? run2BrainMessages[run2BrainMessages.length - 1]
             : null
@@ -208,6 +210,8 @@ describe('ai human live backend', () => {
             run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
             run2Delivery: run2Result.finalDeliveryMarkdown || '',
             run2PrefixCache: collectContinuationPrefixCacheReuse({
+              previousRunId: `${runtime.runId}-run-1`,
+              nextRunId: run2Id,
               previousLlmIo: run1LlmIo,
               nextLlmIo: run2LlmIo
             }),
@@ -255,7 +259,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(Boolean(result.run2PrefixCache?.satisfied), {
             name: 'human-live-partner-continuation-reuses-run1-prefix-cache',
             message:
-              'Run2 首次 brain 的 cachedInputTokens 应明显复用 Run1 末次 brain 的 inputTokens 前缀；低于公用跨 run 比例门槛说明前缀被改写或缓存未命中。',
+              'Run2 首次 brain 的 cachedInputTokens 应明显复用 Run1 末次 brain 的 inputTokens 前缀；历史消息前缀和工具定义须一致，服务端缓存复用率须达到公用门槛；低命中按实际请求日志独立归因。',
             data: result.run2PrefixCache
               ? continuationPrefixCacheAssertionData(result.run2PrefixCache)
               : { run2PrefixCache: null }

@@ -191,8 +191,8 @@ const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<ExcelPr
       changedSheetNames.push(sheet.name)
     }
     const cells: Record<number, Record<number, ICellData>> = {}
-    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-      row.eachCell({ includeEmpty: false }, (cell, columnNumber) => {
+    sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+      row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
         ;(cells[rowNumber - 1] ||= {})[columnNumber - 1] = cellData(cell)
       })
     })
@@ -200,8 +200,10 @@ const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<ExcelPr
     sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
       if (row.height) rowData[rowNumber - 1] = { h: Math.round(row.height * 1.333) }
     })
+    const columns = sheet.columns || []
+    const layoutColumnCount = Math.max(sheet.columnCount, columns.length, 1)
     const columnData: Record<number, { w: number }> = {}
-    for (let index = 1; index <= Math.max(1, sheet.columnCount); index += 1) {
+    for (let index = 1; index <= layoutColumnCount; index += 1) {
       const width = sheet.getColumn(index).width
       if (width) columnData[index - 1] = { w: Math.round(width * 7) }
     }
@@ -221,7 +223,7 @@ const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<ExcelPr
       tabColor: color(sheet.properties.tabColor)?.rgb || '',
       hidden: sheet.state === 'visible' ? BooleanNumber.FALSE : BooleanNumber.TRUE,
       rowCount: Math.max(100, sheet.rowCount + 20),
-      columnCount: Math.max(26, sheet.columnCount + 10),
+      columnCount: Math.max(26, layoutColumnCount + 10),
       cellData: cells,
       rowData,
       columnData,

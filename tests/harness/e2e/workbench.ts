@@ -45,6 +45,7 @@ import {
 } from './electronApp'
 import {
   E2E_WORKSPACE_FIXTURE_ROOT,
+  createEmptyE2EWorkspace,
   copyE2EWorkspaceFixture,
   type TemporaryE2EWorkspace
 } from './workspaceFixture'
@@ -506,8 +507,12 @@ export const loadWorkbenchLiveModelEnv = (): WorkbenchLiveModelEnv => {
 }
 
 export const createTemporaryWorkbenchWorkspace = async (
-  caseId: string
-): Promise<TemporaryWorkbenchWorkspace> => await copyE2EWorkspaceFixture(caseId, 'workbench')
+  caseId: string,
+  contents: 'shared-fixture' | 'empty' = 'shared-fixture'
+): Promise<TemporaryWorkbenchWorkspace> =>
+  contents === 'empty'
+    ? await createEmptyE2EWorkspace(caseId, 'workbench')
+    : await copyE2EWorkspaceFixture(caseId, 'workbench')
 
 export const startLocalWorkbenchHttpServer = async (
   html: string,
@@ -999,10 +1004,13 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
     workspaceName: string
     rootPath: string
     webSourceUrl?: string
+    prepareFiles?: boolean
   }
 ): Promise<void> => {
   const workspaceId = await createWorkspaceThroughSettingsUi(page, input.rootPath)
-  await prepareSelectedWorkspaceFilesThroughSettingsUi(page, workspaceId)
+  if (input.prepareFiles !== false) {
+    await prepareSelectedWorkspaceFilesThroughSettingsUi(page, workspaceId)
+  }
   if (input.webSourceUrl) {
     await addWebSourceThroughSettingsUi(page, input.webSourceUrl)
     await prepareSelectedWorkspaceWebSourcesThroughSettingsUi(page)
@@ -1040,6 +1048,7 @@ export const setupWorkbenchWithTempWorkspace = async (
   page: Page,
   input: {
     caseId: string
+    workspaceContents?: 'shared-fixture' | 'empty'
     workspaceName?: string
     webSourceUrl?: string
     configureModel?: boolean
@@ -1048,7 +1057,7 @@ export const setupWorkbenchWithTempWorkspace = async (
   }
 ): Promise<WorkbenchSetupResult> => {
   const env = loadWorkbenchLiveModelEnv()
-  const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
+  const workspace = await createTemporaryWorkbenchWorkspace(input.caseId, input.workspaceContents)
   // Default name doubles as partner title; keep it within the partner Input maxLength.
   const workspaceName = clampWorkbenchPartnerName(
     input.workspaceName || `Workbench ${input.caseId}`
@@ -1062,7 +1071,8 @@ export const setupWorkbenchWithTempWorkspace = async (
   await prepareWorkbenchWorkspaceThroughUi(page, {
     workspaceName,
     rootPath: workspace.rootPath,
-    webSourceUrl: input.webSourceUrl
+    webSourceUrl: input.webSourceUrl,
+    prepareFiles: input.workspaceContents !== 'empty'
   })
   const shouldCreatePartner = input.createPartner !== false && input.createSession !== false
   if (shouldCreatePartner) {

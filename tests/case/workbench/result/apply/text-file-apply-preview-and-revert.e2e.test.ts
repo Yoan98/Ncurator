@@ -97,9 +97,11 @@ describe('workbench result e2e', () => {
             { page, blockerPolicy: 'auto_approve' }
           )
           await waitForWorkbenchAiEvent(runtime, {
-            name: 'text_file_artifact_before_run_completion',
+            name: 'text_file_saved_before_run_completion',
             matches: (event) =>
-              event.type === 'file_artifact' && event.fileName === 'workbench-preview.md'
+              event.type === 'tool_call_result' &&
+              event.toolName === 'text_file_edit' &&
+              event.result?.ok === true
           })
           const applyEntryCountDuringRun = await getWorkbenchPrefixLocator(
             page,
@@ -114,7 +116,9 @@ describe('workbench result e2e', () => {
           )
           const afterApply = await fs.readFile(targetPath, 'utf-8')
           if (!afterApply.includes('cedar-text-diff-884')) {
-            throw new Error('AI write did not persist cedar-text-diff-884 into workbench-preview.md')
+            throw new Error(
+              'AI write did not persist cedar-text-diff-884 into workbench-preview.md'
+            )
           }
           // Prefer opening apply first — the AI session may not already show the markdown editor.
           const normalPreviewAfterAiWrite = getWorkbenchLocator(
@@ -183,6 +187,7 @@ describe('workbench result e2e', () => {
           const documentModeTag = getWorkbenchLocator(page, workbenchSelectors.documentModeTag)
           const initialToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const initialModeTag = (await documentModeTag.textContent())?.trim()
+          await fs.writeFile(targetPath, afterApply + '\nEXTERNAL_TEXT_C\n')
           await documentModeToggle.click()
           await page
             .locator(
@@ -194,6 +199,11 @@ describe('workbench result e2e', () => {
               timeout: 30_000
             })
           const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          await page
+            .getByText('EXTERNAL_TEXT_C', { exact: false })
+            .first()
+            .waitFor({ state: 'visible', timeout: 30_000 })
+          const previewContainsExternalC = true
           const previewModeTag = (await documentModeTag.textContent())?.trim()
           await documentModeToggle.click()
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
@@ -389,6 +399,8 @@ describe('workbench result e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
+          await page.getByText('仍然回退这次修改？').waitFor({ state: 'visible' })
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const afterRevertBytes = await fs.readFile(targetPath)
           const fileStillVisible = await page
@@ -400,6 +412,7 @@ describe('workbench result e2e', () => {
             .catch(() => false)
 
           return {
+            previewContainsExternalC,
             normalPreviewModeTagCount,
             editModeTagCount,
             initialToggleLabel,
@@ -449,7 +462,9 @@ describe('workbench result e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.normalPreviewModeTagCount === 0 &&
+            result.previewContainsExternalC &&
+              !result.diffText.includes('EXTERNAL_TEXT_C') &&
+              result.normalPreviewModeTagCount === 0 &&
               result.editModeTagCount === 1 &&
               result.initialModeTag === '审核' &&
               result.previewModeTag === '预览' &&

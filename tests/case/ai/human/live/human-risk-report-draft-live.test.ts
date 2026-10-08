@@ -1,3 +1,4 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
@@ -6,7 +7,7 @@ import {
   loadDocxBundle
 } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   HUMAN_RISK_REPORT_DRAFT_USER_INPUT,
@@ -78,11 +79,11 @@ describe('ai human live backend', () => {
         const workspaceSeed = await loadRiskReportDraftWorkspaceSeed(runtime)
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
 
-        const runner = createHumanTestRunner(runtime)
-        const output = await runner.run({
-          taskId: runtime.taskId,
+        const runner = await createAiServiceTestRunner(runtime, {
           userInput: HUMAN_RISK_REPORT_DRAFT_USER_INPUT
         })
+        const output = await runner.run()
+        await assertRunFileReviews(runtime, output)
 
         return {
           configurationMissing: false,
@@ -171,10 +172,10 @@ describe('ai human live backend', () => {
             Object.keys(data).every((key) => key === 'createdIds')
           )
         })
-        const docxFileArtifact = result.output?.artifacts?.find(
+        const docxFileArtifact = result.output?.finalArtifacts?.find(
           (artifact) => artifact.kind === 'file' && artifact.capability === 'docx'
         )
-        const hasDocxArtifact = hasDocxFileArtifact(result.output?.artifacts)
+        const hasDocxArtifact = hasDocxFileArtifact(result.output?.finalArtifacts)
         let appliedDocText = ''
         const appliedDocPath = docxFileArtifact?.kind === 'file' ? docxFileArtifact.path : undefined
         if (appliedDocPath) {
@@ -184,7 +185,7 @@ describe('ai human live backend', () => {
         const generatedDraftText = appliedDocText
         const appliedTextOnly = appliedDocText
         const evidenceText = `${generatedDraftText}\n${JSON.stringify(
-          result.output?.artifacts || []
+          result.output?.finalArtifacts || []
         )}`
         const referencesDocxEvidence =
           result.workspaceSeed.relevantDocxRelativePaths.some((relativePath) =>
@@ -238,7 +239,7 @@ describe('ai human live backend', () => {
               relevantDocxOpened,
               referencesDocxEvidence,
               referencesTxtEvidence,
-              artifacts: result.output?.artifacts
+              artifacts: result.output?.finalArtifacts
             }
           }
         )
@@ -248,7 +249,7 @@ describe('ai human live backend', () => {
           message: 'live human complex case 应给出最终修改说明。',
           data: {
             toolNames,
-            artifacts: result.output?.artifacts
+            artifacts: result.output?.finalArtifacts
           }
         })
 
@@ -282,7 +283,7 @@ describe('ai human live backend', () => {
             filterAiRunEventsByType(events, 'file_artifact').some(
               (event) => event.capability === 'docx' && Boolean(event.applyId)
             ) &&
-            hasDocxApplyArtifact(result.output?.artifacts) &&
+            hasDocxApplyArtifact(result.output?.finalArtifacts) &&
             hasDocxArtifact,
           {
             name: 'human-live-risk-report-delivery-is-backed-by-evidence-and-apply-artifacts',
@@ -291,7 +292,7 @@ describe('ai human live backend', () => {
             data: {
               toolNames,
               createSourcePaths,
-              artifacts: result.output?.artifacts
+              artifacts: result.output?.finalArtifacts
             }
           }
         )

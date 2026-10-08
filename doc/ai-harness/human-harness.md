@@ -60,7 +60,7 @@ graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 | `dispatch`                   | 否             | 否                                                                        | 消费 `tool_calls` 队列，路由下一 stage                                     |
 | `learning`                   | 否             | `learning_*` + `tool` + **`skill_state_updated`**                         | 加载 skill 工具；**不**改 build user                                       |
 | `plan`                       | 否             | `tool` + `plan_updated`                                                   | 更新 state.plan；**不**改 build user                                       |
-| `hand` / `human_interaction` | 否             | `tool`（+ 可选 `images[]`）+ `human_interaction_resolved` annotation      | append ToolMessage；`read_image` 后 append 多模态 HumanMessage；           |
+| `hand` / `human_interaction` | 否             | `tool`（+ 可选 `images[]`）+ `human_interaction_resolved` annotation      | append ToolMessage；同一 assistant 的工具结果齐全后 append 图片 HumanMessage；           |
 
 交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：docx/ppt 落盘 side effect → `finalizing_started` → 写交付 `assistant`（`toolCalls: []`）→ 立即 `answer_completed` / `run_completed`。下一轮同伙伴发送可立刻创建。
 无 `tool_calls` 的正常交付路径上，**brain 不向 log 写 `assistant`**（流式 Answer 只走事件 / `partial_answer`）。
@@ -559,7 +559,7 @@ Live 运行中的 Thought 由 `assistant_process_thought` 事件写入 `processT
 #### 写入（hand / read_image）
 
 1. 工具执行成功 → `buildModelToolResultDelivery` 得文本 → 写 log `tool`（`content` + 可选 `images[]`）。
-2. runtime cache：同一批 log `tool` append 进 `cache.messages`（第 1.5 节；有图则紧随 ToolMessage 之后）。
+2. runtime cache：log `tool` 可跨 hand、learning、plan 等节点分段 append；按同一 assistant 的全部 tool call ID 等待结果齐全，再按读图顺序追加一条多模态 HumanMessage。运行中、历史重建与压缩尾部共用投影。中断重建保留已返回图片，并先补齐缺失的工具结果。
 3. `read_image`：本地源按 SHA-256 缓存为 `userData/partners/{id}/runtime/assets/read_image-cache/<hash>-v1.webp`；log 存缓存路径 ref。
 
 #### 读路径（发给主模型）

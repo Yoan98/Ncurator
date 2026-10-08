@@ -14,7 +14,7 @@ const renderChangedFile = (
   mode: HumanRuntimeRenderMode
 ): string => {
   if (mode === 'fallback_markdown') {
-    return `${file.fileName} (${file.path}) - ${file.capability}, +${String(file.insertCount)} -${String(file.deleteCount)}; changeId=${file.id}`
+    return `${file.fileName} (${file.path}) - ${file.capability}${file.changeCount > 0 ? `, +${String(file.insertCount)} -${String(file.deleteCount)}` : ''}; changeId=${file.id}`
   }
 
   return [
@@ -22,12 +22,15 @@ const renderChangedFile = (
     `  - 文件路径：${file.path}`,
     `  - 来源能力：${file.capability}`,
     `  - 操作：${file.operation}`,
-    `  - 改动数：${file.changeCount}`,
-    `  - 新增：${file.insertCount}`,
-    `  - 删除：${file.deleteCount}`,
+    ...(file.changeCount > 0
+      ? [
+          `  - 改动数：${file.changeCount}`,
+          `  - 新增：${file.insertCount}`,
+          `  - 删除：${file.deleteCount}`
+        ]
+      : ['  - 文件已保存，净差异尚未计算']),
     `  - 修改记录：${file.id}`
-  ]
-    .join('\n')
+  ].join('\n')
 }
 
 export const renderHumanFileChangeLines = (
@@ -35,12 +38,9 @@ export const renderHumanFileChangeLines = (
   mode: HumanRuntimeRenderMode
 ): string =>
   renderLineList(
-    (state.execution.fileChanges?.changed_files || []).map((file) =>
-      renderChangedFile(file, mode)
-    ),
+    (state.execution.fileChanges?.changed_files || []).map((file) => renderChangedFile(file, mode)),
     {
       fallback: getRenderFallback(mode),
       style: getRenderStyle(mode)
     }
   )
-

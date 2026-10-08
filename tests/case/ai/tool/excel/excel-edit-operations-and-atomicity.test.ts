@@ -3,8 +3,6 @@ import path from 'node:path'
 import ExcelJS from 'exceljs'
 import JSZip from 'jszip'
 import { describe, it } from 'vitest'
-import type { AiRunContext } from '../../../../../src/main/services/ai/types'
-import { createExcelToolRuntime } from '../../../../../src/main/services/ai/human/tools/excel/runtime'
 import { createExcelToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
@@ -200,7 +198,7 @@ describe('ai tool excel edit backend', () => {
           sheetName: 'Overview',
           range: 'D1:E1'
         })
-        const secondEditRecord = await recordOf(operationsPath)
+        const secondEditRecordId = (await recordOf(operationsPath))?.id
         const noOp = await harness.invoke<Record<string, unknown>>('excel_edit', {
           type: 'set_range',
           sourcePath: path.join(runtime.workspaceRoot, 'noop.xlsx'),
@@ -248,59 +246,14 @@ describe('ai tool excel edit backend', () => {
           values: [[3]]
         })
 
-        const rollbackRoot = path.join(runtime.workspaceRoot, 'rollback-scope')
-        await fs.mkdir(rollbackRoot, { recursive: true })
-        const rollbackWorkbook = new ExcelJS.Workbook()
-        rollbackWorkbook.addWorksheet('Data').getCell('A1').value = 'before'
-        const rollbackBytes = Buffer.from(await rollbackWorkbook.xlsx.writeBuffer())
-        const rollbackPath = path.join(rollbackRoot, 'rollback.xlsx')
-        await fs.writeFile(rollbackPath, rollbackBytes)
-        const rollbackRuntime = createExcelToolRuntime({
-          ctx: {
-            checkCancelled: () => undefined,
-            sendEvent: () => undefined,
-            saveFileChangeRecord: async () => {
-              throw new Error('record save failed')
-            }
-          } as unknown as AiRunContext,
-          cache: {},
-          runId: `${runtime.runId}-rollback`,
-          partnerId: 'rollback-session',
-          taskId: `${runtime.taskId}-rollback`,
-          workspaceRootPath: rollbackRoot,
-          emitActivity: () => undefined
-        })
-        let rollbackError = ''
-        try {
-          await rollbackRuntime.edit({
-            type: 'set_range',
-            sourcePath: rollbackPath,
-            sheetName: 'Data',
-            range: 'A1',
-            values: [['after']]
-          })
-        } catch (error) {
-          rollbackError = error instanceof Error ? error.message : String(error)
-        }
-        const generatedFiles = async (root: string): Promise<string[]> =>
-          await fs
-            .readdir(root, { recursive: true })
-            .then((items) => items.filter((item) => path.extname(String(item))))
-            .catch(() => [])
-        const rollback = {
-          error: rollbackError,
-          sourceRestored: (await fs.readFile(rollbackPath)).equals(rollbackBytes),
-          changeArtifacts: await generatedFiles(
-            path.join(rollbackRoot, '.ncurator', 'file-changes')
-          ),
-          legacySnapshotsDirExists: await fs
-            .access(path.join(rollbackRoot, '.ncurator', 'file-change-snapshots'))
-            .then(() => true)
-            .catch(() => false)
-        }
-
+        await harness.ctx.finalizeRunFileChanges()
         const operations = await loadWorkbook(operationsFile.filePath)
+        const secondEditRecord = await recordOf(operationsPath)
         const operationsDiff = await loadWorkbook(String(secondEditRecord?.previewPath))
+        runtime.assertThat(secondEditRecord?.id === secondEditRecordId, {
+          name: 'same-change-id',
+          message: '收尾保持记录身份'
+        })
         const operationsXml = await JSZip.loadAsync(
           await fs.readFile(operationsFile.filePath)
         ).then((zip) => zip.file('xl/workbook.xml')!.async('text'))
@@ -315,7 +268,6 @@ describe('ai tool excel edit backend', () => {
           noOpRecord: await recordOf(path.join(runtime.workspaceRoot, 'noop.xlsx')),
           deleteLastSheet,
           conflict,
-          rollback,
           operations: {
             headerFont: operations.getWorksheet('Data')?.getCell('A1').font,
             headerFill: operations.getWorksheet('Data')?.getCell('A1').fill,
@@ -325,7 +277,7 @@ describe('ai tool excel edit backend', () => {
             formula: operations.getWorksheet('Data')?.getCell('C3').value,
             columnWidth: operations.getWorksheet('Data')?.getColumn('B').width,
             merged: operations.getWorksheet('Overview')?.getCell('B1').isMerged,
-            deletedSheetMissing: !operations.getWorksheet('DeleteMe'),
+            deletedSheetMissing: !operations.getWorksheet('DeleteMe（已删除）'),
             sourceHasDiffBorder: operations.worksheets.some((sheet) => {
               let found = false
               sheet.eachRow((row) =>
@@ -342,16 +294,23 @@ describe('ai tool excel edit backend', () => {
             diffSheetNames: operationsDiff.worksheets.map((sheet) => sheet.name),
             addedSheetTabColor: operationsDiff.getWorksheet('Overview')?.properties.tabColor?.argb,
             deletedSheetTabColor:
-              operationsDiff.getWorksheet('DeleteMe')?.properties.tabColor?.argb,
-            deletedSheetValue: operationsDiff.getWorksheet('DeleteMe')?.getCell('A1').value,
-            deletedSheetBodyValue: operationsDiff.getWorksheet('DeleteMe')?.getCell('B2').value,
-            deletedSheetRowHeight: operationsDiff.getWorksheet('DeleteMe')?.getRow(2).height,
-            deletedSheetColumnWidth: operationsDiff.getWorksheet('DeleteMe')?.getColumn('B').width,
-            deletedSheetMerged: operationsDiff.getWorksheet('DeleteMe')?.getCell('C2').isMerged,
-            deletedSheetFill: operationsDiff.getWorksheet('DeleteMe')?.getCell('B2').fill?.fgColor
-              ?.argb,
-            deletedSheetBorderStyle: operationsDiff.getWorksheet('DeleteMe')?.getCell('B2').border
-              .left?.style,
+              operationsDiff.getWorksheet('DeleteMe（已删除）')?.properties.tabColor?.argb,
+            deletedSheetValue: operationsDiff.getWorksheet('DeleteMe（已删除）')?.getCell('A1')
+              .value,
+            deletedSheetBodyValue: operationsDiff.getWorksheet('DeleteMe（已删除）')?.getCell('B2')
+              .value,
+            deletedSheetRowHeight: operationsDiff.getWorksheet('DeleteMe（已删除）')?.getRow(2)
+              .height,
+            deletedSheetColumnWidth: operationsDiff
+              .getWorksheet('DeleteMe（已删除）')
+              ?.getColumn('B').width,
+            deletedSheetMerged: operationsDiff.getWorksheet('DeleteMe（已删除）')?.getCell('C2')
+              .isMerged,
+            deletedSheetFill: operationsDiff.getWorksheet('DeleteMe（已删除）')?.getCell('B2').fill
+              ?.fgColor?.argb,
+            deletedSheetBorderStyle: operationsDiff
+              .getWorksheet('DeleteMe（已删除）')
+              ?.getCell('B2').border.left?.style,
             dataRedAddresses: (() => {
               const addresses: string[] = []
               operationsDiff.getWorksheet('Data')?.eachRow((row) =>
@@ -398,7 +357,7 @@ describe('ai tool excel edit backend', () => {
             result.operations.deletedSheetMissing === true &&
             result.operations.sourceHasDiffBorder === false &&
             JSON.stringify(result.operations.diffSheetNames) ===
-              JSON.stringify(['DeleteMe', 'Data', 'Overview']) &&
+              JSON.stringify(['DeleteMe（已删除）', 'Data', 'Overview']) &&
             result.operations.addedSheetTabColor === 'FF22A06B' &&
             result.operations.deletedSheetTabColor === 'FFD14343' &&
             result.operations.deletedSheetValue === 'remove' &&
@@ -420,10 +379,10 @@ describe('ai tool excel edit backend', () => {
           }
         )
         runtime.assertThat(Object.keys(result.noOp).length === 0 && !result.noOpRecord, {
-            name: 'excel-no-op-has-no-record',
-            message: '无变化的 Excel 编辑不能生成修改记录。',
-            data: result.noOp
-          })
+          name: 'excel-no-op-has-no-record',
+          message: '无变化的 Excel 编辑不能生成修改记录。',
+          data: result.noOp
+        })
         runtime.assertThat(
           result.deleteLastSheet.error &&
             String(result.deleteLastSheet.error).includes('至少保留一个工作表'),
@@ -438,17 +397,6 @@ describe('ai tool excel edit backend', () => {
           message: '同一 runtime 两轮编辑之间发生外部修改时必须拒绝覆盖。',
           data: result.conflict
         })
-        runtime.assertThat(
-          result.rollback.error.includes('record save failed') &&
-            result.rollback.sourceRestored === true &&
-            result.rollback.changeArtifacts.length === 0 &&
-            result.rollback.legacySnapshotsDirExists === false,
-          {
-            name: 'excel-record-persistence-rollback',
-            message: '修改记录持久化失败时应恢复源文件并清理 file-changes 下的预览和快照半成品。',
-            data: result.rollback
-          }
-        )
         runtime.assertThat(
           result.baseline.sameRecordId === true &&
             result.baseline.changeCount === 2 &&

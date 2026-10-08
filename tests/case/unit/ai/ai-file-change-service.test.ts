@@ -2,203 +2,263 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AiFileChangeRecord,
   GetAiFileChangeRecordRequest,
-  GetAiFileChangeRecordResponse,
   ListAiFileChangeRecordsRequest,
-  ListAiFileChangeRecordsResponse
+  TextFileDiffArtifact
 } from '../../../../src/shared/types'
 import { AiFileChangeService } from '../../../../src/main/services/ai/fileChanges/AiFileChangeService'
-import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../../src/shared/constants'
 
-const checksum = (value: string): string => createHash('sha256').update(value).digest('hex')
-
-class MemoryAiFileChangeStore {
-  private records = new Map<string, AiFileChangeRecord>()
-
-  public async saveRecord(record: AiFileChangeRecord): Promise<void> {
-    this.records.set(record.id, record)
+class MemoryStore {
+  public records = new Map<string, AiFileChangeRecord>()
+  public async removeRecord(id: string) {
+    this.records.delete(id)
   }
-
-  public async listRecords(
-    filters?: ListAiFileChangeRecordsRequest
-  ): Promise<ListAiFileChangeRecordsResponse> {
-    const items = Array.from(this.records.values()).filter(
+  public async saveRecord(record: AiFileChangeRecord) {
+    this.records.set(record.id, structuredClone(record))
+  }
+  public async getRecord(request: GetAiFileChangeRecordRequest) {
+    return { record: this.records.get(request.changeId) }
+  }
+  public async listRecords(request?: ListAiFileChangeRecordsRequest) {
+    const items = [...this.records.values()].filter(
       (record) =>
-        (!filters?.partnerId || record.partnerId === filters.partnerId) &&
-        (!filters?.runId || record.runId === filters.runId) &&
-        (!filters?.status || record.status === filters.status)
+        (!request?.runId || record.runId === request.runId) &&
+        (!request?.partnerId || record.partnerId === request.partnerId)
     )
     return { items, total: items.length }
   }
-
-  public async getRecord(
-    request: GetAiFileChangeRecordRequest
-  ): Promise<GetAiFileChangeRecordResponse> {
-    const record = this.records.get(request.changeId)
-    return record ? { record } : { error: 'file change record not found' }
-  }
 }
-
-const createRecord = (input: Partial<AiFileChangeRecord>): AiFileChangeRecord => ({
-  id: input.id || 'change-1',
-  partnerId: input.partnerId || 'partner-1',
-  runId: input.runId || 'run-1',
-  status: input.status || 'applied',
-  capability: input.capability || 'text_file',
-  path: input.path || '',
-  fileName: input.fileName || 'target.txt',
-  operation: input.operation || 'updated',
-  source: input.source,
-  beforePath: input.beforePath,
-  afterPath: input.afterPath,
-  changeCount: input.changeCount ?? 1,
-  insertCount: input.insertCount ?? 1,
-  deleteCount: input.deleteCount ?? 0,
-  beforeSnapshotPath: input.beforeSnapshotPath,
-  afterSnapshotPath: input.afterSnapshotPath,
-  beforeObjectHash: input.beforeObjectHash,
-  afterObjectHash: input.afterObjectHash,
-  previewArtifactHash: input.previewArtifactHash,
-  beforeChecksum: input.beforeChecksum,
-  afterChecksum: input.afterChecksum,
-  previewPath: input.previewPath,
-  runSummary: input.runSummary,
-  createdAt: input.createdAt || 1,
-  updatedAt: input.updatedAt || 1,
-  revertedAt: input.revertedAt,
-  error: input.error
-})
-
-describe('ai file change service', () => {
-  let tempDir = ''
-  let store: MemoryAiFileChangeStore
-  let service: AiFileChangeService
-
+const hash = (buffer: Buffer) => createHash('sha256').update(buffer).digest('hex')
+describe('confirmed file sessions', () => {
+  let root: string, store: MemoryStore, service: AiFileChangeService
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-file-change-'))
-    store = new MemoryAiFileChangeStore()
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'file-session-'))
+    vi.stubEnv('NCURATOR_USER_DATA_PATH', path.join(root, 'userData'))
+    store = new MemoryStore()
     service = new AiFileChangeService(store)
   })
-
   afterEach(async () => {
-    if (tempDir) {
-      await fs.rm(tempDir, { recursive: true, force: true })
-    }
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+    await fs.rm(root, { recursive: true, force: true })
+  })
+  const write = async (
+    service: AiFileChangeService,
+    sourcePath: string,
+    content: string,
+    run = 'owner'
+  ) =>
+    service.sessions.write('partner', run, {
+      sourcePath,
+      buffer: Buffer.from(content),
+      capability: 'text_file'
+    })
+
+  it('publishes only the latest confirmed B and recovers an immutable review after external C', async () => {
+    const source = path.join(root, 'text.md'),
+      original = Buffer.from('\ufeffA\r\nunchanged\r\n')
+    await fs.writeFile(source, original)
+    const first = await write(service, source, 'B\nunchanged\n')
+    const prior = await service.sessions.read('partner', 'owner', source)
+    const second = await write(service, source, 'B2\nunchanged\n')
+    expect(second.record.id).toBe(first.record.id)
+    expect(await fs.readFile(first.record.beforeSnapshotPath!)).toEqual(original)
+    expect(second.record.previewPath).toBeUndefined()
+    await expect(fs.access(prior!.workingPath!)).rejects.toThrow()
+    await fs.writeFile(source, 'C\n')
+    service = new AiFileChangeService(store)
+    const [record] = await service.sessions.recoverPartner('partner')
+    expect(record.afterChecksum).toBe(hash(Buffer.from('B2\nunchanged\n')))
+    expect(await fs.readFile(source, 'utf8')).toBe('C\n')
+    const review = JSON.parse(
+      await fs.readFile(record.previewPath!, 'utf8')
+    ) as TextFileDiffArtifact
+    expect(review.version).toBe(3)
+    expect(review.lines.some((line) => line.text === 'B2' && line.type === 'add')).toBe(true)
+    expect(review.lines.some((line) => line.text === 'unchanged' && line.type === 'context')).toBe(
+      true
+    )
+    expect(record.afterSnapshotPath).toBeUndefined()
+    expect(await service.sessions.read('partner', 'owner', source)).toBeUndefined()
+    expect((await service.sessions.finalize('partner', 'owner'))[0].previewPath).toBe(
+      record.previewPath
+    )
+    expect((await service.revertRecord({ changeId: record.id })).requiresForce).toBe(true)
+    expect((await service.revertRecord({ changeId: record.id, force: true })).success).toBe(true)
+    expect(await fs.readFile(source)).toEqual(original)
   })
 
-  it('stores direct tool snapshots immediately without a run-end scan', async () => {
-    const targetPath = path.join(tempDir, 'deck.pptx')
-    const previewPath = path.join(tempDir, '.ncurator', 'runtime', 'ppt-diff.json')
-    await fs.writeFile(targetPath, 'ppt bytes')
-    await fs.mkdir(path.dirname(previewPath), { recursive: true })
-    await fs.writeFile(previewPath, JSON.stringify({ version: 1, slides: [] }))
-    await service.saveRecord(
-      createRecord({
-        id: 'ppt-change',
-        runId: 'ppt-run',
-        capability: 'ppt',
-        path: targetPath,
-        fileName: 'deck.pptx',
-        operation: 'created',
-        previewPath
-      })
-    )
-
-    const completed = await service.getRecord({ changeId: 'ppt-change' })
-    expect(completed.record?.id).toBe('ppt-change')
-    expect(completed.record?.capability).toBe('ppt')
-    expect(completed.record?.previewPath).toBeTruthy()
-    expect(completed.record?.afterSnapshotPath).toBeTruthy()
-    const manifest = JSON.parse(
-      await fs.readFile(completed.record!.previewPath!, 'utf8')
-    ) as Record<string, unknown>
-    expect(manifest.version).toBe(1)
+  it('removes zero net changes and preserves created empty files for revert', async () => {
+    const source = path.join(root, 'old.txt')
+    await fs.writeFile(source, 'A')
+    await write(service, source, 'B')
+    await write(service, source, 'A')
+    expect(await service.sessions.finalize('partner', 'owner')).toEqual([])
+    const empty = path.join(root, 'empty.txt')
+    const created = await write(service, empty, '')
+    expect((await service.sessions.finalize('partner', 'owner'))[0].operation).toBe('created')
+    expect((await service.revertRecord({ changeId: created.record.id })).success).toBe(true)
+    await expect(fs.access(empty)).rejects.toThrow()
   })
 
-  it('preserves a verified specialist change under ignored runtime assets', async () => {
-    const targetPath = path.join(tempDir, '.ncurator', 'runtime', 'assets', 'bucket', 'input.docx')
-    await fs.mkdir(path.dirname(targetPath), { recursive: true })
-    await fs.writeFile(targetPath, 'before')
-    await fs.writeFile(targetPath, 'after')
-    await service.saveRecord(
-      createRecord({
-        id: 'attachment-change',
-        runId: 'attachment-run',
-        capability: 'docx',
-        source: 'docx_tool',
-        path: targetPath,
-        fileName: 'input.docx',
-        beforeChecksum: checksum('before'),
-        afterChecksum: checksum('after')
-      })
-    )
+  it('reports pre-save failure and leaves A untouched without internal path details', async () => {
+    const source = path.join(root, 'target.txt')
+    await fs.writeFile(source, 'A')
+    const originalWrite = fs.writeFile.bind(fs)
+    const failure = vi.spyOn(fs, 'writeFile').mockImplementation(async (...args) => {
+      if (String(args[0]).startsWith(path.join(root, '.target.txt.')))
+        throw Object.assign(new Error('denied internal temp'), { code: 'EACCES' })
+      return originalWrite(...args)
+    })
+    await expect(write(service, source, 'B')).rejects.toThrow('尚未保存')
+    expect(await fs.readFile(source, 'utf8')).toBe('A')
+    expect(await service.sessions.read('partner', 'owner', source)).toBeUndefined()
+    failure.mockRestore()
+    await fs.writeFile(source, 'C')
+    const saved = await write(service, source, 'B')
+    expect(saved.record.beforeChecksum).toBe(hash(Buffer.from('C')))
+    expect(await fs.readFile(saved.record.beforeSnapshotPath!, 'utf8')).toBe('C')
+    await write(service, source, 'C')
+    expect(await service.sessions.finalize('partner', 'owner')).toEqual([])
+  })
 
-    const completed = await service.getRecord({ changeId: 'attachment-change' })
-    expect(completed.record?.status).toBe('applied')
-    expect(completed.record?.error).toBeUndefined()
-    expect((await service.getRecord({ changeId: 'attachment-change' })).record?.status).toBe(
-      'applied'
+  it('does not restore the file after record failure and retains the previous confirmed review input', async () => {
+    const source = path.join(root, 'target.txt')
+    await fs.writeFile(source, 'A')
+    const first = await write(service, source, 'B1')
+    vi.spyOn(store, 'saveRecord').mockRejectedValueOnce(new Error('record save failed'))
+    await expect(write(service, source, 'B2')).rejects.toThrow('已经写入')
+    expect(await fs.readFile(source, 'utf8')).toBe('B2')
+    expect((await service.sessions.read('partner', 'owner', source))?.record.afterChecksum).toBe(
+      first.checksum
+    )
+    const [review] = await service.sessions.finalize('partner', 'owner')
+    expect(review.afterChecksum).toBe(first.checksum)
+  })
+
+  it('rejects mismatching readback without publishing unconfirmed B', async () => {
+    const source = path.join(root, 'target.txt')
+    await fs.writeFile(source, 'A')
+    const first = await write(service, source, 'B1')
+    const originalRead = fs.readFile.bind(fs)
+    let reads = 0
+    vi.spyOn(fs, 'readFile').mockImplementation(async (...args) => {
+      if (args[0] === source && ++reads === 2) return Buffer.from('unexpected')
+      return originalRead(...args)
+    })
+    await expect(write(service, source, 'B2')).rejects.toThrow('保存校验不一致')
+    expect((await service.sessions.read('partner', 'owner', source))?.record.afterChecksum).toBe(
+      first.checksum
+    )
+    expect(await fs.readFile(source, 'utf8')).toBe('B2')
+  })
+
+  it('waits for writes before finalizing and retries failed review from persisted inputs', async () => {
+    const source = path.join(root, 'target.txt')
+    await fs.writeFile(source, 'A')
+    const writing = write(service, source, 'B')
+    const closing = service.sessions.finalize('partner', 'owner')
+    const saved = await writing,
+      [review] = await closing
+    expect(review.afterChecksum).toBe(saved.checksum)
+    const invalid = path.join(root, 'invalid.docx')
+    await service.sessions.write('partner', 'broken', {
+      sourcePath: invalid,
+      buffer: Buffer.from('invalid'),
+      capability: 'docx'
+    })
+    const [failed] = await service.sessions.finalize('partner', 'broken')
+    expect(failed.status).toBe('applied')
+    expect(failed.error).toContain('审核生成失败')
+    const pending = await service.sessions.read('partner', 'broken', invalid)
+    expect(await fs.readFile(pending!.workingPath!, 'utf8')).toBe('invalid')
+    await fs.writeFile(invalid, 'C')
+    expect(
+      (await new AiFileChangeService(store).sessions.finalize('partner', 'broken'))[0].afterChecksum
+    ).toBe(failed.afterChecksum)
+  })
+
+  it('keeps the previous confirmed B if snapshot publication fails after saving', async () => {
+    const source = path.join(root, 'target.txt')
+    await fs.writeFile(source, 'A')
+    const first = await write(service, source, 'B1')
+    const originalRename = fs.rename.bind(fs)
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (String(to).endsWith('pending.json'))
+        throw Object.assign(new Error('pending publication denied'), { code: 'EACCES' })
+      return originalRename(from, to)
+    })
+    await expect(write(service, source, 'B2')).rejects.toThrow('已经写入')
+    expect(await fs.readFile(source, 'utf8')).toBe('B2')
+    expect(store.records.get(first.record.id)?.afterChecksum).toBe(first.checksum)
+    expect((await service.sessions.read('partner', 'owner', source))?.record.afterChecksum).toBe(
+      first.checksum
+    )
+    expect((await service.sessions.finalize('partner', 'owner'))[0].afterChecksum).toBe(
+      first.checksum
     )
   })
 
-  it('marks a specialist no-op with the user-facing no-change reason', async () => {
-    const targetPath = path.join(tempDir, '.ncurator', 'runtime', 'assets', 'bucket', 'input.docx')
-    await fs.mkdir(path.dirname(targetPath), { recursive: true })
-    await fs.writeFile(targetPath, 'same')
-    await service.saveRecord(
-      createRecord({
-        id: 'no-op-change',
-        runId: 'no-op-run',
-        capability: 'docx',
-        source: 'docx_tool',
-        path: targetPath,
-        fileName: 'input.docx',
-        beforeChecksum: checksum('same'),
-        afterChecksum: checksum('same')
-      })
-    )
-
-    const completed = await service.getRecord({ changeId: 'no-op-change' })
-    expect(completed.record?.status).toBe('failed')
-    expect(completed.record?.error).toBe(NO_EFFECTIVE_FILE_CHANGE_MESSAGE)
+  it('preserves user revert state when retrying a failed review', async () => {
+    const source = path.join(root, 'target.txt')
+    await fs.writeFile(source, 'A')
+    const saved = await write(service, source, 'B')
+    const originalWrite = fs.writeFile.bind(fs)
+    const failure = vi.spyOn(fs, 'writeFile').mockImplementation(async (...args) => {
+      if (String(args[0]).endsWith('review.json'))
+        throw Object.assign(new Error('review denied'), { code: 'EACCES' })
+      return originalWrite(...args)
+    })
+    expect((await service.sessions.finalize('partner', 'owner'))[0].error).toContain('审核生成失败')
+    expect((await service.revertRecord({ changeId: saved.record.id })).success).toBe(true)
+    failure.mockRestore()
+    const [reviewed] = await new AiFileChangeService(store).sessions.recoverPartner('partner')
+    expect(reviewed.status).toBe('reverted')
+    expect(reviewed.revertedAt).toBeTruthy()
+    expect(await fs.readFile(source, 'utf8')).toBe('A')
+    expect(
+      JSON.parse(await fs.readFile(reviewed.previewPath!, 'utf8')).lines.some(
+        (line: { text: string; type: string }) => line.type === 'add' && line.text === 'B'
+      )
+    ).toBe(true)
   })
 
-  it('restores deleted and renamed files during revert', async () => {
-    const deletedPath = path.join(tempDir, 'deleted.txt')
-    const deletedSnapshot = path.join(tempDir, 'deleted.snapshot')
-    await fs.writeFile(deletedSnapshot, 'deleted content')
-    await store.saveRecord(
-      createRecord({
-        id: 'deleted-change',
-        path: deletedPath,
-        beforePath: deletedPath,
-        operation: 'deleted',
-        beforeSnapshotPath: deletedSnapshot
-      })
-    )
-    expect((await service.revertRecord({ changeId: 'deleted-change' })).success).toBe(true)
-    expect(await fs.readFile(deletedPath, 'utf8')).toBe('deleted content')
+  it('keeps a completed review on cleanup failure and finishes cleanup without regenerating', async () => {
+    const source = path.join(root, 'target.txt')
+    await fs.writeFile(source, 'A')
+    await write(service, source, 'B')
+    const session = await service.sessions.read('partner', 'owner', source),
+      originalRm = fs.rm.bind(fs)
+    const failure = vi.spyOn(fs, 'rm').mockImplementation(async (...args) => {
+      if (String(args[0]).endsWith('pending.json'))
+        throw Object.assign(new Error('cleanup denied'), { code: 'EACCES' })
+      return originalRm(...args)
+    })
+    const [first] = await service.sessions.finalize('partner', 'owner')
+    expect(first.error).toBeUndefined()
+    expect(await service.sessions.read('partner', 'owner', source)).toBeTruthy()
+    failure.mockRestore()
+    await fs.writeFile(source, 'C')
+    const [second] = await new AiFileChangeService(store).sessions.recoverPartner('partner')
+    expect(second.previewPath).toBe(first.previewPath)
+    expect(await service.sessions.read('partner', 'owner', source)).toBeUndefined()
+    await expect(fs.access(session!.workingPath!)).rejects.toThrow()
+  })
 
-    const beforePath = path.join(tempDir, 'old.txt')
-    const afterPath = path.join(tempDir, 'new.txt')
-    const renameSnapshot = path.join(tempDir, 'rename.snapshot')
-    await fs.writeFile(afterPath, 'renamed content')
-    await fs.writeFile(renameSnapshot, 'renamed content')
-    await store.saveRecord(
-      createRecord({
-        id: 'rename-change',
-        path: afterPath,
-        beforePath,
-        afterPath,
-        operation: 'renamed',
-        beforeSnapshotPath: renameSnapshot
-      })
-    )
-    expect((await service.revertRecord({ changeId: 'rename-change' })).success).toBe(true)
-    expect(await fs.readFile(beforePath, 'utf8')).toBe('renamed content')
-    await expect(fs.access(afterPath)).rejects.toThrow()
+  it('reverts two runs in reverse order using exact original bytes', async () => {
+    const source = path.join(root, 'target.txt'),
+      A = Buffer.from('\ufeffA\r\n')
+    await fs.writeFile(source, A)
+    const b = await write(service, source, 'B', 'first')
+    await service.sessions.finalize('partner', 'first')
+    const c = await write(service, source, 'C', 'second')
+    await service.sessions.finalize('partner', 'second')
+    expect((await service.revertRecord({ changeId: c.record.id })).success).toBe(true)
+    expect(await fs.readFile(source, 'utf8')).toBe('B')
+    expect((await service.revertRecord({ changeId: b.record.id })).success).toBe(true)
+    expect(await fs.readFile(source)).toEqual(A)
   })
 })

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { getSlides, getSlideText, loadPresentation } from 'pptx-kit'
 import { describe, it } from 'vitest'
+import type { Page } from 'playwright'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -19,6 +20,60 @@ import {
 const CASE_ID = 'ppt-create-diff-and-revert'
 const FILE_NAME = 'Workbench-PPT验收.pptx'
 const MARKER = 'ORBIT-PPT-731'
+const OWNER = '王海涛（供应链总监）'
+
+// Observe the SVG already published by the product with the browser's own font engine.
+const inspectDisplayedTable = async (page: Page, testId: string) => {
+  const image = page.getByTestId(testId).locator('img').first()
+  await image.waitFor({ state: 'visible' })
+  const source = await image.getAttribute('src')
+  if (!source) throw new Error('PPT 预览缺少 SVG')
+  return page.evaluate(
+    async ({ source, owner }) => {
+      const svg = new DOMParser().parseFromString(
+        await (await fetch(source)).text(),
+        'image/svg+xml'
+      )
+      const probe = document.createElement('div')
+      probe.style.cssText =
+        'position:fixed;left:-10000px;top:0;visibility:hidden;pointer-events:none'
+      const root = document.importNode(svg.documentElement, true)
+      probe.appendChild(root)
+      document.body.appendChild(probe)
+      try {
+        await document.fonts.ready
+        const overflows: string[] = []
+        let cellCount = 0
+        for (const group of root.querySelectorAll('g')) {
+          if (Array.from(group.children).filter((child) => child.tagName === 'rect').length <= 1)
+            continue
+          let cell: SVGRectElement | undefined
+          for (const child of Array.from(group.children).slice(1)) {
+            if (child.tagName === 'rect') {
+              cell = child as SVGRectElement
+              cellCount += 1
+            } else if (child.tagName === 'text' && cell) {
+              const textBounds = (child as SVGTextElement).getBBox()
+              const cellBounds = cell.getBBox()
+              if (
+                textBounds.x < cellBounds.x - 1 ||
+                textBounds.y < cellBounds.y - 1 ||
+                textBounds.x + textBounds.width > cellBounds.x + cellBounds.width + 1 ||
+                textBounds.y + textBounds.height > cellBounds.y + cellBounds.height + 1
+              ) {
+                overflows.push(child.textContent || '')
+              }
+            }
+          }
+        }
+        return { hasFullName: root.textContent?.includes(owner) === true, cellCount, overflows }
+      } finally {
+        probe.remove()
+      }
+    },
+    { source, owner: OWNER }
+  )
+}
 
 describe('workbench result e2e', () => {
   it(
@@ -38,13 +93,14 @@ describe('workbench result e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
-            caseId: CASE_ID
+            caseId: CASE_ID,
+            workspaceContents: 'empty'
           })
           const filePath = path.join(setup.workspace.rootPath, FILE_NAME)
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请直接在工作区创建“${FILE_NAME}”。做两页简洁专业的 16:9 PPT：第一页标题包含“季度复盘”，第二页标题包含“下一步”，两页正文都要出现唯一标记“${MARKER}”。必须使用 PPT 工具，每页一次 insert_slide，用元素规格而不是 HTML。字号单位是磅；首次 ppt_edit 成功后不要删除、重建、复制或再次修改文件，直接告诉我已写回。`
+            `请直接在工作区创建“${FILE_NAME}”。做两页简洁专业的 16:9 PPT：第一页标题包含“季度复盘”，并含两行风险表（表头加一行内容），负责人是“${OWNER}”，风险为“芯片供货延迟”；第二页标题包含“下一步”，两页正文都要出现唯一标记“${MARKER}”。必须使用 PPT 工具，每页一次 insert_slide，用元素规格而不是 HTML。表格留足空间容纳中文及全角括号。字号单位是磅；首次 ppt_edit 成功后不要删除、重建、复制或再次修改文件，直接告诉我已写回。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
@@ -96,6 +152,10 @@ describe('workbench result e2e', () => {
             page,
             workbenchSelectors.pptDiffAfter
           ).isVisible()
+          const reviewTableLayout = await inspectDisplayedTable(
+            page,
+            workbenchSelectors.pptDiffAfter
+          )
           const thumbnailCount = await getWorkbenchLocator(
             page,
             workbenchSelectors.pptDiffThumbnails
@@ -141,6 +201,7 @@ describe('workbench result e2e', () => {
             .getByTestId('ppt-preview-viewer')
             .waitFor({ state: 'visible', timeout: 30_000 })
           const previewModeTag = ((await documentModeTag.textContent()) || '').trim()
+          const previewTableLayout = await inspectDisplayedTable(page, 'ppt-preview-after')
           await documentModeToggle.click()
           await getWorkbenchLocator(page, workbenchSelectors.pptDiffViewer).waitFor({
             state: 'visible',
@@ -159,6 +220,8 @@ describe('workbench result e2e', () => {
           return {
             slideCount: getSlides(presentation).length,
             slideText,
+            reviewTableLayout,
+            previewTableLayout,
             applyEntryText,
             assistantApplyEntriesText,
             workspaceExplorerText,
@@ -188,6 +251,12 @@ describe('workbench result e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.slideCount === 2 &&
+              result.reviewTableLayout.hasFullName &&
+              result.previewTableLayout.hasFullName &&
+              result.reviewTableLayout.cellCount >= 4 &&
+              result.previewTableLayout.cellCount >= 4 &&
+              result.reviewTableLayout.overflows.length === 0 &&
+              result.previewTableLayout.overflows.length === 0 &&
               result.slideText.includes(MARKER) &&
               result.applyEntryText.includes(FILE_NAME) &&
               result.assistantApplyEntriesText.every(

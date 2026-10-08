@@ -1,3 +1,4 @@
+import { readReviewPart, storyText } from '../../../../harness/backend/docxReviewAssertions'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import mammoth from 'mammoth'
@@ -306,8 +307,11 @@ describe('temporary subagents through production AiRunService', () => {
         const files = new AiFileChangeService(runtime.storageService.aiFileChange)
         const editedDocx = (await mammoth.extractRawText({ path: docx })).value
         const docxChange = changes.find((change) => change.path === docx)
-        const preview = docxChange?.previewPath
-          ? (await mammoth.extractRawText({ path: docxChange.previewPath })).value
+        const previewDocument = docxChange?.previewPath
+          ? await readReviewPart(await fs.readFile(docxChange.previewPath))
+          : undefined
+        const preview = previewDocument
+          ? [...storyText(previewDocument, false), ...storyText(previewDocument, true)].join('\n')
           : ''
         const textChange = changes.find((change) => change.path === file)
         const docxReverted = docxChange

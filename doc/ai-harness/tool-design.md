@@ -145,7 +145,11 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 
 写成功多为 **A** 或 `{}`（excel 写回不返回系统锚点）；**不**返回 diff 全文——模型应再 read 验证。
 
-### 6.3 Terminal 契约
+### 6.3 PPT 表格写入
+
+PPT 表格创建及 `update_table` 支持 `columnWidths`、`rowHeights`、`fontSize`、`fontFamily`。尺寸单位为 pt，数组数量必须匹配网格，总和必须匹配表格边界。创建明确写入默认 18pt；布局更新可单独调用，文字更新保留字体。新增或更新表格在保存前按实际 SVG 字形检查溢出，失败提示调整空间、字号或文字；工具不自动缩字或扩大表格。
+
+### 6.4 Terminal 契约
 
 - `status`: `running | succeeded | failed | cancelled`
 - `terminal_run` 返回 `terminalId`；`terminal_read` 不回传 id（用 session 上下文）
@@ -162,7 +166,7 @@ hand 收到 call batch
   → 执行 tool runtime
   → buildModelToolResultDelivery
   → append ToolMessage + log tool
-  → read_image 等：append 多模态 HumanMessage
+  → 同一 assistant 的全部 tool 结果齐全后：append 多模态 HumanMessage
   → context_budget
 ```
 
@@ -179,7 +183,7 @@ hand 收到 call batch
 
 浏览器以执行范围隔离标签、发现和 CDP 客户端。CDP 桥使用 Chromium 的真实 Target ID，保持与主 Frame 的身份一致；后台创建不影响用户展示状态，后台标签保存基于伙伴最新界面状态，避免旧快照覆盖选择与折叠。控制释放后标签保留给主伙伴；先释放后台视图，光标视觉清理跳过空白页面并限制等待时间，不阻塞任务收口。sidecar 搜索和抓取统一 FIFO 串行，排队可取消且不计入提交后的执行超时；取消已提交请求不提前释放位置或杀死共享进程。sidecar 进程重新连接时复位隔离页面标记，供客户端重新定位。
 
-受控文件记录从写入时使用 ownerRunId，相同路径复用记录和首次基线；Office 工作态覆盖读取到提交的排他范围。每批工具完成后刷新 DOCX/PPT 写回记录；终态释放临时工作态而保留记录/快照。子交付只汇总参与的文件，主交付汇总整个主 run。
+受控文件记录从写入时使用 ownerRunId，相同路径复用记录和首次基线；Office 工作态覆盖读取到提交的排他范围。工具执行仅保存确认工作版本，主 run 真正收尾统一生成自包含审核；续接共用 ownerRunId。终态完成记录保存后清理工作快照，保留原始对象与审核。子交付只汇总参与的文件，主交付汇总整个主 run。
 
 ## 8. 与测试 / 生成文档的关系
 

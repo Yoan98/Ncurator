@@ -53,7 +53,7 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
     requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
     loadMessageLog: async () => [],
     appendMessageLog: async () => undefined,
-    trackDocxOpen: () => undefined,
+    trackDocxOpen: async () => undefined,
     trackDocxChanges: () => undefined,
     resolveDocxOpenTarget: async () => {
       throw new Error('not used in context budget test')

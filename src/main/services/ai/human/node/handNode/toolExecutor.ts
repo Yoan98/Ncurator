@@ -201,8 +201,7 @@ export const executeToolCall = async (input: {
     // The parent pauses here. Relinquish its committed document sessions so children can
     // use those files and the parent reloads their latest contents after the handoff.
     await releaseDocxRunSession(input.ctx.runId)
-    input.ctx.discardDocxApplyRun()
-    input.ctx.beginDocxApplyRun()
+
     input.cache.docxRuntime = undefined
     input.cache.excelRuntime = undefined
     input.cache.pptRuntime = undefined

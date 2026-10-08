@@ -87,7 +87,8 @@ describe('ai human mock-llm backend', () => {
                 {
                   output: buildCompleteTaskDecision({
                     summary: '已验证 run 入口直接进入 human。',
-                    deliveryMarkdown: '# Human Only\n\nAiRunService 已直接进入 human 并完成最终交付。'
+                    deliveryMarkdown:
+                      '# Human Only\n\nAiRunService 已直接进入 human 并完成最终交付。'
                   })
                 }
               ]
@@ -99,7 +100,7 @@ describe('ai human mock-llm backend', () => {
         return {
           result,
           events: runtime.eventCollector.snapshot(),
-          llmIoRecords: runtime.eventCollector.snapshotLlmIo()
+          llmIoRecords: await runtime.eventCollector.snapshotLlmIo()
         }
       },
       assert: async (result, runtime) => {

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
@@ -25,8 +25,9 @@ describe('ai human mock-llm text backend', () => {
         const sourcePath = path.join(runtime.workspaceRoot, 'notes.md')
         const filePath = sourcePath
         await fs.writeFile(filePath, '# Status\n\nOwner: TBD\n', 'utf8')
-        const runner = createHumanTestRunner(runtime, {
-          structuredOutputScript: {
+        const runner = await createAiServiceTestRunner(runtime, {
+          userInput: '把 notes.md 的负责人从 TBD 更新为 Alice，并确认内容。',
+          llmScript: {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
@@ -68,10 +69,7 @@ describe('ai human mock-llm text backend', () => {
             ]
           }
         })
-        const output = await runner.run({
-          taskId: runtime.taskId,
-          userInput: '把 notes.md 的负责人从 TBD 更新为 Alice，并确认内容。'
-        })
+        const output = await runner.run()
         return {
           output,
           events: runtime.eventCollector.snapshot(),

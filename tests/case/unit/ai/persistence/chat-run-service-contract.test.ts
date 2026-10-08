@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -28,6 +28,7 @@ type TestService = {
 
 type ChatRunServicePrivate = ChatRunService & {
   activeRuns: Map<string, { finalizing: boolean }>
+  prepareFileChangeFinalization: (runId: string, allowContinuation: boolean) => Promise<boolean>
   queueRunEvent: (runId: string, event: AiRunEvent) => Promise<void>
   requestApprovalBatch: (
     runId: string,
@@ -74,7 +75,7 @@ const createTestService = async (options?: {
   await storage.initialize()
   activeStorages.push(storage)
   const aiFileChangeService = new AiFileChangeService(storage.aiFileChange)
-  const docxApplyService = new DocxApplyService(storage.docxApply, aiFileChangeService)
+  const docxApplyService = new DocxApplyService(aiFileChangeService)
   const embeddingService = {
     embed: async () => ({ data: new Float32Array(768) })
   } as EmbeddingService
@@ -399,6 +400,75 @@ describe('unit ai persistence backend', () => {
         (item) => item.id === `queued-${queued.userMessage?.id}`
       )
     ).toBe(false)
+  })
+
+  it('seals submissions during review generation and keeps queued continuations open', async () => {
+    const setup = await createTestService(),
+      run = await submitAiRun(setup)
+    const internals = setup.service as ChatRunServicePrivate
+    expect(await internals.prepareFileChangeFinalization(run.id, true)).toBe(true)
+    const payload = {
+      partnerId: 'partner-1',
+      input: 'late message',
+      mainModel: { configId: 'mock-config', modelName: 'mock-model' }
+    }
+    expect((await setup.service.submit(payload)).success).toBe(false)
+    await internals.queueRunEvent(run.id, { type: 'run_completed', runId: run.id })
+
+    const nextSetup = await createTestService(),
+      next = await submitAiRun(nextSetup)
+    const nextInternals = nextSetup.service as ChatRunServicePrivate
+    expect((await nextSetup.service.submit(payload)).queued).toBe(true)
+    expect(await nextInternals.prepareFileChangeFinalization(next.id, true)).toBe(false)
+    expect((await nextSetup.service.submit({ ...payload, input: 'queued again' })).queued).toBe(
+      true
+    )
+    expect(await nextInternals.prepareFileChangeFinalization(next.id, false)).toBe(true)
+    expect((await nextSetup.service.submit(payload)).success).toBe(false)
+  })
+
+  it('persists recovered review artifacts before marking an interrupted owner run failed', async () => {
+    const setup = await createTestService()
+    vi.stubEnv('NCURATOR_USER_DATA_PATH', path.join(setup.workspaceRoot, 'userData'))
+    try {
+      await seedPartner(setup.storage)
+      await seedAiTurn(setup.storage, {
+        runId: 'interrupted-owner',
+        userMessageId: 'user',
+        assistantMessageId: 'answer',
+        userContent: 'edit',
+        status: 'running',
+        createdAt: Date.now()
+      })
+      const source = path.join(setup.workspaceRoot, 'text.txt')
+      await writeFile(source, 'A')
+      const files = new AiFileChangeService(setup.storage.aiFileChange)
+      const saved = await files.sessions.write('partner-1', 'interrupted-owner', {
+        sourcePath: source,
+        capability: 'text_file',
+        buffer: Buffer.from('B')
+      })
+      await writeFile(source, 'C')
+      await setup.service.failInterruptedRuns()
+      const owner = await setup.storage.aiRun.getRun('interrupted-owner')
+      expect(owner?.status).toBe('failed')
+      expect(owner?.artifacts?.some((artifact) => artifact.applyId === saved.record.id)).toBe(true)
+      const record = (await files.getRecord({ changeId: saved.record.id })).record!
+      expect(
+        JSON.parse(await readFile(record.previewPath!, 'utf8')).lines.some(
+          (line: { text: string; type: string }) => line.text === 'B' && line.type === 'add'
+        )
+      ).toBe(true)
+      expect(await readFile(source, 'utf8')).toBe('C')
+      await expect(
+        access(
+          (await files.sessions.read('partner-1', 'interrupted-owner', source))?.workingPath ||
+            path.join(setup.workspaceRoot, 'missing')
+        )
+      ).rejects.toThrow()
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('interrupted-yielded-run-parks-queued-messages-without-starting-ai', async () => {

@@ -4,11 +4,8 @@ import path from 'node:path'
 import { createCanvas, loadImage } from '@napi-rs/canvas'
 import { Resvg } from '@resvg/resvg-js'
 import { DOMParser } from '@xmldom/xmldom'
-import type { AiFileChangeOperation, AiFileChangeRecord } from '../../../../../../shared/types'
-import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 import { isPathInsideRoot } from '../utils/pathBoundary'
-import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { resolveSafeTextFilePath, withTextFileMutationQueue } from '../textFile/textFileUtils'
 import type { ImageGenerateInput, ImageGenerateOutput } from './toolSchemas'
 
@@ -47,7 +44,8 @@ const assertSafeReference = (value: string): void => {
 }
 
 const validateSvg = (svg: string): void => {
-  if (Buffer.byteLength(svg, 'utf8') > MAX_SVG_BYTES) throw new Error('SVG 内容过大，超出大小上限。')
+  if (Buffer.byteLength(svg, 'utf8') > MAX_SVG_BYTES)
+    throw new Error('SVG 内容过大，超出大小上限。')
   if (/<!DOCTYPE|<!ENTITY/iu.test(svg)) {
     throw new Error('SVG 包含被禁止的文档声明（如 DOCTYPE/ENTITY）。')
   }
@@ -190,17 +188,7 @@ export const generateImage = async (
       allowMissing: true
     })
 
-    const existingRecord = shouldTrackChange
-      ? (await buildInput.ctx.listFileChangeRecords({ runId: buildInput.runId }))
-          .filter(
-            (record) =>
-              record.capability === 'image' &&
-              record.path === outputPath &&
-              record.status === 'applied'
-          )
-          .sort((left, right) => right.updatedAt - left.updatedAt)[0]
-      : undefined
-    const operationId = existingRecord?.id || randomUUID()
+    const operationId = randomUUID()
     let beforeBuffer: Buffer | undefined
     let beforeMode = 0o644
     try {
@@ -216,104 +204,19 @@ export const generateImage = async (
 
     if (beforeBuffer?.equals(outputBuffer)) return { outputPath: args.outputPath }
 
-    const operation: AiFileChangeOperation =
-      existingRecord?.operation || (beforeBuffer ? 'updated' : 'created')
-    const artifactRoot = path.join(
-      getPartnerRuntimeDir(buildInput.partnerId),
-      'file-changes',
-      buildInput.runId
-    )
-    let beforeSnapshotPath = beforeBuffer && shouldTrackChange
-      ? path.join(artifactRoot, `${operationId}.before`)
-      : undefined
-    let beforeChecksum = beforeBuffer && shouldTrackChange ? checksum(beforeBuffer) : undefined
-    if (existingRecord?.operation === 'created') {
-      beforeSnapshotPath = undefined
-      beforeChecksum = undefined
-    } else if (existingRecord) {
-      if (!existingRecord.beforeSnapshotPath) {
-        throw new Error(`无法更新 ${args.outputPath}：原始快照缺失。`)
-      }
-      beforeSnapshotPath = existingRecord.beforeSnapshotPath
-      beforeChecksum = existingRecord.beforeChecksum
-    }
-
-    let targetWritten = false
-    try {
-      if (shouldTrackChange) await fs.mkdir(artifactRoot, { recursive: true })
-      if (!existingRecord && beforeBuffer && beforeSnapshotPath) {
-        await fs.writeFile(beforeSnapshotPath, beforeBuffer)
-      }
-      if (beforeBuffer) {
-        const currentBuffer = await fs.readFile(outputPath)
-        if (!currentBuffer.equals(beforeBuffer)) {
-          throw new Error(`无法写入 ${args.outputPath}：文件在操作期间被其他进程修改。`)
-        }
-        await atomicReplaceFile({
-          outputPath,
-          content: outputBuffer,
-          mode: beforeMode,
-          operationId
-        })
-      } else {
-        await fs.writeFile(outputPath, outputBuffer, { flag: 'wx', mode: 0o644 })
-      }
-      targetWritten = true
-      if (!shouldTrackChange) return { outputPath: args.outputPath }
-
-      const now = Date.now()
-      const record: AiFileChangeRecord = {
-        id: operationId,
-        partnerId: buildInput.partnerId,
-        runId: buildInput.runId,
-        status: 'applied',
-        capability: 'image',
-        path: outputPath,
-        fileName: path.basename(outputPath),
-        operation,
-        source: 'image_tool',
-        beforePath: operation === 'updated' ? outputPath : undefined,
-        afterPath: outputPath,
-        changeCount: (existingRecord?.changeCount || 0) + 1,
-        insertCount: 0,
-        deleteCount: 0,
-        beforeSnapshotPath,
-        beforeChecksum,
-        afterChecksum: checksum(outputBuffer),
-        createdAt: existingRecord?.createdAt || now,
-        updatedAt: now
-      }
-      await buildInput.ctx.saveFileChangeRecord(record)
-      emitFileArtifactEvent({
-        ctx: buildInput.ctx,
-        runId: buildInput.runId,
-        taskId: buildInput.taskId,
-        capability: 'image',
-        artifactPath: outputPath,
-        operation,
-        applyId: operationId,
-        changeCount: record.changeCount,
-        insertCount: record.insertCount,
-        deleteCount: record.deleteCount
-      })
+    if (!shouldTrackChange) {
+      await atomicReplaceFile({ outputPath, content: outputBuffer, mode: beforeMode, operationId })
+      if (!(await fs.readFile(outputPath)).equals(outputBuffer))
+        throw new Error('图片保存校验不一致，文件已经写入，请重新读取确认。')
       return { outputPath: args.outputPath }
-    } catch (error) {
-      if (targetWritten) {
-        if (beforeBuffer) {
-          await atomicReplaceFile({
-            outputPath,
-            content: beforeBuffer,
-            mode: beforeMode,
-            operationId: `${operationId}.rollback`
-          }).catch(() => undefined)
-        } else {
-          await fs.rm(outputPath, { force: true }).catch(() => undefined)
-        }
-      }
-      if (!existingRecord && beforeSnapshotPath) {
-        await fs.rm(beforeSnapshotPath, { force: true }).catch(() => undefined)
-      }
-      throw error
     }
+    await buildInput.ctx.writeFileChange({
+      sourcePath: outputPath,
+      buffer: outputBuffer,
+      capability: 'image',
+      expectedChecksum: beforeBuffer ? checksum(beforeBuffer) : undefined
+    })
+
+    return { outputPath: args.outputPath }
   })
 }

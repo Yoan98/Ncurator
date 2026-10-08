@@ -287,7 +287,7 @@ export function registerHandlers(services: {
     webSourceStore
   })
   const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
-  const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
+  const docxApplyService = new DocxApplyService(aiFileChangeService)
   const attachmentService = new AttachmentService()
   const runResourceManager = new AiRunResourceManager([
     { id: 'docx', releaseRun: releaseDocxRunSession },

@@ -1,5 +1,9 @@
 # NCurator-Desktop Workbench 测试计划
 
+## 文件审核共同验收
+
+`result/apply` E2E 覆盖四类文件正式 A→B 后外部修改为 C：审核始终展示 A→B，预览展示 C；删除临时工作快照后仍可审核及展开文本未变行。审核只消费长期产物，缺失、损坏、不支持时明确报错，不回退到当前文件。Excel 空白样式、行高列宽及合并区域保留；PPT 备注只显示修改标记。完成、失败、取消后展示已保存变化；强制撤销和两轮回退恢复原始字节。
+
 ## 一次性子任务专项
 
 #### `subagent-delegation-browser-sidecar`
@@ -35,7 +39,7 @@
 - Workbench 附件链路不限制文件扩展名、大小、数量或目录大小；点击 `+` 直接打开可选择文件或目录的系统选择器，拖放接受文件与目录并保留源绝对路径，目录不递归扫描；附件卡片采用紧凑内边距，文件夹、音频和视频分别使用对应图标；图片保持灯箱预览，支持右侧文件预览的文档打开资源 Tab，文件夹打开系统文件管理器，音视频和其他不支持右侧预览的文件定位到系统文件所在位置；粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
 - Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 测试承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧（`WB-EXCEL-001` / `WB-EXCEL-002`）覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（`WB-EXCEL-002-AC3` 记录/baseline **只在 ai-test 硬断言**）；Workbench e2e 覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9` 用户闭环（UI 可见单入口，不重复硬断言 AC3）。
 - DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示统一的 `nodeId`、visual kind、`imagePath` 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。图片理解统一由 `agent-control` 内置的 `read_image` 把图片加入主模型请求。
-- Workbench 历史只展示白名单内的必要 DOCX 字段，不展示 worker、identity 或 replay 内部状态。DOCX 事件以 `nodeId` 定位，PPT 继续使用自己的 `location`，两套协议互不复用。
+- Workbench 历史只展示白名单内的必要 DOCX 字段，不展示 worker、identity 或净审阅内部状态。DOCX 事件以 `nodeId` 定位，PPT 继续使用自己的 `location`，两套协议互不复用。
 
 ## 3. Suite 设计
 
@@ -245,7 +249,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`（路径 `conversation/prefix-cache/`；`release:start` Tag 前必跑）
 - What：同一伙伴经真实 Workbench UI 连续三轮短任务（Run1 `@` 选中极短笔记抽出事实，Run2/Run3 同选中文件追问），相邻跨 run 首轮 brain 均须明显复用上一 run 末次前缀缓存，且 `toolsHash` 一致。
 - Why：发布准备需要一条轻量、专职的前缀缓存回归。纯闲聊测不到 tool 历史投影与 tools 前缀稳态；backend 直调 `AiRunService` 也绕过 Composer `@` 选中与生产发送组装。若消息重建或工具表漂移导致缓存丢失，会拖高成本并放大续接不稳定。
-- How：临时 workspace 写入 `cache-retain-note.txt` 后经 Settings 添加文件地址并建伙伴、选 live 模型。每轮用 `@` 选中该文件再发送（不得 `sendWorkbenchMessage` 清空 token）。Run1 要求读笔记说出项目代号（硬断言文本读工具）；Run2 问发布窗口；Run3 问负责人。e2e observer 只采集生产 `recordLlmIo` 并写入 `llm-io.jsonl`。两段跨 run 缓存用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）；硬断言相邻段 `toolsHash` 相等；断言 data 附带 `requestWireDiff` 供排障。
+- How：创建空临时 workspace，仅写入 `cache-retain-note.txt`，经 Settings 添加文件地址并建伙伴、选 live 模型。每轮用 `@` 选中该文件再发送（不得 `sendWorkbenchMessage` 清空 token）。Run1 要求读笔记说出项目代号（硬断言文本读工具）；Run2 问发布窗口；Run3 问负责人。e2e observer 只采集生产 `recordLlmIo` 并写入 `llm-io.jsonl`。两段跨 run 缓存用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）；硬断言相邻段 `toolsHash` 相等；按实际 runId 选择完成日志中的请求，禁止按数组长度切分；断言 data 附带双方 runId/callId、历史前缀是否一致和 `requestWireDiff` 供排障。
 - Oracle：三轮均 `completed`，对齐 `WB-SESSION-005`；Run1 有 `text_file_read` / `text_file_search` 证据，且发送带 `@` 选中，对齐 `WB-CORE-002`；Run2 首次 brain 相对 Run1 末次、以及 Run3 首次 brain 相对 Run2 末次，均满足 `cachedInputTokens / 上一末次 inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，且两段 `toolsHash` 分别一致。没有 live key 必须失败，不能跳过。
 
 #### `user-message-actions`
@@ -533,7 +537,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：同一个 Markdown 文件打开即进入编辑态并展示最新内容，AI 运行完成后无需点击修改项即可显示非零修改数量，切换伙伴再切回后不点击仍保持真实数量，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：编辑态和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容；伙伴切换后的数量恢复不能依赖用户点击触发补算。
-- How：先打开 Markdown（进入编辑态）；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件，等待 run 完成但不点击修改项，确认 assistant 修改列表已经显示非零 `+/-` 数量；检查编辑态静默刷新为最新内容；切换伙伴再切回，不点击修改项确认数量仍为非零；再点击 assistant 修改入口检查 `TextFileDiffViewer`、工具栏没有独立定位按钮且系统应用下拉包含“打开所在文件夹”；通过 E2E no-op 外部启动成功分支检查重新打开提醒，最后执行回退。
+- How：先打开 Markdown（进入编辑态）；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件，等待 run 完成但不点击修改项，确认 assistant 修改列表已经显示非零 `+/-` 数量；检查编辑态静默刷新为最新内容；切换伙伴再切回，不点击修改项确认数量仍为非零；再点击 assistant 修改入口检查 `TextFileDiffViewer`、工具栏没有独立定位按钮且系统应用下拉包含“打开所在文件夹”；通过 E2E no-op 外部启动成功分支检查重新打开提醒，最后执行回退。 测试进程在审核打开后真实写入 C，切到预览检查 C、切回审核检查 B，并展开完整未变行；回退验证后续修改确认。
 - Oracle：AI 写入后编辑态显示最新内容且不误报外部修改；编辑态与审核模式共用一个文件 Tab；Run 终态后修改入口在未点击时已显示真实非零数量；切换伙伴再切回后未点击时数量仍为真实非零，不重置为 0，对齐 `WB-APPLY-005-AC4`；审核模式展示差异数量、修改状态和回退，预览模式全部隐藏；预览模式对 Markdown/UTF-8 文本进入应用内编辑态（与普通打开一致），对齐 `WB-EDIT-001-AC7`、`WB-PANEL-003-AC14`；已应用记录打开外部应用后显示重新打开提醒；文件夹入口打开的文件列表从工具栏底部贴右悬浮，不改变预览宽度，可通过外部点击、Escape 或选择文件关闭；当前已经是最新记录且处于预览模式时，再次点击文件总分类仍会重置到最新审核模式；历史批次、结构化 Diff、不可变展开和回退刷新整体对齐 `WB-PANEL-003`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`；确认回退后 bytes 与原始输入一致且有效改动标记消失。
 
 #### `ppt-create-diff-and-revert`
@@ -541,15 +545,15 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`
 - What：真实 AI 创建两页 PPT 后，用户可打开页面级左右 diff、看到准确 `+2/-0`、切换审核/预览并回撤文件；运行时生成的 `userData/partners/{id}/runtime/assets` 资源不出现在修改文件和右侧变更列表。
 - Why：新建 PPT 必须同时验证文件交付、审核模式和回退闭环。
-- How：通过真实 Workbench UI 请求 AI 创建两页 PPT，打开修改记录，操作审核/预览、缩放、拖拽和回退。
-- Oracle：真实 PPT 创建、原子写入和 run 级修改记录对齐 `WB-PPT-001`、`WB-APPLY-002`；pptx 可解析，修改文件与右侧“本次运行改动”只显示用户 PPT、不显示 `userData/partners/{id}/runtime/assets` 内的运行时资源；审核模式显示两页和 `+2/-0`，预览模式显示正式 PPT，现有缩放拖拽可用；回撤后新建文件被删除，对齐 `WB-APPLY-003`。
+- How：创建空临时 workspace，经真实 Settings 和 Workbench UI 请求 AI 创建两页 PPT，第一页含中文负责人和全角括号的风险表；打开修改记录，操作审核/预览、缩放、拖拽和回退；从两种模式实际显示的 SVG 收集浏览器字形边界。
+- Oracle：真实 PPT 创建、原子写入和 run 级修改记录对齐 `WB-PPT-001`、`WB-APPLY-002`；pptx 可解析，修改文件与右侧“本次运行改动”只显示用户 PPT、不显示 `userData/partners/{id}/runtime/assets` 内的运行时资源；审核模式显示两页和 `+2/-0`，预览模式显示正式 PPT；两种模式都完整保留负责人姓名及全角括号，浏览器实际字形不越出表格单元格；现有缩放拖拽可用；回撤后新建文件被删除，对齐 `WB-APPLY-003`。
 
 #### `ppt-update-diff-interactions`
 
 - 测试类型：`e2e`
 - What：已有 PPT 更新后的左右差异、绿色新增/修改/移动、红色删除、准确 `+N/-N`、缩略图筛选、审核/预览、缩放和拖动画布。
 - Why：创建态与更新态的差异语义不同，不能只用新建 PPT case 代替。
-- How：让真实 AI 对已有四页 PPT 主动移动一页、修改一页、删除中间页、新增一页，并要求末页完全不变；打开修改记录并操作审核/预览、筛选、同步切页、缩放、拖动、关联应用打开和回退。关联应用启动在 E2E 中使用 no-op 成功分支，不实际启动 Office/WPS。
+- How：在空临时 workspace 中准备四页基线 PPT，让真实 AI 主动移动一页、修改一页、删除中间页、新增一页，并要求末页完全不变；打开修改记录并操作审核/预览、筛选、同步切页、缩放、拖动、关联应用打开和回退。关联应用启动在 E2E 中使用 no-op 成功分支，不实际启动 Office/WPS。 测试进程将正式 PPT 首页面文字改为 C，读取界面实际 SVG 验证预览 C、历史审核仍为 B，并确认强制回退。
 - Oracle：正式 PPT 内容和顺序正确；审核显示准确 `+3/-1`、三个绿色页面标记和一个红色删除标记；删除中间页不会把未改末页标绿，变化筛选为四页、全部模式为五个 before/after 对齐项；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；审核/预览切换、同步缩放拖动不变，底部「滚轮缩放 / 拖拽平移」提示固定可见（缩放或拖拽后仍在），回退后 bytes 与 baseline 完全一致，对齐 `WB-PANEL-003-AC19`、`WB-PPT-002`、`WB-APPLY-003`。
 
 #### `excel-update-diff-and-revert`
@@ -557,7 +561,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`
 - What：真实 AI 修改已有 Excel 后，用户在同一个只读网格中查看红绿单元格边框，并能回退到原始文件。
 - Why：Excel 修改预览不能依赖模型描述，也不适合 PPT 式左右画面对比，必须直接验证工作簿数据、公式和单元格级 diff。
-- How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改；打开修改记录，显式切换“预览/审核”，在两种模式下尝试编辑、切换工作表和拖列宽；通过 E2E no-op 成功分支打开关联应用，再执行回退。
+- How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改；打开修改记录，显式切换“预览/审核”，在两种模式下尝试编辑、切换工作表和拖列宽；通过 E2E no-op 成功分支打开关联应用，再执行回退。 测试进程将正式工作表重命名为 External C，以界面实际 Sheet 标签验证预览 C、历史审核仍为 B，并确认强制回退。
 - Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；同一 run 两轮修改在 UI 上只见一条本 run 修改入口；两种模式都通过 Univer 只读预览、可切换工作表且不出现 PPT 前后预览；审核态被改过的 Data 工作表 tab 有绿点、未改的 Notes 无绿点，预览态均无绿点；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；回退后 bytes 与修改前一致；真实调用包含 `excel_read` 和至少两次 `excel_edit`；对齐 `WB-PANEL-003-AC19`、`WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9`。
 
 #### `excel-create-diff-and-revert`
@@ -567,6 +571,14 @@ pnpm test:update:e2e
 - Why：新建文件的 baseline 为空，Diff 与回退语义不同于已有文件更新，不能由更新 case 间接代替。
 - How：通过真实 Workbench UI 用自然语言请求创建包含 Data/Notes 的 xlsx；打开修改入口，在两个 Sheet 检查新增边框，再执行回退。
 - Oracle：正式文件可解析且两个 Sheet 数据正确；所有抽查新增单元格为绿色；审核态 Data 与 Notes 工作表 tab 均有绿点；真实调用包含 Excel 写入和创建后的读取核对；回退后新建文件不存在；对齐 `WB-EXCEL-002-AC9`。
+
+#### `docx-review-position-and-inline-diff`
+
+- 测试类型：`e2e / live`
+- What：真实 UI Word 移动、逐字和局部格式审阅效果。
+- Why：真实 native Review 可正确生成但 renderer 或记录选择仍可能错位。
+- How：真实 UI 选取隔离 Word 并要求移动风险段落、修改指定单字和加粗指定文字（含原有前景色与黄色底色）；打开修改入口检查渲染的正文顺序及红删绿增，再切预览检查最终稿并回退。
+- Oracle：删除段落在原位置，新增在最终位置；同位置改字只标实际字符，格式只标目标文字；已有底色用绿色边框，原色和底色保留；不复制或新增说明；未改文字正常，审核/预览切换及回退正确。对齐 WB-APPLY-003-AC8/AC11/AC12/AC13。
 
 #### `docx-apply-panel-preview-and-revert`
 
@@ -605,7 +617,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：AI 写回后文件又被外部真实修改时，首次回退展示风险提示，确认后允许强制回退并刷新右侧状态。
 - Why：强制回退是避免静默覆盖用户后续修改的关键安全交互。
-- How：AI 写回真实 docx 后，由测试进程对同一个真实文件做外部修改；在右侧修改文件工作区点击回退，先确认统一回退提示，再观察风险提示并确认强制回退。
+- How：AI 写回真实 docx 后，由测试进程对同一个真实文件做外部修改；在右侧修改文件工作区点击回退，先确认统一回退提示，再观察风险提示并确认强制回退。 切换审核/预览并读取实际 DOCX 渲染文本，验证预览 C、历史审核 B。
 - Oracle：审核模式不创建普通预览文件监听，外部修改不会刷新审核快照或显示普通预览刷新提示，对齐 `WB-PANEL-003-AC18`；首次点击只展示统一确认且不写磁盘，对齐 `WB-APPLY-004-AC1`；确认后检测到后续修改，再展示“仍然回退这次修改？”风险提示；用户确认强制回退后恢复 checkpoint 或删除新建文件，对齐 `WB-APPLY-004-AC2`；右侧记录状态和预览在强制回退后刷新，对齐 `WB-APPLY-004-AC3`；记录模型、耗时、完成度评分和失败归因。
 
 #### `multi-file-apply-tabs`
@@ -621,7 +633,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`
 - What：审核模式展开状态下折叠右侧面板，切换伙伴再切回后面板必须保持折叠；异步修改记录刷新只更新内容，不得把面板重新展开，展开后直接展示最新审核内容。
 - Why：伙伴切换会恢复目标伙伴自己的展开状态（`WB-PANEL-001-AC5`）；如果恢复过程中的记录刷新强制展开面板，折叠态用户会反复被打断。
-- How：真实 AI 修改一个 Markdown 文件并打开审核模式；折叠面板后创建第二个伙伴，再切回原伙伴，等待异步记录刷新窗口；确认面板保持折叠，再手动展开并检查审核内容与文件 Tab。
+- How：用户明确要求使用应用的文本编辑能力修改 Markdown（不通过命令行/脚本写入，以便产生受控审核），完成后通过真实 UI 创建第二个伙伴，切回原伙伴并打开审核模式；折叠面板后切到第二个伙伴，再切回原伙伴，等待异步记录刷新窗口；确认面板保持折叠，再手动展开并检查审核内容与文件 Tab。
 - Oracle：切回后 shell 不存在且仅保留右缘展开按钮，对齐 `WB-PANEL-001-AC5`；手动展开后展示目标文件的最新审核内容且文件 Tab 保留，对齐 `WB-PANEL-001-AC1`。
 
 #### `human-interaction-question-card`

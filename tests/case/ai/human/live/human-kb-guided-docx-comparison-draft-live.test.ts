@@ -1,9 +1,10 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import type { AiRunEvent, JsonObject, JsonValue } from '../../../../../src/shared/types'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildKbGuidedDocxWorkspaceSeed,
@@ -83,13 +84,12 @@ describe('ai human live backend', () => {
           }
         )
 
-        const runner = createHumanTestRunner(runtime, {
-          streamingModeOverride: 'force_non_stream'
-        })
-        const output = await runner.run({
-          taskId: runtime.taskId,
+        const runner = await createAiServiceTestRunner(runtime, {
+          streamingModeOverride: 'force_non_stream',
           userInput: HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT
         })
+        const output = await runner.run()
+        await assertRunFileReviews(runtime, output)
 
         return {
           configurationMissing: false,
@@ -163,8 +163,8 @@ describe('ai human live backend', () => {
           filterAiRunEventsByType(events, 'file_artifact').filter(
             (event) => event.capability === 'docx' && Boolean(event.applyId)
           ).length >= 2 &&
-          countDocxApplyArtifacts(result.output?.artifacts) >= 2 &&
-          countDocxFileArtifacts(result.output?.artifacts) >= 2
+          countDocxApplyArtifacts(result.output?.finalArtifacts) >= 2 &&
+          countDocxFileArtifacts(result.output?.finalArtifacts) >= 2
         runtime.assertThat(
           kbEvidenceSatisfied &&
             writtenTargetCount === result.workspaceSeed.targetDocs.length &&
@@ -186,7 +186,7 @@ describe('ai human live backend', () => {
               requiredIndexedRelativePaths,
               indexedSupportedFiles,
               changedContentKinds,
-              artifacts: result.output?.artifacts
+              artifacts: result.output?.finalArtifacts
             }
           }
         )

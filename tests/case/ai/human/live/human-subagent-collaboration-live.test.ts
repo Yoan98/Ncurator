@@ -1,3 +1,4 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
@@ -48,6 +49,7 @@ describe('live subagent collaboration quality', () => {
         })
         const startedAt = Date.now()
         const output = await runner.run()
+        await assertRunFileReviews(runtime, output)
         return {
           output,
           sales,

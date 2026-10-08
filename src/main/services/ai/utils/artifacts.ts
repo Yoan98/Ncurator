@@ -6,7 +6,6 @@ import type {
   AiFileArtifactOperation,
   AiFileArtifactRef,
   AiRunEvent,
-  DocxApplyRecord,
   FileChangesSummary
 } from '../../../../shared/types'
 import type { ToolCallResult } from '../human/types'
@@ -51,48 +50,6 @@ export const extractArtifactRefsFromToolResults = (
   results: readonly ToolCallResult[]
 ): AiArtifactRef[] =>
   mergeArtifactRefs(...results.map((result) => extractArtifactRefsFromToolResult(result)))
-
-export const buildRunArtifactsFromDocxApplyRecord = (record: DocxApplyRecord): AiArtifactRef[] => [
-  createFileArtifactRef({
-    capability: 'docx',
-    artifactPath: record.source_path,
-    operation: record.operation,
-    applyId: record.id
-  })
-]
-
-export const appendDocxApplyArtifactsAndEmitEvents = (input: {
-  existingArtifacts?: readonly AiArtifactRef[]
-  records: readonly DocxApplyRecord[]
-  sendEvent: (event: AiRunEvent) => void
-  runId: string
-  taskId: string
-}): AiArtifactRef[] => {
-  const nextArtifacts = mergeArtifactRefs(
-    input.existingArtifacts,
-    ...input.records.map((record) => buildRunArtifactsFromDocxApplyRecord(record))
-  )
-
-  input.records.forEach((record) => {
-    input.sendEvent({
-      type: 'file_artifact',
-      runId: input.runId,
-      taskId: input.taskId,
-      artifactId: uuidv4(),
-      capability: 'docx',
-      path: record.source_path,
-      fileName: record.source_name,
-      operation: record.operation,
-      applyId: record.id,
-      changeCount: record.change_count,
-      insertCount: record.insert_count,
-      deleteCount: record.delete_count,
-      createdAt: Date.now()
-    })
-  })
-
-  return nextArtifacts
-}
 
 export const appendFileChangeArtifactsAndEmitEvents = (input: {
   existingArtifacts?: readonly AiArtifactRef[]
@@ -151,29 +108,4 @@ const toFileChangeSummaryItem = (
   insertCount: record.insertCount,
   deleteCount: record.deleteCount,
   status: record.status
-})
-
-export const toAiFileChangeRecordFromDocxApply = (record: DocxApplyRecord): AiFileChangeRecord => ({
-  id: record.id,
-  partnerId: record.partner_id,
-  runId: record.run_id,
-  status: record.status,
-  capability: 'docx',
-  path: record.source_path,
-  fileName: record.source_name,
-  operation: record.operation,
-  source: 'docx_tool',
-  beforePath: record.operation === 'updated' ? record.source_path : undefined,
-  afterPath: record.source_path,
-  changeCount: record.change_count,
-  insertCount: record.insert_count,
-  deleteCount: record.delete_count,
-  beforeSnapshotPath: record.before_snapshot_path,
-  beforeChecksum: record.before_checksum,
-  afterChecksum: record.after_checksum,
-  previewPath: record.preview_diff_artifact_path,
-  createdAt: record.created_at,
-  updatedAt: record.updated_at,
-  revertedAt: record.reverted_at,
-  error: record.error
 })

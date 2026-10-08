@@ -1,8 +1,9 @@
+import { assertRunFileReviews } from '../../../../harness/backend/fileReviewAssertions'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
@@ -39,16 +40,18 @@ describe('ai human live excel edit backend', () => {
         execute: async (runtime) => {
           const sourcePath = path.join(runtime.workspaceRoot, WORKSPACE_RELATIVE)
           const eventOffset = runtime.eventCollector.snapshot().length
-          const output = await createHumanTestRunner(runtime, {}).run({
-            taskId: runtime.taskId,
-            userInput: [
-              `请更新工作区里的《${WORKSPACE_RELATIVE}》：`,
-              '1）把「订单明细」表头「实际销售额」改成「实际销售额（元）」；',
-              `2）把产品「${FLAGSHIP_PRODUCT}」的实际销售额更正为 680000；`,
-              `3）在「汇总看板」增加一行「扣退货后净额」，公式为 SUM(订单明细!D2:D${String(ORDER_LAST_ROW)})-SUM(订单明细!E2:E${String(ORDER_LAST_ROW)})。`,
-              '「口径说明」整表、「华北-标准款」整行、以及「区域目标」的「最低毛利率」列必须保持原样。'
-            ].join('')
-          })
+          const output = await (
+            await createAiServiceTestRunner(runtime, {
+              userInput: [
+                `请更新工作区里的《${WORKSPACE_RELATIVE}》：`,
+                '1）把「订单明细」表头「实际销售额」改成「实际销售额（元）」；',
+                `2）把产品「${FLAGSHIP_PRODUCT}」的实际销售额更正为 680000；`,
+                `3）在「汇总看板」增加一行「扣退货后净额」，公式为 SUM(订单明细!D2:D${String(ORDER_LAST_ROW)})-SUM(订单明细!E2:E${String(ORDER_LAST_ROW)})。`,
+                '「口径说明」整表、「华北-标准款」整行、以及「区域目标」的「最低毛利率」列必须保持原样。'
+              ].join('')
+            })
+          ).run()
+          await assertRunFileReviews(runtime, output)
           const workbook = new ExcelJS.Workbook()
           await workbook.xlsx.load((await fs.readFile(sourcePath)) as never)
           const orders = workbook.getWorksheet('订单明细')
@@ -57,18 +60,25 @@ describe('ai human live excel edit backend', () => {
           const notes = workbook.getWorksheet('口径说明')
           const standardRow = orders ? findProductRow(orders, STANDARD_PRODUCT) : -1
           const flagshipRow = orders ? findProductRow(orders, FLAGSHIP_PRODUCT) : -1
-          const records = await runtime.createAiRunContext().listFileChangeRecords({
-            runId: runtime.runId
-          })
+          const records = (
+            await runtime.storageService.aiFileChange.listRecords({
+              runId: runtime.runId
+            })
+          ).items
           return {
             output,
             events: runtime.eventCollector.snapshot().slice(eventOffset),
             header: String(orders?.getCell('D1').value || ''),
-            flagshipSales: flagshipRow > 0 ? orders?.getCell(`D${String(flagshipRow)}`).value : null,
-            standardSales: standardRow > 0 ? orders?.getCell(`D${String(standardRow)}`).value : null,
-            standardOwner: standardRow > 0 ? orders?.getCell(`C${String(standardRow)}`).value : null,
+            flagshipSales:
+              flagshipRow > 0 ? orders?.getCell(`D${String(flagshipRow)}`).value : null,
+            standardSales:
+              standardRow > 0 ? orders?.getCell(`D${String(standardRow)}`).value : null,
+            standardOwner:
+              standardRow > 0 ? orders?.getCell(`C${String(standardRow)}`).value : null,
             targetMargins: [2, 3, 4, 5, 6].map((row) => targets?.getCell(`D${String(row)}`).value),
-            notesText: [2, 3, 4].map((row) => String(notes?.getCell(`C${String(row)}`).value || '')),
+            notesText: [2, 3, 4].map((row) =>
+              String(notes?.getCell(`C${String(row)}`).value || '')
+            ),
             summaryFormulas: summary
               ? Array.from({ length: Math.max(summary.rowCount, 1) }, (_, index) =>
                   getFormula(summary.getCell(index + 1, 2).value)
@@ -91,7 +101,8 @@ describe('ai human live excel edit backend', () => {
               result.flagshipSales === 680000 &&
               result.standardSales === 1040000 &&
               result.standardOwner === '赵静' &&
-              JSON.stringify(result.targetMargins) === JSON.stringify([0.18, 0.16, 0.14, 0.15, 0.12]) &&
+              JSON.stringify(result.targetMargins) ===
+                JSON.stringify([0.18, 0.16, 0.14, 0.15, 0.12]) &&
               result.notesText[0].includes('华东-旗舰款') &&
               result.notesText[1].includes('华北-标准款') &&
               result.notesText[2].includes('华西') &&
@@ -104,8 +115,7 @@ describe('ai human live excel edit backend', () => {
               result.recordCount === 1,
             {
               name: 'human-live-excel-weekly-review-edit-preserves-protected-areas',
-              message:
-                'live 模型应先读后写，完成指定更正并保护口径说明、华北-标准款和目标毛利率。',
+              message: 'live 模型应先读后写，完成指定更正并保护口径说明、华北-标准款和目标毛利率。',
               data: {
                 toolNames,
                 header: result.header,

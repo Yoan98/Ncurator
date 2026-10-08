@@ -1,4 +1,3 @@
-import { applyDeliverySideEffects } from '../brainNode/finalizeDelivery'
 import { randomUUID } from 'node:crypto'
 import type {
   ChatMessageImageRef,
@@ -98,13 +97,6 @@ const executeHandCalls = async (input: {
     )
     // Persist each tool's disk effects before the next tool can wait, fail or be cancelled.
     if (input.cache.currentState) {
-      input.cache.currentState = await applyDeliverySideEffects({
-        ctx: input.ctx,
-        cache: input.cache,
-        state: input.cache.currentState,
-        finalizing: false,
-        retainWorkingState: true
-      })
     }
   }
   return results

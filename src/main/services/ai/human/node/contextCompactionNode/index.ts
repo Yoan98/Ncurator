@@ -29,10 +29,7 @@ import {
   resolveMaxMessageLogSeq,
   type HistoryFloor
 } from '../../memory/transcript'
-import {
-  createCompactedBrainUserMessage,
-  renderMessagesForCompaction
-} from '../utils/messageTail'
+import { createCompactedBrainUserMessage, renderMessagesForCompaction } from '../utils/messageTail'
 import { createAiRunFailure } from '../../../utils/runFailure'
 
 const returnToContextBudget = (state: HumanState): HumanState => ({
@@ -155,7 +152,9 @@ export const createContextCompactionNode = (input: {
 
     const historyMessages = prependFloorHistoryUsers(currentRecords, messagesFromRecords(history))
     const historyText = renderMessagesForCompaction(historyMessages)
-    const prefixText = isSplitTurn ? renderMessagesForCompaction(messagesFromRecords(turnPrefix)) : ''
+    const prefixText = isSplitTurn
+      ? renderMessagesForCompaction(messagesFromRecords(turnPrefix))
+      : ''
     const sourceHistoryTokenEstimate = estimateTextTokens(
       isSplitTurn ? `${historyText}\n${prefixText}` : historyText
     )
@@ -251,6 +250,7 @@ export const createContextCompactionNode = (input: {
       new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
       ...projection.messages
     ]
+    input.cache.conversationProjection = undefined
     input.cache.currentUserMessageIndex = projection.currentUserMessageIndex + 1
     input.cache.currentUserLogAppended = true
 

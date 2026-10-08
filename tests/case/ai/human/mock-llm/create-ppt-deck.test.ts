@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { getSlides, getSlideText, loadPresentation } from 'pptx-kit'
 import { describe, it } from 'vitest'
-import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
@@ -68,8 +68,9 @@ describe('ai human mock-llm backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const sourcePath = path.join(runtime.workspaceRoot, 'mock-quarterly-review.pptx')
-        const runner = createHumanTestRunner(runtime, {
-          structuredOutputScript: {
+        const runner = await createAiServiceTestRunner(runtime, {
+          userInput: '创建两页季度业务复盘 PPT，并确认最终页面数量。',
+          llmScript: {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
@@ -111,10 +112,7 @@ describe('ai human mock-llm backend', () => {
           }
         })
 
-        const output = await runner.run({
-          taskId: runtime.taskId,
-          userInput: '创建两页季度业务复盘 PPT，并确认最终页面数量。'
-        })
+        const output = await runner.run()
         const presentation = await loadPresentation(new Uint8Array(await fs.readFile(sourcePath)))
 
         return {
@@ -125,7 +123,7 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         const startedTools = filterAiRunEventsByType(result.events, 'tool_call_started')
-        const pptArtifacts = result.output.artifacts.filter(
+        const pptArtifacts = result.output.finalArtifacts.filter(
           (artifact) => artifact.kind === 'file' && artifact.capability === 'ppt'
         )
         const fileEvents = filterAiRunEventsByType(result.events, 'file_artifact').filter(
