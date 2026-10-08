@@ -1,7 +1,6 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FiSave } from 'react-icons/fi'
-import { HiOutlineSparkles, HiOutlineTrash } from 'react-icons/hi2'
+import { HiOutlineCheck, HiOutlineSparkles, HiOutlineTrash } from 'react-icons/hi2'
 import type { ChatInlineContentNode, DocumentSelectionNode } from '../../../../shared/types'
 import {
   chatContentText,
@@ -14,7 +13,6 @@ import {
   type SelectionLocation
 } from '../workbench/composer/DocumentSelectionContext'
 import ComposerInputEditor from '../workbench/composer/ComposerInputEditor'
-import { SELECTION_NUMBER_CLASS_NAME } from '../workbench/composer/referenceVisuals'
 import {
   captureSelection,
   locateSelection,
@@ -25,6 +23,7 @@ import {
   positionSelectionFloating,
   positionSelectionMarker,
   previewViewport,
+  SELECTION_MARKER_SIZE,
   visiblePreviewObstacles,
   type SelectionFloatingPosition,
   type SelectionMarkerPosition
@@ -159,7 +158,7 @@ export default function DocxSelectionLayer({
           left: position.left,
           top: position.top,
           right: position.left + position.width,
-          bottom: position.top + 24
+          bottom: position.top + SELECTION_MARKER_SIZE
         })
         next.push({
           node,
@@ -281,14 +280,19 @@ export default function DocxSelectionLayer({
           aria-label={'编辑 ' + selectionLabel(marker.node)}
           title={selectionLabel(marker.node) + '\n' + marker.node.selectedText}
           disabled={state.locked}
-          className="absolute z-10 flex h-6 cursor-pointer items-center justify-center rounded-md outline-none hover:bg-[#F3EDF9] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] disabled:cursor-not-allowed"
-          style={{ left: marker.left, top: marker.top, width: marker.width }}
+          className="absolute z-10 flex cursor-pointer items-center justify-center rounded-[4px] bg-[#E3D4F3] text-[9px] font-semibold leading-none text-[#79569F] outline-none hover:bg-[#D8C2EF] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] disabled:cursor-not-allowed"
+          style={{
+            left: marker.left,
+            top: marker.top,
+            width: marker.width,
+            height: SELECTION_MARKER_SIZE
+          }}
           onClick={() => {
             const current = state.selections.find((node) => node.id === marker.node.id)
             if (current) open(current, marker.location, 'editor')
           }}
         >
-          <span className={SELECTION_NUMBER_CLASS_NAME}>{marker.node.number}</span>
+          {marker.node.number}
         </button>
       ))}
       {notice && (
@@ -309,7 +313,7 @@ export default function DocxSelectionLayer({
             className={
               'fixed z-[1100] border border-[#E0DFDC] bg-white shadow-[0_4px_16px_rgba(15,15,15,0.10)] ' +
               (popup.mode === 'editor'
-                ? 'flex w-[420px] items-end gap-1 rounded-[22px] p-1.5 focus-within:border-[#B5CCE2]'
+                ? 'flex w-[420px] items-end gap-1 rounded-[19px] p-[4px] focus-within:border-[#B5CCE2]'
                 : 'rounded-lg p-1')
             }
             style={{
@@ -343,7 +347,7 @@ export default function DocxSelectionLayer({
                   dataTestId="docx-selection-thought"
                   disabled={state.locked}
                   onSubmit={save}
-                  editorClassName="max-h-[80px] overflow-auto"
+                  editorClassName="max-h-[68px] overflow-auto"
                   onChange={(value) =>
                     setPopup(
                       (previous) =>
@@ -366,25 +370,25 @@ export default function DocxSelectionLayer({
                     aria-label="删除引用"
                     title="删除引用"
                     disabled={state.locked}
-                    className="flex h-8 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-[#91918E] outline-none hover:bg-[#F8EBE9] hover:text-[#B3261E] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] disabled:cursor-not-allowed"
+                    className="flex h-[28px] w-[28px] shrink-0 cursor-pointer items-center justify-center rounded-full text-[#91918E] outline-none hover:bg-[#F8EBE9] hover:text-[#B3261E] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] disabled:cursor-not-allowed"
                     onClick={() => {
                       state.remove(popup.node.id)
                       setPopup(null)
                     }}
                   >
-                    <HiOutlineTrash className="h-4 w-4" aria-hidden="true" />
+                    <HiOutlineTrash className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 ) : null}
                 <button
                   type="button"
                   data-testid="docx-selection-save"
-                  aria-label="保存"
-                  title="保存"
+                  aria-label={popup.node.number ? '确认修改' : '添加到输入框'}
+                  title={popup.node.number ? '确认修改' : '添加到输入框'}
                   disabled={state.locked || !hasUserText(popup.node.children)}
-                  className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#37352F] text-white outline-none hover:bg-[#25241F] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#F4F4F2] disabled:text-[#B8B7B3]"
+                  className="flex h-[28px] w-[28px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#37352F] text-white outline-none hover:bg-[#25241F] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#F4F4F2] disabled:text-[#B8B7B3]"
                   onClick={save}
                 >
-                  <FiSave className="h-4 w-4" aria-hidden="true" />
+                  <HiOutlineCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </>
             )}

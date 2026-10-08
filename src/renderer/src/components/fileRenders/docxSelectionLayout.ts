@@ -9,7 +9,7 @@ export type SelectionFloatingPosition = {
 export type SelectionMarkerPosition = { left: number; top: number; width: number }
 
 const GAP = 8
-const MARKER_HEIGHT = 24
+export const SELECTION_MARKER_SIZE = 14
 const overlaps = (a: Rect, b: Rect): boolean =>
   a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
 const clamp = (value: number, min: number, max: number): number =>
@@ -73,16 +73,24 @@ export function positionSelectionMarker(
   obstacles: Rect[],
   number: number
 ): SelectionMarkerPosition | null {
-  const rect = [...range.getClientRects()].filter((item) => item.width && item.height).at(-1)
+  const tail = range.cloneRange()
+  if (range.endContainer instanceof Text && range.endOffset > 0) {
+    const node = range.endContainer
+    const minimum = range.startContainer === node ? range.startOffset : 0
+    let end = range.endOffset
+    while (end > minimum && /\s/.test(node.data[end - 1])) end -= 1
+    if (end > minimum) {
+      const characterLength = Array.from(node.data.slice(minimum, end)).at(-1)?.length || 1
+      tail.setStart(node, end - characterLength)
+      tail.setEnd(node, end)
+    }
+  }
+  const rect = [...tail.getClientRects()].filter((item) => item.width && item.height).at(-1)
   if (!rect || !overlaps(rect, viewport)) return null
-  const width = Math.max(24, String(number).length * 6 + 14)
-  const top = clamp(
-    rect.top + (rect.height - MARKER_HEIGHT) / 2,
-    viewport.top + 4,
-    viewport.bottom - MARKER_HEIGHT - 4
-  )
+  const width = Math.max(SELECTION_MARKER_SIZE, String(number).length * 5 + 6)
+  const top = rect.top - SELECTION_MARKER_SIZE - 1
   const free = (left: number, y: number): boolean => {
-    const candidate = { left, top: y, right: left + width, bottom: y + MARKER_HEIGHT }
+    const candidate = { left, top: y, right: left + width, bottom: y + SELECTION_MARKER_SIZE }
     return (
       candidate.left >= viewport.left + 4 &&
       candidate.right <= viewport.right - 4 &&
@@ -91,22 +99,11 @@ export function positionSelectionMarker(
       !obstacles.some((item) => overlaps(candidate, item))
     )
   }
-  const tail = rect.right + 4
-  if (free(tail, top)) return { left: tail, top, width }
-
-  const endElement =
-    range.endContainer instanceof Element ? range.endContainer : range.endContainer.parentElement
-  const article = endElement?.closest('article')?.getBoundingClientRect()
-  const rightEdge = viewport.right - width - 4
-  const gutter = article ? clamp(article.right + 4, viewport.left + 4, rightEdge) : rightEdge
-  const columns = [...new Set([gutter, gutter + width, rightEdge, viewport.left + 4])]
-  // Test the entire hit target, including neighbouring text and other markers.
-  for (let distance = 0; distance < viewport.bottom - viewport.top; distance += MARKER_HEIGHT) {
-    const rows = distance ? [top + distance, top - distance] : [top]
-    for (const y of rows) {
-      for (const left of columns) {
-        if (free(left, y)) return { left, top: y, width }
-      }
+  // Stay beside the last selected glyph. Never move an annotation to the page gutter.
+  const columns = [rect.right + 2, rect.right + 6, rect.right - width - 2]
+  for (const offset of [0, -4, 4, -8, 8, -12, 12, -16]) {
+    for (const left of columns) {
+      if (free(left, top + offset)) return { left, top: top + offset, width }
     }
   }
   return null

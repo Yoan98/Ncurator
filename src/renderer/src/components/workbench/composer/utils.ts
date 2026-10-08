@@ -46,18 +46,33 @@ export const normalizeComposerNodes = (nodes: ComposerNode[]): ComposerNode[] =>
   return nextNodes
 }
 
+/** Numbers belong to the current draft; stable selection IDs carry the association. */
+export const renumberComposerSelections = (draft: ComposerDraftValue): ComposerDraftValue => {
+  const numbers = new Map<string, number>()
+  let changed = false
+  const contentNodes = draft.contentNodes.map((node) => {
+    if (node.kind !== 'document_selection') return node
+    const number = (numbers.get(node.filePath) || 0) + 1
+    numbers.set(node.filePath, number)
+    if (node.number === number) return node
+    changed = true
+    return { ...node, number }
+  })
+  return changed ? { ...draft, contentNodes, input: chatContentText(contentNodes).trim() } : draft
+}
+
 export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftValue => {
   const contentNodes: ChatMessageContentNode[] = nodes.map((node) => {
     if (node.kind === 'text') return { kind: 'text', text: node.text.replace(/\u00a0/g, ' ') }
     if (node.kind === 'scope') return { kind: 'reference', reference: node.scope }
     return node.selection
   })
-  return {
+  return renumberComposerSelections({
     input: chatContentText(contentNodes).trim(),
     contentNodes,
     selectedReferences: chatReferences(contentNodes),
     attachments: []
-  }
+  })
 }
 
 export const createComposerNodesFromDraftValue = (draft: ComposerDraftValue): ComposerNode[] =>
@@ -71,6 +86,32 @@ export const createComposerNodesFromDraftValue = (draft: ComposerDraftValue): Co
 
 const selectionElements = new WeakMap<HTMLElement, DocumentSelectionNode>()
 const referenceElements = new WeakMap<HTMLElement, SelectedReference>()
+
+const updateSelectionToken = (token: HTMLElement, selection: DocumentSelectionNode): void => {
+  token.title = selectionLabel(selection) + '\n' + selection.selectedText
+  token.setAttribute('aria-label', selectionLabel(selection))
+  const number = token.querySelector('[data-role="selection-number"]')
+  if (number) number.textContent = String(selection.number)
+}
+
+/** Update only token metadata after deletion, preserving the editable content and caret. */
+export const syncComposerSelectionTokens = (
+  editor: HTMLElement,
+  contentNodes: ChatMessageContentNode[]
+): void => {
+  const selections = new Map(
+    contentNodes.filter((node) => node.kind === 'document_selection').map((node) => [node.id, node])
+  )
+  for (const fragment of editor.querySelectorAll<HTMLElement>(
+    '[data-role="document-selection-fragment"]'
+  )) {
+    const selection = selections.get(fragment.dataset.selectionId || '')
+    const token = fragment.querySelector<HTMLElement>('[data-role="document-selection-token"]')
+    if (!selection || !token) continue
+    selectionElements.set(fragment, selection)
+    updateSelectionToken(token, selection)
+  }
+}
 
 export const pruneComposerNodesByWorkspace = (
   nodes: ComposerNode[],
@@ -252,9 +293,7 @@ export const renderComposerNodesToEditor = (editor: HTMLElement, nodes: Composer
       token.dataset.role = 'document-selection-token'
       token.dataset.selectionId = node.selection.id
       token.className = SELECTION_TOKEN_CLASS_NAME
-      token.title = selectionLabel(node.selection) + '\n' + node.selection.selectedText
       token.setAttribute('role', 'button')
-      token.setAttribute('aria-label', selectionLabel(node.selection))
       token.tabIndex = 0
       token.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return
@@ -278,9 +317,10 @@ export const renderComposerNodesToEditor = (editor: HTMLElement, nodes: Composer
       label.className = INLINE_TOKEN_LABEL_CLASS_NAME
       label.textContent = selectionFileName(node.selection)
       const number = document.createElement('span')
+      number.dataset.role = 'selection-number'
       number.className = SELECTION_NUMBER_CLASS_NAME
-      number.textContent = String(node.selection.number)
       token.append(icon, label, number)
+      updateSelectionToken(token, node.selection)
       fragment.appendChild(token)
       const thought = document.createElement('span')
       thought.dataset.role = 'document-selection-thought'

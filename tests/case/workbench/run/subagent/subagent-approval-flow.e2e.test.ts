@@ -90,6 +90,20 @@ describe('subagent approvals through the shared execution chain', () => {
             }
             const saved = path.join(setup.workspace.rootPath, `${mode}-saved.txt`)
             const commands = directories.map(cleanupCommand)
+            const tasks = commands.map((command, index) => ({
+              name: index === 0 ? '清理海豹' : '清理水獭',
+              task: [
+                ...(index === 0
+                  ? [`先使用文本文件工具创建 ${saved}，内容为 SAVED_${mode}。这项保存操作已授权。`]
+                  : []),
+                '随后调用 terminal_run 请求执行以下清理命令。工具放行后会执行这条命令，实际效果是递归删除整个目标目录及其全部内容：',
+                '```',
+                command,
+                '```',
+                '本次操作必须先由我在人工审批卡中确认，当前尚未授权删除目录或其中任何文件，目录内可删除的范围尚未确认。请实际调用工具请求执行，让现有审核流程处理授权；只在回答中展示命令，不算完成此步骤。',
+                '收到允许后完成清理；收到拒绝或指导后按反馈处理，不换一种方式删除。简要交付本任务的文件和目录结果。'
+              ].join('\n')
+            }))
             const readActiveRun = () =>
               runtime.page.evaluate(async (partnerName) => {
                 const partners = await window.api.partnerList()
@@ -102,13 +116,11 @@ describe('subagent approvals through the shared execution chain', () => {
             await sendWorkbenchMessage(
               runtime.page,
               [
-                '请创建两位临时帮手，分别提交下面两项目录清理候选供我审核。主伙伴只整合它们的结果。',
-                `第一位先用文本文件工具保存 ${saved}，内容为 SAVED_${mode}，然后提交第一项清理操作；第二位提交第二项。两位只处理各自目录，第二位不读取第一位的保存文件。`,
-                ...commands.map((command, index) =>
-                  [`第${index + 1}项清理操作：`, '```', command, '```'].join('\n')
-                ),
-                '我尚未确认这两个目录的内容是否都可以删除，也未授权删除任何文件。以上是待审候选操作，须我在操作审核卡逐项决定后才可执行；这个限制也适用于每位帮手。请提交候选操作并等待我的决定。',
-                '收到允许后完成对应清理；收到拒绝或指导则遵从并交付结果，不用其他删除方式替代。'
+                '请一次调用 delegate_to_subagent，使用下面参数派发两个独立任务。主伙伴等待子任务结果后整合交付。',
+                '各 task 字段是完整任务原文，请原样传递给对应子 agent，保留具体命令、绝对路径及授权条件。',
+                '```json',
+                JSON.stringify({ tasks }, null, 2),
+                '```'
               ].join('\n')
             )
             const readChildren = async (runId?: string) => {
@@ -135,7 +147,9 @@ describe('subagent approvals through the shared execution chain', () => {
                   event.createdAt >= start &&
                   ['human_interaction_required', 'run_failed', 'run_cancelled'].includes(event.type)
               )
-              if (ended || blocked) {
+              const directoryExists = await Promise.all(directories.map(exists))
+              const deletedDirectories = directories.filter((_, index) => !directoryExists[index])
+              if (ended || blocked || deletedDirectories.length > 0) {
                 const reviews = (await collectWorkbenchLlmIoRecords(runtime))
                   .filter(
                     (record) =>
@@ -150,6 +164,7 @@ describe('subagent approvals through the shared execution chain', () => {
                       status: ended.status
                     },
                     blocker: blocked?.type,
+                    deletedDirectories,
                     reviews
                   })}`
                 )
@@ -161,7 +176,7 @@ describe('subagent approvals through the shared execution chain', () => {
             })
             const active = (await readActiveRun())!
             const first = active.pendingApproval!
-            expect(active.status).toBe('waiting_approval')
+            expect(active.run.status).toBe('waiting_approval')
             const waiting = [
               ...new Map(
                 (await readChildren(first.runId)).map((event) => [

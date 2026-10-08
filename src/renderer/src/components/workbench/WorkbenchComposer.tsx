@@ -35,7 +35,8 @@ import {
   moveCaretToTextNode,
   readComposerNodesFromEditor,
   removeComposerTokenBeforeCaret,
-  renderComposerNodesToEditor
+  renderComposerNodesToEditor,
+  syncComposerSelectionTokens
 } from './composer/utils'
 import WorkbenchSelect from './WorkbenchSelect'
 import WorkbenchModelSelector from './WorkbenchModelSelector'
@@ -153,6 +154,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   useEffect(() => {
     draftValueRef.current = draftValue
+    if (editorRef.current) syncComposerSelectionTokens(editorRef.current, draftValue.contentNodes)
     setHasContent(
       draftValue.contentNodes.length > 0 ||
         Boolean(draftValue.input.trim()) ||

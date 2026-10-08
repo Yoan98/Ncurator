@@ -175,7 +175,7 @@ const ComposerInputEditor: React.FC<Props> = ({
         aria-label={placeholder}
         data-testid={dataTestId}
         data-placeholder={placeholder}
-        className={`block whitespace-pre-wrap break-words leading-6 text-[#37352F] outline-none empty:before:pointer-events-none empty:before:text-[#9B9A97] empty:before:content-[attr(data-placeholder)] ${variant === 'inline' ? 'min-h-8 px-2 py-1 text-[15px]' : 'min-h-[72px] rounded-[6px] border border-[#E5E4E0] px-3 py-2 text-[14px]'} ${editorClassName || ''}`}
+        className={`block whitespace-pre-wrap break-words text-[#37352F] outline-none empty:before:pointer-events-none empty:before:text-[#9B9A97] empty:before:content-[attr(data-placeholder)] ${variant === 'inline' ? 'min-h-[28px] px-2 py-[4px] text-[13px] leading-[20px]' : 'min-h-[72px] rounded-[6px] border border-[#E5E4E0] px-3 py-2 text-[14px] leading-6'} ${editorClassName || ''}`}
         onInput={() => {
           editorRef.current
             ?.querySelectorAll('[data-role="composer-caret-anchor"]')

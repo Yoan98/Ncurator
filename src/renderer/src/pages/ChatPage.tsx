@@ -110,6 +110,7 @@ import {
 } from '../../../shared/chatContent'
 import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
 import type { ComposerDraftValue } from '../components/workbench/composer/types'
+import { renumberComposerSelections } from '../components/workbench/composer/utils'
 import {
   WORKBENCH_CONTENT_PANEL_COLLAPSE_WIDTH,
   WORKBENCH_CONTENT_PANEL_DEFAULT_RATIO,
@@ -995,7 +996,6 @@ const ChatPage: React.FC = () => {
   const currentPartnerIdRef = useRef<string | null>(null)
   const submitInFlightRef = useRef(false)
   const [submittingPartnerId, setSubmittingPartnerId] = useState<string | null>(null)
-  const selectionNumbersRef = useRef(new Map<string, number>())
   const selectionLocationsRef = useRef(new Map<string, Map<string, SelectionLocation>>())
   const [selectionNavigation, setSelectionNavigation] =
     useState<DocumentSelectionState['navigation']>(null)
@@ -1327,6 +1327,13 @@ const ChatPage: React.FC = () => {
   const saveComposerDraftForPartner = useCallback(
     (partnerId: string | null, draft: ComposerDraftValue): void => {
       if (!partnerId) return
+      draft = renumberComposerSelections(draft)
+      const selectionIds = new Set(documentSelections(draft.contentNodes).map((node) => node.id))
+      const locations = selectionLocationsRef.current.get(partnerId)
+      locations?.forEach((_, id) => {
+        if (!selectionIds.has(id)) locations.delete(id)
+      })
+      if (!locations?.size) selectionLocationsRef.current.delete(partnerId)
       if (isComposerDraftEmpty(draft)) {
         delete composerDraftByPartnerIdRef.current[partnerId]
         return
@@ -1337,6 +1344,7 @@ const ChatPage: React.FC = () => {
   )
 
   const applyComposerDraft = useCallback((draft: ComposerDraftValue, reason: string): void => {
+    draft = renumberComposerSelections(draft)
     composerDraftValueRef.current = draft
     setInput(draft.input)
     setComposerContentNodes(draft.contentNodes)
@@ -4565,6 +4573,7 @@ const ChatPage: React.FC = () => {
   const handleComposerDraftChange = useCallback(
     (draft: ComposerDraftValue) => {
       if (submitInFlightRef.current && submittingPartnerId === currentPartnerId) return
+      draft = renumberComposerSelections(draft)
       composerDraftValueRef.current = draft
       setInput(draft.input)
       setComposerContentNodes(draft.contentNodes)
@@ -4756,15 +4765,7 @@ const ChatPage: React.FC = () => {
       if (!currentPartnerId || submittingPartnerId === currentPartnerId) return
       const draft = composerDraftValueRef.current
       const existing = documentSelections(draft.contentNodes).find((item) => item.id === node.id)
-      const key = `${currentPartnerId}\u0000${node.filePath}`
-      const maximum = Math.max(
-        selectionNumbersRef.current.get(key) || 0,
-        ...documentSelections(draft.contentNodes)
-          .filter((item) => item.filePath === node.filePath)
-          .map((item) => item.number)
-      )
-      const saved: DocumentSelectionNode = { ...node, number: existing?.number || maximum + 1 }
-      selectionNumbersRef.current.set(key, Math.max(maximum, saved.number))
+      const saved: DocumentSelectionNode = { ...node, number: existing?.number || 0 }
       locations.set(saved.id, location)
       const contentNodes: ChatMessageContentNode[] = existing
         ? draft.contentNodes.map((item) =>
