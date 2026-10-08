@@ -187,6 +187,17 @@ describe('subagent approvals through the shared execution chain', () => {
             ]
             expect(waiting).toHaveLength(2)
             expect(waiting.every((child) => child.status === 'waiting_approval')).toBe(true)
+            const reviewRequests = (await collectWorkbenchLlmIoRecords(runtime)).filter(
+              (record) =>
+                record.startedAt >= start &&
+                record.caller === 'human.terminal_review' &&
+                record.status === 'completed'
+            )
+            expect(reviewRequests.length).toBeGreaterThanOrEqual(2)
+            for (const review of reviewRequests) {
+              expect(review.user).not.toMatch(/^用途说明：/m)
+              expect(review.user).toContain('命令 ID：')
+            }
             expect(
               (await collectWorkbenchAiRunEvents(runtime)).filter(
                 (event) => event.type === 'approval_batch_required' && event.runId === first.runId
@@ -196,6 +207,7 @@ describe('subagent approvals through the shared execution chain', () => {
             expect(await fs.readFile(saved, 'utf8')).toContain(`SAVED_${mode}`)
             const card = getApprovalCard(runtime.page)
             await card.waitFor({ state: 'visible' })
+            expect(await card.textContent()).toContain(first.items[0].commandExplanation)
             expect(await card.getByTestId(chatSelectors.approvalBatchSource).textContent()).toBe(
               first.source!.name
             )

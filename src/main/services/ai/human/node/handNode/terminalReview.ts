@@ -93,7 +93,7 @@ export const reviewTerminalCommands = async (input: {
       platform: input.ctx.platform,
       workspaceRoots: input.ctx.workspaceRoots,
       terminalStartDirectory: getTerminalStartDirectory(),
-      commands: input.commands,
+      commands: input.commands.map(({ commandId, command }) => ({ commandId, command })),
       retryHint: retryIndex > 0
     })
     try {

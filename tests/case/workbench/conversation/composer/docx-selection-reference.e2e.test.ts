@@ -24,6 +24,11 @@ const selectText = async (
   end: number,
   options: { selector?: string; popup?: boolean; editor?: boolean } = {}
 ) => {
+  await page.bringToFront()
+  await page.waitForFunction(() =>
+    [...CSS.highlights.keys()].some((key) => key.startsWith('docx-'))
+  )
+  await page.locator('.docx-content').click({ position: { x: 5, y: 5 } })
   await page
     .locator('.docx-content')
     .locator(options.selector || 'article p')
@@ -64,10 +69,13 @@ const selectText = async (
       },
       { startParagraph, start, endParagraph, end, selector: options.selector || 'article p' }
     )
-  await page.mouse.move(bounds.start.x, bounds.start.y)
-  await page.mouse.down()
-  await page.mouse.move(bounds.end.x, bounds.end.y, { steps: 12 })
-  await page.mouse.up()
+  await page.mouse.click(bounds.start.x, bounds.start.y)
+  await page.keyboard.down('Shift')
+  try {
+    await page.mouse.click(bounds.end.x, bounds.end.y)
+  } finally {
+    await page.keyboard.up('Shift')
+  }
   if (options.popup !== false) {
     await page.getByTestId('docx-selection-ai-edit').waitFor({ state: 'visible' })
     if (options.editor !== false) {

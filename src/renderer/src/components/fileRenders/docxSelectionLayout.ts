@@ -100,7 +100,7 @@ export function positionSelectionMarker(
     )
   }
   // Stay beside the last selected glyph. Never move an annotation to the page gutter.
-  const columns = [rect.right + 2, rect.right + 6, rect.right - width - 2]
+  const columns = [2, 6, 10, 14, 18, 22, 26, -width - 2].map((offset) => rect.right + offset)
   for (const offset of [0, -4, 4, -8, 8, -12, 12, -16]) {
     for (const left of columns) {
       if (free(left, top + offset)) return { left, top: top + offset, width }

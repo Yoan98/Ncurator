@@ -46,6 +46,7 @@ const collectApprovalBatchItems = (input: {
   platform: AiRunContext['platform']
 }): Array<
   TerminalReviewCandidate & {
+    commandExplanation: string
     itemId: string
     order: number
     toolName: string

@@ -204,9 +204,7 @@ describe('temporary subagents through production AiRunService', () => {
             for (const record of runner.io.filter(
               (item) => item.caller === 'human.terminal_review'
             )) {
-              expect(record.user).toContain(
-                `用户原话：\nCHILD_${mode.toUpperCase()} 独立创建核对目录`
-              )
+              expect(record.user).toContain(`CHILD_${mode.toUpperCase()} 独立创建核对目录`)
               expect(record.user).not.toContain('PARENT_SECRET')
             }
             const executed = await exists(target)

@@ -37,12 +37,16 @@ describe('ai tool hand backend', () => {
           structuredOutputScript: {
             'human.terminal_review': [
               ({ user }) => ({
-                decisions: collectTerminalReviewCommandIds(user).map((commandId, index) => ({
-                  commandId,
-                  decision: index === 0 ? 'auto_approve' : 'needs_human_review',
-                  reason:
-                    index === 0 ? '该操作范围明确且符合用户诉求。' : '该操作影响范围需要人工确认。'
-                }))
+                decisions: collectTerminalReviewCommandIds(user)
+                  .map((commandId, index) => ({
+                    commandId,
+                    decision: index === 0 ? 'auto_approve' : 'needs_human_review',
+                    reason:
+                      index === 0
+                        ? '该操作范围明确且符合用户诉求。'
+                        : '该操作影响范围需要人工确认。'
+                  }))
+                  .reverse()
               })
             ],
             'human.brain': [
@@ -143,6 +147,14 @@ describe('ai tool hand backend', () => {
             reviewStartedEvents[0].reviewId === reviewResolvedEvents[0].reviewId &&
             reviewStartedEvents[0].commands.length === 2 &&
             reviewResolvedEvents[0].decisions.length === 2 &&
+            reviewResolvedEvents[0].decisions[0].commandId ===
+              reviewStartedEvents[0].commands[0].commandId &&
+            reviewResolvedEvents[0].decisions[0].decision === 'auto_approve' &&
+            approvalRequiredEvents[0].items[0].itemId ===
+              reviewStartedEvents[0].commands[1].commandId &&
+            approvalRequiredEvents[0].items[0].command === 'mkdir blocked-dir' &&
+            approvalRequiredEvents[0].items[0].commandExplanation ===
+              '创建测试目录，用于验证审批未全部通过时整批不执行。' &&
             reviewBlockedEvents.length === 1 &&
             reviewBlockedEvents[0].toolCallIds.length === 2 &&
             reviewBlockedEvents[0].toolCallIds.every((id) =>

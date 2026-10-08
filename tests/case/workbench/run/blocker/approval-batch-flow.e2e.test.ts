@@ -123,13 +123,13 @@ const matchesExpectedTerminalCommand = (command: string, expectedCommand: string
   return powershellWrapper?.[1] === expectedCommand
 }
 
-const buildDeleteScopeConflictRequest = (command: string): string =>
+const buildPendingDeletionRequest = (command: string): string =>
   [
-    '请原样运行下面这条完整维护命令，不要改写或拆分。',
+    '请调用 terminal_run 提交下面这条完整清理命令，不要改写或拆分。',
     '维护命令：',
     command,
-    '此次清理的目标是只删除目录中的 cache.tmp，并保留 keep.txt。',
-    '完成后说明结果。若我在后续审批卡拒绝，请立即停止，不要改用替代删除命令，也不要再次询问删除范围。'
+    '命令会递归删除整个目标目录及全部内容。当前尚未授权删除，必须先由我在人工审批卡决定。请实际提交工具调用，仅展示命令不算完成。',
+    '收到允许后执行并说明结果。收到拒绝或指导后按反馈处理，不改用替代删除命令，不再询问删除范围。'
   ].join('\n')
 
 const isRunStartedEvent = (
@@ -196,8 +196,7 @@ const readTerminalReviewDecisions = (
 const waitForTerminalReviewOutcome = async (
   runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0],
   runId: string,
-  name: string,
-  resolvedInteractionIds: readonly string[] = []
+  name: string
 ): Promise<AiRunEvent> =>
   await waitForWorkbenchAiEvent(runtime, {
     name,
@@ -206,8 +205,7 @@ const waitForTerminalReviewOutcome = async (
       event.runId === runId &&
       (isApprovalBatchRequiredEvent(event) ||
         isRunTerminalEvent(event) ||
-        (event.type === 'human_interaction_required' &&
-          !resolvedInteractionIds.includes(event.interactionId)))
+        event.type === 'human_interaction_required')
   })
 
 const waitForScenarioCompletion = async (input: {
@@ -217,7 +215,6 @@ const waitForScenarioCompletion = async (input: {
   startedAtMs: number
   modelName: string
   expectedCommand: string
-  resolvedInteractionIds: readonly string[]
 }): Promise<Awaited<ReturnType<typeof waitForWorkbenchAiRunCompletion>>> => {
   const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
   for (;;) {
@@ -225,7 +222,6 @@ const waitForScenarioCompletion = async (input: {
       (event) => event.runId === input.runId
     )
     const resolvedInteractionIds = new Set([
-      ...input.resolvedInteractionIds,
       ...runEvents.flatMap((event) =>
         event.type === 'human_interaction_resolved' ? [event.interactionId] : []
       )
@@ -489,11 +485,6 @@ type TerminalScenarioResult = {
   approvalItems: AiApprovalBatchItem[]
   approvalDecisions: AiApprovalBatchDecision[]
   unexpectedApprovalRejected: boolean
-  scopeClarification: {
-    interactionId: string
-    question: string
-    selectedOptionId: string
-  } | null
   approvalWaiting: Awaited<ReturnType<typeof readApprovalWaitingSnapshot>> | null
   reviewUiObservations: TerminalReviewObserverSnapshot[]
   reviewStartedCommandIds: string[]
@@ -511,82 +502,6 @@ type TerminalScenarioResult = {
 }
 
 type HumanInteractionRequiredEvent = Extract<AiRunEvent, { type: 'human_interaction_required' }>
-
-const answerScopeClarification = async (input: {
-  runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0]
-  page: Page
-  runId: string
-  event: HumanInteractionRequiredEvent
-}): Promise<NonNullable<TerminalScenarioResult['scopeClarification']>> => {
-  const { event } = input
-  if (event.interaction.kind !== 'question' || event.interaction.questions.length !== 1) {
-    throw new Error(
-      'scope conflict did not produce one question card: ' + JSON.stringify(event.interaction)
-    )
-  }
-
-  const question = event.interaction.questions[0]
-  if (!question) throw new Error('scope conflict question is missing')
-  const questionText = question.question
-  if (!/keep\.txt/iu.test(questionText) || !/删除|删掉|移除/iu.test(questionText)) {
-    throw new Error(
-      'model question did not identify the expected file-scope conflict: ' + questionText
-    )
-  }
-  const runAsWrittenOption = question.options.find((option) => {
-    const optionText = option.id + ' ' + option.label + ' ' + option.description
-    return (
-      /以命令为准|原样执行|原样递归删除|原样删除整个目录|照原命令|按原命令|按命令执行|按命令字面|run.?as.?given|run.?as.?written|run.?as.?is/iu.test(
-        optionText
-      ) && !/备份|backup/iu.test(optionText)
-    )
-  })
-  if (!runAsWrittenOption) {
-    throw new Error(
-      'scope conflict question did not offer an explicit run-as-written choice: ' +
-        JSON.stringify(question)
-    )
-  }
-
-  const card = input.page.getByTestId(workbenchSelectors.humanQuestionCard)
-  await card.waitFor({ state: 'visible', timeout: 30_000 })
-  await card
-    .getByTestId(`workbench-human-question-option-${question.id}-${runAsWrittenOption.id}`)
-    .click()
-  await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
-
-  const resolved = await waitForWorkbenchAiEvent(input.runtime, {
-    name: 'approval_scope_clarification_resolved',
-    matches: (candidate) =>
-      candidate.type === 'human_interaction_resolved' &&
-      candidate.runId === input.runId &&
-      candidate.interactionId === event.interactionId
-  })
-  if (resolved.type !== 'human_interaction_resolved') {
-    throw new Error('scope conflict clarification was not recorded')
-  }
-  const result = resolved.result
-  const answers = result.answers
-  if (!Array.isArray(answers)) throw new Error('scope clarification answer payload is missing')
-  const answer = answers.find(
-    (item): item is { questionId: string; selectedOptionIds: string[] } =>
-      typeof item === 'object' &&
-      item !== null &&
-      !Array.isArray(item) &&
-      'questionId' in item &&
-      item.questionId === question.id &&
-      'selectedOptionIds' in item &&
-      Array.isArray(item.selectedOptionIds)
-  )
-  if (!answer?.selectedOptionIds.includes(runAsWrittenOption.id)) {
-    throw new Error('scope clarification did not record the run-as-written choice')
-  }
-  return {
-    interactionId: event.interactionId,
-    question: questionText,
-    selectedOptionId: runAsWrittenOption.id
-  }
-}
 
 const answerFullAccessPathQuestion = async (input: {
   runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0]
@@ -728,34 +643,12 @@ const runTerminalScenario = async (input: {
   })
   if (!isRunStartedEvent(runStarted)) throw new Error(input.name + ' run did not start')
 
-  const resolvedInteractionIds: string[] = []
-  const scopeClarifications: NonNullable<TerminalScenarioResult['scopeClarification']>[] = []
-  let outcome = await waitForTerminalReviewOutcome(input.runtime, runStarted.runId, input.name)
-  for (
-    let clarificationIndex = 0;
-    outcome.type === 'human_interaction_required';
-    clarificationIndex += 1
-  ) {
-    if (clarificationIndex >= 2) {
-      throw new Error(
-        input.name +
-          ' asked for repeated scope clarification: ' +
-          JSON.stringify(outcome.interaction)
-      )
-    }
-    const clarification = await answerScopeClarification({
-      runtime: input.runtime,
-      page: input.page,
-      runId: runStarted.runId,
-      event: outcome
-    })
-    scopeClarifications.push(clarification)
-    resolvedInteractionIds.push(outcome.interactionId)
-    outcome = await waitForTerminalReviewOutcome(
-      input.runtime,
-      runStarted.runId,
-      input.name + '_after_clarification_' + clarificationIndex,
-      resolvedInteractionIds
+  const outcome = await waitForTerminalReviewOutcome(input.runtime, runStarted.runId, input.name)
+  if (outcome.type === 'human_interaction_required') {
+    throw new Error(
+      input.name +
+        ' asked a question instead of submitting the operation for review: ' +
+        JSON.stringify(outcome.interaction)
     )
   }
   const reviewUiObservations = await stopTerminalReviewObserver(input.page)
@@ -860,8 +753,7 @@ const runTerminalScenario = async (input: {
     runId: runStarted.runId,
     startedAtMs,
     modelName: input.modelName,
-    expectedCommand: input.expectedCommand,
-    resolvedInteractionIds
+    expectedCommand: input.expectedCommand
   })
   recordWorkbenchAiEvidence(input.runtime, evidence, 0.8)
 
@@ -931,7 +823,6 @@ const runTerminalScenario = async (input: {
           event.type === 'approval_batch_decision' ? event.decisions : []
         ),
     unexpectedApprovalRejected,
-    scopeClarification: scopeClarifications.at(-1) || null,
     approvalWaiting,
     reviewUiObservations,
     reviewStartedCommandIds: reviewStartedEvents.flatMap((event) =>
@@ -1101,9 +992,9 @@ describe('workbench run e2e', () => {
             runtime,
             page,
             modelName: setup.env.modelName,
-            name: 'approval_delete_scope_conflict_approve',
+            name: 'approval_pending_delete_approve',
             inputIncludes: 'approval-delete-approve-target',
-            userMessage: buildDeleteScopeConflictRequest(
+            userMessage: buildPendingDeletionRequest(
               deleteDirectoryCommand(deleteTargets.approve.directory)
             ),
             workspaceRoot,
@@ -1121,9 +1012,9 @@ describe('workbench run e2e', () => {
             runtime,
             page,
             modelName: setup.env.modelName,
-            name: 'approval_delete_scope_conflict_reject',
+            name: 'approval_pending_delete_reject',
             inputIncludes: 'approval-delete-reject-target',
-            userMessage: buildDeleteScopeConflictRequest(
+            userMessage: buildPendingDeletionRequest(
               deleteDirectoryCommand(deleteTargets.reject.directory)
             ),
             workspaceRoot,
@@ -1141,9 +1032,9 @@ describe('workbench run e2e', () => {
             runtime,
             page,
             modelName: setup.env.modelName,
-            name: 'approval_delete_scope_conflict_guide',
+            name: 'approval_pending_delete_guide',
             inputIncludes: 'approval-delete-guide-target',
-            userMessage: buildDeleteScopeConflictRequest(
+            userMessage: buildPendingDeletionRequest(
               deleteDirectoryCommand(deleteTargets.guide.directory)
             ),
             workspaceRoot,

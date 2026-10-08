@@ -103,19 +103,17 @@ describe('ai tool hand terminal review', () => {
       execute: async (runtime) => {
         const target = path.join(runtime.workspaceRoot, 'ai-approved-dir')
         const command = createDirectoryCommand(target)
+        const commandExplanation = '仅供人工审批展示的目录创建说明'
         const reviewRequests: string[] = []
-        const reviewSystems: string[] = []
         const runner = createHumanTestRunner(runtime, {
           approvalPolicy: 'deny-all',
           structuredOutputScript: {
             'human.terminal_review': [
-              ({ system, user }) => {
-                reviewSystems.push(system)
+              ({ user }) => {
                 reviewRequests.push(user)
                 return { invalid: true }
               },
-              ({ system, user }) => {
-                reviewSystems.push(system)
+              ({ user }) => {
                 reviewRequests.push(user)
                 return {
                   decisions: collectTerminalReviewCommandIds(user).map((commandId) => ({
@@ -135,7 +133,7 @@ describe('ai tool hand terminal review', () => {
                     calls: [
                       {
                         toolName: 'terminal_run',
-                        args: { command, commandExplanation: '创建用户指定目录' }
+                        args: { command, commandExplanation }
                       }
                     ]
                   }
@@ -169,12 +167,17 @@ describe('ai tool hand terminal review', () => {
         return {
           output,
           command,
+          commandExplanation,
+          explanationRecorded: records.some(
+            ({ entry }) =>
+              entry.kind === 'assistant' &&
+              entry.toolCalls.some((call) => call.args.commandExplanation === commandExplanation)
+          ),
           exists: await fs
             .stat(target)
             .then(() => true)
             .catch(() => false),
           reviewRequests,
-          reviewSystems,
           reviewDecisions,
           reviewStarted,
           reviewResolved,
@@ -203,7 +206,10 @@ describe('ai tool hand terminal review', () => {
             result.reviewRequests.length === 2 &&
             result.reviewRequests[0].includes('请创建 ai-approved-dir 目录') &&
             result.reviewRequests[0].includes('命令 ID：') &&
-            result.reviewRequests[0].includes('用途说明：') &&
+            result.reviewRequests.every(
+              (request) => !request.includes(result.commandExplanation)
+            ) &&
+            result.explanationRecorded &&
             result.reviewRequests[0].includes(result.command) &&
             result.reviewRequests[0].includes(`用户默认工作区目录：\n- ${runtime.workspaceRoot}`) &&
             result.reviewRequests[0].includes('终端默认启动目录：') &&
@@ -216,11 +222,6 @@ describe('ai tool hand terminal review', () => {
             !result.reviewRequests[0].includes('Windows / PowerShell') &&
             !result.reviewRequests[0].includes('基础命中：') &&
             result.reviewRequests[1].includes('上一次响应未通过输出格式或字段校验') &&
-            result.reviewSystems.length === 2 &&
-            result.reviewSystems[0].includes('只返回合法 JSON') &&
-            result.reviewSystems[0].includes('reason 简短说明判断依据') &&
-            result.reviewSystems[0].includes('"decisions"') &&
-            result.reviewSystems[0].includes('"commandId"') &&
             result.reviewDecisions.length === 1 &&
             result.reviewDecisions[0].decision === 'auto_approve' &&
             result.reviewDecisions[0].reason === '用户授权创建指定目录，操作范围清楚。' &&

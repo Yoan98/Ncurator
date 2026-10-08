@@ -161,7 +161,7 @@ PPT 表格创建及 `update_table` 支持 `columnWidths`、`rowHeights`、`fontS
 ```text
 hand 收到 call batch
   → terminal_run 副作用规则判断（未命中则默认通过）
-  → 命中项由本次主模型做一次结构化 AI 审核（传入用户原话、用户默认工作区目录、平台、终端默认启动目录和命令）
+  → 命中项由本次主模型做一次结构化 AI 审核（传入本次任务、用户默认工作区目录、平台、终端默认启动目录和 commandId + command）
   → AI 未自动通过的项进入人工批量审批（整批执行前）
   → 执行 tool runtime
   → buildModelToolResultDelivery
