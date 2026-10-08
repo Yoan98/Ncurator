@@ -11,6 +11,7 @@ import {
   getScopeKey,
   moveCaretToTextNode,
   readComposerNodesFromEditor,
+  removeComposerTokenBeforeCaret,
   renderComposerNodesToEditor
 } from './utils'
 
@@ -19,6 +20,8 @@ type Props = {
   onChange: (
     value: Pick<ComposerDraftValue, 'input' | 'contentNodes' | 'selectedReferences'>
   ) => void
+  disabled?: boolean
+  onSubmit?: () => void
   placeholder?: string
   dataTestId?: string
   /** Extra classes for the editable surface (e.g. max-height + overflow for forms). */
@@ -28,8 +31,18 @@ type MentionContext = { textNode: Text; caretOffset: number; triggerIndex: numbe
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 
-const ComposerInputEditor: React.FC<Props> = ({ value, onChange, placeholder, dataTestId, editorClassName }) => {
+const ComposerInputEditor: React.FC<Props> = ({
+  value,
+  onChange,
+  placeholder,
+  dataTestId,
+  editorClassName,
+  disabled = false,
+  onSubmit
+}) => {
   const { input, contentNodes, selectedReferences } = value
+  const composingRef = useRef(false)
+  const compositionEndedAtRef = useRef(0)
   const editorRef = useRef<HTMLSpanElement | null>(null)
   const knownScopesRef = useRef(new Map<string, SelectedReference>())
   const lastEmittedSignatureRef = useRef<string | null>(null)
@@ -153,7 +166,7 @@ const ComposerInputEditor: React.FC<Props> = ({ value, onChange, placeholder, da
       ) : null}
       <span
         ref={editorRef}
-        contentEditable
+        contentEditable={!disabled}
         suppressContentEditableWarning
         role="textbox"
         aria-multiline="true"
@@ -161,7 +174,35 @@ const ComposerInputEditor: React.FC<Props> = ({ value, onChange, placeholder, da
         data-placeholder={placeholder}
         className={`block min-h-[72px] whitespace-pre-wrap break-words rounded-[6px] border border-[#E5E4E0] px-3 py-2 text-[14px] leading-6 text-[#37352F] outline-none empty:before:pointer-events-none empty:before:text-[#9B9A97] empty:before:content-[attr(data-placeholder)] ${editorClassName || ''}`}
         onInput={sync}
+        onCompositionStart={() => {
+          composingRef.current = true
+        }}
+        onCompositionEnd={() => {
+          composingRef.current = false
+          compositionEndedAtRef.current = Date.now()
+          sync()
+        }}
+        onPaste={(event) => {
+          event.preventDefault()
+          if (disabled) return
+          const selection = window.getSelection()
+          if (!selection?.rangeCount || !editorRef.current?.contains(selection.anchorNode)) return
+          const range = selection.getRangeAt(0)
+          range.deleteContents()
+          const text = document.createTextNode(event.clipboardData.getData('text/plain'))
+          range.insertNode(text)
+          moveCaretToTextNode(text, text.length)
+          sync()
+        }}
         onKeyDown={(event) => {
+          if (
+            disabled ||
+            composingRef.current ||
+            event.nativeEvent.isComposing ||
+            event.keyCode === 229 ||
+            Date.now() - compositionEndedAtRef.current < 80
+          )
+            return
           if (mentionQuery !== null) {
             if (event.key === 'ArrowDown') {
               event.preventDefault()
@@ -192,28 +233,30 @@ const ComposerInputEditor: React.FC<Props> = ({ value, onChange, placeholder, da
               return
             }
           }
-          if (event.key === 'Backspace') {
-            const editor = editorRef.current
+          if (event.key === 'Enter' && !event.shiftKey && onSubmit) {
+            event.preventDefault()
+            onSubmit()
+            return
+          }
+          if (event.key === 'Enter' && event.shiftKey) {
+            event.preventDefault()
             const selection = window.getSelection()
-            if (!editor || !selection?.rangeCount || !selection.isCollapsed) return
-            const anchorNode = selection.anchorNode
-            const previousNode =
-              isTextNode(anchorNode) && selection.anchorOffset === 0
-                ? anchorNode.previousSibling
-                : anchorNode === editor && selection.anchorOffset > 0
-                  ? editor.childNodes[selection.anchorOffset - 1]
-                  : null
-            if (
-              previousNode instanceof HTMLElement &&
-              previousNode.dataset.role === 'scope-token'
-            ) {
-              event.preventDefault()
-              previousNode.remove()
-              sync()
-              const textNode = editor.lastChild
-              if (isTextNode(textNode)) moveCaretToTextNode(textNode, textNode.data.length)
-              return
-            }
+            if (!selection?.rangeCount || !editorRef.current?.contains(selection.anchorNode)) return
+            const range = selection.getRangeAt(0)
+            range.deleteContents()
+            const newline = document.createTextNode('\n')
+            range.insertNode(newline)
+            moveCaretToTextNode(newline, 1)
+            sync()
+            return
+          }
+          if (
+            event.key === 'Backspace' &&
+            editorRef.current &&
+            removeComposerTokenBeforeCaret(editorRef.current)
+          ) {
+            event.preventDefault()
+            sync()
           }
         }}
       />

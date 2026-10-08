@@ -15,7 +15,7 @@ describe('ai unit selected context workspace path', () => {
 
     expect(references).toBe('')
     expect(attachments).toBe('')
-    expect(references).not.toContain('用户@的参考资料：')
+    expect(references).not.toContain('用户引用的文档：')
     expect(references).not.toContain('当前没有用户显式指定的参考范围')
     expect(attachments).not.toContain('用户添加的附件：')
     expect(attachments).not.toContain('当前没有用户添加的附件')
@@ -44,7 +44,8 @@ describe('ai unit selected context workspace path', () => {
     )
 
     expect(text).toContain('1. weekly-risk.md')
-    expect(text).toContain('类型：本地文件')
+    expect(text).not.toContain('类型：')
+    expect(text).toContain('引用范围：整个资源')
     expect(text).toContain('资源地址：/tmp/real-workspace-root/reports/weekly-risk.md')
 
     expect(
@@ -126,7 +127,7 @@ describe('ai unit selected context workspace path', () => {
     expect(text).toContain('第 2 个附件路径：/tmp/README.md')
     expect(text).not.toContain('第 1 个附件：screen.png')
     expect(text).not.toContain('- 路径：')
-    expect(text).not.toContain('用户@的参考资料：')
+    expect(text).not.toContain('用户引用的文档：')
     expect(text).not.toContain('来源：')
     expect(text).not.toContain('类型：图片')
     expect(text).not.toContain('格式：')

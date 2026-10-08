@@ -105,6 +105,7 @@ describe('workbench conversation e2e', () => {
                   executionPermission: 'full_access',
                   modelSelection: { mainModel: null },
                   draft: {
+      formatVersion: 2,
                     input: '重启后仍在的草稿',
                     contentNodes: [{ kind: 'text', text: '重启后仍在的草稿' }],
                     selectedReferences: [],

@@ -61,6 +61,8 @@ Workbench 伙伴。
 | `state_json` | TEXT    | 版本化 UI 状态    |
 | `updated_at` | INTEGER | 更新时间          |
 
+Composer 草稿使用 `formatVersion: 2`，普通文字与 @ 引用以 `contentNodes` 保存并派生展示文本；未发送的文档选区片段及其关联想法不写入 `state_json`，仅保留在 Renderer 内存。已发送选区快照写入消息 log 的 `entry_json`，排队时写入既有排队 JSON，不新增列。
+
 ### `workbench_ui_state`
 
 Workbench 单例 UI。

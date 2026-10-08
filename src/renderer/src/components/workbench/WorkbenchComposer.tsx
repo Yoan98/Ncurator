@@ -1,4 +1,5 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { DocumentSelectionContext } from './composer/DocumentSelectionContext'
 import { App as AntdApp, Spin, Tooltip } from 'antd'
 import { HiArrowUp, HiOutlineFolder, HiPhoto, HiPlus, HiStop, HiXMark } from 'react-icons/hi2'
 import type {
@@ -33,6 +34,7 @@ import {
   moveCaretToEnd,
   moveCaretToTextNode,
   readComposerNodesFromEditor,
+  removeComposerTokenBeforeCaret,
   renderComposerNodesToEditor
 } from './composer/utils'
 import WorkbenchSelect from './WorkbenchSelect'
@@ -115,6 +117,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   requestAttachmentTarget,
   onFileDropHandlerReady
 }) => {
+  const documentSelections = useContext(DocumentSelectionContext)
+  const locked = Boolean(documentSelections?.locked)
   const { message } = AntdApp.useApp()
   const editorRef = useRef<HTMLSpanElement | null>(null)
   const draftNodesRef = useRef<ComposerNode[]>([])
@@ -691,6 +695,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   }, [handleDroppedAttachments, onFileDropHandlerReady])
 
   const handleEditorPaste = (event: React.ClipboardEvent<HTMLSpanElement>): void => {
+    if (locked) {
+      event.preventDefault()
+      return
+    }
     const files = Array.from(event.clipboardData.files || [])
     if (files.length > 0) {
       event.preventDefault()
@@ -785,21 +793,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     if (event.key !== 'Backspace') return
 
     const editor = editorRef.current
-    const selection = window.getSelection()
-    if (!editor || !selection || !selection.rangeCount || !selection.isCollapsed) return
-
-    const anchorNode = selection.anchorNode
-    let previousNode: ChildNode | null = null
-    if (isTextNode(anchorNode) && selection.anchorOffset === 0) {
-      previousNode = anchorNode.previousSibling
-    } else if (anchorNode === editor && selection.anchorOffset > 0) {
-      previousNode = editor.childNodes[selection.anchorOffset - 1] || null
-    }
-
-    if (!(previousNode instanceof HTMLElement) || previousNode.dataset.role !== 'scope-token')
-      return
+    if (!editor || !removeComposerTokenBeforeCaret(editor)) return
     event.preventDefault()
-    previousNode.remove()
     syncDraftFromEditor()
     ensureEditorHasCaretTarget()
     closeMention()
@@ -890,7 +885,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     !showCancel && !loading && !canSubmit && submitDisabledReason ? sendButtonTooltip : ''
 
   return (
-    <div className="relative">
+    <div className="relative" inert={locked || undefined}>
       <WorkbenchPlanProgress plan={plan} />
       {mentionQuery !== null ? (
         <ReferenceMentionPanel
@@ -1010,7 +1005,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         <div className="relative min-h-[46px]">
           <span
             ref={editorRef}
-            contentEditable
+            contentEditable={!locked}
             suppressContentEditableWarning
             role="textbox"
             aria-multiline="true"
@@ -1018,6 +1013,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             spellCheck={false}
             className="block min-h-[32px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#37352F] outline-none [&_[data-role='scope-token']]:align-baseline"
             data-testid={workbenchSelectors.input}
+            onClick={(event) => {
+              const token =
+                event.target instanceof Element
+                  ? event.target.closest<HTMLElement>('[data-role="document-selection-token"]')
+                  : null
+              const node = documentSelections?.selections.find(
+                (item) => item.id === token?.dataset.selectionId
+              )
+              if (node) documentSelections?.navigate(node)
+            }}
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
             onPaste={handleEditorPaste}
@@ -1170,7 +1175,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 <button
                   type="button"
                   onClick={stoppingRun ? onCancel : onSubmit}
-                  disabled={sendButtonDisabled}
+                  disabled={sendButtonDisabled || locked}
                   className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
                     showCancel
                       ? cancelling

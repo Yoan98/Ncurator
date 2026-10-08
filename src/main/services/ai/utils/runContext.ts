@@ -60,7 +60,7 @@ export const normalizeSelectedReferences = (
         reference.workspaceId &&
         reference.nodeId &&
         reference.name &&
-        reference.relativePath &&
+        (reference.kind === 'directory' || reference.relativePath) &&
         reference.absolutePath
       )
     })

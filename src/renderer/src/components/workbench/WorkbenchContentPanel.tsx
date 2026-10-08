@@ -165,7 +165,6 @@ const getParentPath = (filePath: string): string => {
   return separatorIndex > 0 ? normalized.slice(0, separatorIndex) : filePath
 }
 
-
 type WorkbenchDocumentPreviewPanelProps = {
   filePath: string
   documents: FileRenderDocument[]
@@ -765,7 +764,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               fileName: state.file.fileName,
               contentRevision: previewRevision,
               editable: editableKind !== null,
-              metadata: state.file.pageNumber ? { pageNumber: state.file.pageNumber } : undefined
+              metadata: { pageNumber: state.file.pageNumber, allowDocumentSelection: true }
             }
           ]
         : [],
@@ -791,13 +790,19 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     }
     const filePath = getApplyDocumentPath(activeApplyRecord, documentDisplayMode)
     const editable =
-      documentDisplayMode === 'preview' && editableKind !== null && filePath === activeApplyRecord.path
+      documentDisplayMode === 'preview' &&
+      editableKind !== null &&
+      filePath === activeApplyRecord.path
     return [
       {
         filePath,
         fileName: activeApplyRecord.fileName,
         contentRevision: documentDisplayMode === 'preview' ? previewRevision : undefined,
-        editable
+        editable,
+        metadata: {
+          allowDocumentSelection:
+            documentDisplayMode === 'preview' && filePath === activeApplyRecord.path
+        }
       }
     ]
   }, [activeApplyRecord, documentDisplayMode, editableKind, previewRevision])

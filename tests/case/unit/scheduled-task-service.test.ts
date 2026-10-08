@@ -31,6 +31,7 @@ const uiState: PartnerUiStateV1 = {
     executionPermission: 'full_access',
     modelSelection: { mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' } },
     draft: {
+      formatVersion: 2,
       input: '',
       contentNodes: [],
       selectedReferences: [],
@@ -180,8 +181,7 @@ describe('ScheduledTaskService', () => {
     taskStore.set(
       makeTask({
         nextRunAt: NOW - 1,
-        contentNodes,
-        selectedReferences: [reference]
+        contentNodes
       })
     )
     await service.runDue()
@@ -191,8 +191,7 @@ describe('ScheduledTaskService', () => {
         mainModel: uiState.composer.modelSelection.mainModel,
         preference: 'local_sources_strict',
         executionPermission: 'full_access',
-        contentNodes,
-        selectedReferences: [reference]
+        contentNodes
       })
     )
   })

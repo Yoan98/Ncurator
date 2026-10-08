@@ -25,11 +25,8 @@ const resolveDirectoryAvailability = (fileCount: number, indexedCount: number): 
   return 'partial'
 }
 
-const toEntryId = (
-  workspaceId: string,
-  kind: 'directory' | 'file',
-  relativePath: string
-): string => `${workspaceId}:${kind}:${relativePath}`
+const toEntryId = (workspaceId: string, kind: 'directory' | 'file', relativePath: string): string =>
+  `${workspaceId}:${kind}:${relativePath}`
 
 const normalizeRelativePath = (value: string): string =>
   String(value || '')
@@ -53,7 +50,7 @@ const matchesQuery = (reference: SelectedReference, query: string): boolean => {
   )
 }
 
-const buildDirectoryReferenceFromRecords = (input: {
+export const buildDirectoryReferenceFromRecords = (input: {
   workspace: WorkspaceSource
   name: string
   relativePath: string

@@ -1,4 +1,9 @@
-import type { ChatMessageContentNode, SelectedReference } from '../../../../../shared/types'
+import { chatContentText, chatReferences } from '../../../../../shared/chatContent'
+import type {
+  ChatMessageContentNode,
+  DocumentSelectionNode,
+  SelectedReference
+} from '../../../../../shared/types'
 import type { ComposerDraftValue, ComposerNode } from './types'
 import { getReferenceKey, pruneReferencesByWorkspace } from '../../../utils/reference'
 import { getReferenceVisualSpec } from './referenceVisuals'
@@ -34,67 +39,30 @@ export const normalizeComposerNodes = (nodes: ComposerNode[]): ComposerNode[] =>
 }
 
 export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftValue => {
-  const scopeMap = new Map<string, SelectedReference>()
-  const seenScopeKeys = new Set<string>()
-  const contentNodes: ChatMessageContentNode[] = []
-  const input = nodes
-    .filter((node): node is Extract<ComposerNode, { kind: 'text' }> => node.kind === 'text')
-    .map((node) => node.text)
-    .join('')
-    .replace(/\u00a0/g, ' ')
-    .trim()
-
-  nodes.forEach((node) => {
-    if (node.kind === 'text') {
-      const text = node.text.replace(/\u00a0/g, ' ')
-      if (text) contentNodes.push({ kind: 'text', text })
-      return
-    }
-    const scopeKey = getScopeKey(node.scope)
-    if (seenScopeKeys.has(scopeKey)) return
-    seenScopeKeys.add(scopeKey)
-    scopeMap.set(scopeKey, node.scope)
-    contentNodes.push({ kind: 'reference', reference: node.scope })
+  const contentNodes: ChatMessageContentNode[] = nodes.map((node) => {
+    if (node.kind === 'text') return { kind: 'text', text: node.text.replace(/\u00a0/g, ' ') }
+    if (node.kind === 'scope') return { kind: 'reference', reference: node.scope }
+    return node.selection
   })
-
-  const firstText = contentNodes.find((node) => node.kind === 'text')
-  if (firstText?.kind === 'text') firstText.text = firstText.text.replace(/^\s+/, '')
-  let lastText: ChatMessageContentNode | undefined
-  for (let index = contentNodes.length - 1; index >= 0; index -= 1) {
-    if (contentNodes[index].kind === 'text') {
-      lastText = contentNodes[index]
-      break
-    }
-  }
-  if (lastText?.kind === 'text') lastText.text = lastText.text.replace(/\s+$/, '')
-  const normalizedContentNodes = contentNodes.filter(
-    (node) => node.kind !== 'text' || node.text.length > 0
-  )
-
   return {
-    input,
-    contentNodes: normalizedContentNodes,
-    selectedReferences: Array.from(scopeMap.values()),
+    input: chatContentText(contentNodes).trim(),
+    contentNodes,
+    selectedReferences: chatReferences(contentNodes),
     attachments: []
   }
 }
 
-export const createComposerNodesFromDraftValue = (draft: ComposerDraftValue): ComposerNode[] => {
-  if (draft.contentNodes.length === 0) {
-    return draft.input ? [createTextNode(draft.input)] : []
-  }
-
-  return normalizeComposerNodes(
-    draft.contentNodes
-      .map((node): ComposerNode | null => {
-        if (node.kind === 'text') {
-          return node.text ? createTextNode(node.text) : null
-        }
-        return createScopeNode(node.reference)
-      })
-      .filter((node): node is ComposerNode => Boolean(node))
+export const createComposerNodesFromDraftValue = (draft: ComposerDraftValue): ComposerNode[] =>
+  normalizeComposerNodes(
+    draft.contentNodes.map((node): ComposerNode => {
+      if (node.kind === 'text') return createTextNode(node.text)
+      if (node.kind === 'reference') return createScopeNode(node.reference)
+      return { id: node.id, kind: 'selection', selection: node }
+    })
   )
-}
+
+const selectionElements = new WeakMap<HTMLElement, DocumentSelectionNode>()
+const referenceElements = new WeakMap<HTMLElement, SelectedReference>()
 
 export const pruneComposerNodesByWorkspace = (
   nodes: ComposerNode[],
@@ -111,23 +79,46 @@ export const readComposerNodesFromEditor = (
   editor: HTMLElement,
   knownScopes: Map<string, SelectedReference>
 ): ComposerNode[] => {
-  const nextNodes: ComposerNode[] = []
-  editor.childNodes.forEach((child) => {
-    if (child.nodeType === Node.TEXT_NODE) {
-      const text = child.textContent || ''
-      if (!text) return
-      nextNodes.push(createTextNode(text))
-      return
-    }
-
-    if (!(child instanceof HTMLElement)) return
-    if (child.dataset.role !== 'scope-token') return
-    const scopeKey = String(child.dataset.scopeKey || '').trim()
-    const scope = knownScopes.get(scopeKey)
-    if (!scope) return
-    nextNodes.push(createScopeNode(scope))
-  })
-  return normalizeComposerNodes(nextNodes)
+  const read = (parent: HTMLElement): ComposerNode[] => {
+    const nodes: ComposerNode[] = []
+    parent.childNodes.forEach((child) => {
+      if (child instanceof Text) {
+        if (child.data) nodes.push(createTextNode(child.data))
+        return
+      }
+      if (!(child instanceof HTMLElement)) return
+      if (
+        child.dataset.role === 'document-selection-token' ||
+        child.dataset.role === 'composer-caret-anchor'
+      )
+        return
+      if (child.dataset.role === 'document-selection-fragment') {
+        const selection = selectionElements.get(child)
+        if (!selection) return
+        if (!child.querySelector('[data-role="document-selection-token"]')) {
+          child.remove()
+          return
+        }
+        const children = extractComposerDraftValue(read(child)).contentNodes.filter(
+          (node) => node.kind !== 'document_selection'
+        )
+        nodes.push({ id: selection.id, kind: 'selection', selection: { ...selection, children } })
+        return
+      }
+      if (child.dataset.role === 'scope-token') {
+        const scope = referenceElements.get(child) || knownScopes.get(child.dataset.scopeKey || '')
+        if (scope) nodes.push(createScopeNode(scope))
+        return
+      }
+      if (child instanceof HTMLBRElement) nodes.push(createTextNode('\n'))
+      else {
+        if (['DIV', 'P'].includes(child.tagName) && nodes.length) nodes.push(createTextNode('\n'))
+        nodes.push(...read(child))
+      }
+    })
+    return normalizeComposerNodes(nodes)
+  }
+  return read(editor)
 }
 
 const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): void => {
@@ -217,6 +208,7 @@ export const createScopeTokenElement = (scope: SelectedReference): HTMLElement =
   const token = document.createElement('span')
   token.className = `inline-flex max-w-full items-baseline gap-[2px] align-baseline text-[0.9em] font-medium leading-[inherit] ${visualSpec.labelClassName}`
   token.contentEditable = 'false'
+  referenceElements.set(token, scope)
   token.dataset.role = 'scope-token'
   token.dataset.scopeKey = getScopeKey(scope)
 
@@ -239,12 +231,73 @@ export const createScopeTokenElement = (scope: SelectedReference): HTMLElement =
 export const renderComposerNodesToEditor = (editor: HTMLElement, nodes: ComposerNode[]): void => {
   editor.replaceChildren()
   nodes.forEach((node) => {
-    if (node.kind === 'text') {
-      editor.appendChild(document.createTextNode(node.text))
-      return
+    if (node.kind === 'text') editor.appendChild(document.createTextNode(node.text))
+    else if (node.kind === 'scope') editor.appendChild(createScopeTokenElement(node.scope))
+    else {
+      const fragment = document.createElement('span')
+      fragment.dataset.role = 'document-selection-fragment'
+      fragment.dataset.selectionId = node.selection.id
+      selectionElements.set(fragment, node.selection)
+      const token = document.createElement('span')
+      token.contentEditable = 'false'
+      token.dataset.role = 'document-selection-token'
+      token.dataset.selectionId = node.selection.id
+      token.className = 'cursor-pointer text-[0.9em] font-medium text-[#2F5F8F]'
+      token.style.marginRight = '0.25em'
+      token.textContent = `[${node.selection.filePath.split(/[/\\]/).pop()} · ${node.selection.number}]`
+      token.title = node.selection.selectedText
+      fragment.appendChild(token)
+      const thought = document.createElement('span')
+      thought.dataset.role = 'document-selection-thought'
+      renderComposerNodesToEditor(
+        thought,
+        createComposerNodesFromDraftValue({
+          input: '',
+          contentNodes: node.selection.children,
+          selectedReferences: [],
+          attachments: []
+        })
+      )
+      fragment.appendChild(thought)
+      editor.appendChild(fragment)
     }
-    editor.appendChild(createScopeTokenElement(node.scope))
   })
+}
+
+/** Atomic tokens share the same deletion behavior, including tokens nested in a selection. */
+export const removeComposerTokenBeforeCaret = (editor: HTMLElement): boolean => {
+  const selection = window.getSelection()
+  if (!selection?.rangeCount || !selection.isCollapsed || !editor.contains(selection.anchorNode))
+    return false
+  let anchor = selection.anchorNode
+  if (!anchor || selection.anchorOffset !== 0) {
+    if (!(anchor instanceof HTMLElement) || selection.anchorOffset < 1) return false
+    anchor = anchor.childNodes[selection.anchorOffset - 1] || null
+  } else {
+    while (anchor && anchor !== editor && !anchor.previousSibling) anchor = anchor.parentNode
+    anchor = anchor?.previousSibling || null
+  }
+  if (
+    !(anchor instanceof HTMLElement) ||
+    !['scope-token', 'document-selection-token', 'document-selection-fragment'].includes(
+      anchor.dataset.role || ''
+    )
+  )
+    return false
+  const target =
+    anchor.dataset.role === 'document-selection-token'
+      ? anchor.closest<HTMLElement>('[data-role="document-selection-fragment"]')
+      : anchor
+  const parent = target?.parentNode
+  if (!target || !parent) return false
+  const index = Array.from(parent.childNodes).indexOf(target)
+  target.remove()
+  const range = document.createRange()
+  range.setStart(parent, index)
+  range.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(range)
+  return true
 }
 
 export const moveCaretToTextNode = (textNode: Text, offset: number): void => {

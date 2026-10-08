@@ -23,6 +23,7 @@ import type {
   ChatAttachment,
   ChatMessage,
   ChatMessageContentNode,
+  DocumentSelectionNode,
   Partner,
   PartnerListItem,
   PartnerRunSnapshot,
@@ -94,7 +95,19 @@ import ImageLightbox from '../components/workbench/ImageLightbox'
 import AttachmentFileIcon from '../components/workbench/composer/AttachmentFileIcon'
 import { isAttachmentDocumentPreviewable } from '../components/workbench/composer/attachmentPresentation'
 import type { DroppedAttachmentItem } from '../components/workbench/WorkbenchComposer'
-import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
+import ChatContent from '../components/workbench/composer/ChatContent'
+import {
+  DocumentSelectionContext,
+  type DocumentSelectionState,
+  type SelectionLocation
+} from '../components/workbench/composer/DocumentSelectionContext'
+import {
+  chatContentText,
+  chatReferences,
+  documentSelections,
+  persistentChatContent,
+  hasUserText
+} from '../../../shared/chatContent'
 import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
 import type { ComposerDraftValue } from '../components/workbench/composer/types'
 import {
@@ -822,13 +835,17 @@ const createEmptyComposerDraft = (): ComposerDraftValue => ({
 
 const toPersistedComposerDraft = (
   draft: ComposerDraftValue
-): PartnerUiStateV1['composer']['draft'] => ({
-  input: draft.input,
-  contentNodes: draft.contentNodes,
-  selectedReferences: draft.selectedReferences,
-  attachments: draft.attachments,
-  assetBucketId: draft.assetBucketId || null
-})
+): PartnerUiStateV1['composer']['draft'] => {
+  const contentNodes = persistentChatContent(draft.contentNodes)
+  return {
+    input: chatContentText(contentNodes).trim(),
+    contentNodes,
+    selectedReferences: chatReferences(contentNodes),
+    attachments: draft.attachments,
+    assetBucketId: draft.assetBucketId || null,
+    formatVersion: 2
+  }
+}
 
 const createDefaultPartnerUiState = (
   modelSelection: WorkbenchModelSelection = { mainModel: null }
@@ -855,19 +872,10 @@ const isComposerDraftEmpty = (draft: ComposerDraftValue): boolean =>
   draft.attachments.length === 0
 
 const getUserMessageContentNodes = (messageItem: ChatMessage): ChatMessageContentNode[] =>
-  messageItem.contentNodes && messageItem.contentNodes.length > 0
-    ? messageItem.contentNodes
-    : [
-        ...(messageItem.selectedReferences || []).map(
-          (reference): ChatMessageContentNode => ({ kind: 'reference', reference })
-        ),
-        ...(messageItem.content ? [{ kind: 'text' as const, text: messageItem.content }] : [])
-      ]
+  messageItem.contentNodes || [{ kind: 'text', text: messageItem.content }]
 
 const getUserMessagePlainText = (messageItem: ChatMessage): string =>
-  getUserMessageContentNodes(messageItem)
-    .map((node) => (node.kind === 'reference' ? `@${node.reference.name}` : node.text))
-    .join('')
+  chatContentText(getUserMessageContentNodes(messageItem))
 
 const getUserAttachmentPaths = (messages: readonly ChatMessage[]): string[] =>
   messages.flatMap((messageItem) =>
@@ -979,6 +987,11 @@ const ChatPage: React.FC = () => {
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const currentPartnerIdRef = useRef<string | null>(null)
   const submitInFlightRef = useRef(false)
+  const [submittingPartnerId, setSubmittingPartnerId] = useState<string | null>(null)
+  const selectionNumbersRef = useRef(new Map<string, number>())
+  const selectionLocationsRef = useRef(new Map<string, Map<string, SelectionLocation>>())
+  const [selectionNavigation, setSelectionNavigation] =
+    useState<DocumentSelectionState['navigation']>(null)
   const lastSubmittedInputRef = useRef('')
   const partnerSwitchRequestRef = useRef(0)
   const partnerListHydratedRef = useRef(false)
@@ -1330,7 +1343,11 @@ const ChatPage: React.FC = () => {
   const applyPartnerUiState = useCallback(
     (key: string, persisted: PartnerUiStateV1 | null): void => {
       const state = persisted || createDefaultPartnerUiState(modelSelectionRef.current)
-      const draft = state.composer.draft
+      const storedDraft = state.composer.draft
+      const draft =
+        composerDraftByPartnerIdRef.current[key] ||
+        (storedDraft.formatVersion === 2 ? storedDraft : createEmptyComposerDraft())
+      setSelectionNavigation(null)
       composerAiPreferenceRef.current = state.composer.aiPreference
       composerExecutionPermissionRef.current =
         state.composer.executionPermission === 'full_access' ? 'full_access' : 'review'
@@ -1473,7 +1490,10 @@ const ChatPage: React.FC = () => {
   ])
 
   const composerCanSubmit = Boolean(
-    input.trim() && currentPartnerId && modelSelection.mainModel && !composerSubmitDisabledReason
+    hasUserText(composerContentNodes) &&
+    currentPartnerId &&
+    modelSelection.mainModel &&
+    !composerSubmitDisabledReason
   )
 
   const approvalSubmitDisabled = useMemo(() => {
@@ -3701,7 +3721,13 @@ const ChatPage: React.FC = () => {
   }, [assetBucketId, currentPartnerId, message])
 
   const handleSend = async (): Promise<void> => {
-    if (!input.trim() || (loading && !aiRunId) || cancellingRun || submitInFlightRef.current) return
+    if (
+      !hasUserText(composerContentNodes) ||
+      (loading && !aiRunId) ||
+      cancellingRun ||
+      submitInFlightRef.current
+    )
+      return
     if (!currentPartnerId) {
       message.warning('请先选择伙伴后再发送消息')
       return
@@ -3793,8 +3819,14 @@ const ChatPage: React.FC = () => {
       emitErrorMessage(normalized)
     }
 
-    saveComposerDraftForPartner(submitPartnerId, createEmptyComposerDraft())
-    applyComposerDraft(createEmptyComposerDraft(), `clear:${submitPartnerId}`)
+    const clearAcceptedDraft = (): void => {
+      saveComposerDraftForPartner(submitPartnerId, createEmptyComposerDraft())
+      selectionLocationsRef.current.delete(submitPartnerId)
+      if (currentPartnerIdRef.current === submitPartnerId) {
+        applyComposerDraft(createEmptyComposerDraft(), `clear:${submitPartnerId}`)
+        setSelectionNavigation(null)
+      }
+    }
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
     if (!queueAttempt) {
@@ -3835,18 +3867,18 @@ const ChatPage: React.FC = () => {
     }
 
     submitInFlightRef.current = true
+    setSubmittingPartnerId(submitPartnerId)
     try {
       const response = await window.api.chatSubmit({
         partnerId: submitPartnerId,
-        input: userQuery,
         preference: composerAiPreference,
         executionPermission: composerExecutionPermission,
-        contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
-        selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
+        contentNodes: submittedContentNodes,
         attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
         mainModel: modelSelection.mainModel
       })
       if (response.success && response.queued && response.userMessage) {
+        clearAcceptedDraft()
         setCurrentMessages((previous) =>
           appendMessagesDedupe(removeOptimisticMessages(previous), [response.userMessage!])
         )
@@ -3862,6 +3894,7 @@ const ChatPage: React.FC = () => {
         failOptimisticSubmit(response.error || '启动失败')
         return
       }
+      clearAcceptedDraft()
       const run = response.run
       const assistantMessageId = response.assistantMessage.id
       activeRunMessageIdsRef.current[run.id] = assistantMessageId
@@ -3899,6 +3932,7 @@ const ChatPage: React.FC = () => {
       failOptimisticSubmit(error instanceof Error ? error.message : '发送失败')
     } finally {
       submitInFlightRef.current = false
+      setSubmittingPartnerId(null)
     }
   }
 
@@ -4281,14 +4315,7 @@ const ChatPage: React.FC = () => {
         const draft: ComposerDraftValue = {
           input: messageItem.content,
           contentNodes: getUserMessageContentNodes(messageItem),
-          selectedReferences:
-            messageItem.selectedReferences ||
-            getUserMessageContentNodes(messageItem)
-              .filter(
-                (node): node is Extract<ChatMessageContentNode, { kind: 'reference' }> =>
-                  node.kind === 'reference'
-              )
-              .map((node) => node.reference),
+          selectedReferences: chatReferences(getUserMessageContentNodes(messageItem)),
           attachments: messageItem.attachments || []
         }
         setCurrentMessages(currentMessages.slice(0, targetIndex))
@@ -4474,21 +4501,7 @@ const ChatPage: React.FC = () => {
                   className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
                   data-testid={workbenchSelectors.userMessageReferences}
                 >
-                  {contentNodes.map((node, index) =>
-                    node.kind === 'reference' ? (
-                      <ReferenceInlineToken
-                        key={
-                          node.reference.kind === 'web'
-                            ? `${index}:web:${node.reference.webSourceId}`
-                            : `${index}:${node.reference.kind}:${node.reference.workspaceId}:${node.reference.nodeId}`
-                        }
-                        reference={node.reference}
-                        className="mx-[1px]"
-                      />
-                    ) : (
-                      <span key={`${index}:text`}>{node.text}</span>
-                    )
-                  )}
+                  <ChatContent nodes={contentNodes} />
                 </div>
               </div>
               <div
@@ -4565,6 +4578,8 @@ const ChatPage: React.FC = () => {
 
   const handleComposerDraftChange = useCallback(
     (draft: ComposerDraftValue) => {
+      if (submitInFlightRef.current && submittingPartnerId === currentPartnerId) return
+      composerDraftValueRef.current = draft
       setInput(draft.input)
       setComposerContentNodes(draft.contentNodes)
       setSelectedReferences(draft.selectedReferences)
@@ -4572,7 +4587,7 @@ const ChatPage: React.FC = () => {
       setAssetBucketId(draft.assetBucketId || null)
       saveComposerDraftForPartner(currentPartnerId, draft)
     },
-    [currentPartnerId, saveComposerDraftForPartner]
+    [currentPartnerId, saveComposerDraftForPartner, submittingPartnerId]
   )
 
   const timelineMessageDayStarts = useMemo(
@@ -4733,7 +4748,83 @@ const ChatPage: React.FC = () => {
     setPlatform(detectRendererPlatform())
   }, [])
 
-  return (
+  const currentDocumentSelections = useMemo(
+    () => documentSelections(composerContentNodes),
+    [composerContentNodes]
+  )
+  const locations =
+    selectionLocationsRef.current.get(currentPartnerId || '') ||
+    new Map<string, SelectionLocation>()
+  if (currentPartnerId) selectionLocationsRef.current.set(currentPartnerId, locations)
+  const selectionState: DocumentSelectionState = {
+    enabled:
+      Boolean(currentPartnerId) &&
+      !scheduledTasksActive &&
+      !pendingQuestion &&
+      !pendingApprovalBatch,
+    locked: submittingPartnerId === currentPartnerId,
+    selections: currentDocumentSelections,
+    locations,
+    navigation: selectionNavigation,
+    save: (node, location) => {
+      if (!currentPartnerId || submittingPartnerId === currentPartnerId) return
+      const draft = composerDraftValueRef.current
+      const existing = documentSelections(draft.contentNodes).find((item) => item.id === node.id)
+      const key = `${currentPartnerId}\u0000${node.filePath}`
+      const maximum = Math.max(
+        selectionNumbersRef.current.get(key) || 0,
+        ...documentSelections(draft.contentNodes)
+          .filter((item) => item.filePath === node.filePath)
+          .map((item) => item.number)
+      )
+      const saved: DocumentSelectionNode = { ...node, number: existing?.number || maximum + 1 }
+      selectionNumbersRef.current.set(key, Math.max(maximum, saved.number))
+      locations.set(saved.id, location)
+      const contentNodes: ChatMessageContentNode[] = existing
+        ? draft.contentNodes.map((item) =>
+            item.kind === 'document_selection' && item.id === saved.id ? saved : item
+          )
+        : [
+            ...draft.contentNodes,
+            ...(draft.contentNodes.length ? [{ kind: 'text' as const, text: '\n' }] : []),
+            saved
+          ]
+      const next = {
+        ...draft,
+        contentNodes,
+        input: chatContentText(contentNodes).trim(),
+        selectedReferences: chatReferences(contentNodes)
+      }
+      saveComposerDraftForPartner(currentPartnerId, next)
+      applyComposerDraft(next, `selection:${saved.id}`)
+    },
+    remove: (id) => {
+      if (!currentPartnerId || submittingPartnerId === currentPartnerId) return
+      const draft = composerDraftValueRef.current
+      const contentNodes = draft.contentNodes.filter(
+        (item) => item.kind !== 'document_selection' || item.id !== id
+      )
+      const next = {
+        ...draft,
+        contentNodes,
+        input: chatContentText(contentNodes).trim(),
+        selectedReferences: chatReferences(contentNodes)
+      }
+      locations.delete(id)
+      saveComposerDraftForPartner(currentPartnerId, next)
+      applyComposerDraft(next, `selection-delete:${id}`)
+    },
+    navigate: (node) => {
+      void openFile({
+        path: node.filePath,
+        fileName: node.filePath.split(/[/\\]/).pop() || node.filePath,
+        origin: 'preview'
+      })
+      setSelectionNavigation({ node, requestId: Date.now() })
+    }
+  }
+
+  const workbench = (
     <div
       className="nc-app-shell"
       data-testid={workbenchSelectors.page}
@@ -5486,6 +5577,11 @@ const ChatPage: React.FC = () => {
         />
       </div>
     </div>
+  )
+  return (
+    <DocumentSelectionContext.Provider value={selectionState}>
+      {workbench}
+    </DocumentSelectionContext.Provider>
   )
 }
 

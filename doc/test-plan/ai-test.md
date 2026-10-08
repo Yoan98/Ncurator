@@ -1088,3 +1088,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：工具契约正确不代表模型能完成「起服务 → 确认 → 用完关掉」；放行后台分离后，模型可走前台长跑 + 读终端，也可走 `nohup`/后台 + 等待再确认，不强制 `terminal_read`。
 - How：在临时 workspace 的 `preview-site` 中创建带唯一标记的页面，为用户提供一个随机空闲端口；用户只描述启动预览、真实访问确认标记、确认服务收到请求、用完关闭的诉求，不指定工具或命令。由真实模型自主决策。
 - Oracle：任务 `completed`；页面标记出现在最终交付或真实工具结果中；服务在模型完成后不可达（由模型关闭，框架不在会话结束时强杀拆出去的后台进程）。路径满足其一即可：① 出现 `command_still_running`/`terminal_command_yielded` 且随后有成功的 `terminal_read` 或 wait-like 终端命令；② 出现 wait-like 终端命令（`sleep` / `Start-Sleep` / `time.sleep` / `ping -c|-n` / `timeout` 等跨平台等待语义）。
+
+#### `human-document-reference-context`
+
+- 测试类型：`backend / mock-llm`；suite `human`，group `mock-llm`。
+- What：混合正文和统一文档引用块在真实投影链中进入模型上下文。
+- Why：避免正文丢失引用顺序、选区漏传、重复用户想法或索引状态阻塞。
+- How：构建文字、@文件/目录/网页、多个选区的正文，使用生产正文转换和 build user；覆盖接受时索引快照、排队续接和历史。
+- Oracle：用户诉求保持顺序；资源合并；原文和前后文准确；无类型行与重复用户想法；未索引可用；选区不改变显式 @ 范围。

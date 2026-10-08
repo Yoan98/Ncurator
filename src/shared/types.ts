@@ -552,7 +552,7 @@ export type AiLlmUsage = {
   rawUsage?: JsonObject
 }
 
-export type ChatMessageContentNode =
+export type ChatInlineContentNode =
   | {
       kind: 'text'
       text: string
@@ -561,6 +561,22 @@ export type ChatMessageContentNode =
       kind: 'reference'
       reference: SelectedReference
     }
+
+/** A selected excerpt and its editable inline thought form one composer fragment. */
+export type DocumentSelectionNode = {
+  kind: 'document_selection'
+  id: string
+  number: number
+  filePath: string
+  selectedText: string
+  contextBefore: string
+  contextAfter: string
+  children: ChatInlineContentNode[]
+  /** Resolved by Main at submission; frozen with the accepted message. */
+  knowledge?: { kbAvailability: KbAvailability; kbDocumentIds: string[] }
+}
+
+export type ChatMessageContentNode = ChatInlineContentNode | DocumentSelectionNode
 
 export type ChatAttachmentKind = 'image' | 'file' | 'directory'
 export type ChatAttachmentStatus = 'ready' | 'processing' | 'failed'
@@ -757,6 +773,7 @@ export type PartnerUiStateV1 = {
     executionPermission: AiExecutionPermission
     modelSelection: WorkbenchModelSelection
     draft: {
+      formatVersion?: 2
       input: string
       contentNodes: ChatMessageContentNode[]
       selectedReferences: SelectedReference[]
@@ -1271,9 +1288,7 @@ export type ChatSubmitRequest = {
   preference?: AiPreference
   executionPermission?: AiExecutionPermission
   partnerId: string
-  input: string
-  contentNodes?: ChatMessageContentNode[]
-  selectedReferences?: SelectedReference[]
+  contentNodes: ChatMessageContentNode[]
   attachments?: ChatAttachment[]
   mainModel?: WorkbenchSelectedModel
 }

@@ -127,7 +127,7 @@ export const buildBrainUserMessageForInput = (input: {
 ${input.userInput}`,
     renderOptionalUserBlock('偏好', renderPreferenceText(input.preference)),
     renderOptionalUserBlock('默认用户工作区', renderWorkspaceRootsText(input.workspaceRoots)),
-    renderOptionalUserBlock('用户@的参考资料', renderSelectedReferencesText(input.referenceScope)),
+    renderOptionalUserBlock('用户引用的文档', renderSelectedReferencesText(input.referenceScope)),
     renderOptionalUserBlock('用户添加的附件', renderAttachmentsText(input.referenceScope)),
     `当前时间：
 ${renderCurrentTimeText(input.runStartedAt)}`

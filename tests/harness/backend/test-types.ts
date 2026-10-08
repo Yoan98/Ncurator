@@ -19,6 +19,7 @@ import type { ScheduledTaskService } from '../../../src/main/services/scheduler/
 import type { WebCrawlerService } from '../../../src/main/services/webCrawler/types'
 import type {
   ChatMessage,
+  ChatMessageContentNode,
   AiRunEvent,
   AiExecutionPermission,
   AiLlmStreamingMode,
@@ -185,6 +186,8 @@ export type CreateAiRunContextInput = {
   userInput?: string
   executionPermission?: AiExecutionPermission
   selectedReferences?: SelectedReference[]
+  contentNodes?: ChatMessageContentNode[]
+  userMessageId?: string
   streamingModeOverride?: AiLlmStreamingMode
   modelName?: string
   approvalPolicy?: ApprovalPolicy | ApprovalResolver

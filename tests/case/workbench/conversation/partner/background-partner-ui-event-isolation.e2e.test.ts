@@ -29,6 +29,7 @@ const emptyState = (draft: string): PartnerUiStateV1 => ({
     executionPermission: 'review',
     modelSelection: { mainModel: null },
     draft: {
+      formatVersion: 2,
       input: draft,
       contentNodes: [{ kind: 'text', text: draft }],
       selectedReferences: [],

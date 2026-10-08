@@ -34,7 +34,15 @@ export const projectBrainMessagesFromLog = (input: {
   const appendCurrentUser = input.appendCurrentUser !== false
   const messages: BaseMessage[] = []
   const floor = resolveHistoryFloor(ordered)
-  const projectedRecords = ordered.filter((record) => record.seq > floor.historyFloorSeq)
+  const currentUser = input.ctx.userMessageId
+    ? ordered.find(
+        (record) =>
+          record.entry.kind === 'user' && record.entry.messageId === input.ctx.userMessageId
+      )
+    : undefined
+  const projectedRecords = ordered.filter(
+    (record) => record.seq > floor.historyFloorSeq && (!appendCurrentUser || record !== currentUser)
+  )
 
   for (const record of projectedRecords) {
     if (record.entry.kind === 'user' && !record.entry.content.trim()) {
@@ -51,7 +59,11 @@ export const projectBrainMessagesFromLog = (input: {
   messages.push(...messagesFromLogEntries(projectedRecords.map((record) => record.entry)))
 
   if (appendCurrentUser) {
-    messages.push(buildCurrentUserMessage(input))
+    messages.push(
+      currentUser?.entry.kind === 'user'
+        ? createCurrentBrainUserMessage(currentUser.entry.content)
+        : buildCurrentUserMessage(input)
+    )
   }
 
   const repaired = repairInterruptedToolCalls(messages, ordered)

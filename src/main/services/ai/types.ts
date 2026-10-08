@@ -88,6 +88,7 @@ export type AiWorkspaceBinding = {
 }
 
 export type AiReferenceScope = {
+  contentNodes?: ChatMessageContentNode[]
   selectedReferences: SelectedReference[]
   attachments: ChatAttachment[]
 }

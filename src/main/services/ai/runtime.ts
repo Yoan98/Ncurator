@@ -123,6 +123,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     contentNodes: payload.contentNodes,
     humanRuntimeOverrides: deps.humanRuntimeOverrides,
     referenceScope: buildReferenceScope({
+      contentNodes: payload.contentNodes,
       selectedReferences: normalizedReferences,
       attachments: payload.attachments
     }),

@@ -112,7 +112,7 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
                 scheduleType: input.scheduleType,
                 timeOfDay: input.timeOfDay,
                 weekday: input.weekday,
-                contentNodes: [],
+                contentNodes: [{ kind: 'text', text: input.description }],
                 selectedReferences: []
               })
               if (!result.success) {
@@ -156,8 +156,11 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
               scheduleType: input.scheduleType ?? current.scheduleType,
               timeOfDay: input.timeOfDay ?? current.timeOfDay,
               weekday: input.weekday === undefined ? current.weekday : input.weekday,
-              contentNodes: current.contentNodes,
-              selectedReferences: current.selectedReferences,
+              contentNodes:
+                input.description === undefined
+                  ? current.contentNodes
+                  : [{ kind: 'text', text: input.description }],
+              selectedReferences: input.description === undefined ? current.selectedReferences : [],
               enabled: input.enabled
             })
             if (!result.success) {

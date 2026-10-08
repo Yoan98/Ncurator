@@ -34,6 +34,7 @@ const createUiState = (input: {
     executionPermission: input.executionPermission,
     modelSelection: { mainModel: null },
     draft: {
+      formatVersion: 2,
       input: input.draft,
       contentNodes: [{ kind: 'text', text: input.draft }],
       selectedReferences: [],

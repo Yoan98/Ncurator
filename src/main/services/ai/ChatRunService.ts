@@ -1,3 +1,5 @@
+import { resolveUserContent } from '../sourceScope/userContent'
+import { buildReferenceScope } from './human/prompts/referenceScope'
 import { BrowserWindow } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { AiRunService } from './AiRunService'
@@ -400,9 +402,9 @@ export class ChatRunService {
 
   public async submit(payload: ChatSubmitRequest): Promise<ChatSubmitResponse> {
     const partnerId = String(payload?.partnerId || '').trim()
-    const input = String(payload?.input || '').trim()
+    if (!Array.isArray(payload?.contentNodes) || payload.contentNodes.length === 0)
+      return { success: false, error: '请输入你的想法后再发送' }
     if (!partnerId) return { success: false, error: 'partnerId is required' }
-    if (!input) return { success: false, error: 'input is required' }
     if (this.pendingPartnerSubmissions.has(partnerId)) {
       this.deps.telemetryService?.track('message_submit_completed', {
         outcome: 'failed',
@@ -419,12 +421,31 @@ export class ChatRunService {
       if (activeRun) {
         const finishSubmission = this.registerPendingUserMessageSubmission(activeRun)
         try {
-          response = await this.enqueueMessage(activeRun, { ...payload, partnerId, input })
+          response = await this.enqueueMessage(
+            activeRun,
+            await resolveUserContent(
+              { ...payload, partnerId },
+              {
+                documents: this.deps.documentsStore,
+                workspace: this.deps.workspaceStore,
+                webSources: this.deps.webSourceStore
+              }
+            )
+          )
         } finally {
           finishSubmission()
         }
       } else {
-        response = await this.submitAi({ ...payload, partnerId, input })
+        response = await this.submitAi(
+          await resolveUserContent(
+            { ...payload, partnerId },
+            {
+              documents: this.deps.documentsStore,
+              workspace: this.deps.workspaceStore,
+              webSources: this.deps.webSourceStore
+            }
+          )
+        )
       }
       this.trackSubmitResult(response)
       return response
@@ -464,7 +485,7 @@ export class ChatRunService {
 
   private async enqueueMessage(
     activeRun: ActiveRun,
-    payload: ChatSubmitRequest & { partnerId: string; input: string }
+    payload: Awaited<ReturnType<typeof resolveUserContent>>
   ): Promise<ChatSubmitResponse> {
     const { run } = activeRun
     if (
@@ -588,10 +609,11 @@ export class ChatRunService {
             content: buildBrainUserMessageForInput({
               userInput: message.input,
               preference: message.preference,
-              referenceScope: {
+              referenceScope: buildReferenceScope({
+                contentNodes: message.contentNodes,
                 selectedReferences: message.selectedReferences,
                 attachments: message.attachments
-              },
+              }),
               workspaceRoots: message.workspaceRoots,
               runStartedAt: message.createdAt
             }),
@@ -672,6 +694,30 @@ export class ChatRunService {
     const savePreviousRun = this.deps.aiRunStore.saveRun(previousRun)
     const saveContinuationRun = this.deps.aiRunStore.saveRun(continuationRun)
     await Promise.all([writePriorMessages, savePreviousRun, saveContinuationRun])
+    await this.deps.chatMessageLogStore.appendBatch({
+      partnerId: continuationRun.partnerId,
+      runId: continuationRun.id,
+      createdAt: latest.createdAt,
+      entries: [
+        {
+          kind: 'user',
+          messageId: latest.id,
+          input: latest.input,
+          content: buildBrainUserMessageForInput({
+            userInput: latest.input,
+            preference: latest.preference,
+            referenceScope: buildReferenceScope(latest),
+            workspaceRoots: latest.workspaceRoots,
+            runStartedAt: latest.createdAt
+          }),
+          context: {
+            contentNodes: latest.contentNodes,
+            selectedReferences: latest.selectedReferences,
+            attachments: latest.attachments
+          }
+        }
+      ]
+    })
     return child
   }
 
@@ -865,7 +911,7 @@ export class ChatRunService {
   }
 
   private async submitAi(
-    payload: ChatSubmitRequest & { partnerId: string; input: string }
+    payload: Awaited<ReturnType<typeof resolveUserContent>>
   ): Promise<ChatSubmitResponse> {
     const partnerHasActiveRun = Array.from(this.activeRuns.values()).some(
       (entry) => entry.run.partnerId === payload.partnerId
@@ -937,6 +983,38 @@ export class ChatRunService {
     }
 
     await this.deps.aiRunStore.saveRun(run)
+
+    const workspaces = await this.deps.workspaceStore.listWorkspaces()
+    await this.deps.chatMessageLogStore.appendBatch({
+      partnerId: run.partnerId,
+      runId: run.id,
+      createdAt,
+      entries: [
+        {
+          kind: 'user',
+          messageId: userMessage.id,
+          input: payload.input,
+          content: buildBrainUserMessageForInput({
+            userInput: payload.input,
+            preference,
+            runStartedAt: createdAt,
+            workspaceRoots: workspaces
+              .map((workspace) => workspace.root_path || '')
+              .filter(Boolean),
+            referenceScope: buildReferenceScope({
+              contentNodes: payload.contentNodes,
+              selectedReferences: normalizedReferences,
+              attachments
+            })
+          }),
+          context: {
+            contentNodes: payload.contentNodes,
+            selectedReferences: normalizedReferences || [],
+            attachments
+          }
+        }
+      ]
+    })
 
     const activeRun: ActiveRun = {
       run,

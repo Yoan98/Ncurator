@@ -3,6 +3,7 @@ import type { IDocument } from 'react-doc-viewer'
 export type FileRenderMetadata = {
   pageNumber?: number
   anchorName?: string
+  allowDocumentSelection?: boolean
 }
 
 export type FileRenderDocument = {

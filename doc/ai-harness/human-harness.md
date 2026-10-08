@@ -354,15 +354,19 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 **不进 brain prompt**；工具结果摘要已在 log 的 `tool.content` 中。
 **run 失败不丢记录**：已 `applied` 的修改保持，供 Workbench 展示与回退。
 
-### 2.5 运行时注入（不进库）
+### 2.5 Composer 引用与发送快照
 
-新 run 的参考资料和附件来自 **Composer 当前 `@` 引用与附件**，由 `buildBrainUserMessage` 分别渲染进 build user 的「用户@的参考资料」「用户添加的附件」段。工作地址列表不进这两段，单独渲染为 build user 的「默认工作区」（位于资料段之上），按设置页现表快照，不进 System。
+新 run 的参考资料和附件来自 **Composer 当前混合正文中的 `@`、文档选区与附件**，由 `buildBrainUserMessage` 分别渲染进 build user 的「用户引用的文档」「用户添加的附件」段。工作地址列表不进这两段，单独渲染为 build user 的「默认工作区」（位于资料段之上），按设置页现表快照，不进 System。
 
 |        | log 里的 `user.context`            | Composer → build user                                      |
 | ------ | ---------------------------------- | ---------------------------------------------------------- |
 | 作用   | 审计「当时用户说了什么、配了什么」 | 驱动**当前 run** brain 输入                                |
-| 同 run | 首条 build user 的资料段           | 来自发送时 Composer（仅 `@` 与附件）                       |
-| resume | 每条 log `user` 各存各的 snapshot  | **append** 新 build user 在末尾；资料段用**当前** Composer |
+| 同 run | 首条 build user 的资料段           | Main 接受时冻结 `@`、文档选区、附件与默认工作区快照          |
+| resume | 每条 log `user` 各存各的 snapshot  | 已接受的用户消息沿用各自快照；新增用户消息生成新的快照         |
+
+`contentNodes` 为用户正文唯一真相，普通文字、@引用与 DOCX 选区片段按顺序投影成用户诉求。选区片段包含文件绝对路径、原文、前后文及想法子节点。Main 在接受时补齐引用的索引状态和知识库文档 ID，并保存完整 build user；当前请求、排队续接、归档与历史共用同一构建链。
+
+build user 的引用块统一为「用户引用的文档」：资源按首次出现排列，同一资源地址合并名称、地址、知识库状态和文档 ID；注明整份资源引用或列出选区编号、原文、前后文。不输出类型行和重复的用户想法。@目录和网页仍在该块展示，程序内部保留资源类型。附件仍独立成块。选区不改变 @ 知识库范围，不依赖索引可用性。
 
 ---
 
@@ -441,7 +445,7 @@ flowchart TD
 | 过程                 | assistant / tool / 多模态合成 HumanMessage                                        |
 | User（续发）         | 新 run 末尾 append 的 build 全文                                                  |
 
-**build user 块**（各字段来源见第 3.3 节；`偏好` / `默认工作区` / `用户@的参考资料` / `用户添加的附件` 无内容时整块省略）：
+**build user 块**（各字段来源见第 3.3 节；`偏好` / `默认工作区` / `用户引用的文档` / `用户添加的附件` 无内容时整块省略）：
 
 ```text
 用户诉求：
@@ -453,8 +457,8 @@ flowchart TD
 默认工作区：
 …          ← 仅有工作地址时
 
-用户@的参考资料：
-…          ← 仅有 @ 时
+用户引用的文档：
+…          ← 仅有 @ 或文档选区时
 
 用户添加的附件：
 …          ← 仅有附件时
@@ -465,7 +469,7 @@ flowchart TD
 
 **稳态行为**（同 run、未触发 第 5–6 节）：
 
-- 首次 brain：`[System, User]`，过程为空；log 写入这条 `user` 的 content。
+- 首次 brain：`[System, User]`，过程为空；ChatSubmit 在接收成功前保存这条 `user` 的 content，brain 复用快照而不重复写入。
 - brain → 工具 → 再 brain：过程末尾 append；**当前 User 一字不改**（技能/计划只在 tool 结果与 `bindTools` 中可见）。
 - 前缀 `[System, User, …已发送过程]` 字节序不变 → 第 4 节缓存命中。System **跨 run 稳定**（无 `current_time`）。
 
@@ -479,7 +483,7 @@ flowchart TD
 2. `historyFloorSeq = compaction_checkpoint.throughSeq ?? -1`。
 3. 只保留 `seq > historyFloorSeq`。有 checkpoint 则先合成 Compact User。
 4. 其余 conversation 行走 `messagesFromLogEntries`（第 1.5 节；图片见第 3.5 节）。
-5. 末尾加上这一次的 `buildBrainUserMessage`。
+5. 当前消息已保存时从历史投影中取出，并以发送时冻结的 build user content 放到末尾；尚未保存的内部运行用 `buildBrainUserMessage` 构建。
 6. `repairInterruptedToolCalls`：每个 AIMessage 的 `tool_call_id` 若无对应 ToolMessage，插入
    `Error: The run was interrupted before this tool call could be executed.`
 
@@ -490,7 +494,7 @@ flowchart TD
 | `用户诉求`        | 当时那条 User 对应 run 的 `input`                                                       |
 | `偏好`            | 当时 Composer；`default` 时整块省略                                                     |
 | `默认工作区`      | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
-| `用户@的参考资料` | 当时 Composer 的 `@`（第 2.5 节）；空时整块省略                                         |
+| `用户引用的文档` | 当时 Composer 的 `@` 与文档选区（第 2.5 节）；空时整块省略                                         |
 | `用户添加的附件`  | 当时 Composer 的附件（第 2.5 节）；空时整块省略                                         |
 | `当前时间`        | 当时 run 的 `runStartedAt`（历史行不再改）                                              |
 

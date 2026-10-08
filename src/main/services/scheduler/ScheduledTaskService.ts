@@ -269,9 +269,7 @@ export class ScheduledTaskService {
       return { success: false, error: '伙伴尚未选择主模型' }
     const response = await this.deps.submitTask({
       partnerId: task.partnerId,
-      input: task.description,
       contentNodes: task.contentNodes,
-      selectedReferences: task.selectedReferences,
       mainModel,
       preference: state.composer.aiPreference,
       executionPermission: state.composer.executionPermission

@@ -2,17 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 import type { DocRendererProps, IDocument } from 'react-doc-viewer'
 import '@js-preview/docx/lib/index.css'
 import './index.css'
+import DocxSelectionLayer from './DocxSelectionLayer'
 import { workbenchSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 
 type DocViewerMetadata = {
   anchorName?: string
   pageNumber?: number
+  allowDocumentSelection?: boolean
 }
 
 type DocViewerDocument = Omit<IDocument, 'fileData'> & {
   file?: File | Blob
   fileName?: string
+  filePath?: string
   fileData?: string | ArrayBuffer | Blob | File
   metadata?: DocViewerMetadata
 }
@@ -96,6 +99,7 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
   const currentDocument = mainState.currentDocument as DocViewerDocument | undefined
   const containerRef = useRef<HTMLDivElement | null>(null)
   const lastRenderedKeyRef = useRef<string | null>(null)
+  const [renderRevision, setRenderRevision] = useState(0)
   const [renderError, setRenderError] = useState<string | null>(null)
   const documentFile = currentDocument?.file
   const documentFileData = currentDocument?.fileData
@@ -149,6 +153,7 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
         return
       }
 
+      setRenderRevision(0)
       container.innerHTML = ''
       const jsPreviewDocx = await loadDocxPreview()
       if (cancelled) return
@@ -156,6 +161,7 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
       try {
         await previewer.preview(file)
         if (!cancelled) {
+          setRenderRevision((value) => value + 1)
           lastRenderedKeyRef.current = renderKey
           scrollToAnchor(container, anchorName)
         }
@@ -186,6 +192,15 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
       data-testid={workbenchSelectors.docxViewer}
     >
       <div ref={containerRef} className="docx-content h-full w-full overflow-auto px-3 py-3" />
+      {currentDocument.metadata?.allowDocumentSelection &&
+      currentDocument.filePath &&
+      !renderError ? (
+        <DocxSelectionLayer
+          container={containerRef.current}
+          filePath={currentDocument.filePath}
+          revision={renderRevision}
+        />
+      ) : null}
       {renderError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-[#F7F7F5] px-6 text-center text-sm text-[#787774]">
           <span className="max-w-[460px] whitespace-pre-wrap break-words">

@@ -203,6 +203,7 @@ const createPartnerUiState = (input = 'draft'): PartnerUiStateV1 => ({
       mainModel: { configId: 'provider-1', modelName: 'model-1' }
     },
     draft: {
+      formatVersion: 2,
       input,
       contentNodes: [{ kind: 'text', text: input }],
       selectedReferences: [],

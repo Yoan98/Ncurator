@@ -1,4 +1,13 @@
-import type { PartnerUiStateV1, WorkbenchUiState, WorkbenchUiStateSaveRequest } from '../../../../shared/types'
+import type {
+  PartnerUiStateV1,
+  WorkbenchUiState,
+  WorkbenchUiStateSaveRequest
+} from '../../../../shared/types'
+import {
+  chatContentText,
+  chatReferences,
+  persistentChatContent
+} from '../../../../shared/chatContent'
 import type { SqliteCore } from '../sqlite/SqliteCore'
 import { jsonStringify, parseJsonObject, toRequiredNumber } from '../sqlite/sqliteUtils'
 
@@ -22,6 +31,7 @@ export const createEmptyPartnerUiState = (): PartnerUiStateV1 => ({
     executionPermission: 'review',
     modelSelection: { mainModel: null },
     draft: {
+      formatVersion: 2,
       input: '',
       contentNodes: [],
       selectedReferences: [],
@@ -89,6 +99,19 @@ export class WorkbenchUiStore {
     if (!isPartnerUiStateV1(state)) throw new Error('invalid partner UI state')
     const partnerExists = this.sqlite.prepare('SELECT 1 FROM partner WHERE id = ?').get(id)
     if (!partnerExists) throw new Error('partner not found')
+    const contentNodes = persistentChatContent(state.composer.draft.contentNodes)
+    const persistedState: PartnerUiStateV1 = {
+      ...state,
+      composer: {
+        ...state.composer,
+        draft: {
+          ...state.composer.draft,
+          contentNodes,
+          input: chatContentText(contentNodes).trim(),
+          selectedReferences: chatReferences(contentNodes)
+        }
+      }
+    }
     const updatedAt = Date.now()
     this.sqlite
       .prepare(
@@ -98,7 +121,7 @@ export class WorkbenchUiStore {
            state_json = excluded.state_json,
            updated_at = excluded.updated_at`
       )
-      .run(id, jsonStringify(state), updatedAt)
+      .run(id, jsonStringify(persistedState), updatedAt)
     return updatedAt
   }
 

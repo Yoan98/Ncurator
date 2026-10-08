@@ -99,15 +99,17 @@ AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`c
 - **临时子任务**：`delegate_to_subagent` 调用同一 `AiRunService` / human graph；子完整 transcript 使用内存适配，公共投影与 compaction 保持一致。子终态和行动摘要进入主任务日志，文件记录及产物始终归主 run；不创建伙伴或新增数据表。
 - **主任务 Transcript 真相源**：`chat_session_message_log`（append-only，行挂 `partner_id`）；字段见 `doc/db/tables.md`。压缩、恢复与投影细节见 `ai-harness/human-harness.md`。
 - **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载 `learn_skill`、`update_plan`、`read_image`。
-- **伙伴 UI 状态**：`partner_ui_state(partner_id PK)` 与 `workbench_ui_state.active_view_key` 以 SQLite 为唯一真相，字段见 `doc/db/tables.md`。
+- **伙伴 UI 状态**：`partner_ui_state(partner_id PK)` 与 `workbench_ui_state.active_view_key` 以 SQLite 为持久化真相；未发送的文档选区片段与定位信息仅保留在 Renderer 内存。字段见 `doc/db/tables.md`。
 
 ### AI 数据源与消费方
 
 ```mermaid
 flowchart LR
   subgraph write [写入]
-    User[用户发送] --> Graph[human graph 节点]
-    Graph --> Log[(chat_session_message_log)]
+    User[用户发送] --> Submit[ChatSubmit 正文转换与快照]
+    Submit --> Log[(chat_session_message_log)]
+    Submit --> Graph[human graph 节点]
+    Graph --> Log
     Tools[Tool Runtime 写文件] --> FC[(ai_file_change)]
     Graph --> Run[(ai_run)]
   end
@@ -123,6 +125,9 @@ flowchart LR
 ```
 
 细节（消息形态、resume append、compaction 范围、多模态配额、failure_code 等）一律以 human-harness 为准，本文不再重复。
+
+
+Workbench 消息正文使用统一的 `contentNodes`：普通文本、`@` 引用和包含普通可编辑子正文的文档选区。DOCX 预览通过可见正文 DOM 捕获原文与少量上下文；选区位置和未发送片段只保留在 Renderer 的伙伴草稿内存中。Main 从正文推导用户诉求与显式引用范围，接收成功前冻结文档索引信息和完整 build user 快照，沿用既有消息 log / 排队 JSON 保存。brain 的可选“用户引用的文档”块统一汇总 `@` 和选区；选区本身不缩小知识库检索范围。
 
 ## 领域能力（概要）
 
@@ -141,7 +146,7 @@ flowchart LR
 
 ## 存储与索引
 
-业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为唯一持久化真相。索引 generation、写后清理与检索过滤规则见 `doc/db/design.md`，表字段见 `doc/db/tables.md`。
+业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为持久化真相，未发送的文档选区片段仅保留在 Renderer 内存。索引 generation、写后清理与检索过滤规则见 `doc/db/design.md`，表字段见 `doc/db/tables.md`。
 
 ## 主链路
 

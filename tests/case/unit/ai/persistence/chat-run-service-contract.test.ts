@@ -172,7 +172,7 @@ const submitAiRun = async (
     preference: 'local_sources_strict',
     executionPermission,
     partnerId: 'partner-1',
-    input: '生成测试回答',
+    contentNodes: [{ kind: 'text', text: '生成测试回答' }],
     mainModel: {
       configId: 'mock-config',
       modelName: 'mock-model'
@@ -247,7 +247,7 @@ describe('unit ai persistence backend', () => {
     const submitQueued = async (input: string) =>
       await setup.service.submit({
         partnerId: 'partner-1',
-        input,
+        contentNodes: [{ kind: 'text', text: input }],
         preference: 'local_sources_strict',
         executionPermission: 'review',
         mainModel: { configId: 'mock-config', modelName: 'mock-model' }
@@ -336,7 +336,7 @@ describe('unit ai persistence backend', () => {
     const service = setup.service as ChatRunServicePrivate
     const submission = setup.service.submit({
       partnerId: 'partner-1',
-      input: '校验期间到达的追加消息',
+      contentNodes: [{ kind: 'text', text: '校验期间到达的追加消息' }],
       preference: 'default',
       executionPermission: 'review',
       mainModel: { configId: 'mock-config', modelName: 'mock-model' }
@@ -363,9 +363,7 @@ describe('unit ai persistence backend', () => {
         queued: true,
         userMessage: { content: '校验期间到达的追加消息', pending: true }
       })
-      expect(snapshot.activeRuns.map((item) => item.run.input)).toEqual([
-        '校验期间到达的追加消息'
-      ])
+      expect(snapshot.activeRuns.map((item) => item.run.input)).toEqual(['校验期间到达的追加消息'])
       expect((await setup.storage.aiRun.getRun(run.id))?.pendingMessages).toEqual([])
     } finally {
       releaseValidation()
@@ -377,7 +375,7 @@ describe('unit ai persistence backend', () => {
     const run = await submitAiRun(setup)
     const queued = await setup.service.submit({
       partnerId: 'partner-1',
-      input: '停止后保留为普通消息',
+      contentNodes: [{ kind: 'text', text: '停止后保留为普通消息' }],
       preference: 'default',
       executionPermission: 'review',
       mainModel: { configId: 'mock-config', modelName: 'mock-model' }
@@ -727,6 +725,7 @@ describe('unit ai persistence backend', () => {
     expect(opened.messages).toHaveLength(2)
     expect(opened.activeRuns).toHaveLength(1)
     expect(opened.activeRuns[0].messageLogRecords?.map((record) => record.entry.kind)).toEqual([
+      'user',
       'annotation',
       'assistant',
       'annotation'
@@ -764,8 +763,8 @@ describe('unit ai persistence backend', () => {
     expect(snapshot.activeRuns).toEqual([])
     expect(snapshot.runs).toHaveLength(1)
     expect(snapshot.runs?.[0].run.status).toBe('completed')
-    expect(snapshot.runs?.[0].messageLogRecords).toHaveLength(3)
-    expect(snapshot.runs?.[0].messageLogRecords?.[1].entry).toMatchObject({
+    expect(snapshot.runs?.[0].messageLogRecords).toHaveLength(4)
+    expect(snapshot.runs?.[0].messageLogRecords?.[2].entry).toMatchObject({
       kind: 'assistant',
       content: '先检索资料'
     })
@@ -799,8 +798,8 @@ describe('unit ai persistence backend', () => {
 
     expect(summaries.runs).toHaveLength(1)
     expect(summaries.runs[0].run.status).toBe('completed')
-    expect(summaries.runs[0].messageLogRecords).toHaveLength(3)
-    expect(summaries.runs[0].messageLogRecords?.[0].entry).toMatchObject({
+    expect(summaries.runs[0].messageLogRecords).toHaveLength(4)
+    expect(summaries.runs[0].messageLogRecords?.[1].entry).toMatchObject({
       kind: 'annotation',
       eventType: 'thinking_started'
     })

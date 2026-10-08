@@ -1,6 +1,7 @@
 import type {
   ChatAttachment,
   ChatMessageContentNode,
+  DocumentSelectionNode,
   SelectedReference
 } from '../../../../../shared/types'
 
@@ -16,7 +17,10 @@ export type ComposerScopeNode = {
   scope: SelectedReference
 }
 
-export type ComposerNode = ComposerTextNode | ComposerScopeNode
+export type ComposerNode =
+  | ComposerTextNode
+  | ComposerScopeNode
+  | { id: string; kind: 'selection'; selection: DocumentSelectionNode }
 
 export type ComposerDraftValue = {
   input: string
