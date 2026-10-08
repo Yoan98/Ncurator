@@ -23,7 +23,6 @@ const CACHE_CONTENTS = 'temporary-cache-file-for-stop-approval-e2e\n'
 const KEEP_CONTENTS = 'temporary-preserved-file-for-stop-approval-e2e\n'
 const APPROVAL_WAIT_TIMEOUT_MS = 120_000
 
-type HumanInteractionRequiredEvent = Extract<AiRunEvent, { type: 'human_interaction_required' }>
 type ReviewShimmerSnapshot = {
   activityId: string
   itemIds: string[]
@@ -44,13 +43,13 @@ const quoteCommandPath = (filePath: string): string =>
     ? "'" + filePath.replaceAll("'", "''") + "'"
     : "'" + filePath.replaceAll("'", "'\\''") + "'"
 
-const buildDeleteScopeConflictRequest = (command: string): string =>
+const buildPendingDeletionRequest = (command: string): string =>
   [
-    '请原样运行下面这条完整维护命令，不要改写或拆分。',
+    '请调用 terminal_run 提交下面这条完整清理命令，不要改写或拆分。',
     '维护命令：',
     command,
-    '此次清理的目标是只删除目录中的 cache.tmp，并保留 keep.txt。',
-    '完成后说明结果。若我在后续审批卡拒绝，请立即停止，不要改用替代删除命令，也不要再次询问删除范围。'
+    '命令会递归删除整个目标目录及全部内容。当前尚未授权删除，必须先由我在人工审批卡决定。请实际提交工具调用，仅展示命令不算完成。',
+    '收到允许后执行并说明结果。收到拒绝或指导后按反馈处理，不改用替代删除命令，不再询问删除范围。'
   ].join('\n')
 
 const matchesExpectedTerminalCommand = (command: string, expectedCommand: string): boolean => {
@@ -113,61 +112,12 @@ const stopReviewShimmerObserver = async (
     return state?.snapshots || []
   })
 
-const answerRunAsWrittenQuestion = async (input: {
-  runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0]
-  page: Parameters<typeof sendWorkbenchMessage>[0]
-  runId: string
-  event: HumanInteractionRequiredEvent
-}): Promise<void> => {
-  if (
-    input.event.interaction.kind !== 'question' ||
-    input.event.interaction.questions.length !== 1
-  ) {
-    throw new Error(
-      'approval scope clarification was not one question: ' +
-        JSON.stringify(input.event.interaction)
-    )
-  }
-  const question = input.event.interaction.questions[0]
-  if (!question) throw new Error('approval scope clarification question is missing')
-  const option = question.options.find((candidate) => {
-    const text = candidate.id + ' ' + candidate.label + ' ' + candidate.description
-    return /以命令为准|原样执行|原样递归删除|原样删除整个目录|照原命令|按原命令|按命令执行|按命令字面|run.?as.?given|run.?as.?written|run.?as.?is/iu.test(
-      text
-    )
-  })
-  if (!option) {
-    throw new Error(
-      'approval scope clarification has no explicit run-as-written choice: ' +
-        JSON.stringify(question)
-    )
-  }
-
-  const card = input.page.getByTestId(workbenchSelectors.humanQuestionCard)
-  await card.waitFor({ state: 'visible', timeout: 30_000 })
-  await card.getByTestId(`workbench-human-question-option-${question.id}-${option.id}`).click()
-  await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
-  const resolved = await waitForWorkbenchAiEvent(input.runtime, {
-    name: 'approval_scope_clarification_resolved',
-    timeoutMs: APPROVAL_WAIT_TIMEOUT_MS,
-    matches: (event) =>
-      event.type === 'human_interaction_resolved' &&
-      event.runId === input.runId &&
-      event.interactionId === input.event.interactionId
-  })
-  if (resolved.type !== 'human_interaction_resolved') {
-    throw new Error('approval scope clarification was not recorded')
-  }
-}
-
 const waitForApprovalGate = async (input: {
   runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0]
   page: Parameters<typeof sendWorkbenchMessage>[0]
   runId: string
 }): Promise<Extract<AiRunEvent, { type: 'approval_batch_required' }>> => {
   const deadline = Date.now() + APPROVAL_WAIT_TIMEOUT_MS
-  const resolvedInteractionIds = new Set<string>()
-  let clarificationCount = 0
   for (;;) {
     const runEvents = (await collectWorkbenchAiRunEvents(input.runtime)).filter(
       (event) => event.runId === input.runId
@@ -178,24 +128,9 @@ const waitForApprovalGate = async (input: {
     )
     if (approval) return approval
 
-    for (const event of runEvents) {
-      if (event.type === 'human_interaction_resolved') {
-        resolvedInteractionIds.add(event.interactionId)
-      }
-    }
-    const question = runEvents.find(
-      (event): event is HumanInteractionRequiredEvent =>
-        event.type === 'human_interaction_required' &&
-        !resolvedInteractionIds.has(event.interactionId)
-    )
+    const question = runEvents.find((event) => event.type === 'human_interaction_required')
     if (question) {
-      clarificationCount += 1
-      if (clarificationCount > 2) {
-        throw new Error('approval command asked for repeated clarification')
-      }
-      await answerRunAsWrittenQuestion({ ...input, event: question })
-      resolvedInteractionIds.add(question.interactionId)
-      continue
+      throw new Error('operation was not submitted for approval: ' + JSON.stringify(question))
     }
 
     const terminalEvent = runEvents.find(
@@ -317,7 +252,7 @@ describe('workbench run e2e', () => {
           const expectedCommand = IS_WINDOWS
             ? `Remove-Item -LiteralPath ${quoteCommandPath(targetDirectory)} -Recurse -Force`
             : `rm -rf ${quoteCommandPath(targetDirectory)}`
-          const approvalPrompt = buildDeleteScopeConflictRequest(expectedCommand)
+          const approvalPrompt = buildPendingDeletionRequest(expectedCommand)
 
           await installReviewShimmerObserver(page)
           await sendWorkbenchMessage(page, approvalPrompt)

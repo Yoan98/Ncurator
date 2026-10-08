@@ -103,3 +103,15 @@ export function rangeForLocation(preview: PreviewText, location: SelectionLocati
   range.setEnd(last.node, location.end - last.start)
   return range
 }
+
+// Text-only ranges exclude the empty part of paragraph boxes from the clickable area.
+export function textRangesForLocation(preview: PreviewText, location: SelectionLocation): Range[] {
+  return preview.runs
+    .filter((run) => run.end > location.start && run.start < location.end)
+    .map((run) => {
+      const range = document.createRange()
+      range.setStart(run.node, Math.max(0, location.start - run.start))
+      range.setEnd(run.node, Math.min(run.node.length, location.end - run.start))
+      return range
+    })
+}

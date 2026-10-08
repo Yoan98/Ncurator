@@ -2,12 +2,7 @@ import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { HiOutlineCheck, HiOutlineSparkles, HiOutlineTrash } from 'react-icons/hi2'
 import type { ChatInlineContentNode, DocumentSelectionNode } from '../../../../shared/types'
-import {
-  chatContentText,
-  chatReferences,
-  hasUserText,
-  selectionLabel
-} from '../../../../shared/chatContent'
+import { chatContentText, chatReferences, hasUserText } from '../../../../shared/chatContent'
 import {
   DocumentSelectionContext,
   type SelectionLocation
@@ -17,16 +12,13 @@ import {
   captureSelection,
   locateSelection,
   rangeForLocation,
-  readPreviewText
+  readPreviewText,
+  textRangesForLocation
 } from './docxSelectionText'
 import {
   positionSelectionFloating,
-  positionSelectionMarker,
   previewViewport,
-  SELECTION_MARKER_SIZE,
-  visiblePreviewObstacles,
-  type SelectionFloatingPosition,
-  type SelectionMarkerPosition
+  type SelectionFloatingPosition
 } from './docxSelectionLayout'
 
 type Popup = {
@@ -34,9 +26,11 @@ type Popup = {
   location: SelectionLocation
   mode: 'action' | 'editor'
 }
-type Marker = SelectionMarkerPosition & {
+type SelectionTarget = {
   node: DocumentSelectionNode
   location: SelectionLocation
+  range: Range
+  textRanges: Range[]
 }
 
 export default function DocxSelectionLayer({
@@ -51,10 +45,11 @@ export default function DocxSelectionLayer({
   const state = useContext(DocumentSelectionContext)
   const [popup, setPopup] = useState<Popup | null>(null)
   const [floating, setFloating] = useState<SelectionFloatingPosition | null>(null)
-  const [markers, setMarkers] = useState<Marker[]>([])
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
   const popupRef = useRef<HTMLDivElement>(null)
   const latestRef = useRef(state)
+  const targetsRef = useRef<SelectionTarget[]>([])
   const popupId = popup?.node.id
   const popupMode = popup?.mode
   const popupLocation = popup?.location
@@ -67,6 +62,7 @@ export default function DocxSelectionLayer({
     mode: Popup['mode']
   ): void => {
     setNotice('')
+    setHoveredId(null)
     setFloating(null)
     setPopup({ node, location, mode })
     window.getSelection()?.removeAllRanges()
@@ -74,29 +70,45 @@ export default function DocxSelectionLayer({
 
   useEffect(() => {
     if (!container || !state?.enabled || !revision) return
-    const capture = (): void => {
-      if (latestRef.current?.locked) return
+    const cursor = container.style.cursor
+    let pointerDown: { x: number; y: number } | null = null
+    let clickedTarget: SelectionTarget | undefined
+    const hit = (event: PointerEvent): SelectionTarget | undefined =>
+      targetsRef.current.find((target) =>
+        target.textRanges.some((range) =>
+          [...range.getClientRects()].some(
+            (rect) =>
+              event.clientX >= rect.left &&
+              event.clientX < rect.right &&
+              event.clientY >= rect.top &&
+              event.clientY < rect.bottom
+          )
+        )
+      )
+    const hover = (target?: SelectionTarget): void => {
+      container.style.cursor = target ? 'pointer' : cursor
+      setHoveredId(target?.node.id || null)
+    }
+    const capture = (): boolean => {
+      if (latestRef.current?.locked) return false
       const selection = window.getSelection()
-      if (!selection?.rangeCount || selection.isCollapsed) return
+      if (!selection?.rangeCount || selection.isCollapsed) return false
       const range = selection.getRangeAt(0)
-      if (!container.contains(range.commonAncestorContainer)) return
+      if (!container.contains(range.commonAncestorContainer)) return false
       const preview = readPreviewText(container)
       const location = captureSelection(container, preview, range)
       if (!location) {
         setNotice('请选择正文中的连续文本；表格仅支持单个单元格。')
-        return
+        return true
       }
       const nodes = latestRef.current?.selections.filter((node) => node.filePath === filePath) || []
       for (const node of nodes) {
         const existing = locateSelection(preview, node, latestRef.current?.locations.get(node.id))
         if (!existing) continue
-        if (existing.start === location.start && existing.end === location.end) {
-          open(node, existing, 'action')
-          return
-        }
         if (existing.start < location.end && location.start < existing.end) {
-          setNotice('该选区与已有编号重叠，请调整选取范围。')
-          return
+          setNotice('')
+          setPopup(null)
+          return true
         }
       }
       open(
@@ -113,22 +125,73 @@ export default function DocxSelectionLayer({
         location,
         'action'
       )
+      return true
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      clickedTarget = undefined
+      pointerDown = event.button === 0 ? { x: event.clientX, y: event.clientY } : null
+      hover()
+    }
+    const onPointerUp = (event: PointerEvent): void => {
+      const start = pointerDown
+      pointerDown = null
+      clickedTarget =
+        start &&
+        event.button === 0 &&
+        !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 4
+          ? hit(event)
+          : undefined
+      capture()
+    }
+    const onClick = (event: MouseEvent): void => {
+      const target = clickedTarget
+      clickedTarget = undefined
+      // A click within native selected text may collapse that selection only after pointerup.
+      if (target && event.detail === 1 && !latestRef.current?.locked)
+        open(target.node, target.location, 'editor')
+    }
+    const onPointerMove = (event: PointerEvent): void => {
+      hover(!event.buttons && !latestRef.current?.locked ? hit(event) : undefined)
+    }
+    const onPointerLeave = (): void => {
+      pointerDown = null
+      clickedTarget = undefined
+      hover()
     }
     const onKeyUp = (event: KeyboardEvent): void => {
       if (event.shiftKey || event.key === 'Shift') capture()
     }
-    container.addEventListener('pointerup', capture)
+    container.addEventListener('pointerdown', onPointerDown)
+    container.addEventListener('pointerup', onPointerUp)
+    container.addEventListener('pointermove', onPointerMove)
+    container.addEventListener('pointerleave', onPointerLeave)
+    container.addEventListener('click', onClick)
+    document.addEventListener('scroll', onPointerLeave, true)
+    window.addEventListener('resize', onPointerLeave)
     container.addEventListener('keyup', onKeyUp)
     return () => {
-      container.removeEventListener('pointerup', capture)
+      container.removeEventListener('pointerdown', onPointerDown)
+      container.removeEventListener('pointerup', onPointerUp)
+      container.removeEventListener('pointermove', onPointerMove)
+      container.removeEventListener('pointerleave', onPointerLeave)
+      container.removeEventListener('click', onClick)
+      document.removeEventListener('scroll', onPointerLeave, true)
+      window.removeEventListener('resize', onPointerLeave)
       container.removeEventListener('keyup', onKeyUp)
+      container.style.cursor = cursor
+      setHoveredId(null)
     }
-  }, [container, filePath, revision, state?.enabled])
+  }, [container, filePath, revision, state?.enabled, state?.locked, state?.selections])
 
   useLayoutEffect(() => {
     if (!container || !revision || !state?.enabled) return
     const key = 'docx-' + crypto.randomUUID()
     const activeKey = key + '-active'
+    const hoverKey = key + '-hover'
     const style = document.createElement('style')
     style.textContent =
       '::highlight(' +
@@ -136,47 +199,40 @@ export default function DocxSelectionLayer({
       ') { background-color: #E9DDFB; }' +
       '::highlight(' +
       activeKey +
+      '), ::highlight(' +
+      hoverKey +
       ') { background-color: #DBC5F6; }'
     document.head.appendChild(style)
     let frame = 0
     const update = (): void => {
       const preview = readPreviewText(container)
-      const origin = container.parentElement!.getBoundingClientRect()
       const viewport = previewViewport(container)
-      const next: Marker[] = []
-      const ranges: Range[] = []
+      const targets: SelectionTarget[] = []
       const nodes = state.selections.filter((node) => node.filePath === filePath)
-      const obstacles = nodes.length ? visiblePreviewObstacles(preview, container) : []
       for (const node of nodes) {
         const location = locateSelection(preview, node, state.locations.get(node.id))
         const range = location && rangeForLocation(preview, location)
         if (!range || !location) continue
-        ranges.push(range)
-        const position = positionSelectionMarker(range, viewport, obstacles, node.number)
-        if (!position) continue
-        obstacles.push({
-          left: position.left,
-          top: position.top,
-          right: position.left + position.width,
-          bottom: position.top + SELECTION_MARKER_SIZE
-        })
-        next.push({
+        targets.push({
           node,
           location,
-          ...position,
-          left: position.left - origin.left,
-          top: position.top - origin.top
+          range,
+          textRanges: textRangesForLocation(preview, location)
         })
       }
-      CSS.highlights.set(key, new Highlight(...ranges))
-      setMarkers(next)
+      targetsRef.current = targets
+      CSS.highlights.set(key, new Highlight(...targets.map((target) => target.range)))
+      const hovered = targets.find((target) => target.node.id === hoveredId)
+      const hoverHighlight = new Highlight(...(hovered && !state.locked ? [hovered.range] : []))
+      hoverHighlight.priority = 1
+      CSS.highlights.set(hoverKey, hoverHighlight)
 
       const activeRange =
         popupLocation?.previewText === preview.text
           ? rangeForLocation(preview, popupLocation)
           : null
       const activeHighlight = new Highlight(...(activeRange ? [activeRange] : []))
-      activeHighlight.priority = 1
+      activeHighlight.priority = 2
       CSS.highlights.set(activeKey, activeHighlight)
       const position =
         activeRange && popupRef.current
@@ -211,6 +267,8 @@ export default function DocxSelectionLayer({
       observer.disconnect()
       CSS.highlights.delete(key)
       CSS.highlights.delete(activeKey)
+      CSS.highlights.delete(hoverKey)
+      targetsRef.current = []
       style.remove()
     }
   }, [
@@ -220,6 +278,8 @@ export default function DocxSelectionLayer({
     state?.enabled,
     state?.selections,
     state?.locations,
+    state?.locked,
+    hoveredId,
     popupLocation,
     popupMode
   ])
@@ -261,6 +321,7 @@ export default function DocxSelectionLayer({
   useEffect(() => {
     setPopup(null)
     setNotice('')
+    setHoveredId(null)
   }, [filePath, revision, state?.enabled])
 
   if (!state?.enabled) return null
@@ -272,29 +333,30 @@ export default function DocxSelectionLayer({
   }
   return (
     <>
-      {markers.map((marker) => (
-        <button
-          key={marker.node.id}
-          type="button"
-          data-testid="docx-selection-marker"
-          aria-label={'编辑 ' + selectionLabel(marker.node)}
-          title={selectionLabel(marker.node) + '\n' + marker.node.selectedText}
-          disabled={state.locked}
-          className="absolute z-10 flex cursor-pointer items-center justify-center rounded-[4px] bg-[#E3D4F3] text-[9px] font-semibold leading-none text-[#79569F] outline-none hover:bg-[#D8C2EF] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] disabled:cursor-not-allowed"
-          style={{
-            left: marker.left,
-            top: marker.top,
-            width: marker.width,
-            height: SELECTION_MARKER_SIZE
-          }}
-          onClick={() => {
-            const current = state.selections.find((node) => node.id === marker.node.id)
-            if (current) open(current, marker.location, 'editor')
-          }}
-        >
-          {marker.node.number}
-        </button>
-      ))}
+      {state.selections
+        .filter((node) => node.filePath === filePath)
+        .map((node) => (
+          <button
+            key={node.id}
+            type="button"
+            aria-label={'编辑所选内容：' + node.selectedText}
+            disabled={state.locked}
+            className="sr-only absolute z-10 cursor-pointer rounded-md bg-white text-sm text-[#79569F] outline-none focus:not-sr-only focus:absolute focus:bottom-3 focus:left-3 focus:px-3 focus:py-2 focus-visible:ring-2 focus-visible:ring-[#0B6BCB]"
+            onFocus={() => {
+              const target = targetsRef.current.find((target) => target.node.id === node.id)
+              target?.range.startContainer.parentElement?.scrollIntoView({
+                block: 'center',
+                behavior: 'instant'
+              })
+            }}
+            onClick={() => {
+              const target = targetsRef.current.find((target) => target.node.id === node.id)
+              if (target) open(target.node, target.location, 'editor')
+            }}
+          >
+            编辑所选内容
+          </button>
+        ))}
       {notice && (
         <button
           type="button"

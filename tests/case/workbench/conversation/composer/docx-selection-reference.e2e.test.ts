@@ -16,6 +16,87 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'docx-selection-reference'
+const textPoint = (
+  page: Page,
+  paragraph: number,
+  offset: number,
+  selector = 'article p',
+  center = false
+) =>
+  page
+    .locator('.docx-content')
+    .first()
+    .evaluate(
+      (viewer, input) => {
+        const paragraph = viewer.querySelectorAll(input.selector)[input.paragraph]
+        const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT)
+        let offset = input.offset
+        let node = walker.nextNode()
+        while (node instanceof Text) {
+          if (offset <= node.length) {
+            const range = document.createRange()
+            range.setStart(node, Math.max(0, offset === node.length ? offset - 1 : offset))
+            range.setEnd(node, Math.min(node.length, offset === node.length ? offset : offset + 1))
+            const rect = range.getBoundingClientRect()
+            return {
+              x: input.center
+                ? rect.left + rect.width / 2
+                : offset === node.length
+                  ? rect.right - 0.5
+                  : rect.left + 0.5,
+              y: rect.top + rect.height / 2
+            }
+          }
+          offset -= node.length
+          node = walker.nextNode()
+        }
+        throw new Error('文本位置不存在')
+      },
+      { paragraph, offset, selector, center }
+    )
+
+const clickSavedText = async (
+  page: Page,
+  paragraph: number,
+  offset: number,
+  selector = 'article p'
+) => {
+  await page.locator('.docx-content').locator(selector).nth(paragraph).scrollIntoViewIfNeeded()
+  const point = await textPoint(page, paragraph, offset, selector, true)
+  await page.mouse.click(point.x, point.y)
+  await page.getByTestId('docx-selection-thought').waitFor({ state: 'visible' })
+}
+
+const observeSavedSelections = (page: Page) =>
+  page.evaluate(() => ({
+    quotes: [...CSS.highlights]
+      .filter(([key]) => key.startsWith('docx-') && !/-(active|hover)$/.test(key))
+      .flatMap(([, highlight]) => [...highlight])
+      .filter((range): range is Range => range instanceof Range)
+      .map((range) => range.toString()),
+    numberCount: document.querySelectorAll('[data-testid="docx-selection-marker"]').length
+  }))
+
+const observeHover = (page: Page, point: { x: number; y: number }) =>
+  page.evaluate(({ x, y }) => {
+    const element = document.elementFromPoint(x, y)
+    const hover = [...CSS.highlights].find(
+      ([key, highlight]) => key.endsWith('-hover') && highlight.size
+    )
+    return {
+      cursor: element ? getComputedStyle(element).cursor : '',
+      quote: hover
+        ? [...hover[1]].map((range) => (range instanceof Range ? range.toString() : '')).join('')
+        : '',
+      background: hover
+        ? getComputedStyle(
+            document.querySelector('.docx-content')!,
+            '::highlight(' + hover[0] + ')'
+          ).backgroundColor
+        : ''
+    }
+  }, point)
+
 const selectText = async (
   page: Page,
   startParagraph: number,
@@ -34,44 +115,16 @@ const selectText = async (
     .locator(options.selector || 'article p')
     .nth(startParagraph)
     .scrollIntoViewIfNeeded()
-  const bounds = await page
-    .locator('.docx-content')
-    .first()
-    .evaluate(
-      (article, input) => {
-        const paragraphs = [...article.querySelectorAll(input.selector)]
-        const point = (paragraphIndex: number, offset: number) => {
-          const walker = document.createTreeWalker(paragraphs[paragraphIndex], NodeFilter.SHOW_TEXT)
-          let node = walker.nextNode()
-          while (node instanceof Text) {
-            if (offset <= node.length) {
-              const range = document.createRange()
-              range.setStart(node, Math.max(0, offset === node.length ? offset - 1 : offset))
-              range.setEnd(
-                node,
-                Math.min(node.length, offset === node.length ? offset : offset + 1)
-              )
-              const rect = range.getBoundingClientRect()
-              return {
-                x: offset === node.length ? rect.right - 0.5 : rect.left + 0.5,
-                y: rect.top + rect.height / 2
-              }
-            }
-            offset -= node.length
-            node = walker.nextNode()
-          }
-          throw new Error('文本位置不存在')
-        }
-        return {
-          start: point(input.startParagraph, input.start),
-          end: point(input.endParagraph, input.end)
-        }
-      },
-      { startParagraph, start, endParagraph, end, selector: options.selector || 'article p' }
-    )
-  await page.mouse.click(bounds.start.x, bounds.start.y)
+  const bounds = {
+    start: await textPoint(page, startParagraph, start, options.selector),
+    end: await textPoint(page, endParagraph, end, options.selector)
+  }
+  // Hold Shift before releasing the first click so saved text remains a selection anchor.
+  await page.mouse.move(bounds.start.x, bounds.start.y)
+  await page.mouse.down()
   await page.keyboard.down('Shift')
   try {
+    await page.mouse.up()
     await page.mouse.click(bounds.end.x, bounds.end.y)
   } finally {
     await page.keyboard.up('Shift')
@@ -127,63 +180,6 @@ const observeSelectionUi = (page: Page) =>
     }
   })
 
-const markersAvoidText = (page: Page) =>
-  page.evaluate(() => {
-    const viewer = document.querySelector('.docx-content')!
-    const rects: DOMRect[] = []
-    const range = document.createRange()
-    for (const paragraph of viewer.querySelectorAll('article p')) {
-      const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT)
-      let node = walker.nextNode()
-      while (node) {
-        range.selectNodeContents(node)
-        rects.push(...range.getClientRects())
-        node = walker.nextNode()
-      }
-    }
-    const markers = [...document.querySelectorAll('[data-testid="docx-selection-marker"]')]
-    return (
-      markers.length > 0 &&
-      markers.every((marker) => {
-        const badge = marker.getBoundingClientRect()
-        return !rects.some(
-          (text) =>
-            badge.left < text.right &&
-            text.left < badge.right &&
-            badge.top < text.bottom &&
-            text.top < badge.bottom
-        )
-      })
-    )
-  })
-
-const observeMarkerAnchors = (page: Page) =>
-  page.evaluate(() => {
-    const ranges = [...CSS.highlights]
-      .filter(([key]) => !key.endsWith('-active'))
-      .flatMap(([, highlight]) => [...highlight])
-      .filter((item): item is Range => item instanceof Range)
-    return [...document.querySelectorAll('[data-testid="docx-selection-marker"]')].map(
-      (marker, index) => {
-        const range = ranges[index]
-        if (!(range?.endContainer instanceof Text) || !range.endOffset)
-          throw new Error('选区末字不存在')
-        const glyph = document.createRange()
-        glyph.setStart(range.endContainer, range.endOffset - 1)
-        glyph.setEnd(range.endContainer, range.endOffset)
-        const end = glyph.getBoundingClientRect()
-        const badge = marker.getBoundingClientRect()
-        return {
-          number: marker.textContent,
-          width: badge.width,
-          height: badge.height,
-          horizontalDistance: badge.left + badge.width / 2 - end.right,
-          verticalDistance: badge.bottom - end.top
-        }
-      }
-    )
-  })
-
 describe('workbench conversation e2e', () => {
   it(
     CASE_ID,
@@ -230,31 +226,59 @@ describe('workbench conversation e2e', () => {
             await page.getByTestId('docx-selection-thought').fill(selection.thought)
             await page.getByRole('button', { name: '添加到输入框', exact: true }).click()
           }
-          const superscripts = await observeMarkerAnchors(page)
+          const savedUi = await observeSavedSelections(page)
+          const hoveredSelections: Awaited<ReturnType<typeof observeHover>>[] = []
+          for (const selection of [
+            { offset: 1, quote: 'Hello' },
+            { offset: 7, quote: 'from' },
+            { offset: 12, quote: 'fixture' }
+          ]) {
+            const point = await textPoint(page, 0, selection.offset, 'article p', true)
+            await page.mouse.move(point.x, point.y)
+            await page.waitForFunction(
+              (quote) =>
+                [...CSS.highlights].some(
+                  ([key, highlight]) =>
+                    key.endsWith('-hover') &&
+                    [...highlight].some(
+                      (range) => range instanceof Range && range.toString() === quote
+                    )
+                ),
+              selection.quote
+            )
+            hoveredSelections.push(await observeHover(page, point))
+          }
+          const spacePoint = await textPoint(page, 0, 5, 'article p', true)
+          await page.mouse.move(spacePoint.x, spacePoint.y)
+          await page.waitForFunction(
+            () =>
+              ![...CSS.highlights].some(
+                ([key, highlight]) => key.endsWith('-hover') && highlight.size
+              )
+          )
+          const spaceHover = await observeHover(page, spacePoint)
           await runtime.assertThat(
-            superscripts.length === 3 &&
-              superscripts.every(
-                (marker) =>
-                  marker.width <= 16 &&
-                  marker.height <= 16 &&
-                  Math.abs(marker.horizontalDistance) <= 20 &&
-                  marker.verticalDistance <= 1 &&
-                  marker.verticalDistance >= -20
+            savedUi.numberCount === 0 &&
+              savedUi.quotes.join(',') === 'Hello,from,fixture' &&
+              hoveredSelections.map((hover) => hover.quote).join(',') === 'Hello,from,fixture' &&
+              hoveredSelections.every(
+                (hover) => hover.cursor === 'pointer' && hover.background === 'rgb(219, 197, 246)'
               ) &&
-              (await markersAvoidText(page)),
+              spaceHover.cursor !== 'pointer' &&
+              !spaceHover.quote,
             {
-              name: 'selection-superscript-near-last-glyph',
-              message: '部分单词的编号应紧贴末字上方，包含点击区域在内不遮挡正文。',
-              data: superscripts
+              name: 'selection-highlight-hover-without-numbers',
+              message: '右侧只展示高亮；悬停各选区有手形和加深背景，未选中的空格无点击反馈。',
+              data: { savedUi, hoveredSelections, spaceHover }
             }
           )
-          await page.getByTestId('docx-selection-marker').nth(1).click()
+          await clickSavedText(page, 0, 7)
           const editConfirmLabel = (await observeSelectionUi(page)).confirmLabel
+          const editedQuote = (await observeSelectionUi(page)).quote
+          const editedThought = await page.getByTestId('docx-selection-thought').textContent()
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
           const afterMiddleDelete = await readDraftSelections()
-          const afterMiddleMarkers = await page
-            .getByTestId('docx-selection-marker')
-            .allTextContents()
+          const afterMiddleHighlights = await observeSavedSelections(page)
           await runtime.assertThat(
             afterMiddleDelete[0]?.label === 'sample-edit.docx · 1' &&
               afterMiddleDelete[0].quote === 'Hello' &&
@@ -262,12 +286,21 @@ describe('workbench conversation e2e', () => {
               afterMiddleDelete[1]?.label === 'sample-edit.docx · 2' &&
               afterMiddleDelete[1].quote === 'fixture' &&
               afterMiddleDelete[1].thought === '第三段' &&
-              afterMiddleMarkers.join(',') === '1,2' &&
+              afterMiddleHighlights.quotes.join(',') === 'Hello,fixture' &&
+              editedQuote === 'from' &&
+              editedThought === '第二段' &&
               editConfirmLabel === '确认修改',
             {
-              name: 'selection-popup-delete-renumbers-both-sides',
-              message: '删除中间引用后两侧连续编号，原文和想法保持关联。',
-              data: { afterMiddleDelete, afterMiddleMarkers, editConfirmLabel }
+              name: 'selection-popup-delete-renumbers-composer',
+              message:
+                '点击高亮打开对应内容；删除中间引用后左侧连续编号，右侧移除对应高亮，原文和想法保持关联。',
+              data: {
+                afterMiddleDelete,
+                afterMiddleHighlights,
+                editConfirmLabel,
+                editedQuote,
+                editedThought
+              }
             }
           )
           await composer
@@ -276,19 +309,17 @@ describe('workbench conversation e2e', () => {
             .click({ position: { x: 0.5, y: 8 } })
           await page.keyboard.press('Backspace')
           const afterComposerDelete = await readDraftSelections()
-          const afterComposerMarkers = await page
-            .getByTestId('docx-selection-marker')
-            .allTextContents()
+          const afterComposerHighlights = await observeSavedSelections(page)
           await runtime.assertThat(
             afterComposerDelete.length === 1 &&
               afterComposerDelete[0]?.label === 'sample-edit.docx · 1' &&
               afterComposerDelete[0].quote === 'fixture' &&
               afterComposerDelete[0].thought === '第三段' &&
-              afterComposerMarkers.join(',') === '1',
+              afterComposerHighlights.quotes.join(',') === 'fixture',
             {
-              name: 'selection-composer-delete-renumbers-both-sides',
+              name: 'selection-composer-delete-renumbers-and-clears-highlight',
               message: '输入区直接删除引用后剩余编号同步重排，内容保持关联。',
-              data: { afterComposerDelete, afterComposerMarkers }
+              data: { afterComposerDelete, afterComposerHighlights }
             }
           )
           await composer.fill('')
@@ -296,19 +327,20 @@ describe('workbench conversation e2e', () => {
           await page.getByTestId('docx-selection-thought').fill('重新添加')
           await page.getByTestId('docx-selection-save').click()
           const afterClear = await readDraftSelections()
-          const afterClearMarker = await page.getByTestId('docx-selection-marker').textContent()
+          const afterClearHighlights = await observeSavedSelections(page)
           await runtime.assertThat(
-            afterClear[0]?.label === 'sample-edit.docx · 1' && afterClearMarker === '1',
+            afterClear[0]?.label === 'sample-edit.docx · 1' &&
+              afterClearHighlights.quotes.join(',') === 'Hello',
             {
               name: 'selection-clear-restarts-at-one',
               message: '删除全部引用后再次添加从 1 开始。',
-              data: { afterClear, afterClearMarker }
+              data: { afterClear, afterClearHighlights }
             }
           )
-          await page.getByTestId('docx-selection-marker').click()
+          await clickSavedText(page, 0, 1)
           await runtime.captureScreenshot({
             name: 'selection-compact-confirm',
-            message: '末字上标编号、对勾确认输入条与左侧引用'
+            message: '点击紫色高亮打开对勾确认输入条，右侧无编号'
           })
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
           await composer.fill('')
@@ -367,14 +399,22 @@ describe('workbench conversation e2e', () => {
             .getAttribute('aria-label')
           const tokenIcon =
             (await composer.locator('[data-role="document-selection-token"] svg').count()) === 1
-          const markerClear = await markersAvoidText(page)
+          const highlightedQuote = await observeSavedSelections(page)
+          const blankPoint = await page
+            .locator('.docx-content article p')
+            .nth(1)
+            .evaluate((paragraph) => {
+              const rect = paragraph.getBoundingClientRect()
+              return { x: rect.right - 5, y: rect.top + rect.height / 2 }
+            })
+          await page.mouse.move(blankPoint.x, blankPoint.y)
+          const blankHover = await observeHover(page, blankPoint)
           await selectText(page, 1, 8, 1, 16)
           await page.getByTestId('docx-selection-thought').fill('临时相邻引用')
           await page.getByTestId('docx-selection-save').click()
-          const adjacentMarkersClear =
-            (await page.getByTestId('docx-selection-marker').count()) === 2 &&
-            (await markersAvoidText(page))
-          await page.getByTestId('docx-selection-marker').last().click()
+          const adjacentHighlights = await observeSavedSelections(page)
+          await clickSavedText(page, 1, 12)
+          const adjacentThought = await page.getByTestId('docx-selection-thought').textContent()
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
 
           const windowHandle = await runtime.electronApp.browserWindow(page)
@@ -432,36 +472,13 @@ describe('workbench conversation e2e', () => {
           await composer.locator('[data-role="document-selection-thought"]').click()
           await page.keyboard.press('End')
           await page.keyboard.type(' 重点说明谨慎表述。')
-          const locatedMarkerUi = await page.evaluate(() => {
-            const range = [...CSS.highlights]
-              .filter(([key]) => !key.endsWith('-active'))
-              .flatMap(([, highlight]) => [...highlight])
-              .find((item): item is Range => item instanceof Range)
-            const viewer = document.querySelector('.docx-content')!
-            const bounds = (rect: DOMRect) => ({
-              left: rect.left,
-              right: rect.right,
-              top: rect.top,
-              bottom: rect.bottom
-            })
-            return {
-              markerCount: document.querySelectorAll('[data-testid="docx-selection-marker"]')
-                .length,
-              viewport: bounds(viewer.getBoundingClientRect()),
-              selection: range ? [...range.getClientRects()].map(bounds) : [],
-              text: [...viewer.querySelectorAll('article p')].slice(0, 3).map((paragraph) => {
-                const content = document.createRange()
-                content.selectNodeContents(paragraph)
-                return [...content.getClientRects()].map(bounds)
-              })
-            }
+          const locatedUi = await observeSavedSelections(page)
+          await runtime.assertThat(locatedUi.quotes.length === 1 && locatedUi.numberCount === 0, {
+            name: 'selection-highlight-after-locating',
+            message: '跨段落引用定位后保留原文高亮，右侧不展示编号。',
+            data: locatedUi
           })
-          await runtime.assertThat(locatedMarkerUi.markerCount === 1, {
-            name: 'selection-marker-after-locating',
-            message: '跨段落引用定位后应展示末字编号。',
-            data: locatedMarkerUi
-          })
-          await page.getByTestId('docx-selection-marker').click()
+          await clickSavedText(page, 1, 4)
           const synchronized =
             (await page.getByTestId('docx-selection-thought').textContent())?.includes(
               '重点说明谨慎表述。'
@@ -472,13 +489,29 @@ describe('workbench conversation e2e', () => {
           await page.getByTestId('docx-selection-save').click()
           await composer.locator('[data-role="document-selection-token"]').click()
           const located = await page.evaluate(() => window.getSelection()?.toString() || '')
-          await selectText(page, 0, 0, 1, 8)
+          await selectText(page, 0, 0, 1, 8, { popup: false })
+          const repeatedUi = await page.evaluate(() => ({
+            selected: window.getSelection()?.toString() || '',
+            popup: Boolean(document.querySelector('[data-testid="docx-selection-popup"]')),
+            overlapNotice: document.body.textContent?.includes('该选区与已有编号重叠') || false
+          }))
+          await clickSavedText(page, 0, 2)
           const repeatedThought = await page.getByTestId('docx-selection-thought').textContent()
           await page.getByTestId('docx-selection-thought').press('Escape')
           const count = await composer.locator('[data-role="document-selection-token"]').count()
           await selectText(page, 0, 0, 1, 12, { popup: false })
-          await page.getByText('该选区与已有编号重叠，请调整选取范围。', { exact: true }).waitFor()
-          const overlapRejected = (await page.getByTestId('docx-selection-popup').count()) === 0
+          const overlapUi = await page.evaluate(() => ({
+            selected: window.getSelection()?.toString() || '',
+            popup: Boolean(document.querySelector('[data-testid="docx-selection-popup"]')),
+            overlapNotice: document.body.textContent?.includes('该选区与已有编号重叠') || false
+          }))
+          const overlappingReferenceCount = await composer
+            .locator('[data-role="document-selection-token"]')
+            .count()
+          await runtime.captureScreenshot({
+            name: 'selection-overlap',
+            message: '重叠选择保留原生选中范围，不弹提示或 AI 编辑入口'
+          })
           await createPartnerThroughWorkbenchUi(page, '选区隔离伙伴')
           const otherPartnerEmpty =
             (await getWorkbenchLocator(page, workbenchSelectors.input)
@@ -517,7 +550,7 @@ describe('workbench conversation e2e', () => {
             .locator('[data-role="document-selection-token"]')
             .last()
             .getAttribute('aria-label')
-          await page.getByTestId('docx-selection-marker').click()
+          await clickSavedText(page, 0, 0, 'article td p')
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
           await composer.locator('[data-role="document-selection-token"]').click()
           await page
@@ -533,7 +566,7 @@ describe('workbench conversation e2e', () => {
           await composer
             .locator('[data-role="document-selection-token"]')
             .waitFor({ state: 'detached' })
-          const markerCount = await page.getByTestId('docx-selection-marker').count()
+          const submittedHighlights = await observeSavedSelections(page)
           await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAt,
@@ -567,7 +600,7 @@ describe('workbench conversation e2e', () => {
             .last()
             .locator('[data-role="document-selection-token"]')
             .getAttribute('aria-label')
-          await page.getByTestId('docx-selection-marker').click()
+          await clickSavedText(page, 0, 0)
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
           await page
             .locator(`[data-testid^="${workbenchSelectors.userMessageEditButtonPrefix}-"]`)
@@ -623,8 +656,10 @@ describe('workbench conversation e2e', () => {
             escapeCancelled,
             outsideCancelled,
             tokenIcon,
-            markerClear,
-            adjacentMarkersClear,
+            highlightedQuote,
+            blankHover,
+            adjacentHighlights,
+            adjacentThought,
             flippedUi,
             resizedUi,
             resizedText,
@@ -634,10 +669,12 @@ describe('workbench conversation e2e', () => {
             located,
             repeatedThought,
             count,
-            markerCount,
+            submittedHighlights,
             historyText,
             historyLabel,
-            overlapRejected,
+            repeatedUi,
+            overlapUi,
+            overlappingReferenceCount,
             otherPartnerEmpty,
             memoryRestored,
             cellQuote,
@@ -661,9 +698,16 @@ describe('workbench conversation e2e', () => {
               result.located.includes('客户周会纪要') &&
               result.count === 1 &&
               result.repeatedThought?.includes('风险控制建议') === true &&
-              result.markerCount === 0 &&
+              result.submittedHighlights.quotes.length === 0 &&
               result.historyLabel === '客户周会纪要.docx · 1' &&
-              result.overlapRejected &&
+              !result.repeatedUi.popup &&
+              !result.repeatedUi.overlapNotice &&
+              result.repeatedUi.selected === result.located &&
+              !result.overlapUi.popup &&
+              !result.overlapUi.overlapNotice &&
+              result.overlapUi.selected.startsWith(result.located) &&
+              result.overlapUi.selected.length > result.located.length &&
+              result.overlappingReferenceCount === 1 &&
               result.otherPartnerEmpty &&
               result.memoryRestored &&
               result.cellQuote === '模式' &&
@@ -701,15 +745,19 @@ describe('workbench conversation e2e', () => {
               result.escapeCancelled &&
               result.outsideCancelled &&
               result.tokenIcon &&
-              result.markerClear &&
-              result.adjacentMarkersClear &&
+              result.highlightedQuote.numberCount === 0 &&
+              result.highlightedQuote.quotes.length === 1 &&
+              result.blankHover.cursor !== 'pointer' &&
+              !result.blankHover.quote &&
+              result.adjacentHighlights.quotes.length === 2 &&
+              result.adjacentThought === '临时相邻引用' &&
               result.flippedUi.placement === 'above' &&
               result.flippedUi.withinViewport &&
               result.resizedUi.withinViewport &&
               result.resizedText === '缩放保留此输入',
             {
               name: 'docx-selection-edit-ui',
-              message: 'AI 编辑入口、紧凑输入条、紫色高亮、碰撞翻转与编号避让应符合真实预览布局。',
+              message: 'AI 编辑入口、紧凑输入条、可点击的紫色高亮与碰撞翻转应符合真实预览布局。',
               data: result
             }
           )
