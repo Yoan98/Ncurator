@@ -31,6 +31,7 @@ import PptDiffViewer from './PptDiffViewer'
 import WorkbenchTabBar from './WorkbenchTabBar'
 import WorkspaceFileExplorer, { type WorkspaceFileExplorerMode } from './WorkspaceFileExplorer'
 import WorkspaceFilesEmptyState from './WorkspaceFilesEmptyState'
+import { findLatestFileChangeForPath } from './fileChangeGroups'
 import { shouldShowWpsOpenWithHint, WPS_OPEN_WITH_HINT } from './wpsOpenWithHint'
 
 type WorkbenchContentPanelProps = {
@@ -47,6 +48,7 @@ type WorkbenchContentPanelProps = {
   onOpenWorkspaceSettings: () => void
   onReloadWorkspaces: () => void
   fileChangeRecords: AiFileChangeRecord[]
+  partnerFileChangeRecords: AiFileChangeRecord[]
   onRevertApply: () => void
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
   isAiRunActive: boolean
@@ -585,6 +587,7 @@ const arePreviewPanelPropsEqual = (
   previous.fallbackWorkspaceName === next.fallbackWorkspaceName &&
   previous.backTarget === next.backTarget &&
   previous.displayMode === next.displayMode &&
+  previous.onSwitchDisplayMode === next.onSwitchDisplayMode &&
   previous.explorerOpen === next.explorerOpen
 
 const WorkbenchDocumentPreviewPanel = React.memo(
@@ -606,6 +609,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   onOpenWorkspaceSettings,
   onReloadWorkspaces,
   fileChangeRecords,
+  partnerFileChangeRecords,
   onRevertApply,
   onBackToPanelState,
   onOpenPath,
@@ -778,6 +782,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         : [],
     [previewRevision, state, editableKind]
   )
+  const previewChangeRecord = useMemo(() => {
+    if (state.kind !== 'file_preview' || state.file.isDirectory) return null
+    const record = findLatestFileChangeForPath(partnerFileChangeRecords, state.file.path)
+    return canSwitchDocumentDisplayMode(record) ? record : null
+  }, [partnerFileChangeRecords, state])
   const hasDedicatedPreview = Boolean(activeApplyRecord?.previewPath)
   const canSwitchDisplayMode = canSwitchDocumentDisplayMode(activeApplyRecord)
   const applyDocuments = useMemo<FileRenderDocument[]>(() => {
@@ -905,7 +914,14 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               <WorkbenchDocumentPreviewPanel
                 filePath={state.file.path}
                 documents={previewDocuments}
-                mode="preview"
+                mode={previewChangeRecord ? 'edit' : 'preview'}
+                status={previewChangeRecord?.status}
+                displayMode="preview"
+                onSwitchDisplayMode={
+                  previewChangeRecord
+                    ? () => onOpenWorkspaceChange(previewChangeRecord.id)
+                    : undefined
+                }
                 canOpen={!state.file.isDirectory}
                 workspaces={workspaces}
                 fallbackWorkspaceName={fallbackWorkspaceName}
@@ -1058,6 +1074,7 @@ const areContentPanelPropsEqual = (
   previous.onOpenWorkspaceSettings === next.onOpenWorkspaceSettings &&
   previous.onReloadWorkspaces === next.onReloadWorkspaces &&
   previous.fileChangeRecords === next.fileChangeRecords &&
+  previous.partnerFileChangeRecords === next.partnerFileChangeRecords &&
   previous.isAiRunActive === next.isAiRunActive &&
   previous.onSuccessMessage === next.onSuccessMessage &&
   previous.onInfoMessage === next.onInfoMessage &&

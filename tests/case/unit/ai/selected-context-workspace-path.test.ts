@@ -43,9 +43,9 @@ describe('ai unit selected context workspace path', () => {
       })
     )
 
-    expect(text).toContain('1. weekly-risk.md')
+    expect(text).toContain('1. 文档：weekly-risk.md')
     expect(text).not.toContain('类型：')
-    expect(text).toContain('引用范围：整个资源')
+    expect(text).toContain('引用内容：整个资源')
     expect(text).toContain('资源地址：/tmp/real-workspace-root/reports/weekly-risk.md')
 
     expect(
@@ -98,6 +98,38 @@ describe('ai unit selected context workspace path', () => {
     expect(text).toContain('知识库文档ID：doc-1')
     expect(text).not.toContain('用户添加的附件：')
     expect(text).not.toContain('当前没有用户添加的附件')
+  })
+
+  it('preserves whitespace and embedded fences inside separate numbered excerpt blocks', () => {
+    const selectedText = '首行\n\n  \t单元格\t\n```text\n后文：这是原文\n```\n   '
+    const contextBefore = '\n  前文\n'
+    const contextAfter = '\t后文  '
+    const text = renderSelectedReferencesText(
+      buildReferenceScope({
+        contentNodes: [
+          {
+            kind: 'document_selection',
+            id: 'excerpt',
+            number: 2,
+            filePath: '/tmp/example.docx',
+            selectedText,
+            contextBefore,
+            contextAfter,
+            children: [{ kind: 'text', text: '解释' }]
+          }
+        ]
+      })
+    )
+    expect(text).toContain(`选中片段2的原文：\n\`\`\`\`text\n${selectedText}\n\`\`\`\``)
+    expect(text).toContain(
+      `选中片段2的前文（上下文，仅供理解与定位）：\n\`\`\`text\n${contextBefore}\n\`\`\``
+    )
+    expect(text).toContain(
+      `选中片段2的后文（上下文，仅供理解与定位）：\n\`\`\`text\n${contextAfter}\n\`\`\``
+    )
+    expect(text).not.toContain('引用内容：')
+    expect(text).not.toContain('\n选中片段2\n')
+    expect(text).not.toContain('[example.docx')
   })
 
   it('renders user selected attachments with compact content-info template', () => {

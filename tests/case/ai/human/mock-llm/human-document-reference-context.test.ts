@@ -217,7 +217,18 @@ describe('ai human mock-llm backend', () => {
             result.body.includes('Hello') &&
             result.body.includes(' from fixture') &&
             result.body.includes('Hello from ') &&
-            result.body.includes('引用范围：整个资源及以下选区') &&
+            result.body.includes('引用内容：整个资源') &&
+            result.body.includes('选中片段1的原文：\n```text\nHello\n```') &&
+            result.body.includes(
+              '选中片段1的后文（上下文，仅供理解与定位）：\n```text\n from fixture\n```'
+            ) &&
+            result.body.includes(
+              '选中片段2的前文（上下文，仅供理解与定位）：\n```text\nHello from \n```'
+            ) &&
+            result.body.split('[sample-edit.docx · 1]').length === 2 &&
+            result.body.split('[sample-edit.docx · 2]').length === 2 &&
+            !result.body.includes('以下选中片段') &&
+            !result.body.includes('\n选中片段1\n') &&
             !result.body.includes('类型：') &&
             !result.body.includes('stale-id') &&
             result.body.split('解释这段文字').length === 2 &&

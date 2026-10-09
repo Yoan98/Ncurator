@@ -1,4 +1,4 @@
-import { chatReferences, selectionLabel } from '../../../../../shared/chatContent'
+import { chatReferences } from '../../../../../shared/chatContent'
 import type {
   ChatAttachment,
   ChatMessageContentNode,
@@ -24,6 +24,24 @@ type ReferencedDocument = {
 
 const renderAttachment = (attachment: ChatAttachment, index: number): string => {
   return `第 ${index} 个附件路径：${attachment.path}`
+}
+
+const renderExcerptBlock = (label: string, content: string): string => {
+  const longestFence = (content.match(/`+/g) || []).reduce(
+    (longest, run) => Math.max(longest, run.length),
+    0
+  )
+  const fence = '`'.repeat(Math.max(3, longestFence + 1))
+  return `${label}：\n${fence}text\n${content}\n${fence}`
+}
+
+const renderSelection = (node: DocumentSelectionNode): string => {
+  const label = `选中片段${node.number}`
+  return [
+    renderExcerptBlock(`${label}的原文`, node.selectedText),
+    renderExcerptBlock(`${label}的前文（上下文，仅供理解与定位）`, node.contextBefore),
+    renderExcerptBlock(`${label}的后文（上下文，仅供理解与定位）`, node.contextAfter)
+  ].join('\n\n')
 }
 
 export const buildReferenceScope = (input: {
@@ -75,22 +93,11 @@ export const renderSelectedReferencesText = (scope: AiReferenceScope): string =>
   if (!scope.contentNodes) scope.selectedReferences.forEach(addReference)
   return [...documents.values()]
     .map((document, index) => {
-      const scopeLabel = document.wholeResource
-        ? document.selections.length
-          ? '整个资源及以下选区'
-          : '整个资源'
-        : '以下选区'
-      const excerpts = document.selections
-        .map(
-          (node) =>
-            `   [${selectionLabel(node)}]\n   选中原文：${node.selectedText}\n   前文：${node.contextBefore}\n   后文：${node.contextAfter}`
-        )
-        .join('\n\n')
-      return `${index + 1}. ${document.name}
-   资源地址：${document.address}
-   文档知识库状态：${KB_AVAILABILITY_LABEL[document.knowledge.kbAvailability]}
-   知识库文档ID：${document.knowledge.kbDocumentIds.join(', ') || '无'}
-   引用范围：${scopeLabel}${excerpts ? `\n\n${excerpts}` : ''}`
+      const excerpts = document.selections.map(renderSelection).join('\n\n')
+      return `${index + 1}. 文档：${document.name}
+资源地址：${document.address}
+文档知识库状态：${KB_AVAILABILITY_LABEL[document.knowledge.kbAvailability]}
+知识库文档ID：${document.knowledge.kbDocumentIds.join(', ') || '无'}${document.wholeResource ? '\n引用内容：整个资源' : ''}${excerpts ? `\n\n${excerpts}` : ''}`
     })
     .join('\n\n')
 }

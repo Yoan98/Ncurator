@@ -48,6 +48,7 @@ describe('workbench result e2e', () => {
           const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
           const beforeBytes = await fs.readFile(targetPath)
 
+          await createWorkbenchNewSession(page)
           await openWorkbenchWorkspaceFile(runtime, 'workbench-preview.md')
           await getWorkbenchLocator(page, workbenchSelectors.markdownEditor).waitFor({
             state: 'visible',
@@ -57,6 +58,10 @@ describe('workbench result e2e', () => {
             page,
             workbenchSelectors.documentModeTag
           ).count()
+          const originalDocumentView = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.documentView
+          ).elementHandle()
           await page.evaluate((noticeText) => {
             const target = window as unknown as {
               __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number
@@ -82,7 +87,6 @@ describe('workbench result e2e', () => {
             })
           }, '检测到当前文件被外部修改，已自动刷新')
 
-          await createWorkbenchNewSession(page)
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
@@ -109,6 +113,16 @@ describe('workbench result e2e', () => {
           ).count()
           const evidence = await completionPromise
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          await getWorkbenchLocator(page, workbenchSelectors.documentModeToggle).waitFor({
+            state: 'visible',
+            timeout: 15_000
+          })
+          const associatedPreviewMode = (
+            await getWorkbenchLocator(page, workbenchSelectors.documentModeTag).textContent()
+          )?.trim()
+          const documentViewPreserved = await originalDocumentView?.evaluate(
+            (element) => element.isConnected
+          )
           const applyEntry = await waitForApplyEntry(page)
           const assistantApplyTextBeforeClick = ((await applyEntry.textContent()) || '').trim()
           const modificationCountsVisibleBeforeClick = /[+-][1-9]\d*/u.test(
@@ -156,6 +170,33 @@ describe('workbench result e2e', () => {
                 (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
                   .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
             )) === 0
+          await openWorkbenchWorkspaceFile(runtime, 'workbench-preview.md')
+          const allFilePreviewMode = (
+            await getWorkbenchLocator(page, workbenchSelectors.documentModeTag).textContent()
+          )?.trim()
+          await getWorkbenchLocator(page, workbenchSelectors.documentModeToggle).click()
+          await getWorkbenchLocator(page, workbenchSelectors.textDiffViewer).waitFor({
+            state: 'visible',
+            timeout: 30_000
+          })
+          const allFileCanReview =
+            (
+              await getWorkbenchLocator(page, workbenchSelectors.documentModeTag).textContent()
+            )?.trim() === '审核'
+          const followUpStartedAt = Date.now()
+          await sendWorkbenchMessage(page, '只解释刚才文字修改的用途，简短回答即可。无需修改文件。')
+          await waitForWorkbenchAiRunCompletion(
+            runtime,
+            followUpStartedAt,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          const pinnedReviewPreserved =
+            (await getWorkbenchLocator(page, workbenchSelectors.textDiffViewer).isVisible()) &&
+            (
+              await getWorkbenchLocator(page, workbenchSelectors.documentModeTag).textContent()
+            )?.trim() === '审核'
           const runStartedEvent = evidence.events.find(
             (
               item
@@ -414,6 +455,11 @@ describe('workbench result e2e', () => {
           return {
             previewContainsExternalC,
             normalPreviewModeTagCount,
+            associatedPreviewMode,
+            documentViewPreserved,
+            allFilePreviewMode,
+            allFileCanReview,
+            pinnedReviewPreserved,
             editModeTagCount,
             initialToggleLabel,
             fileModeToggleLabel,
@@ -465,6 +511,11 @@ describe('workbench result e2e', () => {
             result.previewContainsExternalC &&
               !result.diffText.includes('EXTERNAL_TEXT_C') &&
               result.normalPreviewModeTagCount === 0 &&
+              result.associatedPreviewMode === '预览' &&
+              result.documentViewPreserved &&
+              result.allFilePreviewMode === '预览' &&
+              result.allFileCanReview &&
+              result.pinnedReviewPreserved &&
               result.editModeTagCount === 1 &&
               result.initialModeTag === '审核' &&
               result.previewModeTag === '预览' &&

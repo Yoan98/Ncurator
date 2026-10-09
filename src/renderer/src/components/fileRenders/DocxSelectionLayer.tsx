@@ -367,7 +367,7 @@ export default function DocxSelectionLayer({
               if (target) open(target.node, target.location, 'editor')
             }}
           >
-            编辑所选内容
+            查看引用内容
           </button>
         ))}
       {popup &&
@@ -392,13 +392,13 @@ export default function DocxSelectionLayer({
             {popup.mode === 'action' ? (
               <button
                 type="button"
-                data-testid="docx-selection-ai-edit"
+                data-testid="docx-selection-ai-reference"
                 disabled={state.locked}
                 className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[#37352F] outline-none hover:bg-[#F4F4F2] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={() => setPopup((previous) => previous && { ...previous, mode: 'editor' })}
               >
                 <HiOutlineSparkles className="h-4 w-4 text-[#80649F]" aria-hidden="true" />
-                AI 编辑
+                AI 引用
               </button>
             ) : (
               <>
@@ -409,7 +409,7 @@ export default function DocxSelectionLayer({
                     selectedReferences: chatReferences(popup.node.children)
                   }}
                   variant="inline"
-                  placeholder="描述编辑内容"
+                  placeholder="描述你想对引用内容做什么"
                   dataTestId="docx-selection-thought"
                   disabled={state.locked}
                   onSubmit={save}

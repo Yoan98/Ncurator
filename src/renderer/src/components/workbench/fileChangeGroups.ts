@@ -9,6 +9,22 @@ export type SessionFileChangeGroup = {
 export const normalizeFileChangePath = (value: string): string =>
   value.replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase()
 
+export const findLatestFileChangeForPath = (
+  records: readonly AiFileChangeRecord[],
+  filePath: string
+): AiFileChangeRecord | null => {
+  const path = normalizeFileChangePath(filePath)
+  return (
+    records
+      .filter(
+        (record) =>
+          record.status === 'applied' &&
+          normalizeFileChangePath(record.afterPath || record.path) === path
+      )
+      .sort((left, right) => right.createdAt - left.createdAt)[0] || null
+  )
+}
+
 export const groupSessionFileChanges = (
   changeRecords: readonly AiFileChangeRecord[]
 ): SessionFileChangeGroup[] => {

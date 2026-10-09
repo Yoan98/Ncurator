@@ -1,14 +1,19 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import type { Page } from 'playwright'
+import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
+  collectWorkbenchLlmIoRecords,
   createPartnerThroughWorkbenchUi,
   insertWorkbenchReferenceToken,
   navigateToWorkbench,
   getWorkbenchLocator,
   openWorkbenchWorkspaceFile,
+  readDocxPlainText,
   setupWorkbenchWithTempWorkspace,
   submitWorkbenchCurrentDraft,
   waitForWorkbenchAiRunCompletion,
@@ -133,9 +138,9 @@ const selectText = async (
     await page.keyboard.up('Shift')
   }
   if (options.popup !== false) {
-    await page.getByTestId('docx-selection-ai-edit').waitFor({ state: 'visible' })
+    await page.getByTestId('docx-selection-ai-reference').waitFor({ state: 'visible' })
     if (options.editor !== false) {
-      await page.getByTestId('docx-selection-ai-edit').click()
+      await page.getByTestId('docx-selection-ai-reference').click()
       await page.getByTestId('docx-selection-thought').waitFor({ state: 'visible' })
     }
   }
@@ -202,6 +207,12 @@ describe('workbench conversation e2e', () => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
           const composer = getWorkbenchLocator(page, workbenchSelectors.input)
+          const sourcePaths = ['工作/客户周会纪要.docx', 'docx-selection-layout.docx'].map((name) =>
+            path.join(setup.workspace.rootPath, name)
+          )
+          const originalSources = await Promise.all(
+            sourcePaths.map((source) => fs.readFile(source))
+          )
           const readDraftSelections = () =>
             composer.locator('[data-role="document-selection-fragment"]').evaluateAll((fragments) =>
               fragments.map((fragment) => ({
@@ -229,6 +240,7 @@ describe('workbench conversation e2e', () => {
             await page.getByTestId('docx-selection-thought').fill(selection.thought)
             await page.getByRole('button', { name: '添加到输入框', exact: true }).click()
           }
+          await page.locator('.docx-content article p').first().hover()
           const savedUi = await observeSavedSelections(page)
           const hoveredSelections: Awaited<ReturnType<typeof observeHover>>[] = []
           for (const selection of [
@@ -237,7 +249,7 @@ describe('workbench conversation e2e', () => {
             { offset: 12, quote: 'fixture' }
           ]) {
             const point = await textPoint(page, 0, selection.offset, 'article p', true)
-            await page.mouse.move(point.x, point.y)
+            await page.mouse.move(point.x, point.y, { steps: 2 })
             await page.waitForFunction(
               (quote) =>
                 [...CSS.highlights].some(
@@ -356,9 +368,9 @@ describe('workbench conversation e2e', () => {
           const actionUi = await observeSelectionUi(page)
           await runtime.captureScreenshot({
             name: 'selection-action',
-            message: '紫色选区与 AI 编辑入口'
+            message: '紫色选区与 AI 引用入口'
           })
-          await page.getByTestId('docx-selection-ai-edit').click()
+          await page.getByTestId('docx-selection-ai-reference').click()
           await page.getByTestId('docx-selection-thought').waitFor({ state: 'visible' })
           const inputUi = await observeSelectionUi(page)
           await page.getByTestId('docx-selection-thought').fill('第一行')
@@ -513,7 +525,7 @@ describe('workbench conversation e2e', () => {
             .count()
           await runtime.captureScreenshot({
             name: 'selection-overlap',
-            message: '重叠选择保留原生选中范围，不弹提示或 AI 编辑入口'
+            message: '重叠选择保留原生选中范围，不弹提示或 AI 引用入口'
           })
           await createPartnerThroughWorkbenchUi(page, '选区隔离伙伴')
           const otherPartnerEmpty =
@@ -705,6 +717,25 @@ describe('workbench conversation e2e', () => {
             WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
             { page, blockerPolicy: 'auto_approve' }
           )
+          const brainInput =
+            (await collectWorkbenchLlmIoRecords(runtime))
+              .find((record) => record.caller === 'human.brain' && record.startedAt >= startedAt)
+              ?.requestWire?.messages.filter((message) => message.role === 'human')
+              .map((message) => message.content)
+              .join('\n\n') || ''
+          const finalSources = await Promise.all(sourcePaths.map((source) => fs.readFile(source)))
+          await runtime.assertThat(
+            brainInput.includes('选中片段1的原文：\n```text\n') &&
+              brainInput.includes('选中片段1的前文（上下文，仅供理解与定位）：\n```text\n') &&
+              brainInput.includes('选中片段1的后文（上下文，仅供理解与定位）：\n```text\n') &&
+              !brainInput.includes('以下选中片段') &&
+              finalSources.every((bytes, index) => bytes.equals(originalSources[index])),
+            {
+              name: 'document-reference-brain-blocks-and-question-preservation',
+              message: '真实模型输入将原文与片段上下文分块；引用提问不修改源文档。',
+              data: { brainInput }
+            }
+          )
           const historyText = await getWorkbenchLocator(
             page,
             workbenchSelectors.userMessageReferences
@@ -778,6 +809,67 @@ describe('workbench conversation e2e', () => {
             .locator('[data-role="document-selection-token"]')
             .count()
 
+          const selectedParagraph =
+            '产品定位：我们希望通过人工智能技术为教师和学生提供一个能够支持课堂探究、协作学习和即时反馈的综合性学习平台，让教师能够更加高效地组织课堂，让学生能够更加主动地参与学习并深入理解知识。'
+          const scopePath = await writeTestDocxFile(
+            setup.workspace.rootPath,
+            'selection-scope.docx',
+            [
+              { type: 'paragraph', text: '一、课堂产品定位' },
+              { type: 'paragraph', text: selectedParagraph },
+              {
+                type: 'paragraph',
+                text: '自主探究：学生能够自主提出问题、反复尝试解决方案并记录探索过程，通过持续的问题发现和思考来提升学习能力。'
+              },
+              {
+                type: 'paragraph',
+                text: '小组共创：学生在小组协作中共同讨论问题、分享自己的观点并参与成果设计，教师及时观察并指导每一个小组的合作过程。'
+              }
+            ]
+          )
+          const scopeBefore = await readDocxPlainText(scopePath)
+          await composer.click()
+          await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
+          await page.keyboard.press('Backspace')
+          await openWorkbenchWorkspaceFile(runtime, 'selection-scope.docx')
+          await selectText(page, 1, 0, 1, selectedParagraph.length)
+          await page.getByTestId('docx-selection-thought').fill('精简下')
+          await page.getByTestId('docx-selection-save').click()
+          const scopeStartedAt = Date.now()
+          await submitWorkbenchCurrentDraft(page)
+          await waitForWorkbenchAiRunCompletion(
+            runtime,
+            scopeStartedAt,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          const scopeAfter = await readDocxPlainText(scopePath)
+          const [unchangedPrefix, unchangedSuffix] = scopeBefore.split(selectedParagraph)
+          const replacementLength =
+            scopeAfter.length - unchangedPrefix.length - unchangedSuffix.length
+          const selectionOnlyChanged =
+            scopeAfter.startsWith(unchangedPrefix) &&
+            scopeAfter.endsWith(unchangedSuffix) &&
+            replacementLength > 0 &&
+            replacementLength < selectedParagraph.length
+          const scopeModeToggle = getWorkbenchLocator(page, workbenchSelectors.documentModeToggle)
+          await scopeModeToggle.waitFor({ state: 'visible', timeout: 30_000 })
+          const scopePreviewPreserved =
+            (
+              await getWorkbenchLocator(page, workbenchSelectors.documentModeTag).textContent()
+            )?.trim() === '预览'
+          await scopeModeToggle.click()
+          await page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim() === '审核',
+            workbenchSelectors.documentModeTag
+          )
+          await runtime.captureScreenshot({
+            name: 'selection-scope-review',
+            message: '实际局部改写只精简选中段，普通 DOCX 预览自动关联审核入口'
+          })
+
           return {
             excerpt,
             actionUi,
@@ -817,10 +909,20 @@ describe('workbench conversation e2e', () => {
             historyRestored,
             storedSelections,
             restartedText,
-            restartedSelections
+            restartedSelections,
+            selectionOnlyChanged,
+            scopePreviewPreserved
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(result.selectionOnlyChanged && result.scopePreviewPreserved, {
+            name: 'selection-local-edit-and-live-review',
+            message: '仅输入“精简下”应只改选中段，并保持普通预览直到用户切换到审核。',
+            data: {
+              selectionOnlyChanged: result.selectionOnlyChanged,
+              scopePreviewPreserved: result.scopePreviewPreserved
+            }
+          })
           await runtime.assertThat(
             Boolean(result.excerpt?.includes('客户周会纪要\n会议背景')) &&
               result.emptyDisabled &&
@@ -865,7 +967,7 @@ describe('workbench conversation e2e', () => {
               result.inputUi.quote === result.actionUi.quote &&
               result.inputUi.background === 'rgb(219, 197, 246)' &&
               result.inputUi.decoration === 'none' &&
-              result.inputUi.placeholder === '描述编辑内容' &&
+              result.inputUi.placeholder === '描述你想对引用内容做什么' &&
               result.inputUi.confirmIcon &&
               result.inputUi.confirmLabel === '添加到输入框' &&
               result.inputUi.fontSize === '13px' &&
@@ -888,7 +990,7 @@ describe('workbench conversation e2e', () => {
               result.resizedText === '缩放保留此输入',
             {
               name: 'docx-selection-edit-ui',
-              message: 'AI 编辑入口、紧凑输入条、可点击的紫色高亮与碰撞翻转应符合真实预览布局。',
+              message: 'AI 引用入口、紧凑输入条、可点击的紫色高亮与碰撞翻转应符合真实预览布局。',
               data: result
             }
           )

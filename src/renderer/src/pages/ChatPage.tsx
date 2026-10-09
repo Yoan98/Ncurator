@@ -168,7 +168,6 @@ import {
   isRuntimeAssetPath
 } from '../../../shared/fileChangeVisibility'
 import {
-  createFileChangeListRequest,
   createFileChangeRunScope,
   filterFileChangeRecordsForScope,
   isCurrentFileChangeRunScope,
@@ -973,6 +972,8 @@ const ChatPage: React.FC = () => {
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
+  const [partnerFileChangeRecords, setPartnerFileChangeRecords] = useState<AiFileChangeRecord[]>([])
+  const partnerFileChangeLoadRequestRef = useRef(0)
   const fileChangeRunScopeRef = useRef<FileChangeRunScope | null>(null)
   const [applyLoading, setApplyLoading] = useState(false)
   const [applyReverting, setApplyReverting] = useState(false)
@@ -2523,8 +2524,19 @@ const ChatPage: React.FC = () => {
         setActiveApplyRecord(null)
         return
       }
+      if (currentPartnerIdRef.current !== nextRecord.partnerId) return
+      const currentPanel = contentPanelRef.current
+      if (
+        !input.openWorkspace &&
+        currentPanel.kind === 'apply_workspace' &&
+        currentPanel.applyId !== input.applyId
+      )
+        return
 
       setActiveApplyRecord(nextRecord)
+      setPartnerFileChangeRecords((current) =>
+        current.map((record) => (record.id === nextRecord.id ? nextRecord : record))
+      )
       if (isCurrentFileChangeRunScope(fileChangeRunScopeRef.current, nextRecord)) {
         setFileChangeRecords((current) =>
           current.map((record) => (record.id === nextRecord.id ? nextRecord : record))
@@ -2563,6 +2575,7 @@ const ChatPage: React.FC = () => {
   ): Promise<void> => {
     const requestId = fileChangeLoadRequestRef.current + 1
     fileChangeLoadRequestRef.current = requestId
+    const partnerRecordsRequestId = ++partnerFileChangeLoadRequestRef.current
     const scope = createFileChangeRunScope({ partnerId, runId })
     fileChangeRunScopeRef.current = scope
     try {
@@ -2570,10 +2583,14 @@ const ChatPage: React.FC = () => {
         Boolean(options?.forceOpenWorkspace) || Boolean(options?.preferredApplyId)
       const maxAttempts = shouldWaitForRecords ? 6 : 1
       let allRecords: AiFileChangeRecord[] = []
+      let partnerRecords: AiFileChangeRecord[] = []
       let activeRecords: AiFileChangeRecord[] = []
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const response = await window.api.aiFileChangeList(createFileChangeListRequest(scope))
+        const response = await window.api.aiFileChangeList({ partnerId })
+        partnerRecords = sortFileChangeRecords(response.items).filter(
+          (item) => item.status !== 'failed' || item.error !== NO_EFFECTIVE_FILE_CHANGE_MESSAGE
+        )
         const listedItems = sortFileChangeRecords(
           filterFileChangeRecordsForScope(response.items, scope)
         )
@@ -2607,8 +2624,15 @@ const ChatPage: React.FC = () => {
       const applyTargetsByRunId = groupApplyTargetsByRunId(
         filterVisibleFileChangeRecords(allRecords, getUserAttachmentPaths(currentMessages))
       )
-      if (fileChangeLoadRequestRef.current !== requestId) return
+      if (
+        fileChangeLoadRequestRef.current !== requestId ||
+        currentPartnerIdRef.current !== partnerId
+      )
+        return
       setFileChangeRecords(allRecords)
+      if (partnerFileChangeLoadRequestRef.current === partnerRecordsRequestId) {
+        setPartnerFileChangeRecords(partnerRecords)
+      }
 
       setAssistantTurns((previous) => {
         const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
@@ -2622,8 +2646,12 @@ const ChatPage: React.FC = () => {
         return nextTurns
       })
 
-      const preferredRecord = options?.preferredApplyId
-        ? allRecords.find((record) => record.id === options.preferredApplyId) || null
+      const currentPanel = contentPanelRef.current
+      const selectedApplyId =
+        options?.preferredApplyId ||
+        (currentPanel.kind === 'apply_workspace' ? currentPanel.applyId : null)
+      const preferredRecord = selectedApplyId
+        ? partnerRecords.find((record) => record.id === selectedApplyId) || null
         : null
 
       const nextSelectedRecord = preferredRecord || activeRecords[0] || null
@@ -2660,9 +2688,15 @@ const ChatPage: React.FC = () => {
 
       await loadApplyRecord({
         applyId: nextSelectedRecord.id,
+        detail: nextSelectedRecord,
         openWorkspace: shouldOpenWorkspace
       })
     } catch (error) {
+      if (
+        fileChangeLoadRequestRef.current !== requestId ||
+        currentPartnerIdRef.current !== partnerId
+      )
+        return
       console.error('Failed to load file change records', error)
       setActiveApplyRecord(null)
       setFileChangeRecords([])
@@ -2674,8 +2708,19 @@ const ChatPage: React.FC = () => {
     partnerId: string,
     messages = currentMessages
   ): Promise<void> => {
+    const requestId = ++partnerFileChangeLoadRequestRef.current
     try {
       const response = await window.api.aiFileChangeList({ partnerId })
+      if (
+        partnerFileChangeLoadRequestRef.current !== requestId ||
+        currentPartnerIdRef.current !== partnerId
+      )
+        return
+      setPartnerFileChangeRecords(
+        sortFileChangeRecords(response.items).filter(
+          (item) => item.status !== 'failed' || item.error !== NO_EFFECTIVE_FILE_CHANGE_MESSAGE
+        )
+      )
       const applyTargetsByRunId = groupApplyTargetsByRunId(
         filterVisibleFileChangeRecords(
           sortFileChangeRecords(response.items),
@@ -2721,6 +2766,10 @@ const ChatPage: React.FC = () => {
     uiStateReadyKeyRef.current = null
     setUiStateReadyKey(null)
     currentPartnerIdRef.current = session.id
+    partnerFileChangeLoadRequestRef.current += 1
+    setPartnerFileChangeRecords([])
+    setFileChangeRecords([])
+    fileChangeRunScopeRef.current = null
 
     setCurrentPartnerId(session.id)
     setSwitchingPartnerId(session.id)
@@ -2733,8 +2782,6 @@ const ChatPage: React.FC = () => {
       activeViewKey: session.id
     })
     await loadPartnerOpen(session.id, requestId)
-    setFileChangeRecords([])
-    fileChangeRunScopeRef.current = null
     void refreshContextUsage(session.id)
   }
   const openExistingPartnerRef = useRef(openExistingPartner)
@@ -5435,6 +5482,7 @@ const ChatPage: React.FC = () => {
                         onOpenWorkspaceSettings={openWorkspaceSettings}
                         onReloadWorkspaces={loadWorkspaces}
                         fileChangeRecords={fileChangeRecords}
+                        partnerFileChangeRecords={partnerFileChangeRecords}
                         onRevertApply={() => void handleApplyRevert()}
                         onBackToPanelState={showContentPanel}
                         onOpenPath={openPathOrNotify}
