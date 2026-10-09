@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import type { Event } from 'electron'
 import { windowSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -68,6 +69,42 @@ describe('workbench conversation e2e', () => {
 
           await ensureWorkbenchContentPanelExpanded(page)
           await page.waitForTimeout(300)
+          const windowHandle = await runtime.electronApp.browserWindow(page)
+          const cursorObserver = await windowHandle.evaluateHandle((window) => {
+            const events: string[] = []
+            const listener = (_event: Event, type: string) => events.push(type)
+            window.webContents.on('cursor-changed', listener)
+            return {
+              events,
+              dispose: () => {
+                window.webContents.off('cursor-changed', listener)
+              }
+            }
+          })
+          const inspectResizeHandles = async () => {
+            const result: { testId: string; cursor: string; hitTestId: string | null }[] = []
+            for (const testId of [
+              workbenchSelectors.sidebarResizer,
+              workbenchSelectors.contentPanelResizer
+            ]) {
+              const point = await getWorkbenchLocator(page, testId).evaluate((element) => {
+                const rect = element.getBoundingClientRect()
+                return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+              })
+              await page.mouse.move(point.x - 15, point.y)
+              await page.mouse.move(point.x, point.y, { steps: 2 })
+              const hit = await page.evaluate((point) => {
+                const element = document.elementFromPoint(point.x, point.y)
+                return {
+                  cursor: element ? getComputedStyle(element).cursor : '',
+                  hitTestId: element?.getAttribute('data-testid') || null
+                }
+              }, point)
+              result.push({ testId, ...hit })
+            }
+            return result
+          }
+          const fileResizeHandles = await inspectResizeHandles()
           const resourceMenu = await selectWorkbenchResourceMenuItem(runtime, 'browser')
           const fileMenuLabelVisible = resourceMenu.fileVisible
           const legacyFileMenuLabelCount = await page
@@ -76,6 +113,20 @@ describe('workbench conversation e2e', () => {
 
           const tabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
           await tabs.first().waitFor({ state: 'visible' })
+          const browserResizeHandles = await inspectResizeHandles()
+          const nativeResizeCursors = await cursorObserver.evaluate((observer) => observer.events)
+          await cursorObserver.evaluate((observer) => observer.dispose())
+          await cursorObserver.dispose()
+          await runtime.assertThat(
+            [...fileResizeHandles, ...browserResizeHandles].every(
+              (handle) => handle.hitTestId === handle.testId && handle.cursor === 'ew-resize'
+            ) && nativeResizeCursors.includes('ew-resize'),
+            {
+              name: 'resize-handles-hit-test-and-cursor',
+              message: '两条分隔线的透明热区应命中拖动控件并显示水平调整光标。',
+              data: { fileResizeHandles, browserResizeHandles, nativeResizeCursors }
+            }
+          )
           const readTabDragLayout = async () =>
             await page.evaluate(
               (selectors) => {

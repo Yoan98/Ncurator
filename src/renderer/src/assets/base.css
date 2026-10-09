@@ -990,7 +990,7 @@ textarea,
   z-index: 20;
   width: 8px;
   height: 100%;
-  cursor: col-resize;
+  cursor: ew-resize;
   -webkit-app-region: no-drag;
 }
 
@@ -1015,7 +1015,7 @@ textarea,
 }
 
 .workbench-sidebar-resizing {
-  cursor: col-resize !important;
+  cursor: ew-resize !important;
   user-select: none;
 }
 
@@ -1077,7 +1077,7 @@ textarea,
   z-index: 30;
   width: 0;
   flex-shrink: 0;
-  cursor: col-resize;
+  cursor: ew-resize;
   -webkit-app-region: no-drag;
 }
 
@@ -1088,6 +1088,7 @@ textarea,
   left: -4px;
   width: 8px;
   height: 100%;
+  cursor: inherit;
 }
 
 .nc-content-panel-resizer::after {
@@ -1122,7 +1123,7 @@ textarea,
 }
 
 .workbench-content-panel-resizing {
-  cursor: col-resize !important;
+  cursor: ew-resize !important;
   user-select: none;
 }
 
