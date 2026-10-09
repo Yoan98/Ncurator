@@ -132,6 +132,7 @@ const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }
             key={child.childRunId}
             open={open}
             placement="topLeft"
+            align={{ offset: [20, -12] }}
             trigger={['hover', 'focus']}
             arrow={false}
             color="transparent"
