@@ -91,4 +91,11 @@ export class EmbeddingService {
     await this.executor.close?.()
     this.status = 'uninitialized'
   }
+
+  public async reset(): Promise<void> {
+    await this.initializationPromise?.catch(() => undefined)
+    if (this.executor.restart) await this.executor.restart()
+    else await this.executor.close?.()
+    this.status = 'uninitialized'
+  }
 }

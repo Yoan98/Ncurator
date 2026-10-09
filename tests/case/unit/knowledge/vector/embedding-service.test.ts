@@ -103,3 +103,26 @@ it('waits for initialization before closing and clears the ready cache', async (
   expect(executor.close).toHaveBeenCalledTimes(1)
   expect(service.getStatus()).toBe('uninitialized')
 })
+
+it('resets a runtime for later model loading without permanently closing it', async () => {
+  let closed = false
+  const executor: EmbeddingExecutor = {
+    initialize: async () => {
+      if (closed) throw new Error('embedding runtime client is closed')
+    },
+    embed: async () => result,
+    close: async () => {
+      closed = true
+    },
+    restart: async () => {
+      closed = false
+    }
+  }
+  const service = new EmbeddingService({ executor })
+  await service.initialize()
+  await service.reset()
+  expect(service.getStatus()).toBe('uninitialized')
+  await expect(service.embed('after reinstall')).resolves.toEqual(result)
+  await service.close()
+  await expect(service.initialize()).rejects.toThrow('向量模型初始化失败')
+})

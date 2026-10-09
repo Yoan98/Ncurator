@@ -92,8 +92,8 @@
 - What：所有 KB 工具统一检查模型安装 / 初始化，空库和空范围正常返回空结果；索引入口同样不隐式下载。
 - Why：模型缺失不能被关键词或列表绕过；空库不能误判为知识库故障。
 - How：独立模型目录中用真实 ModelService、EmbeddingService / Transformers executor、store 和 createAiRunContext；分别准备空目录、不完整下载目录、文件齐全但内容损坏的模型目录，调用两个 KB 工具与文件 / 网页索引入口。健康模型显式准备后验证空库、限定空范围、无文件地址的全局网页、删除与恢复。不替换执行器和就绪检查；Node 使用同一生产 executor in-process，Electron utilityProcess 由 Workbench E2E 验证。
-- Oracle：缺失 / 不完整模型在所有 strategy 和列表中返回错误且目录不变；损坏模型初始化错误；索引入口缺失模型失败且无资料写入；健康模型空库 / 空范围返回 items=[]、total=0；全局网页能检索；模型删除后下一次 KB 失败，恢复后可用。
-- 最新验证：2026-10-09 本轮通过；原始日志：`tests/logs/knowledge/foundation/kb-availability-contract/20261009-104115-815-12bf90e6`。
+- Oracle：缺失 / 不完整模型在所有 strategy 和列表中返回错误且目录不变；损坏模型初始化错误；索引入口缺失模型失败且无资料写入；健康模型空库 / 空范围返回 items=[]、total=0；全局网页能检索；模型删除后下一次 KB 失败，恢复后可用；Unit embedding-service 补充关闭后不可重新打开的 executor 生命周期，验证删除使用可重新加载的 reset，而非终态 close。
+- 最新验证：2026-10-09 本轮通过；原始日志：`tests/logs/knowledge/foundation/kb-availability-contract/20261009-105205-164-3693677b`。
 
 #### `index-speed-thread-budget`
 
