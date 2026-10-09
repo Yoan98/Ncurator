@@ -3,30 +3,86 @@ import type { SelectionLocation } from '../workbench/composer/DocumentSelectionC
 
 type TextRun = { node: Text; start: number; end: number }
 export type PreviewText = { text: string; runs: TextRun[] }
-const unsupported =
-  'header, footer, svg, math, .docx-header, .docx-footer, .docx-textbox, [data-docx-textbox]'
+const blocks = new Set([
+  'P',
+  'TABLE',
+  'ARTICLE',
+  'HEADER',
+  'FOOTER',
+  'SECTION',
+  'DIV',
+  'OL',
+  'UL',
+  'LI'
+])
+
+const isHidden = (element: Element): boolean => {
+  const style = getComputedStyle(element)
+  return style.display === 'none' || style.visibility === 'hidden'
+}
+
+function tableGrid(table: HTMLTableElement): (HTMLTableCellElement | null)[][] {
+  const rows = [...table.rows]
+  const grid: (HTMLTableCellElement | null)[][] = rows.map(() => [])
+  for (const [rowIndex, row] of rows.entries()) {
+    if (isHidden(row)) continue
+    let column = 0
+    for (const cell of row.cells) {
+      // DOCX vertical merges render a hidden continuation cell beside the spanning cell.
+      if (isHidden(cell)) continue
+      while (grid[rowIndex][column] !== undefined) column += 1
+      grid[rowIndex][column] = cell
+      const endRow = Math.min(rows.length, rowIndex + (cell.rowSpan || rows.length - rowIndex))
+      for (let r = rowIndex; r < endRow; r += 1) {
+        for (let c = column; c < column + cell.colSpan; c += 1) {
+          if (r !== rowIndex || c !== column) grid[r][c] = null
+        }
+      }
+      column += cell.colSpan
+    }
+  }
+  const columns = Math.max(0, ...grid.map((row) => row.length))
+  return grid.map((row) => Array.from({ length: columns }, (_, column) => row[column] || null))
+}
 
 export function readPreviewText(container: HTMLElement): PreviewText {
   const runs: TextRun[] = []
   let text = ''
-  const paragraphs = container.querySelectorAll('article p')
-  paragraphs.forEach((paragraph) => {
-    if (paragraph.closest(unsupported)) return
-    if (runs.length) text += '\n'
-    const walker = document.createTreeWalker(
-      paragraph,
-      NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT
-    )
-    let node = walker.nextNode()
-    while (node) {
-      if (node instanceof HTMLBRElement && !node.closest(unsupported)) text += '\n'
-      if (node instanceof Text && node.data && !node.parentElement?.closest(unsupported)) {
+  const visit = (node: Node): void => {
+    if (node instanceof Text) {
+      if (node.data && node.parentElement instanceof HTMLElement) {
         runs.push({ node, start: text.length, end: text.length + node.data.length })
         text += node.data
       }
-      node = walker.nextNode()
+      return
     }
-  })
+    if (!(node instanceof HTMLElement || node instanceof SVGElement)) return
+    if (node.matches('style, script, template') || isHidden(node)) return
+    if (node instanceof HTMLBRElement) {
+      text += '\n'
+      return
+    }
+    if (node instanceof HTMLTableElement) {
+      for (const [rowIndex, row] of tableGrid(node).entries()) {
+        if (rowIndex) text += '\n\n'
+        for (const [column, cell] of row.entries()) {
+          if (column) text += '\t'
+          if (cell) visit(cell)
+        }
+      }
+      return
+    }
+    let hasContent = false
+    for (const child of node.childNodes) {
+      if (child instanceof Element && isHidden(child)) continue
+      const block = child instanceof HTMLElement && blocks.has(child.tagName)
+      if (block && hasContent) text += '\n'
+      const start = text.length
+      visit(child)
+      if (block || text.length > start) hasContent = true
+    }
+  }
+  visit(container.querySelector('.docx-wrapper') || container)
   return { text, runs }
 }
 
@@ -35,32 +91,19 @@ export function captureSelection(
   preview: PreviewText,
   range: Range
 ): SelectionLocation | null {
-  const startElement =
-    range.startContainer instanceof Element
-      ? range.startContainer
-      : range.startContainer.parentElement
-  const endElement =
-    range.endContainer instanceof Element ? range.endContainer : range.endContainer.parentElement
-  if (
-    !startElement ||
-    !endElement ||
-    !container.contains(startElement) ||
-    !container.contains(endElement) ||
-    !startElement.closest('article') ||
-    !endElement.closest('article') ||
-    startElement.closest(unsupported) ||
-    endElement.closest(unsupported)
-  )
+  if (!container.contains(range.startContainer) || !container.contains(range.endContainer))
     return null
-  const startCell = startElement.closest('td, th')
-  if (startCell !== endElement.closest('td, th')) return null
-  if (range.cloneContents().querySelector('img, svg, table, header, footer')) return null
-  const intersected = preview.runs.filter((run) => range.intersectsNode(run.node))
+  const intersected = preview.runs.flatMap((run) => {
+    if (!range.intersectsNode(run.node)) return []
+    const start = range.startContainer === run.node ? range.startOffset : 0
+    const end = range.endContainer === run.node ? range.endOffset : run.node.length
+    return end > start ? [{ start: run.start + start, end: run.start + end }] : []
+  })
   const first = intersected[0]
   const last = intersected.at(-1)
   if (!first || !last) return null
-  const start = first.start + (range.startContainer === first.node ? range.startOffset : 0)
-  const end = last.start + (range.endContainer === last.node ? range.endOffset : last.node.length)
+  const { start } = first
+  const { end } = last
   if (!preview.text.slice(start, end).trim()) return null
   return { start, end, previewText: preview.text }
 }
@@ -96,11 +139,11 @@ export function locateSelection(
 
 export function rangeForLocation(preview: PreviewText, location: SelectionLocation): Range | null {
   const first = preview.runs.find((run) => run.end > location.start)
-  const last = preview.runs.find((run) => run.end >= location.end && run.start < location.end)
+  const last = preview.runs.findLast((run) => run.start < location.end && run.end > location.start)
   if (!first || !last) return null
   const range = document.createRange()
   range.setStart(first.node, Math.max(0, location.start - first.start))
-  range.setEnd(last.node, location.end - last.start)
+  range.setEnd(last.node, Math.min(last.node.length, location.end - last.start))
   return range
 }
 

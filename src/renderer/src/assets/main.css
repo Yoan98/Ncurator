@@ -17,7 +17,7 @@
   position: relative;
   width: min(220px, calc(100vw - 24px));
   max-height: 96px;
-  padding: 12px 16px;
+  padding: 26px 30px 22px;
   isolation: isolate;
   color: var(--notion-text-soft, #787774);
   font-size: 12px;
@@ -49,8 +49,10 @@
 }
 
 .nc-subagent-thought-lines {
-  max-height: 72px;
+  max-height: 48px;
   min-height: 18px;
+  min-width: 0;
+  overflow-x: hidden;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   scrollbar-width: none;

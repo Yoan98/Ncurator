@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Tooltip } from 'antd'
-import PartnerAvatar from './PartnerAvatar'
+import SubagentGroupView, { SubagentCloudProvider } from './SubagentGroupView'
 import { FaSpider } from 'react-icons/fa'
 import { PiBrowsers, PiEyes } from 'react-icons/pi'
 import { TbMoodConfuzed } from 'react-icons/tb'
@@ -29,8 +28,7 @@ import type {
   AssistantProcessIconKind,
   AssistantProcessThought,
   AssistantRichTextSegment,
-  AssistantTurnViewModel,
-  SubagentTaskView
+  AssistantTurnViewModel
 } from './types'
 import type { WorkspaceSource } from '../../../../shared/types'
 import type { OpenableMarkdownReference } from '../markdownReference'
@@ -41,7 +39,6 @@ import {
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
-  getSubagentAvatar,
   resolveAssistantExecutionIcon,
   resolveQuestionInteraction,
   shouldShowAssistantApplyTargets,
@@ -293,106 +290,6 @@ const AssistantProcessThoughtView: React.FC<{
     </div>
   )
 }
-
-const SubagentThought: React.FC<{ child: SubagentTaskView; open: boolean }> = ({ child, open }) => {
-  const contentRef = useRef<HTMLDivElement>(null)
-  const active = child.status === 'running'
-  const text =
-    child.status === 'queued'
-      ? '我在排队'
-      : active
-        ? child.message || ''
-        : child.result ||
-          {
-            waiting_approval: '等待你审核操作',
-            completed: '任务已完成',
-            failed: '执行失败',
-            cancelled: '已停止',
-            blocked: '需要主伙伴继续处理',
-            interrupted: '执行被中断，未收到完整结果'
-          }[child.status]
-  const requesting = active && child.requesting
-  useLayoutEffect(() => {
-    if (!open || !contentRef.current) return
-    const content = contentRef.current
-    const scrollToLatest = (): void => {
-      content.scrollTop = content.scrollHeight
-    }
-    scrollToLatest()
-    const frame = requestAnimationFrame(scrollToLatest)
-    const observer = new ResizeObserver(scrollToLatest)
-    observer.observe(content)
-    return () => {
-      cancelAnimationFrame(frame)
-      observer.disconnect()
-    }
-  }, [open, text, requesting])
-  return (
-    <div data-testid="subagent-thought" className="nc-subagent-thought-cloud">
-      <svg
-        className="nc-subagent-thought-outline"
-        viewBox="0 0 264 110"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      >
-        <path d="M30 94C9 94 1 74 11 60C0 45 10 25 30 24C36 5 60 2 74 14C86 0 109 0 120 13C139 0 161 5 169 18C189 6 210 15 214 28C240 22 259 38 254 57C270 74 254 97 232 96C220 111 195 108 184 98C166 112 143 109 131 99C113 112 89 107 81 97C65 111 42 107 30 94Z" />
-      </svg>
-      <div ref={contentRef} className="nc-subagent-thought-lines">
-        <span data-testid="subagent-message">{requesting ? text.trimEnd() : text}</span>
-        {requesting ? (
-          <span
-            data-testid="subagent-stream-dot"
-            className="nc-subagent-stream-dot"
-            aria-label="正在请求模型"
-          />
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-const SubagentTaskRow: React.FC<{ child: SubagentTaskView }> = ({ child }) => {
-  const [open, setOpen] = useState(false)
-  return (
-    <Tooltip
-      placement="topLeft"
-      trigger={['hover', 'focus']}
-      arrow={false}
-      color="transparent"
-      overlayClassName="nc-subagent-thought-tooltip"
-      mouseEnterDelay={0.15}
-      onOpenChange={setOpen}
-      title={<SubagentThought child={child} open={open} />}
-    >
-      <button
-        type="button"
-        data-testid="subagent-task"
-        data-child-run-id={child.childRunId}
-        data-status={child.status}
-        aria-label={child.name}
-        className={`flex items-center gap-1.5 rounded-lg py-1 pr-1 text-left text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-[#9B9A97] ${child.status === 'queued' ? 'text-[#9B9A97]' : 'text-[#37352F]'}`}
-      >
-        <span className={child.status === 'queued' ? 'grayscale opacity-40' : undefined}>
-          <PartnerAvatar
-            {...getSubagentAvatar(child.childRunId)}
-            size={32}
-            animated={child.status === 'running'}
-            animationSeed={child.childRunId}
-          />
-        </span>
-        <span className="max-w-[8em] truncate">{child.name}</span>
-      </button>
-    </Tooltip>
-  )
-}
-
-const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => (
-  <div data-testid="subagent-group" className="flex flex-col items-start gap-1 py-1">
-    {(group.subagents || []).map((child) => (
-      <SubagentTaskRow key={child.childRunId} child={child} />
-    ))}
-  </div>
-)
 
 const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
   if (group.subagents?.length) return <SubagentGroupView group={group} />
@@ -834,227 +731,229 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   }
 
   return (
-    <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
-      <div className="space-y-4">
-        {timeline.length > 0 || hasStreamingThought || reserveThinkingSlot || turn.startedAt ? (
-          <div data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}>
-            {turn.startedAt ? (
-              turn.runFinished ? (
-                <button
-                  type="button"
-                  className="mb-2 flex w-full items-center justify-start gap-1.5 border-b border-[#EEEEEC] pb-2 text-left text-[14px] leading-6 text-[#37352F]"
-                  aria-expanded={processExpanded}
-                  aria-label={`${processExpanded ? '收起' : '展开'}过程记录`}
-                  data-testid={`${workbenchSelectors.assistantProcessTogglePrefix}-${messageId}`}
-                  onClick={() => setProcessExpanded((expanded) => !expanded)}
-                >
-                  <span
-                    data-testid={`${workbenchSelectors.assistantRunDurationPrefix}-${messageId}`}
+    <SubagentCloudProvider groups={processGroups}>
+      <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
+        <div className="space-y-4">
+          {timeline.length > 0 || hasStreamingThought || reserveThinkingSlot || turn.startedAt ? (
+            <div data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}>
+              {turn.startedAt ? (
+                turn.runFinished ? (
+                  <button
+                    type="button"
+                    className="mb-2 flex w-full items-center justify-start gap-1.5 border-b border-[#EEEEEC] pb-2 text-left text-[14px] leading-6 text-[#37352F]"
+                    aria-expanded={processExpanded}
+                    aria-label={`${processExpanded ? '收起' : '展开'}过程记录`}
+                    data-testid={`${workbenchSelectors.assistantProcessTogglePrefix}-${messageId}`}
+                    onClick={() => setProcessExpanded((expanded) => !expanded)}
                   >
-                    用时 {formatRunDuration(turn.startedAt, turn.finishedAt ?? currentTime)}
-                  </span>
-                  {processExpanded ? (
-                    <HiChevronDown className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <HiChevronRight className="h-4 w-4 shrink-0" />
-                  )}
-                </button>
-              ) : (
-                <div className="mb-2 flex items-center border-b border-[#EEEEEC] pb-2 text-[14px] leading-6 text-[#37352F]">
-                  <span
-                    data-testid={`${workbenchSelectors.assistantRunDurationPrefix}-${messageId}`}
-                  >
-                    已处理 {formatRunDuration(turn.startedAt, currentTime)}
-                  </span>
-                </div>
-              )
-            ) : null}
-            <div className={processExpanded ? 'space-y-2' : 'hidden'}>
-              {timeline.map((entry) => {
-                if (entry.kind === 'decision') {
-                  return (
-                    <AssistantProcessThoughtView
-                      key={entry.id}
-                      thought={entry.thought}
+                    <span
+                      data-testid={`${workbenchSelectors.assistantRunDurationPrefix}-${messageId}`}
+                    >
+                      用时 {formatRunDuration(turn.startedAt, turn.finishedAt ?? currentTime)}
+                    </span>
+                    {processExpanded ? (
+                      <HiChevronDown className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <HiChevronRight className="h-4 w-4 shrink-0" />
+                    )}
+                  </button>
+                ) : (
+                  <div className="mb-2 flex items-center border-b border-[#EEEEEC] pb-2 text-[14px] leading-6 text-[#37352F]">
+                    <span
+                      data-testid={`${workbenchSelectors.assistantRunDurationPrefix}-${messageId}`}
+                    >
+                      已处理 {formatRunDuration(turn.startedAt, currentTime)}
+                    </span>
+                  </div>
+                )
+              ) : null}
+              <div className={processExpanded ? 'space-y-2' : 'hidden'}>
+                {timeline.map((entry) => {
+                  if (entry.kind === 'decision') {
+                    return (
+                      <AssistantProcessThoughtView
+                        key={entry.id}
+                        thought={entry.thought}
+                        onOpenReference={onOpenReference}
+                      />
+                    )
+                  }
+                  if (entry.kind === 'activity') {
+                    return (
+                      <AssistantActivityGroupView
+                        key={entry.id}
+                        id={entry.id}
+                        groups={entry.groups}
+                        waitingApproval={entry.waitingApproval}
+                        waitingInteraction={entry.waitingInteraction}
+                        approvalReviews={approvalReviews}
+                        onPreviewImage={onPreviewImage}
+                        shimmerActive={
+                          Boolean(entry.waitingApproval || entry.waitingInteraction) ||
+                          shouldActivityHeaderShimmer({
+                            activityCreatedAt: entry.createdAt,
+                            thoughts: processThoughts,
+                            hasNextAiContent: hasNextAiContentForActivity
+                          })
+                        }
+                      />
+                    )
+                  }
+                  return <AssistantProcessGroupView key={entry.id} group={entry.group} />
+                })}
+                {streamingRole === 'thought' && streamingMarkdown.trim() ? (
+                  <div className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#37352F]">
+                    <MarkdownRenderer
+                      content={streamingMarkdown}
+                      variant="thought"
                       onOpenReference={onOpenReference}
                     />
-                  )
-                }
-                if (entry.kind === 'activity') {
-                  return (
-                    <AssistantActivityGroupView
-                      key={entry.id}
-                      id={entry.id}
-                      groups={entry.groups}
-                      waitingApproval={entry.waitingApproval}
-                      waitingInteraction={entry.waitingInteraction}
-                      approvalReviews={approvalReviews}
-                      onPreviewImage={onPreviewImage}
-                      shimmerActive={
-                        Boolean(entry.waitingApproval || entry.waitingInteraction) ||
-                        shouldActivityHeaderShimmer({
-                          activityCreatedAt: entry.createdAt,
-                          thoughts: processThoughts,
-                          hasNextAiContent: hasNextAiContentForActivity
-                        })
-                      }
-                    />
-                  )
-                }
-                return <AssistantProcessGroupView key={entry.id} group={entry.group} />
-              })}
-              {streamingRole === 'thought' && streamingMarkdown.trim() ? (
-                <div className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#37352F]">
-                  <MarkdownRenderer
-                    content={streamingMarkdown}
-                    variant="thought"
-                    onOpenReference={onOpenReference}
-                  />
-                </div>
-              ) : null}
-              {reserveThinkingSlot ? (
-                <div
-                  className="flex h-6 items-center gap-1.5 text-[13px] leading-6 text-[#37352F]"
-                  data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${messageId}-thinking`}
-                  aria-hidden={!showThinkingIndicator}
-                >
-                  {showThinkingIndicator ? (
-                    <span className="workbench-thinking-shimmer font-medium text-[#37352F]">
-                      让俺想想
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {hasFinalAnswer ? (
-          <div
-            className="min-w-0 text-[15px] leading-7 text-[#37352F]"
-            data-testid={`${workbenchSelectors.assistantFinalAnswerPrefix}-${messageId}`}
-          >
-            <MarkdownRenderer
-              content={visibleAnswerMarkdown}
-              linkAccess={turn.linkAccess}
-              onOpenReference={onOpenReference}
-            />
-          </div>
-        ) : null}
-
-        {turn.status === 'failed' && turn.error ? (
-          <div
-            className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm leading-6 text-[#B3261E]"
-            data-testid={`${workbenchSelectors.assistantRunFailurePrefix}-${messageId}`}
-          >
-            <div>失败：{turn.error}</div>
-            {turn.errorDetail ? (
-              <details className="mt-2">
-                <summary
-                  className="cursor-pointer select-none text-xs text-[#8A4F48] underline-offset-2 hover:underline"
-                  data-testid={`${workbenchSelectors.assistantRunFailureDetailTogglePrefix}-${messageId}`}
-                >
-                  查看详情
-                </summary>
-                <pre
-                  className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[6px] bg-[#F3DDD9] px-3 py-2 text-xs leading-5 text-[#7A3B34]"
-                  data-testid={`${workbenchSelectors.assistantRunFailureDetailPrefix}-${messageId}`}
-                >
-                  {turn.errorDetail}
-                </pre>
-              </details>
-            ) : null}
-          </div>
-        ) : null}
-
-        {shouldShowAssistantApplyTargets({
-          runFinished: turn.runFinished,
-          applyTargetCount: turn.applyTargets.length
-        }) ? (
-          <div className="overflow-hidden rounded-[8px] border border-[#E5E4E0] bg-white">
-            <div className="flex items-center gap-3 border-b border-[#EEEEEC] px-3.5 py-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
-                <HiOutlineDocumentText className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[14px] font-semibold text-[#37352F]">修改的文件</div>
-                <div className="mt-0.5 text-xs text-[#787774]">点击文件查看本次修改</div>
-              </div>
-              <div
-                className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-[#37352F]"
-                data-testid={`${workbenchSelectors.assistantTurnApplyCountPrefix}-${messageId}`}
-              >
-                {turn.applyTargets.length} 个
-              </div>
-            </div>
-            <div>
-              {visibleApplyTargets.map((apply) => {
-                const statusLabel =
-                  apply.status === 'reverted'
-                    ? apply.operation === 'created'
-                      ? '已删除'
-                      : '已回退'
-                    : apply.status === 'failed'
-                      ? '失败'
-                      : null
-                return (
-                  <button
-                    key={apply.changeId}
-                    type="button"
-                    onClick={() => onOpenApply(apply.changeId)}
-                    data-testid={`${workbenchSelectors.assistantTurnApplyPrefix}-${apply.changeId}`}
-                    className="w-full border-b border-[#F1F0ED] px-3.5 py-2.5 text-left transition-colors duration-200 last:border-b-0 hover:bg-[#F7F7F5]"
+                  </div>
+                ) : null}
+                {reserveThinkingSlot ? (
+                  <div
+                    className="flex h-6 items-center gap-1.5 text-[13px] leading-6 text-[#37352F]"
+                    data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${messageId}-thinking`}
+                    aria-hidden={!showThinkingIndicator}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <WorkspacePathLabel
-                          filePath={apply.sourcePath || apply.title}
-                          workspaces={workspaces}
-                          fallbackWorkspaceName={fallbackWorkspaceName}
-                          className="text-[13px] font-medium"
-                          fileNameClassName="text-[#37352F]"
-                          prefixClassName="text-[#9B9A97]"
-                          separator="/"
-                        />
-                      </div>
-                      <span className="flex shrink-0 items-center gap-1 pt-0.5">
-                        <ChangeCountBadges
-                          insertCount={apply.insertCount}
-                          deleteCount={apply.deleteCount}
-                        />
-                        {statusLabel ? (
-                          <span className="inline-flex h-5 items-center rounded-[4px] bg-[#F4F4F2] px-1.5 text-[11px] font-medium text-[#787774]">
-                            {statusLabel}
-                          </span>
-                        ) : null}
+                    {showThinkingIndicator ? (
+                      <span className="workbench-thinking-shimmer font-medium text-[#37352F]">
+                        让俺想想
                       </span>
-                    </div>
-                  </button>
-                )
-              })}
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
-            {turn.applyTargets.length > MAX_VISIBLE_APPLY_TARGETS ? (
-              <button
-                type="button"
-                onClick={() => setApplyTargetsExpanded((value) => !value)}
-                aria-expanded={applyTargetsExpanded}
-                data-testid={`${workbenchSelectors.assistantTurnApplyCollapsePrefix}-${messageId}`}
-                className="flex w-full items-center gap-1.5 border-t border-[#F1F0ED] px-3.5 py-2 text-left text-xs font-medium text-[#787774] transition-colors duration-200 hover:bg-[#F7F7F5] hover:text-[#37352F]"
-              >
-                <HiChevronDown
-                  className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${
-                    applyTargetsExpanded ? 'rotate-180' : ''
-                  }`}
-                />
-                {applyTargetsExpanded
-                  ? '收起文件'
-                  : `显示剩余 ${turn.applyTargets.length - MAX_VISIBLE_APPLY_TARGETS} 个文件`}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+          ) : null}
+
+          {hasFinalAnswer ? (
+            <div
+              className="min-w-0 text-[15px] leading-7 text-[#37352F]"
+              data-testid={`${workbenchSelectors.assistantFinalAnswerPrefix}-${messageId}`}
+            >
+              <MarkdownRenderer
+                content={visibleAnswerMarkdown}
+                linkAccess={turn.linkAccess}
+                onOpenReference={onOpenReference}
+              />
+            </div>
+          ) : null}
+
+          {turn.status === 'failed' && turn.error ? (
+            <div
+              className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm leading-6 text-[#B3261E]"
+              data-testid={`${workbenchSelectors.assistantRunFailurePrefix}-${messageId}`}
+            >
+              <div>失败：{turn.error}</div>
+              {turn.errorDetail ? (
+                <details className="mt-2">
+                  <summary
+                    className="cursor-pointer select-none text-xs text-[#8A4F48] underline-offset-2 hover:underline"
+                    data-testid={`${workbenchSelectors.assistantRunFailureDetailTogglePrefix}-${messageId}`}
+                  >
+                    查看详情
+                  </summary>
+                  <pre
+                    className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[6px] bg-[#F3DDD9] px-3 py-2 text-xs leading-5 text-[#7A3B34]"
+                    data-testid={`${workbenchSelectors.assistantRunFailureDetailPrefix}-${messageId}`}
+                  >
+                    {turn.errorDetail}
+                  </pre>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+
+          {shouldShowAssistantApplyTargets({
+            runFinished: turn.runFinished,
+            applyTargetCount: turn.applyTargets.length
+          }) ? (
+            <div className="overflow-hidden rounded-[8px] border border-[#E5E4E0] bg-white">
+              <div className="flex items-center gap-3 border-b border-[#EEEEEC] px-3.5 py-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
+                  <HiOutlineDocumentText className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[14px] font-semibold text-[#37352F]">修改的文件</div>
+                  <div className="mt-0.5 text-xs text-[#787774]">点击文件查看本次修改</div>
+                </div>
+                <div
+                  className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-[#37352F]"
+                  data-testid={`${workbenchSelectors.assistantTurnApplyCountPrefix}-${messageId}`}
+                >
+                  {turn.applyTargets.length} 个
+                </div>
+              </div>
+              <div>
+                {visibleApplyTargets.map((apply) => {
+                  const statusLabel =
+                    apply.status === 'reverted'
+                      ? apply.operation === 'created'
+                        ? '已删除'
+                        : '已回退'
+                      : apply.status === 'failed'
+                        ? '失败'
+                        : null
+                  return (
+                    <button
+                      key={apply.changeId}
+                      type="button"
+                      onClick={() => onOpenApply(apply.changeId)}
+                      data-testid={`${workbenchSelectors.assistantTurnApplyPrefix}-${apply.changeId}`}
+                      className="w-full border-b border-[#F1F0ED] px-3.5 py-2.5 text-left transition-colors duration-200 last:border-b-0 hover:bg-[#F7F7F5]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <WorkspacePathLabel
+                            filePath={apply.sourcePath || apply.title}
+                            workspaces={workspaces}
+                            fallbackWorkspaceName={fallbackWorkspaceName}
+                            className="text-[13px] font-medium"
+                            fileNameClassName="text-[#37352F]"
+                            prefixClassName="text-[#9B9A97]"
+                            separator="/"
+                          />
+                        </div>
+                        <span className="flex shrink-0 items-center gap-1 pt-0.5">
+                          <ChangeCountBadges
+                            insertCount={apply.insertCount}
+                            deleteCount={apply.deleteCount}
+                          />
+                          {statusLabel ? (
+                            <span className="inline-flex h-5 items-center rounded-[4px] bg-[#F4F4F2] px-1.5 text-[11px] font-medium text-[#787774]">
+                              {statusLabel}
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              {turn.applyTargets.length > MAX_VISIBLE_APPLY_TARGETS ? (
+                <button
+                  type="button"
+                  onClick={() => setApplyTargetsExpanded((value) => !value)}
+                  aria-expanded={applyTargetsExpanded}
+                  data-testid={`${workbenchSelectors.assistantTurnApplyCollapsePrefix}-${messageId}`}
+                  className="flex w-full items-center gap-1.5 border-t border-[#F1F0ED] px-3.5 py-2 text-left text-xs font-medium text-[#787774] transition-colors duration-200 hover:bg-[#F7F7F5] hover:text-[#37352F]"
+                >
+                  <HiChevronDown
+                    className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${
+                      applyTargetsExpanded ? 'rotate-180' : ''
+                    }`}
+                  />
+                  {applyTargetsExpanded
+                    ? '收起文件'
+                    : `显示剩余 ${turn.applyTargets.length - MAX_VISIBLE_APPLY_TARGETS} 个文件`}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
+    </SubagentCloudProvider>
   )
 }
 

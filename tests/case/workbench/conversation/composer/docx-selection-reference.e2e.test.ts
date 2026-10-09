@@ -115,17 +115,20 @@ const selectText = async (
     .locator(options.selector || 'article p')
     .nth(startParagraph)
     .scrollIntoViewIfNeeded()
-  const bounds = {
-    start: await textPoint(page, startParagraph, start, options.selector),
-    end: await textPoint(page, endParagraph, end, options.selector)
-  }
+  const startPoint = await textPoint(page, startParagraph, start, options.selector)
   // Hold Shift before releasing the first click so saved text remains a selection anchor.
-  await page.mouse.move(bounds.start.x, bounds.start.y)
+  await page.mouse.move(startPoint.x, startPoint.y)
   await page.mouse.down()
   await page.keyboard.down('Shift')
   try {
     await page.mouse.up()
-    await page.mouse.click(bounds.end.x, bounds.end.y)
+    await page
+      .locator('.docx-content')
+      .locator(options.selector || 'article p')
+      .nth(endParagraph)
+      .scrollIntoViewIfNeeded()
+    const endPoint = await textPoint(page, endParagraph, end, options.selector)
+    await page.mouse.click(endPoint.x, endPoint.y)
   } finally {
     await page.keyboard.up('Shift')
   }
@@ -538,11 +541,12 @@ describe('workbench conversation e2e', () => {
           await page.keyboard.press('Backspace')
           const atomicDeleted =
             (await composer.locator('[data-role="document-selection-token"]').count()) === 1
-          await selectText(page, 0, 0, 1, 4, { selector: 'article td p', popup: false })
-          await page
-            .getByText('请选择正文中的连续文本；表格仅支持单个单元格。', { exact: true })
-            .waitFor()
-          const crossCellRejected = (await page.getByTestId('docx-selection-popup').count()) === 0
+          await selectText(page, 0, 0, 1, 4, { selector: 'article td p' })
+          await page.getByTestId('docx-selection-thought').fill('解释这两个表头。')
+          await page.getByTestId('docx-selection-save').click()
+          const crossCellQuote = (await readDraftSelections()).at(-1)?.quote
+          await clickSavedText(page, 1, 1, 'article td p')
+          await page.getByRole('button', { name: '删除引用', exact: true }).click()
           await selectText(page, 0, 0, 0, 2, { selector: 'article td p' })
           await page.getByTestId('docx-selection-thought').fill('临时引用。')
           await page.getByTestId('docx-selection-save').click()
@@ -552,6 +556,133 @@ describe('workbench conversation e2e', () => {
             .getAttribute('aria-label')
           await clickSavedText(page, 0, 0, 'article td p')
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
+
+          await openWorkbenchWorkspaceFile(runtime, 'docx-selection-layout.docx')
+          await page.locator('.docx-content article table').waitFor({ state: 'visible' })
+          const cellSelector = 'article table td p'
+          const cellTexts = await page
+            .locator('.docx-content')
+            .locator(cellSelector)
+            .allTextContents()
+          const lastCell = cellTexts.length - 1
+          const tableText =
+            'Area\tOwner\tNotes\tStatus\n\nDesign\tAda\tFirst line\nSecond line\nThird paragraph\tReady\n\nBuild\tShared work\t\tPending\n\n\tBea\t\tDone'
+          const confirmExcerpt = async (thought: string) => {
+            await page.getByTestId('docx-selection-thought').fill(thought)
+            await page.getByTestId('docx-selection-save').click()
+            return (await readDraftSelections()).at(-1)?.quote
+          }
+          const removeExcerpt = async (
+            paragraph: number,
+            offset: number,
+            selector = 'article p'
+          ) => {
+            await clickSavedText(page, paragraph, offset, selector)
+            await page.getByRole('button', { name: '删除引用', exact: true }).click()
+          }
+          await selectText(page, 0, 0, lastCell, cellTexts[lastCell].length, {
+            selector: cellSelector
+          })
+          const wholeTableQuote = await confirmExcerpt('解释所选整张表格。')
+          await composer.locator('[data-role="document-selection-token"]').last().click()
+          const locatedTable = await page.evaluate(() => window.getSelection()?.toString() || '')
+          await clickSavedText(page, 2, 1, cellSelector)
+          const tableThought = await page.getByTestId('docx-selection-thought').textContent()
+          await runtime.captureScreenshot({
+            name: 'selection-whole-table',
+            message: '整表引用保留多段落单元格、空格及合并占位，点击高亮重新编辑'
+          })
+          await page.getByRole('button', { name: '删除引用', exact: true }).click()
+          await selectText(page, lastCell, cellTexts[lastCell].length, 0, 0, {
+            selector: cellSelector
+          })
+          const reversedTableQuote = await confirmExcerpt('反向选择整表。')
+          await removeExcerpt(0, 1, cellSelector)
+
+          const paragraphIndex = (text: string) =>
+            page
+              .locator('.docx-content article p')
+              .evaluateAll(
+                (paragraphs, text) =>
+                  paragraphs.findIndex((paragraph) => paragraph.textContent === text),
+                text
+              )
+          const beforeTable = await paragraphIndex('Text before table.')
+          const afterTable = await paragraphIndex('Text after table.')
+          await selectText(page, beforeTable, 0, afterTable, 'Text after table.'.length)
+          const mixedTableQuote = await confirmExcerpt('解释表格及前后正文。')
+          await removeExcerpt(beforeTable, 2)
+          await selectText(page, 0, 0, 0, 'Selection header'.length, { selector: 'header p' })
+          const headerQuote = await confirmExcerpt('解释页眉。')
+          await removeExcerpt(0, 1, 'header p')
+          await selectText(page, 0, 0, 0, 'Selection footer'.length, { selector: 'footer p' })
+          const footerQuote = await confirmExcerpt('解释页脚。')
+          await removeExcerpt(0, 1, 'footer p')
+          const firstPage = await paragraphIndex('Page one end.')
+          const secondPage = await paragraphIndex('Page two start.')
+          await selectText(page, firstPage, 0, secondPage, 'Page two start.'.length)
+          const crossPageQuote = await confirmExcerpt('解释跨页选区。')
+          const pageCount = await page.locator('.docx-content section.docx').count()
+          await removeExcerpt(secondPage, 1)
+
+          const imageBefore = await paragraphIndex('Image before.')
+          const imageAfter = await paragraphIndex('Image after.')
+          await selectText(page, imageBefore, 0, imageAfter, 'Image after.'.length)
+          const imageMixedQuote = await confirmExcerpt('解释图片前后的文字。')
+          await removeExcerpt(imageBefore, 1)
+          await selectText(page, imageBefore, 'Image before.'.length, imageAfter, 0, {
+            popup: false
+          })
+          const toast = page
+            .locator('.ant-message-notice')
+            .filter({ hasText: '当前选区没有可读取的文字。' })
+          await toast.waitFor({ state: 'visible' })
+          const toastCount = await toast.count()
+          const noInlineNotice =
+            !(await page.locator('.docx-content').textContent())?.includes(
+              '当前选区没有可读取的文字。'
+            ) && (await page.getByTestId('docx-selection-popup').count()) === 0
+          await runtime.captureScreenshot({
+            name: 'selection-system-toast',
+            message: '纯图片选区使用统一系统 toast，同一提示合并，文档内无提示条'
+          })
+          await toast.waitFor({ state: 'detached', timeout: 10_000 })
+          await runtime.assertThat(
+            wholeTableQuote === tableText &&
+              reversedTableQuote === tableText &&
+              tableThought === '解释所选整张表格。' &&
+              locatedTable.includes('First line') &&
+              locatedTable.includes('Done') &&
+              mixedTableQuote === 'Text before table.\n' + tableText + '\nText after table.' &&
+              headerQuote === 'Selection header' &&
+              footerQuote === 'Selection footer' &&
+              pageCount === 2 &&
+              crossPageQuote?.startsWith('Page one end.') === true &&
+              crossPageQuote.endsWith('Page two start.') &&
+              imageMixedQuote?.includes('Image before.') === true &&
+              imageMixedQuote.includes('Image after.') &&
+              toastCount === 1 &&
+              noInlineNotice,
+            {
+              name: 'docx-selection-table-pages-and-toast',
+              message:
+                '真实整表、反向选择、正文混选、合并与空单元格、单元格内换行、页眉页脚、跨页及图片混选正确；无文字使用单个自动消失的系统 toast。',
+              data: {
+                wholeTableQuote,
+                reversedTableQuote,
+                mixedTableQuote,
+                headerQuote,
+                footerQuote,
+                crossPageQuote,
+                pageCount,
+                imageMixedQuote,
+                tableThought,
+                locatedTable,
+                toastCount,
+                noInlineNotice
+              }
+            }
+          )
           await composer.locator('[data-role="document-selection-token"]').click()
           await page
             .locator('.docx-content article p')
@@ -679,7 +810,7 @@ describe('workbench conversation e2e', () => {
             memoryRestored,
             cellQuote,
             atomicDeleted,
-            crossCellRejected,
+            crossCellQuote,
             resetLabel,
             nextDraftLabel,
             frozenHistoryLabel,
@@ -712,7 +843,7 @@ describe('workbench conversation e2e', () => {
               result.memoryRestored &&
               result.cellQuote === '模式' &&
               result.atomicDeleted &&
-              result.crossCellRejected &&
+              result.crossCellQuote === '模式\t核心驱动' &&
               result.resetLabel === '人工智能探究课堂PRD.docx · 1' &&
               result.nextDraftLabel === '客户周会纪要.docx · 1' &&
               result.frozenHistoryLabel === result.historyLabel &&

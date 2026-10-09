@@ -1,4 +1,5 @@
-import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { App as AntdApp } from 'antd'
 import { createPortal } from 'react-dom'
 import { HiOutlineCheck, HiOutlineSparkles, HiOutlineTrash } from 'react-icons/hi2'
 import type { ChatInlineContentNode, DocumentSelectionNode } from '../../../../shared/types'
@@ -43,10 +44,10 @@ export default function DocxSelectionLayer({
   revision: number
 }) {
   const state = useContext(DocumentSelectionContext)
+  const { message } = AntdApp.useApp()
   const [popup, setPopup] = useState<Popup | null>(null)
   const [floating, setFloating] = useState<SelectionFloatingPosition | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
   const popupRef = useRef<HTMLDivElement>(null)
   const latestRef = useRef(state)
   const targetsRef = useRef<SelectionTarget[]>([])
@@ -56,17 +57,16 @@ export default function DocxSelectionLayer({
   useEffect(() => {
     latestRef.current = state
   }, [state])
-  const open = (
-    node: DocumentSelectionNode,
-    location: SelectionLocation,
-    mode: Popup['mode']
-  ): void => {
-    setNotice('')
-    setHoveredId(null)
-    setFloating(null)
-    setPopup({ node, location, mode })
-    window.getSelection()?.removeAllRanges()
-  }
+  const open = useCallback(
+    (node: DocumentSelectionNode, location: SelectionLocation, mode: Popup['mode']): void => {
+      message.destroy('docx-selection')
+      setHoveredId(null)
+      setFloating(null)
+      setPopup({ node, location, mode })
+      window.getSelection()?.removeAllRanges()
+    },
+    [message]
+  )
 
   useEffect(() => {
     if (!container || !state?.enabled || !revision) return
@@ -98,7 +98,8 @@ export default function DocxSelectionLayer({
       const preview = readPreviewText(container)
       const location = captureSelection(container, preview, range)
       if (!location) {
-        setNotice('请选择正文中的连续文本；表格仅支持单个单元格。')
+        setPopup(null)
+        void message.warning({ key: 'docx-selection', content: '当前选区没有可读取的文字。' })
         return true
       }
       const nodes = latestRef.current?.selections.filter((node) => node.filePath === filePath) || []
@@ -106,7 +107,7 @@ export default function DocxSelectionLayer({
         const existing = locateSelection(preview, node, latestRef.current?.locations.get(node.id))
         if (!existing) continue
         if (existing.start < location.end && location.start < existing.end) {
-          setNotice('')
+          message.destroy('docx-selection')
           setPopup(null)
           return true
         }
@@ -185,7 +186,16 @@ export default function DocxSelectionLayer({
       container.style.cursor = cursor
       setHoveredId(null)
     }
-  }, [container, filePath, revision, state?.enabled, state?.locked, state?.selections])
+  }, [
+    container,
+    filePath,
+    revision,
+    state?.enabled,
+    state?.locked,
+    state?.selections,
+    message,
+    open
+  ])
 
   useLayoutEffect(() => {
     if (!container || !revision || !state?.enabled) return
@@ -291,14 +301,17 @@ export default function DocxSelectionLayer({
     const location = locateSelection(preview, node, state.locations.get(node.id))
     const range = location && rangeForLocation(preview, location)
     if (!range || !location) {
-      setNotice('原文已变化或位置不唯一，无法定位该选区。')
+      void message.warning({
+        key: 'docx-selection',
+        content: '原文已变化或位置不唯一，无法定位该选区。'
+      })
       return
     }
     range.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'instant' })
     const selected = window.getSelection()
     selected?.removeAllRanges()
     selected?.addRange(range)
-  }, [container, revision, filePath, state?.navigation, state?.locations])
+  }, [container, revision, filePath, state?.navigation, state?.locations, message])
 
   useEffect(() => {
     if (!popupId) return
@@ -320,9 +333,9 @@ export default function DocxSelectionLayer({
 
   useEffect(() => {
     setPopup(null)
-    setNotice('')
+    message.destroy('docx-selection')
     setHoveredId(null)
-  }, [filePath, revision, state?.enabled])
+  }, [filePath, revision, state?.enabled, message])
 
   if (!state?.enabled) return null
   const save = (): void => {
@@ -357,15 +370,6 @@ export default function DocxSelectionLayer({
             编辑所选内容
           </button>
         ))}
-      {notice && (
-        <button
-          type="button"
-          className="absolute bottom-3 left-3 right-3 z-20 rounded-md bg-white px-3 py-2 text-sm text-[#787774] shadow"
-          onClick={() => setNotice('')}
-        >
-          {notice}
-        </button>
-      )}
       {popup &&
         createPortal(
           <div

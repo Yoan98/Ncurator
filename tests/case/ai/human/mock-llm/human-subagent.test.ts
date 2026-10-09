@@ -25,6 +25,7 @@ import {
 } from '../../../../../src/main/services/ai/human/memory/transcript'
 import { messagesFromLogEntries } from '../../../../../src/main/services/ai/human/memory/conversationLogMessages'
 import { createMemoryTranscript } from '../../../../../src/main/services/ai/run/subagents'
+import { collectBrainPrefixCacheReuse } from '../../../../harness/core/continuation-prefix-cache'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { terminalSessionManager } from '../../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import type { ChatMessageLogEntry, SubagentUpdate } from '../../../../../src/shared/types'
@@ -505,8 +506,8 @@ describe('temporary subagents through production AiRunService', () => {
               .map((event) => event.delta)
               .join('')
           ).toBe(ended.entry.payload.result)
-          expect(own.some((event) => event.requesting === true)).toBe(true)
-          expect(own.at(-1)?.requesting).toBe(false)
+          expect(own.some((event) => event.streaming === true)).toBe(true)
+          expect(own.at(-1)?.streaming).toBe(false)
         }
         expect(
           result.records.filter(
@@ -531,6 +532,98 @@ describe('temporary subagents through production AiRunService', () => {
             message: '子结果汇入一条主工具结果，子完整 transcript 不落盘'
           }
         )
+      }
+    })
+  })
+
+  it('human-subagent-prefix-stability', async () => {
+    await runBackendCase({
+      caseId: 'human-subagent-prefix-stability',
+      domain: 'ai',
+      suite: 'human',
+      groups: ['mock-llm'],
+      harnessMode: 'mock-llm',
+      fixtures: [],
+      runMode: 'single',
+      description: '真实子内存投影连续追加与新实例固定前缀',
+      execute: async (runtime) => {
+        const files = ['A', 'B'].map((suffix) =>
+          path.join(runtime.workspaceRoot, `cache-note-${suffix}.txt`)
+        )
+        for (const file of files) await fs.writeFile(file, '固定资料：苍鹭；负责人：林可。')
+        let parentCalls = 0
+        const calls = new Map<string, number>()
+        const runner = await createAiServiceTestRunner(runtime, {
+          userInput: 'ROOT_CACHE 派发两轮独立核验并汇总',
+          streamingModeOverride: 'force_stream',
+          llmScript: {
+            'human.brain': steps((call) => {
+              if (!isChild(call)) {
+                return ++parentCalls <= 2
+                  ? delegate([
+                      { name: '海豹', task: `CHILD_CACHE_A 核验 ${files[0]}` },
+                      { name: '水獭', task: `CHILD_CACHE_B 核验 ${files[1]}` }
+                    ])
+                  : complete('主伙伴只整合独立结果')
+              }
+              const task = call.user.match(/CHILD_CACHE_[AB]/)?.[0] || ''
+              const count = (calls.get(task) || 0) + 1
+              calls.set(task, count)
+              return count % 3 === 0
+                ? complete(`PUBLIC_RESULT_${task}`)
+                : buildToolDecision({
+                    toolName: 'text_file_read',
+                    args: { sourcePath: files[task.endsWith('A') ? 0 : 1] },
+                    summary: `PUBLIC_ACTION_${task}_${count}`
+                  })
+            })
+          }
+        })
+        const output = await runner.run()
+        return { output, io: runner.io, events: runner.events }
+      },
+      assert: async (result, runtime) => {
+        expect(result.output.status).toBe('completed')
+        const brain = result.io.filter((record) => record.caller === 'human.brain')
+        const root = brain.filter((record) => !record.ownerRunId)
+        const children = [
+          ...new Set(brain.filter((record) => record.ownerRunId).map((record) => record.runId))
+        ]
+        expect(root).toHaveLength(3)
+        expect(children).toHaveLength(4)
+        const firstCalls = children.map((id) => brain.find((record) => record.runId === id)!)
+        for (const first of firstCalls) {
+          expect(first.system).toBe(firstCalls[0].system)
+          expect(first.requestWire?.toolsHash).toBe(firstCalls[0].requestWire?.toolsHash)
+          expect(first.requestWire?.messages).toHaveLength(2)
+          expect(first.user).not.toContain('PUBLIC_RESULT_')
+          expect(first.user).not.toContain('PUBLIC_ACTION_')
+        }
+        for (const runId of [runtime.runId, ...children]) {
+          const records = brain.filter((record) => record.runId === runId)
+          expect(records).toHaveLength(3)
+          for (let index = 1; index < records.length; index += 1) {
+            const reuse = collectBrainPrefixCacheReuse({
+              previousLastBrain: records[index - 1],
+              nextFirstBrain: records[index]
+            })
+            expect(reuse.prefixPreserved, JSON.stringify(reuse.requestWireDiff)).toBe(true)
+          }
+        }
+        expect(root.some((record) => record.user.includes('PUBLIC_ACTION_'))).toBe(false)
+        for (const childRunId of children) {
+          const own = result.events.filter(
+            (event) => event.type === 'subagent_stream' && event.childRunId === childRunId
+          )
+          expect(own.filter((event) => event.delta && event.reset && event.streaming)).toHaveLength(
+            3
+          )
+          expect(own.at(-1)?.streaming).toBe(false)
+        }
+        runtime.assertThat(true, {
+          name: 'subagent-prefix-stable',
+          message: '主子真实消息前缀保留，新实例不继承旧子历史；mock 不伪造服务端缓存'
+        })
       }
     })
   })

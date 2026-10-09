@@ -4,7 +4,7 @@ import { diffChatToolsRequestWire } from '../../../src/main/services/ai/utils/ll
 /**
  * 跨 run 续接时，下一 run 首次 brain 的 cachedInputTokens
  * 相对上一 run 末次 brain inputTokens 的最低比例。
- * 全 live 跨 run case 共用；调低/调高只改这一处，避免各 case 阈值漂移。
+ * 连续 brain 与跨 run live 共用；调低/调高只改这一处，避免各 case 阈值漂移。
  */
 export const CROSS_RUN_PREFIX_CACHE_MIN_RATIO = 0.85
 
@@ -60,6 +60,17 @@ export const collectContinuationPrefixCacheReuse = (input: {
   const previousLastBrain =
     lastBrainRecordWithUsage(previousRecords) || lastBrainRecord(previousRecords)
   const nextFirstBrain = firstBrainRecord(nextRecords)
+  return collectBrainPrefixCacheReuse({ previousLastBrain, nextFirstBrain, minRatio })
+}
+
+/** Same projection invariant for adjacent brain calls within a run or across runs. */
+export const collectBrainPrefixCacheReuse = (input: {
+  previousLastBrain: AiLlmIoRecord | undefined
+  nextFirstBrain: AiLlmIoRecord | undefined
+  minRatio?: number
+}): ContinuationPrefixCacheReuse => {
+  const { previousLastBrain, nextFirstBrain } = input
+  const minRatio = input.minRatio ?? CROSS_RUN_PREFIX_CACHE_MIN_RATIO
   const previousWire = previousLastBrain?.requestWire
   const nextWire = nextFirstBrain?.requestWire
   const prefixPreserved = Boolean(

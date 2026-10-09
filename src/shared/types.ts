@@ -1660,7 +1660,7 @@ type AiRunEventPayload =
       childRunId: string
       delta?: string
       reset?: boolean
-      requesting?: boolean
+      streaming?: boolean
       createdAt: number
     }
   | { type: 'subagent_updated'; runId: string; update: SubagentUpdate; createdAt: number }

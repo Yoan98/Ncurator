@@ -148,7 +148,8 @@ export type AssistantProcessGroupItem = {
 }
 
 export type SubagentTaskView = import('../../../../shared/types').SubagentUpdate & {
-  requesting?: boolean
+  streaming?: boolean
+  messageStartedAt?: number
   actions: import('../../../../shared/types').SubagentAction[]
 }
 

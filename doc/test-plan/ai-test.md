@@ -54,6 +54,15 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 - How：生产 `AiRunService.run`，只脚本化 LLM 决策，其他依赖使用真实服务与存储。
 - Oracle：一次提交超过 2 项仍被接受，峰值并发为默认 2，排队任务仅在前序释放后启动，全部结果进入主工具消息；公开文本真实流式投递，实际请求状态成对开关且原始推理不转发；子完整日志不入 SQLite；状态与精简行动 annotation 持久化；受限工具不可绑定和执行。
 
+#### `human-subagent-prefix-stability`
+
+- 测试类型：backend / mock-llm；扩展现有 human-subagent 文件。
+- What：子内存投影、连续工具结果追加、新实例的固定 System 和工具前缀，以及公开文字流的开始与结束。
+- Why：确定性区分请求前缀改写与供应商缓存低命中，守住临时实例隔离和文字流生命周期。
+- How：生产 AiRunService、人类 graph、真实文本文件及工具；只脚本化 LLM 派发、学习及读取决策。保存真实 requestWire，比较稳定工具集合下的相邻主子 brain；两次派发创建新实例。
+- Oracle：已有消息逐项保留，工具定义和顺序不变；新子 System/初始工具相同且无旧子历史；主上下文只含派发汇总，没有子过程 annotation。公开文字 delta 开始流、completed/reset/取消结束流，审核请求不能冒充文字流。服务端缓存由 Workbench `subagent-prefix-cache-retain-live` 验证，mock 不伪造命中。
+- 最新验证：2026-10-09 生产 AiRunService 通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-prefix-stability/20261009-102111-987-e9228cfe`。两轮共四个新子实例，主子连续请求前缀保持、新实例无旧子历史、真实文本读取及公开流开始/结束通过；不把不同子实例的服务端缓存命中作为断言。
+
 #### `human-subagent-file-cancellation`
 
 - 测试类型：backend / mock-llm。

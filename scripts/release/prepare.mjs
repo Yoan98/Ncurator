@@ -21,7 +21,7 @@ const LIVE_KEY_ENV_NAMES = [
   'AI_LIVE_KEY_MIMO',
   'AI_LIVE_KEY_ZHIPU'
 ]
-const PREFIX_CACHE_LIVE_CASE = 'prefix-cache-retain-live'
+const PREFIX_CACHE_LIVE_CASES = ['prefix-cache-retain-live', 'subagent-prefix-cache-retain-live']
 const args = process.argv.slice(2)
 const valueAfter = (name) => {
   const index = args.indexOf(name)
@@ -93,11 +93,11 @@ const assertReleaseLiveKeyConfigured = () => {
   const anyKey = LIVE_KEY_ENV_NAMES.find((name) => String(process.env[name] || '').trim())
   if (anyKey) {
     throw new Error(
-      `发布准备必跑 ${PREFIX_CACHE_LIVE_CASE}：已配置 ${anyKey}，但 AI_LIVE_PROVIDER=${provider} 缺少 ${preferredKey}`
+      `发布准备必跑 ${PREFIX_CACHE_LIVE_CASES.join(', ')}：已配置 ${anyKey}，但 AI_LIVE_PROVIDER=${provider} 缺少 ${preferredKey}`
     )
   }
   throw new Error(
-    `发布准备必跑 ${PREFIX_CACHE_LIVE_CASE}：请在 .env 配置 ${preferredKey}（或设置 AI_LIVE_PROVIDER 并提供对应 AI_LIVE_KEY_*）`
+    `发布准备必跑 ${PREFIX_CACHE_LIVE_CASES.join(', ')}：请在 .env 配置 ${preferredKey}（或设置 AI_LIVE_PROVIDER 并提供对应 AI_LIVE_KEY_*）`
   )
 }
 
@@ -200,19 +200,16 @@ await run(process.execPath, [
 
 process.env.NCURATOR_RELEASE_PREPARE = '1'
 assertReleaseLiveKeyConfigured()
-process.stdout.write(`[release] running required live gate: ${PREFIX_CACHE_LIVE_CASE}\n`)
+process.stdout.write(
+  `[release] running required live gate: ${PREFIX_CACHE_LIVE_CASES.join(', ')}\n`
+)
 await run(process.execPath, [
   path.join(ROOT, 'scripts', 'test', 'workflow.mjs'),
   '--type',
   'e2e',
   '--domain',
   'workbench',
-  '--suite',
-  'conversation',
-  '--group',
-  'prefix-cache',
-  '--case',
-  PREFIX_CACHE_LIVE_CASE,
+  ...PREFIX_CACHE_LIVE_CASES.flatMap((caseId) => ['--case', caseId]),
   '--target',
   'source'
 ])

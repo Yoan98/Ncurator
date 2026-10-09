@@ -26,7 +26,7 @@
 1. 校验 `released-migrations.json` 中已锁定 migration 的版本、名称、文件名和 SHA-256。
 2. 并行执行 `typecheck:node`、`typecheck:web`，并准备网页抓取 sidecar。
 3. 使用 6 个 worker 执行 Unit、update backend 和非 live AI backend（其中由 `requiresBackendPptBrowser` 识别的 PPT 浏览器用例 `pptBrowserFiles` 固定 1 个 worker 串行）。
-4. 必跑 Workbench e2e `prefix-cache-retain-live`，验证同一伙伴经真实 UI 短续接、文本读工具历史、跨 run 前缀缓存和 `toolsHash`；没有 live key 必须失败，不能跳过。
+4. 必跑 Workbench e2e `prefix-cache-retain-live` 和 `subagent-prefix-cache-retain-live`，分别验证主伙伴跨任务短续接、同一子实例连续调用及主派发收口的前缀稳定和真实缓存；具体门槛按 Workbench 测试计划执行，没有 live key 必须失败，不能跳过。
 5. 全部通过后，把当前连续 migration 纳入发布锁，与 `package.json` 版本一并提交，创建 annotated Tag，并原子推送 `main` 和 Tag。
 
 第一个平台执行 `release:start` 时锁定本次新增 migration；另一平台使用同一份已锁源码。已锁 migration 不能合并、重排或修改，只能新增更高版本。

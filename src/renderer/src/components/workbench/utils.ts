@@ -676,7 +676,9 @@ export const reduceAssistantProcessGroups = (
               return {
                 ...child,
                 message: (event.reset ? '' : child.message || '') + (event.delta || ''),
-                requesting: event.requesting ?? child.requesting
+                streaming: event.streaming ?? child.streaming,
+                messageStartedAt:
+                  event.reset && event.delta ? event.createdAt : child.messageStartedAt
               }
             })
           }
@@ -712,7 +714,7 @@ export const reduceAssistantProcessGroups = (
       message: active
         ? (event.update.message ?? event.update.action?.text ?? previous?.message)
         : event.update.result,
-      requesting: event.update.status === 'running' ? previous?.requesting : false
+      streaming: event.update.status === 'running' ? previous?.streaming : false
     }
     const subagents = group.subagents?.some((item) => item.childRunId === child.childRunId)
       ? group.subagents.map((item) => (item.childRunId === child.childRunId ? child : item))

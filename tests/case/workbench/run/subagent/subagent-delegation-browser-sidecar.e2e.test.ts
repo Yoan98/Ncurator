@@ -1,3 +1,4 @@
+import type { Locator } from 'playwright'
 import http from 'node:http'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -37,6 +38,30 @@ const updates = async (runtime: E2ETestRuntime, started: number) => {
     (event): event is Extract<AiRunEvent, { type: 'subagent_updated' }> =>
       event.type === 'subagent_updated' && event.runId === run?.runId
   )
+}
+
+const assertCloudTextInside = async (cloud: Locator): Promise<void> => {
+  expect(
+    await cloud.evaluate((element) => {
+      const lines = element.querySelector<HTMLElement>('.nc-subagent-thought-lines')!
+      const outline = element.querySelector<SVGPathElement>('.nc-subagent-thought-outline path')!
+      const inverse = outline.getScreenCTM()!.inverse()
+      const bounds = lines.getBoundingClientRect()
+      const corners = [
+        [bounds.left, bounds.top],
+        [bounds.right, bounds.top],
+        [bounds.left, bounds.bottom],
+        [bounds.right, bounds.bottom]
+      ]
+      return (
+        corners.every(([x, y]) =>
+          outline.isPointInFill(new DOMPoint(x, y).matrixTransform(inverse))
+        ) &&
+        lines.scrollWidth <= lines.clientWidth &&
+        getComputedStyle(lines).overflowX === 'hidden'
+      )
+    })
+  ).toBe(true)
 }
 
 // Real website input: forms send server receipts, source facts are rendered by JavaScript.
@@ -191,11 +216,75 @@ describe('subagent browser and sidecar real UI', () => {
               )?.includes('选择模型'),
             10_000
           )
+          await runtime.page.mouse.move(0, 0)
+          // Read-only DOM observer measures one real automatic text cycle, including
+          // visibility after text ends. A newer message may legitimately supersede it.
+          const autoCycle = runtime.page.evaluate(
+            () =>
+              new Promise<{ elapsedMs: number }>((resolve, reject) => {
+                let cycle: { key: string; endedAt?: number } | undefined
+                const started = performance.now()
+                const timer = window.setInterval(() => {
+                  if (performance.now() - started > 120_000) {
+                    window.clearInterval(timer)
+                    reject(new Error('未观察到真实自动云的完整显示周期'))
+                    return
+                  }
+                  const cloud = [
+                    ...document.querySelectorAll<HTMLElement>('[data-testid="subagent-thought"]')
+                  ].find(
+                    (element) =>
+                      element.getClientRects().length > 0 && !element.closest('.ant-tooltip-hidden')
+                  )
+                  const key = cloud
+                    ? `${cloud.dataset.childRunId}:${cloud.dataset.messageStartedAt}`
+                    : undefined
+                  const text = cloud
+                    ?.querySelector('[data-testid="subagent-message"]')
+                    ?.textContent?.trim()
+                  const streaming = Boolean(
+                    cloud?.querySelector('[data-testid="subagent-stream-dot"]')
+                  )
+                  if (cloud && key && text && streaming) {
+                    cycle = { key }
+                  } else if (cycle && key === cycle.key && !streaming) {
+                    cycle.endedAt ??= performance.now()
+                  } else if (cycle?.endedAt && !cloud) {
+                    window.clearInterval(timer)
+                    resolve({ elapsedMs: performance.now() - cycle.endedAt })
+                  } else if (key !== cycle?.key) {
+                    cycle = undefined
+                  }
+                }, 25)
+              })
+          )
           const started = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
             `请一次派发三位临时帮手分头处理，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
           )
+          // No hover: the real public text stream opens the cloud and shows its trailing dot.
+          const automaticCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+          await waitUntil(
+            async () =>
+              (await automaticCloud.count()) === 1 &&
+              (await automaticCloud.getByTestId('subagent-stream-dot').count()) === 1 &&
+              Boolean((await automaticCloud.getByTestId('subagent-message').textContent())?.trim()),
+            120_000
+          )
+          await assertCloudTextInside(automaticCloud)
+          await runtime.captureScreenshot({
+            name: 'subagent-cloud-auto',
+            message: '未悬浮时最新公开消息自动显示，文字及黑球位于云内'
+          })
+          const cycle = await autoCycle
+          expect(cycle.elapsedMs).toBeGreaterThanOrEqual(1800)
+          expect(cycle.elapsedMs).toBeLessThan(3500)
+          runtime.signal({
+            name: 'subagent-auto-cloud-hold',
+            message: '真实文字流结束后云停留约两秒自动隐藏',
+            data: cycle
+          })
           await waitUntil(async () =>
             (await updates(runtime, started)).some((event) => event.update.status === 'running')
           )
@@ -208,7 +297,11 @@ describe('subagent browser and sidecar real UI', () => {
           await queuedRow.hover()
           const queuedCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
           await queuedCloud.waitFor({ state: 'visible' })
+          expect(await queuedCloud.getAttribute('data-child-run-id')).toBe(
+            await queuedRow.getAttribute('data-child-run-id')
+          )
           expect(await queuedCloud.getByTestId('subagent-message').textContent()).toBe('我在排队')
+          await assertCloudTextInside(queuedCloud)
           expect(await queuedCloud.getByTestId('subagent-stream-dot').count()).toBe(0)
           await runtime.captureScreenshot({
             name: 'subagent-cloud-queued',
@@ -236,7 +329,11 @@ describe('subagent browser and sidecar real UI', () => {
               .evaluate((group) => getComputedStyle(group).flexDirection)
           ).toBe('column')
           await waitUntil(async () => {
-            if (await runtime.page.locator('[data-testid="subagent-thought"]:visible').isVisible())
+            const visible = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+            if (
+              (await visible.count()) === 1 &&
+              (await visible.getAttribute('data-child-run-id')) === previewChildRunId
+            )
               return true
             await runtime.page.mouse.move(0, 0)
             await childRow.hover()
@@ -261,6 +358,7 @@ describe('subagent browser and sidecar real UI', () => {
               .evaluate((dot) => getComputedStyle(dot).animationName)
           ).toBe('nc-subagent-dot-breathe')
           expect(await liveCloud.getByTestId('subagent-message').count()).toBe(1)
+          await assertCloudTextInside(liveCloud)
           await waitUntil(
             async () =>
               liveCloud
@@ -489,6 +587,7 @@ describe('subagent browser and sidecar real UI', () => {
           )
           expect(await completedCloud.getByTestId('subagent-message').count()).toBe(1)
           expect(await completedCloud.getByTestId('subagent-stream-dot').count()).toBe(0)
+          await assertCloudTextInside(completedCloud)
           expect(
             await completedCloud.evaluate((cloud) => {
               const lines = cloud.querySelector('.nc-subagent-thought-lines')!
@@ -566,6 +665,13 @@ describe('subagent browser and sidecar real UI', () => {
                 site.getSlowRequests() > slowBefore &&
                 (await updates(runtime, start)).some((event) => event.update.status === 'completed')
             )
+            await runtime.page.mouse.move(0, 0)
+            await getWorkbenchLocator(runtime.page, workbenchSelectors.input).focus()
+            // The genuine pending navigation leaves a gap after text output; no test delay
+            // is added to the model or tool. Auto clouds must expire while the tool still runs.
+            await runtime.page
+              .locator('[data-testid="subagent-thought"]:visible')
+              .waitFor({ state: 'hidden', timeout: 10_000 })
             const before = await updates(runtime, start)
             const completed = before.find((event) => event.update.status === 'completed')!
             expect(await fs.readFile(saved, 'utf8')).toContain(crash ? 'SAVED_CRASH' : 'SAVED_STOP')
@@ -585,6 +691,9 @@ describe('subagent browser and sidecar real UI', () => {
                 .last()
                 .waitFor({ state: 'visible' })
               expect(
+                await runtime.page.locator('[data-testid="subagent-thought"]:visible').count()
+              ).toBe(0)
+              expect(
                 await runtime.page
                   .locator(`[data-child-run-id="${completed.update.childRunId}"]`)
                   .getAttribute('data-status')
@@ -600,6 +709,19 @@ describe('subagent browser and sidecar real UI', () => {
                   .map((contents) => contents.id)
               )
               expect(loadingPages.length).toBeGreaterThan(0)
+              const pendingChild = runtime.page
+                .locator('[data-testid="subagent-task"][data-status="running"]')
+                .last()
+              await pendingChild.hover()
+              const pendingCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+              await pendingCloud.waitFor({ state: 'visible' })
+              expect(await pendingCloud.getByTestId('subagent-stream-dot').count()).toBe(0)
+              await assertCloudTextInside(pendingCloud)
+              // Manual reading survives longer than the automatic two-second hold.
+              await runtime.page.waitForTimeout(2200)
+              expect(await pendingCloud.isVisible()).toBe(true)
+              await runtime.page.mouse.move(0, 0)
+              await pendingCloud.waitFor({ state: 'hidden' })
               await runtime.page.getByRole('button', { name: '停止本次运行', exact: true }).click()
               await waitUntil(async () => {
                 const latest = new Map(

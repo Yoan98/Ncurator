@@ -137,12 +137,11 @@ export const createSubagentDispatcher = (
           }
           deps.abortSignal?.addEventListener('abort', cancel, { once: true })
           if (deps.abortSignal?.aborted || deps.isCancelled()) cancel()
-          const requests = new Set<string>()
           let replaceStream = true
           const stream = (update: {
             delta?: string
             reset?: boolean
-            requesting?: boolean
+            streaming?: boolean
           }): void => {
             // Keep live fragments ordered with durable snapshots without persisting each fragment.
             const next = updates.then(() => {
@@ -182,7 +181,7 @@ export const createSubagentDispatcher = (
                 isCancelled: () => controller.signal.aborted || deps.isCancelled(),
                 requestApprovalBatch: async (request) => {
                   base = { ...base, status: 'waiting_approval' }
-                  stream({ requesting: false })
+                  stream({ streaming: false })
                   await publish(base)
                   const result = await deps.requestApprovalBatch({
                     ...request,
@@ -199,19 +198,16 @@ export const createSubagentDispatcher = (
                 sendEvent: (event) => {
                   // The thought event is public assistant text accompanying this round of tool calls.
                   // Raw reasoning deltas, skill state and lifecycle remain local.
-                  if (event.type === 'llm_request_state') {
-                    if (event.requesting) requests.add(event.callId)
-                    else requests.delete(event.callId)
-                    stream({ requesting: requests.size > 0 })
-                  } else if (event.type === 'assistant_brain_stream_started') {
+                  if (event.type === 'assistant_brain_stream_started') {
                     replaceStream = true
                   } else if (event.type === 'assistant_brain_stream_reset') {
                     replaceStream = true
-                    stream({ reset: true })
+                    stream({ reset: true, streaming: false })
                   } else if (event.type === 'assistant_brain_stream_delta') {
-                    stream({ delta: event.text, reset: replaceStream })
+                    stream({ delta: event.text, reset: replaceStream, streaming: true })
                     replaceStream = false
                   } else if (event.type === 'assistant_brain_stream_completed') {
+                    stream({ streaming: false })
                     if (event.text.trim())
                       void publish({ ...base, message: event.text.slice(0, 12000) })
                   } else if (
@@ -306,7 +302,7 @@ export const createSubagentDispatcher = (
             await publish(update)
             return update
           } finally {
-            stream({ requesting: false })
+            stream({ streaming: false })
             try {
               await updates
             } finally {
