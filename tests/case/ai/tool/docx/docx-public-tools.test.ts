@@ -1,9 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import JSZip from 'jszip'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import type { DocxPublicReadRootNode } from '../../../../../src/main/services/ai/human/tools/docx/nodeTypes'
+import type {
+  DocxPublicReadRootNode,
+  DocxPublicReadRunNode
+} from '../../../../../src/main/services/ai/human/tools/docx/nodeTypes'
+import { DOCX_READ_NODES_TOOL_SPEC } from '../../../../../src/main/services/ai/human/tools/docx/toolSpecs'
 
 type OutlineResult = {
   fromPercent: number
@@ -79,6 +84,148 @@ describe('ai tool docx backend', () => {
         )
         const harness = createDocxToolHarness(runtime)
         try {
+          const styledPath = await writeTestDocxFile(
+            runtime.workspaceRoot,
+            'inherited-styles.docx',
+            [{ type: 'paragraph', text: 'Style input' }]
+          )
+          const styledZip = await JSZip.loadAsync(await fs.readFile(styledPath))
+          const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+          styledZip.file(
+            'word/styles.xml',
+            `<w:styles xmlns:w="${W}">
+            <w:docDefaults>
+              <w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:eastAsia="宋体"/><w:sz w:val="24"/></w:rPr></w:rPrDefault>
+              <w:pPrDefault><w:pPr><w:spacing w:before="60" w:after="80"/></w:pPr></w:pPrDefault>
+            </w:docDefaults>
+            <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>
+              <w:pPr><w:jc w:val="both"/><w:ind w:left="400"/><w:spacing w:after="100"/></w:pPr><w:rPr><w:color w:val="112233"/></w:rPr>
+            </w:style>
+            <w:style w:type="paragraph" w:styleId="ParagraphBase"><w:name w:val="ParagraphBase"/><w:basedOn w:val="Normal"/>
+              <w:pPr><w:ind w:firstLine="420"/><w:spacing w:before="120"/></w:pPr>
+            </w:style>
+            <w:style w:type="paragraph" w:styleId="ParagraphChild"><w:name w:val="ParagraphChild"/><w:basedOn w:val="ParagraphBase"/>
+              <w:pPr><w:jc w:val="center"/><w:ind w:right="240"/></w:pPr>
+            </w:style>
+            <w:style w:type="paragraph" w:styleId="ParagraphBold"><w:name w:val="ParagraphBold"/><w:basedOn w:val="ParagraphChild"/><w:rPr><w:b/></w:rPr></w:style>
+            <w:style w:type="character" w:styleId="CharacterBase"><w:name w:val="CharacterBase"/><w:rPr><w:i/><w:color w:val="445566"/></w:rPr></w:style>
+            <w:style w:type="character" w:styleId="Strong"><w:name w:val="Strong"/><w:basedOn w:val="CharacterBase"/><w:rPr><w:b/></w:rPr></w:style>
+            <w:style w:type="character" w:styleId="StrongChild"><w:name w:val="StrongChild"/><w:basedOn w:val="Strong"/><w:rPr><w:u w:val="single"/></w:rPr></w:style>
+            <w:style w:type="character" w:styleId="ToggleBold"><w:name w:val="ToggleBold"/><w:basedOn w:val="Strong"/><w:rPr><w:b/></w:rPr></w:style>
+            <w:style w:type="character" w:styleId="CycleA"><w:name w:val="CycleA"/><w:basedOn w:val="CycleB"/><w:rPr><w:i/></w:rPr></w:style>
+            <w:style w:type="character" w:styleId="CycleB"><w:name w:val="CycleB"/><w:basedOn w:val="CycleA"/><w:rPr><w:b/></w:rPr></w:style>
+          </w:styles>`
+          )
+          styledZip.file(
+            'word/document.xml',
+            `<w:document xmlns:w="${W}"><w:body>
+            <w:p><w:pPr><w:pStyle w:val="ParagraphChild"/><w:ind w:left="600"/><w:spacing w:after="160"/></w:pPr>
+              <w:r><w:t>普通文字</w:t></w:r>
+              <w:r><w:rPr><w:b/></w:rPr><w:t>直接加粗</w:t></w:r>
+              <w:r><w:rPr><w:rStyle w:val="Strong"/></w:rPr><w:t>继承加粗</w:t></w:r>
+              <w:r><w:rPr><w:rStyle w:val="StrongChild"/><w:strike/><w:shd w:fill="FFFF00"/></w:rPr><w:t>多层继承</w:t></w:r>
+              <w:r><w:rPr><w:rStyle w:val="StrongChild"/><w:b w:val="0"/><w:i w:val="0"/><w:u w:val="none"/></w:rPr><w:t>取消加粗</w:t></w:r>
+              <w:r><w:rPr><w:rStyle w:val="Strong"/><w:rFonts w:eastAsia="黑体"/><w:sz w:val="20"/></w:rPr><w:t>直接覆盖字体</w:t></w:r>
+              <w:r><w:rPr><w:rStyle w:val="ToggleBold"/></w:rPr><w:t>样式开关</w:t></w:r>
+            </w:p>
+            <w:p><w:r><w:t>默认段落</w:t></w:r></w:p>
+            <w:p><w:pPr><w:pStyle w:val="ParagraphBold"/></w:pPr><w:r><w:t>段落继承加粗</w:t></w:r></w:p>
+            <w:p><w:pPr><w:pStyle w:val="MissingParagraph"/></w:pPr><w:r><w:rPr><w:rStyle w:val="MissingCharacter"/><w:i/></w:rPr><w:t>缺失样式</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:rStyle w:val="CycleA"/></w:rPr><w:t>循环样式</w:t></w:r></w:p>
+            <w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:tc><w:tcPr/><w:p><w:r><w:rPr><w:rStyle w:val="Strong"/></w:rPr><w:t>表格继承加粗</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+            <w:sectPr/>
+          </w:body></w:document>`
+          )
+          await fs.writeFile(styledPath, await styledZip.generateAsync({ type: 'nodebuffer' }))
+          const styledArgs = {
+            sourcePath: styledPath,
+            range: { type: 'node_index' as const, fromNodeIndex: 0, toNodeIndex: 5 }
+          }
+          const styledRead = await harness.invoke<ReadResult>('docx_read_nodes', styledArgs)
+          const styledRuns: DocxPublicReadRunNode[] = []
+          type ReadTreeNode = { type: string; children?: ReadTreeNode[] }
+          const collectRuns = (node: ReadTreeNode): void => {
+            if (node.type === 'run') styledRuns.push(node as DocxPublicReadRunNode)
+            node.children?.forEach(collectRuns)
+          }
+          styledRead.nodes.forEach(collectRuns)
+          const styleFor = (text: string) =>
+            styledRuns.find((node) =>
+              node.children.some((child) => child.type === 'text' && child.text === text)
+            )?.style
+          const styledParagraph = styledRead.nodes[0]
+          runtime.assertThat(
+            styledParagraph?.type === 'paragraph' &&
+              styledParagraph.style?.alignment === 'center' &&
+              styledRead.nodes[1]?.type === 'paragraph' &&
+              styledRead.nodes[1].style?.alignment === 'justify' &&
+              JSON.stringify(styledParagraph.style.indent) ===
+                JSON.stringify({ left: 30, right: 12, firstLine: 21 }) &&
+              JSON.stringify(styledParagraph.style.spacing) ===
+                JSON.stringify({ before: 6, after: 8 }) &&
+              !styleFor('普通文字')?.bold &&
+              styleFor('普通文字')?.fontFamily === '宋体' &&
+              styleFor('普通文字')?.fontSize === 12 &&
+              styleFor('普通文字')?.color === '112233' &&
+              styleFor('直接加粗')?.bold === true &&
+              styleFor('继承加粗')?.bold === true &&
+              styleFor('继承加粗')?.italic === true &&
+              styleFor('继承加粗')?.color === '445566' &&
+              styleFor('多层继承')?.bold === true &&
+              styleFor('多层继承')?.underline === true &&
+              styleFor('多层继承')?.strike === true &&
+              styleFor('多层继承')?.highlight === 'FFFF00' &&
+              styleFor('取消加粗')?.bold === false &&
+              styleFor('取消加粗')?.italic === false &&
+              styleFor('取消加粗')?.underline === false &&
+              styleFor('直接覆盖字体')?.fontFamily === '黑体' &&
+              styleFor('直接覆盖字体')?.fontSize === 10 &&
+              styleFor('样式开关')?.bold === false &&
+              styleFor('段落继承加粗')?.bold === true &&
+              styleFor('缺失样式')?.bold === undefined &&
+              styleFor('缺失样式')?.italic === true &&
+              styleFor('循环样式')?.bold === true &&
+              styleFor('循环样式')?.italic === true &&
+              styleFor('表格继承加粗')?.bold === true,
+            {
+              name: 'docx-read-effective-inherited-styles',
+              message: '真实读取合并默认、多层样式和直接格式，保留取消格式并处理缺失及循环引用。',
+              data: styledRead
+            }
+          )
+          const modelText = DOCX_READ_NODES_TOOL_SPEC.modelResult.renderSuccess({
+            toolName: 'docx_read_nodes',
+            args: styledArgs,
+            data: styledRead
+          })
+          const catalog = new Map(
+            Array.from(modelText.matchAll(/^ {2}(S\d+):\n {4}(\{[^\n]+\})$/gm), (match) => [
+              match[1]!,
+              JSON.parse(match[2]!) as DocxPublicReadRunNode['style']
+            ])
+          )
+          const projectedStyleFor = (text: string) => {
+            const run = styledRuns.find((node) =>
+              node.children.some((child) => child.type === 'text' && child.text === text)
+            )
+            const line = modelText
+              .split('\n')
+              .find((entry) => run && entry.includes(`nodeId="${run.nodeId}"`))
+            const id = line?.match(/style=(S\d+)/)?.[1]
+            return id ? catalog.get(id) : undefined
+          }
+          runtime.assertThat(
+            projectedStyleFor('继承加粗')?.bold === true &&
+              projectedStyleFor('多层继承')?.underline === true &&
+              projectedStyleFor('取消加粗')?.bold === false &&
+              !projectedStyleFor('普通文字')?.bold &&
+              projectedStyleFor('表格继承加粗')?.bold === true,
+            {
+              name: 'docx-model-result-inherited-style-references',
+              message: '模型文本的样式目录和节点引用保留继承格式与明确的 false。',
+              data: { modelText }
+            }
+          )
           const created = await harness.invoke<MutationResult>('docx_content_edit', {
             sourcePath: createdPath,
             type: 'insert_nodes',

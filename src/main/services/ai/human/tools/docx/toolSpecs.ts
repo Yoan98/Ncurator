@@ -78,7 +78,7 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
   inputSchema: docxReadNodesSchema,
   promptSpec: {
     name: 'docx_read_nodes',
-    description: '读取指定 nodeId 或 nodeIndex 范围的语义节点树。'
+    description: '读取指定 nodeId 或 nodeIndex 范围的语义节点树，包含继承后的有效格式。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {

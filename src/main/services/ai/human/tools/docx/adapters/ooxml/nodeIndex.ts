@@ -31,6 +31,8 @@ import {
   isElementNode
 } from './dom'
 import { resolveDocxRelationshipTarget } from './relationshipPath'
+import { createStyleContext } from './styleResolver'
+import type { DocxStyleContext } from './styleResolver'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const paragraphStyle = (paragraph: Element): string => {
@@ -317,9 +319,11 @@ export const buildNodeIndex = (
   options?: {
     storyPart?: DocxStoryPart
     nodeIndexOffset?: number
+    styleContext?: DocxStyleContext
   }
 ): NodeIndex => {
   const storyPart = options?.storyPart
+  const styleContext = options?.styleContext || createStyleContext()
   const body = storyPart?.root || getBody(documentDom)
   const story = storyPart?.story || { storyId: 'body', type: 'body' as const }
   const partName = storyPart?.partName || 'word/document.xml'
@@ -398,7 +402,7 @@ export const buildNodeIndex = (
     if (child.localName === 'p') {
       const nodeId = `${idPrefix}p:${storyRootCount}`
       const text = paragraphText(child)
-      const style = readParagraphStyle(child)
+      const style = readParagraphStyle(child, styleContext)
       const layoutMode = paragraphLayoutMode(child)
       rootNodeIds.push(nodeId)
       outlineDraft.push({
@@ -518,7 +522,8 @@ export const buildNodeIndex = (
       relationshipTypes,
       relationshipTargetModes,
       availableRelationshipTargetIds,
-      nodesById
+      nodesById,
+      styleContext
     }
     const detail =
       node.kind === 'paragraph'
@@ -603,6 +608,7 @@ export const buildDocumentNodeIndex = (bundle: ParsedDocxBundle): NodeIndex => {
     cellNodeCount: 0,
     detailByNodeId: new Map()
   }
+  const styleContext = createStyleContext(bundle.stylesDom)
   for (const storyPart of parts) {
     const part = buildNodeIndex(
       storyPart.dom,
@@ -610,7 +616,7 @@ export const buildDocumentNodeIndex = (bundle: ParsedDocxBundle): NodeIndex => {
       storyPart.relationshipTypes,
       storyPart.relationshipTargetModes,
       storyPart.availableRelationshipTargetIds,
-      { storyPart, nodeIndexOffset: combined.rootNodeCount }
+      { storyPart, nodeIndexOffset: combined.rootNodeCount, styleContext }
     )
     combined.outline.push(...part.outline)
     combined.rootNodeIds.push(...part.rootNodeIds)

@@ -192,10 +192,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `docx-public-tools`
 
 - 测试类型：`backend`
-- What：3 个读取工具和 4 个写入工具使用同一 DOCX 编辑会话，连续读取、内容编辑、格式、表格、图片、批注与修订后仍可回读。
+- What：DOCX 公共工具共享编辑会话；读取返回继承后的有效格式，连续内容、格式、表格、图片、批注与修订操作后仍可回读。
 - Why：公共工具必须让 AI 通过“定位 nodeId → 单次局部操作 → 精准读取确认”稳定完成真实任务，同时避免写工具把完整节点再次放入上下文。
-- How：创建真实 DOCX，依次执行 outline/read/search、内容替换、段落格式、表格结构、图片与批注操作，并再次 read/search。
-- Oracle：每次写入只接收一个 discriminated operation；未删除节点的 `nodeId` 保持稳定；普通写入返回空领域结果，创建操作只返回 `createdIds`；四个写工具看到同一 Working 状态，最终状态可由读取工具确认。
+- How：创建真实 DOCX，通过生产公共工具执行 outline/read/search、内容替换、段落格式、表格结构、图片与批注操作，并再次 read/search；另用真实 OOXML 样式准备文档默认、段落与字符多层继承、直接加粗和直接取消加粗，检查结构化读取与生产 modelResult 投影。
+- Oracle：读取正确合并默认、段落、字符样式及直接格式；继承加粗可见，直接取消加粗保留为 false，普通文字不误加粗，缺失或循环样式不阻塞读取；模型文本的样式目录与文字节点引用对应。每次写入只接收一个 discriminated operation；未删除节点的 `nodeId` 保持稳定；普通写入返回空领域结果，创建操作只返回 `createdIds`；四个写工具看到同一 Working 状态，最终状态可由读取工具确认。
 
 ##### `docx-outline-pagination`
 

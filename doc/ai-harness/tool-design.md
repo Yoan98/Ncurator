@@ -145,16 +145,7 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 
 写成功多为 **A** 或 `{}`（excel 写回不返回系统锚点）；**不**返回 diff 全文——模型应再 read 验证。
 
-### 6.3 PPT 表格写入
 
-PPT 表格创建及 `update_table` 支持 `columnWidths`、`rowHeights`、`fontSize`、`fontFamily`。尺寸单位为 pt，数组数量必须匹配网格，总和必须匹配表格边界。创建明确写入默认 18pt；布局更新可单独调用，文字更新保留字体。新增或更新表格在保存前按实际 SVG 字形检查溢出，失败提示调整空间、字号或文字；工具不自动缩字或扩大表格。
-
-### 6.4 Terminal 契约
-
-- `status`: `running | succeeded | failed | cancelled`
-- `terminal_run` 返回 `terminalId`；`terminal_read` 不回传 id（用 session 上下文）
-
----
 
 ## 7. 执行与 hand 节点
 

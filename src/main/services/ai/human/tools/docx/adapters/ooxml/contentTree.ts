@@ -29,7 +29,9 @@ import type {
   DocxVisualSummary
 } from '../../types'
 import type { DocxEditableNode, DocxVisualDescriptor, NodeMapById } from './types'
-import { childElements, descendantElements, firstChildElement, getAttr } from './dom'
+import { childElements, descendantElements, firstChildElement, getAttr, isElementNode } from './dom'
+import { createStyleContext, effectivePropertyElements, enabled, fontScript } from './styleResolver'
+import type { DocxStyleContext } from './styleResolver'
 
 type ContentTreeContext = {
   rootNodeId: string
@@ -40,6 +42,7 @@ type ContentTreeContext = {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   nodesById: NodeMapById
+  styleContext: DocxStyleContext
 }
 
 const nodeId = (context: ContentTreeContext, nodePath: string): string =>
@@ -95,7 +98,7 @@ const boolProperty = (parent: Element | null, name: string): boolean | undefined
   return value === '0' || value === 'false' || value === 'off' ? false : true
 }
 
-const numberAttr = (node: Element | null, name: string): number | undefined => {
+const numberAttr = (node: Element | null | undefined, name: string): number | undefined => {
   if (!node) return undefined
   const raw = getAttr(node, name).trim()
   if (!raw) return undefined
@@ -145,38 +148,58 @@ const readBorders = (properties: Element, containerName: string): DocxBorders | 
   return Object.keys(borders).length > 0 ? borders : undefined
 }
 
-export const readRunStyle = (run: Element): DocxRunStyle | undefined => {
-  const rPr = firstChildElement(run, 'rPr')
-  if (!rPr) return undefined
-  const color = firstChildElement(rPr, 'color')
-  const highlight = firstChildElement(rPr, 'shd')
-  const fonts = firstChildElement(rPr, 'rFonts')
-  const size = firstChildElement(rPr, 'sz')
+export const readRunStyle = (run: Element, context: DocxStyleContext): DocxRunStyle | undefined => {
+  let paragraph = run.parentNode
+  while (paragraph && (!isElementNode(paragraph) || paragraph.localName !== 'p')) {
+    paragraph = paragraph.parentNode
+  }
+  const properties = effectivePropertyElements(
+    context,
+    isElementNode(paragraph) ? paragraph : run,
+    run
+  )
+  const bool = (name: string): boolean | undefined => {
+    const property = properties.get(name)
+    return property ? enabled(property) : undefined
+  }
+  const color = properties.get('color')
+  const highlight = properties.get('shd')
+  const fonts = properties.get('rFonts')
+  const size = properties.get('sz')
+  const underline = properties.get('u')
+  const script = fontScript(run.textContent || '')
   return compact({
-    bold: boolProperty(rPr, 'b'),
-    italic: boolProperty(rPr, 'i'),
-    underline: firstChildElement(rPr, 'u') ? boolProperty(rPr, 'u') : undefined,
-    strike: boolProperty(rPr, 'strike'),
+    bold: bool('b'),
+    italic: bool('i'),
+    underline: underline ? getAttr(underline, 'val') !== 'none' && enabled(underline) : undefined,
+    strike: bool('strike'),
     color: color ? hexColor(getAttr(color, 'val')) : undefined,
     highlight: highlight ? hexColor(getAttr(highlight, 'fill')) : undefined,
     fontFamily: fonts
-      ? getAttr(fonts, 'ascii') || getAttr(fonts, 'eastAsia') || undefined
+      ? getAttr(fonts, script) || getAttr(fonts, 'ascii') || getAttr(fonts, 'eastAsia') || undefined
       : undefined,
     fontSize: halfPointsToPt(numberAttr(size, 'val'))
   })
 }
 
-export const readParagraphStyle = (paragraph: Element): DocxParagraphStyle | undefined => {
+export const readParagraphStyle = (
+  paragraph: Element,
+  context: DocxStyleContext = createStyleContext()
+): DocxParagraphStyle | undefined => {
   const pPr = firstChildElement(paragraph, 'pPr')
-  if (!pPr) return undefined
-  const style = firstChildElement(pPr, 'pStyle')
-  const alignment = firstChildElement(pPr, 'jc')
-  const indent = firstChildElement(pPr, 'ind')
-  const spacing = firstChildElement(pPr, 'spacing')
+  const style = pPr && firstChildElement(pPr, 'pStyle')
+  const properties = effectivePropertyElements(context, paragraph)
+  const alignment = properties.get('jc')
+  const alignmentValue = alignment ? getAttr(alignment, 'val') : ''
+  const publicAlignment = alignmentValue === 'both' ? 'justify' : alignmentValue
+  const indent = properties.get('ind')
+  const spacing = properties.get('spacing')
+  const keepNext = properties.get('keepNext')
+  const pageBreak = properties.get('pageBreakBefore')
   return compact({
     styleId: style ? getAttr(style, 'val') || undefined : undefined,
-    alignment: alignment
-      ? (getAttr(alignment, 'val') as DocxParagraphStyle['alignment']) || undefined
+    alignment: ['left', 'center', 'right', 'justify'].includes(publicAlignment)
+      ? (publicAlignment as DocxParagraphStyle['alignment'])
       : undefined,
     indent: indent
       ? compact({
@@ -193,8 +216,8 @@ export const readParagraphStyle = (paragraph: Element): DocxParagraphStyle | und
           line: twipsToPt(numberAttr(spacing, 'line'))
         })
       : undefined,
-    keepWithNext: boolProperty(pPr, 'keepNext'),
-    pageBreakBefore: boolProperty(pPr, 'pageBreakBefore')
+    keepWithNext: keepNext ? enabled(keepNext) : undefined,
+    pageBreakBefore: pageBreak ? enabled(pageBreak) : undefined
   })
 }
 
@@ -436,7 +459,7 @@ const parseRun = (
   return {
     type: 'run',
     nodeId: id,
-    style: readRunStyle(run),
+    style: readRunStyle(run, context.styleContext),
     children
   }
 }
@@ -649,7 +672,7 @@ const parseParagraph = (
   const node: DocxReadParagraphNode = {
     type: 'paragraph',
     nodeId: id,
-    style: readParagraphStyle(paragraph),
+    style: readParagraphStyle(paragraph, context.styleContext),
     text: '',
     children
   }
@@ -783,6 +806,7 @@ const createContext = (input: {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   nodesById: NodeMapById
+  styleContext: DocxStyleContext
 }): ContentTreeContext => {
   const { nodeId: rootNodeId, ...rest } = input
   return { ...rest, rootNodeId }
@@ -802,6 +826,7 @@ export const buildParagraphDetail = (input: {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   nodesById: NodeMapById
+  styleContext: DocxStyleContext
 }): DocxDetailedParagraphNode => {
   const parsed = parseParagraph(input.paragraph, createContext(input), 'root')
   return {
@@ -829,6 +854,7 @@ export const buildTableDetail = (input: {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   nodesById: NodeMapById
+  styleContext: DocxStyleContext
 }): DocxDetailedTableNode => {
   const parsed = parseTable(input.table, createContext(input), 'root')
   return {
@@ -856,6 +882,7 @@ export const buildContainerDetail = (input: {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   nodesById: NodeMapById
+  styleContext: DocxStyleContext
 }): DocxDetailedContainerNode => {
   const parsed = parseContentNode(input.container, createContext(input), 'root')
   if (!parsed || (parsed.type !== 'content_control' && parsed.type !== 'revision')) {
@@ -907,6 +934,7 @@ export const buildCellDetail = (input: {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   nodesById: NodeMapById
+  styleContext: DocxStyleContext
 }): DocxDetailedCellNode => {
   const parsed = parseCell(input.cell, createContext(input), 'root', input.row, input.col)
   return {
