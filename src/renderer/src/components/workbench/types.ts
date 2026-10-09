@@ -12,6 +12,8 @@ import type { RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 export type WorkbenchAiPreference = AiPreference
 export type WorkbenchExecutionPermission = AiExecutionPermission
 
+export type WorkspaceLoadState = 'loading' | 'ready' | 'error'
+
 export type WorkbenchContextUsage = {
   partnerId: string
   contextWindowTokens: number

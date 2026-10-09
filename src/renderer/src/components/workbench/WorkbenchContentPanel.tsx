@@ -22,7 +22,7 @@ import type { FileRenderDocument } from '../fileRenders'
 import { classifyEditableTextKind, type EditableTextKind } from '../fileRenders/editableTextKind'
 import { resolveRegisteredPreviewType } from '../fileRenders/capabilities'
 import WorkbenchBrowserPanel from './WorkbenchBrowserPanel'
-import type { WorkbenchContentPanelState, WorkbenchResourceTab } from './types'
+import type { WorkbenchContentPanelState, WorkbenchResourceTab, WorkspaceLoadState } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
@@ -30,6 +30,7 @@ import { TextFileDiffViewer } from './TextFileDiffViewer'
 import PptDiffViewer from './PptDiffViewer'
 import WorkbenchTabBar from './WorkbenchTabBar'
 import WorkspaceFileExplorer, { type WorkspaceFileExplorerMode } from './WorkspaceFileExplorer'
+import WorkspaceFilesEmptyState from './WorkspaceFilesEmptyState'
 import { shouldShowWpsOpenWithHint, WPS_OPEN_WITH_HINT } from './wpsOpenWithHint'
 
 type WorkbenchContentPanelProps = {
@@ -42,6 +43,9 @@ type WorkbenchContentPanelProps = {
   workspaces: WorkspaceSource[]
   fallbackWorkspaceName?: string | null
   selectedWorkspace: WorkspaceSource | null
+  workspaceLoadState: WorkspaceLoadState
+  onOpenWorkspaceSettings: () => void
+  onReloadWorkspaces: () => void
   fileChangeRecords: AiFileChangeRecord[]
   onRevertApply: () => void
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
@@ -598,6 +602,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   workspaces,
   fallbackWorkspaceName,
   selectedWorkspace,
+  workspaceLoadState,
+  onOpenWorkspaceSettings,
+  onReloadWorkspaces,
   fileChangeRecords,
   onRevertApply,
   onBackToPanelState,
@@ -630,6 +637,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   const previousExplorerOpenRef = React.useRef(explorerOpen)
   const suppressExternalNoticeUntilRef = React.useRef(isAiRunActive ? Number.POSITIVE_INFINITY : 0)
   const floatingExplorer = state.kind === 'file_preview' || state.kind === 'apply_workspace'
+  const hasWorkspace = Boolean(selectedWorkspace?.root_path)
   const bumpExplorerReload = React.useCallback((): void => {
     setExplorerReloadToken((current) => current + 1)
   }, [])
@@ -877,13 +885,21 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
           <div className="min-w-0 flex-1 overflow-hidden">
             {state.kind === 'empty' ? <WorkbenchEmptyPanel /> : null}
             {state.kind === 'file_launcher' ? (
-              <div className="flex h-full items-center justify-center text-center">
-                <div>
-                  <HiFolderOpen className="mx-auto h-10 w-10 text-[#91918E]" />
-                  <div className="mt-4 text-[18px] font-semibold text-[#37352F]">打开文件</div>
-                  <div className="mt-2 text-sm text-[#91918E]">从右侧工作区文件列表中选择</div>
+              hasWorkspace ? (
+                <div className="flex h-full items-center justify-center text-center">
+                  <div>
+                    <HiFolderOpen className="mx-auto h-10 w-10 text-[#91918E]" />
+                    <div className="mt-4 text-[18px] font-semibold text-[#37352F]">打开文件</div>
+                    <div className="mt-2 text-sm text-[#91918E]">从右侧工作区文件列表中选择</div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <WorkspaceFilesEmptyState
+                  loadState={workspaceLoadState}
+                  onOpenSettings={onOpenWorkspaceSettings}
+                  onRetry={onReloadWorkspaces}
+                />
+              )
             ) : null}
             {state.kind === 'file_preview' ? (
               <WorkbenchDocumentPreviewPanel
@@ -963,10 +979,13 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               />
             ) : null}
           </div>
-          {state.kind === 'file_launcher' && explorerOpen ? (
+          {state.kind === 'file_launcher' && hasWorkspace && explorerOpen ? (
             <div className="w-[min(38%,300px)] min-w-[240px] shrink-0">
               <WorkspaceFileExplorer
                 workspace={selectedWorkspace}
+                workspaceLoadState={workspaceLoadState}
+                onOpenWorkspaceSettings={onOpenWorkspaceSettings}
+                onReloadWorkspaces={onReloadWorkspaces}
                 changeRecords={fileChangeRecords}
                 mode={explorerMode}
                 reloadToken={explorerReloadToken}
@@ -997,6 +1016,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               >
                 <WorkspaceFileExplorer
                   workspace={selectedWorkspace}
+                  workspaceLoadState={workspaceLoadState}
+                  onOpenWorkspaceSettings={onOpenWorkspaceSettings}
+                  onReloadWorkspaces={onReloadWorkspaces}
                   changeRecords={fileChangeRecords}
                   mode={explorerMode}
                   reloadToken={explorerReloadToken}
@@ -1032,6 +1054,9 @@ const areContentPanelPropsEqual = (
   previous.workspaces === next.workspaces &&
   previous.fallbackWorkspaceName === next.fallbackWorkspaceName &&
   previous.selectedWorkspace === next.selectedWorkspace &&
+  previous.workspaceLoadState === next.workspaceLoadState &&
+  previous.onOpenWorkspaceSettings === next.onOpenWorkspaceSettings &&
+  previous.onReloadWorkspaces === next.onReloadWorkspaces &&
   previous.fileChangeRecords === next.fileChangeRecords &&
   previous.isAiRunActive === next.isAiRunActive &&
   previous.onSuccessMessage === next.onSuccessMessage &&

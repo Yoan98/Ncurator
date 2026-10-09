@@ -233,6 +233,7 @@ export const workbenchSelectors = {
   workspaceExplorerBackdrop: 'workbench-workspace-explorer-backdrop',
   workspaceExplorerOverlay: 'workbench-workspace-explorer-overlay',
   workspaceExplorerModeSwitch: 'workbench-workspace-explorer-mode-switch',
+  workspaceFilesEmptyState: 'workbench-workspace-files-empty-state',
   workspaceFileChangePrefix: 'workbench-workspace-file-change',
   contentPanelTitle: 'workbench-content-panel-title',
   assistantTurnPrefix: 'workbench-assistant-turn',

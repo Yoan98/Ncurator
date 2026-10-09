@@ -136,7 +136,8 @@ import type {
   WorkbenchResourceTab,
   WorkbenchTabWorkspaceState,
   WorkbenchAiPreference,
-  WorkbenchExecutionPermission
+  WorkbenchExecutionPermission,
+  WorkspaceLoadState
 } from '../components/workbench/types'
 import type { OpenableMarkdownReference } from '../components/markdownReference'
 import {
@@ -923,6 +924,8 @@ const ChatPage: React.FC = () => {
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [assetBucketId, setAssetBucketId] = useState<string | null>(null)
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
+  const [workspaceLoadState, setWorkspaceLoadState] = useState<WorkspaceLoadState>('loading')
+  const workspaceLoadRequestRef = useRef(0)
   const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
   const [freeModels, setFreeModels] = useState<FreeModelPublicEntry[]>([])
   const [presetProviders, setPresetProviders] = useState<LlmPresetProvider[]>([])
@@ -1187,6 +1190,10 @@ const ChatPage: React.FC = () => {
   const flushCurrentUiState = useCallback(async (): Promise<void> => {
     await persistCurrentUiStateNow({ requireReady: true })
   }, [persistCurrentUiStateNow])
+
+  const openWorkspaceSettings = useCallback((): void => {
+    void flushCurrentUiState().then(() => navigate('/settings/workspace'))
+  }, [flushCurrentUiState, navigate])
 
   useEffect(() => {
     if (uiStateReadyKey !== tabWorkspaceKey) return () => undefined
@@ -2263,10 +2270,16 @@ const ChatPage: React.FC = () => {
   }, [])
 
   const loadWorkspaces = useCallback(async (): Promise<void> => {
+    const requestId = ++workspaceLoadRequestRef.current
+    setWorkspaceLoadState('loading')
     try {
       const response = await window.api.workspaceList()
+      if (requestId !== workspaceLoadRequestRef.current) return
       setWorkspaces(response.items)
+      setWorkspaceLoadState('ready')
     } catch (error) {
+      if (requestId !== workspaceLoadRequestRef.current) return
+      setWorkspaceLoadState('error')
       console.error('Failed to load workspaces', error)
     }
   }, [])
@@ -5418,6 +5431,9 @@ const ChatPage: React.FC = () => {
                         workspaces={workspaces}
                         fallbackWorkspaceName={selectedWorkspaceName}
                         selectedWorkspace={selectedWorkspace || null}
+                        workspaceLoadState={workspaceLoadState}
+                        onOpenWorkspaceSettings={openWorkspaceSettings}
+                        onReloadWorkspaces={loadWorkspaces}
                         fileChangeRecords={fileChangeRecords}
                         onRevertApply={() => void handleApplyRevert()}
                         onBackToPanelState={showContentPanel}

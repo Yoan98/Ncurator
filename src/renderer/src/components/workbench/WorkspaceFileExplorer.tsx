@@ -13,6 +13,8 @@ import type {
 } from '../../../../shared/types'
 import { filterVisibleFileChangeRecords } from '../../../../shared/fileChangeVisibility'
 import ChangeCountBadges from './ChangeCountBadges'
+import WorkspaceFilesEmptyState from './WorkspaceFilesEmptyState'
+import type { WorkspaceLoadState } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   groupSessionFileChanges,
@@ -23,6 +25,9 @@ export type WorkspaceFileExplorerMode = 'all' | 'changed'
 
 type WorkspaceFileExplorerProps = {
   workspace: WorkspaceSource | null
+  workspaceLoadState: WorkspaceLoadState
+  onOpenWorkspaceSettings: () => void
+  onReloadWorkspaces: () => void
   changeRecords: AiFileChangeRecord[]
   mode: WorkspaceFileExplorerMode
   /** 递增时重新拉取根目录与当前已展开目录，不折叠展开态 */
@@ -48,6 +53,9 @@ const getRelativePath = (workspace: WorkspaceSource | null, filePath: string): s
 
 const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   workspace,
+  workspaceLoadState,
+  onOpenWorkspaceSettings,
+  onReloadWorkspaces,
   changeRecords,
   mode,
   reloadToken = 0,
@@ -62,6 +70,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [expandedChangeGroups, setExpandedChangeGroups] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState<Set<string>>(() => new Set())
+  const [directoryErrors, setDirectoryErrors] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
   const directoryRequestIds = useRef<Record<string, number>>({})
   const expandedRef = useRef(expanded)
@@ -86,8 +95,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       if (!workspace) return
       const requestId = (directoryRequestIds.current[relativePath] || 0) + 1
       directoryRequestIds.current[relativePath] = requestId
-      const isLatestRequest = (): boolean =>
-        directoryRequestIds.current[relativePath] === requestId
+      const isLatestRequest = (): boolean => directoryRequestIds.current[relativePath] === requestId
       setLoading((current) => new Set(current).add(relativePath))
       try {
         const response = await window.api.workspaceDirectoryList({
@@ -95,14 +103,17 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
           relativePath
         })
         if (!isLatestRequest()) return
-        if (response.error) {
-          setChildrenByPath((current) => {
-            if (current[relativePath]) return current
-            return { ...current, [relativePath]: [] }
-          })
-          return
-        }
+        if (response.error) throw new Error(response.error)
         setChildrenByPath((current) => ({ ...current, [relativePath]: response.items }))
+        setDirectoryErrors((current) => {
+          const next = new Set(current)
+          next.delete(relativePath)
+          return next
+        })
+      } catch {
+        if (isLatestRequest()) {
+          setDirectoryErrors((current) => new Set(current).add(relativePath))
+        }
       } finally {
         if (isLatestRequest()) {
           setLoading((current) => {
@@ -130,6 +141,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     setChildrenByPath({})
     setExpanded(new Set())
     setExpandedChangeGroups(new Set())
+    setDirectoryErrors(new Set())
     if (workspace) void loadDirectory('')
     // reloadToken 只在工作区切换时同步，避免每次刷新都清空展开态
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when workspace/loader changes
@@ -231,9 +243,11 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
 
   if (!workspace?.root_path) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[#91918E]">
-        请先为当前工作区设置文件目录
-      </div>
+      <WorkspaceFilesEmptyState
+        loadState={workspaceLoadState}
+        onOpenSettings={onOpenWorkspaceSettings}
+        onRetry={onReloadWorkspaces}
+      />
     )
   }
 
@@ -280,8 +294,25 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       </div>
       <div className="min-h-0 flex-1 overflow-auto pb-2">
         {mode === 'all' ? (
-          loading.has('') && !childrenByPath[''] ? (
-            <div className="px-3 py-2 text-xs text-[#91918E]">正在读取文件…</div>
+          !childrenByPath[''] ? (
+            directoryErrors.has('') && !loading.has('') ? (
+              <div className="px-3 py-2 text-xs text-[#91918E]">
+                目录读取失败
+                <button
+                  type="button"
+                  className="ml-2 text-[#37352F] underline"
+                  onClick={() => void loadDirectory('')}
+                >
+                  重试
+                </button>
+              </div>
+            ) : (
+              <div role="status" className="px-3 py-2 text-xs text-[#91918E]">
+                正在读取文件…
+              </div>
+            )
+          ) : childrenByPath[''].length === 0 ? (
+            <div className="px-3 py-2 text-xs text-[#91918E]">目录中暂无文件</div>
           ) : (
             renderEntries('', 0)
           )
