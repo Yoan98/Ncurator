@@ -7,7 +7,14 @@ import type {
   SearchResult,
   WebSourceRecord
 } from '../../../types/store'
-import { asRecord, toNumber, toNumberArray, toOptionalNumber, toOptionalString, toString } from '../../../utils/decoder'
+import {
+  asRecord,
+  toNumber,
+  toNumberArray,
+  toOptionalNumber,
+  toOptionalString,
+  toString
+} from '../../../utils/decoder'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 import type { SqliteCore } from '../sqlite/SqliteCore'
 import {
@@ -258,9 +265,9 @@ export class DocumentsStore {
   public async getDocumentByFilePath(filePath: string): Promise<DocumentRecord | null> {
     const normalized = String(filePath || '').trim()
     if (!normalized) return null
-    const row = this.sqlite.prepare('SELECT * FROM document WHERE file_path = ? LIMIT 1').get(normalized) as
-      | DocumentRow
-      | undefined
+    const row = this.sqlite
+      .prepare('SELECT * FROM document WHERE file_path = ? LIMIT 1')
+      .get(normalized) as DocumentRow | undefined
     if (!row) return null
     const [document] = await this.attachWebSourceMetadata([toDocumentRecord(row)])
     return document || null
@@ -348,7 +355,10 @@ export class DocumentsStore {
     for (let index = 0; index < chunks.length; index += 1) {
       const chunk = chunks[index]
       const textBytes = Buffer.byteLength(chunk.text || '', 'utf8')
-      if (batch.length >= batchSize || (batch.length > 0 && batchTextBytes + textBytes > maxTextBytes)) {
+      if (
+        batch.length >= batchSize ||
+        (batch.length > 0 && batchTextBytes + textBytes > maxTextBytes)
+      ) {
         await flush()
       }
       batch.push({
@@ -379,6 +389,7 @@ export class DocumentsStore {
     const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
     const query = table.query()
     const where = await this.buildChunkWhere({ workspaceId, sourceType, documentIds })
+    if ((await table.countRows(where)) === 0) return []
     if (where) query.where(where)
     const results = await query.nearestTo(queryVector).distanceType('cosine').limit(limit).toArray()
     return results.map(toSearchResult)
@@ -394,6 +405,7 @@ export class DocumentsStore {
     const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
     const q = table.query()
     const where = await this.buildChunkWhere({ workspaceId, sourceType, documentIds })
+    if ((await table.countRows(where)) === 0) return []
     if (where) q.where(where)
     const results = await q.fullTextSearch(queryText).limit(limit).toArray()
     return results.map(toSearchResult)
@@ -407,11 +419,12 @@ export class DocumentsStore {
     workspaceId?: string,
     documentIds?: string[]
   ): Promise<SearchResult[]> {
-    const reranker = await this.getRRFReranker()
     const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
     const q = table.query()
     const where = await this.buildChunkWhere({ workspaceId, sourceType, documentIds })
+    if ((await table.countRows(where)) === 0) return []
     if (where) q.where(where)
+    const reranker = await this.getRRFReranker()
     const results = await q
       .fullTextSearch(queryText)
       .nearestTo(queryVector)
@@ -469,7 +482,9 @@ export class DocumentsStore {
       .get(sqlParams) as { count?: unknown }
     const skip = Math.max(0, (page - 1) * pageSize)
     const rows = this.sqlite
-      .prepare(`SELECT * FROM document WHERE ${where} ORDER BY created_at DESC LIMIT @limit OFFSET @offset`)
+      .prepare(
+        `SELECT * FROM document WHERE ${where} ORDER BY created_at DESC LIMIT @limit OFFSET @offset`
+      )
       .all({ ...sqlParams, limit: pageSize, offset: skip }) as DocumentRow[]
     const items = await this.attachWebSourceMetadata(rows.map(toDocumentRecord))
     return { items, total: toRequiredNumber(totalRow.count) }
@@ -494,7 +509,9 @@ export class DocumentsStore {
   private async getDocumentsByIds(ids: string[]): Promise<DocumentRecord[]> {
     const params: Record<string, string | number | null> = {}
     const where = buildWhere([buildInClause('id', ids, params, 'document_id')])
-    const rows = this.sqlite.prepare(`SELECT * FROM document WHERE ${where}`).all(params) as DocumentRow[]
+    const rows = this.sqlite
+      .prepare(`SELECT * FROM document WHERE ${where}`)
+      .all(params) as DocumentRow[]
     return await this.attachWebSourceMetadata(rows.map(toDocumentRecord))
   }
 
@@ -505,7 +522,9 @@ export class DocumentsStore {
     if (webDocumentIds.length === 0) return documents
     const params: Record<string, string | number | null> = {}
     const where = buildWhere([buildInClause('document_id', webDocumentIds, params, 'document_id')])
-    const rows = this.sqlite.prepare(`SELECT * FROM web_source WHERE ${where}`).all(params) as WebSourceRecord[]
+    const rows = this.sqlite
+      .prepare(`SELECT * FROM web_source WHERE ${where}`)
+      .all(params) as WebSourceRecord[]
     const webSourceMap = new Map(
       rows.map((row) => {
         const source = row as WebSourceRecord

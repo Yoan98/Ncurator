@@ -201,10 +201,11 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     },
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService,
-    assertKbSearchAvailable: async () => {
+    assertKbAvailable: async () => {
       if (await deps.hasRunningKnowledgeIndexJob?.()) {
         throw new Error(KB_INDEXING_IN_PROGRESS_ERROR)
       }
+      await deps.ensureEmbeddingReady()
     }
   }
 }

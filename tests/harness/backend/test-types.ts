@@ -239,6 +239,7 @@ export type BackendTestRuntime = {
   createAiRunContext: (input?: CreateAiRunContextInput) => AiRunContext
   createHumanTaskRunner: (input?: CreateAiRunContextInput) => HumanTaskRunner
   ensureEmbeddingReady: () => Promise<void>
+  prepareEmbeddingModel: () => Promise<void>
   seedKb: (input: readonly SeedKbDocumentInput[]) => Promise<void>
   seedWorkspaceKb: (input: WorkspaceKbSeedInput) => Promise<WorkspaceKbSeedResult[]>
   seedChatHistory: (input: SeedChatHistoryInput) => Promise<void>

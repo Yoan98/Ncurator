@@ -87,6 +87,7 @@ export class EmbeddingService {
   }
 
   public async close(): Promise<void> {
+    await this.initializationPromise?.catch(() => undefined)
     await this.executor.close?.()
     this.status = 'uninitialized'
   }

@@ -101,7 +101,7 @@ describe('unit vector download service contract', () => {
             return { success: true }
           }
         )
-        vi.spyOn(embeddingService, 'initialize').mockResolvedValue()
+        const initializeSpy = vi.spyOn(embeddingService, 'initialize')
 
         const unsubscribe = service.onProgress((payload) => {
           progressEvents.push(payload)
@@ -112,6 +112,8 @@ describe('unit vector download service contract', () => {
         releaseFirstDownload?.()
         const firstResult = await firstTask
         unsubscribe()
+        if (initializeSpy.mock.calls.length !== 0)
+          throw new Error('download must not initialize embedding')
 
         return {
           firstResult,
@@ -234,7 +236,7 @@ describe('unit vector download service contract', () => {
             }
           )
         const deleteSpy = vi.spyOn(modelService, 'deleteModel').mockResolvedValue({ success: true })
-        vi.spyOn(embeddingService, 'initialize').mockResolvedValue()
+        const initializeSpy = vi.spyOn(embeddingService, 'initialize')
 
         const unsubscribe = service.onProgress((payload) => {
           progressEvents.push(payload)
@@ -246,6 +248,8 @@ describe('unit vector download service contract', () => {
         const deleteResult = await service.deleteModel(REPO_A)
         const downloadResult = await downloadTask
         unsubscribe()
+        if (initializeSpy.mock.calls.length !== 0)
+          throw new Error('download must not initialize embedding')
 
         return {
           downloadResult,
@@ -375,7 +379,7 @@ describe('unit vector download service contract', () => {
             return { success: true }
           })
         vi.spyOn(modelService, 'isModelDownloaded').mockReturnValue(false)
-        vi.spyOn(embeddingService, 'initialize').mockResolvedValue()
+        const initializeSpy = vi.spyOn(embeddingService, 'initialize')
 
         const unsubscribe = service.onProgress((payload) => {
           progressEvents.push(payload)
@@ -395,6 +399,8 @@ describe('unit vector download service contract', () => {
         }
         await waitForCondition(() => service.getActiveDownload() === null)
         unsubscribe()
+        if (initializeSpy.mock.calls.length !== 0)
+          throw new Error('download must not initialize embedding')
 
         return {
           resumedRepoId: downloadSpy.mock.calls[0]?.[0] || '',

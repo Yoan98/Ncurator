@@ -15,6 +15,7 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        await runtime.prepareEmbeddingModel()
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
@@ -80,6 +81,7 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        await runtime.prepareEmbeddingModel()
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [

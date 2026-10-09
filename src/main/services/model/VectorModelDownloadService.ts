@@ -150,11 +150,13 @@ export class VectorModelDownloadService {
     }
 
     try {
+      if (repoId === this.deps.embeddingService.getModelName()) {
+        await this.deps.embeddingService.close()
+      }
       await this.deps.modelService.deleteModel(repoId)
       if (this.activeSnapshot?.repoId === repoId) {
         this.clearSnapshot()
       }
-      await this.deps.embeddingService.initialize().catch(() => undefined)
       return { success: true }
     } catch (error: unknown) {
       return {
@@ -178,10 +180,6 @@ export class VectorModelDownloadService {
         signal,
         source
       )
-      .then(async (value) => {
-        await this.deps.embeddingService.initialize().catch(() => undefined)
-        return value
-      })
       .catch((error: unknown) => ({
         success: false,
         error: getErrorMessage(error),

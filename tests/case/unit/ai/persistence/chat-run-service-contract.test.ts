@@ -1045,29 +1045,19 @@ describe('unit ai persistence backend', () => {
   )
 
   it('autostart-run-emits-process-events-after-run-started', async () => {
-    const previousTimeout = process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS
-    process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS = '10'
-    try {
-      const setup = await createTestService({ autoStartRuns: true })
-      const run = await submitAiRun(setup)
+    const setup = await createTestService({ autoStartRuns: true })
+    const run = await submitAiRun(setup)
 
-      await waitForCondition(() =>
-        setup.events.some((event) => event.type === 'assistant_process_group_started')
-      )
-      await waitForCondition(() => setup.events.some((event) => event.type === 'run_failed'))
+    await waitForCondition(() =>
+      setup.events.some((event) => event.type === 'assistant_process_group_started')
+    )
+    await waitForCondition(() => setup.events.some((event) => event.type === 'run_failed'))
 
-      const storedRun = await setup.storage.aiRun.getRun(run.id)
+    const storedRun = await setup.storage.aiRun.getRun(run.id)
 
-      expect(setup.events.map((event) => event.type)).toContain('run_started')
-      expect(setup.events.map((event) => event.type)).toContain('assistant_process_group_started')
-      expect(storedRun?.status).toBe('failed')
-    } finally {
-      if (previousTimeout === undefined) {
-        delete process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS
-      } else {
-        process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS = previousTimeout
-      }
-    }
+    expect(setup.events.map((event) => event.type)).toContain('run_started')
+    expect(setup.events.map((event) => event.type)).toContain('assistant_process_group_started')
+    expect(storedRun?.status).toBe('failed')
   })
 
   it('does-not-attribute-uncontrolled-workspace-changes-when-a-run-finishes', async () => {

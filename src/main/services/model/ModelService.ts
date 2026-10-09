@@ -144,6 +144,7 @@ export class ModelService {
   }
 
   private isModelDownloadedAtPath(repoId: string, modelPath: string): boolean {
+    if (fs.existsSync(path.join(modelPath, DOWNLOAD_STATE_FILE))) return false
     if (!fs.existsSync(modelPath) || !fs.statSync(modelPath).isDirectory()) {
       return false
     }
@@ -343,9 +344,7 @@ export class ModelService {
 
   private resolveSourceEndpoint(source: ModelSource): string {
     if (source === 'modelscope') {
-      return (
-        String(process.env[MODELSCOPE_ENDPOINT_ENV] || '').trim() || MODELSCOPE_ENDPOINT
-      )
+      return String(process.env[MODELSCOPE_ENDPOINT_ENV] || '').trim() || MODELSCOPE_ENDPOINT
     }
     return String(process.env[HF_ENDPOINT_ENV] || '').trim() || HF_ENDPOINT
   }

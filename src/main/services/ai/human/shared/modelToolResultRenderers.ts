@@ -163,7 +163,7 @@ const normalizeKbSearchItems = (data: JsonValue | undefined): JsonObject[] => {
 
 export const renderKbModelError: ModelResultRenderer = ({ data }) => {
   const detail = isObject(data) ? readString(data.error) : ''
-  return detail ? `Error: ${detail}` : 'Error: kb tool failed.'
+  return `${detail ? `Error: ${detail}` : 'Error: kb tool failed.'}\n当前状态下不要继续调用 KB 工具；请告知用户原因，可继续使用其他可用能力。`
 }
 
 export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {

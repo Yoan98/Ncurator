@@ -15,6 +15,7 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        await runtime.prepareEmbeddingModel()
         await runtime.seedKb([
           {
             id: 'doc-1',

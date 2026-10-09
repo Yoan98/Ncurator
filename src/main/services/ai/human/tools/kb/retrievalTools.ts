@@ -65,9 +65,7 @@ const buildKbResult = (input: {
   })()
 
   const normalizedData =
-    input.ok === false && input.error
-      ? ({ error: input.error } satisfies JsonObject)
-      : data
+    input.ok === false && input.error ? ({ error: input.error } satisfies JsonObject) : data
 
   return {
     toolName: input.toolName,
@@ -165,7 +163,7 @@ export const buildKbCapabilityTools = (input: {
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
-          await ctx.assertKbSearchAvailable()
+          await ctx.assertKbAvailable()
           const prepared = resolveSearchArgs(args)
           if (!prepared.queryText) {
             throw new Error('知识库搜索需要提供查询文本。')
@@ -195,20 +193,7 @@ export const buildKbCapabilityTools = (input: {
                 prepared.requestedDocumentIds || undefined
               )
             }
-            let vec: Float32Array
-            try {
-              const embedding = await ctx.embeddingService.embed(prepared.queryText)
-              vec = embedding.data
-            } catch (error) {
-              if (prepared.strategy !== 'auto') throw error
-              return await ctx.documentsStore.ftsSearch(
-                prepared.queryText,
-                prepared.limit,
-                prepared.filter,
-                prepared.workspaceId,
-                prepared.requestedDocumentIds || undefined
-              )
-            }
+            const { data: vec } = await ctx.embeddingService.embed(prepared.queryText)
             if (prepared.strategy === 'semantic') {
               return await ctx.documentsStore.vectorSearch(
                 vec,
@@ -273,7 +258,7 @@ export const buildKbCapabilityTools = (input: {
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
-          await ctx.assertKbSearchAvailable()
+          await ctx.assertKbAvailable()
           const workspaceId = String(ctx.workspace?.workspaceId || '').trim() || undefined
           const sourceNameQuery = String(args.sourceNameQuery || '').trim() || undefined
           const page = Math.max(1, Number(args.page ?? 1))

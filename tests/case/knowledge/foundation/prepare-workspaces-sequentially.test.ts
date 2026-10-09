@@ -17,7 +17,7 @@ describe('knowledge foundation', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        await runtime.ensureEmbeddingReady()
+        await runtime.prepareEmbeddingModel()
         const prepareService = new WorkspaceKnowledgePrepareService({
           embeddingService: runtime.embeddingService,
           documentsStore: runtime.documentsStore,
@@ -73,8 +73,7 @@ describe('knowledge foundation', () => {
         )
         runtime.assertThat(result.cancelCalls.join(',') === 'ws-a', {
           name: 'prepare-stops-after-cancelled',
-          message:
-            '首个地址 cancelled 后不得再启动后续地址，对齐 SET-WORKSPACE-004-AC15。',
+          message: '首个地址 cancelled 后不得再启动后续地址，对齐 SET-WORKSPACE-004-AC15。',
           data: result
         })
       }

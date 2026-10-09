@@ -7,7 +7,6 @@ import { releasePdfRunSession } from '../pdf/worker/pdfWorkerClient'
 import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
 import { createHumanGraphRunner } from './human/graph/humanGraph'
 import { createAiRunContext } from './runtime'
-import { runAiRuntimePreflight } from './runtimePreflight'
 import {
   createCancelledAiRunState,
   createCompletedAiRunState,
@@ -75,7 +74,6 @@ export class AiRunService {
       }
     }
     try {
-      await runAiRuntimePreflight(deps)
       const ctx = createAiRunContext(payload, {
         ...deps,
         delegateToSubagent: (tasks, toolCallId) => dispatch(tasks, toolCallId)

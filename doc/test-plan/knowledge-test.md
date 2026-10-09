@@ -22,7 +22,7 @@
 ### 2.1 `foundation`
 
 - 目标：守住知识库可回归的功能主链。
-- 约束：走生产 store / job / 扫描 / worker / 嵌入 executor；禁止假 executor 或假 `assertKbSearchAvailable`。索引速度 case 必须在独立 Node 进程里建真实 embedding session，并用操作系统线程数证明档位生效，不测 UI、不测墙钟 / CPU%。
+- 约束：走生产 store / job / 扫描 / worker / 嵌入 executor；禁止假 executor 或假 `assertKbAvailable`。索引速度 case 必须在独立 Node 进程里建真实 embedding session，并用操作系统线程数证明档位生效，不测 UI、不测墙钟 / CPU%。
 - 目录：`tests/case/knowledge/foundation/<case>.test.ts`
 
 ### 2.2 `optimization`
@@ -82,8 +82,18 @@
 - 测试类型：`backend`
 - What：prepare 索引进行中时 `kb_search` / `kb_list_documents` 失败，并投递模型可读错误。
 - Why：更新索引期间检索必须明确失败，避免半库结果。
-- How：隔离 sqlite 写入 running prepare job，再走生产 `createAiRunContext` 调用两个工具，并检查 model-facing 投递文案。
-- Oracle：两工具抛出正在更新知识库错误；模型侧结果为 `Error: 正在更新知识库索引，请完成后再检索。`，对齐 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。
+- How：隔离 sqlite 写入文件 / 网页 running prepare job，再走生产 `createAiRunContext` 调用两个工具并检查投递文案；显式准备真实模型后，验证 running scan 与 prepare 的 succeeded / failed / cancelled 终态不拦截空库查询。
+- Oracle：两工具抛出正在更新知识库错误；模型侧结果包含正在更新知识库原因及当前状态下停止调用 KB 的指引，对齐 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。
+- 最新验证：2026-10-09 本轮通过；原始日志：`tests/logs/knowledge/foundation/kb-indexing-blocks-search/20261009-104411-354-11c9b53e`。
+
+#### `kb-availability-contract`
+
+- 测试类型：`backend`
+- What：所有 KB 工具统一检查模型安装 / 初始化，空库和空范围正常返回空结果；索引入口同样不隐式下载。
+- Why：模型缺失不能被关键词或列表绕过；空库不能误判为知识库故障。
+- How：独立模型目录中用真实 ModelService、EmbeddingService / Transformers executor、store 和 createAiRunContext；分别准备空目录、不完整下载目录、文件齐全但内容损坏的模型目录，调用两个 KB 工具与文件 / 网页索引入口。健康模型显式准备后验证空库、限定空范围、无文件地址的全局网页、删除与恢复。不替换执行器和就绪检查；Node 使用同一生产 executor in-process，Electron utilityProcess 由 Workbench E2E 验证。
+- Oracle：缺失 / 不完整模型在所有 strategy 和列表中返回错误且目录不变；损坏模型初始化错误；索引入口缺失模型失败且无资料写入；健康模型空库 / 空范围返回 items=[]、total=0；全局网页能检索；模型删除后下一次 KB 失败，恢复后可用。
+- 最新验证：2026-10-09 本轮通过；原始日志：`tests/logs/knowledge/foundation/kb-availability-contract/20261009-104115-815-12bf90e6`。
 
 #### `index-speed-thread-budget`
 

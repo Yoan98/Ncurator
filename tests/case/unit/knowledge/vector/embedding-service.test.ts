@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EmbeddingService, type EmbeddingExecutor } from '../../../../../src/main/services/vector/EmbeddingService'
+import {
+  EmbeddingService,
+  type EmbeddingExecutor
+} from '../../../../../src/main/services/vector/EmbeddingService'
 
 const result = {
   data: new Float32Array([1, 2]),
@@ -78,4 +81,25 @@ describe('EmbeddingService', () => {
     await expect(service.embed('second')).resolves.toEqual(result)
     expect(initialize).toHaveBeenCalledTimes(2)
   })
+})
+
+it('waits for initialization before closing and clears the ready cache', async () => {
+  let finish!: () => void
+  const executor: EmbeddingExecutor = {
+    initialize: () =>
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+    embed: async () => result,
+    close: vi.fn(async () => undefined)
+  }
+  const service = new EmbeddingService({ executor })
+  const loading = service.initialize()
+  const closing = service.close()
+  expect(executor.close).not.toHaveBeenCalled()
+  finish()
+  await loading
+  await closing
+  expect(executor.close).toHaveBeenCalledTimes(1)
+  expect(service.getStatus()).toBe('uninitialized')
 })

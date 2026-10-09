@@ -5,7 +5,6 @@ import { AiFileChangeService } from '../../../src/main/services/ai/fileChanges/A
 import { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
 import { terminalSessionManager } from '../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { createAiRunContext } from '../../../src/main/services/ai/runtime'
-import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePreflight'
 import type {
   AiApprovalBatchRequest,
   AiApprovalBatchResult
@@ -107,6 +106,7 @@ export type RealAiDepsFactory = {
   workspaceKnowledgePrepareService: WorkspaceKnowledgePrepareService
   docxApplyService: DocxApplyService
   ensureEmbeddingReady: () => Promise<void>
+  prepareEmbeddingModel: () => Promise<void>
   createAiRunContext: (input?: CreateAiRunContextInput) => AiRunContext
   createHumanTaskRunner: (
     input?: CreateAiRunContextInput
@@ -324,14 +324,18 @@ export const createRealAiDepsFactory = async (input: {
     workspaceKnowledgePrepareService,
     docxApplyService,
     ensureEmbeddingReady: ensureReady,
+    prepareEmbeddingModel: async () => {
+      const modelName = embeddingService.getModelName()
+      if (!modelService.isModelDownloaded(modelName)) {
+        await modelService.downloadModel(modelName)
+      }
+      await ensureReady()
+    },
     createAiRunContext: createContext,
     createHumanTaskRunner: (contextInput = {}) => {
       const ctx = createContext(contextInput)
       const run = createHumanGraphRunner({ ctx })
       return async (taskInput, options) => {
-        await runAiRuntimePreflight({
-          ensureEmbeddingReady: ensureReady
-        })
         return await run(taskInput, options)
       }
     },

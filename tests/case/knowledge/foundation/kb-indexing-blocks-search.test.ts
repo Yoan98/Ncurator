@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { buildModelToolResultDelivery } from '../../../../src/main/services/ai/human/shared/modelToolResult'
 import {
   buildKbCapabilityTools,
@@ -65,6 +65,33 @@ describe('knowledge foundation', () => {
           (error: unknown) => (error instanceof Error ? error.message : String(error))
         )
 
+        const jobStore = runtime.storageService.workspaceIndexJob
+        const baseJob = await jobStore.getJobById('kb-indexing-running-prepare')
+        if (!baseJob) throw new Error('missing prepare job')
+        await jobStore.saveJob({ ...baseJob, source_kind: 'web' })
+        for (const name of ['kb_search', 'kb_list_documents'] as const) {
+          await expect(
+            invokeTool(ctx, name, name === 'kb_search' ? { queryText: '合同' } : {})
+          ).rejects.toThrow(KB_INDEXING_IN_PROGRESS_ERROR)
+        }
+        await runtime.prepareEmbeddingModel()
+        for (const action of ['scan', 'prepare'] as const) {
+          for (const status of ['succeeded', 'failed', 'cancelled'] as const) {
+            await jobStore.saveJob({ ...baseJob, action, status })
+            expect(await invokeTool(ctx, 'kb_search', { queryText: '合同' })).toEqual({
+              items: [],
+              total: 0
+            })
+            expect(await invokeTool(ctx, 'kb_list_documents', {})).toEqual({ items: [], total: 0 })
+          }
+        }
+        await jobStore.saveJob({ ...baseJob, action: 'scan', status: 'running' })
+        expect(await invokeTool(ctx, 'kb_search', { queryText: '合同' })).toEqual({
+          items: [],
+          total: 0
+        })
+        expect(await invokeTool(ctx, 'kb_list_documents', {})).toEqual({ items: [], total: 0 })
+
         const deliveries = []
         for (const toolName of ['kb_search', 'kb_list_documents'] as const) {
           const delivery = await buildModelToolResultDelivery({
@@ -100,7 +127,10 @@ describe('knowledge foundation', () => {
         runtime.assertThat(
           result.deliveries.length === 2 &&
             result.deliveries.every(
-              (item) => item.ok === false && item.content === MODEL_FACING_INDEXING_ERROR
+              (item) =>
+                item.ok === false &&
+                item.content.startsWith(MODEL_FACING_INDEXING_ERROR) &&
+                item.content.includes('不要继续调用 KB')
             ),
           {
             name: 'indexing-error-is-model-facing',

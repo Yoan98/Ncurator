@@ -450,7 +450,7 @@ export type AiRunContext = {
   }) => Promise<AiFileChangeRecord[]>
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
-  assertKbSearchAvailable: () => Promise<void>
+  assertKbAvailable: () => Promise<void>
 }
 
 export type AiRunFailureMetadata = {
@@ -475,7 +475,7 @@ export type KnowledgeRetrievalContext = Pick<
   | 'workspace'
   | 'documentsStore'
   | 'embeddingService'
-  | 'assertKbSearchAvailable'
+  | 'assertKbAvailable'
 >
 
 export type DocxToolContext = AiRunContext

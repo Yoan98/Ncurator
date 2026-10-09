@@ -2,6 +2,7 @@ import path from 'node:path'
 import { v4 as uuidv4 } from 'uuid'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
+import { ensureEmbeddingReady } from '../vector/ensureEmbeddingReady'
 import { isSupportedLocalFilePath } from '../ingestion/loader'
 import type {
   WorkspaceKnowledgeChunkInput,
@@ -77,6 +78,8 @@ export class WorkspaceKnowledgePrepareService {
     if (!isSupportedLocalFilePath(input.filePath)) {
       throw new Error(`Unsupported file type: ${input.filePath}`)
     }
+    await ensureEmbeddingReady({ embeddingService: this.deps.embeddingService })
+    this.throwIfAborted(input.signal)
 
     const stopAbort = this.listenForAbort(input.signal, () => {
       void this.abortActivePrepare()
@@ -146,6 +149,8 @@ export class WorkspaceKnowledgePrepareService {
   public async indexWebText(
     input: WorkspaceKnowledgeWebInput
   ): Promise<WorkspaceKnowledgeIndexResult> {
+    this.throwIfAborted(input.signal)
+    await ensureEmbeddingReady({ embeddingService: this.deps.embeddingService })
     this.throwIfAborted(input.signal)
     const stopAbort = this.listenForAbort(input.signal, () => {
       void this.abortActivePrepare()
@@ -254,14 +259,6 @@ export class WorkspaceKnowledgePrepareService {
         vectors: []
       }
     } else {
-      if (this.deps.embeddingService.getStatus() !== 'ready') {
-        await this.deps.embeddingService.initialize()
-      }
-      if (this.deps.embeddingService.getStatus() !== 'ready') {
-        throw new Error(
-          `EmbeddingService is not ready. Current status: ${this.deps.embeddingService.getStatus()}`
-        )
-      }
       vectorSnapshot = {
         contentHash: preparedSource.contentHash,
         fileExt: preparedSource.fileExt,
@@ -402,8 +399,7 @@ export class WorkspaceKnowledgePrepareService {
         }))
       }
     } catch (error) {
-      const cancelled =
-        isIndexPrepareCancelledError(error) || Boolean(input.signal?.aborted)
+      const cancelled = isIndexPrepareCancelledError(error) || Boolean(input.signal?.aborted)
       if (wroteChunks && !activated) {
         await this.deps.documentsStore
           .deleteChunksByGeneration({

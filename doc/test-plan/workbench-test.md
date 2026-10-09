@@ -185,6 +185,15 @@ pnpm test:update:e2e
 - How：完成一次真实 AI run，读取圆圈可访问名称和 hover 提示。用量环分母为当前所选模型的 effectiveWindow（免费/推荐目录 `contextWindowTokens` × 0.8 再 cap 256k；自定义按 256k 算出）。
 - Oracle：圆圈展示已用信息，hover 展示已用百分比与 tokens、不展示剩余，对齐 `WB-COMPOSER-008`。
 
+#### `chat-without-knowledge-model`
+
+- 测试类型：`e2e / live`
+- What：未配置工作空间、未安装向量模型仍可发送并完成真实聊天。
+- Why：默认 E2E 模型准备不能掩盖首次使用的运行门禁。
+- How：通过既有 NCURATOR_MODELS_PATH 注入独立空模型目录，跳过 harness 默认模型预热；真实 UI 配聊天模型、创建伙伴并发送；只读 observer 收集运行事件、下载状态和 embedding runtime。
+- Oracle：真实 run completed；模型目录没有下载产物；无下载任务；embedding runtime uninitialized 且 pid 为空，对齐 WB-COMPOSER-001-AC5。
+- 最新验证：2026-10-09 本轮通过；原始日志：`tests/logs/workbench/conversation/composer/chat-without-knowledge-model/20261009-104143-882`。
+
 #### `send-guard-and-preferences`
 
 - 测试类型：`e2e`

@@ -5,6 +5,7 @@ import { AiRunService } from '../../../src/main/services/ai/AiRunService'
 import { AiFileChangeService } from '../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { createScriptedStructuredOutputDriver } from './scriptedStructuredOutputDriver'
 import type { BackendTestRuntime, CreateAiRunContextInput } from './test-types'
+import { ensureEmbeddingReady } from '../../../src/main/services/vector/ensureEmbeddingReady'
 import type { AiRunStartPayload, AiRunDeps } from '../../../src/main/services/ai/types'
 
 /** Uses the same top-level runtime as ChatRunService, including subagent dispatch and cleanup. */
@@ -39,7 +40,8 @@ export const createAiServiceTestRunner = async (
     chatMessageLogStore: runtime.storageService.chatMessageLog,
     documentsStore: runtime.documentsStore,
     embeddingService: runtime.embeddingService,
-    ensureEmbeddingReady: runtime.ensureEmbeddingReady,
+    ensureEmbeddingReady: () =>
+      ensureEmbeddingReady({ embeddingService: runtime.embeddingService }),
     docxApplyService: runtime.docxApplyService,
     saveFileChangeRecord: (record) => files.saveRecord(record),
     listFileChangeRecords: async (request) => (await files.listRecords(request)).items,
@@ -91,7 +93,8 @@ export const createChatServiceTestRunner = async (
     workspaceStore: runtime.storageService.workspace,
     workspaceIndexJobStore: runtime.storageService.workspaceIndexJob,
     webSourceStore: runtime.storageService.webSource,
-    ensureEmbeddingReady: runtime.ensureEmbeddingReady,
+    ensureEmbeddingReady: () =>
+      ensureEmbeddingReady({ embeddingService: runtime.embeddingService }),
     docxApplyService: runtime.docxApplyService,
     aiFileChangeService: files,
     runResourceManager: new AiRunResourceManager(),

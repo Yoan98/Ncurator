@@ -21,6 +21,7 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        await runtime.prepareEmbeddingModel()
         const blockedPath = path.join(runtime.workspaceRoot, 'blocked-dir')
         const runner = createHumanTestRunner(runtime, {
           approvalPolicy: 'deny-medium-high',

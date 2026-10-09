@@ -18,6 +18,7 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        await runtime.prepareEmbeddingModel()
         let hasQueuedMessage = false
         let queueSubmissionStarted = false
         let toolResultRecorded = false
@@ -126,7 +127,7 @@ describe('ai human mock-llm backend', () => {
         const toolResults = filterAiRunEventsByType(result.firstEvents, 'tool_call_result')
         const toolLogEntries = result.firstLog.filter((record) => record.entry.kind === 'tool')
         runtime.assertThat(
-            result.firstOutput.status === 'yielded' &&
+          result.firstOutput.status === 'yielded' &&
             result.firstBrainCallCount === 1 &&
             toolResults.some((event) => event.toolName === 'kb_list_documents') &&
             toolLogEntries.some(

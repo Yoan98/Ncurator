@@ -154,7 +154,7 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 - fixture 可用 `tests/fixtures/workspace`；运行时作为设置页文件地址 + 伙伴，不再「绑定工作区才能跑」。
 - AI backend 回归以生产 `createAiRunContext` 为唯一 runtime 入口，使用真实 store、apply service 和 embedding service；文档 worker 经 `AiRunResourceManager` 在 run 结束时释放，释放失败不得覆盖任务结果。
 - `mock-llm` 只固定 LLM 输出，其余全部真实；`live` 走真实 `LlmConfigStore` 与生产 LLM executor。
-- 进入 `human` 前必须完成 embedding preflight；KB fixture 走真实导入 / 索引 / 检索。所有支持文件前置「文件名锚点」内容块；Excel 只索引文件名、文档标题与工作表名等元数据。embedding 缺失时走真实生产下载链，不得用测试替身。
+- AI run 与 human harness 不准备 embedding；KB 工具调用时统一检查模型安装与本地初始化，不隐式下载或静默降级。需要 KB 的 fixture 显式通过真实下载 / 索引准备模型和资料；不使用 KB 的回归不准备模型。所有支持文件前置「文件名锚点」内容块；Excel 只索引文件名、文档标题与工作表名等元数据。
 - 不得使用旧式 fake API。默认 `testTimeout` / `hookTimeout` 为 `900_000`；少数重型 live case 可覆写更长超时。
 
 ### 3.2 `mock-llm` 与 `live` 设计口径
@@ -789,21 +789,23 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - How：脚本化 brain 决策调用真实 `kb_list_documents`；在工具结果写入、`context_budget` 已完成检查后模拟一条正在校验的提交，延迟确认入队；验证 Brain 入口等待校验并回到交接边界，再用第二个真实 graph run 捕获首轮 brain messages。
 - Oracle：第一轮状态为 `yielded` 且真实工具结果已写入 log；未确认入队前不会启动第二次 brain 决策；第二轮状态为 `completed`，历史中工具结果先于尾部追加 user；第二轮不重复调用中断前工具。
 
-##### `ai-run-service-embedding-preflight`
+##### `ai-run-service-without-knowledge`
 
-- 测试类型：`backend`
-- What：`AiRunService` 会在进入 `human` 前执行有界 embedding preflight，知识库语义检索可继续复用该基础设施。
-- Why：知识库 embedding 初始化应在模型可用时提前完成，但不能无限阻塞 AI run 启动。
-- How：通过 `AiRunService.getInstance().run(...)` 启动真实 run，在 preflight 成功后执行普通 DOCX literal 读取链路。
-- Oracle：preflight 被调用一次；任务完成；DOCX literal 搜索返回真实命中且不依赖 embedding。
+- 测试类型：`backend / mock-llm`
+- What：未配置文件地址且向量模型缺失或损坏时，主 run、子 run 和续接仍能完成聊天、真实文件读取。
+- Why：普通 AI 运行不能受知识库配置影响，也不能隐式下载模型。
+- How：隔离空模型目录，使用生产 AiRunService 和 scripted LLM 完成 DOCX literal 读取、子任务与续接；另在真实损坏模型目录下完成聊天。不调用 KB，不替换 embedding executor 或就绪检查。
+- Oracle：run 完成；真实文件读取命中；主子运行有 brain 事件；模型目录不变，embedding 保持 uninitialized；不产生模型下载。
+- 最新验证：2026-10-09 本轮通过；原始日志：`tests/logs/ai/human/mock-llm/ai-run-service-without-knowledge/20261009-104153-012-aa92ff73`。
 
-##### `ai-run-service-embedding-preflight-failure`
+##### `ai-run-service-kb-error-continues`
 
-- 测试类型：`backend`
-- What：embedding preflight 失败时，`AiRunService` 会在进入 `human` 前直接失败收口。
-- Why：基础服务明确失败时继续进入 human graph 会制造后续工具层噪音，应该在入口阶段明确失败；初始化卡住则由有界 preflight 超时保护。
-- How：注入会抛错的 `ensureEmbeddingReady`，启动一次真实 `AiRunService` run。
-- Oracle：run 状态为 `failed`，只返回统一的用户可见错误，不泄露底层 preflight 原文，事件流中没有任何 `human_step`。
+- 测试类型：`backend / mock-llm`
+- What：真实 KB 不可用只产生工具错误，后续文件工具和最终交付仍正常。
+- Why：知识库失败应交给 AI 决策，不能终止整个 run。
+- How：隔离空模型目录，生产 AiRunService 中 scripted LLM 先调用 kb_search，再读取真实文本并交付；捕获下一轮模型上下文。
+- Oracle：KB 结果 ok=false 且上下文含模型缺失原因及停止调用 KB 指引；真实文本读取成功；run completed，无 run_failed，目录无下载产物。
+- 最新验证：2026-10-09 本轮通过；原始日志：`tests/logs/ai/human/mock-llm/ai-run-service-kb-error-continues/20261009-104153-378-156b33dd`。
 
 ##### `learning-hand-mouth-smoke`
 

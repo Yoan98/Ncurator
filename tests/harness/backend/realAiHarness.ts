@@ -87,8 +87,9 @@ export const createRealAiHarness = async (input: {
     ensureEmbeddingReady: async () => {
       await depsFactory.ensureEmbeddingReady()
     },
+    prepareEmbeddingModel: depsFactory.prepareEmbeddingModel,
     seedKb: async (documents) => {
-      await depsFactory.ensureEmbeddingReady()
+      await depsFactory.prepareEmbeddingModel()
       await seedKbFixture({
         documentsStore: depsFactory.storageService.documents,
         embeddingService: depsFactory.embeddingService,
@@ -97,7 +98,7 @@ export const createRealAiHarness = async (input: {
       appendSeedKbDocuments(seedManifest, documents)
     },
     seedWorkspaceKb: async (params) => {
-      await depsFactory.ensureEmbeddingReady()
+      await depsFactory.prepareEmbeddingModel()
       const seeded = await seedWorkspaceKb({
         runtime,
         params
