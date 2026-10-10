@@ -906,10 +906,10 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `partner-skill-memory-multi-run`
 
 - 测试类型：`backend / mock-llm`
-- What：同一伙伴的多轮 human run 能复用已学习技能记忆；在 `HUMAN_MAX_ACTIVE_TOOLS=25` 下学满后会 FIFO 淘汰，被淘汰 skill 可再学回来。
+- What：同一伙伴的多轮 human run 能复用已学习技能记忆；在 `HUMAN_MAX_ACTIVE_TOOLS=30` 下学满后会 FIFO 淘汰，被淘汰 skill 可再学回来。
 - Why：技能记忆是 AI 架构跨轮次协作的核心；active tool 上限下的遗忘与再学必须由真实 learning 链路守住，不能只靠 unit 算法。
 - How：跨五轮逐步学习 DOCX、PDF、Excel、PPT 和图片技能；第四轮加载 `excel-read + image-generation + docx-write` 挤爆预算；第五轮再学被淘汰的 `docx-read`。
-- Oracle：技能跨 run 保留；随公共工具数量变化，超限可能在第三或第四轮发生。第四轮包含新请求的 `excel-read/image-generation/docx-write`，且最早学习的 `docx-read/pdf-read` 已按 FIFO 淘汰；第五轮真实重新加载 `docx-read` 且最终快照包含它，不固定中间技能集合。
+- Oracle：技能跨 run 保留；第三轮的 DOCX/PDF/Excel/PPT 技能均保留。第四轮包含新请求的 `excel-read/image-generation/docx-write`，最早学习的 `docx-read` 按 FIFO 淘汰，`pdf-read` 仍保留；第五轮真实重新加载 `docx-read` 且最终快照包含它。
 
 ##### `plan-memory-maintenance`
 
@@ -1052,10 +1052,10 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `human-skill-eviction-relearn-loop-live`
 
 - 测试类型：`backend / live`
-- What：同一伙伴在生产 `HUMAN_MAX_ACTIVE_TOOLS=25` 下先学满多项阅读技能，再学写入技能触发 FIFO 淘汰；淘汰后续做仍能完成，随后在再次需要被淘汰 skill 时自动再学（可在同一 Run 内闭环，也可跨 Run3）；跨 run 首轮 brain 须明显复用上一 run 末次前缀缓存。
+- What：同一伙伴在生产 `HUMAN_MAX_ACTIVE_TOOLS=30` 下先学满多项阅读技能，再学写入技能触发 FIFO 淘汰；淘汰后续做仍能完成，随后在再次需要被淘汰 skill 时自动再学（可在同一 Run 内闭环，也可跨 Run3）；跨 run 首轮 brain 须明显复用上一 run 末次前缀缓存。
 - Why：技能遗忘若只靠 unit/mock，无法证明真实模型在自然语言任务下会触发淘汰、淘汰后不卡死、需要时再学；这是学习预算闭环的生产风险；续做跨 run 时前缀缓存也不应因消息重建漂移而丢失。
-- How：共用伙伴，测值与生产一致（无 maxActiveTools override）。fixture 含 `学习笔记/深度学习.docx`、`学习笔记/深度学习.pdf`、`品牌策略提案.pptx`、`经营周报.xlsx`。Run 1 按顺序只读四类资料并口头汇总（期望学会含 `docx-read` 在内的多项阅读技能，不淘汰）。Run 2 新建 Word 备忘并给 PPT 加附录页，挤爆预算并淘汰最早的 `docx-read`；若 Run2 同轮已再学回 `docx-read`，则闭环完成且不启 Run3；否则 Run 3 再读课件核对备忘，迫使再学。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）。
-- Oracle：Run 1 `completed`，`learnedSkillIds` 含 `docx-read` 且至少另一项 external，无淘汰证据，并有 docx 读工具证据。Run 2 `completed`，learning summary 出现淘汰 `docx-read`，且 Word/PPT 写入或备忘文件落地。再学闭环二选一成立：Run2 同轮再学 `docx-read` 并有读工具证据，或 Run3 `completed` 再学并有读工具证据。Run2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`；若启动 Run3，则 Run3 首次 brain 相对 Run2 末次同样满足该门槛。人工依据 raw logs 回写顶部评分。
+- How：共用伙伴，测值与生产一致（无 maxActiveTools override）。fixture 含 `学习笔记/深度学习.docx`、`学习笔记/深度学习.pdf`、`品牌策略提案.pptx`、`经营周报.xlsx`。Run 1 按顺序只读四类资料并口头汇总（期望学会含 `docx-read` 在内的多项阅读技能，不淘汰）。Run 2 新建 Word 备忘、给 PPT 加附录页并新建 Excel 资料索引，触发 Word/PPT/Excel 写入技能，总工具数超过 30，淘汰最早的 `docx-read`；若 Run2 同轮已再学回 `docx-read`，则闭环完成且不启 Run3；否则 Run 3 再读课件核对备忘，迫使再学。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）。
+- Oracle：Run 1 `completed`，`learnedSkillIds` 含 `docx-read` 且至少另一项 external，无淘汰证据，并有 docx 读工具证据。Run 2 `completed`，learning summary 出现淘汰 `docx-read`，且 Word/PPT 写入或备忘文件落地，并有 Excel 写入证据。再学闭环二选一成立：Run2 同轮再学 `docx-read` 并有读工具证据，或 Run3 `completed` 再学并有读工具证据。Run2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`；若启动 Run3，则 Run3 首次 brain 相对 Run2 末次同样满足该门槛。人工依据 raw logs 回写顶部评分。
 
 ##### `human-ppt-edit-management-review-live`
 

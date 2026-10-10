@@ -39,6 +39,7 @@ const RUN1_USER_INPUT = [
 const RUN2_USER_INPUT = [
   `请继续：新建一份 Word 备忘《${MEMO_NAME}》，把刚才汇总的要点写进去；`,
   `另外在《${PPT_NAME}》末尾加一页极简附录页（标题写成「技能盘点附录」即可）。`,
+  '再新建 Excel《技能盘点索引.xlsx》，用「资料」「用途」两列列出刚才的四份资料。',
   `源课件《学习笔记/${DOCX_NAME}》《学习笔记/${PDF_NAME}》和《${EXCEL_NAME}》不要改。`
 ].join('')
 
@@ -306,6 +307,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.run2Output?.status === 'completed' &&
               run2Eviction.evictedDocxRead &&
+              run2Tools.includes('excel_edit') &&
               (run2Tools.includes('docx_content_edit') ||
                 run2Tools.includes('ppt_edit') ||
                 result.memoExists),

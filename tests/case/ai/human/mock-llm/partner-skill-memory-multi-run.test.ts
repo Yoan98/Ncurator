@@ -7,6 +7,7 @@ import {
   filterAiRunEventsByType
 } from '../testUtils'
 import type { ChatMessageLogRecord } from '../../../../../src/shared/types'
+import { HUMAN_MAX_ACTIVE_TOOLS } from '../../../../../src/main/services/ai/human/constants'
 
 const PARTNER_ID = 'partner-skill-memory-multi-run'
 
@@ -29,8 +30,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description:
-        '验证同一伙伴跨 run 共享技能；在 25 上限下学满后 FIFO 淘汰，且被淘汰 skill 可再学回来。',
+      description: `验证同一伙伴跨 run 共享技能；在 ${HUMAN_MAX_ACTIVE_TOOLS} 上限下学满后 FIFO 淘汰，且被淘汰 skill 可再学回来。`,
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -183,20 +183,20 @@ describe('ai human mock-llm backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.stateAfterRun1.join(',') === 'docx-read,pdf-read' &&
-            result.stateAtLimit.includes('ppt-read') &&
-            result.stateAtLimit.includes('ppt-write') &&
-            Boolean(result.run4EvictionSummary?.includes('pdf-read')) &&
+            ['docx-read', 'pdf-read', 'excel-write', 'ppt-read', 'ppt-write'].every((skill) =>
+              result.stateAtLimit.includes(skill)
+            ) &&
+            Boolean(result.run4EvictionSummary?.includes('docx-read')) &&
             ['excel-read', 'image-generation', 'docx-write'].every((skill) =>
               result.stateAfterEviction.includes(skill)
             ) &&
             !result.stateAfterEviction.includes('docx-read') &&
-            !result.stateAfterEviction.includes('pdf-read') &&
+            result.stateAfterEviction.includes('pdf-read') &&
             result.run5LoadedDocxRead &&
             result.stateAfterRelearn.includes('docx-read'),
           {
             name: 'partner-skills-persist-evict-and-relearn-under-tool-budget',
-            message:
-              '同一伙伴应跨 run 共享技能；学满 25 上限后 FIFO 淘汰最早 skill，被淘汰 skill 应可再学回来。',
+            message: `同一伙伴应跨 run 共享技能；学满 ${HUMAN_MAX_ACTIVE_TOOLS} 上限后 FIFO 淘汰最早 skill，被淘汰 skill 应可再学回来。`,
             data: result
           }
         )
