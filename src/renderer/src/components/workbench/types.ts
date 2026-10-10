@@ -151,6 +151,7 @@ export type AssistantProcessGroupItem = {
 
 export type SubagentTaskView = import('../../../../shared/types').SubagentUpdate & {
   streaming?: boolean
+  // Live first-visible-character time; historical projection leaves it unset.
   messageStartedAt?: number
   actions: import('../../../../shared/types').SubagentAction[]
 }

@@ -57,11 +57,11 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 #### `human-subagent-prefix-stability`
 
 - 测试类型：backend / mock-llm；扩展现有 human-subagent 文件。
-- What：子 SQLite 投影、连续工具结果追加、新会话隔离、中断后同会话续接的请求前缀，以及公开文字流的开始与结束。
+- What：子 SQLite 投影、连续工具结果追加、新会话隔离、中断后同会话续接的请求前缀，以及公开文字流的消息标识、开始与结束。
 - Why：确定性区分请求前缀改写与供应商缓存低命中，守住临时实例隔离和文字流生命周期。
-- How：生产 AiRunService、人类 graph、真实文本文件及工具；只脚本化 LLM 派发、学习及读取决策。保存真实 requestWire，比较稳定工具集合下的相邻主子 brain；两次派发创建新会话。另经生产 ChatRunService 让子任务读文件后进入真实终端等待，停止主运行、重新打开 SQLite，通过 list_agent 查询并续接原会话。
-- Oracle：已有消息逐项保留，工具定义和顺序不变；新子 System/初始工具相同且无旧子历史；主上下文只含派发汇总，没有子过程 annotation；续接沿用 agentId、名称和原任务，执行 ID 改变，首次请求保留原末次有效请求的消息和工具前缀，完成后子会话被清理。公开文字 delta 开始流、completed/reset/取消结束流，审核请求不能冒充文字流。服务端缓存由 Workbench `subagent-prefix-cache-retain-live` 验证，mock 不伪造命中。
-- 最新验证：2026-10-10 生产 AiRunService / ChatRunService 通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-prefix-stability/20261010-144817-076-e48b562a`。四个新会话隔离、连续请求前缀及公开流通过；真实终端等待中停止，重新打开 SQLite 后查询并续接相同 agentId，执行 ID 改变、原任务及历史前缀保持，完成清理通过。
+- How：生产 AiRunService、人类 graph、真实文本文件及工具；只脚本化 LLM 派发、学习及读取决策，连续两轮使用相同公开文案以核对消息身份。保存真实 requestWire，比较稳定工具集合下的相邻主子 brain；两次派发创建新会话。另经生产 ChatRunService 让子任务读文件后进入真实终端等待，停止主运行、重新打开 SQLite，通过 list_agent 查询并续接原会话。
+- Oracle：已有消息逐项保留，工具定义和顺序不变；新子 System/初始工具相同且无旧子历史；主上下文只含派发汇总，没有子过程 annotation；续接沿用 agentId、名称和原任务，执行 ID 改变，首次请求保留原末次有效请求的消息和工具前缀，完成后子会话被清理。公开文字每轮使用独立消息标识，同轮 delta 与完成快照标识一致；delta 开始流、completed/reset/取消结束流，审核请求不能冒充文字流。服务端缓存由 Workbench `subagent-prefix-cache-retain-live` 验证，mock 不伪造命中。
+- 最新验证：2026-10-10 生产 AiRunService / ChatRunService 通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-prefix-stability/20261010-173627-357-11639c82`。四个子实例各三轮公开消息标识独立，同轮片段与完成快照一致，相同文案仍有独立消息身份；连续请求前缀、新会话隔离、真实终端等待中停止及 SQLite 重开续接通过。
 
 #### `human-subagent-file-cancellation`
 
@@ -826,10 +826,10 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `tool-failure-recovery`
 
 - 测试类型：`backend`
-- What：真实工具失败结果会被 `human` 吸收，并继续收束到最终交付。
-- Why：工具失败是高频真实场景，如果失败后链路无法继续，`human` 就不具备稳定执行能力。
-- How：直接真实执行一个会失败的 builtin terminal 安全指令，随后由 `brain` 决定停止重试并无工具调用输出最终交付。
-- Oracle：真实 `terminal_run` 结果为失败，且 `human` 最终仍进入 `completed` 并产出最终交付。
+- What：执行前参数校验拒绝与真实工具失败均会被 `human` 吸收；校验拒绝即时进入失败 Activity，随后继续收束到最终交付。
+- Why：执行前拒绝若只写 transcript，会导致实时 Activity 漏项、刷新后才显示；失败也不能中断剩余有效调用与后续交付。
+- How：通过生产 human graph，脚本化 brain 先返回缺少 `type` 的 `web_search`，下一轮同时返回同类无效调用与会失败的 builtin terminal 安全指令，最后无工具调用输出交付。只固定 LLM 输出，使用真实校验、事件管道、工具和消息存储。
+- Oracle：两次无效调用均不进入执行器，在最终交付前各发出一组开始及失败过程事件，调用 ID、原入参与持久化失败结果一致；后续 brain 收到校验失败反馈，混合批次中的 `terminal_run` 仍真实执行并返回失败事实，`human` 最终进入 `completed` 并产出交付。
 
 ##### `approval-denied-restricted-delivery`
 

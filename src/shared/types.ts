@@ -1659,6 +1659,7 @@ export type SubagentUpdate = {
   status: SubagentTaskStatus
   action?: SubagentAction
   message?: string
+  messageId?: string
   result?: string
   artifacts?: AiArtifactRef[]
 }
@@ -1676,6 +1677,7 @@ type AiRunEventPayload =
       runId: string
       toolCallId: string
       childRunId: string
+      messageId: string
       delta?: string
       reset?: boolean
       streaming?: boolean

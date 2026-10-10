@@ -98,7 +98,7 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 - 主子共用 `AiRunService.run`、human graph、审批、工具、预算、消息投影与 compaction。子工具禁止查询/派发子 agent、主动提问及定时任务管理；并发常量默认 2，其余 FIFO。
 - `ai_subagent` 只存身份、原任务和生命周期；完整 user/assistant/tool、计划、技能及压缩 checkpoint 使用同一 `chat_session_message_log`。SQLite transcript 在入口绑定 `{partnerId, subagentId?}`，graph 不区分读写实现。每个会话独立 seq，续接跨执行读取历史，复用 checkpoint 与原文 tail 后追加新 user。
 - `agentId` 为稳定会话 ID，`childRunId` 为本次执行 ID，`ownerRunId` 为本次父任务文件归属。`list_agent({})` 只返回 ID、名称、原任务、状态；`delegate_to_subagent` 接受创建 `{name,task}` 或续接 `{agentId,task}`。续接校验伙伴归属并原子占用会话，活跃会话不能重复执行。
-- 子过程、结果及审批 annotation 保存到主日志用于 UI，子完整日志不进入主上下文。派发工具汇集交付结果；公开流保留开始、替换与结束，不转发内部推理；诊断关联 agentId 与父子执行。
+- 子过程、结果及审批 annotation 保存到主日志用于 UI，子完整日志不进入主上下文。派发工具汇集交付结果；公开流与完成快照共用消息标识，每轮及重试替换使用独立标识，保留开始、替换与结束；工具动作沿用附带公开消息标识，单纯状态更新不产生新消息。不转发内部推理；诊断关联 agentId 与父子执行。
 - 审批共用父任务 FIFO 队列及生产提交入口；等待保留实例并占名额。决定落盘后恢复原 hand，拒绝/指导跳过原操作。旧审批不跨执行复用。
 - 创建和续接继承当前父配置。文件修改从产生时归本次 ownerRunId；历史修改不搬运，终端/浏览器控制及文档工作态不恢复。缺失工具结果由公共投影修复，不重放操作、不伪造真实结果。
 - 完成时同事务保存父结果 annotation 并删除子身份及完整日志；失败、取消、交回父任务保留会话，释放运行资源。启动将排队、运行及等待审批会话标记中断，不自动调用模型。清空消息/删除伙伴清理子会话，保留文件按既有规则处理。
@@ -141,7 +141,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | ------------ | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `user`       | 发给模型的 build 全文 + `context`             | **`ChatRunService`**（主运行启动前）或 **`context_budget`**（尚无当前 user 的内部运行）                           |
 | `assistant`  | 文本 + `toolCalls[]`（交付另含 `linkAccess`） | **brain**（过程决策 / 截断 / 内容安全 fallback）或 **`finalizeDelivery`**（正常交付）；**同一轮交付正文不叠写** |
-| `tool`       | 工具反馈正文 + 可选 `images[]`                | **`hand` / `plan` / `learning`**（执行结果；不写 assistant）                                                    |
+| `tool`       | 工具反馈正文 + 可选 `images[]`                | **`brain`**（执行前拒绝）或 **`hand` / `plan` / `learning`**（执行结果；不写 assistant）                                                    |
 | `annotation` | 过程与状态事件                                | 见下表                                                                                                          |
 
 #### `annotation` 事件
@@ -536,7 +536,6 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 
 `update_plan` **不出** tool 过程组。`learn_skill` 与其它工具一样进入 Activity。
 
-Live 运行中的 Thought 由 `assistant_process_thought` 事件写入 `processThoughts`（不依赖中途重投影 log）；凡 brain 本轮有正文且带 tool_calls（含全部不可执行），都必须发出该事件，避免流式缓冲被下一轮清空后正文从 UI 消失。伙伴恢复时再由 log 投影补齐。
 
 #### 流式与终态
 

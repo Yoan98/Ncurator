@@ -553,7 +553,7 @@ describe('temporary subagents through production AiRunService', () => {
       harnessMode: 'mock-llm',
       fixtures: [],
       runMode: 'single',
-      description: '真实子内存投影连续追加与新实例固定前缀',
+      description: '子会话投影连续追加、续接前缀与公开消息标识',
       execute: async (runtime) => {
         const files = ['A', 'B'].map((suffix) =>
           path.join(runtime.workspaceRoot, `cache-note-${suffix}.txt`)
@@ -582,7 +582,7 @@ describe('temporary subagents through production AiRunService', () => {
                 : buildToolDecision({
                     toolName: 'text_file_read',
                     args: { sourcePath: files[task.endsWith('A') ? 0 : 1] },
-                    summary: `PUBLIC_ACTION_${task}_${count}`
+                    summary: `PUBLIC_ACTION_${task}`
                   })
             })
           }
@@ -723,6 +723,27 @@ describe('temporary subagents through production AiRunService', () => {
           expect(own.filter((event) => event.delta && event.reset && event.streaming)).toHaveLength(
             3
           )
+          const messageIds = [
+            ...new Set(own.filter((event) => event.delta).map((event) => event.messageId))
+          ]
+          expect(messageIds).toHaveLength(3)
+          const snapshots = result.events.filter(
+            (event) =>
+              event.type === 'subagent_updated' &&
+              event.update.childRunId === childRunId &&
+              event.update.message !== undefined
+          )
+          expect(snapshots.map((event) => event.update.messageId)).toEqual(messageIds)
+          for (const snapshot of snapshots) {
+            expect(
+              own
+                .filter((event) => event.messageId === snapshot.update.messageId)
+                .map((event) => event.delta || '')
+                .join('')
+            ).toBe(snapshot.update.message)
+          }
+          expect(snapshots[0].update.message).toBe(snapshots[1].update.message)
+          expect(snapshots[0].update.messageId).not.toBe(snapshots[1].update.messageId)
           expect(own.at(-1)?.streaming).toBe(false)
         }
         runtime.assertThat(true, {

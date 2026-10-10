@@ -22,7 +22,7 @@ export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
       ])
     )
     .min(1)
-    .describe('子任务列表')
+    .describe('子agent任务列表')
 })
 
 export const LEARN_SKILL_SCHEMA = z.object({

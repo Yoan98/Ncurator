@@ -233,6 +233,7 @@ describe('unit ai persistence backend', () => {
     const internal = service as ChatRunServicePrivate
     await internal.queueRunEvent('owner-stream', {
       type: 'subagent_stream',
+      messageId: 'public-message',
       runId: 'owner-stream',
       toolCallId: 'delegate',
       childRunId: 'child-stream',

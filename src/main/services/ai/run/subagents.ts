@@ -76,7 +76,7 @@ export const createSubagentDispatcher = (
         }
         let updates = Promise.resolve()
         let blocker: string | undefined
-        const actions = new Map<string, string>()
+        const actions = new Map<string, { text: string; messageId: string }>()
         let publicToolText = ''
         const publish = (update: SubagentUpdate): Promise<void> => {
           const next = updates.then(async () => {
@@ -117,18 +117,21 @@ export const createSubagentDispatcher = (
           deps.abortSignal?.addEventListener('abort', cancel, { once: true })
           if (deps.abortSignal?.aborted || deps.isCancelled()) cancel()
           let replaceStream = true
+          let messageId: string = randomUUID()
           const stream = (update: {
             delta?: string
             reset?: boolean
             streaming?: boolean
           }): void => {
             // Keep live fragments ordered with durable snapshots without persisting each fragment.
+            const streamMessageId = messageId
             const next = updates.then(() => {
               deps.sendEvent({
                 type: 'subagent_stream',
                 runId: payload.runId,
                 toolCallId,
                 childRunId,
+                messageId: streamMessageId,
                 ...update,
                 createdAt: Date.now()
               })
@@ -190,8 +193,10 @@ export const createSubagentDispatcher = (
                   // Raw reasoning deltas, skill state and lifecycle remain local.
                   if (event.type === 'assistant_brain_stream_started') {
                     replaceStream = true
+                    messageId = event.roundId
                   } else if (event.type === 'assistant_brain_stream_reset') {
                     replaceStream = true
+                    messageId = randomUUID()
                     stream({ reset: true, streaming: false })
                   } else if (event.type === 'assistant_brain_stream_delta') {
                     stream({ delta: event.text, reset: replaceStream, streaming: true })
@@ -199,7 +204,7 @@ export const createSubagentDispatcher = (
                   } else if (event.type === 'assistant_brain_stream_completed') {
                     stream({ streaming: false })
                     if (event.text.trim())
-                      void publish({ ...base, message: event.text.slice(0, 12000) })
+                      void publish({ ...base, messageId, message: event.text.slice(0, 12000) })
                   } else if (
                     event.type === 'assistant_process_group_started' &&
                     event.display.kind === 'thinking'
@@ -214,28 +219,31 @@ export const createSubagentDispatcher = (
                     )
                       ? (event.toolName as RuntimeToolName)
                       : 'unnamed'
-                    const text =
-                      publicToolText ||
-                      getAssistantToolItemCopy(toolName, 'running', event.input)
-                        .detail.map((segment) => segment.text)
-                        .join('')
-                    actions.set(event.toolCallId, text)
+                    const text = publicToolText.trim()
+                      ? publicToolText
+                      : getAssistantToolItemCopy(toolName, 'running', event.input)
+                          .detail.map((segment) => segment.text)
+                          .join('')
+                    const actionMessageId = publicToolText.trim() ? messageId : event.toolCallId
+                    actions.set(event.toolCallId, { text, messageId: actionMessageId })
                     void publish({
                       ...base,
+                      messageId: actionMessageId,
                       action: {
                         id: event.toolCallId,
                         toolName: event.toolName,
-                        text: actions.get(event.toolCallId) || '',
+                        text,
                         status: 'running'
                       }
                     })
                   } else if (event.type === 'tool_call_result') {
                     void publish({
                       ...base,
+                      messageId: actions.get(event.toolCallId)?.messageId,
                       action: {
                         id: event.toolCallId,
                         toolName: event.toolName,
-                        text: actions.get(event.toolCallId) || '',
+                        text: actions.get(event.toolCallId)?.text || '',
                         status: event.error || event.result?.ok === false ? 'failed' : 'completed',
                         feedback:
                           event.error ||

@@ -673,12 +673,21 @@ export const reduceAssistantProcessGroups = (
             ...group,
             subagents: group.subagents?.map((child) => {
               if (child.childRunId !== event.childRunId || child.status !== 'running') return child
+              if (!event.reset && event.delta === undefined && child.messageId !== event.messageId)
+                return child
+              const replace = event.reset || child.messageId !== event.messageId
+              const message = (replace ? '' : child.message || '') + (event.delta || '')
+              const newVisibleMessage = message.trim() && (replace || !child.message?.trim())
               return {
                 ...child,
-                message: (event.reset ? '' : child.message || '') + (event.delta || ''),
+                message,
+                messageId: event.messageId,
                 streaming: event.streaming ?? child.streaming,
-                messageStartedAt:
-                  event.reset && event.delta ? event.createdAt : child.messageStartedAt
+                messageStartedAt: newVisibleMessage
+                  ? event.createdAt
+                  : replace
+                    ? undefined
+                    : child.messageStartedAt
               }
             })
           }
@@ -707,14 +716,38 @@ export const reduceAssistantProcessGroups = (
       event.update.status === 'running' ||
       event.update.status === 'queued' ||
       event.update.status === 'waiting_approval'
+    const action = event.update.action
+    const actionMessageId = event.update.messageId || action?.id
+    // A tool finishing must not replace a newer public message with its old action copy.
+    const actionMessage =
+      action && (action.status === 'running' || previous?.messageId === actionMessageId)
+        ? action.text
+        : undefined
+    const message = active
+      ? (event.update.message ?? actionMessage ?? previous?.message)
+      : event.update.result
+    const messageId = active
+      ? event.update.message !== undefined
+        ? event.update.messageId
+        : actionMessage !== undefined
+          ? actionMessageId
+          : previous?.messageId
+      : message === previous?.message
+        ? previous?.messageId
+        : `result:${event.update.childRunId}`
+    const newVisibleMessage =
+      message?.trim() && (messageId !== previous?.messageId || !previous?.message?.trim())
     const child = {
       ...previous,
       ...event.update,
       actions,
-      message: active
-        ? (event.update.message ?? event.update.action?.text ?? previous?.message)
-        : event.update.result,
-      streaming: event.update.status === 'running' ? previous?.streaming : false
+      message,
+      messageId,
+      messageStartedAt: newVisibleMessage ? event.createdAt : previous?.messageStartedAt,
+      streaming:
+        event.update.status === 'running' && event.update.message === undefined
+          ? previous?.streaming
+          : false
     }
     const subagents = group.subagents?.some((item) => item.childRunId === child.childRunId)
       ? group.subagents.map((item) => (item.childRunId === child.childRunId ? child : item))

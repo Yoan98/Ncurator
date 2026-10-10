@@ -26,7 +26,9 @@ import {
   emitAssistantProcessThought,
   emitThinkingCompleted,
   emitThinkingFailed,
-  emitThinkingStarted
+  emitThinkingStarted,
+  emitToolProcessCompleted,
+  emitToolProcessStarted
 } from '../../../events/processEvents'
 import {
   applyDeliverySideEffects,
@@ -395,13 +397,31 @@ export const createBrainNode = (input: {
         calls: Array<{ id: string; name: string; errorMessage: string }>
       ): Promise<void> => {
         for (const call of calls) {
+          const toolName = call.name || 'unknown'
           await appendToolFeedback({
             cache: input.cache,
             ctx: input.ctx,
             toolCallId: call.id,
-            toolName: call.name || 'unknown',
+            toolName,
             ok: false,
             errorMessage: call.errorMessage
+          })
+          // 执行前拒绝也进入 Activity；与恢复投影使用同一 ID 和原始入参。
+          if (toolName === 'update_plan') continue
+          const processCall = {
+            sendEvent: input.ctx.sendEvent,
+            runId: input.ctx.runId,
+            toolCallId: call.id,
+            toolName
+          }
+          emitToolProcessStarted({
+            ...processCall,
+            args: logToolCalls.find((loggedCall) => loggedCall.id === call.id)?.args ?? {}
+          })
+          emitToolProcessCompleted({
+            ...processCall,
+            ok: false,
+            error: call.errorMessage
           })
         }
       }

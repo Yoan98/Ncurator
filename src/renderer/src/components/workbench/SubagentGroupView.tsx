@@ -25,7 +25,9 @@ const SubagentThought: React.FC<{
       : child.status === 'completed' && !showDelivery
         ? '已完成'
         : active
-          ? child.message || ''
+          ? child.message?.trim()
+            ? child.message
+            : '我在思考中'
           : child.result ||
             {
               waiting_approval: '等待你审核操作',
@@ -35,7 +37,7 @@ const SubagentThought: React.FC<{
               blocked: '需要主伙伴继续处理',
               interrupted: '执行被中断，未收到完整结果'
             }[child.status]
-  const streaming = active && child.streaming
+  const streaming = active && child.streaming && Boolean(child.message?.trim())
   useLayoutEffect(() => {
     if (!open || !contentRef.current) return
     const content = contentRef.current
@@ -55,6 +57,7 @@ const SubagentThought: React.FC<{
     <div
       data-testid="subagent-thought"
       data-child-run-id={child.childRunId}
+      data-message-id={child.messageId}
       data-message-started-at={child.messageStartedAt}
       className="nc-subagent-thought-cloud"
     >
@@ -96,32 +99,60 @@ export const SubagentCloudProvider: React.FC<{
 }> = ({ groups, children }) => {
   const tasks = useMemo(() => groups.flatMap((group) => group.subagents || []), [groups])
   const [manualChildId, setManualChildId] = useState<string>()
-  const [autoChildId, setAutoChildId] = useState<string>()
+  const [automaticMessage, setAutomaticMessage] = useState<{
+    childRunId: string
+    messageId: string
+  }>()
   // Existing view state on mount is history, including when returning to a running partner.
-  const seen = useRef(new Map(tasks.map((child) => [child.childRunId, child.messageStartedAt])))
+  const seen = useRef(
+    new Map(
+      tasks.map((child) => [child.childRunId, child.message?.trim() ? child.messageId : undefined])
+    )
+  )
   useEffect(() => {
     let latest: SubagentTaskView | undefined
     for (const child of tasks) {
-      if (child.messageStartedAt && seen.current.get(child.childRunId) !== child.messageStartedAt) {
-        if (!latest || child.messageStartedAt >= (latest.messageStartedAt || 0)) latest = child
+      const visibleMessageId = child.message?.trim() ? child.messageId : undefined
+      if (
+        visibleMessageId &&
+        child.messageStartedAt !== undefined &&
+        seen.current.get(child.childRunId) !== visibleMessageId
+      ) {
+        if (!latest || (child.messageStartedAt || 0) >= (latest.messageStartedAt || 0))
+          latest = child
       }
-      seen.current.set(child.childRunId, child.messageStartedAt)
+      seen.current.set(child.childRunId, visibleMessageId)
     }
-    if (latest) setAutoChildId(latest.childRunId)
+    if (latest?.messageId)
+      setAutomaticMessage({ childRunId: latest.childRunId, messageId: latest.messageId })
   }, [tasks])
-  const automatic = tasks.find((child) => child.childRunId === autoChildId)
+  const automatic = tasks.find(
+    (child) =>
+      child.childRunId === automaticMessage?.childRunId &&
+      child.messageId === automaticMessage.messageId &&
+      child.message?.trim()
+  )
+  const automaticPresent = Boolean(automatic)
   const streaming = automatic?.status === 'running' && automatic.streaming
   useEffect(() => {
-    if (!autoChildId || streaming) return
-    const timer = window.setTimeout(() => setAutoChildId(undefined), AUTO_CLOUD_HOLD_MS)
+    if (!automaticMessage) return
+    if (!automaticPresent) {
+      setAutomaticMessage((current) => (current === automaticMessage ? undefined : current))
+      return
+    }
+    if (streaming) return
+    const timer = window.setTimeout(
+      () => setAutomaticMessage((current) => (current === automaticMessage ? undefined : current)),
+      AUTO_CLOUD_HOLD_MS
+    )
     return () => window.clearTimeout(timer)
-  }, [autoChildId, streaming, automatic?.messageStartedAt])
+  }, [automaticMessage, automaticPresent, streaming])
 
   return (
     <SubagentCloudContext.Provider
       value={{
-        openChildId: manualChildId || autoChildId,
-        automaticChildId: autoChildId,
+        openChildId: manualChildId || automatic?.childRunId,
+        automaticChildId: automatic?.childRunId,
         setManualChildId
       }}
     >

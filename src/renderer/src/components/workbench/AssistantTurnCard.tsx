@@ -740,7 +740,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 turn.runFinished ? (
                   <button
                     type="button"
-                    className="mb-2 flex w-full items-center justify-start gap-1.5 border-b border-[#EEEEEC] pb-2 text-left text-[14px] leading-6 text-[#37352F]"
+                    className="mb-2 flex w-full items-center justify-start gap-1.5 border-b border-[#EEEEEC] pb-2 text-left text-[13px] leading-5 text-[#9B9A97]"
                     aria-expanded={processExpanded}
                     aria-label={`${processExpanded ? '收起' : '展开'}过程记录`}
                     data-testid={`${workbenchSelectors.assistantProcessTogglePrefix}-${messageId}`}
@@ -752,9 +752,9 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                       用时 {formatRunDuration(turn.startedAt, turn.finishedAt ?? currentTime)}
                     </span>
                     {processExpanded ? (
-                      <HiChevronDown className="h-4 w-4 shrink-0" />
+                      <HiChevronDown className="h-3.5 w-3.5 shrink-0" />
                     ) : (
-                      <HiChevronRight className="h-4 w-4 shrink-0" />
+                      <HiChevronRight className="h-3.5 w-3.5 shrink-0" />
                     )}
                   </button>
                 ) : (

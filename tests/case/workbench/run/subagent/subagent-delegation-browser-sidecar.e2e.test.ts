@@ -218,17 +218,28 @@ describe('subagent browser and sidecar real UI', () => {
             10_000
           )
           await runtime.page.mouse.move(0, 0)
-          // Read-only DOM observer measures one real automatic text cycle, including
-          // visibility after text ends. A newer message may legitimately supersede it.
+          // Read-only DOM observer checks repeated automatic messages in the same child,
+          // plus a full two-second hold. Hover/focus observations are excluded.
           const autoCycle = runtime.page.evaluate(
             () =>
-              new Promise<{ elapsedMs: number }>((resolve, reject) => {
-                let cycle: { key: string; endedAt?: number } | undefined
+              new Promise<{
+                elapsedMs: number
+                messages: Array<{ childRunId: string; messageId: string }>
+              }>((resolve, reject) => {
+                const messages = new Map<string, { childRunId: string; messageId: string }>()
+                let elapsedMs: number | undefined
+                let cycle: { key: string; streamed?: boolean; endedAt?: number } | undefined
+                const transitions: string[] = []
+                let lastState = ''
                 const started = performance.now()
                 const timer = window.setInterval(() => {
-                  if (performance.now() - started > 120_000) {
+                  if (performance.now() - started > 240_000) {
                     window.clearInterval(timer)
-                    reject(new Error('未观察到真实自动云的完整显示周期'))
+                    reject(
+                      new Error(
+                        `未观察到同一子任务多轮自动云及完整隐藏周期：${JSON.stringify({ elapsedMs, messages: [...messages.values()], transitions })}`
+                      )
+                    )
                     return
                   }
                   const cloud = [
@@ -237,8 +248,13 @@ describe('subagent browser and sidecar real UI', () => {
                     (element) =>
                       element.getClientRects().length > 0 && !element.closest('.ant-tooltip-hidden')
                   )
-                  const key = cloud
-                    ? `${cloud.dataset.childRunId}:${cloud.dataset.messageStartedAt}`
+                  const manual =
+                    [
+                      ...document.querySelectorAll<HTMLElement>('[data-testid="subagent-task"]')
+                    ].some((row) => row.matches(':hover, :focus')) ||
+                    Boolean(cloud?.matches(':hover'))
+                  const key = cloud?.dataset.messageId
+                    ? `${cloud.dataset.childRunId}:${cloud.dataset.messageId}`
                     : undefined
                   const text = cloud
                     ?.querySelector('[data-testid="subagent-message"]')
@@ -246,15 +262,39 @@ describe('subagent browser and sidecar real UI', () => {
                   const streaming = Boolean(
                     cloud?.querySelector('[data-testid="subagent-stream-dot"]')
                   )
-                  if (cloud && key && text && streaming) {
-                    cycle = { key }
-                  } else if (cycle && key === cycle.key && !streaming) {
-                    cycle.endedAt ??= performance.now()
+                  const state = `${key || 'hidden'}:${streaming ? 'stream' : 'ended'}:${manual ? 'manual' : 'auto'}`
+                  if (state !== lastState) {
+                    transitions.push(state)
+                    if (transitions.length > 20) transitions.shift()
+                    lastState = state
+                  }
+                  if (manual) {
+                    cycle = undefined
+                    return
+                  }
+                  if (cloud && key && text) {
+                    if (streaming)
+                      messages.set(key, {
+                        childRunId: cloud.dataset.childRunId!,
+                        messageId: cloud.dataset.messageId!
+                      })
+                    if (cycle?.key !== key) cycle = { key }
+                    if (streaming) {
+                      cycle.streamed = true
+                      cycle.endedAt = undefined
+                    } else cycle.endedAt ??= performance.now()
                   } else if (cycle?.endedAt && !cloud) {
-                    window.clearInterval(timer)
-                    resolve({ elapsedMs: performance.now() - cycle.endedAt })
+                    if (cycle.streamed) elapsedMs ??= performance.now() - cycle.endedAt
+                    cycle = undefined
                   } else if (key !== cycle?.key) {
                     cycle = undefined
+                  }
+                  const counts = new Map<string, number>()
+                  for (const message of messages.values())
+                    counts.set(message.childRunId, (counts.get(message.childRunId) || 0) + 1)
+                  if (elapsedMs !== undefined && [...counts.values()].some((count) => count >= 2)) {
+                    window.clearInterval(timer)
+                    resolve({ elapsedMs, messages: [...messages.values()] })
                   }
                 }, 25)
               })
@@ -264,7 +304,35 @@ describe('subagent browser and sidecar real UI', () => {
           const started = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
-            `请一次派发三位临时帮手分头处理，每位开始操作前先简短告诉我正在做什么，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后用文本编辑工具将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你用文本编辑工具把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
+            `请一次派发三位临时帮手分头处理，每位开始操作前先简短告诉我正在做什么，网页帮手提交表单后再用一句话报告进展，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后用文本编辑工具将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你用文本编辑工具把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
+          )
+          const pendingRow = runtime.page
+            .locator('[data-testid="subagent-task"][data-status="running"]')
+            .first()
+          await pendingRow.waitFor({ state: 'visible', timeout: 120_000 })
+          await pendingRow.hover()
+          const delegatedChildRunIds = new Set(
+            (await updates(runtime, started)).map((event) => event.update.childRunId)
+          )
+          expect(delegatedChildRunIds.size).toBeGreaterThanOrEqual(3)
+          const pendingChildRunId = await pendingRow.getAttribute('data-child-run-id')
+          const pendingCloud = runtime.page.locator(
+            `[data-testid="subagent-thought"][data-child-run-id="${pendingChildRunId}"]:visible`
+          )
+          await pendingCloud.waitFor({ state: 'visible' })
+          expect(await pendingCloud.getByTestId('subagent-message').textContent()).toBe(
+            '我在思考中'
+          )
+          expect(await pendingCloud.getByTestId('subagent-stream-dot').count()).toBe(0)
+          await assertCloudTextInside(pendingCloud)
+          await runtime.captureScreenshot({
+            name: 'subagent-cloud-thinking',
+            message: '首段文字尚未到达时悬浮显示思考提示，无空白云或文字流黑球'
+          })
+          await runtime.page.mouse.move(0, 0)
+          await waitUntil(
+            async () => !(await pendingRow.evaluate((row) => row.matches(':hover, :focus'))),
+            5000
           )
           // No hover: the real public text stream opens the cloud and shows its trailing dot.
           const automaticCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
@@ -276,17 +344,14 @@ describe('subagent browser and sidecar real UI', () => {
             120_000
           )
           await assertCloudTextInside(automaticCloud)
+          expect(
+            await automaticCloud
+              .getByTestId('subagent-stream-dot')
+              .evaluate((dot) => getComputedStyle(dot).animationName)
+          ).toBe('nc-subagent-dot-breathe')
           await runtime.captureScreenshot({
             name: 'subagent-cloud-auto',
             message: '未悬浮时最新公开消息自动显示，文字及黑球位于云内'
-          })
-          const cycle = await autoCycle
-          expect(cycle.elapsedMs).toBeGreaterThanOrEqual(1800)
-          expect(cycle.elapsedMs).toBeLessThan(3500)
-          runtime.signal({
-            name: 'subagent-auto-cloud-hold',
-            message: '真实文字流结束后云停留约两秒自动隐藏',
-            data: cycle
           })
           await waitUntil(async () =>
             (await updates(runtime, started)).some((event) => event.update.status === 'running')
@@ -297,8 +362,11 @@ describe('subagent browser and sidecar real UI', () => {
           await queuedRow.waitFor({ state: 'visible', timeout: 120_000 })
           expect(await queuedRow.locator('.nc-partner-avatar-animated').count()).toBe(0)
           expect(await queuedRow.locator('.grayscale').count()).toBe(1)
+          const queuedChildRunId = await queuedRow.getAttribute('data-child-run-id')
           await queuedRow.hover()
-          const queuedCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+          const queuedCloud = runtime.page.locator(
+            `[data-testid="subagent-thought"][data-child-run-id="${queuedChildRunId}"]:visible`
+          )
           await queuedCloud.waitFor({ state: 'visible' })
           expect(await queuedCloud.getAttribute('data-child-run-id')).toBe(
             await queuedRow.getAttribute('data-child-run-id')
@@ -351,16 +419,13 @@ describe('subagent browser and sidecar real UI', () => {
                 ),
             10_000
           )
-          const liveCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
-          await liveCloud
-            .getByTestId('subagent-stream-dot')
-            .waitFor({ state: 'visible', timeout: 120_000 })
-          expect(
-            await liveCloud
-              .getByTestId('subagent-stream-dot')
-              .evaluate((dot) => getComputedStyle(dot).animationName)
-          ).toBe('nc-subagent-dot-breathe')
+          const liveCloud = runtime.page.locator(
+            `[data-testid="subagent-thought"][data-child-run-id="${previewChildRunId}"]:visible`
+          )
           expect(await liveCloud.getByTestId('subagent-message').count()).toBe(1)
+          expect(
+            (await liveCloud.getByTestId('subagent-message').textContent())?.trim()
+          ).toBeTruthy()
           await assertCloudTextInside(liveCloud)
           await waitUntil(
             async () =>
@@ -377,17 +442,19 @@ describe('subagent browser and sidecar real UI', () => {
             message: '运行中的竖排头像列表与最新消息云朵气泡'
           })
           await runtime.page.mouse.move(0, 0)
-          await runtime.page
-            .locator('[data-testid="subagent-thought"]:visible')
-            .waitFor({ state: 'hidden' })
+          await liveCloud.waitFor({ state: 'hidden' })
           await childRow.focus()
-          await runtime.page
-            .locator('[data-testid="subagent-thought"]:visible')
-            .waitFor({ state: 'visible' })
+          await liveCloud.waitFor({ state: 'visible' })
           await getWorkbenchLocator(runtime.page, workbenchSelectors.input).focus()
-          await runtime.page
-            .locator('[data-testid="subagent-thought"]:visible')
-            .waitFor({ state: 'hidden' })
+          await liveCloud.waitFor({ state: 'hidden' })
+          const cycle = await autoCycle
+          expect(cycle.elapsedMs).toBeGreaterThanOrEqual(1800)
+          expect(cycle.elapsedMs).toBeLessThan(3500)
+          runtime.signal({
+            name: 'subagent-auto-cloud-hold',
+            message: '同一子任务连续新文案均自动开云，真实文字流结束后云停留约两秒隐藏',
+            data: cycle
+          })
           const panelToggle = getWorkbenchLocator(
             runtime.page,
             workbenchSelectors.contentPanelToggle
@@ -419,7 +486,9 @@ describe('subagent browser and sidecar real UI', () => {
               .evaluate((row) => row.classList.contains('nc-sidebar-item-active'))
           )
           await waitUntil(
-            async () => (await runtime.page.getByTestId('subagent-task').count()) === 3,
+            async () =>
+              (await runtime.page.getByTestId('subagent-task').count()) ===
+              delegatedChildRunIds.size,
             10_000
           )
           let pageGeometry: Array<{
@@ -485,7 +554,7 @@ describe('subagent browser and sidecar real UI', () => {
               ])
             )
             if (
-              latest.size === 3 &&
+              latest.size === delegatedChildRunIds.size &&
               [...latest.values()].every((status) => status !== 'running' && status !== 'queued')
             )
               return true
@@ -547,7 +616,7 @@ describe('subagent browser and sidecar real UI', () => {
                 .filter((event) => event.update.status === 'completed')
                 .map((event) => event.update.childRunId)
             ).size
-          ).toBe(3)
+          ).toBe(delegatedChildRunIds.size)
           const childStreams = (await collectWorkbenchAiRunEvents(runtime)).filter(
             (event) => event.type === 'subagent_stream' && event.runId === subagentEvents[0].runId
           )
@@ -569,7 +638,9 @@ describe('subagent browser and sidecar real UI', () => {
             workbenchSelectors.assistantProcessTogglePrefix
           ).last()
           await processToggle.click()
-          expect(await runtime.page.getByTestId('subagent-task').count()).toBe(3)
+          expect(await runtime.page.getByTestId('subagent-task').count()).toBe(
+            delegatedChildRunIds.size
+          )
           const completedChild = runtime.page.locator(
             `[data-testid="subagent-task"][data-child-run-id="${previewChildRunId}"]`
           )
@@ -714,7 +785,10 @@ describe('subagent browser and sidecar real UI', () => {
                 .locator('[data-testid="subagent-task"][data-status="running"]')
                 .last()
               await pendingChild.hover()
-              const pendingCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+              const pendingChildRunId = await pendingRow.getAttribute('data-child-run-id')
+              const pendingCloud = runtime.page.locator(
+                `[data-testid="subagent-thought"][data-child-run-id="${pendingChildRunId}"]:visible`
+              )
               await pendingCloud.waitFor({ state: 'visible' })
               expect(await pendingCloud.getByTestId('subagent-stream-dot').count()).toBe(0)
               await assertCloudTextInside(pendingCloud)
@@ -722,7 +796,10 @@ describe('subagent browser and sidecar real UI', () => {
               await runtime.page.waitForTimeout(2200)
               expect(await pendingCloud.isVisible()).toBe(true)
               await runtime.page.mouse.move(0, 0)
-              await pendingCloud.waitFor({ state: 'hidden' })
+              await waitUntil(
+                async () => !(await pendingRow.evaluate((row) => row.matches(':hover, :focus'))),
+                5000
+              )
               await runtime.page.getByRole('button', { name: '停止本次运行', exact: true }).click()
               await waitUntil(async () => {
                 const latest = new Map(

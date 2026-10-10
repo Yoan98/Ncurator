@@ -270,18 +270,20 @@ export const projectProcessGroups = (input: {
     .filter((group): group is AssistantProcessGroup => Boolean(group))
     .sort((left, right) => left.createdAt - right.createdAt)
   for (const group of projectedGroups) {
-    if (input.runFinished && group.subagents)
+    if (group.subagents)
       group.subagents = group.subagents.map((child) =>
-        child.status === 'running' ||
-        child.status === 'queued' ||
-        child.status === 'waiting_approval'
+        input.runFinished &&
+        (child.status === 'running' ||
+          child.status === 'queued' ||
+          child.status === 'waiting_approval')
           ? {
               ...child,
+              messageStartedAt: undefined,
               requesting: false,
               status: 'interrupted',
               result: '执行被中断，未收到完整结果'
             }
-          : child
+          : { ...child, messageStartedAt: undefined }
       )
   }
   const processGroups = input.runFinished
