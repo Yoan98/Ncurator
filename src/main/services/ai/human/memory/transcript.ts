@@ -1,3 +1,4 @@
+import type { SubagentTask } from '../../types'
 import { AIMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
 import type {
   ChatMessageLogEntry,
@@ -52,9 +53,11 @@ export const repairInterruptedToolCalls = (
               call.name === 'delegate_to_subagent'
                 ? JSON.stringify({
                     children: Array.isArray(call.args?.tasks)
-                      ? call.args.tasks.map((task: { name: string; task: string }) => {
-                          const childIndex = remainingChildren.findIndex(
-                            (child) => child.name === task.name && child.task === task.task
+                      ? call.args.tasks.map((task: SubagentTask) => {
+                          const childIndex = remainingChildren.findIndex((child) =>
+                            task.agentId
+                              ? child.agentId === task.agentId
+                              : child.name === task.name && child.task === task.task
                           )
                           const completed =
                             childIndex >= 0 ? remainingChildren.splice(childIndex, 1)[0] : undefined
@@ -64,7 +67,7 @@ export const repairInterruptedToolCalls = (
                             completed.status !== 'waiting_approval'
                             ? completed
                             : {
-                                ...task,
+                                ...(completed || task),
                                 status: 'interrupted',
                                 result: '执行被中断，未收到完整结果'
                               }

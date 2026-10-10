@@ -52,6 +52,7 @@ describe('ai human mock-llm backend', () => {
             llmStore: runtime.llmStore,
             partnerStore: runtime.chatStore,
             chatMessageLogStore: runtime.storageService.chatMessageLog,
+            subagentStore: runtime.storageService.subagent,
             documentsStore: runtime.documentsStore,
             embeddingService: runtime.embeddingService,
             ensureEmbeddingReady: async () => {

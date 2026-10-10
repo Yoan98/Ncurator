@@ -307,6 +307,7 @@ export function registerHandlers(services: {
   const chatRunService = new ChatRunService({
     partnerStore,
     chatMessageLogStore,
+    subagentStore: storageService.subagent,
     aiRunStore,
     documentsStore,
     embeddingService,

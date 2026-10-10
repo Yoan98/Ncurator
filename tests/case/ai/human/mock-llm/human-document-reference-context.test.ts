@@ -134,6 +134,7 @@ describe('ai human mock-llm backend', () => {
           new ChatRunService({
             partnerStore: storage.partner,
             chatMessageLogStore: storage.chatMessageLog,
+            subagentStore: storage.subagent,
             aiRunStore: storage.aiRun,
             documentsStore: storage.documents,
             embeddingService: runtime.embeddingService,

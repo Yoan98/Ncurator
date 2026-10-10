@@ -24,7 +24,7 @@ import {
   repairInterruptedToolCalls
 } from '../../../../../src/main/services/ai/human/memory/transcript'
 import { messagesFromLogEntries } from '../../../../../src/main/services/ai/human/memory/conversationLogMessages'
-import { createMemoryTranscript } from '../../../../../src/main/services/ai/run/subagents'
+import { createSqliteTranscript } from '../../../../../src/main/services/ai/human/memory/sqliteTranscript'
 import { collectBrainPrefixCacheReuse } from '../../../../harness/core/continuation-prefix-cache'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { terminalSessionManager } from '../../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
@@ -145,6 +145,14 @@ describe('temporary subagents through production AiRunService', () => {
               expect(request.runId).toBe(run.runId)
               expect(request.source?.name).toBe('公式海豹')
               const childId = request.source!.childRunId
+              expect(
+                runner.events.some(
+                  (event) =>
+                    event.type === 'subagent_updated' &&
+                    event.update.childRunId === childId &&
+                    event.update.agentId === request.source?.agentId
+                )
+              ).toBe(true)
               expect(
                 runner.events.some(
                   (event) =>
@@ -580,6 +588,103 @@ describe('temporary subagents through production AiRunService', () => {
           }
         })
         const output = await runner.run()
+        let parentRound = 0
+        let childRound = 0
+        let agentId = ''
+        let stop: Promise<unknown> | undefined
+        const continued = await createChatServiceTestRunner(runtime, {
+          partnerId: 'prefix-resume-partner',
+          userInput: 'ROOT_RESUME 派发独立核对',
+          executionPermission: 'full_access',
+          observeEvent: (event) => {
+            if (event.type === 'subagent_updated') {
+              agentId = event.update.agentId
+              if (
+                event.update.action?.toolName === 'terminal_run' &&
+                event.update.action.status === 'running' &&
+                !stop
+              )
+                stop = continued.service.cancelRun(event.runId)
+            }
+          },
+          llmScript: {
+            'human.brain': steps((call) => {
+              if (isChild(call)) {
+                childRound += 1
+                if (childRound === 1)
+                  return buildToolDecision({
+                    toolName: 'text_file_read',
+                    args: { sourcePath: files[0] },
+                    summary: '读取资料'
+                  })
+                if (childRound === 2)
+                  return buildToolDecision({
+                    toolName: 'terminal_run',
+                    args: {
+                      command:
+                        process.platform === 'win32' ? 'Start-Sleep -Seconds 30' : 'sleep 30',
+                      commandExplanation: '等待检查'
+                    },
+                    summary: '等待检查'
+                  })
+                expect(call.user).toContain('负责人：林可')
+                return complete('苍鹭；负责人：林可')
+              }
+              parentRound += 1
+              if (parentRound === 1)
+                return delegate([{ name: '海豹', task: `CHILD_RESUME 核对 ${files[0]}` }])
+              if (parentRound === 2)
+                return buildToolDecision({
+                  toolName: 'list_agent',
+                  args: {},
+                  summary: '查看未完成任务'
+                })
+              if (parentRound === 3)
+                return buildToolDecision({
+                  toolName: 'delegate_to_subagent',
+                  args: { tasks: [{ agentId, task: 'CHILD_RESUME 继续核对并交付' }] },
+                  summary: '继续核对'
+                })
+              return complete('核对交付完成')
+            })
+          }
+        })
+        const interrupted = await continued.submit()
+        expect((await interrupted.wait())?.status).toBe('cancelled')
+        await stop
+        const retained = runtime.storageService.subagent.list(continued.partnerId)
+        expect(retained).toHaveLength(1)
+        expect(retained[0]).toMatchObject({
+          agentId,
+          task: `CHILD_RESUME 核对 ${files[0]}`,
+          status: 'cancelled'
+        })
+        runtime.storageService.sqlite.close()
+        runtime.storageService.sqlite.initialize()
+        await continued.service.failInterruptedRuns()
+        const resumed = await continued.submit('ROOT_CONTINUE 继续未完成的独立核对')
+        expect((await resumed.wait())?.status).toBe('completed')
+        const childIo = continued.io.filter(
+          (record) => record.agentId === agentId && record.caller === 'human.brain'
+        )
+        const executionIds = [...new Set(childIo.map((record) => record.runId))]
+        expect(executionIds).toHaveLength(2)
+        const lastBefore = childIo
+          .filter((record) => record.runId === executionIds[0] && record.status === 'completed')
+          .at(-1)
+        const firstAfter = childIo.find((record) => record.runId === executionIds[1])
+        const resumePrefix = collectBrainPrefixCacheReuse({
+          previousLastBrain: lastBefore,
+          nextFirstBrain: firstAfter
+        })
+        expect(resumePrefix.prefixPreserved, JSON.stringify(resumePrefix.requestWireDiff)).toBe(
+          true
+        )
+        expect(firstAfter?.user).toContain('负责人：林可')
+        expect(runtime.storageService.subagent.list(continued.partnerId)).toEqual([])
+        expect(
+          await runtime.storageService.chatMessageLog.list(continued.partnerId, agentId)
+        ).toEqual([])
         return { output, io: runner.io, events: runner.events }
       },
       assert: async (result, runtime) => {
@@ -816,7 +921,7 @@ describe('temporary subagents through production AiRunService', () => {
       harnessMode: 'mock-llm',
       fixtures: [],
       runMode: 'single',
-      description: '内存压缩投影与真实 SQLite 中断恢复',
+      description: '持久子会话压缩投影与真实 SQLite 中断恢复',
       execute: async (runtime) => {
         const runner = await createAiServiceTestRunner(runtime, {
           userInput: '继续中断任务',
@@ -830,6 +935,7 @@ describe('temporary subagents through production AiRunService', () => {
           { name: '水獭', task: '独立任务 B' }
         ]
         const update: SubagentUpdate = {
+          agentId: 'historical-a',
           toolCallId: 'dispatch-1',
           childRunId: 'child-a',
           ...tasks[0],
@@ -847,6 +953,7 @@ describe('temporary subagents through production AiRunService', () => {
             kind: 'annotation',
             eventType: 'subagent_updated',
             payload: {
+              agentId: 'historical-b',
               toolCallId: 'dispatch-1',
               childRunId: 'child-b',
               ...tasks[1],
@@ -861,7 +968,41 @@ describe('temporary subagents through production AiRunService', () => {
         })
         const before = await runtime.storageService.chatMessageLog.list(runner.payload.partnerId)
         const repaired = repairInterruptedToolCalls(messagesFromLogEntries(entries), before)
-        const memory = createMemoryTranscript(runner.payload.partnerId, 'child-memory')
+        const resumedRepair = repairInterruptedToolCalls(
+          messagesFromLogEntries([
+            {
+              kind: 'assistant',
+              content: '',
+              toolCalls: [
+                {
+                  id: 'dispatch-1',
+                  name: 'delegate_to_subagent',
+                  args: {
+                    tasks: [
+                      { agentId: 'historical-a', task: '续接交付' },
+                      { agentId: 'historical-b', task: '继续' }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]),
+          before
+        )
+        expect(resumedRepair.map((message) => String(message.content)).join('\n')).toContain(
+          'VERIFIED_A'
+        )
+        expect(resumedRepair.map((message) => String(message.content)).join('\n')).toContain(
+          'historical-b'
+        )
+        const childInfo = runtime.storageService.subagent.enqueue(runner.payload.partnerId, [
+          { name: '海豹', task: '独立任务继续' }
+        ])[0]
+        const memory = createSqliteTranscript(
+          runtime.storageService.chatMessageLog,
+          { partnerId: runner.payload.partnerId, subagentId: childInfo.agentId },
+          'child-memory'
+        )
         await memory.append([
           {
             kind: 'user',
@@ -882,12 +1023,12 @@ describe('temporary subagents through production AiRunService', () => {
           {
             ...runner.payload,
             runId: 'child-memory',
+            subagentId: childInfo.agentId,
             ownerRunId: runtime.runId,
             parentToolCallId: 'compact-parent'
           },
           {
             ...runner.deps,
-            transcript: memory,
             humanRuntimeOverrides: { modelContextWindowTokens: 4000 },
             sendEvent: (event) => runtime.eventCollector.add(event)
           }
@@ -896,9 +1037,59 @@ describe('temporary subagents through production AiRunService', () => {
           createInitialHumanState({ taskId: 'child-memory', userInput: '独立任务继续' })
         )
         const projection = projectMessageLogRecords(await memory.load())
-        memory.clear()
+        runtime.storageService.sqlite.close()
+        runtime.storageService.sqlite.initialize()
+        runtime.storageService.subagent.interruptActive()
+        const reloaded = projectMessageLogRecords(
+          await runtime.storageService.chatMessageLog.list(
+            runner.payload.partnerId,
+            childInfo.agentId
+          )
+        )
+        expect(reloaded).toEqual(projection)
+        runtime.storageService.subagent.publish(
+          runtime.storageService.chatMessageLog,
+          runner.payload.partnerId,
+          'compact-parent',
+          {
+            ...childInfo,
+            childRunId: 'child-memory',
+            toolCallId: 'compact-parent',
+            status: 'completed',
+            result: 'COMPACT_CHILD'
+          }
+        )
         const output = await runner.run()
         const after = await runtime.storageService.chatMessageLog.list(runner.payload.partnerId)
+        let queuedAgentId = ''
+        let queuedParentRound = 0
+        const queuedRunner = await createChatServiceTestRunner(runtime, {
+          partnerId: 'queued-resume-partner',
+          userInput: 'ROOT_QUEUED_RESUME 继续未开始的子任务',
+          llmScript: {
+            'human.brain': steps((call) => {
+              if (call.user.includes('原任务：CHILD_QUEUED_ORIGINAL')) {
+                expect(call.user).toContain('本次任务：CHILD_QUEUED_CONTINUE')
+                return complete('排队任务已交付')
+              }
+              if (++queuedParentRound === 1)
+                return buildToolDecision({
+                  toolName: 'delegate_to_subagent',
+                  args: { tasks: [{ agentId: queuedAgentId, task: 'CHILD_QUEUED_CONTINUE' }] },
+                  summary: '继续排队任务'
+                })
+              return complete('主任务交付完成')
+            })
+          }
+        })
+        queuedAgentId = runtime.storageService.subagent.enqueue(queuedRunner.partnerId, [
+          { name: '排队海豹', task: 'CHILD_QUEUED_ORIGINAL' }
+        ])[0].agentId
+        runtime.storageService.subagent.interruptActive()
+        const queuedResume = await queuedRunner.submit()
+        expect((await queuedResume.wait())?.status).toBe('completed')
+        expect(queuedRunner.io.filter((record) => record.agentId === queuedAgentId)).toHaveLength(1)
+        expect(runtime.storageService.subagent.list(queuedRunner.partnerId)).toEqual([])
         return {
           output,
           repaired: repaired.map((message) => String(message.content)),

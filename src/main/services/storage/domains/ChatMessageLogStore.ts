@@ -30,11 +30,14 @@ const toMessageLogRecord = (row: ChatMessageLogRow): ChatMessageLogRecord | null
   }
 }
 
+export type MessageLogScope = { partnerId: string; subagentId?: string }
+
 export class ChatMessageLogStore {
   public constructor(private readonly sqlite: SqliteCore) {}
 
   public async appendBatch(input: {
     partnerId: string
+    subagentId?: string
     runId: string
     entries: ChatMessageLogEntry[]
     createdAt?: number
@@ -44,6 +47,7 @@ export class ChatMessageLogStore {
 
   public appendBatchSync(input: {
     partnerId: string
+    subagentId?: string
     runId: string
     entries: ChatMessageLogEntry[]
     createdAt?: number
@@ -52,14 +56,14 @@ export class ChatMessageLogStore {
     return this.sqlite.transaction(() => {
       const nextSeqRow = this.sqlite
         .prepare(
-          'SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM chat_session_message_log WHERE partner_id = ?'
+          'SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM chat_session_message_log WHERE partner_id = ? AND subagent_id IS ?'
         )
-        .get(input.partnerId) as { next_seq?: unknown }
+        .get(input.partnerId, input.subagentId || null) as { next_seq?: unknown }
       const startSeq = toRequiredNumber(nextSeqRow.next_seq, 1)
       const insert = this.sqlite.prepare(
         `
-        INSERT INTO chat_session_message_log (id, partner_id, run_id, seq, entry_json, created_at)
-        VALUES (@id, @partner_id, @run_id, @seq, @entry_json, @created_at)
+        INSERT INTO chat_session_message_log (id, partner_id, subagent_id, run_id, seq, entry_json, created_at)
+        VALUES (@id, @partner_id, @subagent_id, @run_id, @seq, @entry_json, @created_at)
       `
       )
       const baseCreatedAt = input.createdAt != null ? input.createdAt : Date.now()
@@ -77,6 +81,7 @@ export class ChatMessageLogStore {
         insert.run({
           id: record.id,
           partner_id: record.partnerId,
+          subagent_id: input.subagentId || null,
           run_id: record.runId,
           seq: record.seq,
           entry_json: jsonStringify(record.entry),
@@ -88,10 +93,12 @@ export class ChatMessageLogStore {
     })
   }
 
-  public async list(partnerId: string): Promise<ChatMessageLogRecord[]> {
+  public async list(partnerId: string, subagentId?: string): Promise<ChatMessageLogRecord[]> {
     const rows = this.sqlite
-      .prepare('SELECT * FROM chat_session_message_log WHERE partner_id = ? ORDER BY seq ASC')
-      .all(partnerId) as ChatMessageLogRow[]
+      .prepare(
+        'SELECT * FROM chat_session_message_log WHERE partner_id = ? AND subagent_id IS ? ORDER BY seq ASC'
+      )
+      .all(partnerId, subagentId || null) as ChatMessageLogRow[]
     return rows
       .map(toMessageLogRecord)
       .filter((record): record is ChatMessageLogRecord => record !== null)
@@ -99,6 +106,7 @@ export class ChatMessageLogStore {
 
   public async listPage(input: {
     partnerId: string
+    subagentId?: string
     limit: number
     beforeSeq?: number
   }): Promise<{ records: ChatMessageLogRecord[]; hasMoreBefore: boolean }> {
@@ -106,6 +114,7 @@ export class ChatMessageLogStore {
     const beforeSeq = Number(input.beforeSeq)
     const params = {
       partner_id: input.partnerId,
+      subagent_id: input.subagentId || null,
       before: Number.isFinite(beforeSeq) ? Math.floor(beforeSeq) : null,
       limit: safeLimit + 1
     }
@@ -114,6 +123,7 @@ export class ChatMessageLogStore {
         `
         SELECT * FROM chat_session_message_log
         WHERE partner_id = @partner_id
+          AND subagent_id IS @subagent_id
           AND (@before IS NULL OR seq < @before)
         ORDER BY seq DESC
         LIMIT @limit

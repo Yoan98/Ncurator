@@ -14,6 +14,7 @@ import { WorkspaceStore } from './domains/WorkspaceStore'
 import { WorkbenchUiStore } from './domains/WorkbenchUiStore'
 import { BrowserTabStateStore } from './domains/BrowserTabStateStore'
 import { ScheduledTaskStore } from './domains/ScheduledTaskStore'
+import { AiSubagentStore } from './domains/AiSubagentStore'
 import { ChatMessageLogStore } from './domains/ChatMessageLogStore'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 
@@ -35,6 +36,7 @@ export class StorageService {
   public readonly workbenchUi: WorkbenchUiStore
   public readonly browserTabs: BrowserTabStateStore
   public readonly scheduledTask: ScheduledTaskStore
+  public readonly subagent: AiSubagentStore
   public readonly chatMessageLog: ChatMessageLogStore
 
   public constructor(
@@ -63,6 +65,7 @@ export class StorageService {
     this.workbenchUi = new WorkbenchUiStore(this.sqlite)
     this.browserTabs = new BrowserTabStateStore(this.sqlite)
     this.scheduledTask = new ScheduledTaskStore(this.sqlite)
+    this.subagent = new AiSubagentStore(this.sqlite)
     this.chatMessageLog = new ChatMessageLogStore(this.sqlite)
   }
 
@@ -75,15 +78,14 @@ export class StorageService {
 
   public async initialize(): Promise<void> {
     this.sqlite.initialize()
+    this.subagent.interruptActive()
     await this.sqlite.runPendingAfterCommitHooks({ lanceDbPath: this.vector.getDbPath() })
     await this.vector.initialize()
     await this.failInterruptedWorkspaceIndexJobs()
     await this.documents.purgeStaleChunks()
   }
 
-  public async failInterruptedWorkspaceIndexJobs(
-    message = '程序关闭导致索引中断'
-  ): Promise<void> {
+  public async failInterruptedWorkspaceIndexJobs(message = '程序关闭导致索引中断'): Promise<void> {
     const now = Date.now()
     await Promise.all([
       this.workspaceIndexJob.failRunningJobs(message, now),

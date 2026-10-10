@@ -166,11 +166,11 @@ hand 收到 call batch
 
 ---
 
-### 一次性派发与资源范围
+### 子任务工具与资源范围
 
-`delegate_to_subagent` 属于内置 `agent-control`：`tasks` 非空、数量不限，每项含最多八字符的 `name` 和 `task`。输出为任务状态、精简结果、依据及产物路径，走公共 modelResult / 大小守卫。执行与审批编排见 [`human-harness.md`](human-harness.md)。
+`list_agent({})` 返回当前伙伴未清理子会话的 `agentId/name/task/status`，不提供详情或过程摘要。`delegate_to_subagent` 属于内置 `agent-control`：`tasks` 非空、数量不限，每项为创建 `{name,task}`（名称最多八字符）或续接 `{agentId,task}`；无效、跨伙伴或活跃会话返回错误。结果含会话/执行关联及交付，走公共 modelResult / 大小守卫。执行与存储见 [`human-harness.md`](human-harness.md)。
 
-主子共用工具链及审核；子额外禁用派发、提问和定时任务管理，学习技能后仍受限制。人工决定返回原执行位置，待审操作在允许前不执行。
+主子共用工具链及审核；子额外禁用查询/派发子 agent、提问和定时任务管理，学习技能后仍受限制。人工决定返回原执行位置，待审操作在允许前不执行。
 
 资源边界：
 

@@ -4,6 +4,11 @@ import type {
   ConfirmedFileWrite
 } from './fileChanges/FileChangeSession'
 import type { PartnerStore } from '../storage/domains/PartnerStore'
+import type {
+  AiSubagentStore,
+  SubagentTask,
+  SubagentInfo
+} from '../storage/domains/AiSubagentStore'
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
@@ -66,6 +71,7 @@ export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 export type AiRuntimePlatform = 'macos' | 'windows'
 
 export type AiRunStartPayload = {
+  subagentId?: string
   ownerRunId?: string
   parentToolCallId?: string
   runId: string
@@ -310,11 +316,10 @@ export type AiTranscript = {
   load: () => Promise<ChatMessageLogRecord[]>
 }
 
-export type SubagentTask = { name: string; task: string }
+export type { SubagentTask }
 
 export type AiRunDeps = {
   modelConfig?: LlmRuntimeConfig
-  transcript?: AiTranscript
   delegateToSubagent?: (
     tasks: SubagentTask[],
     toolCallId: string
@@ -323,6 +328,7 @@ export type AiRunDeps = {
   defaultStreamingMode?: AiLlmStreamingMode
   llmStore: LlmConfigStore
   partnerStore: PartnerStore
+  subagentStore: AiSubagentStore
   chatMessageLogStore: ChatMessageLogStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
@@ -366,6 +372,7 @@ export type AiRunDeps = {
 export type AiRunContext = {
   ownerRunId: string
   isSubagent: boolean
+  listAgents: () => SubagentInfo[]
   delegateToSubagent: (
     tasks: SubagentTask[],
     toolCallId: string

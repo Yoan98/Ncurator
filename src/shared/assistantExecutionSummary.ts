@@ -112,6 +112,7 @@ const TOOL_UI_KINDS = {
   learn_skill: 'learning',
   update_plan: 'generic',
   read_image: 'image-read',
+  list_agent: 'generic',
   delegate_to_subagent: 'generic',
   ask_user_question: 'generic',
   scheduled_task_list: 'generic',

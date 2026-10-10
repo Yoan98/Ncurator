@@ -98,9 +98,9 @@ AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`c
 
 **稳定结构摘要**
 
-- **临时子任务**：`delegate_to_subagent` 调用同一 `AiRunService` / human graph；子完整 transcript 使用内存适配，公共投影与 compaction 保持一致。子终态和行动摘要进入主任务日志，文件记录及产物始终归主 run；不创建伙伴或新增数据表。
+- **子会话协作**：`delegate_to_subagent` 创建或续接持久子会话，调用同一 `AiRunService` / human graph；主子 SQLite transcript 按会话隔离，共用投影与 compaction。完成清理子会话，未完成保留供续接；过程和交付进入主任务日志，文件归本次主运行。不创建侧栏伙伴。
 - **主任务 Transcript 真相源**：`chat_session_message_log`（append-only，行挂 `partner_id`）；字段见 `doc/db/tables.md`。压缩、恢复与投影细节见 `ai-harness/human-harness.md`。
-- **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载 `learn_skill`、`update_plan`、`read_image`。
+- **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载子任务查询/派发、技能加载、计划、用户提问和图像读取。
 - **伙伴 UI 状态**：`partner_ui_state(partner_id PK)` 与 `workbench_ui_state.active_view_key` 保存伙伴 UI 快照与当前伙伴。存储边界见下文「存储与索引」，字段见 `doc/db/tables.md`。
 
 ### AI 数据源与消费方

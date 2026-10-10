@@ -11,6 +11,7 @@ import {
   setupWorkbenchWithTempWorkspace,
   sendWorkbenchMessage,
   collectWorkbenchAiRunEvents,
+  waitForWorkbenchAiEvent,
   waitForWorkbenchAiRunCompletion,
   createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
@@ -258,10 +259,12 @@ describe('subagent browser and sidecar real UI', () => {
                 }, 25)
               })
           )
+          // Handle rejection immediately even if another UI assertion fails first.
+          void autoCycle.catch(() => {})
           const started = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
-            `请一次派发三位临时帮手分头处理，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
+            `请一次派发三位临时帮手分头处理，每位开始操作前先简短告诉我正在做什么，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后用文本编辑工具将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你用文本编辑工具把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
           )
           // No hover: the real public text stream opens the cloud and shows its trailing dot.
           const automaticCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
@@ -582,9 +585,7 @@ describe('subagent browser and sidecar real UI', () => {
               event.update.childRunId === previewChildRunId && event.update.status === 'completed'
           )?.update.result
           expect(completedResult).toBeTruthy()
-          expect(await completedCloud.getByTestId('subagent-message').textContent()).toBe(
-            completedResult
-          )
+          expect(await completedCloud.getByTestId('subagent-message').textContent()).toBe('已完成')
           expect(await completedCloud.getByTestId('subagent-message').count()).toBe(1)
           expect(await completedCloud.getByTestId('subagent-stream-dot').count()).toBe(0)
           await assertCloudTextInside(completedCloud)
@@ -756,10 +757,20 @@ describe('subagent browser and sidecar real UI', () => {
             }
             expect(await fs.readFile(saved, 'utf8')).toContain(crash ? 'SAVED_CRASH' : 'SAVED_STOP')
             const continueStart = Date.now()
+            const replacementUrl = `${site.url}/facts?marker=94217`
             await sendWorkbenchMessage(
               runtime.page,
-              `继续：保留已经保存的 ${saved}，未完成的网页改为 ${site.url}/facts?marker=94217。请创建新的临时帮手读取资料，并写到 ${saved}.continued.md，说明先前已保存结果和新的核验数字。`
+              `继续：先查询未完成子 agent，续接原会话，把下面完整的新任务原样交给它：\n用内置浏览器打开 ${replacementUrl} 并核对页面数字；旧的 /slow 网页不再访问。读取已保存的 ${saved}，保持该文件原样；用文本编辑工具写 ${saved}.continued.md，说明先前已保存的文件内容和这次新页面的核验数字。`
             )
+            const dispatch = await waitForWorkbenchAiEvent(runtime, {
+              name: 'resume-with-new-page-task',
+              matches: (event) =>
+                event.type === 'tool_call_started' &&
+                event.toolName === 'delegate_to_subagent' &&
+                event.createdAt >= continueStart
+            })
+            if (dispatch.type !== 'tool_call_started') throw new Error('缺少续接派发证据')
+            expect(JSON.stringify(dispatch.input)).toContain(replacementUrl)
             await waitForWorkbenchAiRunCompletion(
               runtime,
               continueStart,
@@ -771,7 +782,12 @@ describe('subagent browser and sidecar real UI', () => {
               continued.some(
                 (event) =>
                   event.update.status === 'completed' &&
-                  !before.some((previous) => previous.update.childRunId === event.update.childRunId)
+                  before.some(
+                    (previous) =>
+                      previous.update.agentId === event.update.agentId &&
+                      previous.update.childRunId !== event.update.childRunId &&
+                      previous.update.status !== 'completed'
+                  )
               )
             ).toBe(true)
             expect(await fs.readFile(`${saved}.continued.md`, 'utf8')).toContain('94217')

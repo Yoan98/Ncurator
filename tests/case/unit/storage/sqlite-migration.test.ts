@@ -118,7 +118,7 @@ describe('SQLite migration contract', () => {
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
-    expect(migrationRows.at(-1)).toEqual({ version: 15, name: 'ai_run_pending_messages' })
+    expect(migrationRows.at(-1)).toEqual({ version: 16, name: 'subagent_sessions' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -272,6 +272,11 @@ describe('SQLite migration contract', () => {
     const prepared = new SqliteCore(databasePath)
     prepared.initialize()
     prepared.prepare('DELETE FROM schema_migrations WHERE version >= 11').run()
+    prepared.exec(`DROP INDEX idx_chat_session_message_log_subagent_seq;
+      DROP INDEX idx_chat_session_message_log_partner_seq;
+      ALTER TABLE chat_session_message_log DROP COLUMN subagent_id;
+      DROP TABLE ai_subagent;
+      CREATE UNIQUE INDEX idx_chat_session_message_log_partner_seq ON chat_session_message_log(partner_id, seq);`)
     prepared.exec('DROP TABLE IF EXISTS app_settings')
     prepared.exec('ALTER TABLE ai_run DROP COLUMN pending_messages_json')
     prepared

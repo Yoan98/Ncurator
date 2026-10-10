@@ -1,3 +1,4 @@
+import type { AiSubagentStore } from '../storage/domains/AiSubagentStore'
 import { resolveUserContent } from '../sourceScope/userContent'
 import { buildReferenceScope } from './human/prompts/referenceScope'
 import { appendFileChangeArtifactsAndEmitEvents } from './utils/artifacts'
@@ -91,6 +92,7 @@ type ActiveRun = {
 
 type ChatRunServiceDeps = {
   partnerStore: PartnerStore
+  subagentStore: AiSubagentStore
   chatMessageLogStore: ChatMessageLogStore
   aiRunStore: AiRunStore
   documentsStore: DocumentsStore
@@ -203,6 +205,7 @@ export class ChatRunService {
   }
 
   public async failInterruptedRuns(): Promise<void> {
+    this.deps.subagentStore.interruptActive()
     const interrupted = await this.deps.aiRunStore.listRunsByStatuses([
       ...ACTIVE_RUN_STATUSES,
       'continued'
@@ -418,6 +421,7 @@ export class ChatRunService {
     }
     const clearedAt = Date.now()
     // 物理删除消息 log 与 ai_run；保留 ai_file_change（回退入口）与伙伴 / UI 状态。
+    this.deps.subagentStore.deleteByPartner(normalizedPartnerId)
     await this.deps.chatMessageLogStore.deleteByPartner(normalizedPartnerId)
     await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
     return { success: true, clearedAt }
@@ -1134,6 +1138,7 @@ export class ChatRunService {
           llmStore: this.deps.llmStore,
           partnerStore: this.deps.partnerStore,
           chatMessageLogStore: this.deps.chatMessageLogStore,
+          subagentStore: this.deps.subagentStore,
           documentsStore: this.deps.documentsStore,
           embeddingService: this.deps.embeddingService,
           ensureEmbeddingReady: this.deps.ensureEmbeddingReady,

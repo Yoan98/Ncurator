@@ -2,34 +2,10 @@ import { getAssistantToolItemCopy } from '../../../../shared/assistantToolCopy'
 import { RUNTIME_TOOL_CATALOG, type RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 import { randomUUID } from 'node:crypto'
 import { SUBAGENT_EXECUTION_CONCURRENCY } from '../constants'
-import type { AiRunDeps, AiRunStartPayload, AiRunState, AiTranscript, SubagentTask } from '../types'
-import type { ChatMessageLogRecord, SubagentUpdate } from '../../../../shared/types'
+import type { AiRunDeps, AiRunStartPayload, AiRunState, SubagentTask } from '../types'
+import type { SubagentUpdate } from '../../../../shared/types'
 import { terminalSessionManager } from '../human/tools/terminal/TerminalSessionManager'
 import { SubagentBlockedError } from './toolPolicy'
-
-export const createMemoryTranscript = (
-  partnerId: string,
-  runId: string
-): AiTranscript & { clear: () => void } => {
-  const records: ChatMessageLogRecord[] = []
-  return {
-    append: async (entries) => {
-      for (const entry of entries)
-        records.push({
-          id: randomUUID(),
-          partnerId,
-          runId,
-          seq: records.length + 1,
-          entry,
-          createdAt: Date.now()
-        })
-    },
-    load: async () => records.slice(),
-    clear: () => {
-      records.length = 0
-    }
-  }
-}
 
 export const createSubagentDispatcher = (
   payload: AiRunStartPayload,
@@ -85,14 +61,17 @@ export const createSubagentDispatcher = (
     if (payload.parentToolCallId) throw new SubagentBlockedError('子任务不能再次派发')
     if (!tasks.length) throw new Error('子任务列表不能为空')
     const modelConfig = await getModelConfig()
+    const agents = deps.subagentStore.enqueue(payload.partnerId, tasks)
     const results = await Promise.allSettled(
-      tasks.map(async (task): Promise<SubagentUpdate> => {
+      tasks.map(async (task, index): Promise<SubagentUpdate> => {
+        const agent = agents[index]
         const childRunId = randomUUID()
         let base: SubagentUpdate = {
+          agentId: agent.agentId,
           toolCallId,
           childRunId,
-          name: task.name,
-          task: task.task,
+          name: agent.name,
+          task: agent.task,
           status: 'queued'
         }
         let updates = Promise.resolve()
@@ -101,11 +80,12 @@ export const createSubagentDispatcher = (
         let publicToolText = ''
         const publish = (update: SubagentUpdate): Promise<void> => {
           const next = updates.then(async () => {
-            await deps.chatMessageLogStore.appendBatch({
-              partnerId: payload.partnerId,
-              runId: payload.runId,
-              entries: [{ kind: 'annotation', eventType: 'subagent_updated', payload: update }]
-            })
+            deps.subagentStore.publish(
+              deps.chatMessageLogStore,
+              payload.partnerId,
+              payload.runId,
+              update
+            )
             deps.sendEvent({
               type: 'subagent_updated',
               runId: payload.runId,
@@ -113,8 +93,8 @@ export const createSubagentDispatcher = (
               createdAt: Date.now()
             })
           })
-          updates = next
-          void next.catch(() => {})
+          // A failed snapshot must not prevent persisting the subsequent failure state.
+          updates = next.catch(() => {})
           return next
         }
         const needParent = (message: string): never => {
@@ -129,7 +109,6 @@ export const createSubagentDispatcher = (
             return cancelled
           }
           base = { ...base, status: 'running' }
-          const transcript = createMemoryTranscript(payload.partnerId, childRunId)
           const controller = new AbortController()
           const cancel = (): void => {
             controller.abort()
@@ -159,21 +138,27 @@ export const createSubagentDispatcher = (
           }
           try {
             await publish(base)
+            // A task cancelled while queued has no graph messages yet; preserve its original input on first execution.
+            const input =
+              task.agentId &&
+              !(await deps.chatMessageLogStore.list(payload.partnerId, agent.agentId)).length
+                ? `原任务：${agent.task}\n\n本次任务：${task.task}`
+                : task.task
             const output = await run(
               {
                 ...payload,
                 runId: childRunId,
+                subagentId: agent.agentId,
                 ownerRunId: payload.ownerRunId || payload.runId,
                 parentToolCallId: toolCallId,
                 userMessageId: randomUUID(),
                 assistantMessageId: randomUUID(),
-                input: task.task,
+                input,
                 contentNodes: undefined
               },
               {
                 ...deps,
                 modelConfig,
-                transcript,
                 delegateToSubagent: undefined,
                 hasPendingUserMessages: undefined,
                 waitForPendingUserMessageSubmissions: undefined,
@@ -185,7 +170,12 @@ export const createSubagentDispatcher = (
                   await publish(base)
                   const result = await deps.requestApprovalBatch({
                     ...request,
-                    source: { childRunId, name: task.name, parentToolCallId: toolCallId },
+                    source: {
+                      agentId: agent.agentId,
+                      childRunId,
+                      name: agent.name,
+                      parentToolCallId: toolCallId
+                    },
                     abortSignal: controller.signal
                   })
                   if (!controller.signal.aborted && !deps.isCancelled()) {
@@ -267,7 +257,8 @@ export const createSubagentDispatcher = (
                   ? (record) =>
                       deps.recordLlmIo?.({
                         ...record,
-                        ownerRunId: payload.runId,
+                        ownerRunId: payload.ownerRunId || payload.runId,
+                        agentId: agent.agentId,
                         parentToolCallId: toolCallId
                       })
                   : undefined
@@ -306,7 +297,6 @@ export const createSubagentDispatcher = (
             try {
               await updates
             } finally {
-              transcript.clear()
               deps.abortSignal?.removeEventListener('abort', cancel)
             }
           }

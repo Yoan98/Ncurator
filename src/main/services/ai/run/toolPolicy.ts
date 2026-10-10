@@ -2,6 +2,7 @@ import type { AiRunContext } from '../types'
 
 const CHILD_DENIED_TOOLS = new Set([
   'delegate_to_subagent',
+  'list_agent',
   'ask_user_question',
   'scheduled_task_list',
   'scheduled_task_action'

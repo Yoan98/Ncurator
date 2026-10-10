@@ -87,16 +87,31 @@ Workbench 单例 UI。
 | `created_at`   | INTEGER | 创建时间 |
 | `updated_at`   | INTEGER | 更新时间 |
 
+### `ai_subagent`
+
+子会话身份与生命周期，不保存模型消息或重复的计划/技能/压缩状态。
+
+| 字段         | 类型    | 说明                                           |
+| ------------ | ------- | ---------------------------------------------- |
+| `id`         | TEXT PK | 稳定 agentId                                   |
+| `partner_id` | TEXT    | 所属伙伴，级联删除                             |
+| `name`       | TEXT    | 名称                                           |
+| `task`       | TEXT    | 首次原任务，续接不覆盖                         |
+| `status`     | TEXT    | 排队、运行、审批等待及未完成终态；完成事务删除 |
+| `created_at` | INTEGER | 创建时间                                       |
+| `updated_at` | INTEGER | 更新时间                                       |
+
 ### `chat_session_message_log`
 
-伙伴消息转录。
+主子会话使用相同格式的不可变消息转录。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | TEXT PK | 条目 id |
 | `partner_id` | TEXT | 伙伴 id，级联删除 |
 | `run_id` | TEXT | 所属 run |
-| `seq` | INTEGER | 伙伴内顺序 |
+| `subagent_id` | TEXT NULL | 空为主会话；子会话外键，子会话删除级联清理      |
+| `seq`         | INTEGER   | 各自会话内顺序，跨 run 连续                     |
 | `entry_json` | TEXT | 消息正文、引用与附件快照，工具消息及 annotation |
 | `created_at` | INTEGER | 创建时间 |
 

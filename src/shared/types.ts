@@ -1174,6 +1174,7 @@ export type AiLlmRequestWireDiff = {
 
 export type AiLlmIoRecord = {
   ownerRunId?: string
+  agentId?: string
   parentToolCallId?: string
   callId: string
   runId: string
@@ -1447,6 +1448,7 @@ export type AiApprovalBatchItem = {
 }
 
 export type AiApprovalSource = {
+  agentId?: string
   childRunId: string
   name: string
   parentToolCallId: string
@@ -1634,6 +1636,7 @@ export type SubagentAction = {
 }
 
 export type SubagentUpdate = {
+  agentId: string
   toolCallId: string
   childRunId: string
   name: string

@@ -108,6 +108,7 @@ const createTestService = async (options?: {
   const service = new ChatRunService({
     partnerStore: storage.partner,
     chatMessageLogStore: storage.chatMessageLog,
+    subagentStore: storage.subagent,
     aiRunStore: storage.aiRun,
     documentsStore: storage.documents,
     embeddingService,

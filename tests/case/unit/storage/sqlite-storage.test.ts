@@ -1,3 +1,5 @@
+import { ChatMessageLogStore } from '../../../../src/main/services/storage/domains/ChatMessageLogStore'
+import { AiSubagentStore } from '../../../../src/main/services/storage/domains/AiSubagentStore'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -268,7 +270,8 @@ describe('sqlite storage core and stores', () => {
       { version: 12, name: 'app_settings' },
       { version: 13, name: 'ai_run_pending_interaction' },
       { version: 14, name: 'scheduled_task_partner_binding' },
-      { version: 15, name: 'ai_run_pending_messages' }
+      { version: 15, name: 'ai_run_pending_messages' },
+      { version: 16, name: 'subagent_sessions' }
     ])
 
     const legacyTables = sqlite
@@ -764,6 +767,88 @@ describe('storage service initialization', () => {
       expect(await service.vector.tableExists('vector_chunk')).toBe(true)
     } finally {
       await service.close()
+    }
+  })
+})
+
+describe('persistent child transcript boundaries', () => {
+  it('isolates sessions and rolls back completion and duplicate admission atomically', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'subagent-store-'))
+    const core = new SqliteCore(path.join(directory, 'app.sqlite'))
+    core.initialize()
+    try {
+      const partners = new PartnerStore(core)
+      await partners.savePartner(createPartner('subagent-owner'))
+      const logs = new ChatMessageLogStore(core)
+      const agents = new AiSubagentStore(core)
+      const child = agents.enqueue('subagent-owner', [{ name: '海豹', task: '原任务' }])[0]
+      const entry = { kind: 'assistant' as const, content: '事实', toolCalls: [] }
+      await logs.appendBatch({ partnerId: 'subagent-owner', runId: 'R', entries: [entry] })
+      await logs.appendBatch({
+        partnerId: 'subagent-owner',
+        subagentId: child.agentId,
+        runId: 'S1',
+        entries: [entry]
+      })
+      await logs.appendBatch({
+        partnerId: 'subagent-owner',
+        subagentId: child.agentId,
+        runId: 'S2',
+        entries: [entry]
+      })
+      expect((await logs.list('subagent-owner')).map((row) => row.seq)).toEqual([1])
+      expect((await logs.list('subagent-owner', child.agentId)).map((row) => row.seq)).toEqual([
+        1, 2
+      ])
+      expect(
+        (await logs.listPage({ partnerId: 'subagent-owner', limit: 10 })).records
+      ).toHaveLength(1)
+      expect(agents.list('another-partner')).toEqual([])
+      const update = { ...child, childRunId: 'S2', toolCallId: 'D', status: 'cancelled' as const }
+      agents.publish(logs, 'subagent-owner', 'R', update)
+      expect(() =>
+        agents.enqueue('another-partner', [{ agentId: child.agentId, task: '续接' }])
+      ).toThrow('不属于')
+      expect(() =>
+        agents.enqueue('subagent-owner', [
+          { agentId: child.agentId, task: '续接' },
+          { agentId: child.agentId, task: '重复' }
+        ])
+      ).toThrow('正在')
+      expect(agents.list('subagent-owner')[0].status).toBe('cancelled')
+      core.exec(
+        "CREATE TRIGGER reject_child_delete BEFORE DELETE ON ai_subagent BEGIN SELECT RAISE(ABORT, 'delete failed'); END;"
+      )
+      const before = (await logs.list('subagent-owner')).length
+      expect(() =>
+        agents.publish(logs, 'subagent-owner', 'R', {
+          ...update,
+          status: 'completed',
+          result: '交付'
+        })
+      ).toThrow('delete failed')
+      expect((await logs.list('subagent-owner')).length).toBe(before)
+      expect(await logs.list('subagent-owner', child.agentId)).toHaveLength(2)
+      core.exec('DROP TRIGGER reject_child_delete')
+      agents.enqueue('subagent-owner', [{ agentId: child.agentId, task: '续接' }])
+      agents.interruptActive()
+      expect(agents.list('subagent-owner')[0]).toMatchObject({
+        task: '原任务',
+        status: 'interrupted'
+      })
+      agents.publish(logs, 'subagent-owner', 'R', {
+        ...update,
+        status: 'completed',
+        result: '交付'
+      })
+      expect(agents.list('subagent-owner')).toEqual([])
+      expect(await logs.list('subagent-owner', child.agentId)).toEqual([])
+      expect((await logs.list('subagent-owner')).at(-1)?.entry).toMatchObject({
+        payload: { result: '交付' }
+      })
+    } finally {
+      core.close()
+      await fs.rm(directory, { recursive: true, force: true })
     }
   })
 })

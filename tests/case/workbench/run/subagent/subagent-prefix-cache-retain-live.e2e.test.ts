@@ -1,3 +1,4 @@
+import http from 'node:http'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -19,14 +20,17 @@ import {
   prepareWorkbenchWorkspaceThroughUi,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
+  selectWorkbenchExecutionPermission,
+  collectWorkbenchAiRunEvents,
+  waitForWorkbenchAiEvent,
   sendWorkbenchMessage,
   waitForWorkbenchAiRunCompletion
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'subagent-prefix-cache-retain-live'
-const SOURCES = ['本周排期更新.txt', '对外口径确认.txt', '临时备注.txt']
+const SOURCES = ['本周排期更新.txt', '对外口径确认.txt', '临时备注.txt', '财务与付款材料跟进.txt']
 const TASKS = [
-  { directory: '排期核对', files: [SOURCES[0], SOURCES[1]] },
+  { directory: '排期核对', files: [SOURCES[0], SOURCES[1], SOURCES[3]] },
   { directory: '口径核对', files: [SOURCES[2], SOURCES[1]] }
 ]
 const brainCalls = (records: readonly AiLlmIoRecord[], runId: string): AiLlmIoRecord[] =>
@@ -49,7 +53,7 @@ describe('workbench subagent prefix cache e2e', () => {
         domain: 'workbench',
         suite: 'run',
         groups: ['subagent'],
-        description: '真实 UI 一次派发，验证同一子实例连续调用及主派发收口的前缀和缓存',
+        description: '真实 UI 中断并续接同一子会话，验证首次续接的请求前缀与实际缓存',
         fixtures: SOURCES.map((name) => `tests/fixtures/workspace/工作/${name}`),
         serviceMode: 'real',
         execution: 'live',
@@ -91,25 +95,118 @@ describe('workbench subagent prefix cache e2e', () => {
           await createPartnerThroughWorkbenchUi(runtime.page, workspaceName)
           await selectWorkbenchModel(runtime.page, env.modelName)
           const tasks = [
-            `先阅读 ${taskFiles[0][0]}，找出最终复核的时间安排；得到排期信息后，再阅读 ${taskFiles[0][1]} 核对正式负责人称呼。交付时间、负责人及两份来源路径。`,
+            `先阅读 ${taskFiles[0][0]}，找出最终复核的时间安排；得到排期信息后，再阅读 ${taskFiles[0][1]} 核对正式负责人称呼；最后阅读 ${taskFiles[0][2]}，核对财务执行人的动作、时限与主负责人区别。交付时间、主负责人、财务后续动作及三份来源路径。`,
             `先阅读 ${taskFiles[1][0]}，识别这份内部随手记对风险状态的判断；得到判断后，再阅读 ${taskFiles[1][1]} 核对能否用于对外同步。交付可用的风险口径、原因及两份来源路径。`
           ]
+          await selectWorkbenchExecutionPermission(runtime.page, '完全访问')
+          let requested = false
+          let ready = false
+          const server = http.createServer((_request, response) => {
+            requested = true
+            if (ready)
+              response.end('<html><body>复核资料页已就绪，可以交付之前核对的结果。</body></html>')
+          })
+          await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+          const address = server.address()
+          if (!address || typeof address === 'string') throw new Error('资料服务未启动')
+          const url = `http://127.0.0.1:${address.port}/review`
+          runtime.registerResource({
+            name: 'cache-resume-input-site',
+            phase: 'before-app-close',
+            dispose: async () => {
+              server.closeAllConnections()
+              await new Promise<void>((resolve) => server.close(() => resolve()))
+            }
+          })
           const startedAt = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
-            `请通过 delegate_to_subagent 一次派发两位临时帮手，分别独立执行任务A：${tasks[0]} 任务B：${tasks[1]} 两位帮手只读自己的资料目录，不修改文件。你只简短汇总他们交付的负责人、排期和对外风险口径，不接管核对。`
+            `请通过 delegate_to_subagent 一次派发两位帮手，分别独立执行任务A：${tasks[0]} 核对三份资料后，再使用 browser_use 打开 ${url}，页面加载完成后才能交付。任务B：${tasks[1]} 两位帮手只读自己的资料，不修改文件。你只简短汇总，不接管核对。`
+          )
+          await waitForWorkbenchAiEvent(runtime, {
+            name: 'other-child-completed',
+            matches: (event) =>
+              event.type === 'subagent_updated' &&
+              event.createdAt >= startedAt &&
+              event.update.status === 'completed'
+          })
+          const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
+          while (!requested) {
+            if (Date.now() > deadline) throw new Error('子任务没有读取资料并打开待加载页')
+            await runtime.page.waitForTimeout(250)
+          }
+          const beforeEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
+            (event) => event.createdAt >= startedAt
+          )
+          const pending = childUpdates(beforeEvents)
+            .filter(
+              (event) =>
+                event.update.status === 'running' && event.update.action?.toolName === 'browser_use'
+            )
+            .at(-1)
+          if (!pending) throw new Error('缺少待加载子任务执行证据')
+          await runtime.page.getByRole('button', { name: '停止本次运行', exact: true }).click()
+          await waitForWorkbenchAiEvent(runtime, {
+            name: 'root-stopped',
+            matches: (event) => event.type === 'run_cancelled' && event.runId === pending.runId
+          })
+          await runtime.page
+            .getByRole('button', { name: '停止本次运行', exact: true })
+            .waitFor({ state: 'hidden' })
+          const interruptedEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
+            (event) => event.createdAt >= startedAt
+          )
+          ready = true
+          const resumeStartedAt = Date.now()
+          await sendWorkbenchMessage(
+            runtime.page,
+            '继续刚才未完成的子任务。先查询现有子 agent，续接原会话；资料页现在已就绪。利用它已读取的资料完成交付，不新建替代子 agent。'
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
-            startedAt,
+            resumeStartedAt,
             env.modelName,
             WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
             { page: runtime.page }
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
           const runId = evidence.events.find((event) => event.type === 'run_started')?.runId
-          if (!runId) throw new Error('缺少主运行 ID')
+          if (!runId) throw new Error('缺少续接主运行 ID')
           const records = await collectWorkbenchLlmIoRecords(runtime)
+          const events = [
+            ...interruptedEvents,
+            ...evidence.events.filter((event) => event.createdAt >= resumeStartedAt)
+          ]
+          const resumed = childUpdates(events).find(
+            (event) =>
+              event.runId === runId &&
+              event.update.agentId === pending.update.agentId &&
+              event.update.status === 'completed'
+          )
+          if (!resumed || resumed.update.childRunId === pending.update.childRunId)
+            throw new Error('未续接同一子会话的新执行')
+          const previous = brainCalls(records, pending.update.childRunId).at(-1)
+          const first = brainCalls(records, pending.update.childRunId)[0]
+          const next = brainCalls(records, resumed.update.childRunId)[0]
+          const resumeCache = collectBrainPrefixCacheReuse({
+            previousLastBrain: previous,
+            nextFirstBrain: next
+          })
+          await runtime.assertThat(
+            resumeCache.prefixPreserved &&
+              (first?.usage?.inputTokens || 0) > 0 &&
+              (resumeCache.nextFirstCachedInputTokens || 0) > first.usage!.inputTokens!,
+            {
+              name: 'same-agent-resume-cache',
+              message: '同子会话续接保留前缀，真实缓存复用超过首次请求规模并覆盖新增历史',
+              data: {
+                agentId: pending.update.agentId,
+                firstCallId: first.callId,
+                firstInputTokens: first.usage?.inputTokens,
+                ...continuationPrefixCacheAssertionData(resumeCache)
+              }
+            }
+          )
           const unchanged = await Promise.all(
             inputs.map(
               async (input) => (await fs.readFile(input.sourcePath, 'utf8')) === input.original
@@ -119,10 +216,10 @@ describe('workbench subagent prefix cache e2e', () => {
             name: 'subagent-cache-completed',
             message: '一次派发的两项资料核对和主伙伴汇总'
           })
-          return { runId, events: evidence.events, records, taskFiles, unchanged }
+          return { runId, events, records, taskFiles, unchanged }
         },
         assert: async (result, runtime) => {
-          expect(result.unchanged).toEqual([true, true, true, true])
+          expect(result.unchanged).toEqual(result.taskFiles.flat().map(() => true))
           const assertCache = async (calls: AiLlmIoRecord[]): Promise<void> => {
             const pairs = calls.slice(1).map((next, index) =>
               collectBrainPrefixCacheReuse({
@@ -159,19 +256,21 @@ describe('workbench subagent prefix cache e2e', () => {
           expect(completed).toHaveLength(2)
           const results: string[] = []
           for (const event of completed) {
-            const childRunId = event.update.childRunId
-            const calls = brainCalls(result.records, childRunId)
+            const calls = result.records.filter(
+              (record) =>
+                record.agentId === event.update.agentId &&
+                record.caller === 'human.brain' &&
+                record.status === 'completed'
+            )
             expect(calls.length).toBeGreaterThanOrEqual(3)
             expect(
-              calls.every(
-                (call) =>
-                  call.ownerRunId === result.runId &&
-                  call.parentToolCallId === event.update.toolCallId
+              calls.every((call) =>
+                Boolean(call.ownerRunId && call.parentToolCallId && call.agentId)
               )
             ).toBe(true)
             const reads = updates.filter(
               (item) =>
-                item.update.childRunId === childRunId &&
+                item.update.agentId === event.update.agentId &&
                 item.update.action?.toolName === 'text_file_read' &&
                 item.update.action.status === 'completed'
             )
@@ -191,6 +290,7 @@ describe('workbench subagent prefix cache e2e', () => {
             await assertCache(calls)
           }
           expect(results.join('\n')).toContain('Alice')
+          expect(results.join('\n')).toContain('Bob')
           expect(results.join('\n')).toMatch(/跟进|签署/)
           const root = brainCalls(result.records, result.runId)
           expect(root.length).toBeGreaterThanOrEqual(2)

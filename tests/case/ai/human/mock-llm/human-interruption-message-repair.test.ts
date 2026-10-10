@@ -22,6 +22,7 @@ const buildDeps = async (input: {
     llmStore: input.runtime.llmStore,
     chatStore: input.runtime.chatStore,
     chatMessageLogStore: input.runtime.storageService.chatMessageLog,
+    subagentStore: input.runtime.storageService.subagent,
     documentsStore: input.runtime.documentsStore,
     embeddingService: input.runtime.embeddingService,
     ensureEmbeddingReady: async () => {
@@ -230,8 +231,7 @@ describe('ai human mock-llm backend', () => {
         )
         const orderHasResumeBuildUsers =
           (run2BrainMessages || []).filter((message) => message.getType() === 'human').length ===
-            2 &&
-          orderLast?.getType() === 'human'
+            2 && orderLast?.getType() === 'human'
         const orderFirstHuman = (run2BrainMessages || []).find(
           (message) => message.getType() === 'human'
         )

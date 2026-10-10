@@ -38,6 +38,7 @@ export const createAiServiceTestRunner = async (
     llmStore: runtime.llmStore,
     partnerStore: runtime.partnerStore,
     chatMessageLogStore: runtime.storageService.chatMessageLog,
+    subagentStore: runtime.storageService.subagent,
     documentsStore: runtime.documentsStore,
     embeddingService: runtime.embeddingService,
     ensureEmbeddingReady: () =>
@@ -86,6 +87,7 @@ export const createChatServiceTestRunner = async (
   const service = new ChatRunService({
     partnerStore: runtime.partnerStore,
     chatMessageLogStore: runtime.storageService.chatMessageLog,
+    subagentStore: runtime.storageService.subagent,
     aiRunStore: runtime.storageService.aiRun,
     documentsStore: runtime.documentsStore,
     embeddingService: runtime.embeddingService,
@@ -112,11 +114,11 @@ export const createChatServiceTestRunner = async (
       runtime.eventCollector.addLlmIo(record)
     }
   })
-  const submit = async () => {
+  const submit = async (userInput?: string) => {
     const response = await service.submit({
       partnerId: context.partnerId,
-      contentNodes: options.contentNodes || [
-        { kind: 'text', text: options.userInput || '完成当前任务' }
+      contentNodes: (!userInput && options.contentNodes) || [
+        { kind: 'text', text: userInput || options.userInput || '完成当前任务' }
       ],
       executionPermission: options.executionPermission || 'review',
       mainModel: { configId: config.id, modelName: config.model_name || '' }

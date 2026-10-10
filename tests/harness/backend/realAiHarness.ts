@@ -123,6 +123,7 @@ export const createRealAiHarness = async (input: {
       await seedChatHistory({
         partnerStore: depsFactory.storageService.partner,
         chatMessageLogStore: depsFactory.storageService.chatMessageLog,
+        subagentStore: depsFactory.storageService.subagent,
         payload: {
           ...payload,
           partnerId: payload.partnerId || payload.sessionId

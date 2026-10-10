@@ -124,6 +124,7 @@ const buildAiRunDeps = async (input: {
     listFileChangeRecords: async (request) =>
       (await aiFileChangeService.listRecords(request)).items,
     chatMessageLogStore: input.runtime.storageService.chatMessageLog,
+    subagentStore: input.runtime.storageService.subagent,
     isCancelled: () => controller.signal.aborted,
     abortSignal: controller.signal,
     sendEvent: (event) => input.runtime.eventCollector.add(event),

@@ -1,3 +1,4 @@
+import { createSqliteTranscript } from './human/memory/sqliteTranscript'
 import type { LlmRuntimeConfig } from '../../../shared/types'
 import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from './types'
 import { createAiLlmExecutor } from './llmExecutor'
@@ -88,22 +89,20 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   const ownerRunId = payload.ownerRunId || payload.runId
   const touchedPaths = new Set<string>()
-  const appendMessageLog: AiRunContext['appendMessageLog'] = async (entries, options) => {
-    if (deps.transcript) return await deps.transcript.append(entries, options)
-    await deps.chatMessageLogStore.appendBatch({
+  const transcript = createSqliteTranscript(
+    deps.chatMessageLogStore,
+    {
       partnerId: payload.partnerId,
-      runId: options?.runId || payload.runId,
-      entries
-    })
-  }
-
-  const loadMessageLog: AiRunContext['loadMessageLog'] = async () => {
-    if (deps.transcript) return await deps.transcript.load()
-    return await deps.chatMessageLogStore.list(payload.partnerId)
-  }
+      subagentId: payload.subagentId
+    },
+    payload.runId
+  )
+  const appendMessageLog = transcript.append
+  const loadMessageLog = transcript.load
 
   return {
     ownerRunId,
+    listAgents: () => deps.subagentStore.list(payload.partnerId),
     isSubagent: Boolean(payload.parentToolCallId),
     delegateToSubagent:
       deps.delegateToSubagent ||

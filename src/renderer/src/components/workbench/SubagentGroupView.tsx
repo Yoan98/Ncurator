@@ -12,23 +12,29 @@ import PartnerAvatar from './PartnerAvatar'
 import type { AssistantProcessGroup, SubagentTaskView } from './types'
 import { getSubagentAvatar } from './utils'
 
-const SubagentThought: React.FC<{ child: SubagentTaskView; open: boolean }> = ({ child, open }) => {
+const SubagentThought: React.FC<{
+  child: SubagentTaskView
+  open: boolean
+  showDelivery: boolean
+}> = ({ child, open, showDelivery }) => {
   const contentRef = useRef<HTMLDivElement>(null)
   const active = child.status === 'running'
   const text =
     child.status === 'queued'
       ? '我在排队'
-      : active
-        ? child.message || ''
-        : child.result ||
-          {
-            waiting_approval: '等待你审核操作',
-            completed: '任务已完成',
-            failed: '执行失败',
-            cancelled: '已停止',
-            blocked: '需要主伙伴继续处理',
-            interrupted: '执行被中断，未收到完整结果'
-          }[child.status]
+      : child.status === 'completed' && !showDelivery
+        ? '已完成'
+        : active
+          ? child.message || ''
+          : child.result ||
+            {
+              waiting_approval: '等待你审核操作',
+              completed: '任务已完成',
+              failed: '执行失败',
+              cancelled: '已停止',
+              blocked: '需要主伙伴继续处理',
+              interrupted: '执行被中断，未收到完整结果'
+            }[child.status]
   const streaming = active && child.streaming
   useLayoutEffect(() => {
     if (!open || !contentRef.current) return
@@ -78,6 +84,7 @@ const AUTO_CLOUD_HOLD_MS = 2000
 const SubagentCloudContext = createContext<
   | {
       openChildId?: string
+      automaticChildId?: string
       setManualChildId: React.Dispatch<React.SetStateAction<string | undefined>>
     }
   | undefined
@@ -112,7 +119,11 @@ export const SubagentCloudProvider: React.FC<{
 
   return (
     <SubagentCloudContext.Provider
-      value={{ openChildId: manualChildId || autoChildId, setManualChildId }}
+      value={{
+        openChildId: manualChildId || autoChildId,
+        automaticChildId: autoChildId,
+        setManualChildId
+      }}
     >
       {children}
     </SubagentCloudContext.Provider>
@@ -143,7 +154,13 @@ const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }
                 next ? child.childRunId : current === child.childRunId ? undefined : current
               )
             }
-            title={<SubagentThought child={child} open={open} />}
+            title={
+              <SubagentThought
+                child={child}
+                open={open}
+                showDelivery={cloud.automaticChildId === child.childRunId}
+              />
+            }
           >
             <button
               type="button"
@@ -155,10 +172,10 @@ const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }
             >
               <span className={child.status === 'queued' ? 'grayscale opacity-40' : undefined}>
                 <PartnerAvatar
-                  {...getSubagentAvatar(child.childRunId)}
+                  {...getSubagentAvatar(child.agentId || child.childRunId)}
                   size={32}
                   animated={child.status === 'running'}
-                  animationSeed={child.childRunId}
+                  animationSeed={child.agentId || child.childRunId}
                 />
               </span>
               <span className="max-w-[8em] truncate">{child.name}</span>

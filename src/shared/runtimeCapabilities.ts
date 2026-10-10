@@ -49,6 +49,7 @@ export const RUNTIME_TOOL_CATALOG = {
   learn_skill: { familyId: 'agent-control', skillId: 'agent-control' },
   update_plan: { familyId: 'agent-control', skillId: 'agent-control' },
   read_image: { familyId: 'agent-control', skillId: 'agent-control' },
+  list_agent: { familyId: 'agent-control', skillId: 'agent-control' },
   delegate_to_subagent: { familyId: 'agent-control', skillId: 'agent-control' },
   ask_user_question: { familyId: 'agent-control', skillId: 'agent-control' },
   scheduled_task_list: { familyId: 'scheduled-tasks', skillId: 'scheduled-tasks' },

@@ -1,13 +1,25 @@
 import { z } from 'zod/v4'
 import { humanPlanItemSchema } from '../../schema'
 
+export const LIST_AGENT_SCHEMA = z.object({}).strict()
+
 export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
   tasks: z
     .array(
-      z.object({
-        name: z.string().trim().min(1).max(8).describe('子任务名称'),
-        task: z.string().trim().min(1).describe('子任务描述')
-      })
+      z.union([
+        z
+          .object({
+            name: z.string().trim().min(1).max(8).describe('子 agent 名称'),
+            task: z.string().trim().min(1).describe('任务内容')
+          })
+          .strict(),
+        z
+          .object({
+            agentId: z.string().trim().min(1).describe('子 agent ID'),
+            task: z.string().trim().min(1).describe('任务内容')
+          })
+          .strict()
+      ])
     )
     .min(1)
     .describe('子任务列表')

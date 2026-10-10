@@ -2,6 +2,7 @@ import { tool } from '@langchain/core/tools'
 import type { ToolFamilyDefinition } from '../types'
 import {
   DELEGATE_TO_SUBAGENT_TOOL_SPEC,
+  LIST_AGENT_TOOL_SPEC,
   ASK_USER_QUESTION_TOOL_SPEC,
   LEARN_SKILL_TOOL_SPEC,
   READ_IMAGE_TOOL_SPEC,
@@ -71,6 +72,11 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
         schema: DELEGATE_TO_SUBAGENT_TOOL_SPEC.inputSchema
       }
     )
-    return [learnSkill, updatePlan, readImage, askUserQuestion, delegate]
+    const list = tool(async () => ({ agents: ctx.listAgents() }), {
+      name: LIST_AGENT_TOOL_SPEC.name,
+      description: LIST_AGENT_TOOL_SPEC.promptSpec.description,
+      schema: LIST_AGENT_TOOL_SPEC.inputSchema
+    })
+    return [list, learnSkill, updatePlan, readImage, askUserQuestion, delegate]
   }
 }

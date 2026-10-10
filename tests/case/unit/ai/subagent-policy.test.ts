@@ -2,12 +2,16 @@ import { SUBAGENT_EXECUTION_CONCURRENCY } from '../../../../src/main/services/ai
 import { describe, it, expect } from 'vitest'
 import { assertToolAllowed, isToolAllowed } from '../../../../src/main/services/ai/run/toolPolicy'
 import { acquireRunFile, releaseRunFiles } from '../../../../src/main/services/ai/run/fileLease'
-import { DELEGATE_TO_SUBAGENT_SCHEMA } from '../../../../src/main/services/ai/human/tools/agentControl/toolSchemas'
+import {
+  DELEGATE_TO_SUBAGENT_SCHEMA,
+  LIST_AGENT_SCHEMA
+} from '../../../../src/main/services/ai/human/tools/agentControl/toolSchemas'
 
 describe('subagent policy and file leases', () => {
   it('denies nested dispatch, questions and scheduled management', () => {
     for (const tool of [
       'delegate_to_subagent',
+      'list_agent',
       'ask_user_question',
       'scheduled_task_list',
       'scheduled_task_action'
@@ -20,6 +24,16 @@ describe('subagent policy and file leases', () => {
     expect(isToolAllowed({ isSubagent: true }, 'terminal_run')).toBe(true)
   })
   it('accepts batches beyond execution concurrency and guards short names', () => {
+    expect(LIST_AGENT_SCHEMA.safeParse({}).success).toBe(true)
+    expect(LIST_AGENT_SCHEMA.safeParse({ agentId: 'a' }).success).toBe(false)
+    expect(
+      DELEGATE_TO_SUBAGENT_SCHEMA.safeParse({ tasks: [{ agentId: 'a', task: '继续' }] }).success
+    ).toBe(true)
+    expect(
+      DELEGATE_TO_SUBAGENT_SCHEMA.safeParse({
+        tasks: [{ agentId: 'a', name: '海豹', task: '继续' }]
+      }).success
+    ).toBe(false)
     expect(DELEGATE_TO_SUBAGENT_SCHEMA.safeParse({ tasks: [] }).success).toBe(false)
     expect(
       DELEGATE_TO_SUBAGENT_SCHEMA.safeParse({

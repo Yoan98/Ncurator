@@ -5216,7 +5216,8 @@ const ChatPage: React.FC = () => {
                                     <>
                                       <PartnerAvatar
                                         {...getSubagentAvatar(
-                                          pendingApprovalBatch.source.childRunId
+                                          pendingApprovalBatch.source.agentId ||
+                                            pendingApprovalBatch.source.childRunId
                                         )}
                                         size={24}
                                       />

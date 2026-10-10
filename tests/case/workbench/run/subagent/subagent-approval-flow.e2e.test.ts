@@ -296,7 +296,7 @@ describe('subagent approvals through the shared execution chain', () => {
               const continuedStart = Date.now()
               await sendWorkbenchMessage(
                 runtime.page,
-                `继续：上一轮清理已经终止，不再执行清理。请新建一位临时帮手，仅用文本文件工具读取 ${saved} 并将原文写入新报告 ${continuedPath}。所有缓存目录及原文件保持现状。`
+                `继续：上一轮清理已经终止，不再执行清理。请查询未完成子 agent 并续接其中一位原会话，仅用文本文件工具读取 ${saved} 并将原文写入新报告 ${continuedPath}。所有缓存目录及原文件保持现状。`
               )
               await waitForWorkbenchAiRunCompletion(
                 runtime,
@@ -312,7 +312,11 @@ describe('subagent approvals through the shared execution chain', () => {
                 continued.some(
                   (event) =>
                     event.update.status === 'completed' &&
-                    !waiting.some((child) => child.childRunId === event.update.childRunId)
+                    waiting.some(
+                      (child) =>
+                        child.agentId === event.update.agentId &&
+                        child.childRunId !== event.update.childRunId
+                    )
                 )
               ).toBe(true)
               expect(await fs.readFile(continuedPath, 'utf8')).toContain(`SAVED_${mode}`)

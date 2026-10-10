@@ -9,6 +9,7 @@ import {
 } from '../../shared/modelToolResultRenderers'
 import {
   DELEGATE_TO_SUBAGENT_SCHEMA,
+  LIST_AGENT_SCHEMA,
   LEARN_SKILL_SCHEMA,
   READ_IMAGE_SCHEMA,
   UPDATE_PLAN_SCHEMA,
@@ -107,7 +108,7 @@ export const DELEGATE_TO_SUBAGENT_TOOL_SPEC: HumanToolSpec<
   inputSchema: DELEGATE_TO_SUBAGENT_SCHEMA,
   promptSpec: {
     name: 'delegate_to_subagent',
-    description: '执行临时子 agent 任务，返回各任务的状态、结果和产物。'
+    description: '创建或继续执行子 agent 任务，返回各任务的状态、结果和产物。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'mutating',
@@ -116,8 +117,29 @@ export const DELEGATE_TO_SUBAGENT_TOOL_SPEC: HumanToolSpec<
   modelResult: { renderSuccess: ({ data }) => JSON.stringify(data) }
 }
 
+export const LIST_AGENT_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof LIST_AGENT_SCHEMA>,
+  'list_agent',
+  'agent-control'
+> = {
+  name: 'list_agent',
+  familyId: 'agent-control',
+  skillIds: ['agent-control'],
+  inputSchema: LIST_AGENT_SCHEMA,
+  promptSpec: {
+    name: 'list_agent',
+    description: '查询当前伙伴的子 agent ID、名称、原任务和状态。'
+  },
+  resolveExecutionMeta: createStaticExecutionMetaResolver({
+    mutability: 'read_only',
+    defaultResourceKey: 'subagent'
+  }),
+  modelResult: { renderSuccess: ({ data }) => JSON.stringify(data) }
+}
+
 export const AGENT_CONTROL_TOOL_SPECS = [
   DELEGATE_TO_SUBAGENT_TOOL_SPEC,
+  LIST_AGENT_TOOL_SPEC,
   LEARN_SKILL_TOOL_SPEC,
   UPDATE_PLAN_TOOL_SPEC,
   READ_IMAGE_TOOL_SPEC,

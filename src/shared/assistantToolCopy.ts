@@ -296,6 +296,7 @@ const TOOL_ITEM_RENDERERS = {
       sentence(text('学习 '), text(skillName), text(' 失败了'))
     )
   },
+  list_agent: () => toolCopy('查看子任务', sentence(text('查看子任务'))),
   delegate_to_subagent: () => toolCopy('分头处理', sentence(text('分头处理'))),
   update_plan: () => toolCopy('更新任务计划', sentence(text('更新任务计划'))),
   scheduled_task_list: () => toolCopy('查看定时任务', sentence(text('查看当前伙伴的定时任务'))),

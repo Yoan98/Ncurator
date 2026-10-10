@@ -176,7 +176,7 @@ export const createRealAiDepsFactory = async (input: {
     terminalSessionIds.add(partnerId)
     void storageService.partner.savePartner({
       id: partnerId,
-      name: 'backend test partner',
+      name: `backend ${partnerId}`,
       avatar_shape: 'circle',
       avatar_color: 'blue',
       created_at: Date.now(),
@@ -199,7 +199,7 @@ export const createRealAiDepsFactory = async (input: {
         runId,
         ownerRunId: contextInput.ownerRunId,
         partnerId,
-        partnerName: 'backend test partner',
+        partnerName: `backend ${partnerId}`,
         userMessageId: contextInput.userMessageId || `test-user-message-${runId}`,
         assistantMessageId: `test-assistant-message-${runId}`,
         input: contextInput.userInput || '请处理当前测试任务。',
@@ -222,6 +222,7 @@ export const createRealAiDepsFactory = async (input: {
         llmStore: storageService.llm,
         partnerStore: storageService.partner,
         chatMessageLogStore: storageService.chatMessageLog,
+        subagentStore: storageService.subagent,
         documentsStore: storageService.documents,
         embeddingService,
         ensureEmbeddingReady: ensureReady,

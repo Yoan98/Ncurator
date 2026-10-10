@@ -34,17 +34,17 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 - How：生产 `AiRunService.run`、真实文本工具、正式文件与 Store；只脚本化模型决策，沿用追加消息测试的调度回调，在真实工具结果后通知待处理消息。续接使用同一 ownerRunId；另一轮在保存后由脚本模型返回不可重试错误。
 - Oracle：yield 后正式 B 已保存但无审核；续接最终 B2 的审核仍相对 A且仅一条 owner 记录；主 run 失败后审核包含成功保存的 B，临时输入清理、正式文件保留。
 
-## 一次性子任务
+## 子任务协作
 
 #### `human-subagent-collaboration-live`
 
 - 测试类型：backend / live；suite `human`，group `live`。
 - What：三位临时帮手分别核对经营表、修改文本配置和 DOCX，主伙伴写交接报告。
 - Why：验证真实派发的任务完成度、证据和整合质量，以及文件统一归属。
-- How：自然语言任务经生产 `AiRunService.run`；现有 XLSX、DOCX 和固定配置 fixture 复制到临时 workspace；真实模型、终端、工具和存储。保留主子 LLM I/O、事件、耗时与 token/cache 数据。
+- How：自然语言任务经生产 `AiRunService.run`；现有 XLSX、DOCX 和固定配置 fixture 复制到临时 workspace；请求配置和报告使用受控文本编辑，计算仍使用真实终端；真实模型、工具和存储。保留主子 LLM I/O、事件、耗时与 token/cache 数据。
 - Oracle：三项子任务完成；终端产出数值事实；源经营表不变；配置与 DOCX 指定修改落盘且保护内容不变；主报告包含核对事实与依据；文件记录均归主 run。执行者根据 raw logs 评估完成度、准确性、依据和整合质量，回写 0–100 分，不设自动评分门槛。
 
-- 最新验证：2026-10-08 真实 qwen3.8-flash 通过，耗时 523s；raw logs：`tests/logs/ai/human/live/human-subagent-collaboration-live/20261008-163025-802-a4417b2c`。三项完成，销售/退货/净额为 91,824,000 / 422,000 / 91,402,000；源表、配置保护项及 DOCX 其余正文保持，主报告与主文件记录正确。人工质量评分 88/100：事实、依据和文件交付完整；报告 146 行、8.7KB，重复计算复核及一次无副作用的重复 DOCX 编辑，效率与简洁性扣分。主 17 次调用，输入/输出 348,127 / 11,363 token；子 31 次调用，输入/输出 436,122 / 26,090 token；总缓存读 671,744（85.7%），不据此推断子任务必然节省总 token。
+- 最新验证：2026-10-10 真实 qwen3.8-flash 通过，555s；raw logs：`tests/logs/ai/human/live/human-subagent-collaboration-live/20261010-144742-669-e69ff387`。三项完成，销售/退货/净额为 91,824,000 / 422,000 / 91,402,000；配置与 DOCX 的受控审核、主文件归属及保护项通过，完成子会话清理。人工质量评分 88/100：事实及文件交付完整；主伙伴重复独立计算，122 行报告及多轮链接/时间修订增加耗时和 token。主 24 次调用，输入/输出 501,127 / 16,888；子 34 次，518,455 / 16,974；总缓存读 941,824（92.4%）。
 
 #### `human-subagent-isolation`
 
@@ -52,16 +52,16 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 - What：超出并发额度的批量派发、FIFO 排队、独立上下文、工具策略、公开流式消息与结果汇集。
 - Why：子任务不能读主聊天、再次派发或主动询问用户；子事件不能终止主 run。
 - How：生产 `AiRunService.run`，只脚本化 LLM 决策，其他依赖使用真实服务与存储。
-- Oracle：一次提交超过 2 项仍被接受，峰值并发为默认 2，排队任务仅在前序释放后启动，全部结果进入主工具消息；公开文本真实流式投递，实际请求状态成对开关且原始推理不转发；子完整日志不入 SQLite；状态与精简行动 annotation 持久化；受限工具不可绑定和执行。
+- Oracle：一次提交超过 2 项仍被接受，峰值并发为默认 2，排队任务仅在前序释放后启动，全部结果进入主工具消息；公开文本真实流式投递，实际请求状态成对开关且原始推理不转发；子完整日志按会话隔离存入 SQLite，完成事务清理；状态与精简行动 annotation 持久化；受限工具不可绑定和执行。
 
 #### `human-subagent-prefix-stability`
 
 - 测试类型：backend / mock-llm；扩展现有 human-subagent 文件。
-- What：子内存投影、连续工具结果追加、新实例的固定 System 和工具前缀，以及公开文字流的开始与结束。
+- What：子 SQLite 投影、连续工具结果追加、新会话隔离、中断后同会话续接的请求前缀，以及公开文字流的开始与结束。
 - Why：确定性区分请求前缀改写与供应商缓存低命中，守住临时实例隔离和文字流生命周期。
-- How：生产 AiRunService、人类 graph、真实文本文件及工具；只脚本化 LLM 派发、学习及读取决策。保存真实 requestWire，比较稳定工具集合下的相邻主子 brain；两次派发创建新实例。
-- Oracle：已有消息逐项保留，工具定义和顺序不变；新子 System/初始工具相同且无旧子历史；主上下文只含派发汇总，没有子过程 annotation。公开文字 delta 开始流、completed/reset/取消结束流，审核请求不能冒充文字流。服务端缓存由 Workbench `subagent-prefix-cache-retain-live` 验证，mock 不伪造命中。
-- 最新验证：2026-10-09 生产 AiRunService 通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-prefix-stability/20261009-102111-987-e9228cfe`。两轮共四个新子实例，主子连续请求前缀保持、新实例无旧子历史、真实文本读取及公开流开始/结束通过；不把不同子实例的服务端缓存命中作为断言。
+- How：生产 AiRunService、人类 graph、真实文本文件及工具；只脚本化 LLM 派发、学习及读取决策。保存真实 requestWire，比较稳定工具集合下的相邻主子 brain；两次派发创建新会话。另经生产 ChatRunService 让子任务读文件后进入真实终端等待，停止主运行、重新打开 SQLite，通过 list_agent 查询并续接原会话。
+- Oracle：已有消息逐项保留，工具定义和顺序不变；新子 System/初始工具相同且无旧子历史；主上下文只含派发汇总，没有子过程 annotation；续接沿用 agentId、名称和原任务，执行 ID 改变，首次请求保留原末次有效请求的消息和工具前缀，完成后子会话被清理。公开文字 delta 开始流、completed/reset/取消结束流，审核请求不能冒充文字流。服务端缓存由 Workbench `subagent-prefix-cache-retain-live` 验证，mock 不伪造命中。
+- 最新验证：2026-10-10 生产 AiRunService / ChatRunService 通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-prefix-stability/20261010-144817-076-e48b562a`。四个新会话隔离、连续请求前缀及公开流通过；真实终端等待中停止，重新打开 SQLite 后查询并续接相同 agentId，执行 ID 改变、原任务及历史前缀保持，完成清理通过。
 
 #### `human-subagent-file-cancellation`
 
@@ -74,10 +74,10 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 #### `human-subagent-transcript-recovery`
 
 - 测试类型：backend / mock-llm。
-- What：内存日志投影、compaction 与缺失派发结果恢复。
+- What：持久子会话投影、compaction、同会话续接与缺失派发结果恢复。
 - Why：共用消息链且重启不复活子实例，保留已完成事实。
 - How：生产运行、公共 compaction 节点与投影入口；只脚本化 LLM 决策，日志与存储真实。
-- Oracle：子 compaction 不污染主计划/技能；已完成子结果进入合成反馈，排队及运行中任务均标记中断；修复不写真实 tool 行、不自动派发。
+- Oracle：重新打开 SQLite 后 checkpoint、tail、技能与计划正确；尚未开始执行的排队会话续接时同时收到原任务和新任务；完成后子会话清理，主结果保留。同会话中断续接由 prefix-stability 验证，结果事务及跨伙伴/重复派发由 SQLite unit 验证。子 compaction 不污染主计划/技能；已完成子结果进入合成反馈，排队及运行中任务均标记中断；修复不写真实 tool 行、不自动派发。
 
 #### `human-subagent-approval`
 
@@ -86,7 +86,7 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 - Why：避免人工审批导致子实例提前结束、并发决定串任务、提交前执行或取消后执行。
 - How：生产 ChatRunService → AiRunService，透传既有 AiLlmDriver，只脚本化 brain 与 terminal_review；真实 SQLite、审批入口、终端、文件和资源管理。通过生产决定入口操作，不替换执行器或审批服务。
 - Oracle：同一 childRunId 在决定后继续；允许只执行一次，拒绝/指导不执行原命令；等待前磁盘无副作用；两个子审批 FIFO、第三项仍排队；事务提交后执行，重复/过期决定无效；取消清理全部等待并保留先前文件；子 brain 上下文独立，审核使用当前子任务输入，共用主运行的审核入口；文件归属隔离；规则直通、AI 自动通过、审核异常转人工及完全访问均覆盖。
-- 最新验证：2026-10-08 生产 ChatRunService 链路通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-approval/20261008-181408-483-9fd8904c`。允许、拒绝、指导、FIFO、停止及中断修复通过；子审核与 brain 均使用子任务输入，主上下文保持隔离。规则直通、AI 自动通过、审核异常转人工及完全访问均通过。
+- 最新验证：2026-10-10 生产 ChatRunService 链路通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-approval/20261010-144804-939-b7aeffe6`。允许、拒绝、指导、FIFO、停止和中断修复通过；规则直通、AI 自动通过、审核异常转人工及完全访问通过。完整 human/mock-llm 29 文件、38 项均通过。
 
 ## 最新 Live 评估
 
@@ -94,7 +94,7 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 
 | caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                                  | 简短依据                                                                                                                                                                                                                                                         |
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| human-subagent-collaboration-live | 完成 | 88 | qwen3.8-flash | 2026-10-08 16:30 CST | tests/logs/ai/human/live/human-subagent-collaboration-live/20261008-163025-802-a4417b2c | 三项完成，金额和文件正确，保护项保持，主文件归属正确。523s；报告偏长、重复复核及一次重复编辑扣分，缓存读 85.7%。 |
+| human-subagent-collaboration-live | 完成 | 88 | qwen3.8-flash | 2026-10-10 14:47 CST | tests/logs/ai/human/live/human-subagent-collaboration-live/20261010-144742-669-e69ff387 | 三项事实、保护区、受控审核和主归属通过，完成子会话清理。555s；报告 122 行，重复独立计算和链接修订扣分；缓存读 92.4%。 |
 | human-risk-report-draft-live                        | 完成 |            94 | deepseek-flash                   | 2026-10-05 15:05 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20261005-150552-320-b3053e8c                        | 11 次 Word 编辑交付新周报，来源文件保护和先生成后舍弃的草稿清理通过；独立审核可解析、确认 B 保留。73s。                                                                                                                                                          |
 | human-context-compaction-natural-trigger-live       | 完成 |            90 | qwen3.8-flash                    | 2026-09-12 13:38 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260912-130017-162                | 去掉 discard/digest 后四断言通过（2269s）。Run1 未压；Run2 预算 36297 过 36k，半截 throughSeq=75 后多次历史压（112/136/182/235/283/304）并交付；Run3 再压 333/366（半截）/376/397/437。`historyFloorKind` 仅 none/compaction。跨 run 缓存 0.993（35840/36101）。 |
 | human-excel-read-weekly-review-live                 | 完成 |            91 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                          | Oracle 通过；四表结构/公式/退货异常/口径不对等讲清；6×excel_read。过程仍 6×terminal 验算略多。缓存 83.6%。                                                                                                                                                       |
@@ -909,7 +909,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：同一伙伴的多轮 human run 能复用已学习技能记忆；在 `HUMAN_MAX_ACTIVE_TOOLS=25` 下学满后会 FIFO 淘汰，被淘汰 skill 可再学回来。
 - Why：技能记忆是 AI 架构跨轮次协作的核心；active tool 上限下的遗忘与再学必须由真实 learning 链路守住，不能只靠 unit 算法。
 - How：跨五轮逐步学习 DOCX、PDF、Excel、PPT 和图片技能；第四轮加载 `excel-read + image-generation + docx-write` 挤爆预算；第五轮再学被淘汰的 `docx-read`。
-- Oracle：前三轮技能跨 run 保留；第四轮 learning summary 含淘汰 `docx-read` 与 `pdf-read`，最新 `learnedSkillIds` 为 `excel-write,ppt-read,ppt-write,excel-read,image-generation,docx-write`；第五轮重新加载 `docx-read` 且最终 skill 快照包含它。
+- Oracle：技能跨 run 保留；随公共工具数量变化，超限可能在第三或第四轮发生。第四轮包含新请求的 `excel-read/image-generation/docx-write`，且最早学习的 `docx-read/pdf-read` 已按 FIFO 淘汰；第五轮真实重新加载 `docx-read` 且最终快照包含它，不固定中间技能集合。
 
 ##### `plan-memory-maintenance`
 

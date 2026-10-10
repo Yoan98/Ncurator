@@ -93,21 +93,23 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 - 安全交接时较早的追加消息以 `context_only` run 和 user log 落库，最后一条由续接 run 写入。运行正常结束时自动启动续接；停止、失败和应用重启恢复时只把待处理消息转成普通 user log，不自动调用模型。
 - 停止若发生在工具调用中途，已落库结果保持原样。`repairInterruptedToolCalls` 只在模型上下文投影中为没有结果的悬空调用补充合成 ToolMessage（“The run was interrupted before this tool call could be executed.”）；不会写成真实工具失败记录。
 
-### 1.7 一次性子运行
+### 1.7 子会话与派发
 
-- **执行**：共用 `AiRunService.run`、human graph 和工具链；继承父配置，独立上下文。任务数不限，`SUBAGENT_EXECUTION_CONCURRENCY` 默认 2，其余 FIFO 排队，轮到才创建实例。工具目录、绑定与入口均禁止再次派发、提问及定时任务管理。
-- **转录**：`AiTranscript` 的 SQLite / 内存适配共用投影、预算和压缩。`runId` 标识实例，`ownerRunId` 归属主运行，`parentToolCallId` 关联派发；不建子运行或伙伴行。子完整转录结束释放，父 annotation 保留状态、公开行动、完整公开消息和有界结果，不进主模型；全部收口后返回一条 ToolMessage。流式事件仅更新展示态，明确公开文字流的开始、替换和结束，不把工具或审核请求当作文字流；子过程和终态不改变父状态，I/O 保留父子关联。
-- **审批**：共用 hand 的规则检查和 AI 审核，各自传入本次任务、命令及关联 ID 和执行环境，命令说明仅留人工审批卡及日志。主任务内 FIFO、一次一个批次，已有问题优先；有待审批时父状态为 `waiting_approval`。先登记等待器再发布；决定、关联日志及下一批快照同事务提交后恢复原 hand。等待保留实例并占名额，不调用模型；拒绝/指导跳过原操作。当前批次存主 `ai_run`，队列和等待器留 Main；取消不伪造用户决定。
-- **文件**：派发前释放父已提交文档会话，返回后重读；跨执行租约互斥，冲突交回父运行。修改和产物从产生时归主运行。
-- **结束与恢复**：finally 释放上下文及执行资源，保留落盘产物。Renderer 刷新恢复当前审批；应用重启不恢复子实例或旧审批，未完成状态投影为中断。悬空派发只在模型投影补中断反馈，保留真实结果，不写虚构 tool 行、不自动重派。
+- 主子共用 `AiRunService.run`、human graph、审批、工具、预算、消息投影与 compaction。子工具禁止查询/派发子 agent、主动提问及定时任务管理；并发常量默认 2，其余 FIFO。
+- `ai_subagent` 只存身份、原任务和生命周期；完整 user/assistant/tool、计划、技能及压缩 checkpoint 使用同一 `chat_session_message_log`。SQLite transcript 在入口绑定 `{partnerId, subagentId?}`，graph 不区分读写实现。每个会话独立 seq，续接跨执行读取历史，复用 checkpoint 与原文 tail 后追加新 user。
+- `agentId` 为稳定会话 ID，`childRunId` 为本次执行 ID，`ownerRunId` 为本次父任务文件归属。`list_agent({})` 只返回 ID、名称、原任务、状态；`delegate_to_subagent` 接受创建 `{name,task}` 或续接 `{agentId,task}`。续接校验伙伴归属并原子占用会话，活跃会话不能重复执行。
+- 子过程、结果及审批 annotation 保存到主日志用于 UI，子完整日志不进入主上下文。派发工具汇集交付结果；公开流保留开始、替换与结束，不转发内部推理；诊断关联 agentId 与父子执行。
+- 审批共用父任务 FIFO 队列及生产提交入口；等待保留实例并占名额。决定落盘后恢复原 hand，拒绝/指导跳过原操作。旧审批不跨执行复用。
+- 创建和续接继承当前父配置。文件修改从产生时归本次 ownerRunId；历史修改不搬运，终端/浏览器控制及文档工作态不恢复。缺失工具结果由公共投影修复，不重放操作、不伪造真实结果。
+- 完成时同事务保存父结果 annotation 并删除子身份及完整日志；失败、取消、交回父任务保留会话，释放运行资源。启动将排队、运行及等待审批会话标记中断，不自动调用模型。清空消息/删除伙伴清理子会话，保留文件按既有规则处理。
 
-名称、执行 ID 和时间不进入固定 System，消息只追加、工具排序稳定；供应商缓存按实际 I/O 记录。
+名称、执行 ID 和时间不进入固定 System，历史只追加、工具排序稳定；缓存按真实请求和供应商 usage 验证。
 
 ---
 
 ## 2. 数据源
 
-human harness 涉及的数据从哪来、到哪去。只有 **`chat_session_message_log`** 是 transcript 真相源（行挂 `partner_id`）；其余存储与运行时注入见各小节。
+human harness 涉及的数据从哪来、到哪去。只有 **`chat_session_message_log`** 是 transcript 真相源（行按 `partner_id` 与可空 `subagent_id` 绑定会话）；其余存储与运行时注入见各小节。
 
 ### 2.1 总览
 
@@ -125,8 +127,9 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | 列           | 含义                                                              |
 | ------------ | ----------------------------------------------------------------- |
 | `partner_id` | 所属伙伴                                                          |
+| `subagent_id` | 空为主会话，非空为子会话                                                  |
 | `run_id`     | 写入时所属 AI run                                                 |
-| `seq`        | 伙伴内单调递增；`compaction_checkpoint.throughSeq` / 投影按 `seq` |
+| `seq`         | 各自会话内单调递增；`compaction_checkpoint.throughSeq` / 投影按会话 `seq` |
 | `entry_json` | `ChatMessageLogEntry`                                             |
 | `created_at` | 写入时间                                                          |
 
