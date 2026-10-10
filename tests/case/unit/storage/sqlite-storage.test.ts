@@ -170,7 +170,7 @@ const applyLanceWhere = (rows: VectorRow[], where: string): VectorRow[] => {
 
 const createPartner = (id = 'partner-1'): Partner => ({
   id,
-  name: 'Test partner',
+  name: id === 'partner-1' ? 'Test partner' : `Test partner ${id}`,
   avatar_shape: 'circle',
   avatar_color: 'blue',
   created_at: 1,
@@ -527,6 +527,19 @@ describe('sqlite storage core and stores', () => {
       avatar_color: 'orange',
       pinned: true
     })
+  })
+
+  it('rejects duplicate partner names on create and rename while allowing the current name', async () => {
+    await expect(
+      partnerStore.savePartner({ ...createPartner('partner-2'), name: ' Test partner ' })
+    ).rejects.toThrow('伙伴名称已存在')
+    await partnerStore.savePartner(createPartner('partner-2'))
+    await expect(
+      partnerStore.savePartner({ ...createPartner('partner-2'), name: 'Test partner' })
+    ).rejects.toThrow('伙伴名称已存在')
+    await partnerStore.savePartner({ ...createPartner(), name: ' test partner ' })
+    expect((await partnerStore.getPartner('partner-1'))?.name).toBe('test partner')
+    expect((await partnerStore.listPartners()).length).toBe(2)
   })
 
   it('returns the latest user input preview for each partner', async () => {

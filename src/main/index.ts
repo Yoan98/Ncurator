@@ -290,6 +290,19 @@ if (!singleInstanceLock) {
         context: { event: 'unhandledRejection' }
       })
     })
+    app.on('child-process-gone', (_event, details) => {
+      if (details.reason === 'clean-exit') return
+      errorLogService.write({
+        module: 'electron-child-process',
+        error: 'Electron child process exited',
+        context: {
+          event: 'child-process-gone',
+          type: details.type,
+          reason: details.reason,
+          exitCode: details.exitCode
+        }
+      })
+    })
     const appUpdateService = new AppUpdateService({ shutdownApp: prepareAppShutdown })
     appUpdateService.initialize()
     ipcMain.handle(APP_STARTUP_GET_STATUS_CHANNEL, () => appStartupStatus)
@@ -364,7 +377,8 @@ if (!singleInstanceLock) {
     const browserEmbedService = new BrowserEmbedService(
       mainWindow,
       cdpEndpointService,
-      storageService.browserTabs
+      storageService.browserTabs,
+      errorLogService
     )
     if (process.env.NCURATOR_E2E_OBSERVER) {
       ;(

@@ -1198,7 +1198,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     <Spin size="small" />
                   ) : stoppingRun ? (
                     <HiStop className="h-3 w-3" />
-                  ) : loading ? (
+                  ) : loading && !sendingWhileRunning ? (
                     <Spin size="small" />
                   ) : (
                     <HiArrowUp className="h-3 w-3" />

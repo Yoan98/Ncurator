@@ -37,6 +37,7 @@ import type { BrowserTabState } from '../../../shared/types'
 import { resolveStagehandRuntimeModel } from '../llm/stagehandModel'
 import { BrowserActionVisualizer, createHideCursorScript } from './BrowserActionVisualizer'
 import { BrowserMenuWindowService } from './BrowserMenuWindowService'
+import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type {
   BrowserTabStateStore,
   PersistedBrowserTabState
@@ -438,9 +439,10 @@ export class BrowserEmbedService implements BrowserUseService {
   public constructor(
     private readonly mainWindow: BrowserWindow,
     private readonly cdpEndpointService: CdpEndpointService,
-    private readonly stateStore: BrowserTabStateStore
+    private readonly stateStore: BrowserTabStateStore,
+    private readonly errorLogService?: AppErrorLogService
   ) {
-    this.menuWindowService = new BrowserMenuWindowService(mainWindow)
+    this.menuWindowService = new BrowserMenuWindowService(mainWindow, errorLogService)
     this.mainWindow.on('resize', this.handleWindowResize)
     this.mainWindow.once('closed', () => {
       this.mainWindow.removeListener('resize', this.handleWindowResize)
@@ -982,10 +984,12 @@ export class BrowserEmbedService implements BrowserUseService {
     signal?: AbortSignal
   ): Promise<WebContentsView> {
     if (signal?.aborted) throw createCancelledError()
-    if (runtime.ready) {
-      await raceAbort(runtime.ready, signal, () => {
+    while (runtime.ready) {
+      const ready = runtime.ready
+      await raceAbort(ready, signal, () => {
         if (runtime.view && !runtime.view.webContents.isDestroyed()) runtime.view.webContents.stop()
       })
+      if (runtime.ready !== ready) continue
       if (runtime.view && !runtime.view.webContents.isDestroyed()) return runtime.view
       runtime.view = null
       runtime.ready = null
@@ -1015,6 +1019,26 @@ export class BrowserEmbedService implements BrowserUseService {
     this.applyAllVisibility()
     try {
       await this.restoreRuntime(runtime, view, signal)
+    } catch (error) {
+      if (runtime.view === view) {
+        this.cdpEndpointService.unregisterContents(view.webContents)
+        if (runtime.attached && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.contentView.removeChildView(view)
+        }
+        runtime.view = null
+        runtime.ready = null
+        runtime.attached = false
+        runtime.visible = false
+        if (!view.webContents.isDestroyed()) view.webContents.close()
+      }
+      if (!isCancelledError(error)) {
+        this.errorLogService?.write({
+          module: 'embedded-browser',
+          error: 'Browser tab restore failed',
+          context: { event: 'tab-restore-failed', tabId: runtime.persisted.id }
+        })
+      }
+      throw error
     } finally {
       resolveReady?.()
       if (this.presentedTabId === runtime.persisted.id) this.applyAllVisibility()
@@ -1023,6 +1047,27 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   private bindViewEvents(runtime: BrowserTabRuntime, view: WebContentsView): void {
+    view.webContents.on('render-process-gone', (_event, details) => {
+      if (details.reason === 'clean-exit' || runtime.view !== view) return
+      this.errorLogService?.write({
+        module: 'embedded-browser',
+        error: 'Browser renderer exited',
+        context: {
+          event: 'render-process-gone',
+          tabId: runtime.persisted.id,
+          reason: details.reason,
+          exitCode: details.exitCode
+        }
+      })
+    })
+    view.webContents.on('unresponsive', () => {
+      if (runtime.view !== view) return
+      this.errorLogService?.write({
+        module: 'embedded-browser',
+        error: 'Browser renderer became unresponsive',
+        context: { event: 'unresponsive', tabId: runtime.persisted.id }
+      })
+    })
     view.webContents.setWindowOpenHandler((details) => {
       void this.createTab(runtime.persisted.ownerId).then((state) =>
         this.navigate(details.url, state.id)

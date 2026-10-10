@@ -1,5 +1,6 @@
 import { BrowserWindow, screen } from 'electron'
 import type { BrowserTabState } from '../../../shared/types'
+import type { AppErrorLogService } from '../logging/AppErrorLogService'
 
 type BrowserMenuActions = {
   zoomIn: () => BrowserTabState
@@ -152,7 +153,10 @@ export class BrowserMenuWindowService {
   private menuWindow: BrowserWindow | null = null
   private closeResolver: (() => void) | null = null
 
-  public constructor(private readonly mainWindow: BrowserWindow) {
+  public constructor(
+    private readonly mainWindow: BrowserWindow,
+    private readonly errorLogService?: AppErrorLogService
+  ) {
     this.mainWindow.on('move', this.close)
     this.mainWindow.on('closed', this.close)
   }
@@ -248,6 +252,17 @@ export class BrowserMenuWindowService {
       }
     })
     this.menuWindow = menuWindow
+    menuWindow.webContents.once('render-process-gone', (_event, details) => {
+      this.errorLogService?.write({
+        module: 'embedded-browser-menu',
+        error: 'Browser menu renderer exited',
+        context: {
+          event: 'render-process-gone',
+          reason: details.reason,
+          exitCode: details.exitCode
+        }
+      })
+    })
     return menuWindow
   }
 
@@ -255,6 +270,7 @@ export class BrowserMenuWindowService {
     const closed = new Promise<void>((resolve) => {
       this.closeResolver = resolve
     })
+    let loadTimer: ReturnType<typeof setTimeout> | undefined
     menuWindow.webContents.on('before-input-event', (_event, input) => {
       if (input.type === 'keyDown' && input.key === 'Escape') this.close()
     })
@@ -282,9 +298,22 @@ export class BrowserMenuWindowService {
       }, 150)
     })
     try {
-      await menuWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(html)}`)
-    } catch {
+      await Promise.race([
+        menuWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(html)}`),
+        new Promise<never>((_resolve, reject) => {
+          loadTimer = setTimeout(() => reject(new Error('浏览器菜单加载超时')), 3_000)
+        })
+      ])
+    } catch (error) {
+      this.errorLogService?.write({
+        module: 'embedded-browser-menu',
+        error: 'Browser menu failed to load',
+        context: { event: 'menu-load-failed' }
+      })
       this.close()
+      throw error
+    } finally {
+      clearTimeout(loadTimer)
     }
     await closed
   }

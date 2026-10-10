@@ -4549,8 +4549,8 @@ const ChatPage: React.FC = () => {
                 </div>
               </div>
             ) : null}
-            <div className="flex min-w-0 max-w-[66%] flex-col items-end">
-              <div className="min-w-0 rounded-[22px] bg-[#F4F4F2] px-4 py-2.5 text-[14px] leading-6 text-[#37352F] [overflow-wrap:anywhere]">
+            <div className="flex w-full min-w-0 flex-col items-end">
+              <div className="box-border w-fit max-w-[66%] min-w-0 rounded-[22px] bg-[#F4F4F2] px-4 py-2.5 text-[14px] leading-6 text-[#37352F] [overflow-wrap:anywhere]">
                 <div
                   className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
                   data-testid={workbenchSelectors.userMessageReferences}

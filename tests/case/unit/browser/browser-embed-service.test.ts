@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BrowserWindow, WebContentsView } from 'electron'
+import { WebContentsView } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { BrowserEmbedService } from '../../../../src/main/services/browser/BrowserEmbedService'
 import { BROWSER_CURSOR_OVERLAY_ID } from '../../../../src/main/services/browser/BrowserActionVisualizer'
 import { AiRunResourceManager } from '../../../../src/main/services/ai/run/AiRunResourceManager'
@@ -12,6 +13,13 @@ import {
   EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS,
   EMBEDDED_BROWSER_PAGE_CONTENT_WAIT_MS
 } from '../../../../src/main/services/browser/constants'
+
+vi.mock('electron', () => ({
+  WebContentsView: vi.fn(),
+  BrowserWindow: vi.fn(),
+  screen: { getDisplayMatching: vi.fn(), getCursorScreenPoint: vi.fn() },
+  shell: { openExternal: vi.fn() }
+}))
 
 const createMockStateStore = (): BrowserTabStateStore => ({
   listByOwner: vi.fn().mockReturnValue([]),
@@ -53,6 +61,7 @@ const getBrowserInternals = (service: BrowserEmbedService) =>
     runTabMap: Map<string, Set<string>>
     trackRunTab: (runId: string, tabId: string) => void
     applyAllVisibility: () => void
+    ensureReady: (runtime: object) => Promise<WebContentsView>
     restoreRuntime: (
       runtime: { persisted: PersistedBrowserTabState; restoring: boolean },
       view: WebContentsView,
@@ -139,6 +148,65 @@ const createPendingDocument = () => {
 }
 
 describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
+  it('discards a failed restored view so the next attempt creates a fresh one', async () => {
+    const mainWindow = createMockMainWindow()
+    const cdp = createMockCdpEndpointService()
+    const service = new BrowserEmbedService(mainWindow, cdp, createMockStateStore())
+    const makeView = (): WebContentsView =>
+      ({
+        setBounds: vi.fn(),
+        setVisible: vi.fn(),
+        webContents: {
+          isDestroyed: vi.fn().mockReturnValue(false),
+          close: vi.fn(),
+          on: vi.fn(),
+          setWindowOpenHandler: vi.fn()
+        }
+      }) as unknown as WebContentsView
+    const failedView = makeView()
+    const retryView = makeView()
+    vi.mocked(WebContentsView)
+      .mockImplementationOnce(function () {
+        return failedView
+      })
+      .mockImplementationOnce(function () {
+        return retryView
+      })
+    const internals = getBrowserInternals(service)
+    let finishRetry: (() => void) | undefined
+    const retryPending = new Promise<void>((resolve) => {
+      finishRetry = resolve
+    })
+    const restore = vi
+      .spyOn(internals, 'restoreRuntime')
+      .mockRejectedValueOnce(new Error('restore failed'))
+      .mockReturnValueOnce(retryPending)
+    const runtime = {
+      persisted: { id: 'restored-tab', ownerId: 'partner' },
+      view: null,
+      ready: null,
+      attached: false,
+      visible: false
+    }
+    internals.tabs.set('restored-tab', runtime)
+    const failed = internals.ensureReady(runtime)
+    const waitingA = internals.ensureReady(runtime)
+    const waitingB = internals.ensureReady(runtime)
+    await expect(failed).rejects.toThrow('restore failed')
+    expect(failedView.webContents.close).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(restore).toHaveBeenCalledTimes(2))
+    let secondWaiterFinished = false
+    void waitingB.then(() => {
+      secondWaiterFinished = true
+    })
+    await Promise.resolve()
+    expect(secondWaiterFinished).toBe(false)
+    finishRetry?.()
+    await expect(waitingA).resolves.toBe(retryView)
+    await expect(waitingB).resolves.toBe(retryView)
+    expect(runtime.view).toBe(retryView)
+  })
+
   it('hides controlled background views while keeping their usable bounds', () => {
     const window = createMockMainWindow()
     const service = new BrowserEmbedService(

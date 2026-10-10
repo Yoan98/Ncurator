@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type WheelEvent } from 'react'
-import { Tooltip } from 'antd'
+import { Tooltip, message } from 'antd'
 import { HiOutlineDocument, HiOutlineGlobeAlt, HiPlus, HiXMark } from 'react-icons/hi2'
 import type { WorkbenchResourceTab } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -86,11 +86,17 @@ const WorkbenchTabBar = ({
   const openAddMenu = async (button: HTMLButtonElement): Promise<void> => {
     const rect = button.getBoundingClientRect()
     setAddMenuOpen(true)
-    await window.api.browserResourceMenuOpen({
-      x: Math.max(0, rect.right - 158),
-      y: rect.bottom + 4
-    })
-    setAddMenuOpen(false)
+    try {
+      const response = await window.api.browserResourceMenuOpen({
+        x: Math.max(0, rect.right - 158),
+        y: rect.bottom + 4
+      })
+      if (!response.success) void message.error(response.error || '无法打开新增标签页菜单')
+    } catch {
+      void message.error('无法打开新增标签页菜单')
+    } finally {
+      setAddMenuOpen(false)
+    }
   }
 
   return (

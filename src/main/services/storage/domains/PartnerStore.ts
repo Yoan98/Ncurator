@@ -20,14 +20,7 @@ type PartnerRow = {
   pinned_at?: unknown
 }
 
-const AVATAR_SHAPES = new Set([
-  'circle',
-  'rounded_square',
-  'pill',
-  'hexagon',
-  'cloud',
-  'teardrop'
-])
+const AVATAR_SHAPES = new Set(['circle', 'rounded_square', 'pill', 'hexagon', 'cloud', 'teardrop'])
 
 const AVATAR_COLORS = new Set([
   'black',
@@ -73,6 +66,17 @@ export class PartnerStore {
   public constructor(private readonly sqlite: SqliteCore) {}
 
   public async savePartner(partner: Partner): Promise<void> {
+    const name = partner.name.trim()
+    if (!name) throw new Error('请填写伙伴名称')
+    const rows = this.sqlite.prepare('SELECT id, name FROM partner').all() as Array<{
+      id: string
+      name: string
+    }>
+    const current = rows.find((row) => row.id === partner.id)
+    const nameChanged = !current || current.name.trim() !== name
+    if (nameChanged && rows.some((row) => row.id !== partner.id && row.name.trim() === name)) {
+      throw new Error('伙伴名称已存在，请换一个名称')
+    }
     const now = Date.now()
     this.sqlite
       .prepare(
@@ -90,7 +94,7 @@ export class PartnerStore {
       )
       .run({
         id: partner.id,
-        name: partner.name,
+        name,
         avatar_shape: partner.avatar_shape,
         avatar_color: partner.avatar_color,
         created_at: partner.created_at,

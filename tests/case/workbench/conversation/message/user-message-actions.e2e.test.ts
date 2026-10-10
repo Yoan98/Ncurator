@@ -23,7 +23,7 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'user-message-actions'
-const RUNNING_MESSAGE = '请根据我刚附上的文件做一个简短说明。'
+const RUNNING_MESSAGE = `请根据我刚附上的文件做一个简短说明。下面的网址仅用于界面换行验证，不需要打开：https://example.com/view/${'a'.repeat(36)}?token=${'b'.repeat(64)}`
 const EDITED_MESSAGE = '这是编辑后的全新任务，请只回复：编辑后新任务。'
 const ONE_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=',
@@ -196,6 +196,27 @@ describe('workbench conversation e2e', () => {
           const bubbleBox = await runningUser
             .locator(`[data-testid="${workbenchSelectors.userMessageReferences}"]`)
             .boundingBox()
+          const bubbleGeometry = await runningUser
+            .locator(`[data-testid="${workbenchSelectors.userMessageReferences}"]`)
+            .evaluate((content) => {
+              const bubble = content.parentElement
+              const message = content.closest('[data-message-id]')
+              if (!(bubble instanceof HTMLElement) || !(message instanceof HTMLElement)) {
+                return null
+              }
+              const bubbleRect = bubble.getBoundingClientRect()
+              const messageRect = message.getBoundingClientRect()
+              return {
+                bubbleWidth: bubbleRect.width,
+                messageWidth: messageRect.width,
+                bubbleLeft: bubbleRect.left,
+                messageLeft: messageRect.left,
+                bubbleRight: bubbleRect.right,
+                messageRight: messageRect.right,
+                scrollWidth: bubble.scrollWidth,
+                clientWidth: bubble.clientWidth
+              }
+            })
           const firstAttachmentBox = await getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.userMessageAttachmentPrefix
@@ -305,6 +326,7 @@ describe('workbench conversation e2e', () => {
             assistantProcessTextAfterSend,
             assistantProcessTextAfterWait,
             interruptedRunCancelled: interruptedRunCancelled.type === 'run_cancelled',
+            bubbleGeometry,
             attachmentsAboveBubble: Boolean(
               firstAttachmentBox && bubbleBox && firstAttachmentBox.y < bubbleBox.y
             )
@@ -325,6 +347,11 @@ describe('workbench conversation e2e', () => {
               (result.assistantProcessTextAfterWait.includes('让俺想想') ||
                 result.assistantProcessTextAfterWait.includes('处理中')) &&
               result.interruptedRunCancelled &&
+              result.bubbleGeometry !== null &&
+              result.bubbleGeometry.bubbleWidth <= result.bubbleGeometry.messageWidth * 0.66 + 1 &&
+              result.bubbleGeometry.bubbleLeft >= result.bubbleGeometry.messageLeft - 1 &&
+              result.bubbleGeometry.bubbleRight <= result.bubbleGeometry.messageRight + 1 &&
+              result.bubbleGeometry.scrollWidth <= result.bubbleGeometry.clientWidth + 1 &&
               result.attachmentsAboveBubble,
             {
               name: 'workbench-user-message-actions-and-attachments',
