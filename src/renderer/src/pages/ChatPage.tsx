@@ -59,6 +59,7 @@ import {
 } from '../../../shared/messageLogVisionContext'
 import type { LlmPresetProvider } from '../../../shared/llmPresets'
 import MarkdownRenderer from '../components/MarkdownRenderer'
+import { NativeConfirmDialog } from '../components/NativeConfirmDialog'
 import { useNavigate } from 'react-router-dom'
 import { normalizeUserFacingError } from '../utils/userFacingError'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
@@ -3190,7 +3191,7 @@ const ChatPage: React.FC = () => {
     })
   }
 
-  const confirmDeletePartner = async (): Promise<void> => {
+  const confirmDeletePartner = async (): Promise<string | void> => {
     const session = deleteConfirmPartner
     if (!session || deletingPartnerIds.has(session.id)) return
     const id = session.id
@@ -3198,8 +3199,7 @@ const ChatPage: React.FC = () => {
     try {
       const response = await window.api.partnerDelete(id)
       if (!response.success) {
-        emitErrorMessage(response.error || '删除会话失败')
-        return
+        return response.error || '删除会话失败'
       }
       const remainingPartners = partners.filter((item) => item.id !== id)
       const retryTimer = persistRetryTimersRef.current[id]
@@ -3231,7 +3231,7 @@ const ChatPage: React.FC = () => {
       void loadPartners()
     } catch (error) {
       console.error(error)
-      emitErrorMessage('删除会话失败')
+      return '删除会话失败'
     } finally {
       setDeletingPartnerIds((current) => {
         const next = new Set(current)
@@ -5529,37 +5529,21 @@ const ChatPage: React.FC = () => {
           <p>{applyRevertConfirm?.content}</p>
         </Modal>
         <ImageLightbox image={previewImage} onClose={() => setPreviewImage(null)} />
-        <Modal
+        <NativeConfirmDialog
           open={Boolean(deleteConfirmPartner)}
           title="删除这个伙伴？"
-          okText="删除"
+          message="删除后会清掉这个伙伴的消息、记忆和恢复进度。这个操作不能撤回。"
+          detail={deleteConfirmPartner ? deleteConfirmPartner.name || '未命名伙伴' : undefined}
+          confirmText="删除"
           cancelText="取消"
-          okButtonProps={{
-            danger: true,
-            'data-testid': workbenchSelectors.partnerDeleteConfirmButton
-          }}
-          cancelButtonProps={{
-            'data-testid': workbenchSelectors.partnerDeleteCancelButton
-          }}
-          confirmLoading={Boolean(
-            deleteConfirmPartner && deletingPartnerIds.has(deleteConfirmPartner.id)
-          )}
-          onOk={() => void confirmDeletePartner()}
+          danger
+          onConfirm={confirmDeletePartner}
           onCancel={() => {
             if (deleteConfirmPartner && deletingPartnerIds.has(deleteConfirmPartner.id)) return
             setDeleteConfirmPartner(null)
           }}
-          data-testid={workbenchSelectors.partnerDeleteConfirmModal}
-        >
-          <p className="text-sm leading-6 text-[#787774]">
-            删除后会清掉这个伙伴的消息、记忆和恢复进度。这个操作不能撤回。
-          </p>
-          {deleteConfirmPartner ? (
-            <div className="mt-3 rounded-[6px] border border-[#EEEEEC] bg-[#F7F7F5] px-3 py-2 text-sm font-medium text-[#37352F]">
-              {deleteConfirmPartner.name || '未命名伙伴'}
-            </div>
-          ) : null}
-        </Modal>
+          onError={emitErrorMessage}
+        />
         <Modal
           open={createPartnerOpen}
           title={editingPartnerId ? '编辑伙伴' : '创建伙伴'}

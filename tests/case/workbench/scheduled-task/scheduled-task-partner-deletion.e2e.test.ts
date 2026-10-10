@@ -5,7 +5,9 @@ import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
   createPartnerThroughWorkbenchUi,
+  dismissWorkbenchPartnerDeleteConfirmation,
   getWorkbenchLocator,
+  openWorkbenchPartnerDeleteConfirmation,
   openScheduledTasksView,
   scheduledTaskSelectors,
   selectScheduledTaskPartner,
@@ -65,12 +67,11 @@ describe('workbench scheduled-task e2e', () => {
             page,
             `${workbenchSelectors.partnerItemPrefix}-${removedPartner.id}`
           )
-          await removedItem.hover()
-          await getWorkbenchLocator(
-            page,
-            `${workbenchSelectors.partnerDeleteButtonPrefix}-${removedPartner.id}`
-          ).click()
-          await getWorkbenchLocator(page, workbenchSelectors.partnerDeleteConfirmButton).click()
+          const deleteConfirmation = await openWorkbenchPartnerDeleteConfirmation(
+            runtime,
+            removedPartner.id
+          )
+          await dismissWorkbenchPartnerDeleteConfirmation(deleteConfirmation, 'confirm')
           await removedItem.waitFor({ state: 'detached' })
 
           const tasksAfterDelete = (await page.evaluate(

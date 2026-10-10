@@ -3,6 +3,8 @@ import type { FreeModelsSnapshot } from '../shared/freeModels'
 import type { PresetModelsSnapshot } from '../shared/llmPresets'
 import type {
   AppSettings,
+  ConfirmDialogRequest,
+  ConfirmDialogResponse,
   BrowserPanelBoundsRequest,
   BrowserPanelFollowRequest,
   BrowserPanelHideRequest,
@@ -228,6 +230,8 @@ export type DesktopApi = {
     payload: PartnerSetPinnedRequest
   ) => Promise<{ success: boolean; error?: string }>
   partnerDelete: (id: string) => Promise<{ success: boolean; error?: string }>
+  confirmDialogShow: (payload: ConfirmDialogRequest) => Promise<ConfirmDialogResponse>
+  confirmDialogClose: (dialogId: string) => Promise<void>
   partnerMessageList: (partnerId: string) => Promise<ChatMessage[]>
   scheduledTaskList: () => Promise<ScheduledTask[]>
   scheduledTaskSave: (payload: ScheduledTaskSaveRequest) => Promise<ScheduledTaskMutationResponse>

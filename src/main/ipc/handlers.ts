@@ -163,6 +163,8 @@ import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { normalizeForIpc } from '../utils/serialization'
 import { writeTextFileAtomically } from '../services/files/TextFileWriteService'
+import { ConfirmDialogWindowService } from '../services/ConfirmDialogWindowService'
+import type { ConfirmDialogRequest, ConfirmDialogResponse } from '../../shared/types'
 
 const WEB_INDEX_OWNER = '__web__'
 
@@ -260,6 +262,25 @@ export function registerHandlers(services: {
       : undefined
   )
   const fileWatchService = new FileWatchService()
+  const confirmDialogService = new ConfirmDialogWindowService()
+  ipcMain.handle(
+    'confirm-dialog-show',
+    async (event, request: ConfirmDialogRequest): Promise<ConfirmDialogResponse> => {
+      const owner = BrowserWindow.fromWebContents(event.sender)
+      if (!owner || owner.webContents !== event.sender) {
+        return { success: false, error: '无法找到确认弹窗所属窗口' }
+      }
+      try {
+        return await confirmDialogService.show(owner, request)
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+  ipcMain.handle('confirm-dialog-close', (event, dialogId: string) => {
+    const owner = BrowserWindow.fromWebContents(event.sender)
+    if (owner && owner.webContents === event.sender) confirmDialogService.close(owner, dialogId)
+  })
   const fileWatchOwners = new Set<number>()
   const {
     embeddingService,

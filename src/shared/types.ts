@@ -76,6 +76,21 @@ export type AppStartupStatus =
       downloadPageUrl: string
     }
 
+export interface ConfirmDialogRequest {
+  dialogId: string
+  title: string
+  message: string
+  detail?: string
+  confirmText: string
+  cancelText?: string
+  danger?: boolean
+  error?: string
+}
+
+export type ConfirmDialogResponse =
+  | { success: true; action: 'confirm' | 'cancel' }
+  | { success: false; error: string }
+
 export interface WebIngestPayload {
   url: string
   includeSelectors?: string[]

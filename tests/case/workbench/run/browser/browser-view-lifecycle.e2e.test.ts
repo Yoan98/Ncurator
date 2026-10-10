@@ -3,7 +3,9 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   createWorkbenchNewSession,
+  dismissWorkbenchPartnerDeleteConfirmation,
   getWorkbenchLocator,
+  openWorkbenchPartnerDeleteConfirmation,
   sendWorkbenchMessage,
   selectWorkbenchResourceMenuItem,
   setupWorkbenchWithTempWorkspace,
@@ -576,12 +578,11 @@ describe('workbench browser lifecycle e2e', () => {
             `${workbenchSelectors.sessionItemPrefix}-`,
             ''
           )
-          await originalSessionItem.hover()
-          await getWorkbenchLocator(
-            page,
-            `${workbenchSelectors.sessionDeleteButtonPrefix}-${sessionId}`
-          ).click()
-          await getWorkbenchLocator(page, workbenchSelectors.sessionDeleteConfirmButton).click()
+          const deleteConfirmation = await openWorkbenchPartnerDeleteConfirmation(
+            runtime,
+            sessionId
+          )
+          await dismissWorkbenchPartnerDeleteConfirmation(deleteConfirmation, 'confirm')
           await originalSessionItem.waitFor({ state: 'detached' })
           const deletedOwnerDestroyed = await runtime.electronApp.evaluate(
             ({ webContents }, webContentsId) =>

@@ -310,6 +310,8 @@ const api: DesktopApi = {
   partnerMarkViewed: (id: string) => ipcRenderer.invoke('chat-session-mark-viewed', id),
   partnerSetPinned: (payload) => ipcRenderer.invoke('chat-session-set-pinned', payload),
   partnerDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
+  confirmDialogShow: (payload) => ipcRenderer.invoke('confirm-dialog-show', payload),
+  confirmDialogClose: (dialogId) => ipcRenderer.invoke('confirm-dialog-close', dialogId),
   partnerMessageList: (partnerId: string) => ipcRenderer.invoke('chat-message-list', partnerId),
   scheduledTaskList: () => {
     emitE2EIpcCall('scheduledTaskList')

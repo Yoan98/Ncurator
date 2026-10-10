@@ -221,6 +221,45 @@ export const selectWorkbenchResourceMenuItem = async (
   return result
 }
 
+export const openWorkbenchPartnerDeleteConfirmation = async (
+  runtime: E2ETestRuntime,
+  partnerId: string
+): Promise<Page> => {
+  const item = getWorkbenchLocator(
+    runtime.page,
+    `${workbenchSelectors.partnerItemPrefix}-${partnerId}`
+  )
+  await item.hover()
+  const popupPromise = runtime.electronApp.waitForEvent('window', { timeout: 10_000 })
+  await getWorkbenchLocator(
+    runtime.page,
+    `${workbenchSelectors.partnerDeleteButtonPrefix}-${partnerId}`
+  ).click()
+  const popup = await popupPromise
+  await popup.getByRole('dialog', { name: '删除这个伙伴？' }).waitFor({ state: 'visible' })
+  await popup.waitForFunction(() => document.visibilityState === 'visible')
+  return popup
+}
+
+export const dismissWorkbenchPartnerDeleteConfirmation = async (
+  popup: Page,
+  action: 'confirm' | 'cancel' | 'close' | 'escape' | 'mask'
+): Promise<void> => {
+  const closed = popup.waitForEvent('close', { timeout: 10_000 })
+  try {
+    if (action === 'escape') await popup.keyboard.press('Escape')
+    else if (action === 'mask') await popup.locator('#mask').click({ position: { x: 8, y: 8 } })
+    else {
+      const name = action === 'confirm' ? '删除' : action === 'close' ? '关闭' : '取消'
+      await popup.getByRole('button', { name, exact: true }).click()
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!/Target page, context or browser has been closed/u.test(message)) throw error
+  }
+  await closed
+}
+
 export const openWorkbenchWorkspaceFile = async (
   runtime: E2ETestRuntime,
   fileName: string
