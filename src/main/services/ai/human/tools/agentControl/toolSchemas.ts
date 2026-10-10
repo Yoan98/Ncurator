@@ -9,13 +9,13 @@ export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
       z.union([
         z
           .object({
-            name: z.string().trim().min(1).max(8).describe('子 agent 名称'),
+            name: z.string().trim().min(1).max(8).describe('子 agent 名称，用于创建新的子agent'),
             task: z.string().trim().min(1).describe('任务内容')
           })
           .strict(),
         z
           .object({
-            agentId: z.string().trim().min(1).describe('子 agent ID'),
+            agentId: z.string().trim().min(1).describe('子 agent ID，用于指定已创建的子agent'),
             task: z.string().trim().min(1).describe('任务内容')
           })
           .strict()
