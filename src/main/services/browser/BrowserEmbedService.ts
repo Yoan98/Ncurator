@@ -15,6 +15,8 @@ import {
   EMBEDDED_BROWSER_PAGE_CONTENT_WAIT_MS,
   EMBEDDED_BROWSER_PARTITION,
   EMBEDDED_BROWSER_RELEASE_SCRIPT_TIMEOUT_MS,
+  EMBEDDED_BROWSER_SCREENSHOT_TIMEOUT_MS,
+  EMBEDDED_BROWSER_STAGEHAND_CLOSE_TIMEOUT_MS,
   EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS
 } from './constants'
 import { BROWSER_RELOAD_CONSOLE_TOKEN, buildNetErrorDocumentHtml } from './netErrorPage'
@@ -75,6 +77,24 @@ const EMPTY_BOUNDS: BrowserPanelBoundsState = {
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+const raceTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string
+): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 const createCancelledError = (): Error & { code: 'CANCELLED' } => {
   const error = new Error('cancelled') as Error & { code: 'CANCELLED' }
@@ -1422,14 +1442,19 @@ export class BrowserEmbedService implements BrowserUseService {
         if (input.action === 'screenshot') {
           await fs.mkdir(path.dirname(input.screenshotPath), { recursive: true })
           await raceAbort(
-            page.screenshot({
-              fullPage: false,
-              animations: 'disabled',
-              caret: 'hide',
-              scale: 'device',
-              path: input.screenshotPath,
-              type: 'png'
-            }),
+            raceTimeout(
+              page.screenshot({
+                fullPage: false,
+                animations: 'disabled',
+                caret: 'hide',
+                scale: 'device',
+                path: input.screenshotPath,
+                timeout: EMBEDDED_BROWSER_SCREENSHOT_TIMEOUT_MS,
+                type: 'png'
+              }),
+              EMBEDDED_BROWSER_SCREENSHOT_TIMEOUT_MS,
+              '浏览器截图超时'
+            ),
             signal,
             abortStagehand
           )
@@ -1546,7 +1571,11 @@ export class BrowserEmbedService implements BrowserUseService {
 
   private async closeStagehand(stagehand: StagehandInstance): Promise<void> {
     try {
-      await stagehand.close({ force: true })
+      await raceTimeout(
+        stagehand.close({ force: true }),
+        EMBEDDED_BROWSER_STAGEHAND_CLOSE_TIMEOUT_MS,
+        'Stagehand close timed out'
+      )
     } catch {
       return
     }
