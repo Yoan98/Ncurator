@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SubagentGroupView, { SubagentCloudProvider } from './SubagentGroupView'
+import { presentSubagentGroups } from './subagentPresentation'
 import { FaSpider } from 'react-icons/fa'
 import { PiBrowsers, PiEyes } from 'react-icons/pi'
 import { TbMoodConfuzed } from 'react-icons/tb'
@@ -677,7 +678,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   const hasNextAiContentForActivity =
     hasFinalAnswer || hasStreamingThought || Boolean(turn?.runFinished)
   const processGroups = useMemo(
-    () => (turn?.processGroups || []).filter((group) => group.kind !== 'thinking'),
+    () =>
+      presentSubagentGroups(
+        (turn?.processGroups || []).filter((group) => group.kind !== 'thinking')
+      ),
     [turn?.processGroups]
   )
   const hasRunningRetry = processGroups.some(

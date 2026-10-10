@@ -90,9 +90,9 @@ describe('subagent approvals through the shared execution chain', () => {
             }
             const saved = path.join(setup.workspace.rootPath, `${mode}-saved.txt`)
             const commands = directories.map(cleanupCommand)
-            const tasks = commands.map((command, index) => ({
+            const agents = commands.map((command, index) => ({
               name: index === 0 ? '清理海豹' : '清理水獭',
-              task: [
+              instruction: [
                 ...(index === 0
                   ? [`先使用文本文件工具创建 ${saved}，内容为 SAVED_${mode}。这项保存操作已授权。`]
                   : []),
@@ -118,9 +118,9 @@ describe('subagent approvals through the shared execution chain', () => {
               runtime.page,
               [
                 '请一次调用 delegate_to_subagent，使用下面参数派发两个独立任务。主伙伴等待子任务结果后，仅汇总本次审批决定和交付结果，不接管或重试清理；拒绝和指导均视为该项已处理。',
-                '各 task 字段是完整任务原文，请原样传递给对应子 agent，保留具体命令、绝对路径及授权条件。',
+                '各 instruction 字段是完整任务原文，请原样传递给对应子 agent，保留具体命令、绝对路径及授权条件。',
                 '```json',
-                JSON.stringify({ tasks }, null, 2),
+                JSON.stringify({ agents }, null, 2),
                 '```'
               ].join('\n')
             )

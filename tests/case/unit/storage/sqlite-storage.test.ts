@@ -781,7 +781,7 @@ describe('persistent child transcript boundaries', () => {
       await partners.savePartner(createPartner('subagent-owner'))
       const logs = new ChatMessageLogStore(core)
       const agents = new AiSubagentStore(core)
-      const child = agents.enqueue('subagent-owner', [{ name: '海豹', task: '原任务' }])[0]
+      const child = agents.enqueue('subagent-owner', [{ name: '海豹', instruction: '原任务' }])[0]
       const entry = { kind: 'assistant' as const, content: '事实', toolCalls: [] }
       await logs.appendBatch({ partnerId: 'subagent-owner', runId: 'R', entries: [entry] })
       await logs.appendBatch({
@@ -807,12 +807,12 @@ describe('persistent child transcript boundaries', () => {
       const update = { ...child, childRunId: 'S2', toolCallId: 'D', status: 'cancelled' as const }
       agents.publish(logs, 'subagent-owner', 'R', update)
       expect(() =>
-        agents.enqueue('another-partner', [{ agentId: child.agentId, task: '续接' }])
+        agents.enqueue('another-partner', [{ agentId: child.agentId, instruction: '续接' }])
       ).toThrow('不属于')
       expect(() =>
         agents.enqueue('subagent-owner', [
-          { agentId: child.agentId, task: '续接' },
-          { agentId: child.agentId, task: '重复' }
+          { agentId: child.agentId, instruction: '续接' },
+          { agentId: child.agentId, instruction: '重复' }
         ])
       ).toThrow('正在')
       expect(agents.list('subagent-owner')[0].status).toBe('cancelled')
@@ -830,7 +830,7 @@ describe('persistent child transcript boundaries', () => {
       expect((await logs.list('subagent-owner')).length).toBe(before)
       expect(await logs.list('subagent-owner', child.agentId)).toHaveLength(2)
       core.exec('DROP TRIGGER reject_child_delete')
-      agents.enqueue('subagent-owner', [{ agentId: child.agentId, task: '续接' }])
+      agents.enqueue('subagent-owner', [{ agentId: child.agentId, instruction: '续接' }])
       agents.interruptActive()
       expect(agents.list('subagent-owner')[0]).toMatchObject({
         task: '原任务',

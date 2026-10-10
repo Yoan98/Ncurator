@@ -111,6 +111,7 @@ const appendToolMessages = async (input: {
     toolName: string
     ok: boolean
     content: string
+    error?: string
     images?: ChatMessageImageRef[]
   }>
 > => {
@@ -119,6 +120,7 @@ const appendToolMessages = async (input: {
     toolName: string
     ok: boolean
     content: string
+    error?: string
     images?: ChatMessageImageRef[]
   }> = []
   for (let index = 0; index < input.calls.length; index += 1) {
@@ -136,6 +138,11 @@ const appendToolMessages = async (input: {
       toolName: call.toolName,
       ok: delivery.ok,
       content: delivery.content,
+      error: delivery.ok
+        ? undefined
+        : !result.ok
+          ? result.data.error.trim() || '未知错误'
+          : delivery.content,
       images: result.ok ? result.imageRefs : undefined
     })
   }
@@ -147,6 +154,7 @@ const appendToolMessages = async (input: {
       toolName: entry.toolName,
       ok: entry.ok,
       content: entry.content,
+      error: entry.error,
       images: entry.images
     }))
   )
@@ -415,6 +423,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         toolName: entry.toolName,
         ok: entry.ok,
         content: entry.content,
+        error: entry.error,
         images: entry.images
       }))
     )

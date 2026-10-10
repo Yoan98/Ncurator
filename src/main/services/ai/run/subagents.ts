@@ -2,7 +2,7 @@ import { getAssistantToolItemCopy } from '../../../../shared/assistantToolCopy'
 import { RUNTIME_TOOL_CATALOG, type RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 import { randomUUID } from 'node:crypto'
 import { SUBAGENT_EXECUTION_CONCURRENCY } from '../constants'
-import type { AiRunDeps, AiRunStartPayload, AiRunState, SubagentTask } from '../types'
+import type { AiRunDeps, AiRunStartPayload, AiRunState, SubagentAssignment } from '../types'
 import type { SubagentUpdate } from '../../../../shared/types'
 import { terminalSessionManager } from '../human/tools/terminal/TerminalSessionManager'
 import { SubagentBlockedError } from './toolPolicy'
@@ -57,13 +57,13 @@ export const createSubagentDispatcher = (
         drain()
       }
     })
-  return async (tasks: SubagentTask[], toolCallId: string) => {
+  return async (assignments: SubagentAssignment[], toolCallId: string) => {
     if (payload.parentToolCallId) throw new SubagentBlockedError('子任务不能再次派发')
-    if (!tasks.length) throw new Error('子任务列表不能为空')
+    if (!assignments.length) throw new Error('子助手分配列表不能为空')
     const modelConfig = await getModelConfig()
-    const agents = deps.subagentStore.enqueue(payload.partnerId, tasks)
+    const agents = deps.subagentStore.enqueue(payload.partnerId, assignments)
     const results = await Promise.allSettled(
-      tasks.map(async (task, index): Promise<SubagentUpdate> => {
+      assignments.map(async (assignment, index): Promise<SubagentUpdate> => {
         const agent = agents[index]
         const childRunId = randomUUID()
         let base: SubagentUpdate = {
@@ -143,10 +143,10 @@ export const createSubagentDispatcher = (
             await publish(base)
             // A task cancelled while queued has no graph messages yet; preserve its original input on first execution.
             const input =
-              task.agentId &&
+              assignment.agentId &&
               !(await deps.chatMessageLogStore.list(payload.partnerId, agent.agentId)).length
-                ? `原任务：${agent.task}\n\n本次任务：${task.task}`
-                : task.task
+                ? `原任务：${agent.task}\n\n本次任务：${assignment.instruction}`
+                : assignment.instruction
             const output = await run(
               {
                 ...payload,
@@ -284,9 +284,10 @@ export const createSubagentDispatcher = (
                       : 'failed',
               result: (
                 blocker ||
-                output.finalDeliveryMarkdown ||
-                output.error ||
-                '执行被中断，未收到完整结果'
+                (output.status === 'failed'
+                  ? [output.error, output.failureRawMessage].filter(Boolean).join('：') ||
+                    '未知错误'
+                  : output.finalDeliveryMarkdown || output.error || '未知错误')
               ).slice(0, 12000),
               artifacts: output.finalArtifacts
             }
@@ -296,7 +297,7 @@ export const createSubagentDispatcher = (
             const update: SubagentUpdate = {
               ...base,
               status: controller.signal.aborted || deps.isCancelled() ? 'cancelled' : 'failed',
-              result: error instanceof Error ? error.message : String(error)
+              result: error instanceof Error ? error.message : String(error ?? '')
             }
             await publish(update)
             return update

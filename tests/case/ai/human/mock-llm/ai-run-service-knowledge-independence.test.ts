@@ -70,7 +70,9 @@ describe('AI runs independent of knowledge configuration', () => {
             if (parentCalls === 3)
               return buildToolDecision({
                 toolName: 'delegate_to_subagent',
-                args: { tasks: [{ name: '读取', task: 'CHILD_LOCAL_READ 读取指定本地文本' }] },
+                args: {
+                  agents: [{ name: '读取', instruction: 'CHILD_LOCAL_READ 读取指定本地文本' }]
+                },
                 summary: '派发文件读取子任务'
               })
             return buildCompleteTaskDecision({ summary: '读取完成' })

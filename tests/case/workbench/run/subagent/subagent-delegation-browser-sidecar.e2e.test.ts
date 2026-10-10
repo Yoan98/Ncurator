@@ -886,4 +886,125 @@ describe('subagent browser and sidecar real UI', () => {
     },
     1_800_000
   )
+  it('subagent-delegation-display', async () => {
+    await runE2ECase({
+      caseId: 'subagent-delegation-display',
+      domain: 'workbench',
+      suite: 'run',
+      groups: ['subagent'],
+      description: '派发只显示助手，失败云保留真实错误并支持刷新恢复',
+      fixtures: [],
+      serviceMode: 'real',
+      execution: 'live',
+      windowMode: 'visible',
+      runMode: 'single',
+      execute: async (runtime) => {
+        const setup = await setupWorkbenchWithTempWorkspace(runtime.page, {
+          caseId: 'subagent-delegation-display',
+          workspaceName: '派发展示'
+        })
+        await createPartnerThroughWorkbenchUi(runtime.page, '派发失败')
+        await selectWorkbenchModel(runtime.page, setup.env.modelName)
+        const missingAgentId = 'missing-subagent-cloud-e2e'
+        const failureStart = Date.now()
+        await sendWorkbenchMessage(
+          runtime.page,
+          [
+            '请只调用一次 delegate_to_subagent，原样传递下面参数。会话 ID 是指定输入，不能替换。工具报错后简短说明并结束，不查询、不重试、不创建新助手。',
+            JSON.stringify({ agents: [{ agentId: missingAgentId, instruction: '仅回复收到' }] })
+          ].join('\n')
+        )
+        const failure = await waitForWorkbenchAiEvent(runtime, {
+          name: 'subagent-dispatch-failed',
+          matches: (event) =>
+            event.type === 'assistant_process_item_failed' && event.failedAt >= failureStart
+        })
+        if (failure.type !== 'assistant_process_item_failed') throw new Error('缺少派发失败事实')
+        await waitForWorkbenchAiRunCompletion(runtime, failureStart, setup.env.modelName, 120_000)
+        const showFailureCloud = async (): Promise<void> => {
+          const toggle = getWorkbenchPrefixLocator(
+            runtime.page,
+            workbenchSelectors.assistantProcessTogglePrefix
+          ).last()
+          await toggle.waitFor({ state: 'visible' })
+          if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
+          const row = runtime.page.locator(
+            `[data-testid="subagent-task"][data-agent-id="${missingAgentId}"]`
+          )
+          await row.waitFor({ state: 'visible' })
+          expect(await row.count()).toBe(1)
+          expect(await row.innerText()).toBe('临时帮手')
+          await row.hover()
+          await waitUntil(async () => {
+            const cloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+            return (
+              (await cloud.count()) === 1 &&
+              (await cloud.innerText()).includes(`我干失败了：${failure.error}`)
+            )
+          }, 10_000)
+          expect(
+            await getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.assistantProcessPrefix)
+              .locator('details > summary')
+              .filter({ hasText: '分头处理' })
+              .count()
+          ).toBe(0)
+        }
+        await showFailureCloud()
+        await runtime.captureScreenshot({
+          name: 'subagent-cloud-dispatch-failed',
+          message: '派发启动前失败在云中显示实际原因，无 Activity'
+        })
+        await runtime.page.reload()
+        await showFailureCloud()
+
+        await runtime.page.mouse.move(0, 0)
+        const successStart = Date.now()
+        await sendWorkbenchMessage(
+          runtime.page,
+          '创建一位名为“数字帮手”的子助手，让它独立核对 17 加 25 的结果并返回数字。请使用 delegate_to_subagent 分配，由你最后汇总。'
+        )
+        const dispatch = await waitForWorkbenchAiEvent(runtime, {
+          name: 'subagent-new-argument-contract',
+          matches: (event) =>
+            event.type === 'tool_call_started' &&
+            event.toolName === 'delegate_to_subagent' &&
+            event.createdAt >= successStart
+        })
+        if (dispatch.type !== 'tool_call_started') throw new Error('缺少真实派发')
+        expect(dispatch.input).toMatchObject({
+          agents: [{ name: '数字帮手', instruction: expect.any(String) }]
+        })
+        expect('tasks' in dispatch.input).toBe(false)
+        await waitForWorkbenchAiRunCompletion(runtime, successStart, setup.env.modelName, 120_000)
+        const children = await updates(runtime, successStart)
+        expect(
+          children.some(
+            (event) => event.update.status === 'completed' && event.update.result?.includes('42')
+          )
+        ).toBe(true)
+        const toggle = getWorkbenchPrefixLocator(
+          runtime.page,
+          workbenchSelectors.assistantProcessTogglePrefix
+        ).last()
+        if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
+        expect(
+          await runtime.page
+            .locator('[data-testid="subagent-task"]')
+            .filter({ hasText: '数字帮手' })
+            .count()
+        ).toBe(1)
+        expect(
+          await getWorkbenchPrefixLocator(runtime.page, workbenchSelectors.assistantProcessPrefix)
+            .locator('details > summary')
+            .filter({ hasText: '分头处理' })
+            .count()
+        ).toBe(0)
+        await assertNoWorkbenchFakeSignals(runtime, await runtime.collectSignals())
+        return { completed: true }
+      },
+      assert: async (result) => {
+        expect(result.completed).toBe(true)
+      }
+    })
+  }, 300_000)
 })

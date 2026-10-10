@@ -97,8 +97,8 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 
 - 主子共用 `AiRunService.run`、human graph、审批、工具、预算、消息投影与 compaction。子工具禁止查询/派发子 agent、主动提问及定时任务管理；并发常量默认 2，其余 FIFO。
 - `ai_subagent` 只存身份、原任务和生命周期；完整 user/assistant/tool、计划、技能及压缩 checkpoint 使用同一 `chat_session_message_log`。SQLite transcript 在入口绑定 `{partnerId, subagentId?}`，graph 不区分读写实现。每个会话独立 seq，续接跨执行读取历史，复用 checkpoint 与原文 tail 后追加新 user。
-- `agentId` 为稳定会话 ID，`childRunId` 为本次执行 ID，`ownerRunId` 为本次父任务文件归属。`list_agent({})` 只返回 ID、名称、原任务、状态；`delegate_to_subagent` 接受创建 `{name,task}` 或续接 `{agentId,task}`。续接校验伙伴归属并原子占用会话，活跃会话不能重复执行。
-- 子过程、结果及审批 annotation 保存到主日志用于 UI，子完整日志不进入主上下文。派发工具汇集交付结果；公开流与完成快照共用消息标识，每轮及重试替换使用独立标识，保留开始、替换与结束；工具动作沿用附带公开消息标识，单纯状态更新不产生新消息。不转发内部推理；诊断关联 agentId 与父子执行。
+- `agentId` 为稳定会话 ID，`childRunId` 为本次执行 ID，`ownerRunId` 为本次父任务文件归属。`list_agent({})` 只返回 ID、名称、原任务、状态；`delegate_to_subagent` 接受非空 `agents` 数组，每项为创建 `{name,instruction}` 或续接 `{agentId,instruction}`，名称与会话 ID 互斥。续接校验伙伴归属并原子占用会话，活跃会话不能重复执行。
+- 派发调用不进入 Activity；执行前失败保留原始错误和输入供子助手云展示，重试后同一目标只展示最新状态。子过程、结果及审批 annotation 保存到主日志用于 UI，子完整日志不进入主上下文。派发工具汇集交付结果；公开流与完成快照共用消息标识，每轮及重试替换使用独立标识，保留开始、替换与结束；工具动作沿用附带公开消息标识，单纯状态更新不产生新消息。不转发内部推理；诊断关联 agentId 与父子执行。
 - 审批共用父任务 FIFO 队列及生产提交入口；等待保留实例并占名额。决定落盘后恢复原 hand，拒绝/指导跳过原操作。旧审批不跨执行复用。
 - 创建和续接继承当前父配置。文件修改从产生时归本次 ownerRunId；历史修改不搬运，终端/浏览器控制及文档工作态不恢复。缺失工具结果由公共投影修复，不重放操作、不伪造真实结果。
 - 完成时同事务保存父结果 annotation 并删除子身份及完整日志；失败、取消、交回父任务保留会话，释放运行资源。启动将排队、运行及等待审批会话标记中断，不自动调用模型。清空消息/删除伙伴清理子会话，保留文件按既有规则处理。
@@ -234,7 +234,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 }
 ```
 
-**`tool`** — 模型可见的工具结果文本；图片只存 ref，不存 Base64。
+**`tool`** — 模型可见的工具结果文本；失败另存可选 `error` 原始原因供 UI 使用，不改变模型可见正文；图片只存 ref，不存 Base64。
 
 ```json
 {

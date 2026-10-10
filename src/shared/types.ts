@@ -2233,6 +2233,7 @@ export type ChatMessageLogEntry =
       toolName: string
       ok: boolean
       content: string
+      error?: string
       images?: ChatMessageImageRef[]
     }
   | ChatMessageLogAnnotationEntry

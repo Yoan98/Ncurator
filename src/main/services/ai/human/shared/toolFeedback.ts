@@ -27,7 +27,8 @@ export const buildToolFeedback = (input: ToolFeedbackInput): ChatMessageLogEntry
     toolCallId: input.toolCallId,
     toolName: input.toolName,
     ok: input.ok,
-    content
+    content,
+    error: input.ok ? undefined : input.errorMessage?.trim() || '未知错误'
   }
 }
 
@@ -43,8 +44,5 @@ export const appendToolFeedback = async (input: {
 }): Promise<void> => {
   const transcript = buildToolFeedback(input)
   appendLogEntriesToCache(input.cache, [transcript])
-  await input.ctx.appendMessageLog([
-    transcript,
-    ...(input.additionalTranscriptEntries || [])
-  ])
+  await input.ctx.appendMessageLog([transcript, ...(input.additionalTranscriptEntries || [])])
 }

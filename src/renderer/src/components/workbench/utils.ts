@@ -224,19 +224,22 @@ export const createDisplayProcessGroup = (input: {
   sourceEventType: AssistantProcessGroup['sourceEventType']
 }): AssistantProcessGroup => {
   const skillKey = getDisplaySkillKey(input.display)
-  return createProcessGroup({
-    id: input.groupId,
-    kind: input.kind,
-    skillKey,
-    iconKind: getDisplayIconKind(input.display),
-    status: input.status,
-    runningText: getDisplayGroupText(input.display, 'running'),
-    completedText: getDisplayGroupText(input.display, 'completed'),
-    failedText: getDisplayGroupText(input.display, 'failed'),
-    partialFailedText: getDisplayGroupText(input.display, 'partial_failed'),
-    createdAt: input.createdAt,
-    sourceEventType: input.sourceEventType
-  })
+  return {
+    ...createProcessGroup({
+      id: input.groupId,
+      kind: input.kind,
+      skillKey,
+      iconKind: getDisplayIconKind(input.display),
+      status: input.status,
+      runningText: getDisplayGroupText(input.display, 'running'),
+      completedText: getDisplayGroupText(input.display, 'completed'),
+      failedText: getDisplayGroupText(input.display, 'failed'),
+      partialFailedText: getDisplayGroupText(input.display, 'partial_failed'),
+      createdAt: input.createdAt,
+      sourceEventType: input.sourceEventType
+    }),
+    toolName: input.display.kind === 'tool' ? normalizeToolName(input.display.toolName) : undefined
+  }
 }
 
 export const createDisplayProcessItem = (input: {
@@ -567,6 +570,8 @@ const completeProcessItem = (
     groupId: string
     itemId: string
     status: AssistantProcessStatus
+    error?: string
+    failureStartedAt?: number
     display?: AssistantProcessDisplay
     sourceEventType: AssistantProcessGroupItem['sourceEventType']
   }
@@ -582,6 +587,8 @@ const completeProcessItem = (
         return {
           ...item,
           status: input.status,
+          error: input.error,
+          failureStartedAt: input.failureStartedAt,
           completedText: input.display
             ? getDisplayItemText(input.display, 'completed')
             : item.completedText,
@@ -725,7 +732,7 @@ export const reduceAssistantProcessGroups = (
         : undefined
     const message = active
       ? (event.update.message ?? actionMessage ?? previous?.message)
-      : event.update.result
+      : event.update.result || (event.update.status === 'failed' ? '未知错误' : undefined)
     const messageId = active
       ? event.update.message !== undefined
         ? event.update.messageId
@@ -740,6 +747,7 @@ export const reduceAssistantProcessGroups = (
     const child = {
       ...previous,
       ...event.update,
+      id: event.update.agentId,
       actions,
       message,
       messageId,
@@ -918,6 +926,8 @@ export const reduceAssistantProcessGroups = (
       groupId: event.groupId,
       itemId: event.itemId,
       status: 'failed',
+      error: event.error,
+      failureStartedAt: event.failedAt,
       display: event.display,
       sourceEventType: event.type
     })

@@ -56,7 +56,7 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
           toolName: DELEGATE_TO_SUBAGENT_TOOL_SPEC.name,
           args,
           execute: async (session) => {
-            const children = await ctx.delegateToSubagent(args.tasks, session.toolCallId)
+            const children = await ctx.delegateToSubagent(args.agents, session.toolCallId)
             const result = {
               toolName: DELEGATE_TO_SUBAGENT_TOOL_SPEC.name,
               ok: true,

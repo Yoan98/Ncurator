@@ -56,5 +56,22 @@ export const formatZodError = (error: ZodErrorLike, maxIssues = 3): string => {
     .join('; ')
 }
 
-export const formatZodErrorForTool = (toolName: string, error: ZodErrorLike): string =>
-  `Tool ${toolName} arguments do not match the schema: ${formatZodError(error)}`
+export const formatZodErrorForTool = (
+  toolName: string,
+  error: ZodErrorLike,
+  args?: Record<string, unknown>
+): string => {
+  if (toolName === 'delegate_to_subagent' && Array.isArray(args?.agents)) {
+    const index = args.agents.findIndex(
+      (agent) =>
+        agent !== null &&
+        typeof agent === 'object' &&
+        !Array.isArray(agent) &&
+        'name' in agent &&
+        'agentId' in agent
+    )
+    if (index >= 0)
+      return `Tool ${toolName} arguments do not match the schema: agents.[${index}]: When continuing a subagent, provide agentId and instruction only; omit name.`
+  }
+  return `Tool ${toolName} arguments do not match the schema: ${formatZodError(error)}`
+}

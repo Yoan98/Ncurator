@@ -4,25 +4,34 @@ import { humanPlanItemSchema } from '../../schema'
 export const LIST_AGENT_SCHEMA = z.object({}).strict()
 
 export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
-  tasks: z
+  agents: z
     .array(
       z.union([
         z
           .object({
-            name: z.string().trim().min(1).max(8).describe('子 agent 名称，用于创建新的子agent'),
-            task: z.string().trim().min(1).describe('任务内容')
+            name: z
+              .string()
+              .trim()
+              .min(1)
+              .max(8)
+              .describe('创建新子agent的名称，不能同时提供 agentId'),
+            instruction: z.string().trim().min(1).describe('交给子agent执行的完整工作指令')
           })
           .strict(),
         z
           .object({
-            agentId: z.string().trim().min(1).describe('子 agent ID，用于指定已创建的子agent'),
-            task: z.string().trim().min(1).describe('任务内容')
+            agentId: z
+              .string()
+              .trim()
+              .min(1)
+              .describe('续接已有子agent的agentId，不能同时提供 name'),
+            instruction: z.string().trim().min(1).describe('交给子agent执行的完整工作指令')
           })
           .strict()
       ])
     )
     .min(1)
-    .describe('子agent任务列表')
+    .describe('本次分配的子agent列表')
 })
 
 export const LEARN_SKILL_SCHEMA = z.object({

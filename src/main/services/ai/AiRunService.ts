@@ -76,7 +76,7 @@ export class AiRunService {
     try {
       const ctx = createAiRunContext(payload, {
         ...deps,
-        delegateToSubagent: (tasks, toolCallId) => dispatch(tasks, toolCallId)
+        delegateToSubagent: (agents, toolCallId) => dispatch(agents, toolCallId)
       })
       const dispatch = createSubagentDispatcher(
         payload,

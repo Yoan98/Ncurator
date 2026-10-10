@@ -20,23 +20,25 @@ const SubagentThought: React.FC<{
   const contentRef = useRef<HTMLDivElement>(null)
   const active = child.status === 'running'
   const text =
-    child.status === 'queued'
-      ? '我在排队'
-      : child.status === 'completed' && !showDelivery
-        ? '已完成'
-        : active
-          ? child.message?.trim()
-            ? child.message
-            : '我在思考中'
-          : child.result ||
-            {
-              waiting_approval: '等待你审核操作',
-              completed: '任务已完成',
-              failed: '执行失败',
-              cancelled: '已停止',
-              blocked: '需要主伙伴继续处理',
-              interrupted: '执行被中断，未收到完整结果'
-            }[child.status]
+    child.status === 'failed' || child.status === 'blocked'
+      ? `我干失败了：${child.result?.trim() || '未知错误'}`
+      : child.status === 'queued'
+        ? '我在排队'
+        : child.status === 'completed' && !showDelivery
+          ? '已完成'
+          : active
+            ? child.message?.trim()
+              ? child.message
+              : '我在思考中'
+            : child.result ||
+              {
+                waiting_approval: '等待你审核操作',
+                completed: '任务已完成',
+                failed: '执行失败',
+                cancelled: '已停止',
+                blocked: '需要主伙伴继续处理',
+                interrupted: '执行被中断，未收到完整结果'
+              }[child.status]
   const streaming = active && child.streaming && Boolean(child.message?.trim())
   useLayoutEffect(() => {
     if (!open || !contentRef.current) return
@@ -100,14 +102,12 @@ export const SubagentCloudProvider: React.FC<{
   const tasks = useMemo(() => groups.flatMap((group) => group.subagents || []), [groups])
   const [manualChildId, setManualChildId] = useState<string>()
   const [automaticMessage, setAutomaticMessage] = useState<{
-    childRunId: string
+    childId: string
     messageId: string
   }>()
   // Existing view state on mount is history, including when returning to a running partner.
   const seen = useRef(
-    new Map(
-      tasks.map((child) => [child.childRunId, child.message?.trim() ? child.messageId : undefined])
-    )
+    new Map(tasks.map((child) => [child.id, child.message?.trim() ? child.messageId : undefined]))
   )
   useEffect(() => {
     let latest: SubagentTaskView | undefined
@@ -116,19 +116,18 @@ export const SubagentCloudProvider: React.FC<{
       if (
         visibleMessageId &&
         child.messageStartedAt !== undefined &&
-        seen.current.get(child.childRunId) !== visibleMessageId
+        seen.current.get(child.id) !== visibleMessageId
       ) {
         if (!latest || (child.messageStartedAt || 0) >= (latest.messageStartedAt || 0))
           latest = child
       }
-      seen.current.set(child.childRunId, visibleMessageId)
+      seen.current.set(child.id, visibleMessageId)
     }
-    if (latest?.messageId)
-      setAutomaticMessage({ childRunId: latest.childRunId, messageId: latest.messageId })
+    if (latest?.messageId) setAutomaticMessage({ childId: latest.id, messageId: latest.messageId })
   }, [tasks])
   const automatic = tasks.find(
     (child) =>
-      child.childRunId === automaticMessage?.childRunId &&
+      child.id === automaticMessage?.childId &&
       child.messageId === automaticMessage.messageId &&
       child.message?.trim()
   )
@@ -151,8 +150,8 @@ export const SubagentCloudProvider: React.FC<{
   return (
     <SubagentCloudContext.Provider
       value={{
-        openChildId: manualChildId || automatic?.childRunId,
-        automaticChildId: automatic?.childRunId,
+        openChildId: manualChildId || automatic?.id,
+        automaticChildId: automatic?.id,
         setManualChildId
       }}
     >
@@ -168,10 +167,10 @@ const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }
   return (
     <div data-testid="subagent-group" className="flex flex-col items-start gap-1 py-1">
       {(group.subagents || []).map((child) => {
-        const open = openChildId === child.childRunId
+        const open = openChildId === child.id
         return (
           <Tooltip
-            key={child.childRunId}
+            key={child.id}
             open={open}
             placement="topLeft"
             align={{ offset: [20, -12] }}
@@ -182,14 +181,14 @@ const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }
             mouseEnterDelay={0.15}
             onOpenChange={(next) =>
               setManualChildId((current) =>
-                next ? child.childRunId : current === child.childRunId ? undefined : current
+                next ? child.id : current === child.id ? undefined : current
               )
             }
             title={
               <SubagentThought
                 child={child}
                 open={open}
-                showDelivery={cloud.automaticChildId === child.childRunId}
+                showDelivery={cloud.automaticChildId === child.id}
               />
             }
           >
@@ -197,16 +196,17 @@ const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }
               type="button"
               data-testid="subagent-task"
               data-child-run-id={child.childRunId}
+              data-agent-id={child.agentId}
               data-status={child.status}
               aria-label={child.name}
               className={`flex items-center gap-1.5 rounded-lg py-1 pr-1 text-left text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-[#9B9A97] ${child.status === 'queued' ? 'text-[#9B9A97]' : 'text-[#37352F]'}`}
             >
               <span className={child.status === 'queued' ? 'grayscale opacity-40' : undefined}>
                 <PartnerAvatar
-                  {...getSubagentAvatar(child.agentId || child.childRunId)}
+                  {...getSubagentAvatar(child.agentId || child.id)}
                   size={32}
                   animated={child.status === 'running'}
-                  animationSeed={child.agentId || child.childRunId}
+                  animationSeed={child.agentId || child.id}
                 />
               </span>
               <span className="max-w-[8em] truncate">{child.name}</span>

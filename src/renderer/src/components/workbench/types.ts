@@ -121,6 +121,8 @@ export type AssistantProcessSkillKey =
 export type AssistantProcessGroupItem = {
   id: string
   status: AssistantProcessStatus
+  error?: string
+  failureStartedAt?: number
   terminalReviewState?: 'reviewing' | 'ready_to_execute' | 'waiting_approval' | 'not_executed'
   terminalReviewDecision?: 'auto_approve' | 'needs_human_review'
   runningText: AssistantRichTextSegment[]
@@ -149,7 +151,13 @@ export type AssistantProcessGroupItem = {
   }
 }
 
-export type SubagentTaskView = import('../../../../shared/types').SubagentUpdate & {
+export type SubagentTaskView = Omit<
+  import('../../../../shared/types').SubagentUpdate,
+  'agentId' | 'childRunId'
+> & {
+  id: string
+  agentId?: string
+  childRunId?: string
   streaming?: boolean
   // Live first-visible-character time; historical projection leaves it unset.
   messageStartedAt?: number
@@ -158,6 +166,7 @@ export type SubagentTaskView = import('../../../../shared/types').SubagentUpdate
 
 export type AssistantProcessGroup = {
   subagents?: SubagentTaskView[]
+  toolName?: AssistantToolName
   id: string
   kind: AssistantProcessGroupKind
   skillKey: AssistantProcessSkillKey

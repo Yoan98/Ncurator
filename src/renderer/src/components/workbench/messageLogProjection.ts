@@ -232,6 +232,7 @@ export const projectProcessGroups = (input: {
         terminalReviewState:
           existingItem?.terminalReviewState === 'not_executed' ? 'not_executed' : null
       })
+      if (!entry.ok) item.error = entry.error || entry.content
       const interaction =
         entry.toolName === 'ask_user_question'
           ? (() => {

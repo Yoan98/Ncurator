@@ -31,10 +31,10 @@ import { terminalSessionManager } from '../../../../../src/main/services/ai/huma
 import type { ChatMessageLogEntry, SubagentUpdate } from '../../../../../src/shared/types'
 
 const complete = (text: string) => buildCompleteTaskDecision({ summary: text })
-const delegate = (tasks: Array<{ name: string; task: string }>) =>
+const delegate = (agents: Array<{ name: string; instruction: string }>) =>
   buildToolDecision({
     toolName: 'delegate_to_subagent',
-    args: { tasks },
+    args: { agents },
     summary: '并行处理独立任务'
   })
 const steps = (
@@ -97,7 +97,10 @@ describe('temporary subagents through production AiRunService', () => {
                 if (!isChild(call))
                   return ++rootCalls === 1
                     ? delegate([
-                        { name: '公式海豹', task: `CHILD_${mode.toUpperCase()} 独立创建核对目录` }
+                        {
+                          name: '公式海豹',
+                          instruction: `CHILD_${mode.toUpperCase()} 独立创建核对目录`
+                        }
                       ])
                     : complete('收到独立任务结果')
                 childInputs.push(call.user)
@@ -257,7 +260,9 @@ describe('temporary subagents through production AiRunService', () => {
             'human.brain': steps((call) => {
               if (!isChild(call))
                 return ++rootCalls === 1
-                  ? delegate(targets.map(({ name }) => ({ name, task: `CHILD_${name} 核对` })))
+                  ? delegate(
+                      targets.map(({ name }) => ({ name, instruction: `CHILD_${name} 核对` }))
+                    )
                   : complete('结果汇总')
               const name = call.user.match(/用户诉求：\nCHILD_([A-Z]+)/)![1]
               const count = (childCalls.get(name) || 0) + 1
@@ -421,19 +426,32 @@ describe('temporary subagents through production AiRunService', () => {
           abortSignal: new AbortController().signal,
           llmScript: {
             'human.brain': steps(async (call) => {
-              if (!isChild(call))
-                return ++parentCalls === 1
+              if (!isChild(call)) {
+                parentCalls += 1
+                if (parentCalls === 1)
+                  return buildToolDecision({
+                    toolName: 'delegate_to_subagent',
+                    args: {
+                      agents: [
+                        { name: '海豹', agentId: 'missing', instruction: 'CHILD_INVALID 不应执行' }
+                      ]
+                    },
+                    summary: '续接参数校验'
+                  })
+                if (parentCalls === 2) expect(call.user).toContain('omit name')
+                return parentCalls === 2
                   ? delegate([
-                      { name: '海豹', task: 'CHILD_ALPHA 独立查验 A' },
-                      { name: '水獭', task: 'CHILD_BETA 独立查验 B' },
-                      { name: '松鼠', task: 'CHILD_GAMMA 独立查验 C' },
-                      { name: '狐狸', task: 'CHILD_DELTA 独立查验 D' },
+                      { name: '海豹', instruction: 'CHILD_ALPHA 独立查验 A' },
+                      { name: '水獭', instruction: 'CHILD_BETA 独立查验 B' },
+                      { name: '松鼠', instruction: 'CHILD_GAMMA 独立查验 C' },
+                      { name: '狐狸', instruction: 'CHILD_DELTA 独立查验 D' },
                       ...Array.from({ length: 8 }, (_, index) => ({
                         name: `飞鸟${index + 1}`,
-                        task: `CHILD_EXTRA_${index + 1} 独立查验`
+                        instruction: `CHILD_EXTRA_${index + 1} 独立查验`
                       }))
                     ])
                   : complete('主伙伴汇集完成')
+              }
               inputs.push(call.user)
               const task = call.user.match(/CHILD_([A-Z_0-9]+)/)?.[1] || ''
               active += 1
@@ -460,6 +478,14 @@ describe('temporary subagents through production AiRunService', () => {
       assert: async (result, runtime) => {
         expect(result.output.status).toBe('completed')
         expect(result.inputs).toHaveLength(12)
+        expect(
+          result.records.some(
+            (record) =>
+              record.entry.kind === 'tool' &&
+              !record.entry.ok &&
+              record.entry.error?.includes('omit name')
+          )
+        ).toBe(true)
         expect(result.peak).toBe(2)
         expect(result.inputs.every((input) => !input.includes('PARENT_SECRET'))).toBe(true)
         const terminal = result.records.filter(
@@ -569,8 +595,8 @@ describe('temporary subagents through production AiRunService', () => {
               if (!isChild(call)) {
                 return ++parentCalls <= 2
                   ? delegate([
-                      { name: '海豹', task: `CHILD_CACHE_A 核验 ${files[0]}` },
-                      { name: '水獭', task: `CHILD_CACHE_B 核验 ${files[1]}` }
+                      { name: '海豹', instruction: `CHILD_CACHE_A 核验 ${files[0]}` },
+                      { name: '水獭', instruction: `CHILD_CACHE_B 核验 ${files[1]}` }
                     ])
                   : complete('主伙伴只整合独立结果')
               }
@@ -632,7 +658,7 @@ describe('temporary subagents through production AiRunService', () => {
               }
               parentRound += 1
               if (parentRound === 1)
-                return delegate([{ name: '海豹', task: `CHILD_RESUME 核对 ${files[0]}` }])
+                return delegate([{ name: '海豹', instruction: `CHILD_RESUME 核对 ${files[0]}` }])
               if (parentRound === 2)
                 return buildToolDecision({
                   toolName: 'list_agent',
@@ -642,7 +668,7 @@ describe('temporary subagents through production AiRunService', () => {
               if (parentRound === 3)
                 return buildToolDecision({
                   toolName: 'delegate_to_subagent',
-                  args: { tasks: [{ agentId, task: 'CHILD_RESUME 继续核对并交付' }] },
+                  args: { agents: [{ agentId, instruction: 'CHILD_RESUME 继续核对并交付' }] },
                   summary: '继续核对'
                 })
               return complete('核对交付完成')
@@ -797,11 +823,11 @@ describe('temporary subagents through production AiRunService', () => {
                 return delegate(
                   phase === 3
                     ? [
-                        { name: '海豹3', task: `PHASE_3 等待取消 ${file}` },
-                        { name: '水獭3', task: `PHASE_3 等待取消 ${file}` },
-                        { name: '排队狐狸', task: 'PHASE_QUEUED 不应该开始' }
+                        { name: '海豹3', instruction: `PHASE_3 等待取消 ${file}` },
+                        { name: '水獭3', instruction: `PHASE_3 等待取消 ${file}` },
+                        { name: '排队狐狸', instruction: 'PHASE_QUEUED 不应该开始' }
                       ]
-                    : [{ name: `海豹${phase}`, task: `PHASE_${phase} 修改 ${file}` }]
+                    : [{ name: `海豹${phase}`, instruction: `PHASE_${phase} 修改 ${file}` }]
                 )
               }
               const phase = call.user.match(/PHASE_(\d)/)?.[1] || '1'
@@ -951,15 +977,16 @@ describe('temporary subagents through production AiRunService', () => {
             'human.context_compaction': [{ text: 'COMPACT_CHILD' }, { text: 'COMPACT_CHILD' }]
           }
         })
-        const tasks = [
-          { name: '海豹', task: '独立任务 A' },
-          { name: '水獭', task: '独立任务 B' }
+        const agents = [
+          { name: '海豹', instruction: '独立任务 A' },
+          { name: '水獭', instruction: '独立任务 B' }
         ]
         const update: SubagentUpdate = {
           agentId: 'historical-a',
           toolCallId: 'dispatch-1',
           childRunId: 'child-a',
-          ...tasks[0],
+          name: agents[0].name,
+          task: agents[0].instruction,
           status: 'completed',
           result: 'VERIFIED_A'
         }
@@ -967,7 +994,7 @@ describe('temporary subagents through production AiRunService', () => {
           {
             kind: 'assistant',
             content: '派发',
-            toolCalls: [{ id: 'dispatch-1', name: 'delegate_to_subagent', args: { tasks } }]
+            toolCalls: [{ id: 'dispatch-1', name: 'delegate_to_subagent', args: { agents } }]
           },
           { kind: 'annotation', eventType: 'subagent_updated', payload: update },
           {
@@ -977,7 +1004,8 @@ describe('temporary subagents through production AiRunService', () => {
               agentId: 'historical-b',
               toolCallId: 'dispatch-1',
               childRunId: 'child-b',
-              ...tasks[1],
+              name: agents[1].name,
+              task: agents[1].instruction,
               status: 'queued'
             }
           }
@@ -999,9 +1027,9 @@ describe('temporary subagents through production AiRunService', () => {
                   id: 'dispatch-1',
                   name: 'delegate_to_subagent',
                   args: {
-                    tasks: [
-                      { agentId: 'historical-a', task: '续接交付' },
-                      { agentId: 'historical-b', task: '继续' }
+                    agents: [
+                      { agentId: 'historical-a', instruction: '续接交付' },
+                      { agentId: 'historical-b', instruction: '继续' }
                     ]
                   }
                 }
@@ -1017,7 +1045,7 @@ describe('temporary subagents through production AiRunService', () => {
           'historical-b'
         )
         const childInfo = runtime.storageService.subagent.enqueue(runner.payload.partnerId, [
-          { name: '海豹', task: '独立任务继续' }
+          { name: '海豹', instruction: '独立任务继续' }
         ])[0]
         const memory = createSqliteTranscript(
           runtime.storageService.chatMessageLog,
@@ -1096,7 +1124,9 @@ describe('temporary subagents through production AiRunService', () => {
               if (++queuedParentRound === 1)
                 return buildToolDecision({
                   toolName: 'delegate_to_subagent',
-                  args: { tasks: [{ agentId: queuedAgentId, task: 'CHILD_QUEUED_CONTINUE' }] },
+                  args: {
+                    agents: [{ agentId: queuedAgentId, instruction: 'CHILD_QUEUED_CONTINUE' }]
+                  },
                   summary: '继续排队任务'
                 })
               return complete('主任务交付完成')
@@ -1104,7 +1134,7 @@ describe('temporary subagents through production AiRunService', () => {
           }
         })
         queuedAgentId = runtime.storageService.subagent.enqueue(queuedRunner.partnerId, [
-          { name: '排队海豹', task: 'CHILD_QUEUED_ORIGINAL' }
+          { name: '排队海豹', instruction: 'CHILD_QUEUED_ORIGINAL' }
         ])[0].agentId
         runtime.storageService.subagent.interruptActive()
         const queuedResume = await queuedRunner.submit()

@@ -6,7 +6,7 @@ import type {
 import type { PartnerStore } from '../storage/domains/PartnerStore'
 import type {
   AiSubagentStore,
-  SubagentTask,
+  SubagentAssignment,
   SubagentInfo
 } from '../storage/domains/AiSubagentStore'
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
@@ -316,12 +316,12 @@ export type AiTranscript = {
   load: () => Promise<ChatMessageLogRecord[]>
 }
 
-export type { SubagentTask }
+export type { SubagentAssignment }
 
 export type AiRunDeps = {
   modelConfig?: LlmRuntimeConfig
   delegateToSubagent?: (
-    tasks: SubagentTask[],
+    agents: SubagentAssignment[],
     toolCallId: string
   ) => Promise<import('../../../shared/types').SubagentUpdate[]>
   releaseRun?: (runId: string) => Promise<void>
@@ -374,7 +374,7 @@ export type AiRunContext = {
   isSubagent: boolean
   listAgents: () => SubagentInfo[]
   delegateToSubagent: (
-    tasks: SubagentTask[],
+    agents: SubagentAssignment[],
     toolCallId: string
   ) => Promise<import('../../../shared/types').SubagentUpdate[]>
   acquireFile: (sourcePath: string) => void

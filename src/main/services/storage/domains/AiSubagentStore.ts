@@ -4,9 +4,9 @@ import type { SqliteCore } from '../sqlite/SqliteCore'
 import type { ChatMessageLogStore } from './ChatMessageLogStore'
 
 export type SubagentInfo = Pick<SubagentUpdate, 'agentId' | 'name' | 'task' | 'status'>
-export type SubagentTask =
-  | { name: string; task: string; agentId?: never }
-  | { agentId: string; task: string; name?: never }
+export type SubagentAssignment =
+  | { name: string; instruction: string; agentId?: never }
+  | { agentId: string; instruction: string; name?: never }
 type SubagentRow = {
   id: string
   partner_id: string
@@ -35,16 +35,16 @@ export class AiSubagentStore {
     ).map(info)
   }
 
-  public enqueue(partnerId: string, tasks: SubagentTask[]): SubagentInfo[] {
+  public enqueue(partnerId: string, assignments: SubagentAssignment[]): SubagentInfo[] {
     return this.sqlite.transaction(() => {
       const now = Date.now()
-      return tasks.map((task) => {
-        if (task.agentId) {
+      return assignments.map((assignment) => {
+        if (assignment.agentId) {
           const row = this.sqlite
             .prepare(
               'SELECT id, partner_id, name, task, status FROM ai_subagent WHERE id = ? AND partner_id = ?'
             )
-            .get(task.agentId, partnerId) as SubagentRow | undefined
+            .get(assignment.agentId, partnerId) as SubagentRow | undefined
           if (!row) throw new Error('子 agent 不存在或不属于当前伙伴')
           if (active.has(row.status)) throw new Error('子 agent 正在执行、排队或等待审批')
           this.sqlite
@@ -57,8 +57,13 @@ export class AiSubagentStore {
           .prepare(
             'INSERT INTO ai_subagent (id, partner_id, name, task, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
           )
-          .run(agentId, partnerId, task.name, task.task, 'queued', now, now)
-        return { agentId, name: task.name!, task: task.task, status: 'queued' as const }
+          .run(agentId, partnerId, assignment.name, assignment.instruction, 'queued', now, now)
+        return {
+          agentId,
+          name: assignment.name!,
+          task: assignment.instruction,
+          status: 'queued' as const
+        }
       })
     })
   }
