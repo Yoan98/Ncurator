@@ -43,10 +43,10 @@ const renderSelection = (node: DocumentSelectionNode): string => {
     node.anchor?.kind === 'ppt'
       ? `页面标识：${node.anchor.slideId}${node.anchor.elementId ? `；元素标识：${node.anchor.elementId}` : ''}`
       : '',
-    node.anchor?.kind === 'text'
+    node.anchor?.kind === 'text' && node.anchor.sourceText !== node.selectedText
       ? renderExcerptBlock('对应的源文件片段（定位用）', node.anchor.sourceText)
       : '',
-    node.image ? `选中时的画面：${node.image.path}（可用 read_image 读取；原文件可能已变化）` : '',
+    node.image ? `选中时的画面：${node.image.path}` : '',
     renderExcerptBlock(`${label}的原文`, node.selectedText),
     renderExcerptBlock(`${label}的前文（上下文，仅供理解与定位）`, node.contextBefore),
     renderExcerptBlock(`${label}的后文（上下文，仅供理解与定位）`, node.contextAfter)
