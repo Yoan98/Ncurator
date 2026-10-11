@@ -52,7 +52,7 @@ describe('workbench scheduled-task e2e', () => {
         domain: 'workbench',
         suite: 'scheduled-task',
         groups: [],
-        description: '创建下一分钟触发的定时任务后，向绑定伙伴追加消息并发送，不切换当前查看伙伴。',
+        description: '创建未来分钟触发的定时任务后，向绑定伙伴追加消息并发送，不切换当前查看伙伴。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -110,6 +110,13 @@ describe('workbench scheduled-task e2e', () => {
             `${workbenchSelectors.partnerItemPrefix}-${viewingPartner.id}`
           ).click()
 
+          const runningMarker = getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.partnerItemPrefix}-${targetPartner.id}`
+          ).locator('[aria-label="任务运行中"]')
+          // Observe before the due time; a short run can finish between IPC polling intervals.
+          await runningMarker.waitFor({ state: 'visible', timeout: 210_000 })
+          const runningMarkerVisible = await runningMarker.isVisible()
           const deadline = Date.now() + 210_000
           let boundPartnerId = ''
           let triggeredMessage = false
@@ -155,6 +162,7 @@ describe('workbench scheduled-task e2e', () => {
             VIEWING_DRAFT
 
           return {
+            runningMarkerVisible,
             scheduledHhmm,
             boundPartnerCreated: Boolean(boundPartner) && boundPartner?.id === targetPartner.id,
             sameViewingPartner: selectedStillViewing,
@@ -168,7 +176,8 @@ describe('workbench scheduled-task e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.boundPartnerCreated &&
+            result.runningMarkerVisible &&
+              result.boundPartnerCreated &&
               result.sameViewingPartner &&
               result.viewingDraftUnchanged &&
               result.viewingPartnerUntouched &&

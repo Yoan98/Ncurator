@@ -90,21 +90,113 @@ const createService = () => {
   }
   const getPartnerUiState = vi.fn(async () => uiState)
   const submitTask = vi.fn(async (): Promise<ChatSubmitResponse> => ({ success: true }))
+  const hasActivePartnerRun = vi.fn(() => false)
+  const emitSessionListRefresh = vi.fn()
+  const now = vi.fn(() => NOW)
   const service = new ScheduledTaskService({
     taskStore,
     partnerStore,
     getPartnerUiState,
-    hasActivePartnerRun: () => false,
+    hasActivePartnerRun,
     submitTask,
-    emitSessionListRefresh: vi.fn(),
-    now: () => NOW,
+    emitSessionListRefresh,
+    now,
     setTimer: vi.fn(() => 1),
     clearTimer: vi.fn()
   })
-  return { service, taskStore, partnerStore, getPartnerUiState, submitTask }
+  return {
+    service,
+    taskStore,
+    partnerStore,
+    getPartnerUiState,
+    submitTask,
+    hasActivePartnerRun,
+    emitSessionListRefresh,
+    now
+  }
 }
 
 describe('ScheduledTaskService', () => {
+  it('advances busy due tasks once without queueing a catch-up run', async () => {
+    const { service, taskStore, submitTask, hasActivePartnerRun, emitSessionListRefresh } =
+      createService()
+    taskStore.set(makeTask({ nextRunAt: NOW }))
+    hasActivePartnerRun.mockReturnValue(true)
+
+    await service.runDue()
+    const postponed = await taskStore.getById('task-1')
+    expect(postponed).toMatchObject({
+      busyCancelNoticeAt: NOW,
+      nextRunAt: new Date(2026, 0, 1, 9, 0).getTime()
+    })
+    expect(submitTask).not.toHaveBeenCalled()
+    expect(emitSessionListRefresh).toHaveBeenCalledOnce()
+
+    hasActivePartnerRun.mockReturnValue(false)
+    await service.runDue()
+    expect(await taskStore.getById('task-1')).toEqual(postponed)
+    expect(taskStore.save).toHaveBeenCalledOnce()
+    expect(submitTask).not.toHaveBeenCalled()
+  })
+
+  it('skips missed startup schedules even within the running grace period', async () => {
+    const { service, taskStore, submitTask } = createService()
+    taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
+    await service.start()
+    await service.runDue()
+    expect(submitTask).not.toHaveBeenCalled()
+    expect((await taskStore.getById('task-1'))?.nextRunAt).toBe(
+      new Date(2026, 0, 1, 9, 0).getTime()
+    )
+    service.stop()
+  })
+
+  it.each([60_000, 60_001])('handles a running scheduler waking %i ms late', async (delay) => {
+    const { service, taskStore, submitTask, now } = createService()
+    const due = new Date(2026, 0, 1, 9, 0).getTime()
+    taskStore.set(makeTask({ nextRunAt: due }))
+    await service.start()
+    now.mockReturnValue(due + delay)
+    await service.runDue()
+    expect(submitTask).toHaveBeenCalledTimes(delay === 60_000 ? 1 : 0)
+    expect((await taskStore.getById('task-1'))?.nextRunAt).toBe(
+      new Date(2026, 0, 2, 9, 0).getTime()
+    )
+    await service.runDue()
+    expect(submitTask).toHaveBeenCalledTimes(delay === 60_000 ? 1 : 0)
+    service.stop()
+  })
+
+  it('rejects run-now while busy and preserves the schedule on a later manual run', async () => {
+    const { service, taskStore, submitTask, hasActivePartnerRun } = createService()
+    const task = makeTask({ nextRunAt: NOW + 3_600_000, busyCancelNoticeAt: NOW - 1 })
+    taskStore.set(task)
+    hasActivePartnerRun.mockReturnValue(true)
+    expect(await service.runNow({ id: task.id })).toMatchObject({
+      success: false,
+      error: '请等待当前任务结束，或先停止后再执行'
+    })
+    expect(submitTask).not.toHaveBeenCalled()
+    expect(taskStore.save).not.toHaveBeenCalled()
+
+    hasActivePartnerRun.mockReturnValue(false)
+    expect(await service.runNow({ id: task.id })).toMatchObject({ success: true })
+    expect(submitTask).toHaveBeenCalledOnce()
+    expect(await taskStore.getById(task.id)).toMatchObject({
+      nextRunAt: task.nextRunAt,
+      busyCancelNoticeAt: null
+    })
+  })
+
+  it('dismisses only the busy notice without executing or rescheduling', async () => {
+    const { service, taskStore, submitTask } = createService()
+    const task = makeTask({ nextRunAt: NOW + 3_600_000, busyCancelNoticeAt: NOW - 1 })
+    taskStore.set(task)
+    expect(await service.dismissBusyNotice({ id: task.id })).toMatchObject({ success: true })
+    expect(await taskStore.getById(task.id)).toEqual({ ...task, busyCancelNoticeAt: null })
+    expect(submitTask).not.toHaveBeenCalled()
+  })
+
   it('requires an existing partner and creates enabled tasks', async () => {
     const { service, taskStore } = createService()
     const response = await service.save({

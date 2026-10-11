@@ -1,0 +1,51 @@
+diff --git a/dist/index-5nb1RZV7.d.ts b/dist/index-5nb1RZV7.d.ts
+index e0e55e751d25f97e156867bf4129f4b00122bf87..e814b70f7ca74122b51cf8cd93e35263f1c84e1e 100644
+--- a/dist/index-5nb1RZV7.d.ts
++++ b/dist/index-5nb1RZV7.d.ts
+@@ -23,6 +23,8 @@ interface MeasureResult {
+ type TextMeasurer = (text: string, spec: FontSpec) => MeasureResult;
+ type TextLayoutMode = 'foreignObject' | 'svg';
+ interface RenderSlideOptions {
++  /** Emit stable shape identifiers for interactive selection. */
++  readonly includeShapeIds?: boolean;
+   /** Measurer used by the pure-SVG text path. Required when `textLayout` is
+    *  'svg'; ignored otherwise. */
+   readonly measureText?: TextMeasurer;
+diff --git a/dist/src-Q2z_XgT6.js b/dist/src-Q2z_XgT6.js
+index 756391541d8dfb33625f542c2ac84dfde3e3265b..99a0693125688b554bf2e2bbafeb71296990d28f 100644
+--- a/dist/src-Q2z_XgT6.js
++++ b/dist/src-Q2z_XgT6.js
+@@ -1,4 +1,4 @@
+-import { getEffectiveColorMap, getGroupChildren, getGroupTransform, getParagraphAlignment, getParagraphBullet, getParagraphBulletImageBytes, getParagraphBulletStyle, getParagraphIndent, getParagraphLevel, getParagraphPropertiesEffective, getParagraphSpacing, getPresentationFonts, getPresentationTheme, getShapeAdjustValues, getShapeAltTitle, getShapeBodyPrEffective, getShapeBoundsResolved, getShapeChartSpec, getShapeClickAction, getShapeCustomGeometry, getShapeDescription, getShapeEffectsEffective, getShapeFillColorResolved, getShapeFillEffective, getShapeFlip, getShapeGradientFill, getShapeGradientFillEffective, getShapeHyperlink, getShapeHyperlinkTooltip, getShapeImageBiLevelThreshold, getShapeImageBrightness, getShapeImageBytes, getShapeImageContrast, getShapeImageCrop, getShapeImageDuotone, getShapeImageFillBytes, getShapeImageFormat, getShapeImageLinkUrl, getShapeImageOpacity, getShapeImagePartName, getShapeKind, getShapeName, getShapeParagraphCount, getShapeParagraphElements, getShapePatternFill, getShapePlaceholderType, getShapePreset, getShapeRotation, getShapeRunClickAction, getShapeRunFormat, getShapeRunFormatEffective, getShapeRunHyperlink, getShapeRunHyperlinkTooltip, getShapeStrokeArrow, getShapeStrokeCap, getShapeStrokeColorResolved, getShapeStrokeCompound, getShapeStrokeDash, getShapeStrokeEffective, getShapeStrokeJoin, getShapeTextAnchor, getShapeTextAutoFitParams, getShapeTextBodyRotationDeg, getShapeTextColumns, getShapeTextDirection, getShapeTextMargins, getShapeXmlString, getSlideBackground, getSlideBackgroundGradientFill, getSlideBackgroundImageBytes, getSlideBackgroundPatternFill, getSlideIndex, getSlideLayout, getSlideLayoutBackground, getSlideLayoutBackgroundGradientFill, getSlideLayoutBackgroundImageBytes, getSlideLayoutBackgroundPatternFill, getSlideLayoutShapes, getSlideMasterBackground, getSlideMasterBackgroundGradientFill, getSlideMasterBackgroundImageBytes, getSlideMasterBackgroundPatternFill, getSlideMasterShapes, getSlideShapes, getSlideSize, getTableCellAnchor, getTableCellBorders, getTableCellFill, getTableCellMargins, getTableCellParagraphs, getTableCellSpan, getTableCells, getTableColumnWidths, getTableDimensions, getTableRowHeights, getTableStyleFlags, isChartShape, isParagraphBulletPicture, isShapeImageGrayscale, isShapePlaceholder, isShapeTextBox, isTableShape, resolveDeckBodyTextColor } from "pptx-kit";
++import { getShapeId, getEffectiveColorMap, getGroupChildren, getGroupTransform, getParagraphAlignment, getParagraphBullet, getParagraphBulletImageBytes, getParagraphBulletStyle, getParagraphIndent, getParagraphLevel, getParagraphPropertiesEffective, getParagraphSpacing, getPresentationFonts, getPresentationTheme, getShapeAdjustValues, getShapeAltTitle, getShapeBodyPrEffective, getShapeBoundsResolved, getShapeChartSpec, getShapeClickAction, getShapeCustomGeometry, getShapeDescription, getShapeEffectsEffective, getShapeFillColorResolved, getShapeFillEffective, getShapeFlip, getShapeGradientFill, getShapeGradientFillEffective, getShapeHyperlink, getShapeHyperlinkTooltip, getShapeImageBiLevelThreshold, getShapeImageBrightness, getShapeImageBytes, getShapeImageContrast, getShapeImageCrop, getShapeImageDuotone, getShapeImageFillBytes, getShapeImageFormat, getShapeImageLinkUrl, getShapeImageOpacity, getShapeImagePartName, getShapeKind, getShapeName, getShapeParagraphCount, getShapeParagraphElements, getShapePatternFill, getShapePlaceholderType, getShapePreset, getShapeRotation, getShapeRunClickAction, getShapeRunFormat, getShapeRunFormatEffective, getShapeRunHyperlink, getShapeRunHyperlinkTooltip, getShapeStrokeArrow, getShapeStrokeCap, getShapeStrokeColorResolved, getShapeStrokeCompound, getShapeStrokeDash, getShapeStrokeEffective, getShapeStrokeJoin, getShapeTextAnchor, getShapeTextAutoFitParams, getShapeTextBodyRotationDeg, getShapeTextColumns, getShapeTextDirection, getShapeTextMargins, getShapeXmlString, getSlideBackground, getSlideBackgroundGradientFill, getSlideBackgroundImageBytes, getSlideBackgroundPatternFill, getSlideIndex, getSlideLayout, getSlideLayoutBackground, getSlideLayoutBackgroundGradientFill, getSlideLayoutBackgroundImageBytes, getSlideLayoutBackgroundPatternFill, getSlideLayoutShapes, getSlideMasterBackground, getSlideMasterBackgroundGradientFill, getSlideMasterBackgroundImageBytes, getSlideMasterBackgroundPatternFill, getSlideMasterShapes, getSlideShapes, getSlideSize, getTableCellAnchor, getTableCellBorders, getTableCellFill, getTableCellMargins, getTableCellParagraphs, getTableCellSpan, getTableCells, getTableColumnWidths, getTableDimensions, getTableRowHeights, getTableStyleFlags, isChartShape, isParagraphBulletPicture, isShapeImageGrayscale, isShapePlaceholder, isShapeTextBox, isTableShape, resolveDeckBodyTextColor } from "pptx-kit";
+ //#region src/text-layout.ts
+ const SANS = "Carlito";
+ const SERIF = "Caladea";
+@@ -4014,6 +4014,10 @@ const customGeometryToSvg = (geom, x, y, w, h, fill, stroke, strokeWidthEmu, str
+ 	return out.join("");
+ };
+ const renderShape = (shape, pres, theme, ctx) => {
++  const svg = renderShapeContent(shape, pres, theme, ctx);
++  return svg && ctx.selection ? `<g data-nc-shape-id="${getShapeId(shape)}">${svg}</g>` : svg;
++};
++const renderShapeContent = (shape, pres, theme, ctx) => {
+ 	const bounds = getShapeBoundsResolved(pres, shape);
+ 	if (!bounds) return "";
+ 	const x = bounds.x;
+@@ -4326,6 +4330,7 @@ const renderSlideSvg = (pres, slide, opts = {}) => {
+ 	activeColorMap = getEffectiveColorMap(slide);
+ 	activeDeckTextColor = resolveDeckBodyTextColor(slide) ?? "#000000";
+ 	const ctx = {
++		selection: opts.includeShapeIds === true,
+ 		mode: opts.textLayout ?? "foreignObject",
+ 		measure: opts.measureText ?? defaultMeasurer
+ 	};
+@@ -4395,7 +4400,7 @@ const renderSlideSvg = (pres, slide, opts = {}) => {
+ 	if (layoutForBg) try {
+ 		const masterShapes = getSlideMasterShapes(pres, layoutForBg);
+ 		const layoutShapes = getSlideLayoutShapes(pres, layoutForBg);
+-		layoutBgShapes = [...masterShapes, ...layoutShapes].map((s) => renderShape(s, pres, theme, ctx)).join("");
++		layoutBgShapes = [...masterShapes, ...layoutShapes].map((s) => renderShape(s, pres, theme, { ...ctx, selection: false })).join("");
+ 	} catch {
+ 		layoutBgShapes = "";
+ 	}

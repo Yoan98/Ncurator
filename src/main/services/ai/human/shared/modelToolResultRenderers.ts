@@ -27,8 +27,7 @@ export const renderGenericModelResult: ModelResultRenderer = ({ toolName }) =>
 export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ data }) => {
   const answers = isObject(data) && Array.isArray(data.answers) ? data.answers.filter(isObject) : []
   return joinGroupedSections([
-    renderGroupedHeader('The user answered the clarification questions.'),
-    'The original option order: A=first, B=second, C=third, and so on.',
+    renderGroupedHeader('The user replied to the questions or collaboration request.'),
     ...answers.map((answer) => {
       const selectedOptionIds = Array.isArray(answer.selectedOptionIds)
         ? answer.selectedOptionIds.filter((value): value is string => typeof value === 'string')

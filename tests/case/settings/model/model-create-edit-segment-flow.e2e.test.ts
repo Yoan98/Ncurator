@@ -28,6 +28,17 @@ describe('settings model e2e', () => {
 
           let presetNameInputCount = 0
           let presetProviderDisabled = false
+          let presetConfiguredLabel = false
+          let presetDefaultAddress = ''
+          let defaultRecommendChecked = false
+          const modal = getSettingsLocator(page, settingsSelectors.modelModal).locator(
+            '.ant-modal-content'
+          )
+          const field = (id: string) => getSettingsLocator(page, id)
+          const requiredBlocked: boolean[] = []
+          let duplicateBlocked = false
+          let maskPreservesInput = false
+          let customPrefillCorrect = false
 
           await runtime.step({
             name: 'open-create-form-preset-default',
@@ -36,6 +47,12 @@ describe('settings model e2e', () => {
               await navigateToSettingsSection(page, 'model')
               await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
               await providerSelect().waitFor({ state: 'visible' })
+              defaultRecommendChecked = await field(settingsSelectors.modelTypeRecommend).evaluate(
+                (element) =>
+                  element instanceof HTMLInputElement
+                    ? element.checked
+                    : element.querySelector('input')?.checked === true
+              )
               presetNameInputCount = await getSettingsLocator(
                 page,
                 settingsSelectors.modelNameInput
@@ -70,11 +87,23 @@ describe('settings model e2e', () => {
                 .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
                 .last()
               await dropdown.waitFor({ state: 'visible' })
+              presetDefaultAddress =
+                (await page.evaluate(() => window.api.llmConfigList())).find(
+                  (config) => config.name === 'DeepSeek'
+                )?.base_url || ''
+              presetConfiguredLabel = (
+                await dropdown
+                  .locator('.ant-select-item-option')
+                  .filter({ hasText: 'DeepSeek' })
+                  .innerText()
+              ).includes('已配置')
               presetProviderDisabled = await dropdown
                 .locator('.ant-select-item-option')
                 .filter({ hasText: 'DeepSeek' })
                 .first()
-                .evaluate((element) => element.classList.contains('ant-select-item-option-disabled'))
+                .evaluate((element) =>
+                  element.classList.contains('ant-select-item-option-disabled')
+                )
             }
           })
 
@@ -92,6 +121,23 @@ describe('settings model e2e', () => {
               await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(
                 'sk-segment-custom'
               )
+              for (const [id, value, error] of [
+                [settingsSelectors.modelNameInput, 'Segment 自定义', '请输入名称'],
+                [
+                  settingsSelectors.modelBaseUrlInput,
+                  'https://segment.local/v1',
+                  '请输入模型服务地址'
+                ],
+                [settingsSelectors.modelApiKeyInput, 'sk-segment-custom', '请输入 API Key']
+              ]) {
+                await field(id).fill('')
+                await field(settingsSelectors.modelSaveButton).click()
+                await modal.getByText(error, { exact: true }).waitFor({ state: 'visible' })
+                requiredBlocked.push(
+                  (await modal.isVisible()) && (await page.locator('tbody tr').count()) === 1
+                )
+                await field(id).fill(value)
+              }
               await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
               await page
                 .locator('tbody tr')
@@ -99,6 +145,39 @@ describe('settings model e2e', () => {
                 .waitFor({ state: 'visible' })
             }
           })
+
+          await modal.waitFor({ state: 'hidden' })
+          await page
+            .locator('tbody tr')
+            .filter({ hasText: 'Segment 自定义' })
+            .locator(`[data-testid^="${settingsSelectors.modelEditButtonPrefix}-"]`)
+            .click()
+          customPrefillCorrect =
+            (await field(settingsSelectors.modelNameInput).inputValue()) === 'Segment 自定义' &&
+            (await field(settingsSelectors.modelBaseUrlInput).inputValue()) ===
+              'https://segment.local/v1' &&
+            (await field(settingsSelectors.modelApiKeyInput).inputValue()) === 'sk-segment-custom'
+          await field(settingsSelectors.modelCancelButton).click()
+          await modal.waitFor({ state: 'hidden' })
+          await field(settingsSelectors.modelAddButton).click()
+          await customRadio().click()
+          await field(settingsSelectors.modelNameInput).fill('Segment 自定义')
+          await field(settingsSelectors.modelBaseUrlInput).fill('https://duplicate.local/v1')
+          await field(settingsSelectors.modelApiKeyInput).fill('sk-duplicate')
+          await page.locator('.ant-modal-wrap:visible').click({ position: { x: 5, y: 5 } })
+          maskPreservesInput =
+            (await modal.isVisible()) &&
+            (await field(settingsSelectors.modelBaseUrlInput).inputValue()) ===
+              'https://duplicate.local/v1'
+          await field(settingsSelectors.modelSaveButton).click()
+          await page
+            .getByText(/名称.*(已存在|重复)|同名/)
+            .first()
+            .waitFor({ state: 'visible' })
+          duplicateBlocked =
+            (await modal.isVisible()) && (await page.locator('tbody tr').count()) === 2
+          await field(settingsSelectors.modelCancelButton).click()
+          await modal.waitFor({ state: 'hidden' })
 
           let presetProviderSelectLocked = false
 
@@ -128,6 +207,13 @@ describe('settings model e2e', () => {
           const zhipuRow = page.locator('tbody tr').filter({ hasText: '智谱 GLM' }).first()
 
           return {
+            defaultRecommendChecked,
+            presetConfiguredLabel,
+            presetDefaultAddress,
+            requiredBlocked,
+            duplicateBlocked,
+            maskPreservesInput,
+            customPrefillCorrect,
             presetNameInputCount,
             presetProviderDisabled,
             presetProviderSelectLocked,
@@ -137,24 +223,44 @@ describe('settings model e2e', () => {
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(result.presetNameInputCount === 0, {
-            name: 'preset-has-no-name-input',
-            message:
-              '推荐类型不展示名称输入框，名称由系统维护为服务商名，对齐 SET-MODEL-002-AC1。',
-            data: result
-          })
+          await runtime.assertThat(
+            result.requiredBlocked.length === 3 &&
+              result.requiredBlocked.every(Boolean) &&
+              result.duplicateBlocked &&
+              result.maskPreservesInput &&
+              result.customPrefillCorrect,
+            {
+              name: 'custom-form-validation-and-prefill',
+              message:
+                '自定义必填和重名拦截、完整回填及遮罩保留输入，对齐 SET-MODEL-002-AC3/AC4/AC5/AC6。',
+              data: result
+            }
+          )
+          await runtime.assertThat(
+            result.presetNameInputCount === 0 && result.defaultRecommendChecked,
+            {
+              name: 'preset-has-no-name-input',
+              message:
+                '推荐类型不展示名称输入框，名称由系统维护为服务商名，对齐 SET-MODEL-002-AC1。',
+              data: result
+            }
+          )
 
-          await runtime.assertThat(result.presetProviderDisabled, {
-            name: 'preset-config-saved-and-deduped',
-            message:
-              '推荐配置保存后名称等于服务商名；再次新增时服务商下拉禁用并标注已配置，对齐 SET-MODEL-002-AC2。',
-            data: result
-          })
+          await runtime.assertThat(
+            result.presetProviderDisabled &&
+              result.presetConfiguredLabel &&
+              result.presetDefaultAddress === 'https://api.deepseek.com',
+            {
+              name: 'preset-config-saved-and-deduped',
+              message:
+                '推荐配置保存后名称等于服务商名；再次新增时服务商下拉禁用并标注已配置，对齐 SET-MODEL-002-AC2。',
+              data: result
+            }
+          )
 
           await runtime.assertThat(result.customRowText.includes('自定义'), {
             name: 'custom-config-flagged',
-            message:
-              '自定义配置在列表中以「自定义」标签区分展示，对齐 SET-MODEL-001-AC3。',
+            message: '自定义配置在列表中以「自定义」标签区分展示，对齐 SET-MODEL-001-AC3。',
             data: result
           })
 

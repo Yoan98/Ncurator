@@ -23,12 +23,14 @@ export const createPptTextMeasurer =
 export const renderPptSvg = async (
   presentation: PresentationData,
   slide: SlideData,
-  measureText: TextMeasurer
+  measureText: TextMeasurer,
+  includeShapeIds = false
 ): Promise<string> => {
   // The library has an import-only export; Main is bundled as CommonJS.
   const { renderSlideToSvg } = await import('pptx-kit-preview')
-  return renderSlideToSvg(presentation, slide, { textLayout: 'svg', measureText }).replace(
-    /font-family="([^"]*)"/gu,
-    `font-family="$1, ${FALLBACK_FAMILIES}"`
-  )
+  return renderSlideToSvg(presentation, slide, {
+    textLayout: 'svg',
+    measureText,
+    includeShapeIds
+  }).replace(/font-family="([^"]*)"/gu, `font-family="$1, ${FALLBACK_FAMILIES}"`)
 }

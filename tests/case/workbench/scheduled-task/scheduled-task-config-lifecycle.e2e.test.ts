@@ -260,6 +260,28 @@ describe('workbench scheduled-task e2e', () => {
           const partnerListShowsSelectedPartner =
             (await selectedPartnerOption.getAttribute('aria-pressed')) === 'true' &&
             (await selectedPartnerOption.innerText()).includes(originalPartner.name)
+          const requiredFieldsBlocked: boolean[] = []
+          const assertEmptyBlocked = async (message: string) => {
+            await saveButton.click()
+            await page.getByText(message, { exact: true }).first().waitFor({ state: 'visible' })
+            requiredFieldsBlocked.push(
+              (await saveButton.isVisible()) && (await listTasks(page)).length === 0
+            )
+          }
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('')
+          await assertEmptyBlocked('请填写任务名称')
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill(TASK_NAME)
+          await setWorkbenchInput(page, '', scheduledTaskSelectors.formDescriptionInput)
+          await assertEmptyBlocked('请填写任务描述')
+          await setWorkbenchInput(page, TASK_PROMPT, scheduledTaskSelectors.formDescriptionInput)
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formScheduleType)
+            .getByText('每周', { exact: true })
+            .click()
+          await assertEmptyBlocked('请选择星期几')
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formScheduleType)
+            .getByText('每天', { exact: true })
+            .click()
+          // TimePicker disables clearing and the cycle always has a selected default.
           await saveButton.click()
           await waitForScheduledTaskDrawerClosed(page)
 
@@ -377,6 +399,7 @@ describe('workbench scheduled-task e2e', () => {
             (await sidebarCountChip.textContent())?.trim() === '1' &&
             (await titleCountChip.textContent())?.trim() === '1'
 
+          let deleteCancelPreservedTask = false
           if (edited) {
             const editedItem = getWorkbenchLocator(
               page,
@@ -385,6 +408,12 @@ describe('workbench scheduled-task e2e', () => {
             await editedItem.getByRole('button', { name: `删除 ${TASK_NAME_EDITED}` }).click()
             const deleteOk = page.locator('.ant-modal-confirm-btns .ant-btn-dangerous')
             await deleteOk.waitFor({ state: 'visible' })
+            await page.locator('.ant-modal-confirm-btns .ant-btn-default').click()
+            await deleteOk.waitFor({ state: 'hidden' })
+            deleteCancelPreservedTask = (await listTasks(page)).some(
+              (task) => task.id === edited.id
+            )
+            await editedItem.getByRole('button', { name: `删除 ${TASK_NAME_EDITED}` }).click()
             await deleteOk.click()
           }
           const deletedCorrectly = (await listTasks(page)).every(
@@ -401,6 +430,8 @@ describe('workbench scheduled-task e2e', () => {
               .catch(() => false))
 
           return {
+            requiredFieldsBlocked,
+            deleteCancelPreservedTask,
             drawerOpened,
             firstCreateEditorReady,
             closeButtonNoDrag,
@@ -438,7 +469,10 @@ describe('workbench scheduled-task e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.drawerOpened &&
+            result.requiredFieldsBlocked.length === 3 &&
+              result.requiredFieldsBlocked.every(Boolean) &&
+              result.deleteCancelPreservedTask &&
+              result.drawerOpened &&
               result.firstCreateEditorReady &&
               result.closeButtonNoDrag &&
               result.cleanHeaderCloseButtonWorks &&

@@ -1,3 +1,5 @@
+import { validateDocumentSelection, freezeSelectionImages } from './documentSelection'
+import { documentSelections } from '../../../shared/chatContent'
 import path from 'node:path'
 import type { ChatMessageContentNode, ChatSubmitRequest } from '../../../shared/types'
 import { chatContentText, chatReferences, hasUserText } from '../../../shared/chatContent'
@@ -70,20 +72,7 @@ export const resolveUserContent = async (
           normalized.notIndexedFileCount = current.notIndexedFileCount
         }
       } else if (node.kind === 'document_selection') {
-        if (
-          !node.id ||
-          !Number.isInteger(node.number) ||
-          node.number < 1 ||
-          !path.isAbsolute(node.filePath) ||
-          path.extname(node.filePath).toLowerCase() !== '.docx' ||
-          !node.selectedText?.trim() ||
-          typeof node.contextBefore !== 'string' ||
-          typeof node.contextAfter !== 'string' ||
-          !Array.isArray(node.children) ||
-          node.children.some((child) => child.kind !== 'text' && child.kind !== 'reference')
-        ) {
-          throw new Error('文档选区无效，请重新选择')
-        }
+        validateDocumentSelection(node)
         node.contextBefore = Array.from(node.contextBefore).slice(-150).join('')
         node.contextAfter = Array.from(node.contextAfter).slice(0, 150).join('')
         node.filePath = path.normalize(node.filePath)
@@ -94,8 +83,11 @@ export const resolveUserContent = async (
   }
   await resolve(contentNodes)
   if (!hasUserText(contentNodes)) throw new Error('请输入你的想法后再发送')
+  await freezeSelectionImages(request, documentSelections(contentNodes))
+  const acceptedRequest = { ...request }
+  delete acceptedRequest.selectionImages
   return {
-    ...request,
+    ...acceptedRequest,
     contentNodes,
     input: chatContentText(contentNodes).trim(),
     selectedReferences: chatReferences(contentNodes)

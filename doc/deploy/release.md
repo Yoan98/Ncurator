@@ -102,7 +102,7 @@ git diff <previous-platform-tag>..<current-platform-tag>
 
 publish 只读取已经测试通过的候选包，不重新构建。默认发布到 COS，验证国内公开下载、更新 metadata、公开 manifest、文件大小、sha512 和 URL 成功后才算完成。对象键、CDN Cache-Control 和公开 URL 见 [`design.md`](./design.md)。
 
-真实发布默认锁定。用户已按第 0 节批准本次上线后，在当前终端设置：
+真实发布默认锁定。用户已批准本次上线后，在当前终端设置：
 
 ```bash
 export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production

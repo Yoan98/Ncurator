@@ -5,7 +5,9 @@ import type {
   AiRunEvent,
   AiFileChangeStatus,
   IpcJsonObject,
-  RuntimeSkillId
+  RuntimeSkillId,
+  UserQuestion,
+  AskUserQuestionAnswer
 } from '../../../../shared/types'
 import type { RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 
@@ -137,17 +139,8 @@ export type AssistantProcessGroupItem = {
   targetLabel?: string
   input?: IpcJsonObject
   interaction?: {
-    questions: Array<{
-      id: string
-      question: string
-      options: Array<{ id: string; label: string; description?: string; recommended?: boolean }>
-      multiSelect?: boolean
-    }>
-    answers?: Array<{
-      questionId: string
-      selectedOptionIds: string[]
-      userText?: string
-    }>
+    questions: UserQuestion[]
+    answers?: AskUserQuestionAnswer[]
   }
 }
 

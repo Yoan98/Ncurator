@@ -522,7 +522,7 @@ const InteractionResultView: React.FC<{
   <div className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]">
     {interaction.questions.map((question) => {
       const answer = interaction.answers?.find((item) => item.questionId === question.id)
-      const labels = question.options
+      const labels = (question.options ?? [])
         .filter((option) => answer?.selectedOptionIds.includes(option.id))
         .map((option) => option.label)
       if (answer?.userText) labels.push(answer.userText)

@@ -1,3 +1,5 @@
+import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
+import { pdfAdapter } from './selection/pdfAdapter'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { pdfjs, Document, Page } from 'react-pdf'
 import { Pagination } from 'antd'
@@ -23,7 +25,12 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
   const currentDocument = mainState.currentDocument as LoadedFileRenderDocument | undefined
   const [numPages, setNumPages] = useState(0)
   const [pageNumber, setPageNumber] = useState(1)
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const [selectionContainer, setSelectionContainer] = useState<HTMLDivElement | null>(null)
+  const filePath = currentDocument?.filePath
+  const selectionAdapter = useMemo(
+    () => (selectionContainer && filePath ? pdfAdapter(selectionContainer, filePath) : null),
+    [selectionContainer, filePath]
+  )
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const pageNumbers = useMemo(() => createPageNumbers(numPages), [numPages])
 
@@ -74,7 +81,7 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
   return (
     <div
       id="my-pdf-renderer"
-      ref={scrollContainerRef}
+      ref={setSelectionContainer}
       className="relative h-full w-full overflow-auto bg-[#F4F4F2] p-4"
     >
       <Document
@@ -106,7 +113,10 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
           </div>
         ))}
         {numPages > 1 && (
-          <div className="sticky bottom-4 left-1/2 z-10 w-fit min-w-[200px] -translate-x-1/2 rounded-full bg-white/80 p-2 opacity-20 shadow-none backdrop-blur-sm transition-opacity duration-300 hover:opacity-100">
+          <div
+            data-selection-ignore
+            className="sticky bottom-4 left-1/2 z-10 w-fit min-w-[200px] -translate-x-1/2 rounded-full bg-white/80 p-2 opacity-20 shadow-none backdrop-blur-sm transition-opacity duration-300 hover:opacity-100"
+          >
             <Pagination
               current={pageNumber}
               total={numPages}
@@ -118,6 +128,15 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
           </div>
         )}
       </Document>
+      {currentDocument.metadata?.allowDocumentSelection && filePath && selectionAdapter && (
+        <DocumentSelectionLayer
+          container={selectionContainer}
+          filePath={filePath}
+          revision={numPages}
+          adapter={selectionAdapter}
+          testPrefix="pdf"
+        />
+      )}
     </div>
   )
 }

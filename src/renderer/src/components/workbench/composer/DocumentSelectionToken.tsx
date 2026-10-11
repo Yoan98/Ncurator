@@ -1,8 +1,9 @@
+import { selectionTooltip } from '../../../../../shared/documentSelection'
 import type { DocumentSelectionNode } from '../../../../../shared/types'
 import { selectionLabel } from '../../../../../shared/chatContent'
 import {
   INLINE_TOKEN_LABEL_CLASS_NAME,
-  SELECTION_DOCUMENT_ICON_PATH,
+  selectionIconPath,
   SELECTION_NUMBER_CLASS_NAME,
   SELECTION_TOKEN_CLASS_NAME,
   selectionFileName
@@ -20,7 +21,7 @@ export default function DocumentSelectionToken({
       type="button"
       data-role="document-selection-token"
       aria-label={selectionLabel(node)}
-      title={selectionLabel(node) + '\n' + node.selectedText}
+      title={selectionLabel(node) + '\n' + selectionTooltip(node)}
       className={SELECTION_TOKEN_CLASS_NAME}
       onClick={onClick}
     >
@@ -34,7 +35,7 @@ export default function DocumentSelectionToken({
         aria-hidden="true"
         className="relative top-[0.1em] h-[1em] w-[1em] shrink-0 self-center"
       >
-        <path d={SELECTION_DOCUMENT_ICON_PATH} />
+        <path d={selectionIconPath(node)} />
       </svg>
       <span className={INLINE_TOKEN_LABEL_CLASS_NAME}>{selectionFileName(node)}</span>
       <span className={SELECTION_NUMBER_CLASS_NAME}>{node.number}</span>

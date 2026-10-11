@@ -835,7 +835,7 @@ export class ChatRunService {
       }
       seenAnswerIds.add(answer.questionId)
       const question = pending.questions.find((item) => item.id === answer.questionId)
-      const optionIds = new Set(question?.options.map((option) => option.id) || [])
+      const optionIds = new Set(question?.options?.map((option) => option.id) || [])
       if (answer.selectedOptionIds.some((id) => !optionIds.has(id))) {
         return { success: false, error: '存在无效选项' }
       }
@@ -843,7 +843,7 @@ export class ChatRunService {
         return { success: false, error: '单选问题只能选择一个选项' }
       }
       if (answer.selectedOptionIds.length === 0 && !String(answer.userText || '').trim()) {
-        return { success: false, error: '请选择选项或填写其他内容' }
+        return { success: false, error: '请选择选项或输入回复' }
       }
     }
     await this.queueRunEvent(runId, {

@@ -8,11 +8,43 @@ const PRD_ROOT = path.join(ROOT, 'doc', 'prd')
 const DOMAIN_RULES = {
   ai: { type: 'backend', plan: 'ai-test.md' },
   knowledge: { type: 'backend', plan: 'knowledge-test.md' },
-  settings: { type: 'e2e', plan: 'settings-test.md', prd: 'settings.md', acPrefix: 'SET-' },
-  workbench: { type: 'e2e', plan: 'workbench-test.md', prd: 'workbench.md', acPrefix: 'WB-' },
+  settings: { type: 'e2e', plan: 'settings-test.md', prd: 'settings.md', acPrefixes: ['SET'] },
+  workbench: {
+    type: 'e2e',
+    plan: 'workbench-test.md',
+    prd: 'workbench.md',
+    acPrefixes: ['WB', 'ST']
+  },
   unit: { type: 'backend', plan: '' }
 }
 const PLAN_FIELDS = ['测试类型', 'What', 'Why', 'How', 'Oracle']
+
+// References register acceptance ownership; they do not prove assertion coverage.
+const acceptanceReferences = (source, prefixes) => {
+  const text = source.replaceAll('`', '')
+  const pattern = new RegExp(`\\b((?:${prefixes.join('|')})-[A-Z0-9-]+)-AC(\\d+)\\b`, 'gu')
+  const references = new Set()
+  for (const match of text.matchAll(pattern)) {
+    const requirement = match[1]
+    let last = Number(match[2])
+    references.add(`${requirement}-AC${last}`)
+    let tail = text.slice(match.index + match[0].length)
+    const continuation = new RegExp(`^\\s*(/|、|至|到|–|—)\\s*(?:${requirement}-)?AC(\\d+)\\b`, 'u')
+    for (let next = tail.match(continuation); next; next = tail.match(continuation)) {
+      const end = Number(next[2])
+      if (['至', '到', '–', '—'].includes(next[1])) {
+        if (end < last || end - last > 1000) throw new Error(`无效验收范围：${match[0]}${next[0]}`)
+        for (let number = last; number <= end; number++)
+          references.add(`${requirement}-AC${number}`)
+      } else {
+        references.add(`${requirement}-AC${end}`)
+      }
+      last = end
+      tail = tail.slice(next[0].length)
+    }
+  }
+  return references
+}
 
 const walk = async (directory) => {
   const files = []
@@ -60,7 +92,9 @@ const planCases = async (planName) => {
     source,
     cases: headings.map((heading, index) => ({
       id: heading[1],
-      body: source.slice(heading.index, headings[index + 1]?.index ?? source.length)
+      body: source
+        .slice(heading.index, headings[index + 1]?.index ?? source.length)
+        .split(/\n#{1,3} /u)[0]
     }))
   }
 }
@@ -172,9 +206,7 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
       const targetsFixture =
         targetArg.includes('tests/fixtures') ||
         /path\.(?:resolve|join)\(\s*['"`](?:[^'"`,)]*,\s*)?fixtures['"`]/u.test(targetArg) ||
-        [...fixtureConstants].some(
-          (name) => new RegExp(`\\b${name}\\b`, 'u').test(targetArg)
-        )
+        [...fixtureConstants].some((name) => new RegExp(`\\b${name}\\b`, 'u').test(targetArg))
       if (targetsFixture && !/\bgetFixtureWorkspacePath\b/u.test(targetArg)) {
         failures.push(
           `${relativePath}: 禁止向 tests/fixtures/** 写入或修改（fixture 只读，需要写入时复制到隔离 workspace）：${targetArg.slice(0, 100)}`
@@ -278,13 +310,20 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
 
     if (rule.prd) {
       const prd = await readFile(path.join(PRD_ROOT, rule.prd), 'utf8')
-      const acPattern = new RegExp(`\\b${rule.acPrefix}[A-Z0-9-]+-AC\\d+\\b`, 'gu')
-      const prdAcs = new Set(prd.match(acPattern) || [])
-      const planAcs = new Set(plan.source.match(acPattern) || [])
+      const prdAcs = acceptanceReferences(prd, rule.acPrefixes)
+      const planAcs = acceptanceReferences(plan.source, rule.acPrefixes)
+      const registrationSource = [
+        ...plan.cases.flatMap((item) => item.body.match(/^- Oracle：.*$/gmu) || []),
+        ...[
+          ...plan.source.matchAll(
+            /^## [^\n]*(?:自动化覆盖边界|发布前真实检查)[^\n]*\n([\s\S]*?)(?=^## |$(?![\s\S]))/gmu
+          )
+        ].map((match) => match[1])
+      ].join('\n')
+      const registeredAcs = acceptanceReferences(registrationSource, rule.acPrefixes)
       for (const ac of prdAcs) {
-        const requirementId = ac.replace(/-AC\d+$/u, '')
-        if (!planAcs.has(ac) && !plan.source.includes(`\`${requirementId}\``)) {
-          failures.push(`${rule.plan}: 未覆盖 ${ac}`)
+        if (!registeredAcs.has(ac)) {
+          failures.push(`${rule.plan}: 未登记验收 ${ac}（需具体 Oracle 或显式覆盖边界）`)
         }
       }
       for (const ac of planAcs) {

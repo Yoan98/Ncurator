@@ -38,13 +38,15 @@ describe('ai human clarification live backend', () => {
               result: {
                 answers: request.questions.map((question, index) => {
                   const userText =
-                    isCustomScenario && index === 0 ? '用深绿色和白色，整体保持克制' : undefined
+                    (isCustomScenario && index === 0) || !question.options?.length
+                      ? '用深绿色和白色，整体保持克制'
+                      : undefined
                   return {
                     questionId: question.id,
                     selectedOptionIds: userText
                       ? []
-                      : question.options[0]
-                        ? [question.options[0].id]
+                      : question.options?.[0]
+                        ? [question.options?.[0].id]
                         : [],
                     userText
                   }
@@ -97,7 +99,10 @@ describe('ai human clarification live backend', () => {
               answers
                 .filter((answer): answer is { questionId: string } =>
                   Boolean(
-                    answer && typeof answer === 'object' && typeof answer.questionId === 'string'
+                    answer &&
+                    typeof answer === 'object' &&
+                    !Array.isArray(answer) &&
+                    typeof answer.questionId === 'string'
                   )
                 )
                 .map((answer) => answer.questionId)

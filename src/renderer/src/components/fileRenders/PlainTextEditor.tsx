@@ -1,3 +1,7 @@
+import { useContext, useMemo } from 'react'
+import { DocumentSelectionContext } from '../workbench/composer/DocumentSelectionContext'
+import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
+import { plainTextAdapter } from './selection/textFileAdapter'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Empty, Spin } from 'antd'
 import { useEditableTextFile } from './useEditableTextFile'
@@ -7,11 +11,26 @@ import { countLines } from './lineNumbers'
 
 const TEXT_EDIT_MAX_CHARS = 500_000
 
-const PlainTextEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
+const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> = ({
+  filePath,
+  allowSelection = false
+}) => {
   const file = useEditableTextFile(filePath)
   const [value, setValue] = useState('')
+  const [container, setContainer] = useState<HTMLDivElement | null>(null)
+  const [mirror, setMirror] = useState<HTMLPreElement | null>(null)
+  const [textarea, setTextarea] = useState<HTMLTextAreaElement | null>(null)
+  const selectionState = useContext(DocumentSelectionContext)
+  const adapter = useMemo(
+    () => (textarea && mirror ? plainTextAdapter(textarea, mirror, filePath) : null),
+    [textarea, mirror, filePath]
+  )
   const { initialText, autoSave, flushSave } = file
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const bindTextarea = useCallback((element: HTMLTextAreaElement | null) => {
+    textareaRef.current = element
+    setTextarea(element)
+  }, [])
   const gutterInnerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -22,9 +41,12 @@ const PlainTextEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
     const textarea = textareaRef.current
     const gutter = gutterInnerRef.current
     if (textarea && gutter) {
+      if (mirror) {
+        mirror.scrollTo({ top: textarea.scrollTop, left: textarea.scrollLeft })
+      }
       gutter.style.transform = `translateY(${-textarea.scrollTop}px)`
     }
-  }, [])
+  }, [mirror])
 
   const handleChange = useCallback(
     (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
@@ -42,14 +64,15 @@ const PlainTextEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
   useEffect(() => {
     const editor = textareaRef.current
     if (!editor) return
-    const onBlur = (): void => flushSave()
+    const onBlur = (): void =>
+      void flushSave().catch((error) => console.error('文件保存失败', error))
     editor.addEventListener('blur', onBlur)
     return () => editor.removeEventListener('blur', onBlur)
   }, [flushSave, file.loading])
 
   useEffect(
     () => () => {
-      flushSave()
+      void flushSave().catch((error) => console.error('文件保存失败', error))
     },
     [flushSave]
   )
@@ -65,7 +88,10 @@ const PlainTextEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
   if (file.loadError || file.initialText === null) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-white">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={file.loadError || '文件加载失败'} />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={file.loadError || '文件加载失败'}
+        />
       </div>
     )
   }
@@ -81,22 +107,40 @@ const PlainTextEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
           文件较大，仅可编辑前 {TEXT_EDIT_MAX_CHARS.toLocaleString()} 个字符。
         </div>
       ) : null}
-      <div className="relative min-h-0 flex-1">
+      <div ref={setContainer} className="relative min-h-0 flex-1">
         <LineNumberOverlay
           lineCount={lineCount}
           innerRef={gutterInnerRef}
           className="inset-y-0 left-0 w-8 overflow-hidden"
           testId={workbenchSelectors.lineNumberOverlay}
         />
+        <pre
+          ref={setMirror}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 m-0 overflow-hidden whitespace-pre-wrap break-words px-8 py-6 font-mono text-[13px] leading-6 text-transparent"
+          style={{ overflowWrap: 'break-word' }}
+        >
+          {displayValue}
+        </pre>
         <textarea
-          ref={textareaRef}
-          className="m-0 h-full w-full resize-none whitespace-pre-wrap break-words border-0 bg-white px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F] outline-none"
+          ref={bindTextarea}
+          readOnly={Boolean(selectionState?.locked)}
+          className="m-0 h-full w-full resize-none whitespace-pre-wrap break-words border-0 bg-transparent px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F] outline-none"
           data-testid={workbenchSelectors.plainTextEditor}
           value={displayValue}
           onChange={handleChange}
           onScroll={syncGutter}
           spellCheck={false}
         />
+        {allowSelection && adapter && (
+          <DocumentSelectionLayer
+            container={container}
+            filePath={filePath}
+            revision={1}
+            adapter={adapter}
+            testPrefix="text"
+          />
+        )}
       </div>
     </div>
   )

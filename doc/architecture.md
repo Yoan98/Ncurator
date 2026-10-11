@@ -79,7 +79,7 @@ flowchart TB
 | Tool Runtime        | 文件、终端、浏览器等本地能力；审批、命令安全                                          |
 | File Change Records | 只有受控文件工具写回才记修改、Diff 与回退；terminal 只执行，不扫描记账                |
 
-工作地址是默认执行范围而非硬边界：模型默认在设置页现有文件地址内操作，系统级需求可访问地址外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径（`read_image` 的 `sourcePath` 额外接受 HTTP(S) 地址）。内置浏览器由 Electron `WebContentsView` 承载；Stagehand 在操作网页时按 Tab 挂到本机回环 CDP 桥（`webContents.debugger`），不在进程启动时打开 `--remote-debugging-port`。对象存储在 `userData/partners/{id}/objects/sha256/<前 2 位>/<其余>`。
+工作地址是默认执行范围而非硬边界：模型默认在设置页现有文件地址内操作，系统级需求可访问地址外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径；`read_image` 的 `paths` 接受本机绝对路径或 HTTP(S) 地址。内置浏览器由 Electron `WebContentsView` 承载；Stagehand 在操作网页时按 Tab 挂到本机回环 CDP 桥（`webContents.debugger`），不在进程启动时打开 `--remote-debugging-port`。对象存储在 `userData/partners/{id}/objects/sha256/<前 2 位>/<其余>`。
 
 网页搜索由冻结的 Python sidecar 提供搜索与抓取；抓取 sidecar 只把隐藏 crawler view 登记进同一座 CDP 桥。`web_search` 只向 AI 返回结构化结果，不得自动展开右侧面板；右侧浏览器仅由 `browser_use` 或用户手动开标签触发。抓取细节见代码与 `ai-harness/tool-design.md`。
 
@@ -87,7 +87,7 @@ flowchart TB
 
 ## AI 运行时
 
-AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`context_budget ⇄ context_compaction → brain → dispatch → (learning | plan | hand) → …`，无工具调用时 `finalizeDelivery` 结束 run。Workbench 可在普通运行期间将追加消息写入当前 `ai_run`；human graph 在工具结果写入、dispatch 队列清空后的 `context_budget` 安全交接，或在最终交付后由 Main 继续下一轮。停止、失败或进程中断时追加消息进入 transcript，不自动启动续接。节点细节见 `ai-harness/human-harness.md`。
+AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`context_budget ⇄ context_compaction → brain → dispatch → (human_interaction | learning | plan | hand) → …`，无工具调用时 `finalizeDelivery` 保存交付正文，再由主进程完成文件审核与 run 终态。Workbench 可在普通运行期间将追加消息写入当前 `ai_run`；human graph 在工具结果写入、dispatch 队列清空后的 `context_budget` 安全交接，或在最终交付后由 Main 继续下一轮。停止、失败或进程中断时追加消息进入 transcript，不自动启动续接。节点细节见 `ai-harness/human-harness.md`。
 
 **设计文档（修改 AI 行为前必读）**
 
@@ -144,7 +144,7 @@ flowchart LR
 
 ## 存储与索引
 
-业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为持久化真相；未发送的文档选区、关联想法及定位状态保留在 Renderer 内存。索引 generation、写后清理与检索过滤规则见 `doc/db/design.md`，表字段见 `doc/db/tables.md`。
+业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为持久化真相；未发送的文档选区、关联想法、定位状态及 PPT 画面快照保留在 Renderer 的伙伴级内存。DOCX、PDF、Markdown/文本、PPT 与 Excel 通过各自的选区适配器接入共用的浮层、草稿、高亮与回跳交互；Excel 使用原生区域高亮，其他预览使用文本 Range 或位置矩形。提交时 Main 校验格式锚点，将 PPT PNG 快照写入伙伴内容寻址对象目录，消息仅保存对象路径和类型，不保存图片字节；无需新增数据库表。文本文件提交前等待当前自动保存完成。索引 generation、写后清理与检索过滤规则见 `doc/db/design.md`，表字段见 `doc/db/tables.md`。
 
 ## 主链路
 

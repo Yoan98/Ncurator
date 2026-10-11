@@ -1,3 +1,4 @@
+import { registerTextSave } from './pendingTextSaves'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import { sha256Hex } from '../../utils/fileHash'
@@ -18,7 +19,8 @@ export type EditableTextFile = {
   /** 注册一次内容变更并安排防抖自动保存（纯覆盖）。 */
   autoSave: (content: string) => void
   /** 立即保存挂起的改动并清空防抖。 */
-  flushSave: () => void
+  flushSave: () => Promise<void>
+  getText: () => string
   reload: () => Promise<void>
 }
 
@@ -58,6 +60,8 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const eolRef = useRef<'lf' | 'crlf'>('lf')
   const hadBomRef = useRef(false)
+  const textRef = useRef('')
+  const savingRef = useRef<Promise<void> | null>(null)
 
   useEffect(() => {
     filePathRef.current = filePath
@@ -70,50 +74,48 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     }
   }, [])
 
-  const doSave = useCallback(async (content: string): Promise<void> => {
-    try {
-      const formattedContent = applyOriginalFormat(content, eolRef.current, hadBomRef.current)
-      const response = await window.api.writeTextFile({
-        filePath: filePathRef.current,
-        content: formattedContent
-      })
-      if (response.success && response.hash) {
+  const flushSave = useCallback(async (): Promise<void> => {
+    clearSaveTimer()
+    if (savingRef.current) return savingRef.current
+    const save = async (): Promise<void> => {
+      while (pendingContentRef.current !== null) {
+        const content = pendingContentRef.current
+        const response = await window.api.writeTextFile({
+          filePath: filePathRef.current,
+          content: applyOriginalFormat(content, eolRef.current, hadBomRef.current)
+        })
+        if (!response.success || !response.hash)
+          throw new Error(response.error || '文件保存失败，请重试')
         lastWrittenHashRef.current = response.hash
         if (pendingContentRef.current === content) pendingContentRef.current = null
-        unsavedRef.current = false
-      } else {
-        console.error('[EDITABLE-FILE] auto-save failed', response.error)
       }
-    } catch (error) {
-      console.error('[EDITABLE-FILE] auto-save failed', error)
+      unsavedRef.current = false
     }
-  }, [])
-
-  const flushSave = useCallback((): void => {
-    clearSaveTimer()
-    if (pendingContentRef.current !== null) {
-      const content = pendingContentRef.current
-      pendingContentRef.current = null
-      void doSave(content)
+    const promise = save()
+    savingRef.current = promise
+    try {
+      await promise
+    } finally {
+      if (savingRef.current === promise) savingRef.current = null
     }
-  }, [clearSaveTimer, doSave])
+  }, [clearSaveTimer])
 
   const autoSave = useCallback(
     (content: string): void => {
+      textRef.current = content
       unsavedRef.current = true
       pendingContentRef.current = content
       clearSaveTimer()
       saveTimerRef.current = setTimeout(() => {
         saveTimerRef.current = null
-        const pending = pendingContentRef.current
-        if (pending !== null) {
-          pendingContentRef.current = null
-          void doSave(pending)
-        }
+        void flushSave().catch((error) => console.error('[EDITABLE-FILE] auto-save failed', error))
       }, AUTO_SAVE_DEBOUNCE_MS)
     },
-    [clearSaveTimer, doSave]
+    [clearSaveTimer, flushSave]
   )
+
+  useEffect(() => registerTextSave(filePath, flushSave), [filePath, flushSave])
+  const getText = useCallback(() => textRef.current, [])
 
   const load = useCallback(async (): Promise<void> => {
     setState((current) => ({ ...current, loading: true, error: null }))
@@ -121,12 +123,13 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
       const bytes = await window.api.readFile(filePathRef.current)
       const hash = await sha256Hex(bytes)
       const text = decodeUtf8(bytes)
+      textRef.current = text.replace(/\r\n/g, '\n')
       hadBomRef.current = detectHadBom(bytes)
       eolRef.current = /\r\n/.test(text) ? 'crlf' : 'lf'
       lastWrittenHashRef.current = hash
       unsavedRef.current = false
       pendingContentRef.current = null
-      setState({ loading: false, text, hash, error: null })
+      setState({ loading: false, text: textRef.current, hash, error: null })
     } catch (error) {
       setState({
         loading: false,
@@ -192,16 +195,14 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
       disposed = true
       unsubscribe()
       clearSaveTimer()
-      if (pendingContentRef.current !== null) {
-        const pending = pendingContentRef.current
-        pendingContentRef.current = null
-        void doSave(pending)
-      }
+      void flushSave().catch((error) =>
+        console.error('[EDITABLE-FILE] save on close failed', error)
+      )
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
       if (watchId) void window.api.fileWatchStop({ watchId }).catch(() => undefined)
     }
-  }, [checkExternalChange, clearSaveTimer, doSave, load, filePath])
+  }, [checkExternalChange, clearSaveTimer, flushSave, load, filePath])
 
   return {
     loading: state.loading,
@@ -209,6 +210,7 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     initialText: state.text,
     autoSave,
     flushSave,
+    getText,
     reload: load
   }
 }

@@ -120,6 +120,70 @@ describe('ai human mock-llm backend', () => {
           contextAfter: '',
           children: [{ kind: 'text', text: '改为更正式的表达' }]
         }
+        const formats: DocumentSelectionNode[] = [
+          {
+            ...selection,
+            id: 'text',
+            number: 1,
+            filePath: path.join(runtime.workspaceRoot, 'human-input.txt'),
+            selectedText: 'Hello',
+            children: [{ kind: 'text', text: '解释文本' }],
+            anchor: {
+              kind: 'text',
+              start: 0,
+              end: 5,
+              startLine: 1,
+              endLine: 1,
+              sourceText: 'Hello'
+            }
+          },
+          {
+            ...selection,
+            id: 'pdf',
+            number: 1,
+            filePath: path.join(runtime.workspaceRoot, '学习笔记/深度学习.pdf'),
+            children: [{ kind: 'text', text: '解释 PDF' }],
+            anchor: { kind: 'pdf', startPage: 1, endPage: 2, start: 0, end: 5 }
+          },
+          {
+            ...selection,
+            id: 'excel',
+            number: 1,
+            filePath: path.join(runtime.workspaceRoot, '经营周报.xlsx'),
+            selectedText: '',
+            children: [{ kind: 'text', text: '填入公式' }],
+            anchor: {
+              kind: 'excel',
+              sheetId: 'sheet-1',
+              sheetName: 'Data',
+              range: 'B2:C3',
+              startRow: 1,
+              endRow: 2,
+              startColumn: 1,
+              endColumn: 2
+            }
+          },
+          {
+            ...selection,
+            id: 'ppt',
+            number: 1,
+            filePath: path.join(runtime.workspaceRoot, '品牌策略提案.pptx'),
+            selectedText: '',
+            children: [{ kind: 'text', text: '解释图片' }],
+            anchor: {
+              kind: 'ppt',
+              slideId: 'ppt/slides/slide1.xml',
+              page: 1,
+              elementId: 'ppt/slides/slide1.xml#3',
+              mode: 'element',
+              revision: 'snapshot-1'
+            }
+          }
+        ]
+        const imageBytes = Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jMZkAAAAASUVORK5CYII=',
+          'base64'
+        )
         const nodes: ChatMessageContentNode[] = [
           { kind: 'text', text: '先看 ' },
           { kind: 'reference', reference },
@@ -128,7 +192,8 @@ describe('ai human mock-llm backend', () => {
           { kind: 'text', text: '\n' },
           second,
           { kind: 'text', text: '\n同时参考 ' },
-          { kind: 'reference', reference: web }
+          { kind: 'reference', reference: web },
+          ...formats
         ]
         const createService = () =>
           new ChatRunService({
@@ -154,7 +219,45 @@ describe('ai human mock-llm backend', () => {
           preference: 'default' as const,
           executionPermission: 'review' as const,
           contentNodes: nodes,
+          selectionImages: [{ id: 'ppt', bytes: imageBytes }],
           mainModel: { configId: 'mock-llm-scripted', modelName: 'scripted-llm' }
+        }
+        const oversized: DocumentSelectionNode = {
+          ...formats[2],
+          anchor: {
+            kind: 'excel',
+            sheetId: 'sheet-1',
+            sheetName: 'Data',
+            range: 'A1:A10001',
+            startRow: 0,
+            endRow: 10000,
+            startColumn: 0,
+            endColumn: 0
+          }
+        }
+        const invalid = [
+          oversized,
+          formats[3],
+          {
+            ...formats[3],
+            image: {
+              path: path.join(runtime.workspaceRoot, 'outside.png'),
+              mimeType: 'image/png' as const
+            }
+          }
+        ]
+        const rejected: boolean[] = []
+        for (const node of invalid) {
+          try {
+            const response = await service.submit({
+              ...request,
+              contentNodes: [node],
+              selectionImages: []
+            })
+            rejected.push(!response.success && !!response.error)
+          } catch (error) {
+            rejected.push(error instanceof Error && error.message === '文档选区无效，请重新选择')
+          }
         }
         const accepted = await service.submit(request)
         if (!accepted.run || !accepted.userMessage) throw new Error(accepted.error || '提交未接收')
@@ -190,11 +293,16 @@ describe('ai human mock-llm backend', () => {
           userInput: accepted.userMessage.content
         })
         const afterBrain = await storage.chatMessageLog.list(partnerId)
-        const queued = await service.submit({ ...request, contentNodes: [second] })
+        const queued = await service.submit({
+          ...request,
+          contentNodes: [second],
+          selectionImages: []
+        })
         const pending = (await storage.aiRun.getRun(accepted.run.id))?.pendingMessages?.[0]
         await createService().failInterruptedRuns()
         const restored = await createService().listPartnerMessages(partnerId)
         return {
+          rejected,
           completed: output.status === 'completed',
           frozen: brainContent === user.content,
           userCount: afterBrain.filter((record) => record.entry.kind === 'user').length,
@@ -209,10 +317,11 @@ describe('ai human mock-llm backend', () => {
       assert: async (result, runtime) => {
         const selections = result.contentNodes.filter((node) => node.kind === 'document_selection')
         runtime.assertThat(
-          result.completed &&
+          result.rejected.every(Boolean) &&
+            result.completed &&
             result.frozen &&
             result.userCount === 1 &&
-            selections.length === 2 &&
+            selections.length === 6 &&
             selections.every((node) => node.knowledge?.kbAvailability === 'not_indexed') &&
             result.body.includes('用户引用的文档：') &&
             result.body.includes('Hello') &&
@@ -233,9 +342,14 @@ describe('ai human mock-llm backend', () => {
             !result.body.includes('类型：') &&
             !result.body.includes('stale-id') &&
             result.body.split('解释这段文字').length === 2 &&
-            result.body.split('资源地址：').length === 4 &&
+            result.body.split('资源地址：').length === 8 &&
             result.body.includes('知识库文档ID：web-document') &&
             !result.body.includes('stale-directory-id') &&
+            result.body.includes('Data!B2:C3') &&
+            result.body.includes('页面标识：ppt/slides/slide1.xml') &&
+            result.body.includes('选中时的画面：') &&
+            !JSON.stringify(result.contentNodes).includes('selectionImages') &&
+            selections.find((node) => node.id === 'ppt')?.image?.mimeType === 'image/png' &&
             result.queued &&
             result.pendingNodes.length === 1 &&
             JSON.stringify(result.restoredNodes) === JSON.stringify(result.pendingNodes),

@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
+import type { WorkspaceIndexJobRecord } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
@@ -42,20 +43,71 @@ describe('settings workspace e2e', () => {
           await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor({
             state: 'visible'
           })
-          await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-          await waitForFileIndexJobIdle(page, workspaceId)
-
-          await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-          const retry = await waitForFileIndexJobIdle(page, workspaceId)
+          const runIndex = async () => {
+            const finished = page.evaluate(
+              (id) =>
+                new Promise<WorkspaceIndexJobRecord>((resolve, reject) => {
+                  const timer = setTimeout(() => {
+                    unsubscribe()
+                    reject(new Error('没有收到本次文件索引任务终态'))
+                  }, 120_000)
+                  const unsubscribe = window.api.onWorkspaceIndexJobProgress((job) => {
+                    if (
+                      job.workspace_id !== id ||
+                      job.source_kind !== 'file' ||
+                      job.action !== 'prepare' ||
+                      job.status === 'running'
+                    )
+                      return
+                    clearTimeout(timer)
+                    unsubscribe()
+                    resolve(job)
+                  })
+                }),
+              workspaceId
+            )
+            // Flush browser commands so the read-only listener precedes the UI click.
+            await page.evaluate(() => true)
+            await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
+            const job = await finished
+            const idle = await waitForFileIndexJobIdle(page, workspaceId)
+            return { job, tree: idle.tree }
+          }
+          const first = await runIndex()
+          const retry = await runIndex()
 
           return {
-            lastRunningJob: retry.lastRunningJob,
+            firstJob: {
+              id: first.job.id,
+              status: first.job.status,
+              total_count: first.job.total_count,
+              processed_count: first.job.processed_count,
+              failed_count: first.job.failed_count
+            },
+            retryJob: {
+              id: retry.job.id,
+              status: retry.job.status,
+              total_count: retry.job.total_count,
+              processed_count: retry.job.processed_count,
+              failed_count: retry.job.failed_count
+            },
+            firstStatuses: toSupportedFileStatuses(first.tree),
             statuses: toSupportedFileStatuses(retry.tree)
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.statuses.length === 1 && result.statuses[0]?.status === 'failed',
+            result.firstJob.id !== result.retryJob.id &&
+              [result.firstJob, result.retryJob].every(
+                (job) =>
+                  job.status === 'failed' &&
+                  job.total_count === 1 &&
+                  job.processed_count === 1 &&
+                  job.failed_count === 1
+              ) &&
+              result.firstStatuses[0]?.status === 'failed' &&
+              result.statuses.length === 1 &&
+              result.statuses[0]?.status === 'failed',
             {
               name: 'failed-file-is-retried',
               message:

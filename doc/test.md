@@ -26,7 +26,6 @@
 - `showcase`
   - 放在 `tests/case/showcase/**`，文件后缀 `.showcase.test.ts`。
   - 独立官网样例采集，走真实 E2E 链路，用 `pnpm test:showcase` 单独执行。
-  - 这个是大概率不维护的，需要用也只会单独执行，基本忽略即可。
 - 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Knowledge、Settings、Workbench、Showcase 或 Unit。
 
 ### 2.2 目录结构
@@ -87,6 +86,8 @@ tests/
 - `Oracle`
   - 必须成立的明确断言集合。
 
+Settings / Workbench 每项 PRD 验收必须通过完整 AC 编号登记到具体 case 的 Oracle，或本域计划的人工验收 / 自动化覆盖边界；可使用同需求的 `AC1/AC2` 缩写与明确的闭区间。仅引用需求编号不能代替逐项登记。跨 AI / Unit 的证据须指明实际 case / 文件和覆盖层次。架构校验只检查验收登记及 case 文件关系，不证明行为已执行或断言充分。
+
 ### 3.3 backend 正式 case 规则
 
 - `ai` / `knowledge` 正式 backend 必须打到页面或 IPC 会调用的生产实现（真实 store、真实服务、真实文件、真实工具）。
@@ -133,7 +134,7 @@ runner 的职责：
 2. 落原始日志到 `tests/logs/**`。
 3. 在不带 `--type` 时按“普通测试 -> 源码 E2E”顺序执行。
 4. E2E 执行前清理 `tests/.tmp/e2e` 中超过 24 小时未活动的残留 `ncurator-*` 目录，避免异常终止的 run 遗留临时数据。
-5. 按 `--target` 准备源码应用，或构建、审计并安装正式包。
+5. 按 `--target` 准备并构建源码应用，或校验并安装已构建的正式包；正式包构建与审计遵循 `doc/deploy/release.md`。
 
 runner 不负责：
 
@@ -256,7 +257,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - 通常与测试文件名去掉 `.test.ts` 后一致；e2e case 通常以 `.e2e` 结尾。
 - `<runId>`
   - 单次执行唯一标识。
-  - 当前格式：`YYYYMMDD-HHmmss-SSS`。
+  - E2E 格式为 `YYYYMMDD-HHmmss-SSS`；backend 在该时间戳后追加 8 位 UUID 前缀，以隔离并发运行。
 - backend 正式 case 运行开始后，runner 应尽快创建对应 run 目录，并对 `timeline.jsonl / runtime-events.jsonl / llm-io.jsonl` 采用渐进式落盘；不得要求等到 run 结束后才首次出现日志目录。
 - backend raw logs 的完整记录以磁盘上的 JSONL 文件为唯一真相源；测试进程内允许不再长期保留这些日志的全量副本。
 

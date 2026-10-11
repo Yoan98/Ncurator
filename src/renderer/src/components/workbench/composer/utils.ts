@@ -1,3 +1,4 @@
+import { selectionTooltip } from '../../../../../shared/documentSelection'
 import { chatContentText, chatReferences, selectionLabel } from '../../../../../shared/chatContent'
 import type {
   ChatMessageContentNode,
@@ -10,7 +11,7 @@ import {
   getReferenceVisualSpec,
   INLINE_TOKEN_LABEL_CLASS_NAME,
   REFERENCE_TOKEN_CLASS_NAME,
-  SELECTION_DOCUMENT_ICON_PATH,
+  selectionIconPath,
   SELECTION_NUMBER_CLASS_NAME,
   SELECTION_TOKEN_CLASS_NAME,
   selectionFileName
@@ -88,7 +89,7 @@ const selectionElements = new WeakMap<HTMLElement, DocumentSelectionNode>()
 const referenceElements = new WeakMap<HTMLElement, SelectedReference>()
 
 const updateSelectionToken = (token: HTMLElement, selection: DocumentSelectionNode): void => {
-  token.title = selectionLabel(selection) + '\n' + selection.selectedText
+  token.title = selectionLabel(selection) + '\n' + selectionTooltip(selection)
   token.setAttribute('aria-label', selectionLabel(selection))
   const number = token.querySelector('[data-role="selection-number"]')
   if (number) number.textContent = String(selection.number)
@@ -311,7 +312,7 @@ export const renderComposerNodesToEditor = (editor: HTMLElement, nodes: Composer
       icon.setAttribute('aria-hidden', 'true')
       icon.setAttribute('class', 'relative top-[0.1em] h-[1em] w-[1em] shrink-0 self-center')
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      path.setAttribute('d', SELECTION_DOCUMENT_ICON_PATH)
+      path.setAttribute('d', selectionIconPath(node.selection))
       icon.appendChild(path)
       const label = document.createElement('span')
       label.className = INLINE_TOKEN_LABEL_CLASS_NAME

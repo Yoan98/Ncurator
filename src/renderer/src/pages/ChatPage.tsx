@@ -1,7 +1,7 @@
-﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { flushReferencedTextFiles } from '../components/fileRenders/pendingTextSaves'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Input, Modal, Tooltip } from 'antd'
 import {
-  HiCheck,
   HiOutlineClipboardDocument,
   HiOutlineClock,
   HiOutlineFolder,
@@ -9,8 +9,7 @@ import {
   HiOutlineQuestionMarkCircle,
   HiPhoto,
   HiPlus,
-  HiTrash,
-  HiXMark
+  HiTrash
 } from 'react-icons/hi2'
 import { BsPinAngle, BsPinAngleFill } from 'react-icons/bs'
 import { PiEraser } from 'react-icons/pi'
@@ -38,8 +37,9 @@ import type {
   WorkbenchModelSelection,
   WorkspaceSource,
   PendingHumanInteraction,
-  AskUserQuestionAnswer,
-  AiRunHumanInteractionRequest
+  AskUserQuestionResult,
+  AiRunHumanInteractionRequest,
+  AiApprovalBatchDecision
 } from '../../../shared/types'
 import { PARTNER_AVATAR_SHAPES, PARTNER_AVATAR_COLORS } from '../../../shared/types'
 import {
@@ -67,11 +67,7 @@ import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import { FullAccessConfirmModal } from '../components/workbench/FullAccessConfirmModal'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import HumanInteractionCard from '../components/workbench/HumanInteractionCard'
-import {
-  WorkbenchInteractionCard,
-  WorkbenchInteractionFooter
-} from '../components/workbench/WorkbenchInteractionCard'
-import { buildPartnerGuidePlaceholder } from '../components/workbench/composer/constants'
+import ApprovalInteractionCard from '../components/workbench/ApprovalInteractionCard'
 import { MessageTimeline } from '../components/workbench/MessageTimeline'
 import {
   buildTimelineNodes,
@@ -148,8 +144,7 @@ import {
   formatRelativeTime,
   applyQuestionInteractionResult,
   reduceAssistantProcessGroups,
-  reduceAssistantProcessThoughts,
-  getSubagentAvatar
+  reduceAssistantProcessThoughts
 } from '../components/workbench/utils'
 import {
   clipPartnerListPreview,
@@ -174,14 +169,13 @@ import {
   isCurrentFileChangeRunScope,
   type FileChangeRunScope
 } from '../../../shared/aiFileChangeScope'
-import { chatSelectors, workbenchSelectors } from '../testing/selectors'
+import { workbenchSelectors } from '../testing/selectors'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import brandIcon from '../../../../logo/png/ncurator-logo-24.png'
 import PartnerAvatar, { PARTNER_AVATAR_COLOR_HEX } from '../components/workbench/PartnerAvatar'
 import SidebarUpdateControl from '../components/update/SidebarUpdateControl'
 
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
-type ApprovalBatchDecisionAction = 'approve' | 'reject' | 'guide'
 type WorkbenchE2EWindow = Window &
   typeof globalThis & {
     __NCURATOR_E2E_SET_WORKBENCH_DRAFT__?: (draft: ComposerDraftValue) => void
@@ -191,11 +185,6 @@ type ApplyRevertConfirmState = {
   changeId: string
   stage: 'confirm' | 'force'
   content: string
-}
-
-type ApprovalDraftDecision = {
-  action?: ApprovalBatchDecisionAction
-  message: string
 }
 
 const SCROLL_BOTTOM_TOLERANCE = 72
@@ -982,11 +971,6 @@ const ChatPage: React.FC = () => {
 
   const [pendingApprovalBatch, setPendingApprovalBatch] =
     useState<ApprovalBatchRequiredEvent | null>(null)
-  const [approvalCurrentIndex, setApprovalCurrentIndex] = useState(0)
-  const [approvalDraftDecisions, setApprovalDraftDecisions] = useState<
-    Record<string, ApprovalDraftDecision>
-  >({})
-  const [approvalSubmitting, setApprovalSubmitting] = useState(false)
   const [pendingQuestion, setPendingQuestion] = useState<{
     runId: string
     interaction: Extract<PendingHumanInteraction, { kind: 'question' }>
@@ -1002,6 +986,7 @@ const ChatPage: React.FC = () => {
   const submitInFlightRef = useRef(false)
   const [submittingPartnerId, setSubmittingPartnerId] = useState<string | null>(null)
   const selectionLocationsRef = useRef(new Map<string, Map<string, SelectionLocation>>())
+  const selectionImagesRef = useRef(new Map<string, Map<string, Uint8Array>>())
   const [selectionNavigation, setSelectionNavigation] =
     useState<DocumentSelectionState['navigation']>(null)
   const lastSubmittedInputRef = useRef('')
@@ -1343,6 +1328,11 @@ const ChatPage: React.FC = () => {
         if (!selectionIds.has(id)) locations.delete(id)
       })
       if (!locations?.size) selectionLocationsRef.current.delete(partnerId)
+      const images = selectionImagesRef.current.get(partnerId)
+      images?.forEach((_, id) => {
+        if (!selectionIds.has(id)) images.delete(id)
+      })
+      if (!images?.size) selectionImagesRef.current.delete(partnerId)
       if (isComposerDraftEmpty(draft)) {
         delete composerDraftByPartnerIdRef.current[partnerId]
         return
@@ -1482,11 +1472,6 @@ const ChatPage: React.FC = () => {
     [currentMessages]
   )
 
-  const currentApprovalItem = useMemo(() => {
-    const items = pendingApprovalBatch?.items
-    if (!Array.isArray(items) || items.length === 0) return null
-    return items[approvalCurrentIndex] || items[0] || null
-  }, [approvalCurrentIndex, pendingApprovalBatch])
   const composerSubmitDisabledReason = useMemo(() => {
     if (!input.trim()) return null
     if (!currentPartnerId) return '请先选择伙伴'
@@ -1519,11 +1504,6 @@ const ChatPage: React.FC = () => {
     modelSelection.mainModel &&
     !composerSubmitDisabledReason
   )
-
-  const approvalSubmitDisabled = useMemo(() => {
-    if (!currentApprovalItem || approvalSubmitting) return true
-    return (approvalDraftDecisions[currentApprovalItem.itemId]?.message || '').trim().length === 0
-  }, [approvalDraftDecisions, approvalSubmitting, currentApprovalItem])
 
   const syncLatestDayPinSpacer = useCallback((messages: ChatMessage[]): void => {
     const scroller = scrollRef.current
@@ -2209,9 +2189,6 @@ const ChatPage: React.FC = () => {
         ? { runId: questionRun.run.id, interaction: questionRun.pendingInteraction }
         : null
     )
-    setApprovalCurrentIndex(0)
-    setApprovalDraftDecisions({})
-    setApprovalSubmitting(false)
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
   }
@@ -3207,6 +3184,8 @@ const ChatPage: React.FC = () => {
       delete persistRetryTimersRef.current[id]
       delete persistRevisionsRef.current[id]
       delete composerDraftByPartnerIdRef.current[id]
+      selectionLocationsRef.current.delete(id)
+      selectionImagesRef.current.delete(id)
       setTabWorkspaces((current) => {
         const next = { ...current }
         delete next[id]
@@ -3585,9 +3564,6 @@ const ChatPage: React.FC = () => {
           if (event.code === 'approval_denied') {
             setLoading(false)
             setPendingApprovalBatch(null)
-            setApprovalCurrentIndex(0)
-            setApprovalDraftDecisions({})
-            setApprovalSubmitting(false)
           }
           message.warning(event.message || '当前运行出现告警')
         }
@@ -3597,10 +3573,7 @@ const ChatPage: React.FC = () => {
       if (event.type === 'approval_batch_required') {
         if (!event.internal) {
           setLoading(false)
-          setApprovalSubmitting(false)
           setPendingApprovalBatch(event)
-          setApprovalCurrentIndex(0)
-          setApprovalDraftDecisions({})
         }
         return
       }
@@ -3623,7 +3596,6 @@ const ChatPage: React.FC = () => {
 
       if (event.type === 'approval_batch_decision' || event.type === 'approval_batch_cancelled') {
         if (event.internal) return
-        setApprovalSubmitting(false)
         setPendingApprovalBatch((current) => (current?.batchId === event.batchId ? null : current))
         setLoading(true)
         return
@@ -3655,7 +3627,6 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setPendingQuestion(null)
-        setApprovalSubmitting(false)
         setCurrentMessages((previous) =>
           previous.map((item) =>
             item.id === messageId
@@ -3685,7 +3656,6 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setPendingQuestion(null)
-        setApprovalSubmitting(false)
         setCurrentMessages((previous) =>
           previous.map((item) =>
             item.id === messageId
@@ -3712,7 +3682,6 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setPendingQuestion(null)
-        setApprovalSubmitting(false)
         if (eventPartnerId && eventPartnerId === currentPartnerIdRef.current) {
           void loadFileChangesForPartnerRef.current(eventPartnerId, event.runId, {
             notifyNoEffectiveChange: true
@@ -3890,6 +3859,7 @@ const ChatPage: React.FC = () => {
     const clearAcceptedDraft = (): void => {
       saveComposerDraftForPartner(submitPartnerId, createEmptyComposerDraft())
       selectionLocationsRef.current.delete(submitPartnerId)
+      selectionImagesRef.current.delete(submitPartnerId)
       if (currentPartnerIdRef.current === submitPartnerId) {
         applyComposerDraft(createEmptyComposerDraft(), `clear:${submitPartnerId}`)
         setSelectionNavigation(null)
@@ -3901,7 +3871,6 @@ const ChatPage: React.FC = () => {
       setCancellingRun(false)
       setPendingApprovalBatch(null)
       setPendingQuestion(null)
-      setApprovalSubmitting(false)
     }
     lastSubmittedInputRef.current = userQuery
     setPartners((items) =>
@@ -3937,11 +3906,18 @@ const ChatPage: React.FC = () => {
     submitInFlightRef.current = true
     setSubmittingPartnerId(submitPartnerId)
     try {
+      await flushReferencedTextFiles(
+        documentSelections(submittedContentNodes).map((node) => node.filePath)
+      )
       const response = await window.api.chatSubmit({
         partnerId: submitPartnerId,
         preference: composerAiPreference,
         executionPermission: composerExecutionPermission,
         contentNodes: submittedContentNodes,
+        selectionImages: documentSelections(submittedContentNodes).flatMap((node) => {
+          const bytes = selectionImagesRef.current.get(submitPartnerId)?.get(node.id)
+          return bytes ? [{ id: node.id, bytes }] : []
+        }),
         attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
         mainModel: modelSelection.mainModel
       })
@@ -4176,107 +4152,28 @@ const ChatPage: React.FC = () => {
     setCreatePartnerOpen(true)
   }
 
-  const setApprovalGuideMessage = (itemId: string, messageText: string): void => {
-    setApprovalDraftDecisions((current) => ({
-      ...current,
-      [itemId]: {
-        action: messageText.trim().length > 0 ? 'guide' : undefined,
-        message: messageText
-      }
-    }))
-  }
-
-  const submitHumanQuestion = async (answers: {
-    answers: AskUserQuestionAnswer[]
-  }): Promise<void> => {
-    if (!pendingQuestion) return
+  const submitHumanQuestion = async (answers: AskUserQuestionResult): Promise<void> => {
+    if (!pendingQuestion) throw new Error('当前没有待回答问题')
     const response = await window.api.aiRunHumanInteractionSubmit({
       runId: pendingQuestion.runId,
       interactionId: pendingQuestion.interaction.interactionId,
       answers
     } satisfies AiRunHumanInteractionRequest)
     if (!response.success) {
-      emitErrorMessage(response.error || '提交问题回答失败')
-      return
+      throw new Error(response.error || '提交问题回答失败')
     }
     // Resolution events own dismissal; a queued approval or question may already be visible.
   }
 
-  const flushApprovalBatch = async (
-    draftDecisions: Record<string, ApprovalDraftDecision>
-  ): Promise<void> => {
-    if (!pendingApprovalBatch || approvalSubmitting) return
-    setApprovalSubmitting(true)
-    try {
-      const decisions = pendingApprovalBatch.items.map((item) => {
-        const draft = draftDecisions[item.itemId]
-        if (!draft?.action) {
-          throw new Error('审批项尚未完成')
-        }
-        return {
-          itemId: item.itemId,
-          action: draft.action as ApprovalBatchDecisionAction,
-          message: draft.action === 'guide' ? draft.message.trim() : undefined
-        }
-      })
-      const response = await window.api.aiRunApprovalBatchDecide({
-        runId: pendingApprovalBatch.runId,
-        batchId: pendingApprovalBatch.batchId,
-        decisions
-      })
-      if (!response.success) {
-        setApprovalSubmitting(false)
-        emitErrorMessage(response.error || '审核提交失败')
-        return
-      }
-      // The decision event owns dismissal. A next batch may arrive before this IPC reply.
-    } catch (error) {
-      setApprovalSubmitting(false)
-      emitErrorMessage(error instanceof Error ? error.message : '审核提交失败')
-    }
-  }
-
-  const handleApprovalDecision = async (input: {
-    itemId: string
-    action: ApprovalBatchDecisionAction
-    message?: string
-  }): Promise<void> => {
-    if (!pendingApprovalBatch || approvalSubmitting) return
-    const nextDraftDecisions: Record<string, ApprovalDraftDecision> = {
-      ...approvalDraftDecisions,
-      [input.itemId]: {
-        action: input.action,
-        message: input.action === 'guide' ? input.message || '' : ''
-      }
-    }
-
-    const nextPendingIndex = pendingApprovalBatch.items.findIndex(
-      (item, index) => index > approvalCurrentIndex && !nextDraftDecisions[item.itemId]?.action
-    )
-    const firstPendingIndex = pendingApprovalBatch.items.findIndex(
-      (item) => !nextDraftDecisions[item.itemId]?.action
-    )
-    const hasRemainingUndecided = pendingApprovalBatch.items.some(
-      (item) => !nextDraftDecisions[item.itemId]?.action
-    )
-
-    if (hasRemainingUndecided && (nextPendingIndex >= 0 || firstPendingIndex >= 0)) {
-      setApprovalDraftDecisions(nextDraftDecisions)
-      setApprovalCurrentIndex(nextPendingIndex >= 0 ? nextPendingIndex : firstPendingIndex)
-      return
-    }
-
-    await flushApprovalBatch(nextDraftDecisions)
-  }
-
-  const handleApprovalBatchSubmit = async (): Promise<void> => {
-    if (!currentApprovalItem || approvalSubmitting || approvalSubmitDisabled) return
-    const messageText = approvalDraftDecisions[currentApprovalItem.itemId]?.message || ''
-    await handleApprovalDecision({
-      itemId: currentApprovalItem.itemId,
-      action: 'guide',
-      message: messageText.trim()
+  const submitApprovalBatch = async (decisions: AiApprovalBatchDecision[]): Promise<void> => {
+    if (!pendingApprovalBatch) throw new Error('当前没有待审核操作')
+    const response = await window.api.aiRunApprovalBatchDecide({
+      runId: pendingApprovalBatch.runId,
+      batchId: pendingApprovalBatch.batchId,
+      decisions
     })
+    if (!response.success) throw new Error(response.error || '审核提交失败')
+    // Resolution events own dismissal, including transitions to the next batch.
   }
 
   const handleApplyRevert = async (): Promise<void> => {
@@ -4811,7 +4708,11 @@ const ChatPage: React.FC = () => {
     selectionLocationsRef.current.get(currentPartnerId || '') ||
     new Map<string, SelectionLocation>()
   if (currentPartnerId) selectionLocationsRef.current.set(currentPartnerId, locations)
+  const selectionImages =
+    selectionImagesRef.current.get(currentPartnerId || '') || new Map<string, Uint8Array>()
+  if (currentPartnerId) selectionImagesRef.current.set(currentPartnerId, selectionImages)
   const selectionState: DocumentSelectionState = {
+    partnerId: currentPartnerId || '',
     enabled:
       Boolean(currentPartnerId) &&
       !scheduledTasksActive &&
@@ -4821,12 +4722,13 @@ const ChatPage: React.FC = () => {
     selections: currentDocumentSelections,
     locations,
     navigation: selectionNavigation,
-    save: (node, location) => {
+    save: (node, location, image) => {
       if (!currentPartnerId || submittingPartnerId === currentPartnerId) return
       const draft = composerDraftValueRef.current
       const existing = documentSelections(draft.contentNodes).find((item) => item.id === node.id)
       const saved: DocumentSelectionNode = { ...node, number: existing?.number || 0 }
-      locations.set(saved.id, location)
+      if (location) locations.set(saved.id, location)
+      if (image) selectionImages.set(saved.id, image)
       const contentNodes: ChatMessageContentNode[] = existing
         ? draft.contentNodes.map((item) =>
             item.kind === 'document_selection' && item.id === saved.id ? saved : item
@@ -4858,6 +4760,7 @@ const ChatPage: React.FC = () => {
         selectedReferences: chatReferences(contentNodes)
       }
       locations.delete(id)
+      selectionImages.delete(id)
       saveComposerDraftForPartner(currentPartnerId, next)
       applyComposerDraft(next, `selection-delete:${id}`)
     },
@@ -5202,108 +5105,20 @@ const ChatPage: React.FC = () => {
                             <HumanInteractionCard
                               key={pendingQuestion.interaction.interactionId}
                               interaction={pendingQuestion.interaction}
-                              partnerName={currentPartner?.name}
                               cancelling={cancellingRun}
                               onSubmit={submitHumanQuestion}
                               onCancel={() => void handleCancel()}
                             />
                           ) : pendingApprovalBatch ? (
-                            pendingApprovalBatch && currentApprovalItem ? (
-                              <WorkbenchInteractionCard
-                                key={pendingApprovalBatch.batchId}
-                                source={
-                                  pendingApprovalBatch.source ? (
-                                    <>
-                                      <PartnerAvatar
-                                        {...getSubagentAvatar(
-                                          pendingApprovalBatch.source.agentId ||
-                                            pendingApprovalBatch.source.childRunId
-                                        )}
-                                        size={24}
-                                      />
-                                      <span data-testid={chatSelectors.approvalBatchSource}>
-                                        {pendingApprovalBatch.source.name}
-                                      </span>
-                                    </>
-                                  ) : undefined
-                                }
-                                title={currentApprovalItem.commandExplanation}
-                                itemLabel="审批"
-                                currentIndex={approvalCurrentIndex}
-                                total={pendingApprovalBatch.items.length}
-                                busy={approvalSubmitting}
-                                cancelling={cancellingRun}
-                                onPrevious={() =>
-                                  setApprovalCurrentIndex((current) => Math.max(0, current - 1))
-                                }
-                                onNext={() =>
-                                  setApprovalCurrentIndex((current) =>
-                                    Math.min(pendingApprovalBatch.items.length - 1, current + 1)
-                                  )
-                                }
-                                onCancel={() => void handleCancel()}
-                                cardTestId={chatSelectors.approvalBatchCard}
-                                previousTestId={chatSelectors.approvalBatchPrevButton}
-                                nextTestId={chatSelectors.approvalBatchNextButton}
-                                cancelTestId={workbenchSelectors.sendButton}
-                                footer={
-                                  <WorkbenchInteractionFooter
-                                    value={
-                                      approvalDraftDecisions[currentApprovalItem.itemId]?.message ||
-                                      ''
-                                    }
-                                    placeholder={buildPartnerGuidePlaceholder(
-                                      pendingApprovalBatch.source?.name || currentPartner?.name
-                                    )}
-                                    submitting={approvalSubmitting}
-                                    inputDisabled={cancellingRun}
-                                    disabled={approvalSubmitDisabled || cancellingRun}
-                                    onChange={(value) =>
-                                      setApprovalGuideMessage(currentApprovalItem.itemId, value)
-                                    }
-                                    onSubmit={() => void handleApprovalBatchSubmit()}
-                                    inputTestId={chatSelectors.approvalBatchGuideInput}
-                                    submitTestId={chatSelectors.approvalBatchSubmitButton}
-                                  />
-                                }
-                              >
-                                <code className="mx-5 mt-3 block max-h-[min(34vh,320px)] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437] [overflow-wrap:anywhere]">
-                                  {currentApprovalItem.command}
-                                </code>
-                                <div className="mx-2 mt-3 space-y-1">
-                                  <button
-                                    type="button"
-                                    className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#37352F] shadow-[inset_3px_0_0_#37352F,inset_0_0_0_1px_#EEEEEC] hover:bg-[#F4F4F2]"
-                                    onClick={() =>
-                                      void handleApprovalDecision({
-                                        itemId: currentApprovalItem.itemId,
-                                        action: 'approve'
-                                      })
-                                    }
-                                    disabled={approvalSubmitting}
-                                    data-testid={chatSelectors.approvalBatchApproveButton}
-                                  >
-                                    <span>允许本次操作</span>
-                                    <HiCheck className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#787774] hover:bg-[#F4F4F2]"
-                                    onClick={() =>
-                                      void handleApprovalDecision({
-                                        itemId: currentApprovalItem.itemId,
-                                        action: 'reject'
-                                      })
-                                    }
-                                    disabled={approvalSubmitting}
-                                    data-testid={chatSelectors.approvalBatchDenyButton}
-                                  >
-                                    <span>拒绝本次操作</span>
-                                    <HiXMark className="h-4 w-4 text-[#B3261E]" />
-                                  </button>
-                                </div>
-                              </WorkbenchInteractionCard>
-                            ) : null
+                            <ApprovalInteractionCard
+                              key={pendingApprovalBatch.batchId}
+                              items={pendingApprovalBatch.items}
+                              source={pendingApprovalBatch.source}
+                              partnerName={currentPartner?.name}
+                              cancelling={cancellingRun}
+                              onSubmit={submitApprovalBatch}
+                              onCancel={() => void handleCancel()}
+                            />
                           ) : (
                             <div className="relative">
                               {busyCancelTask || clearContextVisible ? (
@@ -5336,7 +5151,6 @@ const ChatPage: React.FC = () => {
                                 </div>
                               ) : null}
                               <WorkbenchComposer
-                                partnerName={currentPartner?.name}
                                 aiPreference={composerAiPreference}
                                 onAiPreferenceChange={handleAiPreferenceChange}
                                 executionPermission={composerExecutionPermission}

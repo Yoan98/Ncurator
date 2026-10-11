@@ -351,8 +351,9 @@ const readApprovalWaitingSnapshot = async (
     titleText: (
       (await card.getByTestId(chatSelectors.approvalBatchCard + '-title').textContent()) || ''
     ).trim(),
-    positionText: (
-      (await card.getByTestId(chatSelectors.approvalBatchCard + '-position').textContent()) || ''
+    positionText: ((await card.getByTestId(chatSelectors.approvalBatchCard + '-position').count())
+      ? await card.getByTestId(chatSelectors.approvalBatchCard + '-position').innerText()
+      : ''
     ).trim(),
     hasAssistanceBadge: await assistanceBadge.isVisible().catch(() => false),
     hasSeparateGuideButton: (await card.getByRole('button', { name: /告诉|指导/ }).count()) > 0,
@@ -523,7 +524,7 @@ const answerFullAccessPathQuestion = async (input: {
   if (!question) throw new Error('full access path question is missing')
   const questionEvidence = [
     question.question,
-    ...question.options.flatMap((option) => [option.label, option.description])
+    ...(question.options ?? []).flatMap((option) => [option.label, option.description])
   ].join('\n')
   if (!/approval-full-access\.txt/iu.test(questionEvidence)) {
     throw new Error(
@@ -532,7 +533,7 @@ const answerFullAccessPathQuestion = async (input: {
     )
   }
   const workspaceDirectoryName = path.basename(input.workspaceRoot)
-  const workspaceOption = question.options.find((option) => {
+  const workspaceOption = question.options?.find((option) => {
     const optionText = option.id + ' ' + option.label + ' ' + option.description
     return (
       (/当前工作区|use_workspace/iu.test(optionText) ||
@@ -540,17 +541,17 @@ const answerFullAccessPathQuestion = async (input: {
       !/工作区之外|原路径创建/iu.test(optionText)
     )
   })
-  if (!workspaceOption) {
-    throw new Error(
-      'full access question did not offer the actual workspace path: ' + JSON.stringify(question)
-    )
-  }
 
   const card = input.page.getByTestId(workbenchSelectors.humanQuestionCard)
   await card.waitFor({ state: 'visible', timeout: 30_000 })
-  await card
-    .getByTestId(`workbench-human-question-option-${question.id}-${workspaceOption.id}`)
-    .click()
+  if (workspaceOption)
+    await card
+      .getByTestId(`workbench-human-question-option-${question.id}-${workspaceOption.id}`)
+      .click()
+  else
+    await card
+      .getByTestId(`workbench-human-question-user-text-${question.id}`)
+      .fill(`使用当前工作区 ${input.workspaceRoot}`)
   await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
   const resolved = await waitForWorkbenchAiEvent(input.runtime, {
     name: 'approval_full_access_path_question_resolved',
@@ -702,9 +703,22 @@ const runTerminalScenario = async (input: {
       approvalDecisions = rejected.decisions
     } else if (input.action === 'guide') {
       if (!input.guideMessage) throw new Error(input.name + ' guide message is missing')
-      await getWorkbenchLocator(input.page, chatSelectors.approvalBatchGuideInput).fill(
-        input.guideMessage
+      const allow = getWorkbenchLocator(input.page, chatSelectors.approvalBatchApproveButton)
+      const guide = getWorkbenchLocator(input.page, chatSelectors.approvalBatchGuideInput)
+      await allow.click()
+      await guide.fill(input.guideMessage)
+      if ((await allow.getAttribute('aria-pressed')) !== 'false' || !(await allow.isDisabled()))
+        throw new Error('guidance must replace approval')
+      await guide.fill('')
+      if (
+        (await allow.getAttribute('aria-pressed')) !== 'false' ||
+        !(await getWorkbenchLocator(
+          input.page,
+          chatSelectors.approvalBatchSubmitButton
+        ).isDisabled())
       )
+        throw new Error('clearing guidance must not restore approval')
+      await guide.fill(input.guideMessage)
       await getWorkbenchLocator(input.page, chatSelectors.approvalBatchSubmitButton).click()
       const guideDecision = await waitForWorkbenchAiEvent(input.runtime, {
         name: input.name + '_guide_decision',
@@ -1157,7 +1171,7 @@ describe('workbench run e2e', () => {
               snapshot &&
               snapshot.waitingVisible &&
               snapshot.titleText.length > 0 &&
-              snapshot.positionText.startsWith('审批 1 /') &&
+              snapshot.positionText === '' &&
               snapshot.waitingText.includes('等待用户处理') &&
               snapshot.pendingTerminalCommandTexts.some((text) => text.includes('待你确认命令')) &&
               !snapshot.hasBlockerNotice &&

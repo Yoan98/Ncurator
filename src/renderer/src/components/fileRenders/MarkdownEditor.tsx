@@ -1,3 +1,7 @@
+import { useCallback, useContext, useMemo } from 'react'
+import { DocumentSelectionContext } from '../workbench/composer/DocumentSelectionContext'
+import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
+import { markdownAdapter } from './selection/textFileAdapter'
 import React, { useEffect, useRef, useState } from 'react'
 import { App as AntdApp, Empty, Spin } from 'antd'
 import Vditor from 'vditor'
@@ -19,10 +23,23 @@ import { workbenchSelectors } from '../../testing/selectors'
 
 const resolveVditorCdn = (): string => new URL('vditor', document.baseURI).href
 
-const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
+const MarkdownEditor: React.FC<{ filePath: string; allowSelection?: boolean }> = ({
+  filePath,
+  allowSelection = false
+}) => {
   const { message } = AntdApp.useApp()
   const file = useEditableTextFile(filePath)
+  const [selectionContainer, setSelectionContainer] = useState<HTMLDivElement | null>(null)
+  const selectionState = useContext(DocumentSelectionContext)
+  const selectionAdapter = useMemo(
+    () => (selectionContainer ? markdownAdapter(selectionContainer, filePath, file.getText) : null),
+    [selectionContainer, filePath, file.getText]
+  )
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const bindRoot = useCallback((element: HTMLDivElement | null) => {
+    rootRef.current = element
+    setSelectionContainer(element)
+  }, [])
   const vditorRef = useRef<Vditor | null>(null)
   const readyRef = useRef(false)
   const filePathRef = useRef(filePath)
@@ -65,6 +82,11 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
       })
     }
   }, [message])
+
+  useEffect(() => {
+    if (selectionState?.locked) vditorRef.current?.disabled()
+    else vditorRef.current?.enable()
+  }, [selectionState?.locked])
 
   const scheduleHydrate = (): void => {
     const root = rootRef.current
@@ -151,7 +173,7 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
 
   useEffect(
     () => () => {
-      flushSave()
+      void flushSave().catch((error) => console.error('文件保存失败', error))
       if (hydrateTimerRef.current !== null) {
         window.clearTimeout(hydrateTimerRef.current)
         hydrateTimerRef.current = null
@@ -165,7 +187,10 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
   if (file.loadError || (!file.loading && file.initialText === null)) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-white">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={file.loadError || '文件加载失败'} />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={file.loadError || '文件加载失败'}
+        />
       </div>
     )
   }
@@ -182,10 +207,19 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
   return (
     <>
       <div
-        ref={rootRef}
+        ref={bindRoot}
         className="h-full w-full overflow-hidden bg-white"
         data-testid={workbenchSelectors.markdownEditor}
       />
+      {allowSelection && selectionAdapter && (
+        <DocumentSelectionLayer
+          container={selectionContainer}
+          filePath={filePath}
+          revision={1}
+          adapter={selectionAdapter}
+          testPrefix="text"
+        />
+      )}
       <ImageLightbox image={previewImage} onClose={() => setPreviewImage(null)} />
     </>
   )

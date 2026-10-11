@@ -1,5 +1,5 @@
-import type { DocumentSelectionNode } from '../../../../shared/types'
-import type { SelectionLocation } from '../workbench/composer/DocumentSelectionContext'
+import type { DocumentSelectionNode } from '../../../../../shared/types'
+import type { SelectionLocation } from '../../workbench/composer/DocumentSelectionContext'
 
 type TextRun = { node: Text; start: number; end: number }
 export type PreviewText = { text: string; runs: TextRun[] }
@@ -45,19 +45,25 @@ function tableGrid(table: HTMLTableElement): (HTMLTableCellElement | null)[][] {
   return grid.map((row) => Array.from({ length: columns }, (_, column) => row[column] || null))
 }
 
-export function readPreviewText(container: HTMLElement): PreviewText {
+export function readPreviewText(container: HTMLElement | SVGElement): PreviewText {
   const runs: TextRun[] = []
   let text = ''
   const visit = (node: Node): void => {
     if (node instanceof Text) {
-      if (node.data && node.parentElement instanceof HTMLElement) {
+      if (node.data && node.parentElement instanceof Element) {
         runs.push({ node, start: text.length, end: text.length + node.data.length })
         text += node.data
       }
       return
     }
     if (!(node instanceof HTMLElement || node instanceof SVGElement)) return
-    if (node.matches('style, script, template') || isHidden(node)) return
+    if (
+      node.matches(
+        'style, script, template, title, desc, .react-pdf__Page__annotations, canvas, [data-selection-ignore]'
+      ) ||
+      isHidden(node)
+    )
+      return
     if (node instanceof HTMLBRElement) {
       text += '\n'
       return
@@ -75,7 +81,9 @@ export function readPreviewText(container: HTMLElement): PreviewText {
     let hasContent = false
     for (const child of node.childNodes) {
       if (child instanceof Element && isHidden(child)) continue
-      const block = child instanceof HTMLElement && blocks.has(child.tagName)
+      const block =
+        (child instanceof HTMLElement && blocks.has(child.tagName)) ||
+        (child instanceof SVGElement && child.tagName === 'text')
       if (block && hasContent) text += '\n'
       const start = text.length
       visit(child)
@@ -87,7 +95,7 @@ export function readPreviewText(container: HTMLElement): PreviewText {
 }
 
 export function captureSelection(
-  container: HTMLElement,
+  container: HTMLElement | SVGElement,
   preview: PreviewText,
   range: Range
 ): SelectionLocation | null {
@@ -157,4 +165,37 @@ export function textRangesForLocation(preview: PreviewText, location: SelectionL
       range.setEnd(run.node, Math.min(run.node.length, location.end - run.start))
       return range
     })
+}
+
+/** Chromium does not consistently expose Range rectangles for SVG text. */
+export function svgTextRects(preview: PreviewText, location: SelectionLocation): DOMRect[] {
+  return preview.runs.flatMap((run) => {
+    const element = run.node.parentElement
+    if (!(element instanceof SVGTextContentElement)) return []
+    const matrix = element.getScreenCTM()
+    if (!matrix) return []
+    const rects: DOMRect[] = []
+    const start = Math.max(0, location.start - run.start)
+    const end = Math.min(run.node.length, location.end - run.start, element.getNumberOfChars())
+    for (let index = start; index < end; index++) {
+      const box = element.getExtentOfChar(index)
+      const corners = [
+        new DOMPoint(box.x, box.y),
+        new DOMPoint(box.x + box.width, box.y),
+        new DOMPoint(box.x, box.y + box.height),
+        new DOMPoint(box.x + box.width, box.y + box.height)
+      ].map((point) => point.matrixTransform(matrix))
+      const left = Math.min(...corners.map((point) => point.x)),
+        top = Math.min(...corners.map((point) => point.y))
+      rects.push(
+        new DOMRect(
+          left,
+          top,
+          Math.max(...corners.map((point) => point.x)) - left,
+          Math.max(...corners.map((point) => point.y)) - top
+        )
+      )
+    }
+    return rects
+  })
 }

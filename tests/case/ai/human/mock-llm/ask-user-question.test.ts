@@ -40,11 +40,7 @@ const multiQuestionArgs = {
     },
     {
       id: 'format',
-      question: '最终交付使用什么形式？',
-      options: [
-        { id: 'brief', label: '简要说明' },
-        { id: 'detailed', label: '详细方案' }
-      ]
+      question: '请说明最终交付形式'
     }
   ]
 }
@@ -118,7 +114,7 @@ describe('ai human question backend', () => {
                     selectedOptionIds: ['local'],
                     userText: '不要引用外部网页'
                   },
-                  { questionId: 'format', selectedOptionIds: ['brief'] }
+                  { questionId: 'format', selectedOptionIds: [], userText: '简要说明' }
                 ]
               }
             }
@@ -135,7 +131,7 @@ describe('ai human question backend', () => {
                 if (
                   !user.includes('userText="蓝绿色"') ||
                   !user.includes('selectedOptionIds=["local"]') ||
-                  !user.includes('A=first, B=second')
+                  !user.includes('userText="简要说明"')
                 ) {
                   throw new Error('提问结果没有回到下一轮模型上下文')
                 }
@@ -180,7 +176,7 @@ describe('ai human question backend', () => {
             answers: [
               { questionId: 'accent', selectedOptionIds: [], userText: '蓝绿色' },
               { questionId: 'scope', selectedOptionIds: ['local'], userText: '不要引用外部网页' },
-              { questionId: 'format', selectedOptionIds: ['brief'] }
+              { questionId: 'format', selectedOptionIds: [], userText: '简要说明' }
             ]
           }
         })
@@ -336,7 +332,9 @@ describe('ai human question backend', () => {
             return {
               accepted: true as const,
               result: {
-                answers: [{ questionId: question.id, selectedOptionIds: [question.options[0]!.id] }]
+                answers: [
+                  { questionId: question.id, selectedOptionIds: [question.options![0]!.id] }
+                ]
               }
             }
           },

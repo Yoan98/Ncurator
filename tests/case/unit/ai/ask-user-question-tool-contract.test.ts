@@ -43,6 +43,26 @@ describe('ask_user_question contract', () => {
     ).toBe(false)
   })
 
+  it('accepts omitted or empty options and returns a pure text collaboration reply', () => {
+    for (const options of [undefined, []]) {
+      const parsed = ASK_USER_QUESTION_SCHEMA.safeParse({
+        questions: [
+          { id: 'verify', question: '请完成网页验证后回复', ...(options ? { options } : {}) }
+        ]
+      })
+      expect(parsed.success).toBe(true)
+    }
+    expect(ASK_USER_QUESTION_SCHEMA.safeParse({ questions: [] }).success).toBe(false)
+    const rendered = renderAskUserQuestionModelResult({
+      toolName: 'ask_user_question',
+      args: {},
+      data: { answers: [{ questionId: 'verify', selectedOptionIds: [], userText: '验证已完成' }] }
+    })
+    expect(rendered).toContain('selectedOptionIds=[]')
+    expect(rendered).toContain('验证已完成')
+    expect(rendered).not.toContain('A=first')
+  })
+
   it('keeps option metadata, supports multi-select, and leaves custom input implicit', () => {
     const parsed = ASK_USER_QUESTION_SCHEMA.safeParse({
       questions: [
@@ -130,7 +150,7 @@ describe('ask_user_question contract', () => {
       }
     })
 
-    expect(rendered).toContain('A=first, B=second')
+    expect(rendered).not.toContain('A=first')
     expect(rendered).toContain('questionId=delivery')
     expect(rendered).toContain('selectedOptionIds=["full"]')
     expect(rendered).toContain('userText="用 A，然后再补一份摘要"')

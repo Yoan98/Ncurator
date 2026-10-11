@@ -51,7 +51,10 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
     .array(
       z.object({
         id: z.string().min(1).describe('问题的稳定标识'),
-        question: z.string().min(1).describe('需要向用户询问的疑惑或歧义问题'),
+        question: z
+          .string()
+          .min(1)
+          .describe('向用户询问的信息，或需要用户协作完成的操作及反馈请求'),
         options: z
           .array(
             z.object({
@@ -61,9 +64,10 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
               recommended: z.boolean().optional().describe('是否推荐该方案')
             })
           )
-          .min(2)
           .max(4)
-          .describe('供用户选择的具体方案'),
+          .refine((options) => options.length !== 1, '选项必须为空或包含 2 至 4 项')
+          .optional()
+          .describe('可选的具体方案，2 至 4 项；省略或空数组时仅要求用户文字回复'),
         multiSelect: z.boolean().optional().describe('是否允许同时选择多个方案')
       })
     )
@@ -73,9 +77,6 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
 })
 
 export type AskUserQuestionInput = z.infer<typeof ASK_USER_QUESTION_SCHEMA>
-export type AskUserQuestionResult = {
-  answers: Array<{ questionId: string; selectedOptionIds: string[]; userText?: string }>
-}
 
 export type {
   LearnSkillOutput,

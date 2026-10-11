@@ -1,3 +1,11 @@
+export type SelectionRect = {
+  left: number
+  top: number
+  right: number
+  bottom: number
+  width: number
+  height: number
+}
 type Rect = { left: number; top: number; right: number; bottom: number }
 export type SelectionFloatingPosition = {
   left: number
@@ -21,11 +29,11 @@ export function previewViewport(container: HTMLElement): Rect {
 }
 
 export function positionSelectionFloating(
-  range: Range,
+  selectionRects: readonly SelectionRect[],
   viewport: Rect,
   floating: { width: number; height: number }
 ): SelectionFloatingPosition | null {
-  const rects = [...range.getClientRects()].filter(
+  const rects = selectionRects.filter(
     (rect) => rect.width && rect.height && overlaps(rect, viewport)
   )
   const first = rects[0]

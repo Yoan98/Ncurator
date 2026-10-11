@@ -1156,7 +1156,7 @@ export const setupWorkbenchWorkspaceOnly = async (
 export const pasteWorkbenchText = async (
   page: Page,
   value: string,
-  inputTestId = workbenchSelectors.input
+  inputTestId: string = workbenchSelectors.input
 ): Promise<void> => {
   let electronClipboardError: string | null = null
   let pastedThroughElectron = false
@@ -1229,7 +1229,7 @@ let lastWorkbenchPasteDiagnostics: unknown = null
 export const setWorkbenchInput = async (
   page: Page,
   value: string,
-  inputTestId = workbenchSelectors.input
+  inputTestId: string = workbenchSelectors.input
 ): Promise<void> => {
   const input = getWorkbenchLocator(page, inputTestId)
   const selectAllInput = async (): Promise<void> => {
@@ -1911,7 +1911,11 @@ const waitForApprovalItemIndex = async (
     await page.waitForFunction(
       (input: { testId: string; expectedIndex: number }) => {
         const root = document.querySelector(`[data-testid="${input.testId}"]`)
-        return Boolean(root?.textContent?.includes(`审批 ${input.expectedIndex} /`))
+        return Boolean(
+          root
+            ?.querySelector(`[data-testid="${input.testId}-position"]`)
+            ?.textContent?.startsWith(`${input.expectedIndex} /`)
+        )
       },
       {
         testId: chatSelectors.approvalBatchCard,
@@ -1925,7 +1929,7 @@ const waitForApprovalItemIndex = async (
   }
 }
 
-const waitForApprovalAutoAdvance = async (
+const waitForApprovalNextItem = async (
   page: Page,
   expectedOneBasedIndex: number
 ): Promise<void> => {
@@ -1980,8 +1984,9 @@ const autoApproveWorkbenchApprovalBatch = async (
       }
     })
     await getWorkbenchLocator(page, chatSelectors.approvalBatchApproveButton).click()
+    await getWorkbenchLocator(page, chatSelectors.approvalBatchSubmitButton).click()
     if (index < totalItems - 1) {
-      await waitForApprovalAutoAdvance(page, index + 2)
+      await waitForApprovalNextItem(page, index + 2)
     }
   }
 }
@@ -2096,8 +2101,18 @@ export const decideWorkbenchApprovalBatch = async (
       { timeout: WORKBENCH_E2E_TIMEOUT_MS }
     )
     await button.click()
+    if ((await button.getAttribute('aria-pressed')) !== 'true')
+      throw new Error('approval selection was not retained')
+    const beforeSubmitEvents = await collectWorkbenchAiRunEvents(runtime)
+    if (
+      beforeSubmitEvents.some(
+        (event) => event.type === 'approval_batch_decision' && event.batchId === input.event.batchId
+      )
+    )
+      throw new Error('approval submitted before explicit confirmation')
+    await getWorkbenchLocator(page, chatSelectors.approvalBatchSubmitButton).click()
     if (index < input.event.items.length - 1) {
-      await waitForApprovalAutoAdvance(page, index + 2)
+      await waitForApprovalNextItem(page, index + 2)
     }
   }
 

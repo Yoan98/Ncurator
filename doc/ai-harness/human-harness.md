@@ -48,7 +48,7 @@ graph 从 `context_budget` 进入；当前 `user` 的写入分工见第 2.2 节�
 | `plan`                       | 否             | `tool` + `plan_updated`                                                   | 更新 state.plan；**不**改 build user                                       |
 | `hand` / `human_interaction` | 否             | `tool`（+ 可选 `images[]`）+ `human_interaction_resolved` annotation      | append ToolMessage；同一 assistant 的工具结果齐全后 append 图片 HumanMessage；           |
 
-交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：docx/ppt 落盘 side effect → `finalizing_started` → 写交付 `assistant`（`toolCalls: []`）→ 立即 `answer_completed` / `run_completed`。下一轮同伙伴发送可立刻创建。
+交付正文由 brain 内的 `finalizeDelivery` 保存（**不是**独立图节点）：汇总已写盘文件记录 → `finalizing_started` → 写交付 `assistant`（`toolCalls: []`）→ `answer_completed`。正式文件已在工具调用时写盘；回答完成后，`AiRunService` 等待在途写入并按主运行归属生成审核，`ChatRunService` 再发送 `run_completed`。子任务、yield 和追加消息续接不提前生成审核。
 无 `tool_calls` 的正常交付路径上，**brain 不向 log 写 `assistant`**（流式 Answer 只走事件 / `partial_answer`）。
 
 ### 1.3 dispatch 路由
@@ -307,7 +307,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `dispatch` → `plan`      | `tool`（`update_plan`）+ `plan_updated`                                                        | 参数合法时同批写；**不**写 assistant                                                                     |
 | `dispatch` → `hand`      | `tool`（+ 可选 `images[]`）                                                                    | 每个 call 一条；审批拒绝写失败 `tool`；**不**写 assistant                                                |
 | `context_compaction`     | `compaction_checkpoint`                                                                        | 书签 + 摘要正文；发给主模型时再合成 User                                                                 |
-| `finalizeDelivery`       | `finalizing_started` → `assistant`（`toolCalls: []` + `linkAccess`）                           | 正常交付正文的**唯一** writer（落盘与链接访问检查之后）；清空 plan 投影                                  |
+| `finalizeDelivery`       | `finalizing_started` → `assistant`（`toolCalls: []` + `linkAccess`）                           | 正常交付正文的**唯一** writer（文件记录汇总与链接访问检查之后）；清空 plan 投影                                  |
 
 ```text
 用户发送
@@ -488,7 +488,7 @@ flowchart TD
 | `用户添加的附件`  | 当次消息中的附件；空时整块省略                                                          |
 | `当前时间`        | 当时 run 的 `runStartedAt`（历史行不再改）                                              |
 
-引用与附件进入 User，不进 System。知识库范围由显式 `@` 决定，文档选区只作为本轮引用上下文。
+引用与附件进入 User，不进 System。知识库范围由显式 `@` 决定，文档选区只作为本轮引用上下文。选区保留确认时的原文、上下文和格式锚点：文本行及源文件片段、PDF 页码、PPT 页/对象标识、Excel 工作表与 A1 区域。PPT 对象和整页引用另外保存不可变 PNG，User 投影提供可由 `read_image` 读取的伙伴对象路径；模型不会因再次读取已变化的源文件而丢失确认时的画面。临时图像字节只用于提交，不进入消息日志或排队记录。
 
 annotation 扫描该伙伴**全部**剩余 log（不受 `historyFloorSeq` 限制）：技能从最新 `skill_state_updated` 恢复。计划仍按 `plan_updated` / `finalizing_started` 扫描。清空消息记录会物理删除 log，因此技能 / 计划不会从已删除的历史恢复。
 
@@ -914,14 +914,14 @@ Main **不**强制计划全部 `done` 才允许交付。
 
 ```text
 applyDeliverySideEffects
-  → docx/ppt 落盘、汇总 ai_file_change
+  → 汇总已写盘的 ai_file_change（不提交正式文件、不生成审核）
   → finalizing_started（annotation，清空 plan 投影）
   → 扫描交付 markdown 链接、去重检查访问，写入 `linkAccess` sidecar（不改写正文）
   → append 交付 assistant（toolCalls: []，含 linkAccess）
-  → ai_run.status = completed
+  → answer_completed（交付正文完成，run 尚未结束）
 ```
 
-交付正文进 log **与** `ai_run.final_answer`；Workbench 展示 artifacts / file changes。
+交付正文进 log **与** `ai_run.final_answer`。图返回后，`AiRunService` 在主运行真正结束时生成文件审核并发出文件产物事件，`ChatRunService` 再保存终态并发送 `run_completed`；Workbench 在 run 终态展示修改入口。文件写盘与审核边界见 `doc/architecture.md`「文件写盘与审核」。
 brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则续跑 `projectBrainMessagesFromLog` 会出现连续重复 AI。
 
 ### 8.3 内容安全
@@ -990,7 +990,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | `chat_session_message_log`    | append-only，已写行保留                           |
 | `ai_file_change`（`applied`） | 保留，Workbench 可预览/回退                       |
 | `ai_run.partial_answer`       | 仅 UI 草稿，丢弃不参与恢复                        |
-| docx apply 事务               | 失败 run discard；成功 apply 已在 finalize 前提交 |
+| 文件会话与审核               | 已确认写盘版本保留；主运行失败或取消也生成审核，审核失败保留计算输入供恢复 |
 
 ---
 

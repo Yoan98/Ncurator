@@ -3,12 +3,13 @@ import type { DocumentSelectionNode } from '../../../../../shared/types'
 
 export type SelectionLocation = { start: number; end: number; previewText: string }
 export type DocumentSelectionState = {
+  partnerId: string
   enabled: boolean
   locked: boolean
   selections: DocumentSelectionNode[]
   locations: Map<string, SelectionLocation>
   navigation: { node: DocumentSelectionNode; requestId: number } | null
-  save: (node: DocumentSelectionNode, location: SelectionLocation) => void
+  save: (node: DocumentSelectionNode, location?: SelectionLocation, image?: Uint8Array) => void
   remove: (id: string) => void
   navigate: (node: DocumentSelectionNode) => void
 }

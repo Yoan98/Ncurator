@@ -1,3 +1,4 @@
+import { selectionPosition } from '../../../../../shared/documentSelection'
 import { chatReferences } from '../../../../../shared/chatContent'
 import type {
   ChatAttachment,
@@ -38,10 +39,20 @@ const renderExcerptBlock = (label: string, content: string): string => {
 const renderSelection = (node: DocumentSelectionNode): string => {
   const label = `选中片段${node.number}`
   return [
+    selectionPosition(node) ? `${label}的位置：${selectionPosition(node)}` : '',
+    node.anchor?.kind === 'ppt'
+      ? `页面标识：${node.anchor.slideId}${node.anchor.elementId ? `；元素标识：${node.anchor.elementId}` : ''}`
+      : '',
+    node.anchor?.kind === 'text'
+      ? renderExcerptBlock('对应的源文件片段（定位用）', node.anchor.sourceText)
+      : '',
+    node.image ? `选中时的画面：${node.image.path}（可用 read_image 读取；原文件可能已变化）` : '',
     renderExcerptBlock(`${label}的原文`, node.selectedText),
     renderExcerptBlock(`${label}的前文（上下文，仅供理解与定位）`, node.contextBefore),
     renderExcerptBlock(`${label}的后文（上下文，仅供理解与定位）`, node.contextAfter)
-  ].join('\n\n')
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 export const buildReferenceScope = (input: {

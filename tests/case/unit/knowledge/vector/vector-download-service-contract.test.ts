@@ -351,6 +351,7 @@ describe('unit vector download service contract', () => {
           JSON.stringify(
             {
               repoId: SNAPSHOT_REPO_ID,
+              source: 'huggingface-mirror',
               status: 'downloading',
               progress: 18,
               currentFile: 'onnx/model.onnx',
@@ -404,6 +405,7 @@ describe('unit vector download service contract', () => {
 
         return {
           resumedRepoId: downloadSpy.mock.calls[0]?.[0] || '',
+          resumedSource: downloadSpy.mock.calls[0]?.[3] ?? null,
           activeDownloadDuringResume,
           progressEvents,
           activeDownloadAfterFinish: service.getActiveDownload(),
@@ -411,12 +413,17 @@ describe('unit vector download service contract', () => {
         }
       },
       assert: async (result, runtime) => {
-        runtime.assertThat(result.resumedRepoId === SNAPSHOT_REPO_ID, {
-          name: 'vector-startup-resume-starts-saved-download',
-          message:
-            'When startup finds a persisted active download snapshot, it should resume the same vector model download in the background to satisfy SET-VECTOR-002-AC4.',
-          data: result
-        })
+        runtime.assertThat(
+          result.resumedRepoId === SNAPSHOT_REPO_ID &&
+            result.resumedSource === 'huggingface-mirror' &&
+            result.activeDownloadDuringResume?.source === 'huggingface-mirror',
+          {
+            name: 'vector-startup-resume-starts-saved-download',
+            message:
+              'When startup finds a persisted active download snapshot, it should resume the same vector model download in the background to satisfy SET-VECTOR-002-AC4.',
+            data: result
+          }
+        )
 
         runtime.assertThat(
           result.activeDownloadDuringResume?.repoId === SNAPSHOT_REPO_ID &&

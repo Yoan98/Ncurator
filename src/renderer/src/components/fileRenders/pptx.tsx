@@ -1,10 +1,13 @@
+import type { LoadedFileRenderDocument } from './types'
+import { interactivePptSvg } from './selection/pptAdapter'
+import { sha256Hex } from '../../utils/fileHash'
 import { useEffect, useState } from 'react'
-import type { DocRenderer, DocRendererProps, IDocument } from 'react-doc-viewer'
-import { getSlides, loadPresentation } from 'pptx-kit'
+import type { DocRenderer, DocRendererProps } from 'react-doc-viewer'
+import { getSlides, loadPresentation, getSlidePartName } from 'pptx-kit'
 import { createPptTextMeasurer, renderPptSvg } from '../../../../shared/pptTextMeasurer'
 import PptSlideDeckViewer, { type PptViewerSlide } from './PptSlideDeckViewer'
 
-type PptDocument = Omit<IDocument, 'fileData'> & {
+type PptDocument = Omit<LoadedFileRenderDocument, 'fileData'> & {
   file?: File | Blob
   fileData?: string | ArrayBuffer | Uint8Array | Blob | File
   fileName?: string
@@ -33,6 +36,7 @@ const svgUrl = (svg: string, urls: string[]): string => {
 const CustomPptxRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
   const document = mainState.currentDocument as PptDocument | undefined
   const [slides, setSlides] = useState<PptViewerSlide[]>([])
+  const [revision, setRevision] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -40,6 +44,7 @@ const CustomPptxRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
     let cancelled = false
     const urls: string[] = []
     setSlides([])
+    setRevision('')
     setLoading(true)
     setError(null)
     if (!document) return () => undefined
@@ -48,6 +53,8 @@ const CustomPptxRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
       try {
         const bytes = await readDocumentBytes(document)
         const presentation = await loadPresentation(bytes)
+        const hash = await sha256Hex(bytes)
+        if (cancelled) return
         await window.document.fonts.ready
         const context = window.document.createElement('canvas').getContext('2d')
         if (!context) throw new Error('无法初始化 PPT 文字测量')
@@ -56,17 +63,19 @@ const CustomPptxRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
         const nextSlides: PptViewerSlide[] = []
         for (let index = 0; index < sourceSlides.length; index += 1) {
           if (cancelled) return
-          const svg = await renderPptSvg(presentation, sourceSlides[index]!, measureText)
+          const svg = await renderPptSvg(presentation, sourceSlides[index]!, measureText, true)
           nextSlides.push({
-            id: `slide-${index + 1}`,
+            id: getSlidePartName(sourceSlides[index]!),
             index: index + 1,
-            primaryUrl: svgUrl(svg, urls)
+            primaryUrl: svgUrl(svg, urls),
+            svg: interactivePptSvg(svg)
           })
           setSlides([...nextSlides])
           if (index === 0) setLoading(false)
           if (index < sourceSlides.length - 1)
             await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
         }
+        if (!cancelled) setRevision(hash)
       } catch (reason) {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
       } finally {
@@ -83,6 +92,8 @@ const CustomPptxRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
   return (
     <PptSlideDeckViewer
       slides={slides}
+      selectionFilePath={document?.metadata?.allowDocumentSelection ? document.filePath : undefined}
+      contentRevision={revision}
       loading={loading}
       error={error}
       afterTestId="ppt-preview-after"

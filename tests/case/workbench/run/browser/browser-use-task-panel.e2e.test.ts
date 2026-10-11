@@ -20,6 +20,7 @@ import {
 const CASE_ID = 'browser-use-task-panel'
 const LOGOUT_TOKEN = 'LOGOUT_OK_cedar-browser-731'
 const INPUT_NOTE_TOKEN = 'NOTE_PASS_8921'
+const COLLABORATION_TOKEN = 'USER_CONFIRMED_4738'
 const BROWSER_PANEL_WAIT_TIMEOUT_MS = 180_000
 const BROWSER_TASK_COMPLETION_TIMEOUT_MS = 240_000
 const BROWSER_USE_FAILURE_LIMIT = 2
@@ -307,9 +308,11 @@ describe('workbench run e2e', () => {
             <header>
               <span>工作台概览</span>
               <button id="role" type="button">教师身份</button>
+              <button id="user-confirm" type="button">用户确认</button>
             </header>
             <section class="hero">
               <h2>个人中心与工作台概览</h2>
+              <p>协作确认结果：<output id="user-status">等待用户操作</output></p>
               <p>欢迎回到工作台。此区域展示教学安排、日常统计与备课日志。</p>
               <div class="card"><h3>学期进度</h3><p>当前学期教学计划已完成 65%，期末复习大纲已归档。</p></div>
               <div class="card"><h3>教务公告</h3><p>下周教室资源调整通知已发送至各院系邮箱。</p></div>
@@ -330,6 +333,9 @@ describe('workbench run e2e', () => {
               <main id="status">已登录</main>
             </section>
             <script>
+              document.querySelector('#user-confirm').addEventListener('click', () => {
+                document.querySelector('#user-status').textContent = '${COLLABORATION_TOKEN}';
+              });
               const msgBtn = document.querySelector('#msg-btn');
               const accountMenu = document.querySelector('#account-menu');
               const statusEl = document.querySelector('#status');
@@ -366,7 +372,10 @@ describe('workbench run e2e', () => {
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID
           })
-          const panelToggleForFile = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
+          const panelToggleForFile = getWorkbenchLocator(
+            page,
+            workbenchSelectors.contentPanelToggle
+          )
           if ((await panelToggleForFile.getAttribute('aria-label')) === '展开右侧栏') {
             await panelToggleForFile.click()
           }
@@ -386,7 +395,7 @@ describe('workbench run e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请在右侧内置浏览器中打开 ${server.url}，页面内容较长，需要滚动到底部，在“操作备注”输入框中输入“${INPUT_NOTE_TOKEN}”，随后悬停“消息图标”后在弹出的菜单中点击“退出登录”，最后把 #status 的最终状态文本告诉我。`
+            `请在右侧内置浏览器中打开 ${server.url}，先调用 ask_user_question 发起一个不带 options 的纯输入协作请求，让我亲自点击网页顶部“用户确认”按钮，等待我的回复；你不要代点。收到回复后，必须使用 browser_use 的 extract 读取正文“协作确认结果”的当前文本（#user-status），原样保留该结果，再继续。页面内容较长，需要滚动到底部，在“操作备注”输入框中输入“${INPUT_NOTE_TOKEN}”，随后悬停“消息图标”后在弹出的菜单中点击“退出登录”，最后把“协作确认结果”与 #status 的最终状态文本分别告诉我。`
           )
 
           await waitForBrowserPanelOpenedWithApproval(runtime)
@@ -431,11 +440,70 @@ describe('workbench run e2e', () => {
             }
             return browser
           }
+          const questionCard = getWorkbenchLocator(page, workbenchSelectors.humanQuestionCard)
+          await questionCard.waitFor({ state: 'visible', timeout: 180_000 })
+          const questionEvent = (await collectWorkbenchAiRunEvents(runtime))
+            .filter((event) => event.type === 'human_interaction_required')
+            .at(-1)
+          if (
+            questionEvent?.type !== 'human_interaction_required' ||
+            questionEvent.interaction.kind !== 'question' ||
+            questionEvent.interaction.questions.length !== 1 ||
+            questionEvent.interaction.questions[0].options?.length
+          )
+            throw new Error('expected one pure text webpage collaboration request')
+          const collaborationQuestion = questionEvent.interaction.questions[0]
+          const beforeCollaboration = await runtime.electronApp.evaluate(
+            async ({ webContents }, url) => {
+              const contents = webContents
+                .getAllWebContents()
+                .find((candidate) => candidate.getURL() === url)
+              if (!contents) throw new Error('task browser is missing')
+              const target = (await contents.executeJavaScript(`(() => {
+              const rect = document.querySelector('#user-confirm').getBoundingClientRect();
+              return { x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2),
+                status: document.querySelector('#user-status').textContent };
+            })()`)) as { x: number; y: number; status: string }
+              contents.focus()
+              contents.sendInputEvent({
+                type: 'mouseDown',
+                x: target.x,
+                y: target.y,
+                button: 'left',
+                clickCount: 1
+              })
+              contents.sendInputEvent({
+                type: 'mouseUp',
+                x: target.x,
+                y: target.y,
+                button: 'left',
+                clickCount: 1
+              })
+              return target.status
+            },
+            server.url
+          )
+          await runtime.assertThat(beforeCollaboration === '等待用户操作', {
+            name: 'browser-collaboration-waits-for-user',
+            message: '网页协作必须等待用户亲自操作',
+            data: { expected: '等待用户操作', actual: beforeCollaboration }
+          })
+          await questionCard
+            .getByTestId(`workbench-human-question-user-text-${collaborationQuestion.id}`)
+            .fill('我已点击用户确认，请检查网页状态后继续。')
+          await runtime.captureScreenshot({
+            name: 'browser-collaboration',
+            message: '纯输入提问等待网页协作'
+          })
+          await getWorkbenchLocator(page, workbenchSelectors.humanQuestionSubmit).click()
+          await questionCard.waitFor({ state: 'hidden', timeout: 30_000 })
           const taskBrowserBeforeBackground = await waitForTaskBrowserRuntime()
           await waitForBrowserTaskPause(runtime)
           const resourceMenu = await selectWorkbenchResourceMenuItem(runtime, 'browser')
           const openFileMenuItemVisible = resourceMenu.fileVisible
-          await resourceTabs.nth(initialResourceTabCount).waitFor({ state: 'visible', timeout: 10_000 })
+          await resourceTabs
+            .nth(initialResourceTabCount)
+            .waitFor({ state: 'visible', timeout: 10_000 })
           const resourceTabCountAfterReopen = await resourceTabs.count()
           const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
           const browserBackButtonCount = await browserPanel
@@ -455,6 +523,45 @@ describe('workbench run e2e', () => {
             async () => {
               const browser = await inspectTaskBrowserRuntime()
               return browser.resultText
+            }
+          )
+          const collaborationStatus = await runtime.electronApp.evaluate(
+            async ({ webContents }, url) => {
+              const contents = webContents
+                .getAllWebContents()
+                .find((candidate) => candidate.getURL() === url)
+              if (!contents) throw new Error('task browser is missing')
+              return (await contents.executeJavaScript(
+                "document.querySelector('#user-status').textContent"
+              )) as string
+            },
+            server.url
+          )
+          const resolvedAt = evidence.events.findIndex(
+            (event) =>
+              event.type === 'human_interaction_resolved' &&
+              event.interactionId === questionEvent.interactionId
+          )
+          const verifiedByBrowser =
+            resolvedAt >= 0 &&
+            evidence.events
+              .slice(resolvedAt + 1)
+              .some(
+                (event) =>
+                  event.type === 'tool_call_result' &&
+                  event.toolName === 'browser_use' &&
+                  JSON.stringify(event.result).includes(COLLABORATION_TOKEN)
+              )
+          await runtime.assertThat(
+            collaborationStatus === COLLABORATION_TOKEN && verifiedByBrowser,
+            {
+              name: 'browser-collaboration-completed',
+              message: '真实网页收到用户操作，提问回复后任务继续完成',
+              data: {
+                expected: COLLABORATION_TOKEN,
+                actual: collaborationStatus,
+                verifiedByBrowser
+              }
             }
           )
           const taskBrowserAfterBackgroundRun = await inspectTaskBrowserRuntime()

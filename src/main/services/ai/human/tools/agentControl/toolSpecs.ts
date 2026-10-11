@@ -28,7 +28,7 @@ export const ASK_USER_QUESTION_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'ask_user_question',
     description:
-      '在推进任务时，如果碰到无法从已有上下文、资料或工具结果可靠判断的疑惑、歧义或可能违背用户意图的地方，向用户询问并沟通确认。对于可以自行判断或通过读取资料确定的信息不要询问；只有不同理解可能改变用户意图、执行方案或最终结果时才提问。'
+      '在推进任务时，如果碰到无法从已有上下文、资料或工具结果可靠判断的疑惑、歧义或可能违背用户意图的地方，向用户询问并沟通确认。对于可以自行判断或通过读取资料确定的信息不要询问；不同理解可能改变用户意图、执行方案或最终结果时可以提问；也可请求用户完成需要其参与的操作（例如网页登录或验证）并等待回复。无需提供选项。回复是用户反馈，不代表外部页面状态已经验证。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',

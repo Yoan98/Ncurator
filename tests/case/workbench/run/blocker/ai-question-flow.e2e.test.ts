@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import type { AiRunEvent } from '../../../../../src/shared/types'
+import type { AiRunEvent, PendingHumanInteraction } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -19,9 +19,11 @@ import {
 
 const CASE_ID = 'human-interaction-question-card'
 
-const isQuestionRequired = (
-  event: AiRunEvent
-): event is Extract<AiRunEvent, { type: 'human_interaction_required' }> =>
+type QuestionRequiredEvent = Extract<AiRunEvent, { type: 'human_interaction_required' }> & {
+  interaction: Extract<PendingHumanInteraction, { kind: 'question' }>
+}
+
+const isQuestionRequired = (event: AiRunEvent): event is QuestionRequiredEvent =>
   event.type === 'human_interaction_required' && event.interaction.kind === 'question'
 
 describe('workbench AI question e2e', () => {
@@ -62,7 +64,7 @@ describe('workbench AI question e2e', () => {
           await selectWorkbenchExecutionPermission(page, '完全访问')
           await sendWorkbenchMessage(
             page,
-            '请帮我完善当前工作区里的 brief。里面没有说明最终要突出哪种风格，请先问我一个会影响结果的关键问题，再继续修改。'
+            '请帮我完善当前工作区里的 brief。请先用一次 ask_user_question 提出三题：单选主色（2至4项）、多选视觉风格（2至4项）、纯文字询问需要写入的主题（不提供选项）。等我回答完三题后再继续修改。'
           )
 
           const required = await waitForWorkbenchAiEvent(runtime, {
@@ -97,10 +99,23 @@ describe('workbench AI question e2e', () => {
             throw new Error(`expected one to three questions, received ${questions.length}`)
           }
           if (
-            questions.some((question) => question.options.length < 2 || question.options.length > 4)
+            questions.some(
+              (question) =>
+                (question.options?.length ?? 0) === 1 || (question.options?.length ?? 0) > 4
+            )
           ) {
-            throw new Error('expected every question to contain two to four options')
+            throw new Error('expected absent options or two to four options')
           }
+          if (
+            !questions.some((question) => !question.options?.length) ||
+            !questions.some((question) => question.multiSelect && question.options?.length) ||
+            !questions.some((question) => !question.multiSelect && question.options?.length)
+          )
+            throw new Error(
+              'requested single, multiple and text question coverage was not produced'
+            )
+          if (await card.getByText('其他，请填写').count())
+            throw new Error('legacy other option is still present')
           const initialCardText = ((await card.textContent()) || '').trim()
           const titleText = (
             (await card
@@ -109,11 +124,14 @@ describe('workbench AI question e2e', () => {
           ).trim()
           const selectionTypeTagCount = await card.getByText(/^(单选|可多选)$/).count()
           const position = card.getByTestId(`${workbenchSelectors.humanQuestionCard}-position`)
-          const positionText = ((await position.textContent()) || '').trim()
-          const positionBox = await position.boundingBox()
-          const previousBox = await card
-            .getByTestId(workbenchSelectors.humanQuestionPrev)
-            .boundingBox()
+          const positionText = (await position.count())
+            ? ((await position.textContent()) || '').trim()
+            : ''
+          const positionBox = (await position.count()) ? await position.boundingBox() : null
+          const previousBox =
+            questions.length > 1
+              ? await card.getByTestId(workbenchSelectors.humanQuestionPrev).boundingBox()
+              : null
           const guidePlaceholder =
             (await card
               .getByTestId(`workbench-human-question-user-text-${questions[0].id}`)
@@ -125,25 +143,56 @@ describe('workbench AI question e2e', () => {
           const answerQuestionCard = async (currentQuestions: typeof questions): Promise<void> => {
             await card.waitFor({ state: 'visible', timeout: 30_000 })
             for (const [index, question] of currentQuestions.entries()) {
-              if (index === 0) {
-                await card
-                  .getByTestId(`workbench-human-question-option-${question.id}-other`)
-                  .click()
-                await card
-                  .getByTestId(`workbench-human-question-user-text-${question.id}`)
-                  .fill('使用深绿色和白色，整体保持克制')
-              } else {
-                const firstOption = question.options[0]
-                if (!firstOption) throw new Error(`question ${question.id} options are empty`)
-                await card
-                  .getByTestId(`workbench-human-question-option-${question.id}-${firstOption.id}`)
-                  .click()
+              const input = card.getByTestId(`workbench-human-question-user-text-${question.id}`)
+              const options = question.options ?? []
+              if (options.length) {
+                const option = card.getByTestId(
+                  `workbench-human-question-option-${question.id}-${options[0].id}`
+                )
+                await option.click()
+                if ((await option.getAttribute('aria-pressed')) !== 'true')
+                  throw new Error('selection did not remain on current question')
+                await option.click()
+                if ((await option.getAttribute('aria-pressed')) !== 'false')
+                  throw new Error('selection cannot be cleared')
+                await option.click()
+                if (question.multiSelect && options[1]) {
+                  await card
+                    .getByTestId(`workbench-human-question-option-${question.id}-${options[1].id}`)
+                    .click()
+                  if ((await card.locator('[aria-pressed="true"]').count()) !== 2)
+                    throw new Error('multi selection was not retained')
+                }
               }
-              if (index < currentQuestions.length - 1 && (index === 0 || question.multiSelect)) {
-                await card.getByTestId(workbenchSelectors.humanQuestionNext).click()
+              await input.fill(
+                index === 0
+                  ? '使用深绿色和白色，整体保持克制'
+                  : options.length
+                    ? '突出简洁清晰'
+                    : '春日阅读活动'
+              )
+              if (!options.length) {
+                const textBeforeEnter = await input.inputValue()
+                await input.press('End')
+                await input.press('Enter')
+                if ((await input.inputValue()) !== `${textBeforeEnter}\n`)
+                  throw new Error('Enter did not insert a newline')
+              }
+              await runtime.captureScreenshot({
+                name: `question-${index + 1}`,
+                message: '提问卡片与逐题回答草稿'
+              })
+              if (index < currentQuestions.length - 1) {
+                await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
+                await card.getByTestId(workbenchSelectors.humanQuestionPrev).click()
+                if (!(await input.inputValue()).trim())
+                  throw new Error('navigation lost answer draft')
+                await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
               }
             }
-            await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
+            await card
+              .getByTestId(`workbench-human-question-user-text-${currentQuestions.at(-1)!.id}`)
+              .press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter')
           }
 
           const beforeAnswerEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
@@ -165,6 +214,10 @@ describe('workbench AI question e2e', () => {
             throw new Error('a mutating tool ran before the first question was answered')
           }
 
+          const firstInput = card.getByTestId(
+            `workbench-human-question-user-text-${questions[0].id}`
+          )
+          await firstInput.fill('切换后不应恢复的草稿')
           await createPartnerThroughWorkbenchUi(page, '切换验证伙伴')
           await card.waitFor({ state: 'hidden', timeout: 30_000 })
           const partnerAssistanceBadge = getWorkbenchLocator(
@@ -180,11 +233,17 @@ describe('workbench AI question e2e', () => {
           await card.waitFor({ state: 'visible', timeout: 30_000 })
           await partnerAssistanceBadge.waitFor({ state: 'visible', timeout: 30_000 })
           const questionRestoredAfterPartnerSwitch = await card.isVisible()
+          if (await firstInput.inputValue())
+            throw new Error('partner switch restored an unsent draft')
+          await firstInput.fill('刷新后不应恢复的草稿')
 
           await page.reload()
           await card.waitFor({ state: 'visible', timeout: 30_000 })
           await partnerAssistanceBadge.waitFor({ state: 'visible', timeout: 30_000 })
           const assistanceRestoredAfterReload = await partnerAssistanceBadge.isVisible()
+          if (await firstInput.inputValue()) throw new Error('reload restored an unsent draft')
+          if (!(await card.getByTestId(workbenchSelectors.humanQuestionSubmit).isDisabled()))
+            throw new Error('empty answer permits advancement')
           await answerQuestionCard(questions)
 
           const seenInteractionIds = new Set([required.interactionId])
@@ -194,7 +253,8 @@ describe('workbench AI question e2e', () => {
               (event) => event.runId === required.runId
             )
             const nextRequired = events.find(
-              (event) => isQuestionRequired(event) && !seenInteractionIds.has(event.interactionId)
+              (event): event is QuestionRequiredEvent =>
+                isQuestionRequired(event) && !seenInteractionIds.has(event.interactionId)
             )
             if (nextRequired) {
               seenInteractionIds.add(nextRequired.interactionId)
@@ -274,15 +334,15 @@ describe('workbench AI question e2e', () => {
               result.assistancePersistedAfterPartnerSwitch &&
               result.questionRestoredAfterPartnerSwitch &&
               result.assistanceClearedAfterCompletion &&
-              result.initialCardText.includes(`问题 1 / ${result.questionCount}`) &&
+              result.initialCardText.includes('问题') &&
               result.titleText === result.firstQuestionText &&
-              result.selectionTypeTagCount === 0 &&
-              result.positionText === `问题 1 / ${result.questionCount}` &&
-              result.positionBox !== null &&
-              result.previousBox !== null &&
-              result.positionBox.x + result.positionBox.width <= result.previousBox.x &&
-              result.guidePlaceholder.startsWith('告诉') &&
-              result.guidePlaceholder.endsWith('该怎么做') &&
+              (result.questionCount === 1
+                ? result.positionText === '' && result.positionBox === null
+                : result.positionText === `1 / ${result.questionCount}` &&
+                  result.positionBox !== null &&
+                  result.previousBox !== null &&
+                  result.positionBox.x + result.positionBox.width <= result.previousBox.x) &&
+              ['或直接输入回复…', '回复…'].includes(result.guidePlaceholder) &&
               result.stopLabel.includes('停止本次运行') &&
               result.inputCountDuringQuestion === 0 &&
               result.composerSendControlCountDuringQuestion === 0,
@@ -319,7 +379,18 @@ describe('workbench AI question e2e', () => {
             throw new Error('the submitted result did not contain one answer for every question')
           }
           const questionIds = new Set(result.questionIds)
-          const answerIds = new Set(answers.map((answer) => answer.questionId))
+          const answerIds = new Set(
+            answers.map((answer) => {
+              if (
+                !answer ||
+                typeof answer !== 'object' ||
+                Array.isArray(answer) ||
+                typeof answer.questionId !== 'string'
+              )
+                throw new Error('submitted answer has no question id')
+              return answer.questionId
+            })
+          )
           if (
             questionIds.size !== answerIds.size ||
             [...questionIds].some((id) => !answerIds.has(id))

@@ -1,5 +1,9 @@
+import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
+import { excelAdapter } from './selection/excelAdapter'
+import type { SelectionAdapter } from './selection/types'
+import type { LoadedFileRenderDocument } from './types'
 import { useEffect, useRef, useState } from 'react'
-import type { DocRendererProps, IDocument } from 'react-doc-viewer'
+import type { DocRendererProps } from 'react-doc-viewer'
 import ExcelJS from 'exceljs'
 import {
   BooleanNumber,
@@ -17,7 +21,7 @@ import {
 import '@univerjs/preset-sheets-core/lib/index.css'
 import { workbenchSelectors } from '../../testing/selectors'
 
-type XlsxDocument = Omit<IDocument, 'fileData'> & {
+type XlsxDocument = Omit<LoadedFileRenderDocument, 'fileData'> & {
   file?: File | Blob
   fileData?: string | ArrayBuffer | Uint8Array | Blob | File
   fileName?: string
@@ -142,10 +146,7 @@ const cellStyle = (cell: ExcelJS.Cell): IStyleData => ({
 })
 
 const cellData = (cell: ExcelJS.Cell): ICellData => {
-  const formula =
-    cell.value && typeof cell.value === 'object' && 'formula' in cell.value
-      ? String(cell.value.formula)
-      : undefined
+  const formula = cell.formula || undefined
   const rawValue = formula
     ? cell.result
     : cell.value instanceof Date
@@ -217,8 +218,13 @@ const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<ExcelPr
         endColumn: Number(end.col) - 1
       }
     })
+    const frozen = (sheet.views || []).find((view) => view.state === 'frozen')
+    const xSplit = frozen?.state === 'frozen' ? frozen.xSplit || 0 : 0
+    const ySplit = frozen?.state === 'frozen' ? frozen.ySplit || 0 : 0
     sheets[id] = {
       id,
+      freeze:
+        xSplit || ySplit ? { xSplit, ySplit, startRow: ySplit, startColumn: xSplit } : undefined,
       name: sheet.name,
       tabColor: color(sheet.properties.tabColor)?.rgb || '',
       hidden: sheet.state === 'visible' ? BooleanNumber.FALSE : BooleanNumber.TRUE,
@@ -267,6 +273,7 @@ const waitForRenderedCanvas = async (
 const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const document = mainState.currentDocument as XlsxDocument | undefined
   const containerRef = useRef<HTMLDivElement>(null)
+  const [selectionAdapter, setSelectionAdapter] = useState<SelectionAdapter | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
   const [changedSheetIds, setChangedSheetIds] = useState<string[]>([])
@@ -278,6 +285,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
     let cancelled = false
     let dispose: (() => void) | undefined
     setReady(false)
+    setSelectionAdapter(null)
     setError(null)
     setChangedSheetIds([])
     setChangedSheetNames([])
@@ -293,7 +301,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
           preview,
           { Univer, LogLevel },
           { FUniver },
-          { UniverSheetsCorePreset },
+          { UniverSheetsCorePreset, CalculationMode },
           localeModule
         ]) => {
           if (cancelled) return
@@ -311,6 +319,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             header: false,
             toolbar: false,
             formulaBar: true,
+            formula: { initialFormulaComputing: CalculationMode.NO_CALCULATION },
             footer: {
               sheetBar: true,
               zoomSlider: true,
@@ -344,6 +353,8 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             setChangedSheetIds(preview.changedSheetIds)
             setChangedSheetNames(preview.changedSheetNames)
             setReady(true)
+            if (document.metadata?.allowDocumentSelection && document.filePath)
+              setSelectionAdapter(excelAdapter(univerAPI, document.filePath, container))
           }
         }
       )
@@ -379,6 +390,15 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
           Excel 预览失败：{error}
         </div>
       ) : null}
+      {selectionAdapter && document.filePath && (
+        <DocumentSelectionLayer
+          container={containerRef.current}
+          filePath={document.filePath}
+          revision={ready ? 1 : 0}
+          adapter={selectionAdapter}
+          testPrefix="excel"
+        />
+      )}
       <div
         ref={containerRef}
         className="h-full w-full"

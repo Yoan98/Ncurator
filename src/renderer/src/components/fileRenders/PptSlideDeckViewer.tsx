@@ -1,3 +1,6 @@
+import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
+import { pptAdapter } from './selection/pptAdapter'
+import type { SelectionAdapter } from './selection/types'
 import React, { useMemo, useRef, useState } from 'react'
 import { Empty, Spin } from 'antd'
 import { HiHandRaised, HiMinus, HiPlus } from 'react-icons/hi2'
@@ -5,6 +8,7 @@ import { HiHandRaised, HiMinus, HiPlus } from 'react-icons/hi2'
 export type PptViewerSlide = {
   id: string
   index: number
+  svg?: string
   primaryUrl?: string
   secondaryUrl?: string
   label?: string
@@ -40,6 +44,8 @@ export type PptSlideDeckViewerProps = {
   afterTestId?: string
   thumbnailsTestId?: string
   hintTestId?: string
+  selectionFilePath?: string
+  contentRevision?: string
   emptyText?: string
 }
 
@@ -59,8 +65,13 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
   afterTestId,
   thumbnailsTestId,
   hintTestId,
+  selectionFilePath,
+  contentRevision = '',
   emptyText = 'PPT 暂时无法预览'
 }) => {
+  const [selectionContainer, setSelectionContainer] = useState<HTMLDivElement | null>(null)
+  const spaceRef = useRef(false)
+  const panGesture = useRef(false)
   const [activeId, setActiveId] = useState<string | null>(slides[0]?.id || null)
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 })
   const dragRef = useRef<{
@@ -85,10 +96,53 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
     if (!visibleSlides.some((slide) => slide.id === activeId)) setActiveId(visibleSlides[0]!.id)
   }, [activeId, visibleSlides])
 
-  const selectSlide = (id: string): void => {
-    setActiveId(id)
-    setViewport({ scale: 1, x: 0, y: 0 })
-  }
+  const selectSlide = React.useCallback(
+    (id: string): boolean => {
+      if (!slides.some((slide) => slide.id === id)) return false
+      setActiveId(id)
+      setViewport({ scale: 1, x: 0, y: 0 })
+      return true
+    },
+    [slides]
+  )
+  const [selectionAdapter, setSelectionAdapter] = useState<SelectionAdapter | null>(null)
+  React.useEffect(() => {
+    setSelectionAdapter(
+      selectionContainer && selectionFilePath && activeSlide
+        ? pptAdapter(
+            selectionContainer,
+            selectionFilePath,
+            activeSlide,
+            contentRevision,
+            selectSlide,
+            () => panGesture.current
+          )
+        : null
+    )
+  }, [selectionContainer, selectionFilePath, activeSlide, contentRevision, selectSlide])
+  React.useEffect(() => {
+    const down = (event: KeyboardEvent) => {
+      if (
+        event.code === 'Space' &&
+        !(
+          event.target instanceof Element &&
+          event.target.closest('input,textarea,[contenteditable="true"]')
+        )
+      )
+        spaceRef.current = true
+    }
+    const up = () => {
+      spaceRef.current = false
+    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', up)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', up)
+    }
+  }, [])
   const resetViewport = (): void => {
     setViewport({ scale: 1, x: 0, y: 0 })
   }
@@ -116,7 +170,10 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
     })
   }
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
+    panGesture.current = !!selectionFilePath && (spaceRef.current || event.button === 1)
+    if (selectionFilePath && !panGesture.current) return
     if (viewport.scale <= 1) return
+    event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
     dragRef.current = {
       pointerId: event.pointerId,
@@ -155,14 +212,14 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
 
   const surface = (url: string | undefined, label?: string, testId?: string) => (
     <div
-      className={`relative flex min-h-0 min-w-0 flex-1 select-none items-center justify-center overflow-hidden bg-[#F4F4F2] p-3 ${viewport.scale > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      className={`relative flex min-h-0 min-w-0 flex-1 ${selectionFilePath ? 'select-text' : 'select-none'} items-center justify-center overflow-hidden bg-[#F4F4F2] p-3 ${viewport.scale > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
       data-testid={testId}
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      onDoubleClick={resetViewport}
+      onDoubleClick={selectionFilePath ? undefined : resetViewport}
     >
       {label ? (
         <span className="pointer-events-none absolute left-3 top-2 z-10 rounded-[3px] bg-white/90 px-1.5 py-0.5 text-[10px] text-[#787774]">
@@ -178,11 +235,20 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
             willChange: 'transform'
           }}
         >
-          <img
-            src={url}
-            className="block max-h-full max-w-full border border-[#DEDCD8] bg-white object-contain shadow-sm"
-            draggable={false}
-          />
+          {selectionFilePath && activeSlide?.svg ? (
+            <div
+              data-ppt-interactive
+              className="h-full w-full [&>svg]:h-full [&>svg]:w-full [&>svg]:select-text"
+              onClick={(event) => event.preventDefault()}
+              dangerouslySetInnerHTML={{ __html: activeSlide.svg }}
+            />
+          ) : (
+            <img
+              src={url}
+              className="block max-h-full max-w-full border border-[#DEDCD8] bg-white object-contain shadow-sm"
+              draggable={false}
+            />
+          )}
         </div>
       ) : (
         <div className="aspect-video w-full max-w-[960px] border border-dashed border-[#D8D6D1] bg-white" />
@@ -194,8 +260,15 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
     <div
       className="flex h-full w-full min-h-0 bg-white"
       data-testid={testId}
+      ref={setSelectionContainer}
       tabIndex={0}
       onKeyDown={(event) => {
+        if (
+          event.shiftKey ||
+          (event.target instanceof Element &&
+            event.target.closest('input,textarea,[contenteditable="true"]'))
+        )
+          return
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
         event.preventDefault()
         const next =
@@ -208,8 +281,27 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
         if (next) selectSlide(next.id)
       }}
     >
+      {selectionAdapter && selectionFilePath && (
+        <DocumentSelectionLayer
+          container={selectionContainer}
+          filePath={selectionFilePath}
+          revision={contentRevision}
+          adapter={selectionAdapter}
+          testPrefix="ppt"
+        />
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-9 shrink-0 items-center justify-end gap-1 border-b border-[#E7E5E1] bg-white px-2">
+          {selectionFilePath && (
+            <button
+              type="button"
+              data-ppt-reference-page
+              data-selection-trigger
+              className="mr-auto rounded px-2 py-1 text-xs text-[#80649F] hover:bg-[#F3EDF9]"
+            >
+              引用当前页
+            </button>
+          )}
           <button
             type="button"
             title="缩小"
@@ -248,7 +340,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
             surface(activeSlide?.primaryUrl || activeSlide?.secondaryUrl, undefined, afterTestId)
           )}
           <div
-            className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#E7E5E1] bg-white/90 px-3 py-1.5 text-[11px] text-[#787774] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
+            className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex w-max -translate-x-1/2 whitespace-nowrap items-center gap-3 rounded-full border border-[#E7E5E1] bg-white/90 px-3 py-1.5 text-[11px] text-[#787774] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
             data-testid={hintTestId}
           >
             <span className="flex items-center gap-1.5">
@@ -258,7 +350,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
             <span className="h-3 w-px bg-[#E7E5E1]" />
             <span className="flex items-center gap-1.5">
               <HiHandRaised className="h-4 w-4" />
-              <span>拖拽平移</span>
+              <span>{selectionFilePath ? '空格拖动 / 中键平移' : '拖拽平移'}</span>
             </span>
           </div>
         </div>

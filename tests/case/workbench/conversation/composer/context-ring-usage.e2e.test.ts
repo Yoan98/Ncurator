@@ -33,8 +33,20 @@ describe('workbench conversation e2e', () => {
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID
           })
+          const partner = (await page.evaluate(() => window.api.partnerList())).find(
+            (item) => item.name === setup.workspaceName
+          )
+          if (!partner) throw new Error('context usage partner missing')
+          const before = await page.evaluate(
+            (partnerId) => window.api.aiContextUsageGet({ partnerId }),
+            partner.id
+          )
+          if (!before.success) throw new Error('context usage baseline unavailable')
           const startedAtMs = Date.now()
-          await sendWorkbenchMessage(page, '请只回复 ok，用于上下文用量测试。')
+          await sendWorkbenchMessage(
+            page,
+            `请阅读以下编号，只回复已收到：${Array.from({ length: 160 }, (_, i) => `上下文样本${i}`).join('；')}`
+          )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
@@ -53,16 +65,45 @@ describe('workbench conversation e2e', () => {
             workbenchSelectors.contextRing,
             { timeout: 10_000 }
           )
+          const after = await page.evaluate(
+            (partnerId) => window.api.aiContextUsageGet({ partnerId }),
+            partner.id
+          )
+          if (
+            !after.success ||
+            after.usedContextTokens === undefined ||
+            !after.contextWindowTokens
+          ) {
+            throw new Error('completed context usage unavailable')
+          }
+          const expectedLabel = `已用 ${Math.max(0, Math.min(100, Math.round((after.ratio || 0) * 100)))}%`
+          await page.waitForFunction(
+            ({ testId, label }) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-label') ===
+              label,
+            { testId: workbenchSelectors.contextRing, label: expectedLabel }
+          )
           const label = (await contextRing.getAttribute('aria-label')) || ''
           await contextRing.hover()
           const tooltipTitle = page.getByText('上下文用量', { exact: true })
           const usedPercent = page.getByText(/^已用 \d+%$/).first()
           await tooltipTitle.waitFor({ state: 'visible', timeout: 3000 })
           await usedPercent.waitFor({ state: 'visible', timeout: 3000 })
-          const remainingVisible = await page.getByText(/^剩余 \d+%$/).first().isVisible().catch(() => false)
+          const expectedTokens = `${after.usedContextTokens.toLocaleString()} / ${after.contextWindowTokens.toLocaleString()} tokens`
+          const tokens = page.getByText(expectedTokens, { exact: true })
+          await tokens.waitFor({ state: 'visible' })
+          const remainingVisible = await page
+            .getByText(/^剩余 \d+%$/)
+            .first()
+            .isVisible()
+            .catch(() => false)
 
           return {
             label,
+            beforeTokens: before.usedContextTokens || 0,
+            afterTokens: after.usedContextTokens,
+            tokenText: await tokens.innerText(),
+            expectedTokens,
             tooltipVisible: await tooltipTitle.isVisible(),
             percentVisible: await usedPercent.isVisible(),
             remainingVisible,
@@ -71,7 +112,9 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.label.includes('已用') &&
+            result.afterTokens > result.beforeTokens &&
+              result.tokenText === result.expectedTokens &&
+              result.label.includes('已用') &&
               !result.label.includes('剩余') &&
               result.tooltipVisible &&
               result.percentVisible &&

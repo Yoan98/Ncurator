@@ -143,3 +143,12 @@ export const getReferenceVisualKind = (reference: SelectedReference): ReferenceV
 
 export const getReferenceVisualSpec = (reference: SelectedReference): ReferenceVisualSpec =>
   REFERENCE_VISUAL_SPECS[getReferenceVisualKind(reference)]
+
+/** Keep the same purple selection token while distinguishing the selected file format. */
+export const selectionIconPath = (node: DocumentSelectionNode): string => {
+  if (node.anchor?.kind === 'excel') return 'M3 3h12v12H3zM3 7h12M3 11h12M7 3v12'
+  if (node.anchor?.kind === 'ppt') return 'M2.5 3h13v9h-13zM9 12v4M6 16h6M6 6h6M6 9h4'
+  if (node.anchor?.kind === 'pdf')
+    return 'M10.5 2.5H5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 5 15.5h8a1.5 1.5 0 0 0 1.5-1.5V6.5m-4-4 4 4h-4v-4ZM6 12l3-5 3 5M7 10h4'
+  return SELECTION_DOCUMENT_ICON_PATH
+}

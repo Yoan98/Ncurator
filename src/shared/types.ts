@@ -577,6 +577,37 @@ export type ChatInlineContentNode =
       reference: SelectedReference
     }
 
+export type DocumentSelectionAnchor =
+  | {
+      kind: 'text'
+      start: number
+      end: number
+      startLine: number
+      endLine: number
+      sourceText: string
+    }
+  | { kind: 'pdf'; startPage: number; endPage: number; start: number; end: number }
+  | {
+      kind: 'ppt'
+      slideId: string
+      page: number
+      elementId?: string
+      mode: 'text' | 'element' | 'slide'
+      revision: string
+      /** UTF-16 offsets within the rendered element's text. */
+      textRange?: { start: number; end: number }
+    }
+  | {
+      kind: 'excel'
+      sheetId: string
+      sheetName: string
+      range: string
+      startRow: number
+      endRow: number
+      startColumn: number
+      endColumn: number
+    }
+
 /** A selected excerpt and its editable inline thought form one composer fragment. */
 export type DocumentSelectionNode = {
   kind: 'document_selection'
@@ -586,6 +617,10 @@ export type DocumentSelectionNode = {
   selectedText: string
   contextBefore: string
   contextAfter: string
+  /** Absent for existing DOCX excerpts, located by their text and context. */
+  anchor?: DocumentSelectionAnchor
+  /** Immutable visual snapshot, stored by Main when the message is submitted. */
+  image?: { path: string; mimeType: 'image/png' }
   children: ChatInlineContentNode[]
   /** Resolved by Main at submission; frozen with the accepted message. */
   knowledge?: { kbAvailability: KbAvailability; kbDocumentIds: string[] }
@@ -1258,7 +1293,7 @@ export type UserQuestionOption = {
 export type UserQuestion = {
   id: string
   question: string
-  options: UserQuestionOption[]
+  options?: UserQuestionOption[]
   multiSelect?: boolean
 }
 
@@ -1300,6 +1335,8 @@ export type ChatSubmitRequest = {
   executionPermission?: AiExecutionPermission
   partnerId: string
   contentNodes: ChatMessageContentNode[]
+  /** Transient bytes, never written into the message JSON. */
+  selectionImages?: { id: string; bytes: Uint8Array }[]
   attachments?: ChatAttachment[]
   mainModel?: WorkbenchSelectedModel
 }

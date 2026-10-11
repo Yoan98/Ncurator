@@ -126,10 +126,7 @@ describe('settings vector download source switch e2e', () => {
             await downloadButton.waitFor({ state: 'visible' })
             await downloadButton.click()
 
-            const errorArea = getSettingsLocator(
-              page,
-              modelLocator(vectorSelectors.errorPrefix)
-            )
+            const errorArea = getSettingsLocator(page, modelLocator(vectorSelectors.errorPrefix))
             await errorArea.waitFor({ state: 'visible', timeout: SETTINGS_LONG_E2E_TIMEOUT_MS })
             const errorText = (await errorArea.textContent()) || ''
 
@@ -161,6 +158,18 @@ describe('settings vector download source switch e2e', () => {
             )
             await hfRadio.waitFor({ state: 'visible' })
             await hfRadio.click()
+            await getSettingsLocator(page, vectorSelectors.sourceCancelButton).click()
+            await sourceModal.waitFor({ state: 'hidden' })
+            const failurePreservedAfterCancel = await errorArea.isVisible()
+            const callsAfterCancel = (await runtime.collectSignals()).ipcInvokeEntries.filter(
+              (entry) => entry.name === 'downloadModel'
+            ).length
+            await switchSourceButton.click()
+            await sourceModal.waitFor({ state: 'visible' })
+            await hfRadio.click()
+            const callsBeforeConfirm = (await runtime.collectSignals()).ipcInvokeEntries.filter(
+              (entry) => entry.name === 'downloadModel'
+            ).length
             await getSettingsLocator(page, vectorSelectors.sourceConfirmButton).click()
 
             const installedBadge = getSettingsLocator(
@@ -180,6 +189,9 @@ describe('settings vector download source switch e2e', () => {
 
             return {
               errorText,
+              failurePreservedAfterCancel,
+              callsAfterCancel,
+              callsBeforeConfirm,
               switchButtonVisible,
               failedTagVisible,
               installedVisible,
@@ -191,6 +203,17 @@ describe('settings vector download source switch e2e', () => {
             }
           },
           assert: async (result, runtime) => {
+            await runtime.assertThat(
+              result.failurePreservedAfterCancel &&
+                result.callsAfterCancel === 1 &&
+                result.callsBeforeConfirm === 1,
+              {
+                name: 'source-switch-cancel-does-not-retry',
+                message:
+                  '取消选源保留失败状态，用户确认前不会自动换源重试，对齐 SET-VECTOR-003-AC5/AC6。',
+                data: result
+              }
+            )
             await runtime.assertThat(result.errorText.includes('下载失败'), {
               name: 'source-switch-failure-shows-download-failed',
               message: '默认源失败后应提示“下载失败”，对齐 SET-VECTOR-003-AC2/AC3。',

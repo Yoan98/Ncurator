@@ -43,7 +43,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：新增和编辑配置弹框的「推荐 / 自定义」类型切换、推荐无名称、服务商去重与编辑改服务商语义。
 - Why：连接配置是后续 workbench 可用性的前提，类型、去重和改名语义任一失真，用户很容易保存出重复或不可用配置。
-- How：从空配置列表进入新增流，默认推荐类型下从纯下拉选择服务商并只填写 API Key 保存，确认无名称输入框；再尝试对同一服务商再次新增，确认下拉中该服务商禁用并标注「已配置」；切到自定义类型覆盖名称查重、必填校验；编辑推荐配置确认服务商下拉可改，改为其他服务商保存后仍为推荐类型且未新增记录。
+- How：通过真实 UI 新增推荐配置，核对默认类型、无名称输入框、保存后的默认地址与服务商去重提示；切到自定义逐项清空名称、地址、API Key，验证必填拦截，再保存有效配置；尝试重名，检查遮罩不关闭且保留输入；编辑自定义检查完整回填，编辑推荐更换服务商后记录数不增加。
 - Oracle：新增弹框存在「类型（推荐 / 自定义）」且默认推荐，推荐类型无名称输入框、只要求下拉选择服务商并填写 API Key，对齐 `SET-MODEL-002-AC1`；推荐配置保存后名称等于服务商名、地址为目录默认地址、同服务商仅一条，已配置服务商在下拉中禁用并标注「已配置」，对齐 `SET-MODEL-002-AC2`；自定义类型名称重复时保存被拦截，对齐 `SET-MODEL-002-AC3`；编辑推荐配置服务商下拉可改、改为其他服务商仍为推荐类型且未新增记录，编辑自定义配置带出完整值，对齐 `SET-MODEL-002-AC4`；必填字段不完整时保存被拦截，对齐 `SET-MODEL-002-AC5`；弹窗点击遮罩后保持打开且输入不丢失，对齐 `SET-MODEL-002-AC6`。
 
 #### `model-delete-config-feedback`
@@ -62,7 +62,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：工作空间页打开后会自动初始化文件地址树和网页 tab，不再默认选中某个具名工作空间。
 - Why：后续文件 / 网页管理都依赖首屏初始化，如果这里失效，详情区会表现成“无从下手”。
 - How：通过 UI 添加两条文件地址，进入工作空间页并等待文件树与网页 tab 渲染完成。
-- Oracle：页面打开后文件地址树和网页 tab 自动初始化，对齐 `SET-WORKSPACE-001-AC1`、`SET-WORKSPACE-005-AC3`。废弃的 `SET-WORKSPACE-001-AC2`、`SET-WORKSPACE-005-AC1`、`SET-WORKSPACE-005-AC4` 不测。
+- Oracle：页面打开后文件地址树和网页 tab 自动初始化，对齐 `SET-WORKSPACE-001-AC1`、`SET-WORKSPACE-005-AC3`。
 
 #### `workspace-set-root-path`
 
@@ -70,7 +70,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：文件 tab 可以直接添加目录作为工作地址，并立即刷新目录树；顶层节点就是各地址。
 - Why：文件地址已从“具名容器再绑目录”改为直接丢入路径。
 - How：进入无地址页面检查空态，再通过目录选择器添加一条真实目录；再尝试添加已包含的子路径，确认弹出「目录已包含」并拒绝；再验证父路径自动替换子根。包含关系判定另由 unit `workspace-root-containment-contract` 覆盖。
-- Oracle：空态提示还没有文件地址，对齐 `SET-WORKSPACE-007-AC1`；成功添加后写入地址并刷新真实目录树，顶层即该地址，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC1`；添加子路径弹窗拒绝、添加父路径自动替换对齐 `SET-WORKSPACE-006-AC5`；添加后启动扫描且结束后可索引数更新，对齐 `SET-WORKSPACE-006-AC4`。废弃的 `SET-WORKSPACE-002`（具名添加弹窗）、`SET-WORKSPACE-008-AC3`、`SET-WORKSPACE-006-AC3` 不测。`SET-WORKSPACE-007-AC2`（地址内无可显示文件的树空态）不测。
+- Oracle：空态提示还没有文件地址，对齐 `SET-WORKSPACE-007-AC1`；成功添加后写入地址并刷新真实目录树，顶层即该地址，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC1`；添加子路径弹窗拒绝、添加父路径自动替换对齐 `SET-WORKSPACE-006-AC5`；添加后启动扫描且结束后可索引数更新，对齐 `SET-WORKSPACE-006-AC4`。`SET-WORKSPACE-007-AC2`（地址内无可显示文件的树空态）不测。
 
 #### `workspace-directory-lazy-load`
 
@@ -137,8 +137,8 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：已有失败文件再次点击“更新索引”时会被纳入本次处理范围。
 - Why：失败文件是用户最常见的重试对象，如果失败记录不再进入目标集，用户会误判“没有东西可更新”。
-- How：通过原生目录选择添加包含真实损坏 docx 的临时目录，首次点击“更新索引”形成真实 failed 文件；等 job idle 后再点击更新索引，读取 active job 与文件状态。两次点击之间必须等到终态，避免第二次点到「取消」。
-- Oracle：本次 job 的目标数量包含失败文件，对齐 `SET-WORKSPACE-004-AC1`；失败文件重试后状态发生收敛，对齐 `SET-WORKSPACE-004-AC2`。可索引数含失败与「含失败 N 个」文案由 `workspace-detail-status-and-error` 覆盖 `SET-WORKSPACE-005-AC2`，本 case 不断言。
+- How：通过原生目录选择添加包含损坏 docx 的临时目录，两次由 UI 点击“更新索引”；每次等待真实终态，并通过只读 IPC 收集任务身份、目标数、处理数和文件状态。输入保持不变，必须看到第二个不同的任务实际处理原失败文件。
+- Oracle：两次任务 ID 不同，均包含并处理唯一失败文件；损坏输入使两次任务均以 failed 终态结束且 failed_count 为 1，第二次完成后文件仍为 failed，对齐 `SET-WORKSPACE-004-AC1/AC2`。只有旧 failed 状态不算重试证据。可索引数与失败提示由 `workspace-detail-status-and-error` 承担。
 
 #### `workspace-prepare-file-failure-isolated`
 
@@ -240,7 +240,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：向量模型页打开后，真实模型目录能加载，并展示下载或已安装状态。
 - Why：向量模型是检索能力的基础依赖，如果列表加载状态不清晰，用户无法判断是否还需要下载模型。
 - How：打开 Settings 向量模型页，等待真实模型目录渲染。
-- Oracle：页面至少展示一个模型卡片，且每个模型有下载按钮或已安装标识，对齐 `SET-VECTOR-001`。
+- Oracle：页面至少展示一个模型卡片，每个模型有下载按钮或已安装标识，对齐 `SET-VECTOR-001-AC1`；目录加载失败提示见自动化缺口。
 
 #### `vector-model-download-delete-flow`
 
@@ -248,7 +248,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：用户下载产品列表中的真实向量模型，观察真实进度和页面恢复，再完成删除确认、取消与成功删除。
 - Why：模型下载是索引前置能力，必须验证应用现有下载逻辑、真实网络传输、真实落盘和用户操作形成完整闭环。
 - How：关闭代理软件 TUN 模式，在临时模型目录和隔离的 Electron 子进程用户目录中启动真实应用，避免复用本机已有模型；从 Settings 点击产品列表中的模型下载，离开并返回页面，等待下载完成，再分别取消和确认删除。
-- Oracle：下载中展示当前文件、文件完成数和总进度，离开页面后任务继续且返回时恢复进度，对齐 `SET-VECTOR-002`；完成后显示已安装，网络失败则 case 失败并保留 raw logs，对齐 `SET-VECTOR-003`；删除先确认、取消后仍安装、确认后恢复下载入口，对齐 `SET-VECTOR-004`。临时模型目录不与其他安装共享。
+- Oracle：下载中展示文件、完成数和进度，离开后继续且返回恢复，对齐 `SET-VECTOR-002-AC2/AC3`；完成后显示已安装，对齐 `SET-VECTOR-003-AC1`；删除先确认，取消保留安装，确认后恢复下载入口，对齐 `SET-VECTOR-004-AC1/AC3/AC4`。临时模型目录不与其他安装共享；网络失败则 case 失败并保留 raw logs。
 
 #### `vector-model-download-delete-while-active`
 
@@ -263,8 +263,8 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：默认下载源失效时，用户在失败提示处点击“更换源下载”，在弹窗中选择另一源并完成模型安装。
 - Why：换源是下载可靠性的兜底闭环，失败提示、失败清理、弹窗标注失败源、选源重下与 IPC 透传任一处断裂都会让用户无法完成模型安装。
-- How：启动真实应用前注入两个本地 mock 端点（`NCURATOR_MODELSCOPE_ENDPOINT` 返回 500 使默认源失效，`NCURATOR_HF_MIRROR_ENDPOINT` 提供完整模型元数据与文件）；在临时模型目录中点击下载，等待失败提示，确认模型目录被清理，再点击“更换源下载”，在弹窗中确认 huggingface-mirror 带“最近失败”标记而选择它，等待安装完成。
-- Oracle：失败区展示“下载失败”与“更换源下载”入口，对齐 `SET-VECTOR-003-AC2/AC3`；弹窗列出两个源并标注最近失败的源，确认后从所选源重新完整下载并完成安装，对齐 `SET-VECTOR-003-AC4`；失败后模型目录无残留，对齐“换源为完整下载”；IPC 共触发两次 `downloadModel`，第二次携带 `huggingface-mirror`，对齐换源由用户主动选择。
+- How：沿用本 case 已批准的两个本地 mock 下载端点：modelscope 返回 500，huggingface-mirror 提供模型元数据与文件。真实 UI 下载失败后确认清理目录，打开换源弹窗并核对 modelscope 为最近失败源；选择 huggingface-mirror 后取消，确认失败状态保留且未重试；再次打开并选源，确认前仍无新下载，确认后等待安装完成。
+- Oracle：失败提示、换源入口与最近失败源标记正确，对齐 `SET-VECTOR-003-AC2/AC3/AC4`；取消后失败状态保留、确认前始终只有第一次下载请求，对齐 `SET-VECTOR-003-AC5/AC6`；确认后第二次 downloadModel 携带 huggingface-mirror 并完成安装，失败目录已清理。
 
 ### 3.6 `general`
 
@@ -290,7 +290,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：通用设置中的 AI 运行完成通知开关可以关闭，并通过真实 IPC 持久化。
 - Why：通知是跨进程能力，开关状态必须由主进程保存，不能只停留在 Renderer 内存。
 - How：通过 Settings UI 打开通用页，关闭开关，重新读取 `app-settings-get`，再恢复开关。
-- Oracle：开关默认开启，关闭后 UI 与主进程设置均为关闭，对齐 `SET-GENERAL-001-AC1`、`SET-GENERAL-001-AC3`。
+- Oracle：开关默认开启，对齐 `SET-GENERAL-001-AC1`；关闭后 UI 与主进程设置一致，仅覆盖 `SET-GENERAL-001-AC3` 的开关持久化前提。实际禁止发送由 backend Unit `tests/case/unit/system-notification-service.test.ts` 补充；真实 OS 效果遵循人工验收范围。
 
 #### `error-log-open-directory`
 
@@ -300,6 +300,28 @@ Settings 顶层 suite 对齐 PRD 模块：
 - How：通过 Settings UI 打开通用页，确认说明和可访问名称，点击文件夹按钮并通过 IPC observer 收集调用。
 - Oracle：带文件夹图标的“打开”按钮可见，说明包含“将 app.log 发给作者排查问题”，点击后调用 `errorLogOpenDirectory`，对齐 `SET-GENERAL-003-AC3`。`app-error-log-service` backend unit 验证错误日志生成、隐私脱敏和 2MB 截断，对齐 `SET-GENERAL-003-AC1`、`SET-GENERAL-003-AC2`。
 
-### 4. 发布前真实检查
+## 4. 发布前真实检查
 
-- `SET-GENERAL-001`：自动化 case 覆盖开关默认值和关闭后静默，unit 覆盖通知参数携带馆长图标；四类真实终态通知、馆长 logo 展示、点击系统通知返回对应伙伴、系统通知不可用时应用保持稳定，必须在 Windows 与 macOS 候选包上使用真实系统通知检查，不伪造通知对象或点击事件。
+- `SET-GENERAL-001`：Settings E2E 覆盖开关默认值与持久化；Unit 覆盖关闭后静默、不可用时不创建通知、点击回到伙伴及通知参数携带馆长图标；四类真实终态通知、馆长 logo 展示、点击系统通知返回对应伙伴、系统通知不可用时应用保持稳定，必须在 Windows 与 macOS 候选包上使用真实系统通知检查，不伪造通知对象或点击事件。
+
+## 5. 自动化覆盖边界
+
+以下是当前证据边界，引用 AC 仅完成验收登记，不代表 UI 已自动验证。
+
+| 验收 | 当前证据与缺口 |
+| --- | --- |
+| `SET-VECTOR-001-AC2`、`SET-VECTOR-004-AC2/AC7` | 待补：目录加载失败、删除失败、删除后再次完整下载没有对应 E2E。 |
+| `SET-VECTOR-002-AC1` | 部分覆盖：`tests/case/unit/knowledge/vector/vector-download-service-contract.test.ts` 检验下载互斥；其他模型按钮禁用缺少 UI 断言。 |
+| `SET-VECTOR-002-AC4` | 部分覆盖：同一 Unit 文件检验启动续传与非默认源保留；重启后的进度恢复 UI 待补。 |
+
+### 逐项断言尚未核实的登记
+
+下列验收只有需求级映射或边界说明，尚未获得逐项断言证据，按未证实自动化覆盖处理。需求编号引用只表示主题归属，不代表整项已测。现有 case 保留，后续补证据时应将对应 AC 移入具体 Oracle 并删除此处条目。
+
+| 验收 | 现有相关 case / 证据状态 |
+| --- | --- |
+| `SET-GENERAL-001-AC2/AC4/AC5/AC6` | 人工 OS 验收见 §4；`tests/case/unit/system-notification-service.test.ts` 覆盖终态去重、禁用、不可用和通知点击，未自动验证 OS 展示与启动中断通知。 |
+| `SET-WORKSPACE-004-AC5/AC6/AC9/AC10` | 部分前置条件、取消边界或提示只在规格中说明；对应操作见同主题 case，所列子项没有独立自动化证据。 |
+| `SET-WORKSPACE-009-AC2/AC3` | 部分前置条件、取消边界或提示只在规格中说明；对应操作见同主题 case，所列子项没有独立自动化证据。 |
+| `SET-WEB-003-AC5` | 部分前置条件、取消边界或提示只在规格中说明；对应操作见同主题 case，所列子项没有独立自动化证据。 |
+| `SET-WEB-004-AC7/AC8/AC9/AC14` | 部分前置条件、取消边界或提示只在规格中说明；对应操作见同主题 case，所列子项没有独立自动化证据。 |

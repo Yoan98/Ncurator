@@ -224,6 +224,12 @@ describe('subagent approvals through the shared execution chain', () => {
             expect(await row.locator('.nc-partner-avatar-animated').count()).toBe(0)
             const cloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
             await waitUntil(async () => {
+              expect(
+                await getWorkbenchLocator(
+                  runtime.page,
+                  chatSelectors.approvalBatchGuideInput
+                ).getAttribute('placeholder')
+              ).toBe(`告诉${first.source!.name}该怎么做`)
               await runtime.page.mouse.move(0, 0)
               await row.hover()
               return cloud.isVisible()
@@ -234,6 +240,12 @@ describe('subagent approvals through the shared execution chain', () => {
               name: `subagent-approval-${mode}`,
               message: '审批来源、静止头像与等待气泡'
             })
+            expect(
+              await getWorkbenchLocator(
+                runtime.page,
+                chatSelectors.approvalBatchGuideInput
+              ).getAttribute('placeholder')
+            ).toBe(`告诉${first.source!.name}该怎么做`)
             await runtime.page.mouse.move(0, 0)
             if (mode === 'decisions') {
               await getWorkbenchLocator(runtime.page, chatSelectors.approvalBatchGuideInput).fill(
@@ -333,11 +345,29 @@ describe('subagent approvals through the shared execution chain', () => {
                     chatSelectors.approvalBatchSubmitButton
                   ).click()
                 }
-              else
+              else {
+                const guide = getWorkbenchLocator(
+                  runtime.page,
+                  chatSelectors.approvalBatchGuideInput
+                )
+                expect(
+                  await getWorkbenchLocator(
+                    runtime.page,
+                    chatSelectors.approvalBatchApproveButton
+                  ).isDisabled()
+                ).toBe(true)
+                await guide.fill('')
+                expect(
+                  await getWorkbenchLocator(
+                    runtime.page,
+                    chatSelectors.approvalBatchApproveButton
+                  ).getAttribute('aria-pressed')
+                ).toBe('false')
                 await decideWorkbenchApprovalBatch(runtime, runtime.page, {
                   event: first,
                   action: 'approve'
                 })
+              }
               await waitUntil(async () => {
                 const next = (await readActiveRun())?.pendingApproval
                 return Boolean(next && next.batchId !== first.batchId)

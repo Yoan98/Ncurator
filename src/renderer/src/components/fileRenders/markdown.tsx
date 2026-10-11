@@ -171,7 +171,13 @@ export const CustomMarkdownRenderer: DocRenderer = ({ mainState }: DocRendererPr
 
   if (!currentDocument) return null
   if (currentDocument.editable && currentDocument.filePath) {
-    return <MarkdownEditor key={currentDocument.filePath} filePath={currentDocument.filePath} />
+    return (
+      <MarkdownEditor
+        key={currentDocument.filePath}
+        filePath={currentDocument.filePath}
+        allowSelection={currentDocument.metadata?.allowDocumentSelection}
+      />
+    )
   }
 
   return (
@@ -203,7 +209,13 @@ export const CustomPlainTextRenderer: DocRenderer = ({ mainState }: DocRendererP
 
   if (!currentDocument) return null
   if (currentDocument.editable && currentDocument.filePath) {
-    return <PlainTextEditor key={currentDocument.filePath} filePath={currentDocument.filePath} />
+    return (
+      <PlainTextEditor
+        key={currentDocument.filePath}
+        filePath={currentDocument.filePath}
+        allowSelection={currentDocument.metadata?.allowDocumentSelection}
+      />
+    )
   }
 
   return (

@@ -1,11 +1,25 @@
-import React from 'react'
-import { Button, Spin } from 'antd'
-import { HiArrowUp, HiChevronLeft, HiChevronRight, HiStop } from 'react-icons/hi2'
+import React, { useLayoutEffect, useRef } from 'react'
+import { Spin } from 'antd'
+import {
+  HiArrowRight,
+  HiArrowUp,
+  HiCheck,
+  HiChevronLeft,
+  HiChevronRight,
+  HiOutlinePencil,
+  HiOutlineQuestionMarkCircle,
+  HiOutlineShieldCheck,
+  HiStop,
+  HiXMark
+} from 'react-icons/hi2'
 
-type WorkbenchInteractionCardProps = {
+const iconButtonClass =
+  'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[#787774] transition-colors hover:bg-[#F4F4F2] focus-visible:outline-2 focus-visible:outline-[#0B6BCB] disabled:cursor-not-allowed disabled:opacity-35'
+
+type CardProps = {
   source?: React.ReactNode
   title: string
-  itemLabel: string
+  itemLabel: '问题' | '操作确认'
   currentIndex: number
   total: number
   busy: boolean
@@ -17,131 +31,221 @@ type WorkbenchInteractionCardProps = {
   previousTestId: string
   nextTestId: string
   cancelTestId: string
-  children: React.ReactNode
+  children?: React.ReactNode
   footer: React.ReactNode
 }
 
-export const WorkbenchInteractionCard: React.FC<WorkbenchInteractionCardProps> = ({
-  source,
-  title,
-  itemLabel,
-  currentIndex,
-  total,
-  busy,
-  cancelling,
-  onPrevious,
-  onNext,
-  onCancel,
-  cardTestId,
-  previousTestId,
-  nextTestId,
-  cancelTestId,
-  children,
-  footer
-}) => (
-  <div
-    className="nc-timeline-layout-anchor min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-white shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
-    data-testid={cardTestId}
+export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
+  <section
+    className="nc-timeline-layout-anchor flex max-h-[calc(100vh-120px)] min-w-0 flex-col overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-white text-[#37352F] shadow-[0_8px_24px_rgba(15,15,15,0.065)]"
+    data-testid={props.cardTestId}
   >
-    {source ? (
-      <div className="flex items-center gap-2 px-5 pt-4 text-[13px] text-[#787774]">{source}</div>
-    ) : null}
-    <div className="flex items-start justify-between gap-3 px-5 pt-4">
-      <div
-        className="min-w-0 flex-1 break-words text-[15px] font-semibold leading-6 text-[#37352F]"
-        data-testid={`${cardTestId}-title`}
-      >
-        {title}
+    <div className="flex shrink-0 items-center justify-between gap-2 px-[18px] pt-3">
+      <div className="flex min-w-0 items-center gap-[7px] text-xs text-[#787774]">
+        {props.itemLabel === '问题' ? (
+          <HiOutlineQuestionMarkCircle className="h-[15px] w-[15px] shrink-0" />
+        ) : (
+          <HiOutlineShieldCheck className="h-[15px] w-[15px] shrink-0" />
+        )}
+        <span className="shrink-0">{props.itemLabel}</span>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <div
-          className="mr-1 whitespace-nowrap text-xs text-[#9B9A97]"
-          data-testid={`${cardTestId}-position`}
-        >
-          {itemLabel} {currentIndex + 1} / {total}
-        </div>
-        <Button
-          type="text"
-          size="small"
-          icon={<HiChevronLeft className="h-4 w-4" />}
-          aria-label={`上一个${itemLabel}`}
-          disabled={currentIndex <= 0 || busy || cancelling}
-          onClick={onPrevious}
-          data-testid={previousTestId}
-        />
-        <Button
-          type="text"
-          size="small"
-          icon={<HiChevronRight className="h-4 w-4" />}
-          aria-label={`下一个${itemLabel}`}
-          disabled={currentIndex >= total - 1 || busy || cancelling}
-          onClick={onNext}
-          data-testid={nextTestId}
-        />
+      <div className="flex shrink-0 items-center gap-0.5">
+        {props.total > 1 && (
+          <>
+            <span
+              className="mr-[7px] whitespace-nowrap text-xs text-[#91918E] tabular-nums"
+              data-testid={`${props.cardTestId}-position`}
+            >
+              {props.currentIndex + 1} / {props.total}
+            </span>
+            <button
+              type="button"
+              className={iconButtonClass}
+              aria-label={`上一个${props.itemLabel}`}
+              disabled={props.currentIndex === 0 || props.busy || props.cancelling}
+              onClick={props.onPrevious}
+              data-testid={props.previousTestId}
+            >
+              <HiChevronLeft className="h-[15px] w-[15px]" />
+            </button>
+            <button
+              type="button"
+              className={iconButtonClass}
+              aria-label={`下一个${props.itemLabel}`}
+              disabled={props.currentIndex >= props.total - 1 || props.busy || props.cancelling}
+              onClick={props.onNext}
+              data-testid={props.nextTestId}
+            >
+              <HiChevronRight className="h-[15px] w-[15px]" />
+            </button>
+          </>
+        )}
         <button
           type="button"
-          onClick={onCancel}
-          disabled={cancelling}
-          className={`ml-1 inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white transition ${
-            cancelling ? 'bg-[#E0DFDC]' : 'bg-[#B3261E] hover:bg-[#8F3028]'
-          }`}
-          data-testid={cancelTestId}
-          aria-label={cancelling ? '正在停止本次运行' : '停止本次运行'}
+          className={`${iconButtonClass} ml-1`}
+          aria-label={props.cancelling ? '正在停止本次运行' : '停止本次运行'}
+          title="停止本次运行"
+          disabled={props.cancelling}
+          onClick={props.onCancel}
+          data-testid={props.cancelTestId}
         >
-          {cancelling ? <Spin size="small" /> : <HiStop className="h-4 w-4" />}
+          {props.cancelling ? <Spin size="small" /> : <HiStop className="h-3 w-3" />}
         </button>
       </div>
     </div>
-    {children}
-    {footer}
-  </div>
+    <div className="min-h-0 overflow-y-auto">
+      {props.source && (
+        <div className="mx-5 mt-2 flex min-w-0 items-center gap-2 break-words text-xs text-[#787774]">
+          {props.source}
+        </div>
+      )}
+      <div
+        className="mx-5 mt-3 mb-[14px] break-words text-[15px] leading-[1.65] font-medium [overflow-wrap:anywhere]"
+        data-testid={`${props.cardTestId}-title`}
+      >
+        {props.title}
+      </div>
+      {props.children}
+    </div>
+    {props.footer}
+  </section>
 )
 
-type WorkbenchInteractionFooterProps = {
+type ChoiceProps = {
+  selected: boolean
+  disabled: boolean
+  index: number
+  label: string
+  description?: string
+  recommended?: boolean
+  multiple?: boolean
+  rejection?: boolean
+  onClick: () => void
+  testId: string
+}
+
+export const WorkbenchInteractionChoice: React.FC<ChoiceProps> = (props) => (
+  <button
+    type="button"
+    aria-pressed={props.selected}
+    disabled={props.disabled}
+    onClick={props.onClick}
+    data-testid={props.testId}
+    className={`flex min-h-[46px] w-full items-center gap-3 rounded-[8px] p-2.5 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-[#0B6BCB] disabled:cursor-not-allowed disabled:opacity-45 ${props.selected ? 'bg-[#F4F4F2]' : 'hover:bg-[#F8F8F7]'}`}
+  >
+    <span
+      aria-hidden="true"
+      className={`inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[5px] border text-xs ${props.selected ? 'border-[#37352F] bg-[#37352F] text-white' : 'border-[#E0DFDC] bg-white text-[#787774]'}`}
+    >
+      {props.multiple ? props.selected && <HiCheck className="h-3.5 w-3.5" /> : props.index + 1}
+    </span>
+    <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
+      {props.label}
+      {props.recommended && (
+        <span className="ml-2 whitespace-nowrap text-[11px] text-[#787774]">推荐</span>
+      )}
+      {props.description && (
+        <span className="block text-xs text-[#787774]">{props.description}</span>
+      )}
+    </span>
+    {!props.multiple && (
+      <span
+        aria-hidden="true"
+        className={`shrink-0 ${props.selected ? '' : 'invisible'} ${props.rejection ? 'text-[#B3261E]' : 'text-[#787774]'}`}
+      >
+        {props.rejection ? <HiXMark className="h-4 w-4" /> : <HiCheck className="h-4 w-4" />}
+      </span>
+    )}
+  </button>
+)
+
+type FooterProps = {
   value: string
   placeholder: string
   submitting: boolean
+  inputDisabled: boolean
   disabled: boolean
+  label: string
+  next: boolean
+  expanded?: boolean
+  hint?: string
+  error?: string
   onChange: (value: string) => void
   onSubmit: () => void
   inputTestId: string
   submitTestId: string
-  inputRef?: React.Ref<HTMLInputElement>
-  inputDisabled?: boolean
 }
 
-export const WorkbenchInteractionFooter: React.FC<WorkbenchInteractionFooterProps> = ({
-  value,
-  placeholder,
-  submitting,
-  disabled,
-  onChange,
-  onSubmit,
-  inputTestId,
-  submitTestId,
-  inputRef,
-  inputDisabled = false
-}) => (
-  <div className="mt-3 flex items-center gap-2 border-t border-[#EEEEEC] px-4 py-4">
-    <input
-      ref={inputRef}
-      className="min-w-0 flex-1 rounded-[6px] border border-[#EEEEEC] bg-white px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EFEFED]"
-      placeholder={placeholder}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      disabled={submitting || inputDisabled}
-      data-testid={inputTestId}
-    />
-    <Button
-      type="primary"
-      className="!flex !h-9 !items-center !gap-1 !rounded-full !border-[#37352F] !bg-[#37352F] !text-white hover:!bg-[#2F3437] disabled:!border-[#EEEEEC] disabled:!bg-[#F4F4F2] disabled:!text-[#9B9A97]"
-      icon={<HiArrowUp className="h-4 w-4" />}
-      onClick={onSubmit}
-      loading={submitting}
-      disabled={disabled}
-      data-testid={submitTestId}
+export const WorkbenchInteractionFooter: React.FC<FooterProps> = (props) => {
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const input = inputRef.current
+    if (!input) return
+    input.style.height = 'auto'
+    input.style.height = `${Math.min(164, Math.max(props.expanded ? 76 : 24, input.scrollHeight))}px`
+  }, [props.value, props.expanded, props.inputTestId])
+  return (
+    <div
+      className={`shrink-0 px-[18px] pb-4 ${props.expanded ? '' : 'mt-[15px] border-t border-[#EEEEEC] pt-[14px]'}`}
     >
-      提交
-    </Button>
-  </div>
-)
+      <div className={`flex items-start gap-2 ${props.expanded ? '' : 'px-[11px] py-2.5'}`}>
+        {!props.expanded && (
+          <HiOutlinePencil
+            aria-hidden="true"
+            className="mt-1 h-[15px] w-[15px] shrink-0 text-[#91918E]"
+          />
+        )}
+        <textarea
+          ref={inputRef}
+          rows={1}
+          aria-label={props.placeholder}
+          placeholder={props.placeholder}
+          value={props.value}
+          disabled={props.inputDisabled || props.submitting}
+          onChange={(event) => props.onChange(event.target.value)}
+          data-testid={props.inputTestId}
+          className={`min-w-0 flex-1 resize-none bg-white text-[15px] leading-6 text-[#37352F] outline-none placeholder:text-[#91918E] focus:border-[#0B6BCB] focus:ring-2 focus:ring-[#0B6BCB]/10 disabled:cursor-not-allowed ${props.expanded ? 'rounded-[8px] border border-[#E0DFDC] px-[11px] py-2.5' : 'rounded-[4px] border border-transparent p-0'}`}
+          onKeyDown={(event) => {
+            if (
+              (event.ctrlKey || event.metaKey) &&
+              event.key === 'Enter' &&
+              !event.nativeEvent.isComposing &&
+              !props.disabled &&
+              !props.submitting &&
+              !props.inputDisabled
+            ) {
+              event.preventDefault()
+              props.onSubmit()
+            }
+          }}
+        />
+      </div>
+      {props.error && (
+        <div role="alert" className="mt-2 break-words text-xs text-[#B3261E]">
+          {props.error}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5">
+        <span aria-live="polite" className="min-w-0 break-words text-xs text-[#91918E]">
+          {props.hint}
+        </span>
+        <button
+          type="button"
+          onClick={props.onSubmit}
+          disabled={props.disabled || props.submitting || props.inputDisabled}
+          data-testid={props.submitTestId}
+          className="ml-auto inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-[6px] bg-[#37352F] px-3 py-[5px] text-[13px] leading-[22px] font-medium text-white focus-visible:outline-2 focus-visible:outline-[#0B6BCB] disabled:cursor-not-allowed disabled:bg-[#F4F4F2] disabled:text-[#91918E]"
+        >
+          {props.label}
+          {props.submitting ? (
+            <Spin size="small" />
+          ) : props.next ? (
+            <HiArrowRight className="h-3.5 w-3.5" />
+          ) : (
+            <HiArrowUp className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
