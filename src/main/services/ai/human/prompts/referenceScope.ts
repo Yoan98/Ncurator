@@ -1,4 +1,4 @@
-import { selectionPosition } from '../../../../../shared/documentSelection'
+import { renderSelectionLocation } from '../../../../../shared/documentSelection'
 import { chatReferences } from '../../../../../shared/chatContent'
 import type {
   ChatAttachment,
@@ -38,25 +38,23 @@ const renderExcerptBlock = (label: string, content: string): string => {
 }
 
 const renderSelection = (node: DocumentSelectionNode): string => {
-  const anchor = node.anchor
-  const position =
-    anchor?.kind === 'ppt'
-      ? `第 ${anchor.page} 页 · ${{ text: '选中文字', element: '整个元素', slide: '整页' }[anchor.mode]}`
-      : selectionPosition(node)
-  return [
+  const parts = [
     `选中片段 ${node.number}：`,
-    position ? `位置：${position}` : '',
-    anchor?.kind === 'ppt' ? `页面标识：${anchor.slideId}` : '',
-    anchor?.kind === 'ppt' && anchor.elementId ? `元素标识：${anchor.elementId}` : '',
-    renderExcerptBlock('选中内容', node.selectedText),
-    anchor?.kind === 'text' && anchor.sourceText !== node.selectedText
-      ? renderExcerptBlock('源文件片段（定位用）', anchor.sourceText)
-      : '',
+    renderSelectionLocation(node),
+    renderExcerptBlock('选中内容', node.selectedText)
+  ]
+
+  const anchor = node.anchor
+  if (anchor?.kind === 'text' && anchor.sourceText !== node.selectedText) {
+    parts.push(renderExcerptBlock('源文件片段（定位用）', anchor.sourceText))
+  }
+
+  parts.push(
     renderExcerptBlock('前文（上下文，仅供理解与定位）', node.contextBefore),
     renderExcerptBlock('后文（上下文，仅供理解与定位）', node.contextAfter)
-  ]
-    .filter(Boolean)
-    .join('\n\n')
+  )
+
+  return parts.filter(Boolean).join('\n\n')
 }
 
 export const buildReferenceScope = (input: {

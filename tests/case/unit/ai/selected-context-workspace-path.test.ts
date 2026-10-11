@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { selectionTooltip } from '../../../../src/shared/documentSelection'
+import type { DocumentSelectionAnchor, DocumentSelectionNode } from '../../../../src/shared/types'
 import {
   buildReferenceScope,
   renderAttachmentsText,
@@ -157,6 +159,167 @@ describe('ai unit selected context workspace path', () => {
     expect(text.split('选中片段 2：')).toHaveLength(2)
     expect(text.split('源文件片段（定位用）：')).toHaveLength(2)
     expect(text).toContain('before **bold** after')
+    expect(text).not.toContain('前文（')
+    expect(text).not.toContain('后文（')
+  })
+
+  const locationCases: {
+    name: string
+    filePath: string
+    anchor?: DocumentSelectionAnchor
+    selectedText: string
+    location: string
+  }[] = [
+    {
+      name: 'DOCX without a format anchor',
+      filePath: '/tmp/example.docx',
+      selectedText: '选中原文',
+      location: ''
+    },
+    {
+      name: 'single text line',
+      filePath: '/tmp/example.txt',
+      anchor: { kind: 'text', start: 0, end: 4, startLine: 3, endLine: 3, sourceText: '选中原文' },
+      selectedText: '选中原文',
+      location: '位置：第 3 行'
+    },
+    {
+      name: 'multiple text lines',
+      filePath: '/tmp/example.txt',
+      anchor: {
+        kind: 'text',
+        start: 0,
+        end: 11,
+        startLine: 3,
+        endLine: 5,
+        sourceText: '第一行\n第二行\n第三行'
+      },
+      selectedText: '第一行\n第二行\n第三行',
+      location: '位置：第 3–5 行'
+    },
+    {
+      name: 'single PDF page',
+      filePath: '/tmp/example.pdf',
+      anchor: { kind: 'pdf', startPage: 2, endPage: 2, start: 0, end: 4 },
+      selectedText: '选中原文',
+      location: '位置：第 2 页'
+    },
+    {
+      name: 'multiple PDF pages',
+      filePath: '/tmp/example.pdf',
+      anchor: { kind: 'pdf', startPage: 2, endPage: 3, start: 0, end: 4 },
+      selectedText: '选中原文',
+      location: '位置：第 2–3 页'
+    },
+    {
+      name: 'Excel cells',
+      filePath: '/tmp/example.xlsx',
+      anchor: {
+        kind: 'excel',
+        sheetId: 'sheet-1',
+        sheetName: '订单明细',
+        range: 'B2',
+        startRow: 1,
+        endRow: 1,
+        startColumn: 1,
+        endColumn: 1
+      },
+      selectedText:
+        '{"display":[["订单"]],"cells":[[{"value":"订单","formula":null}]],"merges":[]}',
+      location: '位置：订单明细!B2'
+    },
+    {
+      name: 'PPT text',
+      filePath: '/tmp/example.pptx',
+      anchor: {
+        kind: 'ppt',
+        slideId: '/ppt/slides/slide1.xml',
+        elementId: '/ppt/slides/slide1.xml#2',
+        page: 1,
+        mode: 'text',
+        textRange: { start: 0, end: 2 },
+        revision: 'revision-1'
+      },
+      selectedText: '标题',
+      location:
+        '位置：第 1 页 · 选中文字\n页面标识：/ppt/slides/slide1.xml\n元素标识：/ppt/slides/slide1.xml#2'
+    },
+    {
+      name: 'PPT element with text',
+      filePath: '/tmp/example.pptx',
+      anchor: {
+        kind: 'ppt',
+        slideId: '/ppt/slides/slide1.xml',
+        elementId: '/ppt/slides/slide1.xml#2',
+        page: 1,
+        mode: 'element',
+        revision: 'revision-1'
+      },
+      selectedText: '完整标题',
+      location:
+        '位置：第 1 页 · 整个元素\n页面标识：/ppt/slides/slide1.xml\n元素标识：/ppt/slides/slide1.xml#2'
+    },
+    {
+      name: 'PPT element without text',
+      filePath: '/tmp/example.pptx',
+      anchor: {
+        kind: 'ppt',
+        slideId: '/ppt/slides/slide1.xml',
+        elementId: '/ppt/slides/slide1.xml#3',
+        page: 1,
+        mode: 'element',
+        revision: 'revision-1'
+      },
+      selectedText: '',
+      location:
+        '位置：第 1 页 · 整个元素\n页面标识：/ppt/slides/slide1.xml\n元素标识：/ppt/slides/slide1.xml#3'
+    },
+    {
+      name: 'PPT whole slide',
+      filePath: '/tmp/example.pptx',
+      anchor: {
+        kind: 'ppt',
+        slideId: '/ppt/slides/slide1.xml',
+        page: 1,
+        mode: 'slide',
+        revision: 'revision-1'
+      },
+      selectedText: '页面文字',
+      location: '位置：第 1 页 · 整页\n页面标识：/ppt/slides/slide1.xml'
+    }
+  ]
+
+  it.each(locationCases)('shares $name location between model input and tooltip', (example) => {
+    const node: DocumentSelectionNode = {
+      kind: 'document_selection',
+      id: 'excerpt',
+      number: 1,
+      filePath: example.filePath,
+      anchor: example.anchor,
+      selectedText: example.selectedText,
+      contextBefore: '',
+      contextAfter: '',
+      children: []
+    }
+    const text = renderSelectedReferencesText(buildReferenceScope({ contentNodes: [node] }))
+
+    if (example.location) {
+      expect(text).toContain(`选中片段 1：\n\n${example.location}`)
+      expect(text.split('位置：')).toHaveLength(2)
+    } else {
+      expect(text).not.toContain('位置：')
+    }
+    expect(selectionTooltip(node)).toBe(
+      example.location
+        ? `${example.location}${example.selectedText ? `\n${example.selectedText}` : ''}`
+        : example.selectedText
+    )
+    if (example.selectedText) {
+      expect(text).toContain(`选中内容：\n\`\`\`text\n${example.selectedText}\n\`\`\``)
+    } else {
+      expect(text).not.toContain('选中内容：')
+    }
+    expect(text).not.toContain('源文件片段（定位用）')
     expect(text).not.toContain('前文（')
     expect(text).not.toContain('后文（')
   })
