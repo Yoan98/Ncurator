@@ -120,16 +120,45 @@ describe('ai unit selected context workspace path', () => {
         ]
       })
     )
-    expect(text).toContain(`选中片段2的原文：\n\`\`\`\`text\n${selectedText}\n\`\`\`\``)
-    expect(text).toContain(
-      `选中片段2的前文（上下文，仅供理解与定位）：\n\`\`\`text\n${contextBefore}\n\`\`\``
-    )
-    expect(text).toContain(
-      `选中片段2的后文（上下文，仅供理解与定位）：\n\`\`\`text\n${contextAfter}\n\`\`\``
-    )
+    expect(text.split('选中片段 2：')).toHaveLength(2)
+    expect(text).toContain(`选中内容：\n\`\`\`\`text\n${selectedText}\n\`\`\`\``)
+    expect(text).toContain(`前文（上下文，仅供理解与定位）：\n\`\`\`text\n${contextBefore}\n\`\`\``)
+    expect(text).toContain(`后文（上下文，仅供理解与定位）：\n\`\`\`text\n${contextAfter}\n\`\`\``)
     expect(text).not.toContain('引用内容：')
-    expect(text).not.toContain('\n选中片段2\n')
+    expect(text).not.toContain('选中片段2的')
     expect(text).not.toContain('[example.docx')
+  })
+
+  it('groups text excerpts by document, preserves differing source and omits empty blocks', () => {
+    const text = renderSelectedReferencesText(
+      buildReferenceScope({
+        contentNodes: ['plain', 'before bold after'].map((selectedText, index) => ({
+          kind: 'document_selection',
+          id: `excerpt-${index}`,
+          number: index + 1,
+          filePath: '/tmp/example.md',
+          selectedText,
+          contextBefore: '',
+          contextAfter: '',
+          children: [],
+          anchor: {
+            kind: 'text',
+            start: 0,
+            end: selectedText.length,
+            startLine: 1,
+            endLine: 1,
+            sourceText: index === 0 ? selectedText : 'before **bold** after'
+          }
+        }))
+      })
+    )
+    expect(text.split('文档：example.md')).toHaveLength(2)
+    expect(text.split('选中片段 1：')).toHaveLength(2)
+    expect(text.split('选中片段 2：')).toHaveLength(2)
+    expect(text.split('源文件片段（定位用）：')).toHaveLength(2)
+    expect(text).toContain('before **bold** after')
+    expect(text).not.toContain('前文（')
+    expect(text).not.toContain('后文（')
   })
 
   it('renders user selected attachments with compact content-info template', () => {

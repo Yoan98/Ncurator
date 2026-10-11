@@ -9,7 +9,7 @@ export type DocumentSelectionState = {
   selections: DocumentSelectionNode[]
   locations: Map<string, SelectionLocation>
   navigation: { node: DocumentSelectionNode; requestId: number } | null
-  save: (node: DocumentSelectionNode, location?: SelectionLocation, image?: Uint8Array) => void
+  save: (node: DocumentSelectionNode, location?: SelectionLocation) => void
   remove: (id: string) => void
   navigate: (node: DocumentSelectionNode) => void
 }

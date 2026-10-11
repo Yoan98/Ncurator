@@ -986,7 +986,6 @@ const ChatPage: React.FC = () => {
   const submitInFlightRef = useRef(false)
   const [submittingPartnerId, setSubmittingPartnerId] = useState<string | null>(null)
   const selectionLocationsRef = useRef(new Map<string, Map<string, SelectionLocation>>())
-  const selectionImagesRef = useRef(new Map<string, Map<string, Uint8Array>>())
   const [selectionNavigation, setSelectionNavigation] =
     useState<DocumentSelectionState['navigation']>(null)
   const lastSubmittedInputRef = useRef('')
@@ -1328,11 +1327,6 @@ const ChatPage: React.FC = () => {
         if (!selectionIds.has(id)) locations.delete(id)
       })
       if (!locations?.size) selectionLocationsRef.current.delete(partnerId)
-      const images = selectionImagesRef.current.get(partnerId)
-      images?.forEach((_, id) => {
-        if (!selectionIds.has(id)) images.delete(id)
-      })
-      if (!images?.size) selectionImagesRef.current.delete(partnerId)
       if (isComposerDraftEmpty(draft)) {
         delete composerDraftByPartnerIdRef.current[partnerId]
         return
@@ -3185,7 +3179,6 @@ const ChatPage: React.FC = () => {
       delete persistRevisionsRef.current[id]
       delete composerDraftByPartnerIdRef.current[id]
       selectionLocationsRef.current.delete(id)
-      selectionImagesRef.current.delete(id)
       setTabWorkspaces((current) => {
         const next = { ...current }
         delete next[id]
@@ -3859,7 +3852,6 @@ const ChatPage: React.FC = () => {
     const clearAcceptedDraft = (): void => {
       saveComposerDraftForPartner(submitPartnerId, createEmptyComposerDraft())
       selectionLocationsRef.current.delete(submitPartnerId)
-      selectionImagesRef.current.delete(submitPartnerId)
       if (currentPartnerIdRef.current === submitPartnerId) {
         applyComposerDraft(createEmptyComposerDraft(), `clear:${submitPartnerId}`)
         setSelectionNavigation(null)
@@ -3914,10 +3906,6 @@ const ChatPage: React.FC = () => {
         preference: composerAiPreference,
         executionPermission: composerExecutionPermission,
         contentNodes: submittedContentNodes,
-        selectionImages: documentSelections(submittedContentNodes).flatMap((node) => {
-          const bytes = selectionImagesRef.current.get(submitPartnerId)?.get(node.id)
-          return bytes ? [{ id: node.id, bytes }] : []
-        }),
         attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
         mainModel: modelSelection.mainModel
       })
@@ -4708,9 +4696,6 @@ const ChatPage: React.FC = () => {
     selectionLocationsRef.current.get(currentPartnerId || '') ||
     new Map<string, SelectionLocation>()
   if (currentPartnerId) selectionLocationsRef.current.set(currentPartnerId, locations)
-  const selectionImages =
-    selectionImagesRef.current.get(currentPartnerId || '') || new Map<string, Uint8Array>()
-  if (currentPartnerId) selectionImagesRef.current.set(currentPartnerId, selectionImages)
   const selectionState: DocumentSelectionState = {
     partnerId: currentPartnerId || '',
     enabled:
@@ -4722,13 +4707,12 @@ const ChatPage: React.FC = () => {
     selections: currentDocumentSelections,
     locations,
     navigation: selectionNavigation,
-    save: (node, location, image) => {
+    save: (node, location) => {
       if (!currentPartnerId || submittingPartnerId === currentPartnerId) return
       const draft = composerDraftValueRef.current
       const existing = documentSelections(draft.contentNodes).find((item) => item.id === node.id)
       const saved: DocumentSelectionNode = { ...node, number: existing?.number || 0 }
       if (location) locations.set(saved.id, location)
-      if (image) selectionImages.set(saved.id, image)
       const contentNodes: ChatMessageContentNode[] = existing
         ? draft.contentNodes.map((item) =>
             item.kind === 'document_selection' && item.id === saved.id ? saved : item
@@ -4760,7 +4744,6 @@ const ChatPage: React.FC = () => {
         selectedReferences: chatReferences(contentNodes)
       }
       locations.delete(id)
-      selectionImages.delete(id)
       saveComposerDraftForPartner(currentPartnerId, next)
       applyComposerDraft(next, `selection-delete:${id}`)
     },

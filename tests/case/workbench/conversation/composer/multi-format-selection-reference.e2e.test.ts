@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { Page } from 'playwright'
+import { getSlidePartName, getSlides, loadPresentation } from 'pptx-kit'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -179,23 +180,33 @@ describe('workbench conversation e2e', () => {
           await page.waitForFunction(() =>
             [...CSS.highlights.keys()].some((key) => key.startsWith('ppt-'))
           )
+          const presentation = await loadPresentation(before[4])
+          const expectedSlideId = getSlidePartName(getSlides(presentation)[0]!)
+          const expectedElementIds = await page
+            .locator('[data-ppt-interactive] [data-nc-shape-id]')
+            .evaluateAll(
+              (elements, slideId) =>
+                elements.map((element) => `${slideId}#${element.getAttribute('data-nc-shape-id')}`),
+              expectedSlideId
+            )
           await selectVisibleText(page, '[data-ppt-interactive] svg')
           await confirm(page, 'ppt', '只解释这段幻灯片文字，不修改文件。')
-          await page
+          const textShape = page
             .locator('[data-ppt-interactive] [data-nc-shape-id]')
             .filter({ has: page.locator('text') })
             .first()
-            .click()
+          const selectedElementId = `${expectedSlideId}#${await textShape.getAttribute('data-nc-shape-id')}`
+          await textShape.click()
           await confirm(page, 'ppt', '只解释这个文本框，不修改文件。')
           await page.locator('[data-ppt-reference-page]').click()
           await confirm(
             page,
             'ppt',
-            '请用 read_image 读取所附的这一页画面，只解释画面，不修改文件。'
+            '请用 ppt_read_slides 按引用中的 slideId 读取当前页的元素清单，核对引用的文本框 elementId；只解释内容，不修改文件。'
           )
           await runtime.captureScreenshot({
             name: 'ppt-reference',
-            message: 'PPT 整页引用及画面快照'
+            message: 'PPT 文字、对象和整页通过真实标识引用'
           })
           const titles = await tokens.evaluateAll((elements) =>
             elements.map((element) => element.getAttribute('title'))
@@ -223,12 +234,40 @@ describe('workbench conversation e2e', () => {
             { page, blockerPolicy: 'auto_approve' }
           )
           const events = await collectWorkbenchAiRunEvents(runtime)
-          const readImage = events.some(
-            (event) =>
-              event.type === 'tool_call_result' &&
-              event.toolName === 'read_image' &&
-              event.result?.ok === true
-          )
+          const pptReads = events.flatMap((event) => {
+            if (
+              event.type !== 'tool_call_result' ||
+              event.toolName !== 'ppt_read_slides' ||
+              !event.result?.ok
+            )
+              return []
+            const data = event.result.data
+            if (
+              !data ||
+              typeof data !== 'object' ||
+              Array.isArray(data) ||
+              !Array.isArray(data.slides)
+            )
+              return []
+            return data.slides.flatMap((slide) => {
+              if (!slide || typeof slide !== 'object' || Array.isArray(slide)) return []
+              return [
+                {
+                  slideId: slide.slideId,
+                  elementIds: Array.isArray(slide.elements)
+                    ? slide.elements.flatMap((element) =>
+                        element &&
+                        typeof element === 'object' &&
+                        !Array.isArray(element) &&
+                        typeof element.elementId === 'string'
+                          ? [element.elementId]
+                          : []
+                      )
+                    : []
+                }
+              ]
+            })
+          })
           const records = await collectWorkbenchLlmIoRecords(runtime)
           const brain =
             records
@@ -243,21 +282,32 @@ describe('workbench conversation e2e', () => {
           return {
             titles,
             brain,
-            readImage,
+            expectedSlideId,
+            expectedElementIds,
+            selectedElementId,
+            pptReads,
             unchanged: after.every((bytes, index) => bytes.equals(before[index]))
           }
         },
         assert: async (result, runtime) => {
           runtime.assertThat(
             result.unchanged &&
-              result.readImage &&
-              result.brain.includes('选中时的画面：') &&
-              result.brain.includes('对应的源文件片段') &&
+              result.expectedElementIds.length > 0 &&
+              result.pptReads.some(
+                (slide) =>
+                  slide.slideId === result.expectedSlideId &&
+                  result.expectedElementIds.every((id) => slide.elementIds.includes(id)) &&
+                  slide.elementIds.includes(result.selectedElementId)
+              ) &&
+              result.brain.includes(`页面标识：${result.expectedSlideId}`) &&
+              result.brain.includes(`元素标识：${result.selectedElementId}`) &&
+              result.brain.match(/选中片段 \d+：/g)?.length === 7 &&
+              !result.brain.includes('选中时的画面：') &&
               result.brain.includes('经营周报.xlsx') &&
               result.brain.includes('深度学习.pdf'),
             {
               name: 'multi-format-brain-and-readonly',
-              message: '真实 AI 收到位置及不可变快照，提问不写回源文件。',
+              message: '真实 AI 收到独立选区块，PPT 引用标识与工具结果匹配，提问不写回源文件。',
               data: result
             }
           )

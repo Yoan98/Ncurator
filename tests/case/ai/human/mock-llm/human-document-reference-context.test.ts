@@ -169,6 +169,8 @@ describe('ai human mock-llm backend', () => {
             number: 1,
             filePath: path.join(runtime.workspaceRoot, '品牌策略提案.pptx'),
             selectedText: '',
+            contextBefore: '',
+            contextAfter: '',
             children: [{ kind: 'text', text: '解释图片' }],
             anchor: {
               kind: 'ppt',
@@ -180,10 +182,19 @@ describe('ai human mock-llm backend', () => {
             }
           }
         ]
-        const imageBytes = Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jMZkAAAAASUVORK5CYII=',
-          'base64'
-        )
+        const pptSlide: DocumentSelectionNode = {
+          ...formats[3],
+          id: 'ppt-slide',
+          number: 2,
+          children: [{ kind: 'text', text: '解释当前页' }],
+          anchor: {
+            kind: 'ppt',
+            slideId: 'ppt/slides/slide1.xml',
+            page: 1,
+            mode: 'slide',
+            revision: 'snapshot-1'
+          }
+        }
         const nodes: ChatMessageContentNode[] = [
           { kind: 'text', text: '先看 ' },
           { kind: 'reference', reference },
@@ -193,7 +204,8 @@ describe('ai human mock-llm backend', () => {
           second,
           { kind: 'text', text: '\n同时参考 ' },
           { kind: 'reference', reference: web },
-          ...formats
+          ...formats,
+          pptSlide
         ]
         const createService = () =>
           new ChatRunService({
@@ -219,7 +231,6 @@ describe('ai human mock-llm backend', () => {
           preference: 'default' as const,
           executionPermission: 'review' as const,
           contentNodes: nodes,
-          selectionImages: [{ id: 'ppt', bytes: imageBytes }],
           mainModel: { configId: 'mock-llm-scripted', modelName: 'scripted-llm' }
         }
         const oversized: DocumentSelectionNode = {
@@ -235,14 +246,27 @@ describe('ai human mock-llm backend', () => {
             endColumn: 0
           }
         }
-        const invalid = [
+        const invalid: DocumentSelectionNode[] = [
           oversized,
-          formats[3],
           {
             ...formats[3],
-            image: {
-              path: path.join(runtime.workspaceRoot, 'outside.png'),
-              mimeType: 'image/png' as const
+            anchor: {
+              kind: 'ppt',
+              slideId: 'ppt/slides/slide1.xml',
+              page: 0,
+              mode: 'slide',
+              revision: 'snapshot-1'
+            }
+          },
+          {
+            ...formats[3],
+            anchor: {
+              kind: 'ppt',
+              slideId: 'ppt/slides/slide1.xml',
+              elementId: 'ppt/slides/slide2.xml#3',
+              page: 1,
+              mode: 'element',
+              revision: 'snapshot-1'
             }
           }
         ]
@@ -251,8 +275,7 @@ describe('ai human mock-llm backend', () => {
           try {
             const response = await service.submit({
               ...request,
-              contentNodes: [node],
-              selectionImages: []
+              contentNodes: [node]
             })
             rejected.push(!response.success && !!response.error)
           } catch (error) {
@@ -295,8 +318,7 @@ describe('ai human mock-llm backend', () => {
         const afterBrain = await storage.chatMessageLog.list(partnerId)
         const queued = await service.submit({
           ...request,
-          contentNodes: [second],
-          selectionImages: []
+          contentNodes: [second]
         })
         const pending = (await storage.aiRun.getRun(accepted.run.id))?.pendingMessages?.[0]
         await createService().failInterruptedRuns()
@@ -321,24 +343,21 @@ describe('ai human mock-llm backend', () => {
             result.completed &&
             result.frozen &&
             result.userCount === 1 &&
-            selections.length === 6 &&
+            selections.length === 7 &&
             selections.every((node) => node.knowledge?.kbAvailability === 'not_indexed') &&
             result.body.includes('用户引用的文档：') &&
             result.body.includes('Hello') &&
             result.body.includes(' from fixture') &&
             result.body.includes('Hello from ') &&
             result.body.includes('引用内容：整个资源') &&
-            result.body.includes('选中片段1的原文：\n```text\nHello\n```') &&
-            result.body.includes(
-              '选中片段1的后文（上下文，仅供理解与定位）：\n```text\n from fixture\n```'
-            ) &&
-            result.body.includes(
-              '选中片段2的前文（上下文，仅供理解与定位）：\n```text\nHello from \n```'
-            ) &&
+            result.body.includes('选中片段 1：\n\n选中内容：\n```text\nHello\n```') &&
+            result.body.includes('后文（上下文，仅供理解与定位）：\n```text\n from fixture\n```') &&
+            result.body.includes('前文（上下文，仅供理解与定位）：\n```text\nHello from \n```') &&
             result.body.split('[sample-edit.docx · 1]').length === 2 &&
             result.body.split('[sample-edit.docx · 2]').length === 2 &&
             !result.body.includes('以下选中片段') &&
-            !result.body.includes('\n选中片段1\n') &&
+            result.body.split('选中片段 ').length === selections.length + 1 &&
+            !result.body.includes('源文件片段（定位用）') &&
             !result.body.includes('类型：') &&
             !result.body.includes('stale-id') &&
             result.body.split('解释这段文字').length === 2 &&
@@ -347,9 +366,10 @@ describe('ai human mock-llm backend', () => {
             !result.body.includes('stale-directory-id') &&
             result.body.includes('Data!B2:C3') &&
             result.body.includes('页面标识：ppt/slides/slide1.xml') &&
-            result.body.includes('选中时的画面：') &&
-            !JSON.stringify(result.contentNodes).includes('selectionImages') &&
-            selections.find((node) => node.id === 'ppt')?.image?.mimeType === 'image/png' &&
+            result.body.includes('元素标识：ppt/slides/slide1.xml#3') &&
+            !result.body.includes('选中时的画面：') &&
+            selections.find((node) => node.id === 'ppt')?.anchor?.kind === 'ppt' &&
+            selections.find((node) => node.id === 'ppt-slide')?.anchor?.kind === 'ppt' &&
             result.queued &&
             result.pendingNodes.length === 1 &&
             JSON.stringify(result.restoredNodes) === JSON.stringify(result.pendingNodes),

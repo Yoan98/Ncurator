@@ -11,8 +11,6 @@ export type SelectionGeometry = {
 export type SelectionCandidate = {
   node: DocumentSelectionNode
   location?: SelectionLocation
-  /** Captures already frozen SVG data, not the live document at confirmation time. */
-  image?: () => Promise<Uint8Array>
 }
 export type SelectionPopup = SelectionCandidate & { mode: 'action' | 'editor' }
 export type SelectionAdapter = {

@@ -1,9 +1,6 @@
 import path from 'node:path'
-import fs from 'node:fs/promises'
-import type { DocumentSelectionNode, ChatSubmitRequest } from '../../../shared/types'
+import type { DocumentSelectionNode } from '../../../shared/types'
 import { MAX_EXCEL_SELECTION_CELLS } from '../../../shared/documentSelection'
-import { getPartnerObjectsDir } from '../assets/WorkspaceAssetService'
-import { WorkspaceObjectStore } from '../ai/fileChanges/WorkspaceObjectStore'
 
 const integer = (value: number, min = 0): boolean => Number.isSafeInteger(value) && value >= min
 const fail = (): never => {
@@ -26,7 +23,7 @@ export function validateDocumentSelection(node: DocumentSelectionNode): void {
   const ext = path.extname(node.filePath).toLowerCase()
   const a = node.anchor
   if (!a) {
-    if (ext !== '.docx' || !node.selectedText.trim() || node.image) fail()
+    if (ext !== '.docx' || !node.selectedText.trim()) fail()
     return
   }
   if (a.kind === 'text') {
@@ -97,44 +94,4 @@ export function validateDocumentSelection(node: DocumentSelectionNode): void {
       end = `${column(a.endColumn)}${a.endRow + 1}`
     if (a.range !== (start === end ? start : `${start}:${end}`)) fail()
   } else fail()
-  if (node.image && (a.kind !== 'ppt' || a.mode === 'text')) fail()
-}
-
-const png = (bytes: Uint8Array): boolean =>
-  bytes.length >= 24 &&
-  bytes.length <= 20 * 1024 * 1024 &&
-  Buffer.from(bytes.subarray(0, 8)).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-
-export async function freezeSelectionImages(
-  request: ChatSubmitRequest,
-  nodes: DocumentSelectionNode[]
-): Promise<void> {
-  const entries = request.selectionImages || []
-  if (!Array.isArray(entries) || new Set(entries.map((e) => e.id)).size !== entries.length) fail()
-  const root = getPartnerObjectsDir(request.partnerId)
-  const store = new WorkspaceObjectStore(root)
-  for (const entry of entries) {
-    const node = nodes.find((n) => n.id === entry.id)
-    if (!node) throw new Error('引用图像没有对应选区')
-    if (
-      node.anchor?.kind !== 'ppt' ||
-      node.anchor.mode === 'text' ||
-      !(entry.bytes instanceof Uint8Array) ||
-      !png(entry.bytes)
-    )
-      fail()
-    const result = await store.putBuffer(Buffer.from(entry.bytes))
-    node.image = { path: result.objectPath, mimeType: 'image/png' }
-  }
-  for (const node of nodes) {
-    if (node.anchor?.kind === 'ppt' && node.anchor.mode !== 'text' && !node.image) fail()
-    if (!node.image) continue
-    const relative = path.relative(root, node.image.path).split(path.sep).join('/')
-    if (
-      node.image.mimeType !== 'image/png' ||
-      !/^sha256\/[a-f0-9]{2}\/[a-f0-9]{62}$/.test(relative)
-    )
-      fail()
-    if (!png(await fs.readFile(node.image.path))) fail()
-  }
 }

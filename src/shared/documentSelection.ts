@@ -18,6 +18,4 @@ export const selectionPosition = (node: DocumentSelectionNode): string => {
   }
 }
 export const selectionTooltip = (node: DocumentSelectionNode): string =>
-  [selectionPosition(node), node.selectedText, node.image ? '包含选中时的画面快照' : '']
-    .filter(Boolean)
-    .join('\n')
+  [selectionPosition(node), node.selectedText].filter(Boolean).join('\n')
