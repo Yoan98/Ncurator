@@ -53,6 +53,7 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 - Why：子任务不能读主聊天、再次派发或主动询问用户；子事件不能终止主 run。
 - How：生产 `AiRunService.run`，只脚本化 LLM 决策，其他依赖使用真实服务与存储。
 - Oracle：派发参数使用 `agents` / `instruction`，创建名称和续接 ID 互斥；参数失败保留具体错误及原始输入，反馈回主模型修正，执行失败保留已知标题与原始原因。一次提交超过 2 项仍被接受，峰值并发为默认 2，排队任务仅在前序释放后启动，全部结果进入主工具消息；公开文本真实流式投递，实际请求状态成对开关且原始推理不转发；子完整日志按会话隔离存入 SQLite，完成事务清理；状态与精简行动 annotation 持久化；受限工具不可绑定和执行。
+- 最新验证：2026-10-10 生产回归通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-isolation/20261010-183921-036-f2b4c851`。混用名称与 ID 的失败原因保留，主模型修正后使用 agents/instruction 完成批量派发及结果汇集。
 
 #### `human-subagent-prefix-stability`
 
@@ -61,7 +62,7 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 - Why：确定性区分请求前缀改写与供应商缓存低命中，守住临时实例隔离和文字流生命周期。
 - How：生产 AiRunService、人类 graph、真实文本文件及工具；只脚本化 LLM 派发、学习及读取决策，连续两轮使用相同公开文案以核对消息身份。保存真实 requestWire，比较稳定工具集合下的相邻主子 brain；两次派发创建新会话。另经生产 ChatRunService 让子任务读文件后进入真实终端等待，停止主运行、重新打开 SQLite，通过 list_agent 查询并续接原会话。
 - Oracle：已有消息逐项保留，工具定义和顺序不变；新子 System/初始工具相同且无旧子历史；主上下文只含派发汇总，没有子过程 annotation；续接沿用 agentId、名称和原任务，执行 ID 改变，首次请求保留原末次有效请求的消息和工具前缀，完成后子会话被清理。公开文字每轮使用独立消息标识，同轮 delta 与完成快照标识一致；delta 开始流、completed/reset/取消结束流，审核请求不能冒充文字流。服务端缓存由 Workbench `subagent-prefix-cache-retain-live` 验证，mock 不伪造命中。
-- 最新验证：2026-10-10 生产 AiRunService / ChatRunService 通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-prefix-stability/20261010-173627-357-11639c82`。四个子实例各三轮公开消息标识独立，同轮片段与完成快照一致，相同文案仍有独立消息身份；连续请求前缀、新会话隔离、真实终端等待中停止及 SQLite 重开续接通过。
+- 最新验证：2026-10-10 生产 AiRunService / ChatRunService 通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-prefix-stability/20261010-183921-097-bdaa66fe`。四个子实例各三轮公开消息标识独立，同轮片段与完成快照一致，相同文案仍有独立消息身份；连续请求前缀、新会话隔离、真实终端等待中停止及 SQLite 重开续接通过。
 
 #### `human-subagent-file-cancellation`
 
@@ -86,7 +87,7 @@ Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具
 - Why：避免人工审批导致子实例提前结束、并发决定串任务、提交前执行或取消后执行。
 - How：生产 ChatRunService → AiRunService，透传既有 AiLlmDriver，只脚本化 brain 与 terminal_review；真实 SQLite、审批入口、终端、文件和资源管理。通过生产决定入口操作，不替换执行器或审批服务。
 - Oracle：同一 childRunId 在决定后继续；允许只执行一次，拒绝/指导不执行原命令；等待前磁盘无副作用；两个子审批 FIFO、第三项仍排队；事务提交后执行，重复/过期决定无效；取消清理全部等待并保留先前文件；子 brain 上下文独立，审核使用当前子任务输入，共用主运行的审核入口；文件归属隔离；规则直通、AI 自动通过、审核异常转人工及完全访问均覆盖。
-- 最新验证：2026-10-10 生产 ChatRunService 链路通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-approval/20261010-144804-939-b7aeffe6`。允许、拒绝、指导、FIFO、停止和中断修复通过；规则直通、AI 自动通过、审核异常转人工及完全访问通过。完整 human/mock-llm 29 文件、38 项均通过。
+- 最新验证：2026-10-10 生产 ChatRunService 链路通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-approval/20261010-183920-470-5817a69d`。允许、拒绝、指导、FIFO、停止和中断修复通过；规则直通、AI 自动通过、审核异常转人工及完全访问通过。本轮子助手五项 backend 回归全部通过。
 
 ## 最新 Live 评估
 
@@ -796,7 +797,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：普通 AI 运行不能受知识库配置影响，也不能隐式下载模型。
 - How：隔离空模型目录，使用生产 AiRunService 和 scripted LLM 完成 DOCX literal 读取、子任务与续接；另在真实损坏模型目录下完成聊天。不调用 KB，不替换 embedding executor 或就绪检查。
 - Oracle：run 完成；真实文件读取命中；主子运行有 brain 事件；模型目录不变，embedding 保持 uninitialized；不产生模型下载。
-- 最新验证：2026-10-09 本轮通过；原始日志：`tests/logs/ai/human/mock-llm/ai-run-service-without-knowledge/20261009-104153-012-aa92ff73`。
+- 最新验证：2026-10-10 本轮通过；原始日志：`tests/logs/ai/human/mock-llm/ai-run-service-without-knowledge/20261010-184027-387-ad80a32d`。
 
 ##### `ai-run-service-kb-error-continues`
 
@@ -805,7 +806,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：知识库失败应交给 AI 决策，不能终止整个 run。
 - How：隔离空模型目录，生产 AiRunService 中 scripted LLM 先调用 kb_search，再读取真实文本并交付；捕获下一轮模型上下文。
 - Oracle：KB 结果 ok=false 且上下文含模型缺失原因及停止调用 KB 指引；真实文本读取成功；run completed，无 run_failed，目录无下载产物。
-- 最新验证：2026-10-09 本轮通过；原始日志：`tests/logs/ai/human/mock-llm/ai-run-service-kb-error-continues/20261009-104153-378-156b33dd`。
+- 最新验证：2026-10-10 本轮通过；原始日志：`tests/logs/ai/human/mock-llm/ai-run-service-kb-error-continues/20261010-184027-567-c95cb1f2`。
 
 ##### `learning-hand-mouth-smoke`
 

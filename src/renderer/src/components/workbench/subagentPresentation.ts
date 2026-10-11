@@ -19,19 +19,24 @@ export const presentSubagentGroups = (groups: AssistantProcessGroup[]): Assistan
   )
   const rows = new Map<string, { groupId: string; child: SubagentTaskView }>()
   const agentRows = new Map<string, string>()
-  const pendingCreations = new Map<string, string>()
+  const pendingCreations = new Map<string, string[]>()
 
   const upsert = (groupId: string, child: SubagentTaskView): void => {
     const assignmentKey = JSON.stringify([child.name, child.task])
+    const pendingIds = pendingCreations.get(assignmentKey) || []
+    const pendingId = pendingIds.find((id) => rows.get(id)?.child.toolCallId !== child.toolCallId)
     const previousId = child.agentId
-      ? agentRows.get(child.agentId) || pendingCreations.get(assignmentKey)
-      : pendingCreations.get(assignmentKey)
+      ? agentRows.get(child.agentId) || pendingId
+      : pendingId
     const id = previousId || child.id
     const previous = rows.get(id)
     rows.set(id, { groupId: previous?.groupId || groupId, child: { ...child, id } })
     if (child.agentId) agentRows.set(child.agentId, id)
-    if (child.childRunId) pendingCreations.delete(assignmentKey)
-    else if (!child.agentId) pendingCreations.set(assignmentKey, id)
+    if (child.childRunId) {
+      pendingCreations.set(assignmentKey, pendingIds.filter((pending) => pending !== id))
+    } else if (!child.agentId && !pendingIds.includes(id)) {
+      pendingCreations.set(assignmentKey, [...pendingIds, id])
+    }
   }
 
   for (const group of groups) {

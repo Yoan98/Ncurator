@@ -347,8 +347,9 @@ pnpm test:update:e2e
 - 测试类型：e2e / live；suite `run`，group `subagent`；serviceMode `real`，与浏览器生命周期用例共用文件。
 - What：派发调用只显示助手行，成功及启动前失败均不进入 Activity，失败云与刷新后的历史错误一致。
 - Why：隐藏通用工具记录后仍须看见失败原因，不能把派发失败误当作真实子执行。
-- How：真实 UI 配模型及伙伴，要求原样续接不存在的会话，执行生产 Store 校验；从真实失败事件读取原因并悬浮核对云，刷新后再次核对。随后自然语言请求创建一位助手核对简单数字，检查真实调用使用 agents/instruction、助手完成及成功记录无 Activity。无事件、状态或输出注入。
+- How：真实 UI 配模型、伙伴及完全访问权限，要求原样续接不存在的会话，执行生产 Store 校验；从真实失败事件读取原因并悬浮核对云，刷新后再次核对。随后自然语言请求创建一位助手核对简单数字，检查真实调用使用 agents/instruction、助手完成及成功记录无 Activity。无事件、状态或输出注入。
 - Oracle：对齐 `WB-SUBAGENT-001-AC2`。失败只出现一个临时帮手行，云显示「我干失败了：」加实际错误，刷新保留原因；未产生真实子执行。成功调用使用新字段，出现真实助手及完成结果；派发不出现在 Activity。缺失错误的未知错误兜底由文案逻辑保证；已有目标重试去重由过程投影维护。
+- 最新验证：2026-10-10 源码真实 E2E（qwen3.8-flash）通过，32s；raw logs：`tests/logs/workbench/run/subagent/subagent-delegation-display/20261010-184900-575`。实际错误「子 agent 不存在或不属于当前伙伴」在失败云与刷新后保持一致，失败行无 childRunId；创建数字帮手使用 agents/instruction 并完成 17+25=42，成功及失败均无派发 Activity。保留失败云截图与 Playwright trace。人工完成度评分 100/100：上述真实界面断言全部通过。
 
 #### `subagent-prefix-cache-retain-live`
 

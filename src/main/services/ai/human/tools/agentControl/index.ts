@@ -64,7 +64,8 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
             }
             session.succeed(undefined, result)
             return { children }
-          }
+          },
+          onError: (error, session) => session.fail(error.message || '未知错误')
         }),
       {
         name: DELEGATE_TO_SUBAGENT_TOOL_SPEC.name,

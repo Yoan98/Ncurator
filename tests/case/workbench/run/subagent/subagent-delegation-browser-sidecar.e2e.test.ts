@@ -905,6 +905,7 @@ describe('subagent browser and sidecar real UI', () => {
         })
         await createPartnerThroughWorkbenchUi(runtime.page, '派发失败')
         await selectWorkbenchModel(runtime.page, setup.env.modelName)
+        await selectWorkbenchExecutionPermission(runtime.page, '完全访问')
         const missingAgentId = 'missing-subagent-cloud-e2e'
         const failureStart = Date.now()
         await sendWorkbenchMessage(
@@ -916,6 +917,7 @@ describe('subagent browser and sidecar real UI', () => {
         )
         const failure = await waitForWorkbenchAiEvent(runtime, {
           name: 'subagent-dispatch-failed',
+          timeoutMs: 30_000,
           matches: (event) =>
             event.type === 'assistant_process_item_failed' && event.failedAt >= failureStart
         })
@@ -933,6 +935,7 @@ describe('subagent browser and sidecar real UI', () => {
           )
           await row.waitFor({ state: 'visible' })
           expect(await row.count()).toBe(1)
+          expect(await row.getAttribute('data-child-run-id')).toBeNull()
           expect(await row.innerText()).toBe('临时帮手')
           await row.hover()
           await waitUntil(async () => {
