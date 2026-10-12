@@ -63,21 +63,7 @@ const HumanInteractionCard: React.FC<Props> = ({ interaction, cancelling, onSubm
       previousTestId="workbench-human-question-prev"
       nextTestId="workbench-human-question-next"
       cancelTestId="workbench-human-question-cancel"
-      onKeyDownCapture={(event) => {
-        if (
-          event.key !== 'Enter' ||
-          event.shiftKey ||
-          event.altKey ||
-          event.nativeEvent.isComposing ||
-          event.keyCode === 229
-        )
-          return
-        const button = event.target instanceof HTMLElement ? event.target.closest('button') : null
-        if (button?.closest('header')) return
-        event.preventDefault()
-        event.stopPropagation()
-        if (!event.repeat) advance()
-      }}
+      onPrimaryAction={advance}
       footer={
         <WorkbenchInteractionFooter
           value={draft.userText}

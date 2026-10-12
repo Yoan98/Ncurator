@@ -145,11 +145,20 @@ describe('workbench AI question e2e', () => {
             for (const [index, question] of currentQuestions.entries()) {
               const input = card.getByTestId(`workbench-human-question-user-text-${question.id}`)
               const options = question.options ?? []
+              if (
+                !(await input.evaluate((element) => {
+                  const style = getComputedStyle(element)
+                  return parseFloat(style.paddingLeft) >= 12 && parseFloat(style.paddingTop) >= 10
+                }))
+              )
+                throw new Error('question input has insufficient padding')
               if (options.length) {
                 const option = card.getByTestId(
                   `workbench-human-question-option-${question.id}-${options[0].id}`
                 )
                 await option.click()
+                if (!question.multiSelect && (await option.locator('svg').count()))
+                  throw new Error('single choice still contains a redundant trailing icon')
                 if ((await option.getAttribute('aria-pressed')) !== 'true')
                   throw new Error('selection did not remain on current question')
                 await option.click()
@@ -177,6 +186,18 @@ describe('workbench AI question e2e', () => {
                 await input.press('Shift+Enter')
                 if ((await input.inputValue()) !== `${textBeforeEnter}\n`)
                   throw new Error('Shift+Enter did not insert a newline')
+              }
+              if (index === 0 && options.length) {
+                const option = card.getByTestId(
+                  `workbench-human-question-option-${question.id}-${options[0].id}`
+                )
+                await option.press('Tab')
+                await page.keyboard.press('Shift+Tab')
+                if (
+                  (await option.evaluate((element) => getComputedStyle(element).outlineStyle)) !==
+                  'none'
+                )
+                  throw new Error('question choice shows an outline during keyboard confirmation')
               }
               await runtime.captureScreenshot({
                 name: `question-${index + 1}`,

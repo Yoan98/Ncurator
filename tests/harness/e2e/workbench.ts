@@ -2069,6 +2069,7 @@ export const decideWorkbenchApprovalBatch = async (
   input: {
     event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
     action: 'approve' | 'reject'
+    confirmWithEnter?: boolean
     timeoutMs?: number
   }
 ): Promise<Extract<AiRunEvent, { type: 'approval_batch_decision' }>> => {
@@ -2112,7 +2113,19 @@ export const decideWorkbenchApprovalBatch = async (
       )
     )
       throw new Error('approval submitted before explicit confirmation')
-    await getWorkbenchLocator(page, chatSelectors.approvalBatchSubmitButton).click()
+    if (input.confirmWithEnter) {
+      await button.press('Tab')
+      await page.keyboard.press('Shift+Tab')
+      if ((await button.evaluate((element) => getComputedStyle(element).outlineStyle)) !== 'none')
+        throw new Error('approval choice shows an outline during keyboard confirmation')
+      await runtime.captureScreenshot({
+        name: `approval-enter-${input.action}-${index + 1}`,
+        message: '选项键盘焦点与 Enter 确认前的审批卡'
+      })
+      await button.press('Enter')
+    } else {
+      await getWorkbenchLocator(page, chatSelectors.approvalBatchSubmitButton).click()
+    }
     if (index < input.event.items.length - 1) {
       await waitForApprovalNextItem(page, index + 2)
     }

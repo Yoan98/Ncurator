@@ -333,6 +333,15 @@ const readApprovalWaitingSnapshot = async (
 }> => {
   const card = getApprovalCard(page)
   await card.waitFor({ state: 'visible', timeout: 30_000 })
+  const inputHasPadding = await card
+    .getByTestId(chatSelectors.approvalBatchGuideInput)
+    .evaluate((element) => {
+      const style = getComputedStyle(element)
+      return parseFloat(style.paddingLeft) >= 12 && parseFloat(style.paddingTop) >= 10
+    })
+  if (!inputHasPadding) throw new Error('approval guidance input has insufficient padding')
+  if (await card.locator('button[aria-pressed] svg').count())
+    throw new Error('approval choices still contain redundant check or cross icons')
   const processRoot = await waitForLatestAssistantProcess(page)
   const waiting = page.getByTestId(workbenchSelectors.assistantApprovalWaiting)
   const waitingVisible = await waiting.isVisible().catch(() => false)
@@ -719,7 +728,15 @@ const runTerminalScenario = async (input: {
       )
         throw new Error('clearing guidance must not restore approval')
       await guide.fill(input.guideMessage)
-      await getWorkbenchLocator(input.page, chatSelectors.approvalBatchSubmitButton).click()
+      await guide.press('End')
+      await guide.press('Shift+Enter')
+      if ((await guide.inputValue()) !== `${input.guideMessage}\n`)
+        throw new Error('Shift+Enter did not insert a newline in approval guidance')
+      await input.runtime.captureScreenshot({
+        name: 'approval-guide-input',
+        message: '有内边距的多行审批指导输入框'
+      })
+      await guide.press('Enter')
       const guideDecision = await waitForWorkbenchAiEvent(input.runtime, {
         name: input.name + '_guide_decision',
         matches: (event) =>
@@ -737,7 +754,8 @@ const runTerminalScenario = async (input: {
     } else if (input.action === 'approve' || input.action === 'reject') {
       const decision = await decideWorkbenchApprovalBatch(input.runtime, input.page, {
         event: approvalEvent,
-        action: input.action
+        action: input.action,
+        confirmWithEnter: true
       })
       approvalDecisions = decision.decisions
     } else {

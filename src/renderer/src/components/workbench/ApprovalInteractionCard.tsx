@@ -109,6 +109,7 @@ const ApprovalInteractionCard: React.FC<Props> = ({
       previousTestId={chatSelectors.approvalBatchPrevButton}
       nextTestId={chatSelectors.approvalBatchNextButton}
       cancelTestId={workbenchSelectors.sendButton}
+      onPrimaryAction={advance}
       footer={
         <WorkbenchInteractionFooter
           value={draft.message}
@@ -146,7 +147,6 @@ const ApprovalInteractionCard: React.FC<Props> = ({
             label={action === 'approve' ? '允许本次操作' : '拒绝本次操作'}
             selected={!guiding && draft.action === action}
             disabled={blocked || guiding}
-            rejection={action === 'reject'}
             onClick={() =>
               update({ message: '', action: draft.action === action ? undefined : action })
             }

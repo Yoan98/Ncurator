@@ -9,8 +9,7 @@ import {
   HiOutlinePencil,
   HiOutlineQuestionMarkCircle,
   HiOutlineShieldCheck,
-  HiStop,
-  HiXMark
+  HiStop
 } from 'react-icons/hi2'
 
 const iconButtonClass =
@@ -31,7 +30,7 @@ type CardProps = {
   previousTestId: string
   nextTestId: string
   cancelTestId: string
-  onKeyDownCapture?: React.KeyboardEventHandler<HTMLElement>
+  onPrimaryAction: () => void
   children?: React.ReactNode
   footer: React.ReactNode
 }
@@ -40,7 +39,21 @@ export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
   <section
     className="nc-timeline-layout-anchor flex max-h-[calc(100vh-120px)] min-w-0 flex-col overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-white text-[#37352F] shadow-[0_8px_24px_rgba(15,15,15,0.065)]"
     data-testid={props.cardTestId}
-    onKeyDownCapture={props.onKeyDownCapture}
+    onKeyDownCapture={(event) => {
+      if (
+        event.key !== 'Enter' ||
+        event.shiftKey ||
+        event.altKey ||
+        event.nativeEvent.isComposing ||
+        event.keyCode === 229
+      )
+        return
+      const button = event.target instanceof HTMLElement ? event.target.closest('button') : null
+      if (button?.closest('header')) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (!event.repeat && !props.busy && !props.cancelling) props.onPrimaryAction()
+    }}
   >
     <header className="flex shrink-0 items-center justify-between gap-2 px-[18px] pt-3">
       <div className="flex min-w-0 items-center gap-[7px] text-xs text-[#787774]">
@@ -121,7 +134,6 @@ type ChoiceProps = {
   description?: string
   recommended?: boolean
   multiple?: boolean
-  rejection?: boolean
   onClick: () => void
   testId: string
 }
@@ -133,7 +145,7 @@ export const WorkbenchInteractionChoice: React.FC<ChoiceProps> = (props) => (
     disabled={props.disabled}
     onClick={props.onClick}
     data-testid={props.testId}
-    className={`flex min-h-[46px] w-full items-center gap-3 rounded-[8px] p-2.5 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-[#0B6BCB] disabled:cursor-not-allowed disabled:opacity-45 ${props.selected ? 'bg-[#F4F4F2]' : 'hover:bg-[#F8F8F7]'}`}
+    className={`flex min-h-[46px] w-full items-center gap-3 rounded-[8px] p-2.5 text-left text-sm transition-colors outline-none focus-visible:bg-[#EFEFEE] disabled:cursor-not-allowed disabled:opacity-45 ${props.selected ? 'bg-[#F4F4F2]' : 'hover:bg-[#F8F8F7]'}`}
   >
     <span
       aria-hidden="true"
@@ -150,14 +162,6 @@ export const WorkbenchInteractionChoice: React.FC<ChoiceProps> = (props) => (
         <span className="block text-xs text-[#787774]">{props.description}</span>
       )}
     </span>
-    {!props.multiple && (
-      <span
-        aria-hidden="true"
-        className={`shrink-0 ${props.selected ? '' : 'invisible'} ${props.rejection ? 'text-[#B3261E]' : 'text-[#787774]'}`}
-      >
-        {props.rejection ? <HiXMark className="h-4 w-4" /> : <HiCheck className="h-4 w-4" />}
-      </span>
-    )}
   </button>
 )
 
@@ -184,17 +188,17 @@ export const WorkbenchInteractionFooter: React.FC<FooterProps> = (props) => {
     const input = inputRef.current
     if (!input) return
     input.style.height = 'auto'
-    input.style.height = `${Math.min(164, Math.max(props.expanded ? 76 : 24, input.scrollHeight))}px`
+    input.style.height = `${Math.min(164, Math.max(props.expanded ? 76 : 46, input.scrollHeight + 2))}px`
   }, [props.value, props.expanded, props.inputTestId])
   return (
     <div
       className={`shrink-0 px-[18px] pb-4 ${props.expanded ? '' : 'mt-[15px] border-t border-[#EEEEEC] pt-[14px]'}`}
     >
-      <div className={`flex items-start gap-2 ${props.expanded ? '' : 'px-[11px] py-2.5'}`}>
+      <div className={`flex items-start gap-2 ${props.expanded ? '' : 'px-[11px]'}`}>
         {!props.expanded && (
           <HiOutlinePencil
             aria-hidden="true"
-            className="mt-1 h-[15px] w-[15px] shrink-0 text-[#91918E]"
+            className="mt-[14px] h-[15px] w-[15px] shrink-0 text-[#91918E]"
           />
         )}
         <textarea
@@ -206,20 +210,7 @@ export const WorkbenchInteractionFooter: React.FC<FooterProps> = (props) => {
           disabled={props.inputDisabled || props.submitting}
           onChange={(event) => props.onChange(event.target.value)}
           data-testid={props.inputTestId}
-          className={`min-w-0 flex-1 resize-none bg-white text-[15px] leading-6 text-[#37352F] outline-none placeholder:text-[#91918E] focus:border-[#0B6BCB] focus:ring-2 focus:ring-[#0B6BCB]/10 disabled:cursor-not-allowed ${props.expanded ? 'rounded-[8px] border border-[#E0DFDC] px-[11px] py-2.5' : 'rounded-[4px] border border-transparent p-0'}`}
-          onKeyDown={(event) => {
-            if (
-              (event.ctrlKey || event.metaKey) &&
-              event.key === 'Enter' &&
-              !event.nativeEvent.isComposing &&
-              !props.disabled &&
-              !props.submitting &&
-              !props.inputDisabled
-            ) {
-              event.preventDefault()
-              props.onSubmit()
-            }
-          }}
+          className={`min-w-0 flex-1 resize-none rounded-[8px] border bg-white px-[12px] py-[10px] text-[15px] leading-6 text-[#37352F] outline-none placeholder:text-[#91918E] focus:border-[#0B6BCB] focus:ring-2 focus:ring-[#0B6BCB]/10 disabled:cursor-not-allowed ${props.expanded ? 'border-[#E0DFDC]' : 'border-transparent'}`}
         />
       </div>
       {props.error && (
