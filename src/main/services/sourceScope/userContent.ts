@@ -1,5 +1,4 @@
-import { validateDocumentSelection, freezeSelectionImages } from './documentSelection'
-import { documentSelections } from '../../../shared/chatContent'
+import { validateDocumentSelection } from './documentSelection'
 import path from 'node:path'
 import type { ChatMessageContentNode, ChatSubmitRequest } from '../../../shared/types'
 import { chatContentText, chatReferences, hasUserText } from '../../../shared/chatContent'
@@ -83,11 +82,8 @@ export const resolveUserContent = async (
   }
   await resolve(contentNodes)
   if (!hasUserText(contentNodes)) throw new Error('请输入你的想法后再发送')
-  await freezeSelectionImages(request, documentSelections(contentNodes))
-  const acceptedRequest = { ...request }
-  delete acceptedRequest.selectionImages
   return {
-    ...acceptedRequest,
+    ...request,
     contentNodes,
     input: chatContentText(contentNodes).trim(),
     selectedReferences: chatReferences(contentNodes)

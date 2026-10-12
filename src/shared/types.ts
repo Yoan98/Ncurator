@@ -639,8 +639,6 @@ export type DocumentSelectionNode = {
   contextAfter: string
   /** Absent for existing DOCX excerpts, located by their text and context. */
   anchor?: DocumentSelectionAnchor
-  /** Immutable visual snapshot, stored by Main when the message is submitted. */
-  image?: { path: string; mimeType: 'image/png' }
   children: ChatInlineContentNode[]
   /** Resolved by Main at submission; frozen with the accepted message. */
   knowledge?: { kbAvailability: KbAvailability; kbDocumentIds: string[] }
@@ -1355,8 +1353,6 @@ export type ChatSubmitRequest = {
   executionPermission?: AiExecutionPermission
   partnerId: string
   contentNodes: ChatMessageContentNode[]
-  /** Transient bytes, never written into the message JSON. */
-  selectionImages?: { id: string; bytes: Uint8Array }[]
   attachments?: ChatAttachment[]
   mainModel?: WorkbenchSelectedModel
 }

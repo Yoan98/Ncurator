@@ -488,9 +488,7 @@ flowchart TD
 | `用户添加的附件`  | 当次消息中的附件；空时整块省略                                                          |
 | `当前时间`        | 当时 run 的 `runStartedAt`（历史行不再改）                                              |
 
-引用与附件进入 User，不进 System。知识库范围由显式 `@` 决定，文档选区只作为本轮引用上下文。选区保留确认时的原文、上下文和格式锚点：文本行及源文件片段、PDF 页码、PPT 页/对象标识、Excel 工作表与 A1 区域。PPT 对象和整页引用另外保存不可变 PNG，User 投影提供可由 `read_image` 读取的伙伴对象路径；模型不会因再次读取已变化的源文件而丢失确认时的画面。临时图像字节只用于提交，不进入消息日志或排队记录。
 
-annotation 扫描该伙伴**全部**剩余 log（不受 `historyFloorSeq` 限制）：技能从最新 `skill_state_updated` 恢复。计划仍按 `plan_updated` / `finalizing_started` 扫描。清空消息记录会物理删除 log，因此技能 / 计划不会从已删除的历史恢复。
 
 **组装**
 

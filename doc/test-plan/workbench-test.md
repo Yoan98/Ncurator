@@ -328,7 +328,7 @@ pnpm test:update:e2e
 - What：真实 DOCX 任意连续文字选区、表格行列与合并占位、系统 toast、AI 引用入口与对勾确认输入条、可点击的紫色高亮、左侧连续编号、混合正文、双向同步、定位与草稿生命周期。
 - Why：确保原文准确，引用与想法关联，两侧使用同一内容。
 - How：通过鼠标起点与 Shift 终点选择部分单词、跨段落、跨单元格、整表及正文/表格混选；复用 workspace DOCX，并用 `docx-selection-layout.docx` 覆盖单元格内换行、空单元格、横向/纵向合并、跨页、页眉页脚、图片混选及反向选择。只读 DOM 取证和引用原文核对；确认、高亮、点击重新编辑和定位均走真实 UI。纯图片选区检查系统 toast 合并与自动消失，文档内无提示条；重复/重叠选区保持静默。核对 AI 引用入口、“描述你想对引用内容做什么”placeholder、对勾提示、字号、高度、浮层翻转/缩放和未确认输入；发送后检查真实脑模型输入的引用分块及源文件未被提问修改；再用真实临时 DOCX 选择定位段，仅输入“精简下”，核对写回后所选段变短、未选中的同章场景段完全保留，普通 DOCX 预览自动出现切换并可进入审核；双向编辑、跳转和两侧删除，核对左侧编号、原文与想法关联及右侧高亮清理；切换伙伴和文件，实际发送后新增选区检查从 1 开始，再编辑历史消息并刷新 Renderer 检查持久化草稿。
-- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-001-AC1` 的跨段落/跨页/跨单元格/整表/正文混选、页眉页脚、反向选择、表格行列分隔与空/合并占位、单元格内换行、图片混选和无文字 toast，`WB-DOCUMENT-REFERENCE-001-AC2` 的两阶段入口、对勾及新增/编辑提示、小字号紧凑高度、输入后保留紫色高亮、浮层边界/翻转/滚动/缩放、空内容禁用、Enter 确认、Shift+Enter 换行和 Esc/外部点击关闭，`WB-DOCUMENT-REFERENCE-001-AC3` 的图标编号胶囊和两侧编辑同步，`WB-DOCUMENT-REFERENCE-001-AC4` 的右侧无编号、仅高亮文字可悬停和点击、定位、重复/重叠选择静默保留、删除后左侧连续编号与右侧高亮清理、删空及发送后从 1 开始和内容不串，`WB-DOCUMENT-REFERENCE-001-AC5` 的伙伴隔离及内存/持久化边界，`WB-DOCUMENT-REFERENCE-001-AC6` 的接受后清理、历史编号保留和历史编辑。刷新后选区消失，普通文字与 @ 引用保留；真实局部精简保留未选中正文，提问不写文件，引用原文与前后文分块清楚，DOCX 改动收尾后普通预览自动提供审核切换。
+- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-001-AC1` 的跨段落/跨页/跨单元格/整表/正文混选、页眉页脚、反向选择、表格行列分隔与空/合并占位、单元格内换行、图片混选和无文字 toast，`WB-DOCUMENT-REFERENCE-001-AC2` 的两阶段入口、对勾及新增/编辑提示、小字号紧凑高度、输入后保留紫色高亮、浮层边界/翻转/滚动/缩放、空内容禁用、Enter 确认、Shift+Enter 换行和 Esc/外部点击关闭，`WB-DOCUMENT-REFERENCE-001-AC3` 的图标编号胶囊和两侧编辑同步，`WB-DOCUMENT-REFERENCE-001-AC4` 的右侧无编号、仅高亮文字可悬停和点击、定位、重复/重叠选择静默保留、删除后左侧连续编号与右侧高亮清理、删空及发送后从 1 开始和内容不串，`WB-DOCUMENT-REFERENCE-001-AC5` 的伙伴隔离及内存/持久化边界，`WB-DOCUMENT-REFERENCE-001-AC6` 的接受后清理、历史编号保留和历史编辑。刷新后选区消失，普通文字与 @ 引用保留；真实局部精简保留未选中正文，提问不写文件，引用按片段标题分块且选中内容与前后文清楚分隔，DOCX 改动收尾后普通预览自动提供审核切换。
 - 最新验证：2026-10-11 真实 E2E 完整用例通过，包含位置标记的鼠标/键盘循环、正文排序、临时选区无标记与发送清理，并保持共用引用层原有交互；raw logs：`tests/logs/workbench/conversation/composer/docx-selection-reference/20261011-130612-847`。
 - 待覆盖：文本框文字、IME、想法内 @ 混排、关闭资源 Tab、应用进程重启及附件恢复、外部原文变化后的定位 toast、提交期间锁定、提交失败保留、排队成功清理及历史复制。
 - 位置标记条验收：补充 `WB-DOCUMENT-REFERENCE-001-AC7`，自动检查已保存引用生成紫色标记，重叠引用通过鼠标、Enter、Space 按正文顺序轮流定位并短暂强调，包括确认顺序不同于正文顺序；核对临时选区不显示、发送后清理和 16px 无标记空条。删除逐项更新、伙伴/文件隔离、窗口变化、外部原文变化后的可靠定位、更多密集引用及长区域边界列入人工验收。
@@ -337,11 +337,11 @@ pnpm test:update:e2e
 
 - 测试类型：`e2e / live`；suite `conversation`，group `composer`。
 - What：MD/TXT、PDF、Excel、PPTX 的选区引用及混合提交。
-- Why：确保复用交互仍保留各格式的准确定位和不可变内容。
-- How：在真实预览通过鼠标/键盘选字、选择单元格和 PPT 文字/对象/整页，确认引用并切换文件；TXT 编辑想法、删除重建、修改原文后回跳验证失效，再恢复原文；混合发送并检查真实模型输入、`read_image` 成功事件及源文件字节。
-- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-002-AC1`、`WB-DOCUMENT-REFERENCE-002-AC2`、`WB-DOCUMENT-REFERENCE-002-AC3`、`WB-DOCUMENT-REFERENCE-002-AC4`、`WB-DOCUMENT-REFERENCE-002-AC5` 的基础引用与提交链路；混合引用包含原文、页/元素、Sheet/A1 及图像路径，PPT 快照读图成功，纯提问不写源文件，失效文本选区不错误高亮；消息保存/排队/恢复与图像字节隔离由 AI `human-document-reference-context` 生产服务测试覆盖，DOCX 共用交互由既有 case 回归。
-- 最新验证：2026-10-11 真实 UI 与模型链路通过，七条混合引用、文本编辑/删除/失效定位、PPT 快照读图及源文件不变断言通过；raw logs：`tests/logs/workbench/conversation/composer/multi-format-selection-reference/20261011-100122-117`。
-- 待覆盖：`WB-DOCUMENT-REFERENCE-002-AC1` 的跨 Sheet/缩放与各格式双向编辑排列；`WB-DOCUMENT-REFERENCE-002-AC2` 的真实 AI 局部改字外围不变；`WB-DOCUMENT-REFERENCE-002-AC3` 的合并/空白格 UI、范围拒绝 UI 及真实 AI 局部填公式；`WB-DOCUMENT-REFERENCE-002-AC4` 的跨 PDF 页、Markdown 跨样式映射与磁盘保存失败；`WB-DOCUMENT-REFERENCE-002-AC5` 的图片草稿伙伴切换和进程重启。
+- Why：确保复用交互仍保留各格式的准确定位、文字与单元格内容，PPT 引用能匹配工具读取的目标。
+- How：在真实预览通过鼠标/键盘选字、选择单元格和 PPT 文字/对象/整页，确认引用并切换文件；只读采集可选 PPT 元素 ID，与真实 `ppt_read_slides` 返回的 ID 比对；TXT 编辑想法、删除重建、修改原文后回跳验证失效，再恢复原文；混合发送并检查真实模型输入及源文件字节。
+- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-002-AC1`、`WB-DOCUMENT-REFERENCE-002-AC2`、`WB-DOCUMENT-REFERENCE-002-AC3`、`WB-DOCUMENT-REFERENCE-002-AC4`、`WB-DOCUMENT-REFERENCE-002-AC5` 的基础引用与提交链路；混合引用包含选中内容、页/元素和 Sheet/A1，片段编号只在标题出现且没有选区图片路径；PPT 页与可选元素 ID 和工具结果匹配，纯提问不写源文件，失效文本选区不错误高亮；消息保存/排队/恢复由 AI `human-document-reference-context` 生产服务测试覆盖，DOCX 共用交互由既有 case 回归。
+- 最新验证：2026-10-11 源码真实 E2E 通过，279s；raw logs：`tests/logs/workbench/conversation/composer/multi-format-selection-reference/20261011-104703-286`。五种格式的七条引用混合提交成功，每个片段一个编号标题且无选区图片路径；PPT 第 1 页的三个可选元素 ID 与真实 `ppt_read_slides` 返回值完全一致，选中文字与文本框引用命中 `/ppt/slides/slide1.xml#2`；失效文本引用不误高亮，源文件字节保持不变。
+- 待覆盖：`WB-DOCUMENT-REFERENCE-002-AC1` 的跨 Sheet/缩放与各格式双向编辑排列；`WB-DOCUMENT-REFERENCE-002-AC2` 的组合图形外层引用及真实 AI 局部改字外围不变；`WB-DOCUMENT-REFERENCE-002-AC3` 的合并/空白格 UI、范围拒绝 UI 及真实 AI 局部填公式；`WB-DOCUMENT-REFERENCE-002-AC4` 的跨 PDF 页、Markdown 跨样式映射与磁盘保存失败；`WB-DOCUMENT-REFERENCE-002-AC5` 的选区草稿伙伴切换和进程重启。
 
 ### 5.2 `run`
 

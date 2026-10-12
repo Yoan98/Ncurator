@@ -33,7 +33,6 @@ export default function DocumentSelectionLayer({
   const [floating, setFloating] = useState<SelectionFloatingPosition | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [boxes, setBoxes] = useState<(SelectionRect & { outline: boolean })[]>([])
-  const [busy, setBusy] = useState(false)
   const popupRef = useRef<HTMLDivElement>(null)
   const targets = useRef<SelectionTarget[]>([])
   const handledNavigation = useRef<number | null>(null)
@@ -74,7 +73,7 @@ export default function DocumentSelectionLayer({
     }
     const capture = (event: PointerEvent | KeyboardEvent) => {
       const current = latest.current
-      if (current.state?.locked || busy) return
+      if (current.state?.locked) return
       try {
         const candidate = current.adapter.capture(event)
         if (!candidate) return
@@ -118,7 +117,7 @@ export default function DocumentSelectionLayer({
     const click = (e: MouseEvent) => {
       const target = clicked
       clicked = undefined
-      if (target && e.detail === 1 && !latest.current.state?.locked && !busy) open(target, 'editor')
+      if (target && e.detail === 1 && !latest.current.state?.locked) open(target, 'editor')
     }
     const move = (e: PointerEvent) =>
       hover(!e.buttons && !latest.current.state?.locked ? hit(e) : undefined)
@@ -156,7 +155,7 @@ export default function DocumentSelectionLayer({
       document.removeEventListener('scroll', leave, true)
       container.style.cursor = cursor
     }
-  }, [container, filePath, state?.enabled, revision, open, message, noticeKey, busy])
+  }, [container, filePath, state?.enabled, revision, open, message, noticeKey])
 
   useLayoutEffect(() => () => onTargetsChange?.([]), [onTargetsChange])
 
@@ -315,10 +314,10 @@ export default function DocumentSelectionLayer({
   useEffect(() => {
     if (!popupId) return
     const outside = (e: PointerEvent) => {
-      if (!busy && e.target instanceof Node && !popupRef.current?.contains(e.target)) setPopup(null)
+      if (e.target instanceof Node && !popupRef.current?.contains(e.target)) setPopup(null)
     }
     const escape = (e: KeyboardEvent) => {
-      if (!busy && e.key === 'Escape' && !e.defaultPrevented) setPopup(null)
+      if (e.key === 'Escape' && !e.defaultPrevented) setPopup(null)
     }
     document.addEventListener('pointerdown', outside)
     document.addEventListener('keydown', escape)
@@ -328,7 +327,7 @@ export default function DocumentSelectionLayer({
       document.removeEventListener('pointerdown', outside)
       document.removeEventListener('keydown', escape)
     }
-  }, [popupId, popupMode, busy])
+  }, [popupId, popupMode])
   useEffect(() => {
     setPopup(null)
     setHoveredId(null)
@@ -337,27 +336,17 @@ export default function DocumentSelectionLayer({
   }, [filePath, revision, state?.enabled, state?.partnerId, noticeKey, message])
 
   if (!state?.enabled || !container) return null
-  const save = async () => {
-    if (!popup || state.locked || busy || !hasUserText(popup.node.children)) return
-    setBusy(true)
+  const save = () => {
+    if (!popup || state.locked || !hasUserText(popup.node.children)) return
     try {
-      const bytes = await popup.image?.()
-      if (
-        latest.current.popup?.node.id !== popup.node.id ||
-        latest.current.state?.partnerId !== state.partnerId ||
-        latest.current.state?.locked
-      )
-        return
-      latest.current.state?.save(popup.node, popup.location, bytes)
+      state.save(popup.node, popup.location)
       setPopup(null)
       window.getSelection()?.removeAllRanges()
     } catch (e) {
       void message.warning({
         key: noticeKey,
-        content: e instanceof Error ? e.message : '引用画面保存失败'
+        content: e instanceof Error ? e.message : '引用保存失败'
       })
-    } finally {
-      setBusy(false)
     }
   }
   return (
@@ -400,8 +389,8 @@ export default function DocumentSelectionLayer({
           setPopup={setPopup}
           popupRef={popupRef}
           floating={floating}
-          locked={state.locked || busy}
-          save={() => void save()}
+          locked={state.locked}
+          save={save}
           remove={state.remove}
           maxWidth={Math.max(0, container.clientWidth - 16)}
           testPrefix={testPrefix}

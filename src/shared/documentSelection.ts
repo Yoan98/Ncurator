@@ -1,23 +1,37 @@
 import type { DocumentSelectionNode } from './types'
 
 export const MAX_EXCEL_SELECTION_CELLS = 10_000
-export const selectionPosition = (node: DocumentSelectionNode): string => {
-  const a = node.anchor
-  if (!a) return ''
-  switch (a.kind) {
+
+const PPT_SELECTION_MODE_LABEL = {
+  text: '选中文字',
+  element: '整个元素',
+  slide: '整页'
+} as const
+
+export const renderSelectionLocation = (node: DocumentSelectionNode): string => {
+  const anchor = node.anchor
+  if (!anchor) return ''
+  switch (anchor.kind) {
     case 'text':
-      return `第 ${a.startLine}–${a.endLine} 行`
+      return anchor.startLine === anchor.endLine
+        ? `位置：第 ${anchor.startLine} 行`
+        : `位置：第 ${anchor.startLine}–${anchor.endLine} 行`
     case 'pdf':
-      return a.startPage === a.endPage
-        ? `第 ${a.startPage} 页`
-        : `第 ${a.startPage}–${a.endPage} 页`
-    case 'ppt':
-      return `第 ${a.page} 页${a.elementId ? ` · ${a.elementId}` : ' · 整页'}`
+      return anchor.startPage === anchor.endPage
+        ? `位置：第 ${anchor.startPage} 页`
+        : `位置：第 ${anchor.startPage}–${anchor.endPage} 页`
+    case 'ppt': {
+      const parts = [
+        `位置：第 ${anchor.page} 页 · ${PPT_SELECTION_MODE_LABEL[anchor.mode]}`,
+        `页面标识：${anchor.slideId}`
+      ]
+      if (anchor.elementId) parts.push(`元素标识：${anchor.elementId}`)
+      return parts.join('\n')
+    }
     case 'excel':
-      return `${a.sheetName}!${a.range}`
+      return `位置：${anchor.sheetName}!${anchor.range}`
   }
 }
+
 export const selectionTooltip = (node: DocumentSelectionNode): string =>
-  [selectionPosition(node), node.selectedText, node.image ? '包含选中时的画面快照' : '']
-    .filter(Boolean)
-    .join('\n')
+  [renderSelectionLocation(node), node.selectedText].filter(Boolean).join('\n')

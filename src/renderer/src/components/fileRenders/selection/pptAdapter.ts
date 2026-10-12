@@ -7,9 +7,11 @@ import { newSelection, type SelectionAdapter, type SelectionGeometry } from './t
 export function interactivePptSvg(svg: string): string {
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml')
   doc.querySelectorAll('script, foreignObject').forEach((node) => node.remove())
-  doc
-    .querySelectorAll('[data-nc-shape-id]')
-    .forEach((node) => node.setAttribute('pointer-events', 'all'))
+  doc.querySelectorAll('[data-nc-shape-id]').forEach((node) => {
+    // PPT tools expose top-level shapes; select a group by its outer shape ID.
+    if (node.parentElement?.closest('[data-nc-shape-id]')) node.removeAttribute('data-nc-shape-id')
+    else node.setAttribute('pointer-events', 'all')
+  })
   for (const element of doc.querySelectorAll('*')) {
     for (const attr of [...element.attributes]) {
       if (
@@ -22,52 +24,6 @@ export function interactivePptSvg(svg: string): string {
     }
   }
   return new XMLSerializer().serializeToString(doc.documentElement)
-}
-
-const pngSnapshot = async (svg: string): Promise<Uint8Array> => {
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
-  try {
-    const image = new Image()
-    image.src = url
-    await image.decode()
-    const canvas = document.createElement('canvas')
-    const scale = Math.min(2, 2000 / Math.max(image.width, image.height))
-    canvas.width = Math.max(1, Math.ceil(image.width * scale))
-    canvas.height = Math.max(1, Math.ceil(image.height * scale))
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('无法生成引用画面。')
-    context.drawImage(image, 0, 0, canvas.width, canvas.height)
-    const blob = await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob(
-        (value) => (value ? resolve(value) : reject(new Error('无法生成引用画面。'))),
-        'image/png'
-      )
-    )
-    return new Uint8Array(await blob.arrayBuffer())
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
-const frozenSvg = (svg: SVGSVGElement, element: SVGGraphicsElement): string => {
-  const clone = svg.cloneNode(true) as SVGSVGElement
-  const inverse = svg.getScreenCTM()?.inverse()
-  if (!inverse) throw new Error('无法定位引用画面。')
-  const rect = element.getBoundingClientRect()
-  const start =
-    element === svg
-      ? new DOMPoint(svg.viewBox.baseVal.x, svg.viewBox.baseVal.y)
-      : new DOMPoint(rect.left, rect.top).matrixTransform(inverse)
-  const end =
-    element === svg
-      ? new DOMPoint(start.x + svg.viewBox.baseVal.width, start.y + svg.viewBox.baseVal.height)
-      : new DOMPoint(rect.right, rect.bottom).matrixTransform(inverse)
-  const width = end.x - start.x,
-    height = end.y - start.y
-  if (width <= 0 || height <= 0) throw new Error('引用对象没有可见画面。')
-  clone.setAttribute('viewBox', `${start.x} ${start.y} ${width} ${height}`)
-  clone.setAttribute('width', String(width))
-  clone.setAttribute('height', String(height))
-  return new XMLSerializer().serializeToString(clone)
 }
 
 export function pptAdapter(
@@ -170,8 +126,7 @@ export function pptAdapter(
         mode: whole ? 'slide' : 'element',
         revision
       }
-      const frozen = frozenSvg(root, element)
-      return { node, image: () => pngSnapshot(frozen) }
+      return { node }
     },
     locate,
     overlaps: (node, candidate, saved) => {
