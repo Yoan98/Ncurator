@@ -339,9 +339,9 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`；suite `conversation`，group `composer`。
 - What：MD/TXT、PDF、Excel、PPTX 的选区引用及混合提交，PPT 元素点击与画布拖拽的互斥、光标反馈。
 - Why：确保复用交互仍保留各格式的准确定位、文字与单元格内容，PPT 引用能匹配工具读取的目标。
-- How：在真实预览通过鼠标/键盘选择文本、单元格以及 PPT 文本框/图片/整页，确认引用并切换文件；在隔离工作区的 PPT 副本加入既有 DOCX fixture 的真实内嵌 PNG，作为图片点击/拖动输入，不改原始 fixture。PPT 未放大时从文字拖动，再放大后从文字、图片、已引用元素和空白处左键拖动，通过真实鼠标与只读 DOM 观测画布位移、光标、浮层、原生文字选区和 toast；覆盖拖回起点、Esc 取消手势、单击编辑以及空格/中键快捷操作，整页引用后仍可点击新元素引用。只读采集可选 PPT 元素 ID，与真实 `ppt_read_slides` 返回的 ID 比对；TXT 编辑想法、删除重建、修改原文后回跳验证失效，再恢复原文；混合发送并检查真实模型输入及源文件字节。
-- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-002-AC1`、`WB-DOCUMENT-REFERENCE-002-AC2`、`WB-DOCUMENT-REFERENCE-002-AC3`、`WB-DOCUMENT-REFERENCE-002-AC4`、`WB-DOCUMENT-REFERENCE-002-AC5` 的基础引用与提交链路；混合引用包含选中内容、页/元素和 Sheet/A1，片段编号只在标题出现且没有选区图片路径；PPT 点击引用完整文本框和图片，页与可选元素 ID 和工具结果匹配；左键拖动只平移画布且无浮层、toast、原生文字选择或新增引用，未放大拖动及拖回起点不误触编辑，元素点击光标与拖动抓紧光标分开；纯提问不写源文件，失效文本选区不错误高亮；消息保存/排队/恢复由 AI `human-document-reference-context` 生产服务测试覆盖，DOCX 共用交互由既有 case 回归。
-- 最新验证：2026-10-12 源码真实 E2E 通过，186s、17 条断言；真实模型 `qwen3.8-flash`，模型阶段 156s，完成度 1，失败归因为空。未放大拖动、文字/图片/空白/已引用元素平移、空格/中键快捷操作、拖回起点、Esc 取消、点击光标、完整文本框原文及再次编辑、图片元素 ID 均通过；整页引用后仍可点击新元素。五种格式七条引用混合提交，PPT 第 1 页四个元素 ID 与真实工具结果一致，模型收到完整文本框原文与图片定位，源文件字节不变；raw logs：`tests/logs/workbench/conversation/composer/multi-format-selection-reference/20261012-160121-556`。
+- How：使用框架已有的后台 Electron 窗口模式，不抢占桌面输入焦点；在真实预览通过鼠标/键盘选择文本、单元格以及 PPT 文本框/图片/整页，确认引用并切换文件；在隔离工作区的 PPT 副本加入既有 DOCX fixture 的真实内嵌 PNG，作为图片点击/拖动输入，不改原始 fixture。PPT 在 100%、最小 25% 和放大后从文字、图片、已引用元素及空白处左键拖动，包含超过旧边界的大幅位移；通过真实鼠标与只读 DOM 观测精确画布位移、光标、浮层、原生文字选区和 toast，核对缩放按钮保留位移、滚轮跨越 100% 时保持鼠标锚点、“适应窗口”恢复中心；覆盖拖回起点、Esc 取消手势、单击编辑以及空格/中键快捷操作，整页引用后仍可点击新元素引用。只读采集可选 PPT 元素 ID，与真实 `ppt_read_slides` 返回的 ID 比对；TXT 编辑想法、删除重建、修改原文后回跳验证失效，再恢复原文；混合发送并检查真实模型输入及源文件字节。
+- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-002-AC1`、`WB-DOCUMENT-REFERENCE-002-AC2`、`WB-DOCUMENT-REFERENCE-002-AC3`、`WB-DOCUMENT-REFERENCE-002-AC4`、`WB-DOCUMENT-REFERENCE-002-AC5` 的基础引用与提交链路；混合引用包含选中内容、页/元素和 Sheet/A1，片段编号只在标题出现且没有选区图片路径；PPT 点击引用完整文本框和图片，页与可选元素 ID 和工具结果匹配；任意缩放比例下拖拽位移完整跟随鼠标且不受画布边界限制，无浮层、toast、原生文字选择或新增引用，拖回起点不误触编辑；缩放不强制回中，滚轮保持鼠标位置对应的画布点，适应窗口恢复 100% 和中心；空白处始终使用抓手，元素点击光标与拖动抓紧光标分开；纯提问不写源文件，失效文本选区不错误高亮；消息保存/排队/恢复由 AI `human-document-reference-context` 生产服务测试覆盖，DOCX 共用交互由既有 case 回归。
+- 最新验证：2026-10-12 源码后台真实 E2E 通过，267s、22 条断言；真实模型 `qwen3.8-flash`，模型阶段 233s，完成度 1，失败归因为空。100%、25% 和放大后均精确跟随鼠标平移，包含超过旧边界的大幅位移；缩放按钮保留位置，滚轮跨越 100% 仍保持鼠标锚点，适应窗口恢复中心；文字/图片/空白/已引用元素、空格/中键、拖回起点、Esc 取消和点击引用均通过。五种格式七条引用混合提交，完整文本框原文、图片及页/元素标识与模型输入和真实工具结果一致，源文件字节不变；raw logs：`tests/logs/workbench/conversation/composer/multi-format-selection-reference/20261012-162042-449`。
 - 待覆盖：`WB-DOCUMENT-REFERENCE-002-AC1` 的跨 Sheet/缩放与各格式双向编辑排列；`WB-DOCUMENT-REFERENCE-002-AC2` 的组合图形外层引用及真实 AI 局部改字外围不变；`WB-DOCUMENT-REFERENCE-002-AC3` 的合并/空白格 UI、范围拒绝 UI 及真实 AI 局部填公式；`WB-DOCUMENT-REFERENCE-002-AC4` 的跨 PDF 页、Markdown 跨样式映射与磁盘保存失败；`WB-DOCUMENT-REFERENCE-002-AC5` 的选区草稿伙伴切换和进程重启。
 
 ### 5.2 `run`
@@ -620,9 +620,9 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`
 - What：已有 PPT 更新后的左右差异、绿色新增/修改/移动、红色删除、准确 `+N/-N`、缩略图筛选、审核/预览、缩放和拖动画布。
 - Why：创建态与更新态的差异语义不同，不能只用新建 PPT case 代替。
-- How：在空临时 workspace 中准备四页基线 PPT，让真实 AI 主动移动一页、修改一页、删除中间页、新增一页，并要求末页完全不变；打开修改记录并操作审核/预览、筛选、同步切页、缩放、拖动、关联应用打开和回退。关联应用启动在 E2E 中使用 no-op 成功分支，不实际启动 Office/WPS。测试进程将正式 PPT 首页面文字改为 C，直接读取普通预览的交互 SVG 与审核的固定 SVG，验证预览 C、历史审核仍为 B，并确认强制回退。
-- Oracle：正式 PPT 内容和顺序正确；审核显示准确 `+3/-1`、三个绿色页面标记和一个红色删除标记；删除中间页不会把未改末页标绿，变化筛选为四页、全部模式为五个 before/after 对齐项；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；审核/预览切换、同步缩放拖动不变，底部「滚轮缩放 / 拖拽平移」提示固定可见（缩放或拖拽后仍在），回退后 bytes 与 baseline 完全一致，对齐 `WB-PANEL-003-AC19`、`WB-PPT-002`、`WB-APPLY-003`。
-- 最新验证：2026-10-12 源码真实 E2E 通过，157s；真实 AI 更新后的前后页、净变化统计、同步缩放/左键平移、筛选、预览 C/固定审核 B 与强制回退均通过；raw logs：`tests/logs/workbench/result/apply/ppt-update-diff-interactions/20261012-155427-788`。
+- How：在空临时 workspace 中准备四页基线 PPT，让真实 AI 主动移动一页、修改一页、删除中间页、新增一页，并要求末页完全不变；打开修改记录并操作审核/预览、筛选、同步切页、缩放、拖动、关联应用打开和回退。审核视图在 100% 从左侧拖动，在 25% 从右侧大幅拖动，核对两侧精确同步位移；再验证滚轮放大后的平移。关联应用启动在 E2E 中使用 no-op 成功分支，不实际启动 Office/WPS。测试进程将正式 PPT 首页面文字改为 C，直接读取普通预览的交互 SVG 与审核的固定 SVG，验证预览 C、历史审核仍为 B，并确认强制回退。
+- Oracle：正式 PPT 内容和顺序正确；审核显示准确 `+3/-1`、三个绿色页面标记和一个红色删除标记；删除中间页不会把未改末页标绿，变化筛选为四页、全部模式为五个 before/after 对齐项；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；审核/预览切换、同步缩放拖动不变，任意缩放比例下左右画布精确跟随拖拽且不受边界限制，底部「滚轮缩放 / 拖拽平移」提示固定可见（缩放或拖拽后仍在），回退后 bytes 与 baseline 完全一致，对齐 `WB-PANEL-003-AC19`、`WB-PPT-002`、`WB-APPLY-003`。
+- 最新验证：2026-10-12 源码真实 E2E 通过，179s、4 条断言；审核在 100% 和 25% 从左右两侧拖动，位移均完整跟随鼠标、两侧同步且提示持续可见；真实 AI 更新后的前后页、净变化统计、同步缩放/放大后平移、筛选、预览 C/固定审核 B 与强制回退均通过；raw logs：`tests/logs/workbench/result/apply/ppt-update-diff-interactions/20261012-161443-138`。
 
 #### `excel-update-diff-and-revert`
 
@@ -828,7 +828,7 @@ pnpm test:update:e2e
 | `WB-TERMINAL-001-AC3/AC4/AC7/AC8` | 部分覆盖：E2E `terminal-unicode-file-list` 只验中文列目录；AI `terminal-execution-contract` 验证 maxWaitSeconds 后仍运行，`terminal-risk-and-boundary-guard` 验证拒绝审批不执行；进程退出清理、跨伙伴隔离与真实计算需分别以相关 backend / live case 结果核对，不能合称本 E2E 全覆盖。 |
 | `WB-APPLY-005-AC1/AC2/AC3` | 部分覆盖：`multi-file-apply-tabs` 检查四个文件、逐项点击后的对应内容和列表保留；全部格式/历史记录组合没有逐项 UI 证据。 |
 | `WB-PPT-001-AC1/AC2/AC3/AC4/AC5/AC9/AC10` | 部分覆盖：`ppt-create-diff-and-revert` 和 `ppt-update-diff-interactions` 验证真实创建/编辑；AI `ppt-create-read-edit-commit`、`ppt-professional-element-edit`、`ppt-visual-runtime-contract` 补充结构、元素和保存前失败。公式内部只读与所有非法输入的 UI 证据未全覆盖。 |
-| `WB-PPT-002-AC1/AC2/AC3/AC4/AC5/AC6/AC7/AC8/AC9/AC10/AC11` | 部分覆盖：`ppt-update-diff-interactions` 验证前后页、变化/全部缩略图、红绿标记、缩放平移和回退；AI `ppt-diff-slide-and-element-net-semantics` 补充净变化统计。逐页滚动同步和缩放拖动后固定提示等 UI 子项待补。 |
+| `WB-PPT-002-AC1/AC2/AC3/AC4/AC5/AC6/AC7/AC8/AC9/AC10/AC11` | 部分覆盖：`ppt-update-diff-interactions` 验证前后页、变化/全部缩略图、红绿标记、缩放平移和回退；AI `ppt-diff-slide-and-element-net-semantics` 补充净变化统计。逐页滚动同步等 UI 子项待补。 |
 | `WB-EXCEL-001-AC3/AC4/AC6/AC7` | backend 补充：AI `excel-create-read-edit` 检查无默认 Sheet1；`excel-edit-operations-and-atomicity` 检查最后 Sheet、冲突和落盘边界；`excel-read-search-and-format-boundaries` 检查读取格式。宏/模板拒绝写入的用户提示与结构冲突的完整矩阵不能由现有 UI 成功链路代替。 |
 | `WB-EXCEL-002-AC2/AC3/AC5/AC6/AC7/AC8` | backend 补充：AI `excel-create-read-edit` 覆盖 AC2/AC3，`excel-edit-operations-and-atomicity` 与 `excel-blank-layout-and-sheet-identity` 覆盖 Sheet 审核结构，`excel-diff-row-structure-semantics`、`excel-diff-cumulative-net-semantics` 覆盖行对齐和净变化；这些是文件内容证据，非全量 UI 渲染验证。Sheet 移动不支持的边界未单列 case。 |
 | `ST-VIEW-001-AC5` | 部分覆盖：`scheduled-task-partner-deletion` 没有定时视图下删除弹窗可见与可操作的独立 Oracle。 |

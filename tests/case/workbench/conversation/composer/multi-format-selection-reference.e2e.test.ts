@@ -98,7 +98,7 @@ describe('workbench conversation e2e', () => {
         description: '真实多格式选区引用、定位及混合发送。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
-        windowMode: 'visible',
+        windowMode: 'background',
         execution: 'live',
         runMode: 'single',
         execute: async (runtime) => {
@@ -228,6 +228,11 @@ describe('workbench conversation e2e', () => {
           const surface = page.getByTestId('ppt-preview-after')
           const selectedImageId = `${expectedSlideId}#${await imageShape.getAttribute('data-nc-shape-id')}`
           const transform = surface.locator(':scope > div[style*="transform"]')
+          const readViewport = () =>
+            transform.evaluate((element) => {
+              const matrix = new DOMMatrix(getComputedStyle(element).transform)
+              return { scale: matrix.a, x: matrix.e, y: matrix.f }
+            })
           const popup = page.getByTestId('ppt-selection-popup')
           const cursorAt = (point: { x: number; y: number }) =>
             page.evaluate(({ x, y }) => {
@@ -243,7 +248,7 @@ describe('workbench conversation e2e', () => {
             name: string,
             origin: { x: number; y: number },
             options: {
-              movable?: boolean
+              delta?: { x: number; y: number }
               returnToStart?: boolean
               button?: 'left' | 'middle'
               space?: boolean
@@ -251,20 +256,22 @@ describe('workbench conversation e2e', () => {
             } = {}
           ) => {
             const beforeStyle = await transform.getAttribute('style')
+            const beforeViewport = await readViewport()
+            const delta = options.delta || { x: 40, y: 24 }
             const tokenCount = await tokens.count()
             await page.mouse.move(origin.x, origin.y)
             if (options.space) await page.keyboard.down('Space')
             await page.mouse.down({ button: options.button || 'left' })
             const downCursor = await cursorAt(origin)
-            await page.mouse.move(origin.x + 40, origin.y + 24, { steps: 12 })
-            if (options.movable !== false)
-              await page.waitForFunction(
-                () =>
-                  getComputedStyle(document.querySelector('[data-testid="ppt-preview-after"]')!)
-                    .cursor === 'grabbing'
-              )
-            const movingCursor = await cursorAt({ x: origin.x + 40, y: origin.y + 24 })
+            await page.mouse.move(origin.x + delta.x, origin.y + delta.y, { steps: 12 })
+            await page.waitForFunction(
+              () =>
+                getComputedStyle(document.querySelector('[data-testid="ppt-preview-after"]')!)
+                  .cursor === 'grabbing'
+            )
+            const movingCursor = await cursorAt({ x: origin.x + delta.x, y: origin.y + delta.y })
             const movingStyle = await transform.getAttribute('style')
+            const movingViewport = await readViewport()
             if (options.returnToStart) await page.mouse.move(origin.x, origin.y, { steps: 12 })
             if (options.cancel) await page.keyboard.press('Escape')
             await page.mouse.up({ button: options.button || 'left' })
@@ -285,10 +292,18 @@ describe('workbench conversation e2e', () => {
               tokenCount: await tokens.count(),
               nativeText: await page.evaluate(() => window.getSelection()?.toString() || '')
             }
+            const afterViewport = await readViewport()
             await runtime.assertThat(
-              (options.movable === false
-                ? movingStyle === beforeStyle
-                : movingStyle !== beforeStyle && movingCursor === 'grabbing') &&
+              movingStyle !== beforeStyle &&
+                movingCursor === 'grabbing' &&
+                Math.abs(movingViewport.x - beforeViewport.x - delta.x) < 1 &&
+                Math.abs(movingViewport.y - beforeViewport.y - delta.y) < 1 &&
+                Math.abs(
+                  afterViewport.x - beforeViewport.x - (options.returnToStart ? 0 : delta.x)
+                ) < 1 &&
+                Math.abs(
+                  afterViewport.y - beforeViewport.y - (options.returnToStart ? 0 : delta.y)
+                ) < 1 &&
                 downCursor !== 'grabbing' &&
                 observed.afterCursor !== 'grabbing' &&
                 observed.popupCount === 0 &&
@@ -297,14 +312,48 @@ describe('workbench conversation e2e', () => {
                 observed.nativeText === '',
               {
                 name,
-                message: '真实鼠标拖动不触发引用、编辑浮层、文字选择或 toast，光标与画布移动一致。',
-                data: observed
+                message:
+                  '画布完整跟随鼠标位移，不触发引用、编辑浮层、文字选择或 toast，光标与实际拖动一致。',
+                data: { ...observed, beforeViewport, movingViewport, afterViewport, delta }
               }
             )
           }
           const titleText = textShape.locator('text').first()
-          await drag('ppt-drag-at-fit', await centerOf(titleText), { movable: false })
+          await drag('ppt-drag-at-fit', await centerOf(titleText))
           const viewer = page.getByTestId('ppt-preview-viewer')
+          await viewer.getByRole('button', { name: '缩小', exact: true }).click()
+          const shrunkViewport = await readViewport()
+          await runtime.assertThat(
+            shrunkViewport.scale === 0.8 && shrunkViewport.x === 40 && shrunkViewport.y === 24,
+            {
+              name: 'ppt-zoom-keeps-pan',
+              message: '缩小到 100% 以下仍保留手动平移位置。',
+              data: shrunkViewport
+            }
+          )
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
+          for (let index = 0; index < 7; index++)
+            await viewer.getByRole('button', { name: '缩小', exact: true }).click()
+          const minimumViewport = await readViewport()
+          const surfaceBox = await surface.boundingBox()
+          if (!surfaceBox) throw new Error('PPT 画布不可见')
+          const largeDelta = {
+            x: Math.floor(surfaceBox.width * 0.7),
+            y: Math.floor(surfaceBox.height * 0.6)
+          }
+          await runtime.assertThat(minimumViewport.scale === 0.25, {
+            name: 'ppt-minimum-zoom',
+            message: '通过真实缩放按钮到达 25% 最小缩放。',
+            data: minimumViewport
+          })
+          await drag('ppt-pan-at-minimum-zoom', await blankPoint(), { delta: largeDelta })
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
+          const reset = await readViewport()
+          await runtime.assertThat(reset.scale === 1 && reset.x === 0 && reset.y === 0, {
+            name: 'ppt-fit-restores-center',
+            message: '适应窗口将自由平移的画布恢复为 100% 并居中。',
+            data: reset
+          })
           await viewer.getByRole('button', { name: '放大', exact: true }).click()
           await titleText.hover()
           await runtime.assertThat((await cursorAt(await centerOf(titleText))) === 'pointer', {
@@ -323,7 +372,42 @@ describe('workbench conversation e2e', () => {
             name: 'ppt-blank-cursor',
             message: '放大后空白画布显示可平移抓手。'
           })
-          await drag('ppt-blank-pan', blank)
+          await drag('ppt-blank-pan', blank, { delta: largeDelta })
+          const wheelPoint = await blankPoint()
+          const wheelObservations: Array<{
+            before: { scale: number; x: number; y: number }
+            after: { scale: number; x: number; y: number }
+          }> = []
+          for (let index = 0; index < 2; index++) {
+            const before = await readViewport()
+            await page.mouse.move(wheelPoint.x, wheelPoint.y)
+            await page.mouse.wheel(0, 100)
+            await page.waitForFunction((scale) => {
+              const element = document.querySelector(
+                '[data-testid="ppt-preview-after"] > div[style*="transform"]'
+              )!
+              return new DOMMatrix(getComputedStyle(element).transform).a < scale
+            }, before.scale)
+            wheelObservations.push({ before, after: await readViewport() })
+          }
+          const pointerX = wheelPoint.x - surfaceBox.x - surfaceBox.width / 2
+          const pointerY = wheelPoint.y - surfaceBox.y - surfaceBox.height / 2
+          await runtime.assertThat(
+            wheelObservations.at(-1)!.after.scale < 1 &&
+              wheelObservations.every(({ before, after }) => {
+                const ratio = after.scale / before.scale
+                return (
+                  Math.abs(after.x - (before.x + (pointerX - before.x) * (1 - ratio))) < 1 &&
+                  Math.abs(after.y - (before.y + (pointerY - before.y) * (1 - ratio))) < 1
+                )
+              }),
+            {
+              name: 'ppt-wheel-keeps-anchor-below-fit',
+              message: '自由平移后滚轮缩放跨越 100% 仍保持鼠标锚点，不回中或限制位移。',
+              data: { wheelObservations, pointerX, pointerY }
+            }
+          )
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
           await drag('ppt-middle-pan', await blankPoint(), { button: 'middle' })
           await drag('ppt-space-pan', await centerOf(titleText), { space: true })
           await viewer.getByRole('button', { name: '适应窗口' }).click()

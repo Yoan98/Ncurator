@@ -49,11 +49,6 @@ export type PptSlideDeckViewerProps = {
   emptyText?: string
 }
 
-const clampOffset = (value: number, size: number, scale: number): number => {
-  const max = size > 0 ? (size * (scale - 1)) / 2 : Number.POSITIVE_INFINITY
-  return Math.max(-max, Math.min(max, value))
-}
-
 const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
   slides,
   loading = false,
@@ -172,7 +167,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
   const changeZoom = (factor: number): void => {
     setViewport((current) => {
       const scale = Math.min(4, Math.max(0.25, current.scale * factor))
-      return scale <= 1 ? { scale, x: 0, y: 0 } : { ...current, scale }
+      return { ...current, scale }
     })
   }
   const onWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
@@ -183,12 +178,11 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
     const factor = event.deltaY < 0 ? 1.12 : 0.89
     setViewport((current) => {
       const scale = Math.min(4, Math.max(0.25, current.scale * factor))
-      if (scale <= 1) return { scale, x: 0, y: 0 }
       const ratio = scale / current.scale
       return {
         scale,
-        x: clampOffset(current.x + (pointerX - current.x) * (1 - ratio), rect.width, scale),
-        y: clampOffset(current.y + (pointerY - current.y) * (1 - ratio), rect.height, scale)
+        x: current.x + (pointerX - current.x) * (1 - ratio),
+        y: current.y + (pointerY - current.y) * (1 - ratio)
       }
     })
   }
@@ -217,16 +211,15 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
     if (!drag || drag.pointerId !== event.pointerId) return
     if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > POINTER_CLICK_THRESHOLD)
       panGesture.current = true
-    if (!panGesture.current || viewport.scale <= 1) return
+    if (!panGesture.current) return
     event.preventDefault()
     setDragging(true)
     if (!event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.setPointerCapture(event.pointerId)
-    const rect = event.currentTarget.getBoundingClientRect()
     setViewport((current) => ({
       ...current,
-      x: clampOffset(drag.originX + event.clientX - drag.x, rect.width, current.scale),
-      y: clampOffset(drag.originY + event.clientY - drag.y, rect.height, current.scale)
+      x: drag.originX + event.clientX - drag.x,
+      y: drag.originY + event.clientY - drag.y
     }))
   }
   const onPointerUp = (event: React.PointerEvent<HTMLDivElement>): void => {
@@ -257,13 +250,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
     <div
       className="relative flex min-h-0 min-w-0 flex-1 select-none items-center justify-center overflow-hidden bg-[#F4F4F2] p-3"
       style={{
-        cursor: dragging
-          ? 'grabbing'
-          : hoveringElement && !spacePressed
-            ? 'pointer'
-            : viewport.scale > 1
-              ? 'grab'
-              : 'default'
+        cursor: dragging ? 'grabbing' : hoveringElement && !spacePressed ? 'pointer' : 'grab'
       }}
       data-testid={testId}
       onWheel={onWheel}

@@ -193,6 +193,54 @@ describe('workbench result e2e', () => {
 
           const beforeTransform = beforeSurface.locator(':scope > div[style*="transform"]').first()
           const afterTransform = afterSurface.locator(':scope > div[style*="transform"]').first()
+          for (const scale of [1, 0.25]) {
+            await viewer.getByRole('button', { name: '适应窗口' }).click()
+            if (scale === 0.25)
+              for (let index = 0; index < 7; index++)
+                await viewer.getByRole('button', { name: '缩小', exact: true }).click()
+            const dragSurface = scale === 1 ? beforeSurface : afterSurface
+            const dragBox = await dragSurface.boundingBox()
+            if (!dragBox) throw new Error('审核画布不可见')
+            const delta = {
+              x: Math.floor(dragBox.width * 0.7),
+              y: Math.floor(dragBox.height * 0.6)
+            }
+            await page.mouse.move(dragBox.x + 10, dragBox.y + 10)
+            await page.mouse.down()
+            await page.mouse.move(dragBox.x + 10 + delta.x, dragBox.y + 10 + delta.y, {
+              steps: 12
+            })
+            await page.waitForFunction(
+              (selector) =>
+                getComputedStyle(document.querySelector(selector)!).cursor === 'grabbing',
+              scale === 1
+                ? `[data-testid="${workbenchSelectors.pptDiffBefore}"]`
+                : `[data-testid="${workbenchSelectors.pptDiffAfter}"]`
+            )
+            await page.mouse.up()
+            const positions = await Promise.all(
+              [beforeTransform, afterTransform].map((element) =>
+                element.evaluate((node) => {
+                  const matrix = new DOMMatrix(getComputedStyle(node).transform)
+                  return { scale: matrix.a, x: matrix.e, y: matrix.f }
+                })
+              )
+            )
+            await runtime.assertThat(
+              positions.every(
+                (position) =>
+                  position.scale === scale &&
+                  Math.abs(position.x - delta.x) < 1 &&
+                  Math.abs(position.y - delta.y) < 1
+              ) && (await getWorkbenchLocator(page, workbenchSelectors.pptViewerHint).isVisible()),
+              {
+                name: `ppt-review-free-pan-${scale}`,
+                message: '审核两侧在原始和最小缩放下完整跟随鼠标大幅位移，提示持续可见。',
+                data: { positions, delta }
+              }
+            )
+          }
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
           await afterSurface.hover()
           await page.mouse.wheel(0, -420)
           await page.waitForFunction(() => {
