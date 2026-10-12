@@ -612,10 +612,8 @@ export type DocumentSelectionAnchor =
       slideId: string
       page: number
       elementId?: string
-      mode: 'text' | 'element' | 'slide'
+      mode: 'element' | 'slide'
       revision: string
-      /** UTF-16 offsets within the rendered element's text. */
-      textRange?: { start: number; end: number }
     }
   | {
       kind: 'excel'

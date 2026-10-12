@@ -3,7 +3,6 @@ import type { DocumentSelectionNode } from './types'
 export const MAX_EXCEL_SELECTION_CELLS = 10_000
 
 const PPT_SELECTION_MODE_LABEL = {
-  text: '选中文字',
   element: '整个元素',
   slide: '整页'
 } as const

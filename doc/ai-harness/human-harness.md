@@ -1,6 +1,7 @@
 # Human Harness
 
-human graph 的消息与上下文设计约束。修改 `src/main/services/ai/human/**` 的 graph、消息写入、投影、compaction、resume、brain 上下文时必读。
+Huamn(我们的ai harness设计名称)，意味着语言模型在我们的AI架构设计下，像人类一样完成各种事情；
+这是对话让AI干活背后的核心设计规范
 
 ---
 

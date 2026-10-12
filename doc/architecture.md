@@ -144,7 +144,7 @@ flowchart LR
 
 ## 存储与索引
 
-业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为持久化真相；未发送的文档选区、关联想法、定位状态及 PPT 画面快照保留在 Renderer 的伙伴级内存。DOCX、PDF、Markdown/文本、PPT 与 Excel 通过各自的选区适配器接入共用的浮层、草稿、高亮与回跳交互；Excel 使用原生区域高亮，其他预览使用文本 Range 或位置矩形。提交时 Main 校验格式锚点，将 PPT PNG 快照写入伙伴内容寻址对象目录，消息仅保存对象路径和类型，不保存图片字节；无需新增数据库表。文本文件提交前等待当前自动保存完成。索引 generation、写后清理与检索过滤规则见 `doc/db/design.md`，表字段见 `doc/db/tables.md`。
+业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为持久化真相；未发送的文档选区、关联想法及定位状态保留在 Renderer 的伙伴级内存。DOCX、PDF、Markdown/文本、PPT 与 Excel 通过各自的选区适配器接入共用的浮层、草稿、高亮与回跳交互；Excel 使用原生区域高亮，其他预览使用文本 Range 或位置矩形。PPT 画布统一判定元素点击与拖拽平移，引用完整元素或整页，并携带与工具一致的 slideId/elementId；AI 按标识读取源文件。提交时 Main 校验格式锚点，无需新增数据库表。文本文件提交前等待当前自动保存完成。索引 generation、写后清理与检索过滤规则见 `doc/db/design.md`，表字段见 `doc/db/tables.md`。
 
 ## 主链路
 

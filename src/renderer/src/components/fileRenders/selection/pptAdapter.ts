@@ -1,5 +1,5 @@
 import type { DocumentSelectionNode } from '../../../../../shared/types'
-import { captureSelection, locateSelection, readPreviewText, svgTextRects } from './textIndex'
+import { readPreviewText } from './textIndex'
 import type { PptViewerSlide } from '../PptSlideDeckViewer'
 import { newSelection, type SelectionAdapter, type SelectionGeometry } from './types'
 
@@ -10,7 +10,7 @@ export function interactivePptSvg(svg: string): string {
   doc.querySelectorAll('[data-nc-shape-id]').forEach((node) => {
     // PPT tools expose top-level shapes; select a group by its outer shape ID.
     if (node.parentElement?.closest('[data-nc-shape-id]')) node.removeAttribute('data-nc-shape-id')
-    else node.setAttribute('pointer-events', 'all')
+    else node.setAttribute('pointer-events', 'bounding-box')
   })
   for (const element of doc.querySelectorAll('*')) {
     for (const attr of [...element.attributes]) {
@@ -45,24 +45,10 @@ export function pptAdapter(
         )
       : root
   }
-  const locate = (
-    node: DocumentSelectionNode,
-    saved?: { start: number; end: number; previewText: string }
-  ): SelectionGeometry | null => {
+  const locate = (node: DocumentSelectionNode): SelectionGeometry | null => {
     const a = node.anchor,
       element = elementFor(node)
     if (a?.kind !== 'ppt' || !element) return null
-    if (a.mode === 'text') {
-      const preview = readPreviewText(element)
-      const location = locateSelection(preview, node, saved)
-      if (!location) return null
-      // SVG text highlight painting varies across Chromium versions; geometry is always reliable.
-      return {
-        rects: () => svgTextRects(preview, location),
-        outline: false,
-        reveal: () => element.scrollIntoView({ block: 'center', behavior: 'instant' })
-      }
-    }
     if (a.revision !== revision) return null
     return {
       rects: () => {
@@ -77,42 +63,26 @@ export function pptAdapter(
       reveal: () => element.scrollIntoView({ block: 'center', behavior: 'instant' })
     }
   }
+  const isWholePage = (event: PointerEvent | KeyboardEvent) =>
+    event.target instanceof Element && !!event.target.closest('[data-ppt-reference-page]')
   return {
+    acceptPointer: (event) => isWholePage(event) || !isPanning(),
+    hitTest: (node, event) => {
+      const a = node.anchor
+      const element =
+        event.target instanceof Element
+          ? event.target.closest<SVGGraphicsElement>('[data-nc-shape-id]')
+          : null
+      if (a?.kind !== 'ppt' || !locate(node)) return false
+      return element
+        ? a.mode === 'element' && a.elementId === `${slide.id}#${element.dataset.ncShapeId}`
+        : a.mode === 'slide' && event.target instanceof Node && !!svg()?.contains(event.target)
+    },
     capture: (event) => {
       const root = svg()
       if (!root) return null
-      const whole =
-        event.target instanceof Element && !!event.target.closest('[data-ppt-reference-page]')
+      const whole = isWholePage(event)
       if (isPanning() && !whole) return null
-      const selection = window.getSelection()
-      if (
-        !whole &&
-        selection?.rangeCount &&
-        !selection.isCollapsed &&
-        root.contains(selection.getRangeAt(0).commonAncestorContainer)
-      ) {
-        const range = selection.getRangeAt(0)
-        const first =
-          range.startContainer.parentElement?.closest<SVGGraphicsElement>('[data-nc-shape-id]')
-        const last = range.endContainer.parentElement?.closest('[data-nc-shape-id]')
-        if (!first || first !== last) throw new Error('请在一个文本框内选择文字，或引用当前页。')
-        const preview = readPreviewText(first)
-        const location = captureSelection(first, preview, range)
-        if (!location) throw new Error('当前选区没有可读取的文字。')
-        const node = newSelection(filePath, preview.text.slice(location.start, location.end))
-        node.contextBefore = Array.from(preview.text.slice(0, location.start)).slice(-150).join('')
-        node.contextAfter = Array.from(preview.text.slice(location.end)).slice(0, 150).join('')
-        node.anchor = {
-          kind: 'ppt',
-          slideId: slide.id,
-          page: slide.index,
-          elementId: `${slide.id}#${first.dataset.ncShapeId}`,
-          mode: 'text',
-          textRange: { start: location.start, end: location.end },
-          revision
-        }
-        return { node, location }
-      }
       if ((!whole && !(event instanceof PointerEvent)) || !(event.target instanceof Element))
         return null
       const element = whole ? root : event.target.closest<SVGGraphicsElement>('[data-nc-shape-id]')
@@ -129,7 +99,7 @@ export function pptAdapter(
       return { node }
     },
     locate,
-    overlaps: (node, candidate, saved) => {
+    overlaps: (node, candidate) => {
       const a = node.anchor,
         b = candidate.node.anchor
       if (
@@ -138,14 +108,10 @@ export function pptAdapter(
         a.slideId !== b.slideId ||
         a.mode !== b.mode ||
         a.elementId !== b.elementId ||
-        !locate(node, saved)
+        !locate(node)
       )
         return false
-      if (a.mode !== 'text') return true
-      const root = elementFor(node)
-      if (!root || !candidate.location) return false
-      const old = locateSelection(readPreviewText(root), node, saved)
-      return !!old && old.start < candidate.location.end && candidate.location.start < old.end
+      return true
     },
     navigate: (node) => {
       if (node.anchor?.kind === 'ppt' && node.anchor.slideId !== slide.id) {

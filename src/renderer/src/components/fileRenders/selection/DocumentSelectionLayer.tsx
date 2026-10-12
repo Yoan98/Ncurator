@@ -10,7 +10,13 @@ import {
   type SelectionRect
 } from './floatingLayout'
 import SelectionPopover from './SelectionPopover'
-import type { SelectionAdapter, SelectionCandidate, SelectionPopup, SelectionTarget } from './types'
+import {
+  POINTER_CLICK_THRESHOLD,
+  type SelectionAdapter,
+  type SelectionCandidate,
+  type SelectionPopup,
+  type SelectionTarget
+} from './types'
 
 export default function DocumentSelectionLayer({
   container,
@@ -18,6 +24,7 @@ export default function DocumentSelectionLayer({
   adapter,
   revision,
   testPrefix = 'document',
+  manageCursor = true,
   onTargetsChange
 }: {
   container: HTMLElement | null
@@ -25,6 +32,7 @@ export default function DocumentSelectionLayer({
   adapter: SelectionAdapter
   revision: string | number
   testPrefix?: string
+  manageCursor?: boolean
   onTargetsChange?: (targets: SelectionTarget[]) => void
 }) {
   const state = useContext(DocumentSelectionContext)
@@ -37,7 +45,9 @@ export default function DocumentSelectionLayer({
   const targets = useRef<SelectionTarget[]>([])
   const handledNavigation = useRef<number | null>(null)
   const latest = useRef({ state, adapter, popup })
-  latest.current = { state, adapter, popup }
+  useLayoutEffect(() => {
+    latest.current = { state, adapter, popup }
+  }, [state, adapter, popup])
   const noticeKey = `${testPrefix}-selection`
   const open = useCallback(
     (candidate: SelectionCandidate, mode: SelectionPopup['mode']) => {
@@ -56,19 +66,21 @@ export default function DocumentSelectionLayer({
     let start: { x: number; y: number } | null = null
     let clicked: SelectionTarget | undefined
     const hit = (event: PointerEvent) =>
-      targets.current.find((target) =>
-        target.geometry
-          .rects()
-          .some(
-            (rect) =>
-              event.clientX >= rect.left &&
-              event.clientX < rect.right &&
-              event.clientY >= rect.top &&
-              event.clientY < rect.bottom
-          )
+      targets.current.find(
+        (target) =>
+          latest.current.adapter.hitTest?.(target.node, event) ??
+          target.geometry
+            .rects()
+            .some(
+              (rect) =>
+                event.clientX >= rect.left &&
+                event.clientX < rect.right &&
+                event.clientY >= rect.top &&
+                event.clientY < rect.bottom
+            )
       )
     const hover = (target?: SelectionTarget) => {
-      container.style.cursor = target ? 'pointer' : cursor
+      if (manageCursor) container.style.cursor = target ? 'pointer' : cursor
       setHoveredId(target?.node.id || null)
     }
     const capture = (event: PointerEvent | KeyboardEvent) => {
@@ -102,13 +114,18 @@ export default function DocumentSelectionLayer({
     }
     const up = (e: PointerEvent) => {
       if (e.button !== 0) return
+      if (latest.current.adapter.acceptPointer?.(e) === false) {
+        start = null
+        clicked = undefined
+        return
+      }
       clicked =
         start &&
         !e.shiftKey &&
         !e.ctrlKey &&
         !e.metaKey &&
         !e.altKey &&
-        Math.hypot(e.clientX - start.x, e.clientY - start.y) <= 4
+        Math.hypot(e.clientX - start.x, e.clientY - start.y) <= POINTER_CLICK_THRESHOLD
           ? hit(e)
           : undefined
       start = null
@@ -140,22 +157,26 @@ export default function DocumentSelectionLayer({
     }
     container.addEventListener('pointerdown', down)
     container.addEventListener('pointerup', up)
+    container.addEventListener('pointercancel', leave)
     container.addEventListener('click', click)
     container.addEventListener('pointermove', move)
     container.addEventListener('pointerleave', leave)
     container.addEventListener('keyup', key)
     document.addEventListener('scroll', leave, true)
+    window.addEventListener('blur', leave)
     return () => {
       container.removeEventListener('pointerdown', down)
       container.removeEventListener('pointerup', up)
+      container.removeEventListener('pointercancel', leave)
       container.removeEventListener('click', click)
       container.removeEventListener('pointermove', move)
       container.removeEventListener('pointerleave', leave)
       container.removeEventListener('keyup', key)
       document.removeEventListener('scroll', leave, true)
-      container.style.cursor = cursor
+      window.removeEventListener('blur', leave)
+      if (manageCursor) container.style.cursor = cursor
     }
-  }, [container, filePath, state?.enabled, revision, open, message, noticeKey])
+  }, [container, filePath, state?.enabled, revision, open, message, noticeKey, manageCursor])
 
   useLayoutEffect(() => () => onTargetsChange?.([]), [onTargetsChange])
 

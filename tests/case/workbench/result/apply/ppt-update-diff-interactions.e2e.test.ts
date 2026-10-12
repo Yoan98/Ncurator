@@ -233,11 +233,11 @@ describe('workbench result e2e', () => {
           await page
             .getByTestId('ppt-preview-viewer')
             .waitFor({ state: 'visible', timeout: 30_000 })
-          await page.getByTestId('ppt-preview-after').locator('img').waitFor({ state: 'visible' })
+          await page.getByTestId('ppt-preview-after').locator('svg').waitFor({ state: 'visible' })
           const previewSvg = await page
             .getByTestId('ppt-preview-after')
-            .locator('img')
-            .evaluate(async (image) => await (await fetch(image.getAttribute('src')!)).text())
+            .locator('svg')
+            .evaluate((svg) => new XMLSerializer().serializeToString(svg))
           const previewModeTag = ((await documentModeTag.textContent()) || '').trim()
           const reviewViewerHiddenInPreview = !(await viewer.isVisible().catch(() => false))
           await documentModeToggle.click()

@@ -55,16 +55,11 @@ export function validateDocumentSelection(node: DocumentSelectionNode): void {
       typeof a.slideId !== 'string' ||
       !a.slideId ||
       !integer(a.page, 1) ||
-      !['text', 'element', 'slide'].includes(a.mode) ||
+      !['element', 'slide'].includes(a.mode) ||
       typeof a.revision !== 'string' ||
       !a.revision ||
       (a.mode !== 'slide' &&
-        (typeof a.elementId !== 'string' || !a.elementId.startsWith(a.slideId + '#'))) ||
-      (a.mode === 'text' &&
-        (!node.selectedText.trim() ||
-          !a.textRange ||
-          !integer(a.textRange.start) ||
-          !integer(a.textRange.end, a.textRange.start + 1)))
+        (typeof a.elementId !== 'string' || !a.elementId.startsWith(a.slideId + '#')))
     )
       fail()
   } else if (a.kind === 'excel') {

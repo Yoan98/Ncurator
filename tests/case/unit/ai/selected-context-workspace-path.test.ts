@@ -229,22 +229,6 @@ describe('ai unit selected context workspace path', () => {
       location: '位置：订单明细!B2'
     },
     {
-      name: 'PPT text',
-      filePath: '/tmp/example.pptx',
-      anchor: {
-        kind: 'ppt',
-        slideId: '/ppt/slides/slide1.xml',
-        elementId: '/ppt/slides/slide1.xml#2',
-        page: 1,
-        mode: 'text',
-        textRange: { start: 0, end: 2 },
-        revision: 'revision-1'
-      },
-      selectedText: '标题',
-      location:
-        '位置：第 1 页 · 选中文字\n页面标识：/ppt/slides/slide1.xml\n元素标识：/ppt/slides/slide1.xml#2'
-    },
-    {
       name: 'PPT element with text',
       filePath: '/tmp/example.pptx',
       anchor: {

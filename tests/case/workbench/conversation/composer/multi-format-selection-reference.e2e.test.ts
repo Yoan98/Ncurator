@@ -1,7 +1,16 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import type { Page } from 'playwright'
-import { getSlidePartName, getSlides, loadPresentation } from 'pptx-kit'
+import JSZip from 'jszip'
+import type { Locator, Page } from 'playwright'
+import {
+  addSlideImage,
+  emu,
+  getSlidePartName,
+  getSlides,
+  getSlideSize,
+  loadPresentation,
+  savePresentation
+} from 'pptx-kit'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -13,6 +22,7 @@ import {
   waitForWorkbenchAiRunCompletion,
   collectWorkbenchLlmIoRecords,
   collectWorkbenchAiRunEvents,
+  recordWorkbenchAiEvidence,
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals
 } from '../../../../harness/e2e/workbench'
@@ -44,16 +54,8 @@ async function selectVisibleText(page: Page, selector: string): Promise<void> {
         first.setEnd(node, start + 1)
         last.setStart(node, end - 1)
         last.setEnd(node, end)
-        const screenRect = (index: number, range: Range) => {
-          const parent = first.startContainer.parentElement
-          if (!(parent instanceof SVGTextContentElement)) return range.getBoundingClientRect()
-          const box = parent.getExtentOfChar(index)
-          const matrix = parent.getScreenCTM()!
-          const point = new DOMPoint(box.x, box.y).matrixTransform(matrix)
-          return new DOMRect(point.x, point.y, box.width * matrix.a, box.height * matrix.d)
-        }
-        const a = screenRect(start, first),
-          b = screenRect(end - 1, last)
+        const a = first.getBoundingClientRect(),
+          b = last.getBoundingClientRect()
         if (a.width > 0 && a.height > 0 && a.top > 0 && b.bottom < window.innerHeight)
           return {
             x1: a.left + 0.5,
@@ -76,6 +78,12 @@ async function confirm(page: Page, prefix: string, thought: string) {
   await page.getByTestId(`${prefix}-selection-thought`).fill(thought)
   await page.getByTestId(`${prefix}-selection-save`).click()
   await page.getByTestId(`${prefix}-selection-popup`).waitFor({ state: 'detached' })
+}
+
+async function centerOf(locator: Locator) {
+  const box = await locator.boundingBox()
+  if (!box) throw new Error('拖动目标不可见')
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
 }
 
 describe('workbench conversation e2e', () => {
@@ -103,6 +111,24 @@ describe('workbench conversation e2e', () => {
             '经营周报.xlsx',
             '品牌策略提案.pptx'
           ]
+          const pptPath = path.join(setup.workspace.rootPath, names[4])
+          const deck = await loadPresentation(await fs.readFile(pptPath))
+          const imageSource = await JSZip.loadAsync(
+            await fs.readFile(path.join(setup.workspace.rootPath, 'docx-visual-kinds.docx'))
+          )
+          const size = getSlideSize(deck)
+          addSlideImage(
+            getSlides(deck)[0]!,
+            await imageSource.file('word/media/image.png')!.async('uint8array'),
+            {
+              x: emu(Math.round(size.width * 0.72)),
+              y: emu(Math.round(size.height * 0.58)),
+              w: emu(Math.round(size.width * 0.15)),
+              h: emu(Math.round(size.height * 0.2)),
+              format: 'png'
+            }
+          )
+          await fs.writeFile(pptPath, await savePresentation(deck))
           const before = await Promise.all(
             names.map((name) => fs.readFile(path.join(setup.workspace.rootPath, name)))
           )
@@ -189,16 +215,160 @@ describe('workbench conversation e2e', () => {
                 elements.map((element) => `${slideId}#${element.getAttribute('data-nc-shape-id')}`),
               expectedSlideId
             )
-          await selectVisibleText(page, '[data-ppt-interactive] svg')
-          await confirm(page, 'ppt', '只解释这段幻灯片文字，不修改文件。')
           const textShape = page
             .locator('[data-ppt-interactive] [data-nc-shape-id]')
             .filter({ has: page.locator('text') })
             .first()
           const selectedElementId = `${expectedSlideId}#${await textShape.getAttribute('data-nc-shape-id')}`
+          const expectedText = (await textShape.locator('text').allTextContents()).join('\n')
+          const imageShape = page
+            .locator('[data-ppt-interactive] [data-nc-shape-id]')
+            .filter({ has: page.locator('image') })
+            .first()
+          const surface = page.getByTestId('ppt-preview-after')
+          const selectedImageId = `${expectedSlideId}#${await imageShape.getAttribute('data-nc-shape-id')}`
+          const transform = surface.locator(':scope > div[style*="transform"]')
+          const popup = page.getByTestId('ppt-selection-popup')
+          const cursorAt = (point: { x: number; y: number }) =>
+            page.evaluate(({ x, y }) => {
+              const element = document.elementFromPoint(x, y)
+              return element ? getComputedStyle(element).cursor : ''
+            }, point)
+          const blankPoint = () =>
+            surface.evaluate((element) => {
+              const box = element.getBoundingClientRect()
+              return { x: box.left + 5, y: box.top + 5 }
+            })
+          const drag = async (
+            name: string,
+            origin: { x: number; y: number },
+            options: {
+              movable?: boolean
+              returnToStart?: boolean
+              button?: 'left' | 'middle'
+              space?: boolean
+              cancel?: boolean
+            } = {}
+          ) => {
+            const beforeStyle = await transform.getAttribute('style')
+            const tokenCount = await tokens.count()
+            await page.mouse.move(origin.x, origin.y)
+            if (options.space) await page.keyboard.down('Space')
+            await page.mouse.down({ button: options.button || 'left' })
+            const downCursor = await cursorAt(origin)
+            await page.mouse.move(origin.x + 40, origin.y + 24, { steps: 12 })
+            if (options.movable !== false)
+              await page.waitForFunction(
+                () =>
+                  getComputedStyle(document.querySelector('[data-testid="ppt-preview-after"]')!)
+                    .cursor === 'grabbing'
+              )
+            const movingCursor = await cursorAt({ x: origin.x + 40, y: origin.y + 24 })
+            const movingStyle = await transform.getAttribute('style')
+            if (options.returnToStart) await page.mouse.move(origin.x, origin.y, { steps: 12 })
+            if (options.cancel) await page.keyboard.press('Escape')
+            await page.mouse.up({ button: options.button || 'left' })
+            if (options.space) await page.keyboard.up('Space')
+            await page.waitForFunction(
+              () =>
+                getComputedStyle(document.querySelector('[data-testid="ppt-preview-after"]')!)
+                  .cursor !== 'grabbing'
+            )
+            const observed = {
+              beforeStyle,
+              movingStyle,
+              downCursor,
+              movingCursor,
+              afterCursor: await cursorAt(origin),
+              popupCount: await popup.count(),
+              warnings: await page.locator('.ant-message-warning').allTextContents(),
+              tokenCount: await tokens.count(),
+              nativeText: await page.evaluate(() => window.getSelection()?.toString() || '')
+            }
+            await runtime.assertThat(
+              (options.movable === false
+                ? movingStyle === beforeStyle
+                : movingStyle !== beforeStyle && movingCursor === 'grabbing') &&
+                downCursor !== 'grabbing' &&
+                observed.afterCursor !== 'grabbing' &&
+                observed.popupCount === 0 &&
+                observed.warnings.length === 0 &&
+                observed.tokenCount === tokenCount &&
+                observed.nativeText === '',
+              {
+                name,
+                message: '真实鼠标拖动不触发引用、编辑浮层、文字选择或 toast，光标与画布移动一致。',
+                data: observed
+              }
+            )
+          }
+          const titleText = textShape.locator('text').first()
+          await drag('ppt-drag-at-fit', await centerOf(titleText), { movable: false })
+          const viewer = page.getByTestId('ppt-preview-viewer')
+          await viewer.getByRole('button', { name: '放大', exact: true }).click()
+          await titleText.hover()
+          await runtime.assertThat((await cursorAt(await centerOf(titleText))) === 'pointer', {
+            name: 'ppt-element-cursor',
+            message: '放大后悬停文字元素显示点击手形。'
+          })
+          await drag('ppt-text-pan', await centerOf(titleText))
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
+          await viewer.getByRole('button', { name: '放大', exact: true }).click()
+          await drag('ppt-image-pan', await centerOf(imageShape))
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
+          await viewer.getByRole('button', { name: '放大', exact: true }).click()
+          const blank = await blankPoint()
+          await page.mouse.move(blank.x, blank.y)
+          await runtime.assertThat((await cursorAt(blank)) === 'grab', {
+            name: 'ppt-blank-cursor',
+            message: '放大后空白画布显示可平移抓手。'
+          })
+          await drag('ppt-blank-pan', blank)
+          await drag('ppt-middle-pan', await blankPoint(), { button: 'middle' })
+          await drag('ppt-space-pan', await centerOf(titleText), { space: true })
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
           await textShape.click()
           await confirm(page, 'ppt', '只解释这个文本框，不修改文件。')
-          await page.locator('[data-ppt-reference-page]').click()
+          const textTitle = await tokens.last().getAttribute('title')
+          await runtime.assertThat(
+            !!textTitle?.includes('整个元素') &&
+              textTitle.endsWith('\n' + expectedText) &&
+              !textTitle.includes('选中文字'),
+            {
+              name: 'ppt-whole-text-box',
+              message: '点击文字引用完整文本框。',
+              data: { textTitle, expectedText }
+            }
+          )
+          await viewer.getByRole('button', { name: '放大', exact: true }).click()
+          await drag('ppt-saved-element-pan', await centerOf(titleText))
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
+          await viewer.getByRole('button', { name: '放大', exact: true }).click()
+          await drag('ppt-pan-back-to-origin', await centerOf(titleText), { returnToStart: true })
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
+          await viewer.getByRole('button', { name: '放大', exact: true }).click()
+          await drag('ppt-cancel-pan', await centerOf(titleText), { cancel: true })
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
+          await textShape.click()
+          await page
+            .getByTestId('ppt-selection-thought')
+            .fill('只解释完整文本框，保留其他元素，不修改文件。')
+          await page.getByTestId('ppt-selection-save').click()
+          await popup.waitFor({ state: 'detached' })
+          await imageShape.click()
+          await confirm(page, 'ppt', '只解释这张图片，不修改文件。')
+          const imageTitle = await tokens.last().getAttribute('title')
+          await runtime.assertThat(
+            !!imageTitle?.includes('整个元素') &&
+              imageTitle.includes(`元素标识：${selectedImageId}`),
+            {
+              name: 'ppt-image-element',
+              message: '点击图片引用该图片元素的真实标识。',
+              data: { imageTitle, selectedImageId }
+            }
+          )
+          await page.locator('[data-ppt-reference-page]').focus()
+          await page.keyboard.press('Enter')
           await confirm(
             page,
             'ppt',
@@ -206,8 +376,17 @@ describe('workbench conversation e2e', () => {
           )
           await runtime.captureScreenshot({
             name: 'ppt-reference',
-            message: 'PPT 文字、对象和整页通过真实标识引用'
+            message: 'PPT 文本框、图片和整页通过真实标识引用'
           })
+          // A saved whole-page reference must not intercept clicks on an unquoted element.
+          await page
+            .locator('[data-ppt-interactive] [data-nc-shape-id]')
+            .filter({ has: page.locator('text') })
+            .nth(1)
+            .click()
+          await page.getByTestId('ppt-selection-ai-reference').waitFor({ state: 'visible' })
+          await page.keyboard.press('Escape')
+          await popup.waitFor({ state: 'detached' })
           const titles = await tokens.evaluateAll((elements) =>
             elements.map((element) => element.getAttribute('title'))
           )
@@ -226,13 +405,14 @@ describe('workbench conversation e2e', () => {
           const startedAt = Date.now()
           await submitWorkbenchCurrentDraft(page)
           await tokens.first().waitFor({ state: 'detached' })
-          await waitForWorkbenchAiRunCompletion(
+          const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAt,
             setup.env.modelName,
             WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
             { page, blockerPolicy: 'auto_approve' }
           )
+          recordWorkbenchAiEvidence(runtime, evidence, 1)
           const events = await collectWorkbenchAiRunEvents(runtime)
           const pptReads = events.flatMap((event) => {
             if (
@@ -285,6 +465,8 @@ describe('workbench conversation e2e', () => {
             expectedSlideId,
             expectedElementIds,
             selectedElementId,
+            selectedImageId,
+            expectedText,
             pptReads,
             unchanged: after.every((bytes, index) => bytes.equals(before[index]))
           }
@@ -301,6 +483,8 @@ describe('workbench conversation e2e', () => {
               ) &&
               result.brain.includes(`页面标识：${result.expectedSlideId}`) &&
               result.brain.includes(`元素标识：${result.selectedElementId}`) &&
+              result.brain.includes(`元素标识：${result.selectedImageId}`) &&
+              result.brain.includes(`选中内容：\n\`\`\`text\n${result.expectedText}\n\`\`\``) &&
               result.brain.match(/选中片段 \d+：/g)?.length === 7 &&
               !result.brain.includes('选中时的画面：') &&
               result.brain.includes('经营周报.xlsx') &&

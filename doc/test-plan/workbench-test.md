@@ -329,18 +329,19 @@ pnpm test:update:e2e
 - Why：确保原文准确，引用与想法关联，两侧使用同一内容。
 - How：通过鼠标起点与 Shift 终点选择部分单词、跨段落、跨单元格、整表及正文/表格混选；复用 workspace DOCX，并用 `docx-selection-layout.docx` 覆盖单元格内换行、空单元格、横向/纵向合并、跨页、页眉页脚、图片混选及反向选择。只读 DOM 取证和引用原文核对；确认、高亮、点击重新编辑和定位均走真实 UI。纯图片选区检查系统 toast 合并与自动消失，文档内无提示条；重复/重叠选区保持静默。核对 AI 引用入口、“描述你想对引用内容做什么”placeholder、对勾提示、字号、高度、浮层翻转/缩放和未确认输入；发送后检查真实脑模型输入的引用分块及源文件未被提问修改；再用真实临时 DOCX 选择定位段，仅输入“精简下”，核对写回后所选段变短、未选中的同章场景段完全保留，普通 DOCX 预览自动出现切换并可进入审核；双向编辑、跳转和两侧删除，核对左侧编号、原文与想法关联及右侧高亮清理；切换伙伴和文件，实际发送后新增选区检查从 1 开始，再编辑历史消息并刷新 Renderer 检查持久化草稿。
 - Oracle：覆盖 `WB-DOCUMENT-REFERENCE-001-AC1` 的跨段落/跨页/跨单元格/整表/正文混选、页眉页脚、反向选择、表格行列分隔与空/合并占位、单元格内换行、图片混选和无文字 toast，`WB-DOCUMENT-REFERENCE-001-AC2` 的两阶段入口、对勾及新增/编辑提示、小字号紧凑高度、输入后保留紫色高亮、浮层边界/翻转/滚动/缩放、空内容禁用、Enter 确认、Shift+Enter 换行和 Esc/外部点击关闭，`WB-DOCUMENT-REFERENCE-001-AC3` 的图标编号胶囊和两侧编辑同步，`WB-DOCUMENT-REFERENCE-001-AC4` 的右侧无编号、仅高亮文字可悬停和点击、定位、重复/重叠选择静默保留、删除后左侧连续编号与右侧高亮清理、删空及发送后从 1 开始和内容不串，`WB-DOCUMENT-REFERENCE-001-AC5` 的伙伴隔离及内存/持久化边界，`WB-DOCUMENT-REFERENCE-001-AC6` 的接受后清理、历史编号保留和历史编辑。刷新后选区消失，普通文字与 @ 引用保留；真实局部精简保留未选中正文，提问不写文件，引用按片段标题分块且选中内容与前后文清楚分隔，DOCX 改动收尾后普通预览自动提供审核切换。
-- 最新验证：2026-10-11 真实 E2E 完整用例通过，包含位置标记的鼠标/键盘循环、正文排序、临时选区无标记与发送清理，并保持共用引用层原有交互；raw logs：`tests/logs/workbench/conversation/composer/docx-selection-reference/20261011-130612-847`。
+- 最新验证：2026-10-12 真实 E2E 完整用例通过，124s、18 条断言；位置标记的鼠标/键盘循环、正文排序、临时选区无标记与发送清理、原文/非空上下文分块、真实 AI 局部修改及共用引用层交互均通过；raw logs：`tests/logs/workbench/conversation/composer/docx-selection-reference/20261012-155429-209`。
 - 待覆盖：文本框文字、IME、想法内 @ 混排、关闭资源 Tab、应用进程重启及附件恢复、外部原文变化后的定位 toast、提交期间锁定、提交失败保留、排队成功清理及历史复制。
 - 位置标记条验收：补充 `WB-DOCUMENT-REFERENCE-001-AC7`，自动检查已保存引用生成紫色标记，重叠引用通过鼠标、Enter、Space 按正文顺序轮流定位并短暂强调，包括确认顺序不同于正文顺序；核对临时选区不显示、发送后清理和 16px 无标记空条。删除逐项更新、伙伴/文件隔离、窗口变化、外部原文变化后的可靠定位、更多密集引用及长区域边界列入人工验收。
+- 模型投影验收：首段选区没有前文时省略空前文块，原文和非空后文分别分块，纯提问保持源文件字节不变。
 
 #### `multi-format-selection-reference`
 
 - 测试类型：`e2e / live`；suite `conversation`，group `composer`。
-- What：MD/TXT、PDF、Excel、PPTX 的选区引用及混合提交。
+- What：MD/TXT、PDF、Excel、PPTX 的选区引用及混合提交，PPT 元素点击与画布拖拽的互斥、光标反馈。
 - Why：确保复用交互仍保留各格式的准确定位、文字与单元格内容，PPT 引用能匹配工具读取的目标。
-- How：在真实预览通过鼠标/键盘选字、选择单元格和 PPT 文字/对象/整页，确认引用并切换文件；只读采集可选 PPT 元素 ID，与真实 `ppt_read_slides` 返回的 ID 比对；TXT 编辑想法、删除重建、修改原文后回跳验证失效，再恢复原文；混合发送并检查真实模型输入及源文件字节。
-- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-002-AC1`、`WB-DOCUMENT-REFERENCE-002-AC2`、`WB-DOCUMENT-REFERENCE-002-AC3`、`WB-DOCUMENT-REFERENCE-002-AC4`、`WB-DOCUMENT-REFERENCE-002-AC5` 的基础引用与提交链路；混合引用包含选中内容、页/元素和 Sheet/A1，片段编号只在标题出现且没有选区图片路径；PPT 页与可选元素 ID 和工具结果匹配，纯提问不写源文件，失效文本选区不错误高亮；消息保存/排队/恢复由 AI `human-document-reference-context` 生产服务测试覆盖，DOCX 共用交互由既有 case 回归。
-- 最新验证：2026-10-11 源码真实 E2E 通过，279s；raw logs：`tests/logs/workbench/conversation/composer/multi-format-selection-reference/20261011-104703-286`。五种格式的七条引用混合提交成功，每个片段一个编号标题且无选区图片路径；PPT 第 1 页的三个可选元素 ID 与真实 `ppt_read_slides` 返回值完全一致，选中文字与文本框引用命中 `/ppt/slides/slide1.xml#2`；失效文本引用不误高亮，源文件字节保持不变。
+- How：在真实预览通过鼠标/键盘选择文本、单元格以及 PPT 文本框/图片/整页，确认引用并切换文件；在隔离工作区的 PPT 副本加入既有 DOCX fixture 的真实内嵌 PNG，作为图片点击/拖动输入，不改原始 fixture。PPT 未放大时从文字拖动，再放大后从文字、图片、已引用元素和空白处左键拖动，通过真实鼠标与只读 DOM 观测画布位移、光标、浮层、原生文字选区和 toast；覆盖拖回起点、Esc 取消手势、单击编辑以及空格/中键快捷操作，整页引用后仍可点击新元素引用。只读采集可选 PPT 元素 ID，与真实 `ppt_read_slides` 返回的 ID 比对；TXT 编辑想法、删除重建、修改原文后回跳验证失效，再恢复原文；混合发送并检查真实模型输入及源文件字节。
+- Oracle：覆盖 `WB-DOCUMENT-REFERENCE-002-AC1`、`WB-DOCUMENT-REFERENCE-002-AC2`、`WB-DOCUMENT-REFERENCE-002-AC3`、`WB-DOCUMENT-REFERENCE-002-AC4`、`WB-DOCUMENT-REFERENCE-002-AC5` 的基础引用与提交链路；混合引用包含选中内容、页/元素和 Sheet/A1，片段编号只在标题出现且没有选区图片路径；PPT 点击引用完整文本框和图片，页与可选元素 ID 和工具结果匹配；左键拖动只平移画布且无浮层、toast、原生文字选择或新增引用，未放大拖动及拖回起点不误触编辑，元素点击光标与拖动抓紧光标分开；纯提问不写源文件，失效文本选区不错误高亮；消息保存/排队/恢复由 AI `human-document-reference-context` 生产服务测试覆盖，DOCX 共用交互由既有 case 回归。
+- 最新验证：2026-10-12 源码真实 E2E 通过，186s、17 条断言；真实模型 `qwen3.8-flash`，模型阶段 156s，完成度 1，失败归因为空。未放大拖动、文字/图片/空白/已引用元素平移、空格/中键快捷操作、拖回起点、Esc 取消、点击光标、完整文本框原文及再次编辑、图片元素 ID 均通过；整页引用后仍可点击新元素。五种格式七条引用混合提交，PPT 第 1 页四个元素 ID 与真实工具结果一致，模型收到完整文本框原文与图片定位，源文件字节不变；raw logs：`tests/logs/workbench/conversation/composer/multi-format-selection-reference/20261012-160121-556`。
 - 待覆盖：`WB-DOCUMENT-REFERENCE-002-AC1` 的跨 Sheet/缩放与各格式双向编辑排列；`WB-DOCUMENT-REFERENCE-002-AC2` 的组合图形外层引用及真实 AI 局部改字外围不变；`WB-DOCUMENT-REFERENCE-002-AC3` 的合并/空白格 UI、范围拒绝 UI 及真实 AI 局部填公式；`WB-DOCUMENT-REFERENCE-002-AC4` 的跨 PDF 页、Markdown 跨样式映射与磁盘保存失败；`WB-DOCUMENT-REFERENCE-002-AC5` 的选区草稿伙伴切换和进程重启。
 
 ### 5.2 `run`
@@ -616,11 +617,12 @@ pnpm test:update:e2e
 
 #### `ppt-update-diff-interactions`
 
-- 测试类型：`e2e`
+- 测试类型：`e2e / live`
 - What：已有 PPT 更新后的左右差异、绿色新增/修改/移动、红色删除、准确 `+N/-N`、缩略图筛选、审核/预览、缩放和拖动画布。
 - Why：创建态与更新态的差异语义不同，不能只用新建 PPT case 代替。
-- How：在空临时 workspace 中准备四页基线 PPT，让真实 AI 主动移动一页、修改一页、删除中间页、新增一页，并要求末页完全不变；打开修改记录并操作审核/预览、筛选、同步切页、缩放、拖动、关联应用打开和回退。关联应用启动在 E2E 中使用 no-op 成功分支，不实际启动 Office/WPS。 测试进程将正式 PPT 首页面文字改为 C，读取界面实际 SVG 验证预览 C、历史审核仍为 B，并确认强制回退。
+- How：在空临时 workspace 中准备四页基线 PPT，让真实 AI 主动移动一页、修改一页、删除中间页、新增一页，并要求末页完全不变；打开修改记录并操作审核/预览、筛选、同步切页、缩放、拖动、关联应用打开和回退。关联应用启动在 E2E 中使用 no-op 成功分支，不实际启动 Office/WPS。测试进程将正式 PPT 首页面文字改为 C，直接读取普通预览的交互 SVG 与审核的固定 SVG，验证预览 C、历史审核仍为 B，并确认强制回退。
 - Oracle：正式 PPT 内容和顺序正确；审核显示准确 `+3/-1`、三个绿色页面标记和一个红色删除标记；删除中间页不会把未改末页标绿，变化筛选为四页、全部模式为五个 before/after 对齐项；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；审核/预览切换、同步缩放拖动不变，底部「滚轮缩放 / 拖拽平移」提示固定可见（缩放或拖拽后仍在），回退后 bytes 与 baseline 完全一致，对齐 `WB-PANEL-003-AC19`、`WB-PPT-002`、`WB-APPLY-003`。
+- 最新验证：2026-10-12 源码真实 E2E 通过，157s；真实 AI 更新后的前后页、净变化统计、同步缩放/左键平移、筛选、预览 C/固定审核 B 与强制回退均通过；raw logs：`tests/logs/workbench/result/apply/ppt-update-diff-interactions/20261012-155427-788`。
 
 #### `excel-update-diff-and-revert`
 

@@ -2,6 +2,8 @@ import type { DocumentSelectionNode } from '../../../../../shared/types'
 import type { SelectionLocation } from '../../workbench/composer/DocumentSelectionContext'
 import type { SelectionRect } from './floatingLayout'
 
+export const POINTER_CLICK_THRESHOLD = 5
+
 export type SelectionGeometry = {
   rects: () => SelectionRect[]
   ranges?: Range[]
@@ -15,6 +17,9 @@ export type SelectionCandidate = {
 export type SelectionPopup = SelectionCandidate & { mode: 'action' | 'editor' }
 export type SelectionTarget = SelectionCandidate & { geometry: SelectionGeometry }
 export type SelectionAdapter = {
+  /** A preview gesture may consume pointer input before it reaches the shared reference UI. */
+  acceptPointer?: (event: PointerEvent) => boolean
+  hitTest?: (node: DocumentSelectionNode, event: PointerEvent) => boolean
   capture: (event: PointerEvent | KeyboardEvent) => SelectionCandidate | null
   locate: (node: DocumentSelectionNode, saved?: SelectionLocation) => SelectionGeometry | null
   overlaps: (
