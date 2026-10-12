@@ -73,6 +73,7 @@ export type LocalWorkbenchHttpServer = {
 
 type LocalWorkbenchHttpServerOptions = {
   onRequest?: (requestUrl: string) => boolean
+  beforeResponse?: (requestUrl: string) => Promise<void>
 }
 
 export type WorkbenchSetupResult = {
@@ -557,7 +558,7 @@ export const startLocalWorkbenchHttpServer = async (
   html: string,
   options: LocalWorkbenchHttpServerOptions = {}
 ): Promise<LocalWorkbenchHttpServer> => {
-  const server = createServer((request, response) => {
+  const server = createServer(async (request, response) => {
     const requestUrl = request.url || '/'
     if (options.onRequest?.(requestUrl)) {
       response.writeHead(204)
@@ -565,6 +566,7 @@ export const startLocalWorkbenchHttpServer = async (
       return
     }
     if (requestUrl === '/' || requestUrl.startsWith('/task')) {
+      await options.beforeResponse?.(requestUrl)
       response.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'no-store'

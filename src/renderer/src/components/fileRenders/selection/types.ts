@@ -15,6 +15,7 @@ export type SelectionCandidate = {
   image?: () => Promise<Uint8Array>
 }
 export type SelectionPopup = SelectionCandidate & { mode: 'action' | 'editor' }
+export type SelectionTarget = SelectionCandidate & { geometry: SelectionGeometry }
 export type SelectionAdapter = {
   capture: (event: PointerEvent | KeyboardEvent) => SelectionCandidate | null
   locate: (node: DocumentSelectionNode, saved?: SelectionLocation) => SelectionGeometry | null

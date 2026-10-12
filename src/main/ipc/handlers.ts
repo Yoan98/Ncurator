@@ -40,11 +40,16 @@ import type {
   ScheduledTaskDismissBusyNoticeRequest,
   WriteTextFileRequest,
   WriteTextFileResponse,
+  WorkspaceFileCreateRequest,
+  WorkspaceFileCreateResponse,
+  WorkspaceFileTrashRequest,
+  WorkspaceFileMutationResponse,
   AiRunHumanInteractionRequest,
   AiRunHumanInteractionResponse
 } from '../../shared/types'
 import { listReferenceItemsPage } from '../services/sourceScope/referenceList'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
+import { WorkspaceFileService } from '../services/workspace/WorkspaceFileService'
 import { WorkspaceKnowledgePrepareService } from '../services/workspace/WorkspaceKnowledgePrepareService'
 import {
   IndexPrepareCancelledError,
@@ -370,6 +375,7 @@ export function registerHandlers(services: {
     console.error('[CHAT-RUN] Failed to mark interrupted runs:', error)
   })
   const workspaceService = new WorkspaceSourceService()
+  const workspaceFileService = new WorkspaceFileService()
   const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({
     embeddingService,
     documentsStore,
@@ -2217,6 +2223,40 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
+    'workspace-file-create',
+    async (_event, payload: WorkspaceFileCreateRequest): Promise<WorkspaceFileCreateResponse> => {
+      try {
+        const workspace = await workspaceStore.getWorkspaceById(payload.workspaceId)
+        if (!workspace) throw new Error('当前工作目录已被移除')
+        const entry = await workspaceFileService.createFile({
+          ...payload,
+          rootPath: workspace.root_path
+        })
+        return { success: true, entry }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'workspace-file-trash',
+    async (_event, payload: WorkspaceFileTrashRequest): Promise<WorkspaceFileMutationResponse> => {
+      try {
+        const workspace = await workspaceStore.getWorkspaceById(payload.workspaceId)
+        if (!workspace) throw new Error('当前工作目录已被移除')
+        await workspaceFileService.trashFile(
+          { rootPath: workspace.root_path, relativePath: payload.relativePath },
+          (filePath) => shell.trashItem(filePath)
+        )
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
     'workspace-scan',
     async (event, payload: { workspaceId: string }): Promise<WorkspaceJobResponse> => {
       try {
@@ -2576,7 +2616,12 @@ export function registerHandlers(services: {
           return { success: false, error: 'content must be a string' }
         }
 
-        const result = writeTextFileAtomically(filePath, payload.content, payload.expectedHash)
+        const result = writeTextFileAtomically(
+          filePath,
+          payload.content,
+          payload.expectedHash,
+          true
+        )
         if (!result.ok) {
           return {
             success: false,

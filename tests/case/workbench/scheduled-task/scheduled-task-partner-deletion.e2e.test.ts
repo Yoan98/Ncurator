@@ -7,6 +7,8 @@ import {
   createPartnerThroughWorkbenchUi,
   dismissWorkbenchPartnerDeleteConfirmation,
   getWorkbenchLocator,
+  fillScheduledTaskTime,
+  setWorkbenchInput,
   openWorkbenchPartnerDeleteConfirmation,
   openScheduledTasksView,
   scheduledTaskSelectors,
@@ -48,21 +50,24 @@ describe('workbench scheduled-task e2e', () => {
           const removedPartner = partners.find((item) => item.name === '待删除伙伴')
           const reboundPartner = partners.find((item) => item.name === '重新绑定伙伴')
           if (!removedPartner || !reboundPartner) throw new Error('failed to create partners')
-          const saved = await page.evaluate(
-            async ({ partnerId }) =>
-              await window.api.scheduledTaskSave({
-                partnerId,
-                name: '伙伴删除保留任务',
-                description: '验证删除伙伴后的任务状态',
-                scheduleType: 'daily',
-                timeOfDay: '09:00'
-              }),
-            { partnerId: removedPartner.id }
-          )
-          if (!saved.success || !saved.task) throw new Error(saved.error || 'failed to save task')
-          const taskId = saved.task.id
-
           await openScheduledTasksView(page)
+          await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('伙伴删除保留任务')
+          await setWorkbenchInput(
+            page,
+            '验证删除伙伴后的任务状态',
+            scheduledTaskSelectors.formDescriptionInput
+          )
+          await selectScheduledTaskPartner(page, removedPartner.id)
+          await fillScheduledTaskTime(page, '09:00')
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
+          await waitForScheduledTaskDrawerClosed(page)
+          const task = (await page.evaluate(() => window.api.scheduledTaskList())).find(
+            (item) => item.name === '伙伴删除保留任务'
+          )
+          if (!task) throw new Error('saved task missing')
+          const taskId = task.id
+
           const removedItem = getWorkbenchLocator(
             page,
             `${workbenchSelectors.partnerItemPrefix}-${removedPartner.id}`

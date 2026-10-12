@@ -3,6 +3,7 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
+  createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
   navigateToWorkbench,
   workbenchSelectors
@@ -27,24 +28,13 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await navigateToWorkbench(page, { waitForSessionListText: false })
-          const partners = await page.evaluate(async () => {
-            const first = await window.api.partnerCreate({
-              name: '置顶伙伴 A',
-              avatar_shape: 'circle',
-              avatar_color: 'blue'
-            })
-            const second = await window.api.partnerCreate({
-              name: '置顶伙伴 B',
-              avatar_shape: 'circle',
-              avatar_color: 'green'
-            })
-            if (!first.success || !first.partner || !second.success || !second.partner) {
-              throw new Error(first.error || second.error || 'partnerCreate failed')
-            }
-            return { first: first.partner, second: second.partner }
-          })
-          await page.reload()
-          await navigateToWorkbench(page)
+          await createPartnerThroughWorkbenchUi(page, '置顶伙伴 A')
+          await createPartnerThroughWorkbenchUi(page, '置顶伙伴 B')
+          const listed = await page.evaluate(() => window.api.partnerList())
+          const first = listed.find((item) => item.name === '置顶伙伴 A')
+          const second = listed.find((item) => item.name === '置顶伙伴 B')
+          if (!first || !second) throw new Error('created partners missing')
+          const partners = { first, second }
 
           const partnerA = getWorkbenchLocator(
             page,

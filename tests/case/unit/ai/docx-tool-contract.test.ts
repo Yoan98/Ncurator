@@ -1,3 +1,4 @@
+import { renderToolResultDataText } from '../../../../src/main/services/ai/human/shared/toolResultRenderers'
 import { describe, expect, it } from 'vitest'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../../../../src/main/services/ai/human/constants'
 import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
@@ -11,7 +12,6 @@ import {
   docxOutlineSchema,
   docxReadNodesSchema
 } from '../../../../src/main/services/ai/human/tools/docx/toolSchemas'
-import type { DocxMutationOutput } from '../../../../src/main/services/ai/human/tools/docx/outputTypes'
 
 const READ_TOOLS = ['docx_read_outline', 'docx_search', 'docx_read_nodes']
 const WRITE_TOOLS = [
@@ -30,14 +30,6 @@ describe('ai unit docx tool contract', () => {
     expect(SKILL_DEFINITIONS['docx-write'].toolNames).toEqual(WRITE_TOOLS)
     expect(DOCX_TOOL_SPECS).toHaveLength(7)
     expect(DOCX_TOOL_SPECS.length).toBeLessThan(HUMAN_MAX_ACTIVE_TOOLS)
-  })
-
-  it('keeps every public call to one discriminated operation', () => {
-    for (const spec of DOCX_WRITE_TOOL_SPECS) {
-      expect(spec.promptSpec.description).not.toContain('actions[]')
-      expect(spec.promptSpec.description).not.toContain('nodeId')
-      expect(spec.promptSpec.description).not.toContain('\n')
-    }
   })
 
   it('bounds detailed node reads', () => {
@@ -122,12 +114,176 @@ describe('ai unit docx tool contract', () => {
       }).success
     ).toBe(false)
   })
+})
 
-  it('keeps docx mutation output minimal', () => {
-    const empty = {} satisfies DocxMutationOutput
-    const withIds = { createdIds: ['node_1'] } satisfies DocxMutationOutput
-    expect(empty).toEqual({})
-    expect(withIds.createdIds).toEqual(['node_1'])
-    expect('createdIds' in empty).toBe(false)
+describe('tool result data fidelity', () => {
+  it('renders nested docx_read_nodes table, cell and runs details', () => {
+    const rendered = renderToolResultDataText({
+      toolName: 'docx_read_nodes',
+      data: {
+        sourcePath: 'graphics.docx',
+        nodes: [
+          {
+            nodeId: 'node_10',
+            type: 'paragraph',
+            story: { storyId: 'body', type: 'body' },
+            children: [
+              {
+                type: 'run',
+                nodeId: 'n:1',
+                style: { bold: true },
+                children: [{ type: 'text', text: '反走样定义' }]
+              }
+            ]
+          },
+          {
+            nodeId: 'node_11',
+            type: 'table',
+            story: { storyId: 'body', type: 'body' },
+            children: [
+              {
+                type: 'table_row',
+                nodeId: 'row:1',
+                children: [
+                  {
+                    nodeId: 'b:11:c1',
+                    type: 'table_cell',
+                    row: 0,
+                    col: 0,
+                    children: [
+                      {
+                        nodeId: 'b:11:c1:p1',
+                        type: 'paragraph',
+                        children: [
+                          {
+                            type: 'run',
+                            nodeId: 'n:2',
+                            children: [{ type: 'text', text: '多个像素点' }]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    nodeId: 'b:11:c2',
+                    type: 'table_cell',
+                    row: 0,
+                    col: 1,
+                    children: [
+                      {
+                        nodeId: 'b:11:c2:p1',
+                        type: 'paragraph',
+                        children: [
+                          {
+                            type: 'run',
+                            nodeId: 'n:3',
+                            children: [{ type: 'text', text: '低通滤波' }]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    })
+
+    expect(rendered).toContain('n:1')
+    expect(rendered).toContain('反走样定义')
+    expect(rendered).toContain('table_row')
+    expect(rendered).toContain('b:11:c1')
+    expect(rendered).toContain('多个像素点')
+    expect(rendered).toContain('低通滤波')
+  })
+
+  it('renders lightweight DOCX outline positioning and visual summaries', () => {
+    const rendered = renderToolResultDataText({
+      toolName: 'docx_read_outline',
+      data: {
+        fromPercent: 0,
+        toPercent: 50,
+        fromNodeIndex: 4,
+        toNodeIndex: 4,
+        totalRootCount: 12,
+        segments: [
+          {
+            story: 'body',
+            fromNodeIndex: 4,
+            toNodeIndex: 4,
+            textMap: '结构：表格 2x3 视觉方法表\n关键词：视觉方法\n代表句：[4] 视觉方法表'
+          }
+        ]
+      }
+    })
+
+    expect(rendered).toContain('视觉方法表')
+    expect(rendered).not.toContain('nodeId')
+  })
+
+  it('renders DOCX match-centered and neighboring context', () => {
+    const rendered = renderToolResultDataText({
+      toolName: 'docx_search',
+      data: {
+        totalMatchCount: 1,
+        matches: [
+          {
+            nodeId: 'node_3',
+            nodeIndex: 3,
+            type: 'paragraph',
+            story: 'body',
+            matchText: '过度拟合',
+            textContext: '训练过久时可能出现过度拟合。',
+            before: [
+              { nodeId: 'node_2', nodeIndex: 2, type: 'paragraph', textPreview: '训练背景' }
+            ],
+            after: [{ nodeId: 'node_4', nodeIndex: 4, type: 'table', textPreview: '缓解方法' }]
+          }
+        ]
+      }
+    })
+
+    expect(rendered).toContain('过度拟合')
+    expect(rendered).toContain('训练过久时可能出现过度拟合')
+    expect(rendered).toContain('node_2')
+    expect(rendered).toContain('训练背景')
+    expect(rendered).toContain('node_4')
+    expect(rendered).toContain('缓解方法')
+  })
+
+  it('renders only created ids for DOCX mutations', () => {
+    const rendered = renderToolResultDataText({
+      toolName: 'docx_content_edit',
+      data: {
+        createdIds: ['node_2']
+      }
+    })
+
+    expect(rendered).toContain('createdIds')
+    expect(rendered).toContain('node_2')
+    expect(rendered).not.toContain('changes')
+    expect(renderToolResultDataText({ toolName: 'docx_format', data: {} })).toBeUndefined()
+  })
+
+  it('renders DOCX read nodes with nodeId', () => {
+    const rendered = renderToolResultDataText({
+      toolName: 'docx_read_nodes',
+      data: {
+        sourcePath: '/workspace/灵感测试.docx',
+        nodes: [
+          {
+            type: 'paragraph',
+            nodeId: 'node-18',
+            text: '截图展示了文档中的参考界面。',
+            children: []
+          }
+        ]
+      }
+    })
+
+    expect(rendered).toContain('node-18')
+    expect(rendered).toContain('截图展示了文档中的参考界面')
   })
 })

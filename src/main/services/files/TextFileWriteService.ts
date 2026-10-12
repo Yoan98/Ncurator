@@ -20,15 +20,18 @@ const sha256Hex = (data: Buffer): string => createHash('sha256').update(data).di
 export const writeTextFileAtomically = (
   filePath: string,
   content: string,
-  expectedHash?: string
+  expectedHash?: string,
+  requireExisting = false
 ): TextFileWriteResult => {
   const encoded = Buffer.from(content, 'utf8')
   if (encoded.toString('utf8') !== content) {
     return { ok: false, error: 'content is not valid UTF-8' }
   }
 
+  if ((requireExisting || expectedHash) && !fs.existsSync(filePath)) {
+    return { ok: false, error: '文件已删除，无法保存' }
+  }
   if (expectedHash) {
-    if (!fs.existsSync(filePath)) return { ok: false, error: 'file not found' }
     if (sha256Hex(fs.readFileSync(filePath)) !== expectedHash) {
       return { ok: false, conflict: true, error: '文件已被外部修改，请确认后覆盖' }
     }

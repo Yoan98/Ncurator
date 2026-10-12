@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from 'playwright'
+import JSZip from 'jszip'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -88,6 +89,22 @@ const closeExplorerIfOpen = async (page: Page): Promise<void> => {
     await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
   }
   await overlay.waitFor({ state: 'hidden', timeout: 10_000 })
+}
+
+const startFileCreation = async (
+  page: Page,
+  typeLabel: string,
+  targetPath?: string
+): Promise<void> => {
+  if (targetPath) await page.getByTitle(targetPath, { exact: true }).click({ button: 'right' })
+  else {
+    const list = getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerList)
+    const height = await list.evaluate((element) => element.clientHeight)
+    await list.click({ button: 'right', position: { x: 8, y: height - 8 } })
+  }
+  await page.getByRole('menuitem', { name: /^新建文件/u }).hover()
+  await page.getByRole('menuitem', { name: typeLabel, exact: true }).click()
+  await page.getByRole('textbox', { name: '新建文件名', exact: true }).waitFor({ state: 'visible' })
 }
 
 describe('workbench result e2e', () => {
@@ -177,6 +194,98 @@ describe('workbench result e2e', () => {
             name: 'workspace-added-empty-directory',
             message: '添加空目录返回后，原伙伴、草稿和文件 Tab 恢复，列表显示空目录说明。'
           })
+          const fileNames = {
+            docx: '行内空白文档',
+            xlsx: '行内空白工作簿',
+            pptx: '行内空白演示',
+            md: '行内其他类型'
+          }
+          const rootCreationResults: boolean[] = []
+          for (const [extension, label] of [
+            ['docx', 'Word 文档 (.docx)'],
+            ['xlsx', 'Excel 工作簿 (.xlsx)'],
+            ['pptx', 'PPT 演示 (.pptx)'],
+            ['md', '其他类型']
+          ] as const) {
+            await page.getByPlaceholder('筛选文件…').fill('不会匹配的筛选')
+            await startFileCreation(page, label)
+            const input = page.getByRole('textbox', { name: '新建文件名', exact: true })
+            const focused = await input.evaluate((element) => document.activeElement === element)
+            await input.fill(fileNames[extension])
+            if (extension === 'md')
+              await page.getByRole('textbox', { name: '文件后缀', exact: true }).fill('.md')
+            await input.press('Enter')
+            await page
+              .getByTitle(`${fileNames[extension]}.${extension}`, { exact: true })
+              .waitFor({ state: 'visible' })
+            rootCreationResults.push(
+              focused &&
+                (await page.getByPlaceholder('筛选文件…').inputValue()) === '' &&
+                (await tabs.count()) === 1 &&
+                (await tabs.first().getAttribute('data-testid')) === launcherId &&
+                (await page.getByText('从右侧工作区文件列表中选择').isVisible())
+            )
+          }
+          const docxPath = path.join(workspace.rootPath, `${fileNames.docx}.docx`)
+          const docxBefore = await fs.readFile(docxPath)
+          const docxZip = await JSZip.loadAsync(docxBefore)
+          const xlsxZip = await JSZip.loadAsync(
+            await fs.readFile(path.join(workspace.rootPath, `${fileNames.xlsx}.xlsx`))
+          )
+          const pptxZip = await JSZip.loadAsync(
+            await fs.readFile(path.join(workspace.rootPath, `${fileNames.pptx}.pptx`))
+          )
+          const blankFilesValid =
+            Boolean(docxZip.file('word/document.xml')) &&
+            Boolean(
+              (await xlsxZip.file('xl/workbook.xml')?.async('string'))?.includes('name="Sheet1"')
+            ) &&
+            Object.keys(pptxZip.files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/u.test(name))
+              .length === 1 &&
+            (await fs.readFile(path.join(workspace.rootPath, `${fileNames.md}.md`))).length === 0
+
+          await startFileCreation(page, 'Word 文档 (.docx)')
+          const newNameInput = page.getByRole('textbox', { name: '新建文件名', exact: true })
+          await newNameInput.fill(fileNames.docx)
+          await newNameInput.press('Enter')
+          await page
+            .getByRole('alert')
+            .filter({ hasText: '同名文件或文件夹已存在' })
+            .waitFor({ state: 'visible' })
+          const duplicatePreserved =
+            docxBefore.equals(await fs.readFile(docxPath)) && (await newNameInput.isVisible())
+          await newNameInput.fill('bad:name')
+          await newNameInput.press('Enter')
+          await page
+            .getByRole('alert')
+            .filter({ hasText: '文件名包含不允许' })
+            .waitFor({ state: 'visible' })
+          await newNameInput.press('Escape')
+          const invalidCancelled =
+            !(await newNameInput.isVisible()) &&
+            (await page.getByPlaceholder('筛选文件…').isVisible())
+
+          await fs.mkdir(path.join(workspace.rootPath, '子目录'))
+          await triggerWindowFocusRefresh(page)
+          await startFileCreation(page, '其他类型', '子目录')
+          await newNameInput.fill('文件夹内新建')
+          await page.getByRole('textbox', { name: '文件后缀', exact: true }).fill('txt')
+          await newNameInput.press('Enter')
+          await page
+            .getByTitle('子目录/文件夹内新建.txt', { exact: true })
+            .waitFor({ state: 'visible' })
+          await startFileCreation(page, '其他类型', '子目录/文件夹内新建.txt')
+          await newNameInput.fill('同级新建')
+          await page.getByRole('textbox', { name: '文件后缀', exact: true }).fill('md')
+          await newNameInput.press('Enter')
+          await page.getByTitle('子目录/同级新建.md', { exact: true }).waitFor({ state: 'visible' })
+          const nestedCreationCorrect =
+            (await fs.stat(path.join(workspace.rootPath, '子目录/文件夹内新建.txt'))).isFile() &&
+            (await fs.stat(path.join(workspace.rootPath, '子目录/同级新建.md'))).isFile()
+          await runtime.captureScreenshot({
+            name: 'workspace-inline-create-files',
+            message: '四种类型新建有效文件，保留打开文件 Tab，文件夹和文件右键定位正确。'
+          })
           await fs.writeFile(
             path.join(workspace.rootPath, SEED_FILE),
             'seed for explorer refresh\n'
@@ -220,6 +329,72 @@ describe('workbench result e2e', () => {
           const openFocusCallCount = await countDirectoryListCalls(page)
           const focusWhileOpenDidRefresh = openFocusCallCount > openFocusBaseline
           const lateCVisibleAfterOpenFocus = await waitForExplorerFile(page, LATE_FILE_C)
+
+          await page.getByPlaceholder('筛选文件…').fill('')
+          await startFileCreation(page, '其他类型')
+          await newNameInput.press('Escape')
+          const floatingEscapePreservedList =
+            !(await newNameInput.isVisible()) &&
+            (await getWorkbenchLocator(
+              page,
+              workbenchSelectors.workspaceExplorerOverlay
+            ).isVisible())
+          await startFileCreation(page, '其他类型')
+          await page.getByPlaceholder('筛选文件…').click()
+          const outsideClickCancelled = !(await newNameInput.isVisible())
+
+          const deleteBaseName = `回收站测试-${randomUUID()}`
+          const deleteFileName = `${deleteBaseName}.txt`
+          const deleteFilePath = path.join(workspace.rootPath, deleteFileName)
+          const activeTabBeforeCreate = await tabs
+            .locator('[aria-current="page"]')
+            .locator('..')
+            .getAttribute('data-testid')
+          await startFileCreation(page, '其他类型')
+          await newNameInput.fill(deleteBaseName)
+          await page.getByRole('textbox', { name: '文件后缀', exact: true }).fill('txt')
+          await newNameInput.press('Enter')
+          await page.getByTitle(deleteFileName, { exact: true }).waitFor({ state: 'visible' })
+          const floatingCreatePreservedPreview =
+            (await getWorkbenchLocator(
+              page,
+              workbenchSelectors.workspaceExplorerOverlay
+            ).isVisible()) &&
+            (await getWorkbenchLocator(page, workbenchSelectors.plainTextEditor).isVisible()) &&
+            (await tabs
+              .locator('[aria-current="page"]')
+              .locator('..')
+              .getAttribute('data-testid')) === activeTabBeforeCreate
+          await page.getByTitle(deleteFileName, { exact: true }).click()
+          const editor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
+          await editor.waitFor({ state: 'visible' })
+          await editor.fill('删除前通过真实编辑器保存的内容')
+          await openAllModeExplorer(page)
+          await page.getByPlaceholder('筛选文件…').fill('')
+          await page.getByTitle(deleteFileName, { exact: true }).click({ button: 'right' })
+          await page.getByRole('menuitem', { name: '删除', exact: true }).click()
+          const deleteDialog = page.getByRole('dialog', { name: '删除文件？', exact: true })
+          await deleteDialog.getByRole('button', { name: /^取\s*消$/u }).click()
+          const deleteCancelled = (await fs.stat(deleteFilePath)).isFile()
+          await page.getByTitle(deleteFileName, { exact: true }).click({ button: 'right' })
+          await page.getByRole('menuitem', { name: '删除', exact: true }).click()
+          await deleteDialog.getByRole('button', { name: '移到回收站', exact: true }).click()
+          await deleteDialog.waitFor({ state: 'hidden' })
+          await page.getByText('文件已删除', { exact: true }).waitFor({ state: 'visible' })
+          await page.getByTitle(deleteFileName, { exact: true }).waitFor({ state: 'hidden' })
+          await page.waitForTimeout(1200)
+          const fileAbsentAfterDelay = !(await fs.access(deleteFilePath).then(
+            () => true,
+            () => false
+          ))
+          await page.getByTitle(SEED_FILE, { exact: true }).click()
+          await editor.waitFor({ state: 'visible' })
+          const deletedFileNotRecreated =
+            fileAbsentAfterDelay &&
+            !(await fs.access(deleteFilePath).then(
+              () => true,
+              () => false
+            ))
 
           await closeExplorerIfOpen(page)
           const previewTabId = await tabs.first().getAttribute('data-testid')
@@ -267,10 +442,38 @@ describe('workbench result e2e', () => {
             closedFocusCallCount,
             openFocusBaseline,
             openFocusCallCount,
+            rootCreationResults,
+            blankFilesValid,
+            duplicatePreserved,
+            invalidCancelled,
+            nestedCreationCorrect,
+            floatingEscapePreservedList,
+            outsideClickCancelled,
+            floatingCreatePreservedPreview,
+            deleteCancelled,
+            deletedFileNotRecreated,
             workspaceRoot: workspace.rootPath
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.rootCreationResults.every(Boolean) &&
+              result.blankFilesValid &&
+              result.duplicatePreserved &&
+              result.invalidCancelled &&
+              result.nestedCreationCorrect &&
+              result.floatingEscapePreservedList &&
+              result.outsideClickCancelled &&
+              result.floatingCreatePreservedPreview &&
+              result.deleteCancelled &&
+              result.deletedFileNotRecreated,
+            {
+              name: 'workspace-file-inline-create-and-trash',
+              message:
+                '真实右键创建有效 Office/自定义文件；行内重名/非法提示与取消正确；创建保留原预览和列表；删除先确认且不会延迟重建，对齐 WB-PANEL-003-AC24–AC28。',
+              data: result
+            }
+          )
           await runtime.assertThat(
             result.unifiedEmpty &&
               result.settingsTargetCorrect &&

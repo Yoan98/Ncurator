@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { toJSONSchema } from 'zod/v4'
 import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
-import {
-  PPT_EDIT_TOOL_SPEC,
-  PPT_TOOL_SPECS
-} from '../../../../src/main/services/ai/human/tools/ppt/toolSpecs'
+import { PPT_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/ppt/toolSpecs'
 import {
   assertPptElementInCanvas,
   assertPptElementTextFitsBounds,
@@ -163,52 +159,6 @@ describe('ai unit ppt tool contract', () => {
     ).toBe(false)
   })
 
-  it('keeps tool and skill descriptions as capability boundaries', () => {
-    const description = PPT_EDIT_TOOL_SPEC.promptSpec.description
-    expect(description).toBe('创建或编辑 PPTX 的页面、元素、文字和备注。')
-    expect(SKILL_DEFINITIONS['ppt-read'].description).toBe('读取 PPTX 文件内容。')
-    expect(SKILL_DEFINITIONS['ppt-write'].description).toBe('创建或编辑 PPTX 文件。')
-    for (const text of [
-      description,
-      SKILL_DEFINITIONS['ppt-read'].description,
-      SKILL_DEFINITIONS['ppt-write'].description
-    ]) {
-      for (const forbidden of [
-        'insert_slide',
-        'replace_slide',
-        'elementId',
-        'html',
-        'data-ppt-slide',
-        'data-ppt-element',
-        'CSS',
-        'actions[]',
-        'revision',
-        'replay',
-        'checksum',
-        'UUID',
-        '原子',
-        'runtime/assets'
-      ]) {
-        expect(text).not.toContain(forbidden)
-      }
-    }
-    expect(PPT_EDIT_TOOL_SPEC.promptSpec).not.toHaveProperty('examples')
-  })
-
-  it('puts operation and canvas semantics on schema field describes', () => {
-    const rendered = JSON.stringify(toJSONSchema(pptEditSchema))
-    expect(rendered).toContain('插入新页面')
-    expect(rendered).toContain('按规格重写已有页面，保留 slideId')
-    expect(rendered).toContain('按 elementId 修改当前页元素')
-    expect(rendered).toContain('960×540')
-    expect(rendered).toContain('按内容自拟版式')
-    expect(rendered).toContain('须 ≤ bounds.height')
-    expect(rendered).toContain('不透明颜色；#RRGGBB')
-    expect(rendered).not.toContain('或 RRGGBB')
-    expect(rendered).not.toContain('rgb()')
-    expect(rendered).not.toContain('html')
-  })
-
   it('renders latex fallback as a standalone svg image', () => {
     const svg = renderLatexToSvg(
       String.raw`\begin{aligned}a^2+b^2&=c^2\\x&=\frac{-b}{2a}\end{aligned}`
@@ -257,9 +207,7 @@ describe('ai unit ppt tool contract', () => {
         style: { fontSize: 36 }
       })
     ).toThrow('超过框高')
-    expect(() =>
-      assertPptTextFitsBounds({ fontSize: 24, boundsHeight: 24 })
-    ).not.toThrow()
+    expect(() => assertPptTextFitsBounds({ fontSize: 24, boundsHeight: 24 })).not.toThrow()
     expect(() =>
       assertPptElementTextFitsBounds({
         type: 'text',

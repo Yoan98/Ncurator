@@ -119,6 +119,10 @@ import type {
   WorkspaceMutationResponse,
   WorkspaceTreeListResponse,
   WorkspaceDirectoryListResponse,
+  WorkspaceFileCreateRequest,
+  WorkspaceFileCreateResponse,
+  WorkspaceFileTrashRequest,
+  WorkspaceFileMutationResponse,
   WorkbenchUiStateResponse,
   WorkbenchUiStateSaveRequest,
   WriteTextFileRequest,
@@ -185,6 +189,8 @@ export type DesktopApi = {
   workspaceDirectoryList: (
     payload: ListWorkspaceDirectoryRequest
   ) => Promise<WorkspaceDirectoryListResponse>
+  workspaceFileCreate: (payload: WorkspaceFileCreateRequest) => Promise<WorkspaceFileCreateResponse>
+  workspaceFileTrash: (payload: WorkspaceFileTrashRequest) => Promise<WorkspaceFileMutationResponse>
   workspaceScan: (payload: { workspaceId: string }) => Promise<WorkspaceJobResponse>
   workspacePrepare: (payload: PrepareWorkspaceRequest) => Promise<WorkspaceJobResponse>
   workspaceIndexPrepareSessionBegin: (
@@ -239,26 +245,20 @@ export type DesktopApi = {
   scheduledTaskSetEnabled: (
     payload: ScheduledTaskSetEnabledRequest
   ) => Promise<ScheduledTaskMutationResponse>
-  scheduledTaskRunNow: (payload: ScheduledTaskRunNowRequest) => Promise<ScheduledTaskMutationResponse>
+  scheduledTaskRunNow: (
+    payload: ScheduledTaskRunNowRequest
+  ) => Promise<ScheduledTaskMutationResponse>
   scheduledTaskDismissBusyNotice: (
     payload: ScheduledTaskDismissBusyNoticeRequest
   ) => Promise<ScheduledTaskMutationResponse>
   onPartnerListRefresh: (cb: () => void) => () => void
   partnerOpen: (payload: PartnerOpenRequest) => Promise<PartnerOpenResponse>
-  partnerUiStateSave: (
-    payload: PartnerUiStateSaveRequest
-  ) => Promise<PartnerUiStateSaveResponse>
+  partnerUiStateSave: (payload: PartnerUiStateSaveRequest) => Promise<PartnerUiStateSaveResponse>
   workbenchUiStateGet: () => Promise<WorkbenchUiStateResponse>
   workbenchUiStateSave: (payload: WorkbenchUiStateSaveRequest) => Promise<WorkbenchUiStateResponse>
-  partnerRunSummaries: (
-    payload: PartnerRunSummariesRequest
-  ) => Promise<PartnerRunSummariesResponse>
-  partnerSnapshotGet: (
-    payload: PartnerSnapshotRequest
-  ) => Promise<PartnerSnapshotResponse>
-  partnerClearContext: (
-    payload: PartnerClearContextRequest
-  ) => Promise<PartnerClearContextResponse>
+  partnerRunSummaries: (payload: PartnerRunSummariesRequest) => Promise<PartnerRunSummariesResponse>
+  partnerSnapshotGet: (payload: PartnerSnapshotRequest) => Promise<PartnerSnapshotResponse>
+  partnerClearContext: (payload: PartnerClearContextRequest) => Promise<PartnerClearContextResponse>
   chatSubmit: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
   chatTurnRetractLatest: (
     payload: ChatTurnRetractLatestRequest
@@ -267,17 +267,13 @@ export type DesktopApi = {
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigModelList: (id: string) => Promise<LlmModelListResponse>
-  freeModelsGet: (options?: {
-    refreshIfStale?: boolean
-  }) => Promise<FreeModelsSnapshot>
+  freeModelsGet: (options?: { refreshIfStale?: boolean }) => Promise<FreeModelsSnapshot>
   freeModelsRefresh: () => Promise<{
     success: boolean
     snapshot: FreeModelsSnapshot
     error?: string
   }>
-  presetModelsGet: (options?: {
-    refreshIfStale?: boolean
-  }) => Promise<PresetModelsSnapshot>
+  presetModelsGet: (options?: { refreshIfStale?: boolean }) => Promise<PresetModelsSnapshot>
   presetModelsRefresh: () => Promise<{
     success: boolean
     snapshot: PresetModelsSnapshot

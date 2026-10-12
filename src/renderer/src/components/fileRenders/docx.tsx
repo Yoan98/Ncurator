@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { DocRendererProps } from 'react-doc-viewer'
 import '@js-preview/docx/lib/index.css'
 import './index.css'
 import DocxSelectionLayer from './DocxSelectionLayer'
+import DocxOverviewRuler from './DocxOverviewRuler'
+import type { SelectionTarget } from './selection/types'
 import { workbenchSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import type { LoadedFileRenderDocument } from './types'
@@ -88,9 +90,35 @@ export const DocxPreview = ({
   document?: LoadedFileRenderDocument
 }) => {
   const [container, setContainer] = useState<HTMLDivElement | null>(null)
-  const lastRenderedKeyRef = useRef<string | null>(null)
+  const [renderedKey, setRenderedKey] = useState<string | null>(null)
   const [renderRevision, setRenderRevision] = useState(0)
   const [renderError, setRenderError] = useState<string | null>(null)
+  const [references, setReferences] = useState<SelectionTarget[]>([])
+  const updateReferences = useCallback((next: SelectionTarget[]) => {
+    setReferences((previous) => {
+      // Selection geometry is refreshed on scroll. Keep the ruler's targets stable when
+      // the same DOM ranges still represent the same saved references.
+      const unchanged =
+        previous.length === next.length &&
+        previous.every((target, index) => {
+          const candidate = next[index]
+          const a = target.geometry.ranges || [],
+            b = candidate.geometry.ranges || []
+          return (
+            target.node === candidate.node &&
+            a.length === b.length &&
+            a.every(
+              (range, i) =>
+                range.startContainer === b[i].startContainer &&
+                range.startOffset === b[i].startOffset &&
+                range.endContainer === b[i].endContainer &&
+                range.endOffset === b[i].endOffset
+            )
+          )
+        })
+      return unchanged ? previous : next
+    })
+  }, [])
   const documentFile = currentDocument?.file
   const documentFileData = currentDocument?.fileData
   const documentUri = currentDocument?.uri
@@ -101,7 +129,7 @@ export const DocxPreview = ({
 
   useEffect(() => {
     if (!container || !currentDocument) return
-    if (lastRenderedKeyRef.current === renderKey && container.childNodes.length > 0) {
+    if (renderedKey === renderKey && container.childNodes.length > 0) {
       scrollToAnchor(container, anchorName)
       return
     }
@@ -151,7 +179,7 @@ export const DocxPreview = ({
         await previewer.preview(file)
         if (!cancelled) {
           setRenderRevision((value) => value + 1)
-          lastRenderedKeyRef.current = renderKey
+          setRenderedKey(renderKey)
           scrollToAnchor(container, anchorName)
         }
       } catch (error) {
@@ -178,24 +206,37 @@ export const DocxPreview = ({
     documentFile,
     documentFileData,
     documentUri,
-    renderKey
+    renderKey,
+    renderedKey
   ])
 
   if (!currentDocument) return null
+  const ready = renderRevision > 0 && renderedKey === renderKey && !renderError
 
   return (
     <div
-      className="relative h-full w-full bg-[#F7F7F5]"
+      className="relative flex h-full w-full min-w-0 bg-[#F7F7F5]"
       data-testid={workbenchSelectors.docxViewer}
     >
-      <div ref={setContainer} className="docx-content h-full w-full overflow-auto px-3 py-3" />
-      {currentDocument.metadata?.allowDocumentSelection &&
-      currentDocument.filePath &&
-      !renderError ? (
+      <div
+        ref={setContainer}
+        className="docx-content h-full min-w-0 flex-1 overflow-auto px-3 py-3"
+      />
+      {currentDocument.metadata?.allowDocumentSelection && currentDocument.filePath && ready ? (
         <DocxSelectionLayer
           container={container}
           filePath={currentDocument.filePath}
           revision={renderRevision}
+          onTargetsChange={updateReferences}
+        />
+      ) : null}
+      {currentDocument.metadata?.docxOverview ? (
+        <DocxOverviewRuler
+          key={renderKey}
+          container={container}
+          mode={currentDocument.metadata.docxOverview}
+          revision={ready ? renderRevision : 0}
+          references={references}
         />
       ) : null}
       {renderError ? (

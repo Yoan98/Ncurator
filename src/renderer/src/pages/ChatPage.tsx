@@ -4718,7 +4718,7 @@ const ChatPage: React.FC = () => {
       !scheduledTasksActive &&
       !pendingQuestion &&
       !pendingApprovalBatch,
-    locked: submittingPartnerId === currentPartnerId,
+    locked: Boolean(currentPartnerId) && submittingPartnerId === currentPartnerId,
     selections: currentDocumentSelections,
     locations,
     navigation: selectionNavigation,

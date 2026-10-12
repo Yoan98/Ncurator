@@ -16,6 +16,7 @@ export type EditableTextFile = {
   loading: boolean
   loadError: string | null
   initialText: string | null
+  readOnly: boolean
   /** 注册一次内容变更并安排防抖自动保存（纯覆盖）。 */
   autoSave: (content: string) => void
   /** 立即保存挂起的改动并清空防抖。 */
@@ -52,6 +53,9 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     hash: null,
     error: null
   })
+  const [readOnly, setReadOnly] = useState(false)
+  const pausedRef = useRef(false)
+  const deletedRef = useRef(false)
 
   const filePathRef = useRef(filePath)
   const lastWrittenHashRef = useRef<string | null>(null)
@@ -76,6 +80,7 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
 
   const flushSave = useCallback(async (): Promise<void> => {
     clearSaveTimer()
+    if (deletedRef.current) return
     if (savingRef.current) return savingRef.current
     const save = async (): Promise<void> => {
       while (pendingContentRef.current !== null) {
@@ -102,6 +107,7 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
 
   const autoSave = useCallback(
     (content: string): void => {
+      if (pausedRef.current || deletedRef.current) return
       textRef.current = content
       unsavedRef.current = true
       pendingContentRef.current = content
@@ -114,12 +120,42 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     [clearSaveTimer, flushSave]
   )
 
-  useEffect(() => registerTextSave(filePath, flushSave), [filePath, flushSave])
+  const discardDeletedFile = useCallback((): void => {
+    deletedRef.current = true
+    pausedRef.current = true
+    clearSaveTimer()
+    pendingContentRef.current = null
+    unsavedRef.current = false
+    setReadOnly(true)
+    setState({ loading: false, text: null, hash: null, error: '文件已删除' })
+  }, [clearSaveTimer])
+
+  useEffect(
+    () =>
+      registerTextSave(filePath, {
+        save: flushSave,
+        pause: () => {
+          pausedRef.current = true
+          clearSaveTimer()
+          setReadOnly(true)
+        },
+        resume: () => {
+          pausedRef.current = false
+          setReadOnly(false)
+        },
+        discard: discardDeletedFile
+      }),
+    [filePath, flushSave, clearSaveTimer, discardDeletedFile]
+  )
   const getText = useCallback(() => textRef.current, [])
 
   const load = useCallback(async (): Promise<void> => {
     setState((current) => ({ ...current, loading: true, error: null }))
     try {
+      if (!(await window.api.fileExists(filePathRef.current))) {
+        discardDeletedFile()
+        return
+      }
       const bytes = await window.api.readFile(filePathRef.current)
       const hash = await sha256Hex(bytes)
       const text = decodeUtf8(bytes)
@@ -129,6 +165,11 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
       lastWrittenHashRef.current = hash
       unsavedRef.current = false
       pendingContentRef.current = null
+      if (deletedRef.current) {
+        deletedRef.current = false
+        pausedRef.current = false
+        setReadOnly(false)
+      }
       setState({ loading: false, text: textRef.current, hash, error: null })
     } catch (error) {
       setState({
@@ -138,7 +179,7 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
         error: normalizeUserFacingError(error, '文件加载失败')
       })
     }
-  }, [])
+  }, [discardDeletedFile])
 
   const checkExternalChange = useCallback(async (): Promise<void> => {
     try {
@@ -148,9 +189,10 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
       if (unsavedRef.current) return
       await load()
     } catch (error) {
-      console.error('[EDITABLE-FILE] external change check failed', error)
+      if (!(await window.api.fileExists(filePathRef.current))) discardDeletedFile()
+      else console.error('[EDITABLE-FILE] external change check failed', error)
     }
-  }, [load])
+  }, [load, discardDeletedFile])
 
   useEffect(() => {
     let disposed = false
@@ -208,6 +250,7 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     loading: state.loading,
     loadError: state.error,
     initialText: state.text,
+    readOnly,
     autoSave,
     flushSave,
     getText,

@@ -74,6 +74,10 @@ describe('workbench browser lifecycle e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           let heartbeatCount = 0
+          let releaseBackgroundResponse = (): void => {}
+          const backgroundResponseGate = new Promise<void>((resolve) => {
+            releaseBackgroundResponse = resolve
+          })
           const checkpoint = (name: string): void => {
             runtime.signal({ name: `browser-lifecycle-${name}`, message: name })
           }
@@ -100,6 +104,9 @@ describe('workbench browser lifecycle e2e', () => {
               </body>
             </html>`,
             {
+              beforeResponse: async (requestUrl) => {
+                if (requestUrl.includes('background=1')) await backgroundResponseGate
+              },
               onRequest: (requestUrl) => {
                 if (!requestUrl.startsWith('/__ncurator-browser-lifecycle-heartbeat')) {
                   return false
@@ -112,7 +119,10 @@ describe('workbench browser lifecycle e2e', () => {
           runtime.registerResource({
             name: 'browser-lifecycle-http-server',
             phase: 'before-app-close',
-            dispose: server.close
+            dispose: async () => {
+              releaseBackgroundResponse()
+              await server.close()
+            }
           })
 
           const setup = await setupWorkbenchWithTempWorkspace(page, {
@@ -343,13 +353,22 @@ describe('workbench browser lifecycle e2e', () => {
             browserTabId
           )
           const backgroundUrl = `${server.url}?background=1`
-          const backgroundNavigation = await page.evaluate(
-            async ({ tabId, url }) => window.api.browserTabNavigate({ tabId, url }),
+          await panelToggle.click()
+          await addressInput.fill(backgroundUrl)
+          await addressInput.press('Enter')
+          await panelToggle.click()
+          await page.waitForFunction(
+            (testId) => document.querySelector(`[data-testid="${testId}"]`) === null,
+            workbenchSelectors.contentPanelShell
+          )
+          releaseBackgroundResponse()
+          await page.waitForFunction(
+            async ({ tabId, url }) => {
+              const { state } = await window.api.browserPanelStateGet({ tabId })
+              return state?.url === url && !state.isLoading
+            },
             { tabId: browserTabId, url: backgroundUrl }
           )
-          if (!backgroundNavigation.success) {
-            throw new Error(backgroundNavigation.error || 'background navigation failed')
-          }
           const hiddenUpdatedState = await page.evaluate(
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
@@ -393,7 +412,10 @@ describe('workbench browser lifecycle e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
           )
-          const openExternalButton = getWorkbenchLocator(page, workbenchSelectors.browserOpenExternal)
+          const openExternalButton = getWorkbenchLocator(
+            page,
+            workbenchSelectors.browserOpenExternal
+          )
           const openExternalVisible = await openExternalButton.isVisible()
           const openExternalLabel = (await openExternalButton.getAttribute('aria-label')) || ''
           const escapeMenuClosePromise = escapeMenuPage.waitForEvent('close', { timeout: 10_000 })
@@ -529,9 +551,9 @@ describe('workbench browser lifecycle e2e', () => {
           }, workbenchSelectors.contentPanelShell)
           await page.waitForFunction(
             (testId) =>
-              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute(
-                'data-panel-visible'
-              ) === 'true',
+              document
+                .querySelector(`[data-testid="${testId}"]`)
+                ?.getAttribute('data-panel-visible') === 'true',
             workbenchSelectors.contentPanelShell
           )
           // Wait out the expand animation so its pending enable timer has already fired;
@@ -623,8 +645,7 @@ describe('workbench browser lifecycle e2e', () => {
             menuZoom: menuState.state?.zoomPercent,
             restoreSamples,
             emptyGoDisabled,
-            openExternalButton:
-              openExternalVisible && openExternalLabel === '将打开外部浏览器',
+            openExternalButton: openExternalVisible && openExternalLabel === '将打开外部浏览器',
             closedTabDestroyed,
             deletedOwnerDestroyed
           }

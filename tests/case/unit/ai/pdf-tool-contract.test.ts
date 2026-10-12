@@ -1,3 +1,4 @@
+import { renderToolResultDataText } from '../../../../src/main/services/ai/human/shared/toolResultRenderers'
 import { describe, expect, it } from 'vitest'
 import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
 import { PDF_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/pdf/toolSpecs'
@@ -47,5 +48,58 @@ describe('ai unit PDF tool contract', () => {
         sourcePath: '学习笔记/深度学习.pdf'
       }).success
     ).toBe(true)
+  })
+})
+
+describe('tool result data fidelity', () => {
+  it('renders PDF page text, search snippets and rendered image paths', () => {
+    const readRendered = renderToolResultDataText({
+      toolName: 'pdf_read_pages',
+      data: {
+        sourcePath: '/workspace/深度学习.pdf',
+        pageCount: 11,
+        pages: [
+          {
+            pageNumber: 1,
+            textStatus: 'available',
+            charCount: 42,
+            imageCount: 1,
+            text: 'inputs parameters architecture predictions labels loss update'
+          }
+        ]
+      }
+    })
+    const searchRendered = renderToolResultDataText({
+      toolName: 'pdf_search',
+      data: {
+        sourcePath: '/workspace/深度学习.pdf',
+        pageCount: 11,
+        query: '过度拟合',
+        mode: 'literal',
+        totalMatchCount: 1,
+        returnedMatchCount: 1,
+        matches: [{ pageNumber: 9, matchedText: '过度拟合', snippet: '右图属于过度拟合' }]
+      }
+    })
+    const visualRendered = renderToolResultDataText({
+      toolName: 'pdf_read_pages',
+      data: {
+        sourcePath: '/workspace/深度学习.pdf',
+        pages: [
+          {
+            pageNumber: 9,
+            pageImagePath: '/runtime/page-9.png',
+            text: '第9页右侧 Overfit 曲线显示验证表现变差。'
+          }
+        ]
+      }
+    })
+
+    expect(readRendered).toContain('1')
+    expect(readRendered).toContain('architecture')
+    expect(searchRendered).toContain('9')
+    expect(searchRendered).toContain('右图属于过度拟合')
+    expect(visualRendered).toContain('9')
+    expect(visualRendered).toContain('Overfit 曲线')
   })
 })

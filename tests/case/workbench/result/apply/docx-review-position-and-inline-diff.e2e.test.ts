@@ -1,3 +1,7 @@
+import {
+  assertDocxReviewOverview,
+  assertEmptyDocxOverview
+} from '../../../../harness/e2e/docxOverview'
 import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import path from 'node:path'
 import fs from 'node:fs/promises'
@@ -215,6 +219,7 @@ describe('workbench result e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.applyPanel)
             .getByText(MARKER)
             .waitFor({ state: 'visible', timeout: 30_000 })
+          await assertDocxReviewOverview(runtime)
           const reviewVisual = await getWorkbenchLocator(
             page,
             workbenchSelectors.docxViewer
@@ -341,6 +346,7 @@ describe('workbench result e2e', () => {
             .filter({ hasText: CORE_NAMES[0]! })
             .first()
           await previewPositioning.waitFor({ state: 'visible', timeout: 30_000 })
+          await assertEmptyDocxOverview(runtime)
           const previewPositioningText = await previewPositioning.textContent()
           const previewBoldText = await previewPositioning.evaluate((paragraph) => {
             const bold: string[] = []

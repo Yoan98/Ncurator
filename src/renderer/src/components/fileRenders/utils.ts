@@ -93,6 +93,9 @@ export const prepareFileRenderDocument = async (
   document: FileRenderDocument,
   createdUrls: string[]
 ): Promise<PreparedFileRenderDocument> => {
+  if (document.filePath && !(await window.api.fileExists(document.filePath))) {
+    throw new Error('文件已删除')
+  }
   const fileName = getFileName(document)
   const sourceMimeType =
     document.file instanceof Blob

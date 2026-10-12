@@ -72,7 +72,7 @@ describe('workbench scheduled-task e2e', () => {
             page,
             '请先通过界面向我提问，询问我希望报告采用哪种语言，给出中文和英文两个选项。等待我的选择后再继续，不要替我选择。'
           )
-          await waitForWorkbenchAiEvent(runtime, {
+          const required = await waitForWorkbenchAiEvent(runtime, {
             name: 'scheduled-task-partner-waiting-human',
             timeoutMs: 120_000,
             matches: (event) =>
@@ -164,18 +164,37 @@ describe('workbench scheduled-task e2e', () => {
             page,
             `${workbenchSelectors.partnerItemPrefix}-${partner.id}`
           ).click()
-          await page.getByTestId('workbench-human-question-cancel').click()
+          if (
+            required.type !== 'human_interaction_required' ||
+            required.interaction.kind !== 'question'
+          ) {
+            throw new Error('question event missing')
+          }
+          const questions = required.interaction.questions
+          for (const [index, question] of questions.entries()) {
+            await page
+              .getByTestId(`workbench-human-question-user-text-${question.id}`)
+              .fill('中文。请直接回复已收到，无需继续提问或生成报告。')
+            await page
+              .getByTestId(
+                index < questions.length - 1
+                  ? workbenchSelectors.humanQuestionNext
+                  : workbenchSelectors.humanQuestionSubmit
+              )
+              .click()
+          }
           await page.getByTestId(workbenchSelectors.humanQuestionCard).waitFor({ state: 'hidden' })
+          await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
+          await capsule.waitFor({ state: 'visible' })
+          const firstCapsule = (await capsule.textContent()) || ''
           await waitForState(
             async () =>
               (await page.evaluate(() => window.api.partnerList())).find(
                 (item) => item.id === partner.id
               )?.isRunning === false,
-            '停止后伙伴仍然忙碌'
+            '回答后伙伴未结束运行',
+            120_000
           )
-
-          await capsule.waitFor({ state: 'visible' })
-          const firstCapsule = (await capsule.textContent()) || ''
           await getWorkbenchLocator(page, scheduledTaskSelectors.busyCancelDismiss).click()
           await waitForState(
             async () =>
@@ -301,11 +320,12 @@ describe('workbench scheduled-task e2e', () => {
             }
           )
           await runtime.assertThat(
-            result.capsuleVisibleWhileWaiting &&
+            !result.capsuleVisibleWhileWaiting &&
               TASK_NAMES.some((name) => result.firstCapsule.includes(name)),
             {
               name: 'busy-notice-visible-on-bound-partner',
-              message: '忙碌取消后进入绑定伙伴可见包含任务名的胶囊，对齐 ST-RUN-005-AC1。',
+              message:
+                '问答期间暂不显示；回答后 Composer 恢复，含任务名的提示仍在，对齐 ST-RUN-005-AC1。',
               data: result
             }
           )

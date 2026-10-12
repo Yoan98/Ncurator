@@ -15,7 +15,7 @@
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选；未命中再按展示名；仍未命中则进入「自定义模型」按名称搜索。
 - Workbench UI E2E 测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖工作区文件列表在打开时重新读取磁盘最新目录（含外部新建文件）。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；WPS 通道机制见 `WB-WPS-001`。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖列表打开/焦点刷新、右键行内新建和确认移到回收站，以及删除后禁止自动保存重建。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；WPS 通道机制见 `WB-WPS-001`。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
@@ -150,7 +150,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：侧栏编辑入口复用创建弹窗，保存后更新名称与形象。
 - Why：伙伴名称和形象应可改，且不能误建成新伙伴或清掉对话。
-- How：创建伙伴后悬停点击编辑，修改名称和外形后保存。
+- How：通过真实创建弹窗创建伙伴，再悬停点击编辑，修改名称和外形后保存；只读查询确认 id 和总数。
 - Oracle：弹窗为「编辑伙伴」并预填原值；保存后仍是同一伙伴 id，侧栏显示新名称，对齐 `WB-SESSION-012`。
 
 #### `workbench-help-entry`
@@ -207,24 +207,24 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：A/B 伙伴分别保存 Composer（包括执行权限）、资源标签、活动标签和展开状态，反复切换互不覆盖。
 - Why：伙伴状态串联会让用户把输入、模型或资料发到错误上下文。
-- How：给两个真实伙伴设置不同偏好、执行权限、模型、输入、引用、附件和右侧内容，通过真实伙伴列表来回切换。不断言工作区选择器或搜索模式。
-- Oracle：每次切回只出现目标伙伴自己的完整 `partner_ui_state`，执行权限与其他 Composer 状态分别恢复，对齐 `WB-SESSION-002`、`WB-SESSION-008-AC1`、`WB-SESSION-008-AC2`。目标伙伴若仍在 Brain 思考等待，切回后「让俺想想」仍在，对齐 `WB-SESSION-002-AC3`。
+- How：经 UI 创建 A/B 伙伴，分别输入草稿、选择资料偏好和执行权限；在 A 打开文件资源标签，在 B 收起/展开资源面板，来回切换后核对可见状态及只读持久化快照。
+- Oracle：草稿、偏好、执行权限及活动资源标签和展开状态各自恢复，对齐 `WB-SESSION-002`、`WB-SESSION-008-AC1/AC2`。本例不验证完整模型/引用/附件矩阵，也不验证 Brain 思考中切回的 `WB-SESSION-002-AC3`，这些属于覆盖边界。
 
 #### `partner-ui-state-restart-persistence`
 
 - 测试类型：`e2e`
 - What：正常关闭并使用同一用户目录重启后，恢复最后活动伙伴及其完整 UI 状态。
 - Why：只在内存中隔离会导致用户重启后看到错误伙伴或丢失未发送工作。
-- How：保存伙伴和未发送草稿状态，正常退出应用，再用相同 `NCURATOR_USER_DATA_PATH` 启动并读取界面。
-- Oracle：最后活动伙伴、Composer、右侧面板和浏览器 URL / 历史 / 缩放均恢复，对齐 `WB-SESSION-008-AC3`、`WB-PANEL-004-AC12`。`workbench_ui_state` 只恢复 `active_view_key`，无 `draft_state_json`。
+- How：经 UI 创建伙伴、输入草稿并选择执行权限；经资源菜单创建浏览器，在地址栏连续导航两个真实本地页面并用工具栏放大；等待只读快照落盘后正常退出，用同一用户目录重启。
+- Oracle：最后活动伙伴、草稿、执行权限、面板以及浏览器 URL / 历史 / 缩放恢复，对齐 `WB-SESSION-008-AC3`、`WB-PANEL-004-AC12`；不把这些断言扩展为全部 Composer 字段的重启矩阵。
 
 #### `background-partner-ui-event-isolation`
 
 - 测试类型：`e2e`
-- What：A 伙伴的延迟 AI 或浏览器事件在用户切到 B 后只更新 A。
+- What：A 伙伴的浏览器导航在用户切到 B 后完成，只更新 A。
 - Why：后台事件晚到时若按当前页面写状态，会无声覆盖用户正在操作的另一伙伴。
-- How：在 A 启动受控延迟事件，完成前切到 B；事件完成后检查 B，再切回 A。
-- Oracle：B 的 Composer 和面板不变化，A 显示延迟结果，对齐 `WB-SESSION-008-AC2`。
+- How：经 UI 创建两个伙伴并输入不同草稿，在 A 的浏览器地址栏导航到真实本地 HTTP 页面；服务器暂缓响应，切到 B 后释放真实响应，再检查 B 并切回 A。不注入应用状态或伪造事件。
+- Oracle：B 草稿和面板展开状态不变、无 A 浏览器标签；切回 A 可见原草稿、对应浏览器标签及已加载 URL，对齐 `WB-SESSION-008-AC2`。
 
 #### `model-selector-and-provider-error`
 
@@ -329,8 +329,9 @@ pnpm test:update:e2e
 - Why：确保原文准确，引用与想法关联，两侧使用同一内容。
 - How：通过鼠标起点与 Shift 终点选择部分单词、跨段落、跨单元格、整表及正文/表格混选；复用 workspace DOCX，并用 `docx-selection-layout.docx` 覆盖单元格内换行、空单元格、横向/纵向合并、跨页、页眉页脚、图片混选及反向选择。只读 DOM 取证和引用原文核对；确认、高亮、点击重新编辑和定位均走真实 UI。纯图片选区检查系统 toast 合并与自动消失，文档内无提示条；重复/重叠选区保持静默。核对 AI 引用入口、“描述你想对引用内容做什么”placeholder、对勾提示、字号、高度、浮层翻转/缩放和未确认输入；发送后检查真实脑模型输入的引用分块及源文件未被提问修改；再用真实临时 DOCX 选择定位段，仅输入“精简下”，核对写回后所选段变短、未选中的同章场景段完全保留，普通 DOCX 预览自动出现切换并可进入审核；双向编辑、跳转和两侧删除，核对左侧编号、原文与想法关联及右侧高亮清理；切换伙伴和文件，实际发送后新增选区检查从 1 开始，再编辑历史消息并刷新 Renderer 检查持久化草稿。
 - Oracle：覆盖 `WB-DOCUMENT-REFERENCE-001-AC1` 的跨段落/跨页/跨单元格/整表/正文混选、页眉页脚、反向选择、表格行列分隔与空/合并占位、单元格内换行、图片混选和无文字 toast，`WB-DOCUMENT-REFERENCE-001-AC2` 的两阶段入口、对勾及新增/编辑提示、小字号紧凑高度、输入后保留紫色高亮、浮层边界/翻转/滚动/缩放、空内容禁用、Enter 确认、Shift+Enter 换行和 Esc/外部点击关闭，`WB-DOCUMENT-REFERENCE-001-AC3` 的图标编号胶囊和两侧编辑同步，`WB-DOCUMENT-REFERENCE-001-AC4` 的右侧无编号、仅高亮文字可悬停和点击、定位、重复/重叠选择静默保留、删除后左侧连续编号与右侧高亮清理、删空及发送后从 1 开始和内容不串，`WB-DOCUMENT-REFERENCE-001-AC5` 的伙伴隔离及内存/持久化边界，`WB-DOCUMENT-REFERENCE-001-AC6` 的接受后清理、历史编号保留和历史编辑。刷新后选区消失，普通文字与 @ 引用保留；真实局部精简保留未选中正文，提问不写文件，引用原文与前后文分块清楚，DOCX 改动收尾后普通预览自动提供审核切换。
-- 最新验证：2026-10-11 共用引用层回归通过；raw logs：`tests/logs/workbench/conversation/composer/docx-selection-reference/20261011-095702-737`。
+- 最新验证：2026-10-11 真实 E2E 完整用例通过，包含位置标记的鼠标/键盘循环、正文排序、临时选区无标记与发送清理，并保持共用引用层原有交互；raw logs：`tests/logs/workbench/conversation/composer/docx-selection-reference/20261011-130612-847`。
 - 待覆盖：文本框文字、IME、想法内 @ 混排、关闭资源 Tab、应用进程重启及附件恢复、外部原文变化后的定位 toast、提交期间锁定、提交失败保留、排队成功清理及历史复制。
+- 位置标记条验收：补充 `WB-DOCUMENT-REFERENCE-001-AC7`，自动检查已保存引用生成紫色标记，重叠引用通过鼠标、Enter、Space 按正文顺序轮流定位并短暂强调，包括确认顺序不同于正文顺序；核对临时选区不显示、发送后清理和 16px 无标记空条。删除逐项更新、伙伴/文件隔离、窗口变化、外部原文变化后的可靠定位、更多密集引用及长区域边界列入人工验收。
 
 #### `multi-format-selection-reference`
 
@@ -464,7 +465,6 @@ pnpm test:update:e2e
 
 - 最新验证：2026-10-11 真实 qwen3.8-flash 通过，137s；raw logs：`tests/logs/workbench/run/blocker/stop-running-or-approval-run/20261011-095354-111`。运行中及新审核卡等待时停止均收口，待审命令未执行，文件保持原样。
 
-
 #### `interrupted-task-resume-flow`
 
 - 测试类型：`e2e`
@@ -492,13 +492,12 @@ pnpm test:update:e2e
 
 - 最新验证：2026-10-11 真实 qwen3.8-flash 完整用例未通过，372s；raw logs：`tests/logs/workbench/run/browser/browser-use-task-panel/20261011-095555-836`。日志确认无选项协作卡等待用户、原生点击后提交文字回复，随后真实 extract 返回 `USER_CONFIRMED_4738`；后续网页操作在完成期限内未完成，`#status` 仍为“已登录”。保留完整流程与状态核验断言，不将局部协作成功计作整例通过。
 
-
 #### `browser-view-lifecycle`
 
 - 测试类型：`e2e`
 - What：内置浏览器原生视图在初次显示、面板折叠、原生自绘菜单、伙伴切换以及分栏拖拽调整后仍可见、尺寸稳定且持续运行，包括切走的伙伴面板同样处于展开状态后切回的呈现恢复。
 - Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换伙伴时误销毁仍在运行的网页。分栏拖拽期间高频更新 bounds 会导致 Windows DirectComposition 下原生视图原点跑偏且旧画面错位遮挡对话区，松手时的 CSS transition 补间动画会导致半秒滞后。分栏拖拽期间采用静态快照占位并阻断高频 bounds，松手瞬时无补间对齐并恢复原生 View，确保拖拽期间平滑跟手、松手无缝切回。伙伴切换后浏览器呈现依赖 `contentPanelCollapsed` 值变化触发的恢复，若前后两个伙伴面板均展开（值不变）会漏掉重新呈现，表现为地址栏正常但网页白屏。`setBounds` 在 bounds 未变时跳过 `applyAllVisibility`、或后台加载完成后挂载未强制重绘，也会出现同样白屏；此时加号 / 三点菜单还可能因 `WebContentsView` 抢焦点被立刻关掉。
-- How：通过 Settings UI 添加文件地址并创建伙伴；在 Workbench UI 新建浏览器 Tab，导航真实本地网页并调整缩放；折叠、切换伙伴后验证运行期状态，再正常重启同一用户目录，验证 URL、历史和缩放恢复；最后分别通过关闭 Tab 和原生确认子窗口删除所属伙伴销毁浏览器。伙伴切换分支覆盖两种路径：新建伙伴（面板默认折叠）后切回，以及切到面板已展开的伙伴后切回，并直接断言主窗口 `contentView.children` 原生挂载计数恢复到 1 而非仅依赖像素采样。
+- How：通过 Settings UI 添加文件地址并创建伙伴；在 Workbench UI 新建浏览器 Tab，导航真实本地网页；通过可见地址栏发起延迟 HTTP 导航，折叠后才释放响应，验证隐藏时完成导航；折叠、切换伙伴后验证运行期状态，再正常重启同一用户目录，验证 URL、历史和缩放恢复；最后分别通过关闭 Tab 和原生确认子窗口删除所属伙伴销毁浏览器。伙伴切换分支覆盖两种路径：新建伙伴（面板默认折叠）后切回，以及切到面板已展开的伙伴后切回，并直接断言主窗口 `contentView.children` 原生挂载计数恢复到 1 而非仅依赖像素采样。
 - Oracle：运行期折叠或切换伙伴不销毁 WebContents；无论切走的伙伴面板是否展开，切回后同一 `webContents.id` 必须重新挂载到主窗口并恢复显示；重启后重新创建 WebContents 并恢复 URL、历史和缩放，但不要求表单、滚动内存或 JS 连续；关闭 Tab 或删除所属伙伴后状态清理；地址栏右侧“将打开外部浏览器”按钮可见且更多菜单不再含系统浏览器入口，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC8`、`WB-PANEL-004-AC14`、`WB-PANEL-004-AC12`。
 
 #### `browser-navigate-error-page`
@@ -562,10 +561,10 @@ pnpm test:update:e2e
 #### `workspace-file-explorer-open-refresh`
 
 - 测试类型：`e2e`
-- What：无文件目录时统一空态与设置跳转、返回后的伙伴/草稿/资源 Tab 恢复、已配置空目录提示，以及右侧工作区文件列表打开时重新读取磁盘最新目录；仅列表展开时窗口焦点才会触发目录刷新，列表收起时焦点不刷。
-- Why：列表若继续使用挂载时缓存，用户在资源管理器或 AI 写盘后打开列表会长时间看不到新文件；同时若收起时仍因焦点/Run 后台刷目录，会造成无谓 IO。
-- How：使用独立空模型目录，不复用 runner 的已安装向量模型缓存；无文件地址且未下载向量模型时，通过 UI 创建两个伙伴，在第二个伙伴填写草稿并新建“打开文件”Tab；检查全宽统一空态，点击“前往设置”进入工作空间文件页，通过系统目录选择器添加真实临时空目录，点击“返回工作台”检查原伙伴、草稿、活动 Tab 与空目录提示；测试进程写入种子文件，打开文件后依次写入新文件，再展开列表验证刷新。列表收起时模拟窗口失焦/聚焦并断言 `workspaceDirectoryList` 调用数不增加，展开时模拟焦点确认刷新。最后从普通文件预览跳到设置，通过 UI 移除目录，返回后检查预览仍在且悬浮文件列表复用统一空态。
-- Oracle：无目录时只显示一个占满内容区的引导，设置按钮可达工作空间文件页；添加目录后恢复原伙伴、草稿和相同活动 Tab，空目录有明确提示，未下载向量模型也能浏览文件；移除目录后普通预览保留，悬浮列表只显示同一设置引导，对齐 `WB-PANEL-003-AC23`。每次打开文件列表后都能看到打开前已写入磁盘的新文件名；列表收起时焦点不触发 `workspaceDirectoryList`；列表展开时焦点会触发刷新并展示新文件，对齐 `WB-PANEL-003-AC13`。
+- What：无文件目录时统一空态与设置跳转、返回后的伙伴/草稿/资源 Tab 恢复、已配置空目录提示，以及文件列表打开/焦点刷新；常驻与悬浮列表右键新建文件、行内命名、删除确认与回收站、删除后停止文本保存。
+- Why：列表若继续使用挂载时缓存，用户在资源管理器或 AI 写盘后打开列表会长时间看不到新文件；同时若收起时仍因焦点/Run 后台刷目录，会造成无谓 IO。新建还须保证 Office 文件有效且不覆盖同名文件，删除须防止延迟自动保存重建。
+- How：使用独立空模型目录，不复用 runner 的已安装向量模型缓存；无文件地址且未下载向量模型时，通过 UI 创建两个伙伴，在第二个伙伴填写草稿并新建“打开文件”Tab；检查全宽统一空态，点击“前往设置”进入工作空间文件页，通过系统目录选择器添加真实临时空目录，点击“返回工作台”检查原伙伴、草稿、活动 Tab 与空目录提示；测试进程写入种子文件，打开文件后依次写入新文件，再展开列表验证刷新。列表收起时模拟窗口失焦/聚焦并断言 `workspaceDirectoryList` 调用数不增加，展开时模拟焦点确认刷新。最后从普通文件预览跳到设置，通过 UI 移除目录，返回后检查预览仍在且悬浮文件列表复用统一空态。在同一 case 的真实临时目录，通过右键菜单分别创建 DOCX/XLSX/PPTX/自定义后缀，读取实际 OOXML 包检查空白内容结构；准备一个真实子目录，通过文件夹及文件右键验证目录定位。常驻与悬浮列表分别检查不自动打开、不切换活动 Tab 和预览；验证重名与非法名称的提示、Escape/外部点击取消及筛选清空。通过真实 UI 打开新建文本、编辑后确认移到回收站，等待超过自动保存延时并切换 Tab，确认文件不被重建。所有被测创建、编辑与删除均通过 UI，不直接调用写入 IPC。
+- Oracle：无目录统一引导和设置往返对齐 `WB-PANEL-003-AC23`；打开/展开时焦点刷新对齐 `WB-PANEL-003-AC13`。四种类型、三种目录定位、常驻/悬浮右键对齐 `WB-PANEL-003-AC24`；行内命名、重名/非法输入、取消对齐 `WB-PANEL-003-AC25`；真实 Office 结构有效、新建后原 Tab/预览保持且列表可见对齐 `WB-PANEL-003-AC26`；删除取消、确认后的磁盘移除与列表更新对齐 `WB-PANEL-003-AC27`；删除已编辑文本后显示已删除且延迟/关闭不重建文件对齐 `WB-PANEL-003-AC28`。输入法组词、切换工作目录期间取消、回收站失败保留弹窗与重试、AI 历史审核快照保留列入本 case 人工验收边界；主进程路径范围/排他创建与失败无永久删除由 Unit `workspace-root-containment-contract` 补证，编辑保存拒绝重建由 Unit `text-file-write-service` 补证。
 
 #### `file-preview-external-change-auto-refresh`
 
@@ -596,7 +595,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：右侧打开真实 TXT / JSON / 代码等 UTF-8 文本后直接进入纯文本编辑框，输入与保存一致、不 markdown 化改写，编辑后自动落盘；保存保留 CRLF 与 UTF-8 BOM；编辑框每行前显示行号。
 - Why：普通用户也会编辑纯文本文件，若被 markdown 化改写或丢失换行/BOM 会造成内容损坏；行号是纯文本查看与定位的基础。
-- How：用真实临时文件地址创建带 BOM 的 CRLF TXT 文件与 JSON 文件；打开后确认文本左侧 padding 区域显示 1/2/3… 行号；输入追加内容，等待约 500ms 后读取磁盘 bytes 校验内容一致、换行仍为 CRLF、BOM 保留；再对 JSON 文件编辑，等待自动落盘并确认无 markdown 语法改写。
+- How：用真实临时文件地址创建带 BOM 的 CRLF TXT 文件与 JSON 文件，不创建伙伴；打开后确认文本左侧 padding 区域显示 1/2/3… 行号且文本框可编辑；输入追加内容，等待约 500ms 后读取磁盘 bytes 校验内容一致、换行仍为 CRLF、BOM 保留；再对 JSON 文件编辑，等待自动落盘并确认无 markdown 语法改写。
 - Oracle：纯文本编辑框不渲染 markdown 结构（`#`、`**` 保持字面量），编辑后自动落盘且磁盘字节与编辑结果一致并保留 CRLF/BOM，对齐 `WB-EDIT-001-AC3`、`WB-EDIT-001-AC4`、`WB-EDIT-001-AC6`；每行前显示从 1 开始的行号，对齐 `WB-EDIT-001-AC10`。
 
 #### `text-file-apply-preview-and-revert`
@@ -646,6 +645,8 @@ pnpm test:update:e2e
 - Why：读取遗漏继承格式或编辑重建段落可能丢失局部加粗与缩进；真实 Review 与 renderer 还需保持一致。
 - How：隔离 Word 包含长正文、两处通过字符样式继承的加粗概念及段落缩进；通过真实 UI 自然语言要求精简并保留核心概念和原格式，同时移动风险段落、修改指定单字和加粗指定文字（含原有前景色与黄色底色）。收集实际模型读取结果与写入调用，检查最终文件、审核与预览，再回退；不指定工具顺序或精简后的完整文案。
 - Oracle：长段落确实精简，核心概念、继承加粗和原有缩进保留，普通文字不误加粗，其他内容不变；完全未变的文字及有效格式不误标。删除段落在原位置，新增在最终位置；同位置改字只标实际字符，格式只标目标文字；已有底色用绿色边框，原色和底色保留；不复制或新增说明；审核/预览与最终文件一致，回退恢复原始 bytes。对齐 WB-APPLY-003-AC8/AC11/AC12/AC13。
+- 位置标记条验收：补充 `WB-PANEL-003-AC29`，检查 Review DOM 保留 inserted/deleted/formatted 语义，红绿分列、点击定位真实范围与强调、原有字体颜色不误标、模式切换无残留；人工验收补充密集循环、重复文字、图片与表格变化、字体/图片延迟加载和文档首尾长区域。
+- 最新验证：2026-10-11 真实 E2E 完整用例通过，99.9s；包含红删绿增分列、格式修改真实语义、点击定位与强调及预览无残留断言；raw logs：`tests/logs/workbench/result/apply/docx-review-position-and-inline-diff/20261011-125910-652`。
 
 #### `docx-apply-panel-preview-and-revert`
 
@@ -654,6 +655,8 @@ pnpm test:update:e2e
 - Why：直接写回和回退是 Workbench 文件编辑能力的安全边界，只看 artifact 事件无法证明用户能检查和撤销修改。
 - How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回但不点击 assistant turn 中的修改文件入口，确认它显示真实非零 `+/-` 数量；再点击入口检查右侧文件面包屑、无模式标签状态、预览，以及系统应用下拉内的“打开所在文件夹”；通过 E2E no-op 成功分支选择关联应用，再执行回退并重新读取文件内容。
 - Oracle：受支持写回类型边界对齐 `WB-CORE-003`；修改后源文件成为最终净稿，Run 结束后入口在未点击时已显示真实非零数量；DOCX 已应用记录成功交给外部应用后显示“关闭后重新打开”提示；右侧默认选中、Review Docx、写回和回退闭环对齐 `WB-PANEL-003-AC19`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`。
+- 位置标记条验收：补充 `WB-PANEL-003-AC29`，通过真实 UI 验证切入预览与回退后保留 16px 空条且无审核标记；审核标记语义与导航由 `docx-review-position-and-inline-diff` 覆盖，历史批次切换列入人工验收。
+- 最新验证：2026-10-11 真实 E2E 完整用例通过，34.4s；包含预览与回退后 16px 空条和无审核残留断言；raw logs：`tests/logs/workbench/result/apply/docx-apply-panel-preview-and-revert/20261011-125909-755`。
 
 #### `wps-sync-dispatch-on-write-and-revert`
 
@@ -713,7 +716,6 @@ pnpm test:update:e2e
 
 - 最新验证：2026-10-11 真实 qwen3.8-flash 通过，315s；raw logs：`tests/logs/workbench/run/blocker/human-interaction-question-card/20261011-095005-584`。单选/多选/纯输入、选择取消、无自动翻页、草稿翻页保留、切伙伴与刷新清空、Enter 换行及 Cmd+Enter 提交、Activity 回显均通过，保留三类题型截图。
 
-
 ### 5.4 `scheduled-task`
 
 定时任务测试单独归类，Oracle 引用 [`workbench.md`](../prd/workbench.md) 的 `ST-*` 编号。调度触发时点由真实程序运行与系统时间决定，case 通过「下一分钟」级别的短周期调度验证端到端触发，不伪造系统时钟。服务单测覆盖伙伴绑定、默认开启、最新 Composer 配置、缺少主模型和伙伴失效停用。
@@ -771,13 +773,15 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`；suite `scheduled-task`。
 - What：伙伴忙碌时取消到点执行、顺延周期，胶囊关闭与立即执行确认遵守占用限制。
 - Why：避免后台任务打断当前交互或在空闲后意外补跑，并守住用户主动恢复执行的入口。
-- How：真实 UI 创建伙伴与两个独立命名任务，在目标伙伴选择真实模型并进入 waiting_human；等待真实到点，通过只读消息与任务状态确认未提交和顺延，切换伙伴再返回检查等待用户期间的胶囊。分别验证关闭胶囊不执行、胶囊主操作先确认及仍忙碌时拒绝；停止原 run 后关闭第一条提示，切换伙伴再返回查看另一条提示并确认立即执行。不给产品注入状态、不改系统时间。
-- Oracle：忙碌到点不新增任务消息、下一周期顺延，对齐 `ST-RUN-001-AC3`；胶囊含任务名，关闭只消除提示，主操作先确认，对齐 `ST-RUN-005-AC1/AC2/AC3`；仍忙碌时拒绝执行，停止后只启动一次，对齐 `ST-RUN-004-AC2/AC3`。
+- How：真实 UI 创建伙伴与两个独立命名任务，使用真实模型进入 waiting_human 并等待真实到点。只读确认未提交、顺延和提示保留；切回伙伴时问答卡片替换 Composer，提示暂不显示。任务列表确认立即执行时仍被占用限制拒绝；通过问答卡片提交回答，检查 Composer 恢复后提示含任务名。等待原 run 结束后关闭第一条提示，切换回来查看另一条提示并确认立即执行。不注入状态、不改系统时间。
+- Oracle：忙碌到点不新增任务消息、下一周期顺延，对齐 `ST-RUN-001-AC3`；问答期间隐藏胶囊、提交回答恢复 Composer 后显示含任务名的胶囊，关闭只消除提示，主操作先确认，对齐 `ST-RUN-005-AC1/AC2/AC3`；仍忙碌时拒绝执行，空闲后只启动一次，对齐 `ST-RUN-004-AC2/AC3`。
 
 ## 6. 自动化覆盖边界
 
 | 验收 | 当前证据与缺口 |
 | --- | --- |
+| `WB-DOCUMENT-REFERENCE-001-AC7` | 部分覆盖：`docx-selection-reference` 已验证紫色标记、按正文排序的重叠循环、鼠标/键盘定位与强调、临时选区无标记、发送清理和 16px 空条。删除逐项更新、伙伴/文件隔离、窗口变化、外部原文变化、更多密集引用及长区域保留人工验收边界。 |
+| `WB-PANEL-003-AC29` | 部分覆盖：`docx-review-position-and-inline-diff` 与 `docx-apply-panel-preview-and-revert` 已验证红删绿增、格式语义、点击定位、预览与回退无残留。密集循环、重复文字、图片/表格、延迟加载、首尾长区域和历史批次切换保留人工验收边界。 |
 | `WB-CORE-004-AC2/AC3`、`WB-CORE-007-AC3` | 待补：默认 / 宽松补充和严谨资料边界没有专门真实模型场景。偏好选择、持久化或 prompt 格式检查不能代替行为验证。 |
 | `WB-COMPOSER-014-AC3` | 部分覆盖：重试行见 `llm-retry-process-row`；输出截断、半截回答与网络中断上下文的完整 UI 断言待补。 |
 | `WB-COMPOSER-014-AC4` | 待补：计划进度环、hover 浮层、完成隐藏与中断保留没有专门 E2E。 |
@@ -785,7 +789,7 @@ pnpm test:update:e2e
 | `WB-COMPOSER-013-AC5` | 部分覆盖：`tests/case/unit/model/message-log-vision-context.test.ts` 检验有效图片判断和免费无 vision gate；真实 UI 禁用与发送拦截待补。 |
 | `ST-RUN-003-AC1/AC2` | 部分覆盖：`tests/case/unit/scheduled-task-service.test.ts` 以依赖时钟检验启动错过 / 容忍窗口后顺延且不补跑；真实应用关闭 / 系统休眠恢复需桌面人工验收。 |
 | `ST-RUN-001-AC3` | 部分覆盖：`scheduled-task-busy-cancel-and-run-now` 实测 waiting_human 到点不提交并顺延；Unit 验证占用策略和空闲后不补跑。running / waiting_approval 的独立 UI 场景未验证。 |
-| `ST-RUN-005-AC1` | 已有失败用例：`scheduled-task-busy-cancel-and-run-now` 中，waiting_human 到点取消后重新进入伙伴仍不显示胶囊，停止原运行后才显示；问答卡片与胶囊处于互斥渲染分支。保留验收及失败断言，生产显示行为待修复。 |
+| `ST-RUN-005-AC1` | `scheduled-task-busy-cancel-and-run-now` 验证问答卡片收起、Composer 恢复后的提示；waiting_approval 的独立 UI 场景未验证。 |
 
 ### 需求级用例的逐项覆盖边界
 

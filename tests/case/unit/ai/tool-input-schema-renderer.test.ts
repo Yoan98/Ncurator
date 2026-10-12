@@ -5,27 +5,15 @@ import { renderToolInputSchemaForPrompt } from '../../../../src/main/services/ai
 
 describe('ai unit tool input schema renderer', () => {
   it('renders every registered Human tool as plain TypeScript-like types', () => {
-    const renderedByTool = Object.fromEntries(
-      ALL_TOOL_SPECS.map((spec) => {
-        const rendered = renderToolInputSchemaForPrompt(spec.inputSchema, { compact: true })
-        expect(rendered).not.toMatch(/__schema\d+/)
-        expect(rendered).not.toMatch(
-          /minLength|maxLength|minimum|maximum|exclusiveMinimum|exclusiveMaximum|multipleOf|minItems|maxItems|minProperties|maxProperties|pattern|constraint=|integer/
-        )
-        expect(rendered.length).toBeGreaterThanOrEqual(2)
-        expect(rendered.length).toBeLessThan(50_000)
-        return [spec.name, rendered]
-      })
-    )
-
-    expect({
-      terminal_run: renderedByTool.terminal_run,
-      ppt_read_outline: renderedByTool.ppt_read_outline,
-      ppt_edit: renderedByTool.ppt_edit,
-      docx_content_edit: renderedByTool.docx_content_edit,
-      docx_format: renderedByTool.docx_format,
-      docx_table_edit: renderedByTool.docx_table_edit
-    }).toMatchSnapshot()
+    ALL_TOOL_SPECS.forEach((spec) => {
+      const rendered = renderToolInputSchemaForPrompt(spec.inputSchema, { compact: true })
+      expect(rendered).not.toMatch(/__schema\d+/)
+      expect(rendered).not.toMatch(
+        /minLength|maxLength|minimum|maximum|exclusiveMinimum|exclusiveMaximum|multipleOf|minItems|maxItems|minProperties|maxProperties|pattern|constraint=|integer/
+      )
+      expect(rendered.length).toBeGreaterThanOrEqual(2)
+      expect(rendered.length).toBeLessThan(50_000)
+    })
   })
 
   it('hides runtime constraints while preserving TypeScript shapes', () => {

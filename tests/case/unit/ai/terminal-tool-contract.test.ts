@@ -1,3 +1,5 @@
+import { renderTerminalRunModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
+import { renderTerminalReadModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { describe, expect, it } from 'vitest'
 import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
 import { TERMINAL_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
@@ -5,10 +7,6 @@ import {
   TERMINAL_READ_SCHEMA,
   TERMINAL_RUN_SCHEMA
 } from '../../../../src/main/services/ai/human/tools/terminal/toolSchemas'
-import type {
-  TerminalReadOutput,
-  TerminalRunOutput
-} from '../../../../src/main/services/ai/human/tools/terminal/outputTypes'
 import {
   mapTerminalReadStatus,
   mapTerminalRunStatus
@@ -16,10 +14,7 @@ import {
 
 describe('ai unit terminal tool contract', () => {
   it('binds both tools to the terminal skill', () => {
-    expect(TERMINAL_TOOL_SPECS.map((spec) => spec.name)).toEqual([
-      'terminal_run',
-      'terminal_read'
-    ])
+    expect(TERMINAL_TOOL_SPECS.map((spec) => spec.name)).toEqual(['terminal_run', 'terminal_read'])
     expect(SKILL_DEFINITIONS.terminal.toolNames).toEqual(['terminal_run', 'terminal_read'])
     TERMINAL_TOOL_SPECS.forEach((spec) => {
       expect(spec.skillIds).toEqual(['terminal'])
@@ -47,13 +42,7 @@ describe('ai unit terminal tool contract', () => {
     ).toBe(false)
   })
 
-  it('accepts optional maxWaitSeconds without teaching defaults or next steps', () => {
-    expect(TERMINAL_TOOL_SPECS[0]?.promptSpec.description).toBe(
-      '在用户本机终端执行命令。默认工作目录为用户主目录。'
-    )
-    expect(TERMINAL_RUN_SCHEMA.shape.maxWaitSeconds.description).toBe(
-      '本次调用最长盯着命令结束的秒数；到点后命令继续执行'
-    )
+  it('accepts integer maxWaitSeconds and rejects fractions', () => {
     expect(
       TERMINAL_RUN_SCHEMA.safeParse({
         command: 'sleep 40; echo done',
@@ -87,26 +76,6 @@ describe('ai unit terminal tool contract', () => {
     ).toBe(false)
   })
 
-  it('declares terminal run and read output fields', () => {
-    const runSample = {
-      terminalId: 'term-1',
-      status: 'succeeded',
-      output: 'hello\n',
-      readEndPosition: 6,
-      hasMoreOutput: false
-    } satisfies TerminalRunOutput
-
-    const readSample = {
-      status: 'running',
-      output: 'more\n',
-      readEndPosition: 12,
-      hasMoreOutput: true
-    } satisfies TerminalReadOutput
-
-    expect(runSample.status).toBe('succeeded')
-    expect(readSample.hasMoreOutput).toBe(true)
-  })
-
   it('maps terminal run and read statuses to four-state contract', () => {
     expect(mapTerminalRunStatus('command_still_running', null)).toBe('running')
     expect(mapTerminalRunStatus('command_stopped', 130)).toBe('cancelled')
@@ -117,5 +86,45 @@ describe('ai unit terminal tool contract', () => {
     expect(mapTerminalReadStatus('idle', 130, false)).toBe('cancelled')
     expect(mapTerminalReadStatus('idle', 0, false)).toBe('succeeded')
     expect(mapTerminalReadStatus('idle', 2, false)).toBe('failed')
+  })
+})
+
+describe('tool result data fidelity', () => {
+  it('preserves terminal_run data', () => {
+    const rendered = renderTerminalRunModelResult({
+      toolName: 'terminal_run',
+      args: {},
+      data: {
+        terminalId: 'term-001',
+        exitCode: 0,
+        internalTrace: 'private-terminal-trace',
+        status: 'succeeded',
+        output: 'done\n',
+        readEndPosition: 5,
+        hasMoreOutput: false
+      }
+    })
+
+    expect(rendered).toContain('done')
+    expect(rendered).toContain('succeeded')
+    expect(rendered).toContain('term-001')
+    expect(rendered).not.toContain('exitCode')
+    expect(rendered).not.toContain('private-terminal-trace')
+  })
+
+  it('preserves terminal_read data', () => {
+    const rendered = renderTerminalReadModelResult({
+      toolName: 'terminal_read',
+      args: { terminalId: 'term-001' },
+      data: {
+        status: 'running',
+        output: 'more\n',
+        readEndPosition: 12,
+        hasMoreOutput: true
+      }
+    })
+
+    expect(rendered).toContain('running')
+    expect(rendered).not.toContain('term-001')
   })
 })

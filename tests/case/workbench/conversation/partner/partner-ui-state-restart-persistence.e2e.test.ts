@@ -1,30 +1,18 @@
 import { describe, it } from 'vitest'
-import type { Partner, PartnerUiStateV1 } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   getWorkbenchLocator,
+  createPartnerThroughWorkbenchUi,
+  selectWorkbenchResourceMenuItem,
+  selectWorkbenchExecutionPermission,
+  setWorkbenchInput,
   navigateToWorkbench,
   startLocalWorkbenchHttpServer,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'partner-ui-state-restart-persistence'
-
-const createPartner = (id: string, name: string): Partner => {
-  const now = Date.now()
-  return {
-    id,
-    name,
-    avatar_shape: 'circle',
-    avatar_color: 'blue',
-    created_at: now,
-    updated_at: now,
-    last_viewed_at: now,
-    pinned: false,
-    pinned_at: null
-  }
-}
 
 describe('workbench conversation e2e', () => {
   it(
@@ -51,100 +39,63 @@ describe('workbench conversation e2e', () => {
           })
           let { page } = runtime
           await navigateToWorkbench(page, { waitForSessionListText: false })
-          const partner = createPartner('restart-ui-partner', '重启恢复伙伴')
-          const browser = await page.evaluate(
-            async ({ partner, firstUrl, secondUrl }) => {
-              const waitForBrowserState = async (
-                tabId: string,
-                predicate: (state: NonNullable<
-                  Awaited<ReturnType<typeof window.api.browserPanelStateGet>>['state']
-                >) => boolean,
-                label: string
-              ): Promise<void> => {
-                const deadline = Date.now() + 10_000
-                for (;;) {
-                  const state = await window.api.browserPanelStateGet({ tabId })
-                  if (state.success && state.state && predicate(state.state)) return
-                  if (Date.now() >= deadline) {
-                    throw new Error(`${label}: ${JSON.stringify(state.state || null)}`)
-                  }
-                  await new Promise<void>((resolve) => setTimeout(resolve, 100))
-                }
-              }
-
-              await window.api.partnerSave(partner)
-              const created = await window.api.browserTabCreate({ ownerId: partner.id })
-              if (!created.success || !created.state) throw new Error('browser tab create failed')
-              await window.api.browserTabNavigate({ tabId: created.state.id, url: firstUrl })
-              await waitForBrowserState(
-                created.state.id,
-                (state) => state.url === firstUrl && state.isLoading === false,
-                'first navigate not ready'
-              )
-              await window.api.browserTabNavigate({ tabId: created.state.id, url: secondUrl })
-              await waitForBrowserState(
-                created.state.id,
-                (state) =>
-                  state.url === secondUrl && state.isLoading === false && state.canGoBack === true,
-                'second navigate not ready'
-              )
-              const zoomed = await window.api.browserPanelZoomIn({ tabId: created.state.id })
-              if (!zoomed.success || !zoomed.state) throw new Error('browser zoom in failed')
-              await waitForBrowserState(
-                created.state.id,
-                (state) =>
-                  state.canGoBack === true &&
-                  state.zoomPercent === 110 &&
-                  state.url === secondUrl,
-                'browser state not ready before restart'
-              )
-              const state: PartnerUiStateV1 = {
-                version: 1,
-                composer: {
-                  aiPreference: 'local_sources_relaxed',
-                  executionPermission: 'full_access',
-                  modelSelection: { mainModel: null },
-                  draft: {
-      formatVersion: 2,
-                    input: '重启后仍在的草稿',
-                    contentNodes: [{ kind: 'text', text: '重启后仍在的草稿' }],
-                    selectedReferences: [],
-                    attachments: [],
-                    assetBucketId: null
-                  }
-                },
-                panel: {
-                  tabs: [
-                    {
-                      id: `browser:${created.state.id}`,
-                      kind: 'browser',
-                      title: '重启浏览器',
-                      browserTabId: created.state.id,
-                      state: {
-                        kind: 'browser',
-                        title: '重启浏览器',
-                        browserTabId: created.state.id
-                      }
-                    }
-                  ],
-                  activeTabId: `browser:${created.state.id}`,
-                  collapsed: false,
-                  fallbackState: { kind: 'empty', title: '资源工作台', description: '' }
-                }
-              }
-              await window.api.partnerUiStateSave({ partnerId: partner.id, state })
-              await window.api.workbenchUiStateSave({ activeViewKey: partner.id })
-              return created.state
-            },
-            {
-              partner,
-              firstUrl: `${server.url}?step=1`,
-              secondUrl: `${server.url}?step=2`
-            }
+          await createPartnerThroughWorkbenchUi(page, '重启恢复伙伴')
+          await setWorkbenchInput(page, '重启后仍在的草稿')
+          await selectWorkbenchExecutionPermission(page, '完全访问')
+          const partner = (await page.evaluate(() => window.api.partnerList())).find(
+            (item) => item.name === '重启恢复伙伴'
           )
-          await page.reload()
-          await navigateToWorkbench(page)
-          await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
+          if (!partner) throw new Error('created partner missing')
+          await selectWorkbenchResourceMenuItem(runtime, 'browser')
+          const tab = page
+            .locator(`[data-testid^="${workbenchSelectors.resourceTabPrefix}-browser-"]`)
+            .last()
+          const id = (await tab.getAttribute('data-testid'))?.split('-browser-').at(-1)
+          if (!id) throw new Error('browser tab missing')
+          const browser = { id }
+          const address = getWorkbenchLocator(page, workbenchSelectors.browserPanel).getByRole(
+            'textbox',
+            { name: '浏览器地址' }
+          )
+          for (const step of [1, 2]) {
+            const url = `${server.url}?step=${step}`
+            await address.fill(url)
+            await address.press('Enter')
+            await page.waitForFunction(
+              async ({ tabId, url }) => {
+                const { state } = await window.api.browserPanelStateGet({ tabId })
+                return state?.url === url && !state.isLoading
+              },
+              { tabId: id, url }
+            )
+          }
+          const menuPromise = runtime.electronApp.waitForEvent('window', {
+            predicate: async (candidate) =>
+              candidate
+                .getByRole('link', { name: '放大页面' })
+                .waitFor({ state: 'visible', timeout: 5_000 })
+                .then(
+                  () => true,
+                  () => false
+                )
+          })
+          await getWorkbenchLocator(page, workbenchSelectors.browserMenu).click()
+          const menu = await menuPromise
+          await menu.waitForLoadState('domcontentloaded')
+          await menu.getByRole('link', { name: '放大页面' }).click()
+          await page.waitForFunction(async (tabId) => {
+            const { state } = await window.api.browserPanelStateGet({ tabId })
+            return state?.zoomPercent === 110 && state.canGoBack
+          }, id)
+          await menu.keyboard.press('Escape')
+          await page.waitForFunction(async (partnerId) => {
+            const { uiState } = await window.api.partnerOpen({ partnerId })
+            return (
+              uiState?.composer.draft.input === '重启后仍在的草稿' &&
+              uiState.composer.executionPermission === 'full_access' &&
+              !uiState.panel.collapsed
+            )
+          }, partner.id)
 
           const restarted = await runtime.restartApp()
           page = restarted.page
@@ -171,11 +122,14 @@ describe('workbench conversation e2e', () => {
             { tabId: browser.id, expectedUrl: `${server.url}?step=2` },
             { timeout: 15_000 }
           )
-          const restoredBrowser = await page.evaluate(async (tabId) => {
-            const tabs = await window.api.browserTabList({ ownerId: 'restart-ui-partner' })
-            const state = await window.api.browserPanelStateGet({ tabId })
-            return { tabs, state }
-          }, browser.id)
+          const restoredBrowser = await page.evaluate(
+            async ({ tabId, ownerId }) => {
+              const tabs = await window.api.browserTabList({ ownerId })
+              const state = await window.api.browserPanelStateGet({ tabId })
+              return { tabs, state }
+            },
+            { tabId: browser.id, ownerId: partner.id }
+          )
           const input = (
             (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
           ).trim()

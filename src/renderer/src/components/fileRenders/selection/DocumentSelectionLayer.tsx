@@ -10,26 +10,22 @@ import {
   type SelectionRect
 } from './floatingLayout'
 import SelectionPopover from './SelectionPopover'
-import type {
-  SelectionAdapter,
-  SelectionCandidate,
-  SelectionGeometry,
-  SelectionPopup
-} from './types'
+import type { SelectionAdapter, SelectionCandidate, SelectionPopup, SelectionTarget } from './types'
 
-type Target = SelectionCandidate & { geometry: SelectionGeometry }
 export default function DocumentSelectionLayer({
   container,
   filePath,
   adapter,
   revision,
-  testPrefix = 'document'
+  testPrefix = 'document',
+  onTargetsChange
 }: {
   container: HTMLElement | null
   filePath: string
   adapter: SelectionAdapter
   revision: string | number
   testPrefix?: string
+  onTargetsChange?: (targets: SelectionTarget[]) => void
 }) {
   const state = useContext(DocumentSelectionContext)
   const { message } = App.useApp()
@@ -39,7 +35,7 @@ export default function DocumentSelectionLayer({
   const [boxes, setBoxes] = useState<(SelectionRect & { outline: boolean })[]>([])
   const [busy, setBusy] = useState(false)
   const popupRef = useRef<HTMLDivElement>(null)
-  const targets = useRef<Target[]>([])
+  const targets = useRef<SelectionTarget[]>([])
   const handledNavigation = useRef<number | null>(null)
   const latest = useRef({ state, adapter, popup })
   latest.current = { state, adapter, popup }
@@ -59,7 +55,7 @@ export default function DocumentSelectionLayer({
     if (!container || !state?.enabled || !revision) return
     const cursor = container.style.cursor
     let start: { x: number; y: number } | null = null
-    let clicked: Target | undefined
+    let clicked: SelectionTarget | undefined
     const hit = (event: PointerEvent) =>
       targets.current.find((target) =>
         target.geometry
@@ -72,7 +68,7 @@ export default function DocumentSelectionLayer({
               event.clientY < rect.bottom
           )
       )
-    const hover = (target?: Target) => {
+    const hover = (target?: SelectionTarget) => {
       container.style.cursor = target ? 'pointer' : cursor
       setHoveredId(target?.node.id || null)
     }
@@ -162,8 +158,14 @@ export default function DocumentSelectionLayer({
     }
   }, [container, filePath, state?.enabled, revision, open, message, noticeKey, busy])
 
+  useLayoutEffect(() => () => onTargetsChange?.([]), [onTargetsChange])
+
   useLayoutEffect(() => {
-    if (!container || !state?.enabled || !revision) return
+    if (!container || !state?.enabled || !revision) {
+      targets.current = []
+      onTargetsChange?.([])
+      return
+    }
     const key = `${testPrefix}-${crypto.randomUUID()}`
     const style = document.createElement('style')
     style.textContent = `::highlight(${key}){background-color:#E9DDFB}::highlight(${key}-active),::highlight(${key}-hover){background-color:#DBC5F6}`
@@ -178,6 +180,7 @@ export default function DocumentSelectionLayer({
         const geometry = current.adapter.locate(node, location)
         return geometry ? [{ node, location, geometry }] : []
       })
+      onTargetsChange?.(targets.current)
       const active =
         current.popup && current.adapter.locate(current.popup.node, current.popup.location)
       const hovered = targets.current.find((t) => t.node.id === hoveredId)
@@ -275,7 +278,8 @@ export default function DocumentSelectionLayer({
     state?.locked,
     popup,
     hoveredId,
-    testPrefix
+    testPrefix,
+    onTargetsChange
   ])
 
   useEffect(() => {

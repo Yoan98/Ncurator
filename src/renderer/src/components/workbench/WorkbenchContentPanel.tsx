@@ -672,9 +672,13 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       return
     }
     let cancelled = false
-    void classifyEditableTextKind(path, fileName).then((kind) => {
-      if (!cancelled) setEditableKind(kind)
-    })
+    void classifyEditableTextKind(path, fileName)
+      .then((kind) => {
+        if (!cancelled) setEditableKind(kind)
+      })
+      .catch(() => {
+        if (!cancelled) setEditableKind(null)
+      })
     return () => {
       cancelled = true
     }
@@ -723,7 +727,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       setPreviewRevision((current) => current + 1)
       const noticeSuppressed =
         aiRunActiveRef.current || Date.now() <= suppressExternalNoticeUntilRef.current
-      if (!noticeSuppressed) onSuccessMessage('检测到当前文件被外部修改，已自动刷新')
+      if (!noticeSuppressed) {
+        void window.api.fileExists(previewWatchPath).then((exists) => {
+          if (exists && !disposed) onSuccessMessage('检测到当前文件被外部修改，已自动刷新')
+        })
+      }
     }
 
     const unsubscribe = window.api.onFileWatchChange((event) => {
@@ -762,7 +770,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   useEffect(() => {
     if (!explorerOpen || !floatingExplorer) return () => undefined
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setExplorerOpen(false)
+      if (event.key === 'Escape' && !event.defaultPrevented) setExplorerOpen(false)
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
@@ -776,7 +784,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               fileName: state.file.fileName,
               contentRevision: previewRevision,
               editable: editableKind !== null,
-              metadata: { pageNumber: state.file.pageNumber, allowDocumentSelection: true }
+              metadata: {
+                pageNumber: state.file.pageNumber,
+                allowDocumentSelection: true,
+                docxOverview: 'references'
+              }
             }
           ]
         : [],
@@ -823,6 +835,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         contentRevision: documentDisplayMode === 'preview' ? previewRevision : undefined,
         editable,
         metadata: {
+          docxOverview: documentDisplayMode === 'preview' ? 'references' : 'changes',
           allowDocumentSelection:
             documentDisplayMode === 'preview' && filePath === activeApplyRecord.path
         }
@@ -870,10 +883,17 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       : state.kind === 'apply_workspace'
         ? activeApplyRecord?.path
         : null
+  const activePathRef = React.useRef(activePath)
+  React.useLayoutEffect(() => {
+    activePathRef.current = activePath
+  }, [activePath])
   const openWorkspaceChangeFromExplorer = (change: AiFileChangeRecord): void => {
     setDocumentDisplayMode(getDefaultDocumentDisplayMode(change.status))
     onOpenWorkspaceChange(change.id)
     setExplorerOpen(false)
+  }
+  const handleExplorerFileChanged = (filePath: string): void => {
+    if (filePath === activePathRef.current) setPreviewRevision((current) => current + 1)
   }
   return (
     <aside
@@ -1014,6 +1034,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   setExplorerOpen(false)
                 }}
                 onOpenChange={openWorkspaceChangeFromExplorer}
+                onFileChanged={handleExplorerFileChanged}
               />
             </div>
           ) : null}
@@ -1047,6 +1068,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                     setExplorerOpen(false)
                   }}
                   onOpenChange={openWorkspaceChangeFromExplorer}
+                  onFileChanged={handleExplorerFileChanged}
                 />
               </div>
             </>

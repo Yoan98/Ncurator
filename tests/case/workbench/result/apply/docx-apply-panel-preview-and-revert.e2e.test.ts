@@ -1,3 +1,4 @@
+import { assertEmptyDocxOverview } from '../../../../harness/e2e/docxOverview'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -105,6 +106,7 @@ describe('workbench result e2e', () => {
           const initialToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const initialModeTag = (await documentModeTag.textContent())?.trim()
           await documentModeToggle.click()
+          await assertEmptyDocxOverview(runtime)
           const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const previewModeTag = (await documentModeTag.textContent())?.trim()
           const previewToolbarText = (
@@ -169,6 +171,7 @@ describe('workbench result e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           await documentModeTag.getByText('预览', { exact: true }).waitFor({ state: 'visible' })
+          await assertEmptyDocxOverview(runtime)
           const revertedModeTag = (await documentModeTag.textContent())?.trim()
           const revertedToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const revertedRevertButtonCount = await getWorkbenchLocator(

@@ -396,6 +396,26 @@ export interface WorkspaceDirectoryListResponse {
   error?: string
 }
 
+export interface WorkspaceFileCreateRequest {
+  workspaceId: string
+  parentRelativePath: string
+  fileName: string
+}
+
+export interface WorkspaceFileTrashRequest {
+  workspaceId: string
+  relativePath: string
+}
+
+export interface WorkspaceFileMutationResponse {
+  success: boolean
+  error?: string
+}
+
+export interface WorkspaceFileCreateResponse extends WorkspaceFileMutationResponse {
+  entry?: WorkspaceTreeEntry
+}
+
 export interface WorkspaceJobResponse {
   success: boolean
   workspaceId?: string

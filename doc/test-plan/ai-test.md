@@ -17,7 +17,7 @@
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。`browser_use` 网址协议、系统错误页、加载超时与 `navigate` 成败字段由 Workbench `browser-navigate-error-page` 与 unit `navigate-plan` 覆盖。
 - `RUNTIME_TOOL_CATALOG` 中的全部工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](../../src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
-- 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。`web-crawl-contract` 里 `browser-use-navigate-returns-tab-for-follow-up` 等仍注入假 `browserUseService`、`web-search-returns-serp-by-search-type` 仍 mock search，待改为真实 CDP / 本地网页，不得当作已批准例外。
+- 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。参数分发、SERP 字段裁剪、tabId 透传与 act 文本覆盖由 `tests/case/unit/ai/web-tool-contract.test.ts` 验证；其替身服务只证明适配契约，真实网页抓取和浏览器操作分别由本域 tool 与 Workbench E2E 验证。
 - `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再让冻结 sidecar bin 的 Python Playwright 显式复用该测试 Electron 的 Node，通过隔离 context 抓取；host 必须 headless 且不得挂主窗口。该独立 host 可以继续开进程级调试口，与正式 App 无关。正式 App 的 `browser_use` 在无进程级 `--remote-debugging-port` 下，于 observe/act 时按 Tab 挂本机 CDP 桥。另覆盖 `browser_use` 服务不可用诊断。禁止使用 sidecar 内置 Node/浏览器或 Electron 默认 context。`web_search` 结果只回模型，不得自动展开右侧搜索列表（该面板已不存在）。
 
 ### 2.2 `human`
@@ -88,6 +88,14 @@ LLM 失败分类与重试信号遵循 `doc/ai-harness/human-harness.md` §8.4；
 #### docx 类别
 
 DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segment map 百分比区间、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 首次原始字节基线→最终确认落盘版本净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、分页/分栏/section 边界、中英文混合 TF-IDF、DrawingML/VML 视觉锚点、TF-IDF/MMR 摘要预算、搜索全量计数但只构造前 10 条详情、无效搜索 scope、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和 visual 节点编辑清理。公开工具回归还必须验证错误 ID 不会提交部分修改。
+
+##### `docx-non-image-visual-render`
+
+- 测试类型：`backend`；suite `tool`，group `docx`，非 live。
+- What：公开 DOCX 精读工具把 chart / diagram / shape 转为真实非空图片。
+- Why：Node Unit 无法验证 Electron 预览与截图，工具返回的图片必须可供后续读取。
+- How：隔离复制视觉 fixture，测试 harness 启动真实 Electron 宿主、真实 store 和 `createAiRunContext`，经生产 `docx_read_nodes` 精读视觉节点并解码图片；worker 使用同一生产 handler 的 in-process 路径，不调用模型。
+- Oracle：三种视觉节点均返回可解码 PNG，尺寸和非白像素达到有效范围；原始文档字节未变；宿主、临时资源和文档运行会话清理。
 
 ##### `docx-public-tools`
 
@@ -434,14 +442,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - How：启动本地 HTTP server 和测试 Electron CDP host，创建专用非持久化 partition，通过 `PLAYWRIGHT_NODEJS_PATH` 让真实冻结 sidecar bin 的 Python Playwright 复用测试 Electron Node，再连接唯一 marker 对应的隔离 context 返回抓取结果，调用 `web_search({ type: 'fetch', url })`。
 - Oracle：结果包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`。
 
-##### `web-search-returns-serp-by-search-type`
-
-- 测试类型：`backend`
-- What：`web_search` 传 `{ type: 'search', query }` 只返回 `{ query, results[] }`（rank/title/url/snippet），不调用 crawl。
-- Why：SERP 与正文抓取分离，避免一次 query 拉取多页正文占用上下文。
-- How：通过真实 web tool harness 调用 `web_search({ type: 'search', query })`，mock search 返回多个候选 URL，并断言 crawl 未被调用。
-- Oracle：`results` 为数组且含 snippet；结果中无 `markdown`。
-
 ##### `web-search-fetch-entry-page`
 
 - 测试类型：`backend`
@@ -521,22 +521,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Oracle：数量超限时最旧图片按至少 20 张的批次替换为带原路径的占位文本；体积超限时一次至少释放 10 MiB；重新读取的引用出现在消息尾部；只有保留的本地图片才在请求前编码为 data URL，HTTP(S) 地址不计入 data URL 字节预算。
 
 #### browser_use 类别
-
-##### `browser-use-navigate-returns-tab-for-follow-up`
-
-- 测试类型：`backend`
-- What：`navigate` 返回 `tabId`，后续 `extract/observe/act/screenshot` 必须显式使用该 `tabId`。
-- Why：去掉隐式 automation tab 黏连后，tab 坐标系必须由工具结果显式回传，否则会串页或丢状态。
-- How：在 tool harness 中 mock `browserUseService.run`，先 `navigate` 再带返回的 `tabId` 调用 `extract`。
-- Oracle：两次操作使用同一 `tabId`；不再依赖 `ensureAutomationTab` 隐式绑定。
-
-##### `browser-use-act-text-and-instruction-contract`
-
-- 测试类型：`backend`
-- What：`browser_use` 的 `act` 操作支持 `text` 注入并对非输入类动作防爆过滤；支持 `act_instruction` 按自然语言指令执行。
-- Why：支持输入场景直接注入文本避免二次推理，防范误传参数崩溃，并提供直接指令操作能力。
-- How：在 tool harness 中 mock `browserUseService.run`，验证 `fill` 动作的 `arguments` 被 `text` 正确覆盖、`click` 动作过滤 `text`、`act_instruction` 指令正确透传。
-- Oracle：`fill` 动作参数为 `[text]`；`click` 动作参数保持空；`act_instruction` 正确派发。
 
 ##### `browser-use-service-unavailable-error`
 

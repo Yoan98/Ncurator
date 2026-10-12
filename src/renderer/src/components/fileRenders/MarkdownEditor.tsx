@@ -84,9 +84,9 @@ const MarkdownEditor: React.FC<{ filePath: string; allowSelection?: boolean }> =
   }, [message])
 
   useEffect(() => {
-    if (selectionState?.locked) vditorRef.current?.disabled()
+    if (file.readOnly || selectionState?.locked) vditorRef.current?.disabled()
     else vditorRef.current?.enable()
-  }, [selectionState?.locked])
+  }, [file.readOnly, selectionState?.locked])
 
   const scheduleHydrate = (): void => {
     const root = rootRef.current

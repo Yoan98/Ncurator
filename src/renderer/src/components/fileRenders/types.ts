@@ -4,6 +4,7 @@ export type FileRenderMetadata = {
   pageNumber?: number
   anchorName?: string
   allowDocumentSelection?: boolean
+  docxOverview?: 'references' | 'changes'
 }
 
 export type FileRenderDocument = {

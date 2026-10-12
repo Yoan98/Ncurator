@@ -1,0 +1,52 @@
+diff --git a/lib/index.js b/lib/index.js
+index 1aaa6860d8cfa6e41d377afbabf4e01f1740c12c..727be1ed47861ef70e50d277e3fe80c18f1b6913 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -6351,6 +6351,7 @@ var Vs = /*#__PURE__*/function () {
+         r,
+         n = {
+           type: Ui.Paragraph,
++        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"),
+           children: []
+         };
+       var _iterator26 = _createForOfIteratorHelper(xi.elements(e)),
+@@ -6481,6 +6482,7 @@ var Vs = /*#__PURE__*/function () {
+       var _this30 = this;
+       var r = {
+         type: Ui.Run,
++        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"),
+         parent: t,
+         children: []
+       };
+@@ -6828,6 +6830,7 @@ var Vs = /*#__PURE__*/function () {
+       var _this31 = this;
+       var t = {
+         type: Ui.Table,
++        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"),
+         children: []
+       };
+       return Xs.foreach(e, function (e) {
+@@ -6901,6 +6904,7 @@ var Vs = /*#__PURE__*/function () {
+       var _this33 = this;
+       var t = {
+         type: Ui.Row,
++        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"),
+         children: []
+       };
+       return Xs.foreach(e, function (e) {
+@@ -6936,6 +6940,7 @@ var Vs = /*#__PURE__*/function () {
+       var _this34 = this;
+       var t = {
+         type: Ui.Cell,
++        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"),
+         children: []
+       };
+       return Xs.foreach(e, function (e) {
+@@ -8457,6 +8462,7 @@ var to = /*#__PURE__*/function () {
+   }, {
+     key: "renderClass",
+     value: function renderClass(e, t) {
++      if (["inserted", "deleted", "formatted"].includes(e.reviewChange)) t.setAttribute("data-docx-change", e.reviewChange);
+       e.className && (t.className = e.className), e.styleName && t.classList.add(this.processStyleName(e.styleName));
+     }
+   }, {

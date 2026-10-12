@@ -212,7 +212,9 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
           description={
             <span className="max-w-[420px] whitespace-pre-wrap break-words text-[#787774]">
               {errorMessage
-                ? `文件暂时无法预览：${errorMessage}`
+                ? errorMessage === '文件已删除'
+                  ? errorMessage
+                  : `文件暂时无法预览：${errorMessage}`
                 : unsupportedType
                   ? `${unsupportedType} 文件暂不支持预览。\n${FILE_PREVIEW_SUPPORT_SUMMARY}`
                   : '文件暂时无法预览'}

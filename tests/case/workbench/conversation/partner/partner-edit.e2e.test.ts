@@ -3,6 +3,7 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
+  createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
   navigateToWorkbench,
   waitForVisiblePartnerRow,
@@ -30,19 +31,11 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await navigateToWorkbench(page, { waitForSessionListText: false })
-          const created = await page.evaluate(async (name) => {
-            const response = await window.api.partnerCreate({
-              name,
-              avatar_shape: 'circle',
-              avatar_color: 'blue'
-            })
-            if (!response.success || !response.partner) {
-              throw new Error(response.error || 'partnerCreate failed')
-            }
-            return response.partner
-          }, ORIGINAL_NAME)
-          await page.reload()
-          await navigateToWorkbench(page)
+          await createPartnerThroughWorkbenchUi(page, ORIGINAL_NAME)
+          const created = (await page.evaluate(() => window.api.partnerList())).find(
+            (item) => item.name === ORIGINAL_NAME
+          )
+          if (!created) throw new Error('created partner missing')
           await waitForVisiblePartnerRow(page, ORIGINAL_NAME)
 
           const partnerItem = getWorkbenchLocator(
@@ -70,7 +63,7 @@ describe('workbench conversation e2e', () => {
             const partners = await window.api.partnerList()
             return {
               count: partners.length,
-              partner: partners.find((item) => item.id === partnerId) || null
+              partner: partners.filter((item) => item.id === partnerId).map(({id, name, avatar_shape}) => ({id, name, avatar_shape}))[0] || null
             }
           }, created.id)
           const listText = (

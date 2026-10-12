@@ -124,7 +124,7 @@ const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> 
         </pre>
         <textarea
           ref={bindTextarea}
-          readOnly={Boolean(selectionState?.locked)}
+          readOnly={file.readOnly || Boolean(selectionState?.locked)}
           className="m-0 h-full w-full resize-none whitespace-pre-wrap break-words border-0 bg-transparent px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F] outline-none"
           data-testid={workbenchSelectors.plainTextEditor}
           value={displayValue}

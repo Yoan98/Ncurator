@@ -1,3 +1,5 @@
+import { renderTextFileReadModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
+import { renderTextFileEditModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { describe, expect, it } from 'vitest'
 import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
 import { TEXT_FILE_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/textFile/toolSpecs'
@@ -9,7 +11,6 @@ import {
   TEXT_FILE_SEARCH_MAX_MATCHES,
   TEXT_FILE_SEARCH_SCHEMA
 } from '../../../../src/main/services/ai/human/tools/textFile/toolSchemas'
-import type { TextFileEditOutput } from '../../../../src/main/services/ai/human/tools/textFile/outputTypes'
 
 describe('ai unit text-file tool contract', () => {
   it('binds three tools to the text-file skill', () => {
@@ -80,7 +81,7 @@ describe('ai unit text-file tool contract', () => {
     expect(TEXT_FILE_SEARCH_MAX_MATCHES).toBe(10)
   })
 
-  it('accepts four edit actions and empty edit output', () => {
+  it('accepts four edit actions', () => {
     expect(
       TEXT_FILE_EDIT_SCHEMA.safeParse({
         sourcePath: 'notes.md',
@@ -110,8 +111,34 @@ describe('ai unit text-file tool contract', () => {
         newText: 'b'
       }).success
     ).toBe(true)
+  })
+})
 
-    const editOutput = {} satisfies TextFileEditOutput
-    expect(editOutput).toEqual({})
+describe('tool result data fidelity', () => {
+  it('preserves text_file_read data', () => {
+    const rendered = renderTextFileReadModelResult({
+      toolName: 'text_file_read',
+      args: { sourcePath: '/workspace/readme.md' },
+      data: {
+        content: 'alpha\nbeta',
+        startLine: 1,
+        endLine: 2,
+        totalLines: 10
+      }
+    })
+
+    expect(rendered).toContain('/workspace/readme.md')
+    expect(rendered).toContain('alpha')
+    expect(rendered).toContain('beta')
+  })
+
+  it('preserves text_file_edit data', () => {
+    const rendered = renderTextFileEditModelResult({
+      toolName: 'text_file_edit',
+      args: { sourcePath: '/workspace/app.ts', action: 'edit' },
+      data: {}
+    })
+
+    expect(rendered).toContain('/workspace/app.ts')
   })
 })

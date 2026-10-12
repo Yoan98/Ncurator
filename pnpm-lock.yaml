@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@js-preview/docx@1.6.4':
+    hash: hljmwwtpdz4qxmnwnyh6agd6vq
+    path: patches/@js-preview__docx@1.6.4.patch
   pptx-kit-preview@0.6.2:
     hash: q2peooj3mojnliwfuhqcsa5rua
     path: patches/pptx-kit-preview@0.6.2.patch
@@ -30,7 +33,7 @@ importers:
         version: 3.8.1
       '@js-preview/docx':
         specifier: ^1.6.4
-        version: 1.6.4(core-js@3.48.0)
+        version: 1.6.4(patch_hash=hljmwwtpdz4qxmnwnyh6agd6vq)(core-js@3.48.0)
       '@lancedb/lancedb':
         specifier: 0.22.3
         version: 0.22.3(apache-arrow@17.0.0)
@@ -9564,7 +9567,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@js-preview/docx@1.6.4(core-js@3.48.0)':
+  '@js-preview/docx@1.6.4(patch_hash=hljmwwtpdz4qxmnwnyh6agd6vq)(core-js@3.48.0)':
     dependencies:
       core-js: 3.48.0
 

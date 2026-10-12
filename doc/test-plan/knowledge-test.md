@@ -64,10 +64,10 @@
 #### `workspace-index-worker-contract`
 
 - 测试类型：`backend`
-- What：文件索引 worker 协议与 embedding batch 限制保持稳定。
+- What：真实文档加载、worker 请求与缓存复用返回可检索内容。
 - Why：worker 输入输出或切批失真会让更新索引静默丢文件或打爆嵌入。
-- How：真实 worker 协议与切批函数覆盖支持文件与超限文本。
-- Oracle：协议可执行；batch 遵守条数与字符上限。
+- How：在隔离 workspace 中经生产 worker handler（Node in-process）处理真实 Markdown/TXT/DOCX/DOC/PDF/XLSX；缓存来自真实加载器，比较复用结果。纯切批、手写缓存接入和故障 worker 恢复归 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts`。
+- Oracle：真实正文包含输入标记，空文本保留文件名锚点，DOC/PDF 可检索正文，XLSX 仅有元数据且无单元格内容；缓存复用与真实解析相等，不支持类型返回文件级错误。
 
 #### `workspace-interrupted-job-recovery-contract`
 

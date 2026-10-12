@@ -1,63 +1,19 @@
 import { describe, it } from 'vitest'
-import type { Partner, PartnerUiStateV1 } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   getWorkbenchLocator,
+  createPartnerThroughWorkbenchUi,
+  selectWorkbenchAiPreference,
+  selectWorkbenchExecutionPermission,
+  selectWorkbenchResourceMenuItem,
+  setWorkbenchInput,
+  ensureWorkbenchContentPanelExpanded,
   navigateToWorkbench,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'partner-ui-state-isolation'
-
-const createPartner = (id: string, name: string, createdAt: number): Partner => ({
-  id,
-  name,
-  avatar_shape: 'circle',
-  avatar_color: 'blue',
-  created_at: createdAt,
-  updated_at: createdAt,
-  last_viewed_at: createdAt,
-  pinned: false,
-  pinned_at: null
-})
-
-const createUiState = (input: {
-  draft: string
-  executionPermission: 'review' | 'full_access'
-  collapsed: boolean
-  panelTitle: string
-}): PartnerUiStateV1 => ({
-  version: 1,
-  composer: {
-    aiPreference: input.executionPermission === 'full_access' ? 'local_sources_strict' : 'default',
-    executionPermission: input.executionPermission,
-    modelSelection: { mainModel: null },
-    draft: {
-      formatVersion: 2,
-      input: input.draft,
-      contentNodes: [{ kind: 'text', text: input.draft }],
-      selectedReferences: [],
-      attachments: [],
-      assetBucketId: null
-    }
-  },
-  panel: {
-    tabs: input.collapsed
-      ? []
-      : [
-          {
-            id: 'file:launcher',
-            kind: 'file',
-            title: input.panelTitle,
-            state: { kind: 'file_launcher', title: input.panelTitle }
-          }
-        ],
-    activeTabId: input.collapsed ? null : 'file:launcher',
-    collapsed: input.collapsed,
-    fallbackState: { kind: 'empty', title: '资源工作台', description: input.panelTitle }
-  }
-})
 
 describe('workbench conversation e2e', () => {
   it(
@@ -76,34 +32,40 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await navigateToWorkbench(page, { waitForSessionListText: false })
-          const partnerA = createPartner('ui-state-a', '状态伙伴 A', 10)
-          const partnerB = createPartner('ui-state-b', '状态伙伴 B', 20)
-          const stateA = createUiState({
-            draft: 'A 独立草稿',
-            executionPermission: 'full_access',
-            collapsed: false,
-            panelTitle: 'A 文件标签'
-          })
-          const stateB = createUiState({
-            draft: 'B 独立草稿',
-            executionPermission: 'review',
-            collapsed: true,
-            panelTitle: 'B 资源面板'
-          })
-          await page.evaluate(
-            async ({ partnerA, partnerB, stateA, stateB }) => {
-              await window.api.partnerSave(partnerA)
-              await window.api.partnerSave(partnerB)
-              await window.api.partnerUiStateSave({ partnerId: partnerA.id, state: stateA })
-              await window.api.partnerUiStateSave({ partnerId: partnerB.id, state: stateB })
-              await window.api.workbenchUiStateSave({
-                activeViewKey: partnerA.id
-              })
-            },
-            { partnerA, partnerB, stateA, stateB }
-          )
-          await page.reload()
-          await navigateToWorkbench(page)
+          await createPartnerThroughWorkbenchUi(page, '状态伙伴 A')
+          await createPartnerThroughWorkbenchUi(page, '状态伙伴 B')
+          const partners = await page.evaluate(() => window.api.partnerList())
+          const partnerA = partners.find((item) => item.name === '状态伙伴 A')
+          const partnerB = partners.find((item) => item.name === '状态伙伴 B')
+          if (!partnerA || !partnerB) throw new Error('created partners missing')
+          await getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.partnerItemPrefix}-${partnerA.id}`
+          ).click()
+          await page.getByText('找俺干啥？', { exact: true }).waitFor({ state: 'visible' })
+          await setWorkbenchInput(page, 'A 独立草稿')
+          await selectWorkbenchAiPreference(page, '严谨')
+          await selectWorkbenchExecutionPermission(page, '完全访问')
+          await selectWorkbenchResourceMenuItem(runtime, 'file')
+          await page.waitForFunction(async (partnerId) => {
+            const { uiState } = await window.api.partnerOpen({ partnerId })
+            return (
+              uiState?.composer.aiPreference === 'local_sources_strict' &&
+              uiState.composer.executionPermission === 'full_access' &&
+              uiState.panel.activeTabId === 'file:launcher' &&
+              !uiState.panel.collapsed
+            )
+          }, partnerA.id)
+          await getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.partnerItemPrefix}-${partnerB.id}`
+          ).click()
+          await page.getByText('找俺干啥？', { exact: true }).waitFor({ state: 'visible' })
+          await setWorkbenchInput(page, 'B 独立草稿')
+          await selectWorkbenchAiPreference(page, '默认')
+          await selectWorkbenchExecutionPermission(page, '审核')
+          const toggle = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
+          if ((await toggle.getAttribute('aria-label')) === '收起右侧栏') await toggle.click()
 
           const readOptionalText = async (testId: string) => {
             const locator = getWorkbenchLocator(page, testId)
@@ -118,10 +80,13 @@ describe('workbench conversation e2e', () => {
               workbenchSelectors.executionPermissionSwitch
             ),
             panelText: await readOptionalText(workbenchSelectors.contentPanelShell),
-            panelVisible:
-              (await getWorkbenchLocator(page, workbenchSelectors.contentPanelShell).getAttribute(
-                'data-panel-visible'
-              )) === 'true'
+            panelVisible: await page.evaluate(
+              (testId) =>
+                document
+                  .querySelector(`[data-testid="${testId}"]`)
+                  ?.getAttribute('data-panel-visible') === 'true',
+              workbenchSelectors.contentPanelShell
+            )
           })
           const selectPartner = async (id: string, draft: string) => {
             await getWorkbenchLocator(page, `${workbenchSelectors.partnerItemPrefix}-${id}`).click()
@@ -132,17 +97,15 @@ describe('workbench conversation e2e', () => {
             )
           }
 
+          await selectPartner(partnerA.id, 'A 独立草稿')
           const firstA = await readVisibleState()
-          await selectPartner(partnerB.id, stateB.composer.draft.input)
+          await selectPartner(partnerB.id, 'B 独立草稿')
           const collapsedB = await readVisibleState()
-          await getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle).click()
-          await getWorkbenchLocator(page, workbenchSelectors.contentPanelShell).waitFor({
-            state: 'visible'
-          })
+          await ensureWorkbenchContentPanelExpanded(page)
           const expandedB = await readVisibleState()
-          await selectPartner(partnerA.id, stateA.composer.draft.input)
+          await selectPartner(partnerA.id, 'A 独立草稿')
           const secondA = await readVisibleState()
-          await selectPartner(partnerB.id, stateB.composer.draft.input)
+          await selectPartner(partnerB.id, 'B 独立草稿')
           const secondB = await readVisibleState()
           const persisted = await page.evaluate(
             async ({ partnerAId, partnerBId }) => {
@@ -162,14 +125,14 @@ describe('workbench conversation e2e', () => {
             result.firstA.input === 'A 独立草稿' &&
               result.firstA.preference.includes('本地资料') &&
               result.firstA.executionPermission.includes('完全访问') &&
-              result.firstA.panelText.includes('A 文件标签') &&
+              result.firstA.panelText.includes('文件') &&
               result.firstA.panelVisible &&
               result.collapsedB.input === 'B 独立草稿' &&
               result.collapsedB.executionPermission.includes('审核') &&
               !result.collapsedB.panelVisible &&
               result.expandedB.panelVisible &&
               result.secondA.input === result.firstA.input &&
-              result.secondA.panelText.includes('A 文件标签') &&
+              result.secondA.panelText === result.firstA.panelText &&
               result.secondA.executionPermission.includes('完全访问') &&
               result.secondB.input === result.collapsedB.input &&
               result.persisted.stateA?.composer.aiPreference === 'local_sources_strict' &&
@@ -180,7 +143,10 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-partner-ui-state-isolation',
               message: 'A/B 伙伴必须恢复各自的输入、执行权限和右侧面板状态。',
-              data: result
+              data: { firstA: result.firstA, collapsedB: result.collapsedB, expandedB: result.expandedB, secondA: result.secondA, secondB: result.secondB,
+                savedA: { preference: result.persisted.stateA?.composer.aiPreference ?? null, permission: result.persisted.stateA?.composer.executionPermission ?? null, activeTabId: result.persisted.stateA?.panel.activeTabId ?? null, collapsed: result.persisted.stateA?.panel.collapsed ?? null },
+                savedB: { permission: result.persisted.stateB?.composer.executionPermission ?? null, collapsed: result.persisted.stateB?.panel.collapsed ?? null }
+              }
             }
           )
         }

@@ -1,3 +1,7 @@
+import {
+  assertDocxReferenceOverview,
+  assertEmptyDocxOverview
+} from '../../../../harness/e2e/docxOverview'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
@@ -231,16 +235,19 @@ describe('workbench conversation e2e', () => {
             )
           await openWorkbenchWorkspaceFile(runtime, 'sample-edit.docx')
           await page.locator('.docx-content article p').first().waitFor({ state: 'visible' })
+          await assertEmptyDocxOverview(runtime)
           for (const selection of [
             { start: 0, end: 5, thought: '第一段' },
             { start: 6, end: 10, thought: '第二段' },
             { start: 11, end: 18, thought: '第三段' }
           ]) {
             await selectText(page, 0, selection.start, 0, selection.end)
+            if (selection.start === 0) await assertEmptyDocxOverview(runtime)
             await page.getByTestId('docx-selection-thought').fill(selection.thought)
             await page.getByRole('button', { name: '添加到输入框', exact: true }).click()
           }
           await page.locator('.docx-content article p').first().hover()
+          await assertDocxReferenceOverview(runtime)
           const savedUi = await observeSavedSelections(page)
           const hoveredSelections: Awaited<ReturnType<typeof observeHover>>[] = []
           for (const selection of [
@@ -337,6 +344,18 @@ describe('workbench conversation e2e', () => {
               data: { afterComposerDelete, afterComposerHighlights }
             }
           )
+          // The existing "fixture" reference was confirmed first. The overview must
+          // still cycle Hello/from/fixture in document order, independent of numbering.
+          for (const selection of [
+            { start: 0, end: 5 },
+            { start: 6, end: 10 }
+          ]) {
+            await selectText(page, 0, selection.start, 0, selection.end)
+            await page.getByTestId('docx-selection-thought').fill('位置顺序验证')
+            await page.getByTestId('docx-selection-save').click()
+          }
+          await page.locator('.docx-content article p').first().hover()
+          await assertDocxReferenceOverview(runtime)
           await composer.fill('')
           await selectText(page, 0, 0, 0, 5)
           await page.getByTestId('docx-selection-thought').fill('重新添加')
@@ -710,6 +729,7 @@ describe('workbench conversation e2e', () => {
             .locator('[data-role="document-selection-token"]')
             .waitFor({ state: 'detached' })
           const submittedHighlights = await observeSavedSelections(page)
+          await assertEmptyDocxOverview(runtime)
           await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAt,

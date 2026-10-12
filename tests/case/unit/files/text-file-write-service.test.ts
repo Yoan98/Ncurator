@@ -50,6 +50,16 @@ describe('unit text-file-write-service', () => {
           'x',
           'some-hash'
         )
+        const deletedPath = path.join(workspaceRoot, 'deleted-editor-file.txt')
+        await fs.writeFile(deletedPath, 'before deletion')
+        await fs.unlink(deletedPath)
+        const delayedEditorSave = writeTextFileAtomically(
+          deletedPath,
+          'pending save',
+          undefined,
+          true
+        )
+        const deletedFileNotRecreated = !delayedEditorSave.ok && !(await pathExists(deletedPath))
 
         const crlfContent = 'line one\r\nline two\r\n'
         const crlfOk = writeTextFileAtomically(crlfPath, crlfContent)
@@ -57,15 +67,20 @@ describe('unit text-file-write-service', () => {
         const crlfPreserved = crlfBytes.equals(Buffer.from(crlfContent, 'utf8'))
 
         const loneSurrogate = `bad\uD800chars`
-        const invalid = writeTextFileAtomically(path.join(workspaceRoot, 'invalid.txt'), loneSurrogate)
+        const invalid = writeTextFileAtomically(
+          path.join(workspaceRoot, 'invalid.txt'),
+          loneSurrogate
+        )
         const invalidFileNotCreated = !(await pathExists(path.join(workspaceRoot, 'invalid.txt')))
 
         return {
           created: created.ok && createdBytes === 'hello\nworld\n' && Boolean(created.hash),
           noTempLeftovers: tempFilesLeft.length === 0,
-          matchedHashRejected: !matchedHash.ok && Boolean(matchedHash.conflict) && matchedHashWriteSkipped,
+          matchedHashRejected:
+            !matchedHash.ok && Boolean(matchedHash.conflict) && matchedHashWriteSkipped,
           overwriteOk: overwriteOk.ok && overwriteApplied,
           missingFileConflict: !missingFileConflict.ok && Boolean(missingFileConflict.error),
+          deletedFileNotRecreated,
           crlfOk: crlfOk.ok && crlfPreserved,
           invalidRejected: !invalid.ok && Boolean(invalid.error) && invalidFileNotCreated
         }
@@ -77,6 +92,7 @@ describe('unit text-file-write-service', () => {
             result.matchedHashRejected &&
             result.overwriteOk &&
             result.missingFileConflict &&
+            result.deletedFileNotRecreated &&
             result.crlfOk &&
             result.invalidRejected,
           {

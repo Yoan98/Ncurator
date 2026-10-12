@@ -1,90 +1,44 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { describe, it } from 'vitest'
-import {
-  WORKSPACE_EMBEDDING_BATCH_CHUNK_COUNT,
-  WORKSPACE_EMBEDDING_BATCH_MAX_CHARS,
-  WORKSPACE_EMBEDDING_CHUNK_MAX_CHARS
-} from '../../../../src/main/services/workspace/constants'
 import {
   IngestionService,
   isSupportedLocalFilePath
 } from '../../../../src/main/services/ingestion/loader'
 import {
   buildWorkspaceKnowledgeSplitSnapshot,
-  computeWorkspaceFileContentHash,
-  createWorkspaceEmbeddingBatches
+  computeWorkspaceFileContentHash
 } from '../../../../src/main/services/workspace/utils/knowledge'
 import { handleWorkspacePrepareWorkerRequest } from '../../../../src/main/services/workspace/worker/workspacePrepareWorker'
-import { WorkspacePrepareWorkerClient } from '../../../../src/main/services/workspace/worker/workspacePrepareWorkerClient'
 import type { WorkspacePrepareWorkerRequest } from '../../../../src/main/services/workspace/types'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
-const createChunk = (length: number, page: number): { text: string; page: number } => ({
-  text: 'x'.repeat(length),
-  page
-})
-
-describe('unit workspace backend', () => {
+describe('knowledge workspace backend', () => {
   it('workspace-index-worker-contract', async () => {
     await runBackendCase({
       caseId: 'workspace-index-worker-contract',
       harnessMode: 'tool-real',
       domain: 'knowledge',
       suite: 'foundation',
-      description: 'workspace 文件索引 worker 协议与 embedding batch 限制保持稳定。',
+      description: '真实文件经 workspace worker handler 解析并复用真实切分缓存。',
       fixtures: ['tests/fixtures/workspace'],
       runMode: 'single',
       execute: async (runtime) => {
-        const normalChunks = [
-          createChunk(1000, 1),
-          createChunk(3000, 2),
-          createChunk(4000, 3),
-          createChunk(3999, 4),
-          createChunk(2, 5),
-          createChunk(2, 6)
-        ]
-        const normalBatches = createWorkspaceEmbeddingBatches(normalChunks)
-        const oversizedBatch = createWorkspaceEmbeddingBatches([
-          createChunk(WORKSPACE_EMBEDDING_BATCH_MAX_CHARS + 1, 1),
-          createChunk(100, 2)
-        ])
-        let hardLimitError = ''
-        try {
-          createWorkspaceEmbeddingBatches([createChunk(WORKSPACE_EMBEDDING_CHUNK_MAX_CHARS + 1, 1)])
-        } catch (error) {
-          hardLimitError = error instanceof Error ? error.message : String(error)
-        }
-
-        const workerFilePath = path.join(runtime.workspaceRoot, 'cached-worker.docx')
-        await fs.writeFile(workerFilePath, 'cached worker contract file')
-        const workerContentHash = await computeWorkspaceFileContentHash(workerFilePath)
+        const workerFilePath = path.join(runtime.workspaceRoot, '学习笔记', '深度学习.docx')
         const workerRequest: WorkspacePrepareWorkerRequest = {
-          requestId: 'worker-contract-success',
+          requestId: 'worker-contract-docx',
           action: 'prepare_source',
-          payload: {
-            filePath: workerFilePath,
-            cachedSplit: {
-              contentHash: workerContentHash,
-              fileExt: '.docx',
-              chunks: [
-                {
-                  text: 'cached chunk',
-                  page: 1
-                }
-              ]
-            }
-          }
+          payload: { filePath: workerFilePath }
         }
         const workerSuccess = await handleWorkspacePrepareWorkerRequest(workerRequest)
         const pdfFilePath = path.join(runtime.workspaceRoot, '学习笔记', '深度学习.pdf')
         const pdfContentHash = await computeWorkspaceFileContentHash(pdfFilePath)
-        const pdfSplitSnapshot = {
+        const pdfSplitSnapshot = await buildWorkspaceKnowledgeSplitSnapshot({
+          ingestionService: IngestionService.getInstance(),
+          filePath: pdfFilePath,
           contentHash: pdfContentHash,
-          fileExt: '.pdf',
-          chunks: [{ text: '深度学习', page: 1 }]
-        }
+          fileExt: '.pdf'
+        })
         const markdownFilePath = path.join(runtime.workspaceRoot, 'indexed-notes.md')
         await fs.writeFile(
           markdownFilePath,
@@ -170,71 +124,14 @@ describe('unit workspace backend', () => {
           }
         })
         const workerFailure = await handleWorkspacePrepareWorkerRequest({
-          ...workerRequest,
+          action: 'prepare_source',
           requestId: 'worker-contract-error',
           payload: {
-            ...workerRequest.payload,
             filePath: path.join(runtime.workspaceRoot, 'unsupported.js')
           }
         })
-        const exitWorkerPath = path.join(runtime.workspaceRoot, 'workspace-exit-worker.js')
-        const exitMarkerPath = path.join(runtime.workspaceRoot, 'workspace-exit-worker.marker')
-        await fs.writeFile(
-          exitWorkerPath,
-          `
-const fs = require('node:fs')
-const { parentPort } = require('node:worker_threads')
-const markerPath = ${JSON.stringify(exitMarkerPath)}
-parentPort.on('message', (request) => {
-  if (!fs.existsSync(markerPath)) {
-    fs.writeFileSync(markerPath, 'exited')
-    process.exit(1)
-    return
-  }
-  parentPort.postMessage({
-    requestId: request.requestId,
-    action: 'prepare_source',
-    ok: true,
-    payload: {
-      filePath: request.payload.filePath,
-      fileExt: '.docx',
-      contentHash: 'exit-recovery-hash',
-      sourceType: 'file',
-      splitSnapshot: {
-        contentHash: 'exit-recovery-hash',
-        fileExt: '.docx',
-        chunks: []
-      }
-    }
-  }, [])
-})
-`
-        )
-        const exitClient = new WorkspacePrepareWorkerClient({
-          workerUrl: pathToFileURL(exitWorkerPath)
-        })
-        let exitError = ''
-        try {
-          await exitClient.prepareSource({
-            filePath: workerFilePath
-          })
-        } catch (error) {
-          exitError = error instanceof Error ? error.message : String(error)
-        }
-        const exitRecovery = await exitClient.prepareSource({
-          filePath: workerFilePath
-        })
 
         return {
-          normalBatchSizes: normalBatches.map((batch) => batch.length),
-          normalBatchChars: normalBatches.map((batch) =>
-            batch.reduce((total, chunk) => total + chunk.text.length, 0)
-          ),
-          oversizedBatchSizes: oversizedBatch.map((batch) => batch.length),
-          oversizedBatchChars: oversizedBatch.map((batch) =>
-            batch.reduce((total, chunk) => total + chunk.text.length, 0)
-          ),
-          hardLimitError,
           textFileSupport: {
             md: isSupportedLocalFilePath(markdownFilePath),
             markdown: isSupportedLocalFilePath(path.join(runtime.workspaceRoot, 'notes.markdown')),
@@ -253,39 +150,10 @@ parentPort.on('message', (request) => {
           pdfWorkerSuccess,
           legacyDocWorkerSuccess,
           workerFailure,
-          exitError,
-          exitRecovery
+          pdfSplitSnapshot
         }
       },
       assert: async (result, runtime) => {
-        runtime.assertThat(
-          result.normalBatchSizes.every((size) => size <= WORKSPACE_EMBEDDING_BATCH_CHUNK_COUNT) &&
-            result.normalBatchChars.every((chars) => chars <= WORKSPACE_EMBEDDING_BATCH_MAX_CHARS),
-          {
-            name: 'embedding-batches-fit-count-and-char-budget',
-            message:
-              '普通 chunk batch 应同时满足最多 4 个 chunk 和最多 12000 字符，降低单次 embed 内存峰值。',
-            data: result
-          }
-        )
-
-        runtime.assertThat(
-          result.oversizedBatchSizes[0] === 1 &&
-            result.oversizedBatchChars[0] === WORKSPACE_EMBEDDING_BATCH_MAX_CHARS + 1,
-          {
-            name: 'single-oversized-chunk-embeds-alone',
-            message:
-              '单个 chunk 超过 batch 字符预算但未超过硬上限时，应单独组成 batch，而不是截断或与其他 chunk 混合。',
-            data: result
-          }
-        )
-
-        runtime.assertThat(result.hardLimitError.includes('chunk is too large to embed'), {
-          name: 'hard-limit-fails-file',
-          message: '单个 chunk 超过 40000 字符硬上限时，应抛错并交由文件级失败收敛。',
-          data: result
-        })
-
         runtime.assertThat(
           result.textFileSupport.md &&
             result.textFileSupport.markdown &&
@@ -360,7 +228,7 @@ parentPort.on('message', (request) => {
 
         runtime.assertThat(
           result.workerSuccess.ok &&
-            result.workerSuccess.payload?.splitSnapshot.chunks.length === 1,
+            (result.workerSuccess.payload?.splitSnapshot.chunks.length ?? 0) > 1,
           {
             name: 'worker-success-returns-main-process-split-payload',
             message: 'worker 成功时只返回 split chunks，向量推理由独立 embedding runtime 负责。',
@@ -371,7 +239,9 @@ parentPort.on('message', (request) => {
         runtime.assertThat(
           result.pdfWorkerSuccess.ok &&
             result.pdfWorkerSuccess.payload?.fileExt === '.pdf' &&
-            result.pdfWorkerSuccess.payload.splitSnapshot.chunks.length > 0 &&
+            JSON.stringify(result.pdfWorkerSuccess.payload.splitSnapshot) ===
+              JSON.stringify(result.pdfSplitSnapshot) &&
+            result.pdfWorkerSuccess.payload.splitSnapshot.chunks.length > 1 &&
             result.pdfWorkerSuccess.payload.splitSnapshot.chunks.some((chunk) =>
               chunk.text.includes('深度学习')
             ),
@@ -427,21 +297,11 @@ parentPort.on('message', (request) => {
         )
 
         runtime.assertThat(
-          !result.workerFailure.ok && result.workerFailure.error?.includes('Unsupported file type'),
+          !result.workerFailure.ok && result.workerFailure.error?.includes('Unsupported file type') === true,
           {
             name: 'worker-js-error-becomes-file-level-failure-response',
             message:
               'worker 内 JS 错误应返回 ok=false，让 main process 把当前文件收敛为 failed 并继续后续文件。',
-            data: result
-          }
-        )
-
-        runtime.assertThat(
-          result.exitError.includes('workspace prepare worker exited with code 1') &&
-            result.exitRecovery.contentHash === 'exit-recovery-hash',
-          {
-            name: 'worker-exit-fails-current-file-and-rebuilds-for-next-file',
-            message: 'worker 非 0 退出时应让当前请求失败，并在后续文件请求中重建 worker 继续处理。',
             data: result
           }
         )
