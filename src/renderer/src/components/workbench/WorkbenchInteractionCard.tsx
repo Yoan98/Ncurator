@@ -31,6 +31,7 @@ type CardProps = {
   previousTestId: string
   nextTestId: string
   cancelTestId: string
+  onKeyDownCapture?: React.KeyboardEventHandler<HTMLElement>
   children?: React.ReactNode
   footer: React.ReactNode
 }
@@ -39,8 +40,9 @@ export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
   <section
     className="nc-timeline-layout-anchor flex max-h-[calc(100vh-120px)] min-w-0 flex-col overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-white text-[#37352F] shadow-[0_8px_24px_rgba(15,15,15,0.065)]"
     data-testid={props.cardTestId}
+    onKeyDownCapture={props.onKeyDownCapture}
   >
-    <div className="flex shrink-0 items-center justify-between gap-2 px-[18px] pt-3">
+    <header className="flex shrink-0 items-center justify-between gap-2 px-[18px] pt-3">
       <div className="flex min-w-0 items-center gap-[7px] text-xs text-[#787774]">
         {props.itemLabel === '问题' ? (
           <HiOutlineQuestionMarkCircle className="h-[15px] w-[15px] shrink-0" />
@@ -92,7 +94,7 @@ export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
           {props.cancelling ? <Spin size="small" /> : <HiStop className="h-3 w-3" />}
         </button>
       </div>
-    </div>
+    </header>
     <div className="min-h-0 overflow-y-auto">
       {props.source && (
         <div className="mx-5 mt-2 flex min-w-0 items-center gap-2 break-words text-xs text-[#787774]">

@@ -174,25 +174,43 @@ describe('workbench AI question e2e', () => {
               if (!options.length) {
                 const textBeforeEnter = await input.inputValue()
                 await input.press('End')
-                await input.press('Enter')
+                await input.press('Shift+Enter')
                 if ((await input.inputValue()) !== `${textBeforeEnter}\n`)
-                  throw new Error('Enter did not insert a newline')
+                  throw new Error('Shift+Enter did not insert a newline')
               }
               await runtime.captureScreenshot({
                 name: `question-${index + 1}`,
                 message: '提问卡片与逐题回答草稿'
               })
               if (index < currentQuestions.length - 1) {
-                await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
+                if (index === 0 && options.length) {
+                  await card
+                    .getByTestId(`workbench-human-question-option-${question.id}-${options[0].id}`)
+                    .press('Enter')
+                } else {
+                  await input.press('Enter')
+                }
+                await card
+                  .getByTestId(
+                    `workbench-human-question-user-text-${currentQuestions[index + 1].id}`
+                  )
+                  .waitFor({ state: 'visible', timeout: 5_000 })
                 await card.getByTestId(workbenchSelectors.humanQuestionPrev).click()
                 if (!(await input.inputValue()).trim())
                   throw new Error('navigation lost answer draft')
+                if (
+                  options.length &&
+                  (await card
+                    .getByTestId(`workbench-human-question-option-${question.id}-${options[0].id}`)
+                    .getAttribute('aria-pressed')) !== 'true'
+                )
+                  throw new Error('Enter toggled the selected option instead of advancing')
                 await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
               }
             }
             await card
               .getByTestId(`workbench-human-question-user-text-${currentQuestions.at(-1)!.id}`)
-              .press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter')
+              .press('Enter')
           }
 
           const beforeAnswerEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
@@ -244,6 +262,9 @@ describe('workbench AI question e2e', () => {
           if (await firstInput.inputValue()) throw new Error('reload restored an unsent draft')
           if (!(await card.getByTestId(workbenchSelectors.humanQuestionSubmit).isDisabled()))
             throw new Error('empty answer permits advancement')
+          await firstInput.press('Enter')
+          if (!(await firstInput.isVisible()) || (await firstInput.inputValue()))
+            throw new Error('Enter advanced an empty question or inserted a newline')
           await answerQuestionCard(questions)
 
           const seenInteractionIds = new Set([required.interactionId])
