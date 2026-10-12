@@ -25,6 +25,10 @@ const createFakeCtx = (): AiRunContext => {
 }
 
 const titledSection = (text: string, title: string): string => {
+  const tag = `<${title}>\n`
+  if (text.includes(tag)) {
+    return text.split(tag)[1].split(`\n</${title}>`)[0].trim()
+  }
   const marker = `${title}：\n`
   const start = text.indexOf(marker)
   if (start < 0) return ''
@@ -60,13 +64,13 @@ describe('ai unit brain prompt formatting', () => {
     } as AiRunContext
     const emptyUser = buildBrainUserMessage({ state, ctx: emptyCtx })
 
-    expect(emptyUser).toContain('用户诉求：')
+    expect(emptyUser).toContain('<用户诉求>')
     expect(emptyUser).toContain('继续处理任务')
-    expect(emptyUser).not.toContain('偏好：')
-    expect(emptyUser).not.toContain('默认用户工作区：')
-    expect(emptyUser).not.toContain('用户引用的文档：')
-    expect(emptyUser).not.toContain('用户添加的附件：')
-    expect(emptyUser).toContain('当前时间：')
+    expect(emptyUser).not.toContain('<偏好>')
+    expect(emptyUser).not.toContain('<默认用户工作区>')
+    expect(emptyUser).not.toContain('<用户引用的文档>')
+    expect(emptyUser).not.toContain('<用户添加的附件>')
+    expect(emptyUser).toContain('<当前时间>')
     expect(emptyUser).toContain('current_time.local_iso')
     expect(emptyUser).not.toContain('<active_state>')
   })
@@ -98,11 +102,11 @@ describe('ai unit brain prompt formatting', () => {
     const user = buildBrainUserMessage({ state, ctx })
 
     expect(titledSection(user, '偏好').length).toBeGreaterThan(0)
-    expect(user).toContain('默认用户工作区：')
-    expect(user).toContain('用户引用的文档：')
+    expect(user).toContain('<默认用户工作区>')
+    expect(user).toContain('<用户引用的文档>')
     expect(user).toContain('note.md')
     expect(user).toContain('D:\\workspace\\note.md')
-    expect(user).not.toContain('用户添加的附件：')
+    expect(user).not.toContain('<用户添加的附件>')
     expect(user).not.toContain('当前没有用户显式指定的参考范围')
     expect(user).not.toContain('当前没有用户添加的附件')
   })

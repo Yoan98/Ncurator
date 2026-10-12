@@ -9,7 +9,7 @@ patchedDependencies:
     hash: hljmwwtpdz4qxmnwnyh6agd6vq
     path: patches/@js-preview__docx@1.6.4.patch
   pptx-kit-preview@0.6.2:
-    hash: q2peooj3mojnliwfuhqcsa5rua
+    hash: lwzt4hp3vfourxarnxhjleevzi
     path: patches/pptx-kit-preview@0.6.2.patch
 
 importers:
@@ -168,7 +168,7 @@ importers:
         version: 0.11.1
       pptx-kit-preview:
         specifier: 0.6.2
-        version: 0.6.2(patch_hash=q2peooj3mojnliwfuhqcsa5rua)(pptx-kit@0.11.1)
+        version: 0.6.2(patch_hash=lwzt4hp3vfourxarnxhjleevzi)(pptx-kit@0.11.1)
       react-doc-viewer:
         specifier: ^0.1.15
         version: 0.1.15(@babel/core@7.28.5)(@types/react@19.2.7)(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react-is@18.3.1)(react@19.2.3)
@@ -15437,7 +15437,7 @@ snapshots:
       commander: 9.5.0
     optional: true
 
-  pptx-kit-preview@0.6.2(patch_hash=q2peooj3mojnliwfuhqcsa5rua)(pptx-kit@0.11.1):
+  pptx-kit-preview@0.6.2(patch_hash=lwzt4hp3vfourxarnxhjleevzi)(pptx-kit@0.11.1):
     dependencies:
       '@resvg/resvg-js': 2.6.2
       fontkit: 2.0.4

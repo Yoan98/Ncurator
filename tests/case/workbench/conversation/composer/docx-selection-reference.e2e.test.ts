@@ -745,10 +745,10 @@ describe('workbench conversation e2e', () => {
               .join('\n\n') || ''
           const finalSources = await Promise.all(sourcePaths.map((source) => fs.readFile(source)))
           await runtime.assertThat(
-            brainInput.includes('选中片段 1：') &&
-              brainInput.includes('选中内容：\n```text\n') &&
-              !brainInput.includes('前文（上下文，仅供理解与定位）：') &&
-              brainInput.includes('后文（上下文，仅供理解与定位）：\n```text\n') &&
+            brainInput.includes('<用户选中片段1>') &&
+              brainInput.includes('<选中内容>\n') &&
+              !brainInput.includes('<前文>') &&
+              brainInput.includes('<后文>\n') &&
               !brainInput.includes('以下选中片段') &&
               finalSources.every((bytes, index) => bytes.equals(originalSources[index])),
             {

@@ -4,6 +4,16 @@ import JSZip from 'jszip'
 import type { Locator, Page } from 'playwright'
 import {
   addSlideImage,
+  addBlankSlide,
+  addSlideTextBox,
+  addSlideShape,
+  groupShapes,
+  getGroupChildren,
+  getShapeId,
+  getShapeText,
+  getSlideShapes,
+  setShapeFill,
+  setShapeTextFormat,
   emu,
   getSlidePartName,
   getSlides,
@@ -128,6 +138,44 @@ describe('workbench conversation e2e', () => {
               format: 'png'
             }
           )
+          const groupSlide = addBlankSlide(deck)
+          const groupTexts = ['组合引用测试甲', '组合引用测试乙']
+          const groupTextShapes = groupTexts.map((text, index) => {
+            const shape = addSlideTextBox(groupSlide, {
+              x: emu(Math.round(size.width * 0.12)),
+              y: emu(Math.round(size.height * (0.2 + index * 0.2))),
+              w: emu(Math.round(size.width * 0.3)),
+              h: emu(Math.round(size.height * 0.12)),
+              text
+            })
+            setShapeTextFormat(shape, { size: 20 })
+            return shape
+          })
+          const nested = groupShapes(groupTextShapes)
+          const nestedShape = addSlideShape(groupSlide, {
+            preset: 'rect',
+            x: emu(Math.round(size.width * 0.48)),
+            y: emu(Math.round(size.height * 0.2)),
+            w: emu(Math.round(size.width * 0.12)),
+            h: emu(Math.round(size.height * 0.2))
+          })
+          setShapeFill(nestedShape, '#FFD08A')
+          const group = groupShapes([nested, nestedShape])
+          const blankShape = addSlideShape(groupSlide, {
+            preset: 'rect',
+            x: emu(Math.round(size.width * 0.72)),
+            y: emu(Math.round(size.height * 0.3)),
+            w: emu(Math.round(size.width * 0.16)),
+            h: emu(Math.round(size.height * 0.2))
+          })
+          setShapeFill(blankShape, '#17324D')
+          const groupSlideId = getSlidePartName(groupSlide)
+          const groupId = `${groupSlideId}#${getShapeId(group)}`
+          const groupChildIds = getGroupChildren(group).map(
+            (child) => `${groupSlideId}#${getShapeId(child)}`
+          )
+          const blankShapeId = `${groupSlideId}#${getShapeId(blankShape)}`
+          const groupPage = getSlides(deck).length
           await fs.writeFile(pptPath, await savePresentation(deck))
           const before = await Promise.all(
             names.map((name) => fs.readFile(path.join(setup.workspace.rootPath, name)))
@@ -221,6 +269,11 @@ describe('workbench conversation e2e', () => {
             .first()
           const selectedElementId = `${expectedSlideId}#${await textShape.getAttribute('data-nc-shape-id')}`
           const expectedText = (await textShape.locator('text').allTextContents()).join('\n')
+          const expectedSourceText = getShapeText(
+            getSlideShapes(getSlides(presentation)[0]!).find(
+              (shape) => `${expectedSlideId}#${getShapeId(shape)}` === selectedElementId
+            )!
+          )
           const imageShape = page
             .locator('[data-ppt-interactive] [data-nc-shape-id]')
             .filter({ has: page.locator('image') })
@@ -415,7 +468,7 @@ describe('workbench conversation e2e', () => {
           await confirm(page, 'ppt', '只解释这个文本框，不修改文件。')
           const textTitle = await tokens.last().getAttribute('title')
           await runtime.assertThat(
-            !!textTitle?.includes('整个元素') &&
+            !!textTitle?.includes(`选中元素：${selectedElementId}`) &&
               textTitle.endsWith('\n' + expectedText) &&
               !textTitle.includes('选中文字'),
             {
@@ -442,15 +495,11 @@ describe('workbench conversation e2e', () => {
           await imageShape.click()
           await confirm(page, 'ppt', '只解释这张图片，不修改文件。')
           const imageTitle = await tokens.last().getAttribute('title')
-          await runtime.assertThat(
-            !!imageTitle?.includes('整个元素') &&
-              imageTitle.includes(`元素标识：${selectedImageId}`),
-            {
-              name: 'ppt-image-element',
-              message: '点击图片引用该图片元素的真实标识。',
-              data: { imageTitle, selectedImageId }
-            }
-          )
+          await runtime.assertThat(!!imageTitle?.includes(`选中元素：${selectedImageId}`), {
+            name: 'ppt-image-element',
+            message: '点击图片引用该图片元素的真实标识。',
+            data: { imageTitle, selectedImageId }
+          })
           await page.locator('[data-ppt-reference-page]').focus()
           await page.keyboard.press('Enter')
           await confirm(
@@ -471,16 +520,69 @@ describe('workbench conversation e2e', () => {
           await page.getByTestId('ppt-selection-ai-reference').waitFor({ state: 'visible' })
           await page.keyboard.press('Escape')
           await popup.waitFor({ state: 'detached' })
+          await page
+            .getByTestId('ppt-preview-thumbnails')
+            .getByRole('button', { name: `第 ${groupPage} 页`, exact: true })
+            .click()
+          const groupElement = page.locator(
+            `[data-ppt-interactive] [data-nc-shape-id="${getShapeId(group)}"]`
+          )
+          await groupElement.waitFor({ state: 'visible' })
+          const groupMarkup = await page.locator('[data-ppt-interactive] svg').evaluate((svg) => ({
+            selectable: [...svg.querySelectorAll('[data-nc-shape-id]')].map((element) =>
+              element.getAttribute('data-nc-shape-id')
+            ),
+            text: [...svg.querySelectorAll('text')].map((element) => element.textContent)
+          }))
+          await runtime.assertThat(
+            groupMarkup.selectable.length === 2 &&
+              groupMarkup.selectable.includes(String(getShapeId(group))) &&
+              groupTexts.every(
+                (text) => groupMarkup.text.filter((value) => value === text).length === 1
+              ),
+            {
+              name: 'ppt-group-rendered-once',
+              message: '嵌套组合后代只渲染一次，交互层仅保留外层组合和独立对象。',
+              data: groupMarkup
+            }
+          )
+          await drag('ppt-group-pan', await centerOf(groupElement.locator('text').first()))
+          await viewer.getByRole('button', { name: '适应窗口' }).click()
+          await groupElement.locator('text').first().click()
+          await confirm(
+            page,
+            'ppt',
+            '请通过 PPT 工具读取这个组合及其子元素，解释组合中的两段文字，不修改文件。'
+          )
+          const groupTitle = await tokens.last().getAttribute('title')
+          await groupElement.locator('text').last().click()
+          await page.getByTestId('ppt-selection-thought').waitFor({ state: 'visible' })
+          await page.keyboard.press('Escape')
+          await popup.waitFor({ state: 'detached' })
+          await page
+            .locator(`[data-ppt-interactive] [data-nc-shape-id="${getShapeId(blankShape)}"]`)
+            .click()
+          await confirm(page, 'ppt', '只检查这个无文字形状的类型，不修改文件。')
+          const blankTitle = await tokens.last().getAttribute('title')
+          await runtime.assertThat(
+            groupTitle?.includes(`选中元素：${groupId}`) &&
+              blankTitle?.endsWith(`\n位置：第 ${groupPage} 页\n选中元素：${blankShapeId}`),
+            {
+              name: 'ppt-group-and-blank-selection',
+              message: '点击不同组合子元素仍定位同一外层组合，无文字形状也能按身份引用。',
+              data: { groupTitle, blankTitle, groupId, blankShapeId }
+            }
+          )
           const titles = await tokens.evaluateAll((elements) =>
             elements.map((element) => element.getAttribute('title'))
           )
           await runtime.assertThat(
-            titles.length === 7 &&
+            titles.length === 9 &&
               titles.some((title) => title?.includes('!')) &&
-              titles.some((title) => title?.includes('整页')),
+              titles.some((title) => title?.includes('选中页面')),
             {
               name: 'multi-format-drafts',
-              message: '五种格式的七条引用保留定位信息。',
+              message: '五种格式的九条引用保留定位信息。',
               data: { titles }
             }
           )
@@ -518,6 +620,23 @@ describe('workbench conversation e2e', () => {
               return [
                 {
                   slideId: slide.slideId,
+                  groups: Array.isArray(slide.elements)
+                    ? slide.elements
+                        .filter(
+                          (element) =>
+                            element &&
+                            typeof element === 'object' &&
+                            !Array.isArray(element) &&
+                            element.type === 'group'
+                        )
+                        .map(
+                          (element) =>
+                            element as {
+                              elementId: string
+                              details?: { childElementIds?: string[] }
+                            }
+                        )
+                    : [],
                   elementIds: Array.isArray(slide.elements)
                     ? slide.elements.flatMap((element) =>
                         element &&
@@ -533,6 +652,25 @@ describe('workbench conversation e2e', () => {
             })
           })
           const records = await collectWorkbenchLlmIoRecords(runtime)
+          const readCallIds = new Set(
+            events
+              .filter(
+                (event) => event.type === 'tool_call_result' && event.toolName === 'ppt_read_slides'
+              )
+              .map((event) => event.toolCallId)
+          )
+          const modelReadContent = records
+            .filter((record) => record.caller === 'human.brain' && record.startedAt >= startedAt)
+            .flatMap(
+              (record) =>
+                record.requestWire?.messages
+                  .filter(
+                    (message) =>
+                      message.role === 'tool' && readCallIds.has(message.toolCallId || '')
+                  )
+                  .map((message) => message.content) || []
+            )
+            .join('\n')
           const brain =
             records
               .find((record) => record.caller === 'human.brain' && record.startedAt >= startedAt)
@@ -550,7 +688,14 @@ describe('workbench conversation e2e', () => {
             expectedElementIds,
             selectedElementId,
             selectedImageId,
+            groupId,
+            groupChildIds,
+            groupSlideId,
+            groupTexts,
+            blankShapeId,
             expectedText,
+            expectedSourceText,
+            modelReadContent,
             pptReads,
             unchanged: after.every((bytes, index) => bytes.equals(before[index]))
           }
@@ -565,17 +710,50 @@ describe('workbench conversation e2e', () => {
                   result.expectedElementIds.every((id) => slide.elementIds.includes(id)) &&
                   slide.elementIds.includes(result.selectedElementId)
               ) &&
-              result.brain.includes(`页面标识：${result.expectedSlideId}`) &&
-              result.brain.includes(`元素标识：${result.selectedElementId}`) &&
-              result.brain.includes(`元素标识：${result.selectedImageId}`) &&
-              result.brain.includes(`选中内容：\n\`\`\`text\n${result.expectedText}\n\`\`\``) &&
-              result.brain.match(/选中片段 \d+：/g)?.length === 7 &&
+              result.pptReads.some(
+                (slide) =>
+                  slide.slideId === result.groupSlideId &&
+                  slide.elementIds.includes(result.blankShapeId) &&
+                  slide.groups.some(
+                    (group) =>
+                      group.elementId === result.groupId &&
+                      JSON.stringify(group.details?.childElementIds) ===
+                        JSON.stringify(result.groupChildIds)
+                  )
+              ) &&
+              result.brain.includes(`选中页面：${result.expectedSlideId}`) &&
+              [
+                result.selectedElementId,
+                result.selectedImageId,
+                result.groupId,
+                result.blankShapeId
+              ].every((id) => result.brain.includes(`选中元素：${id}`)) &&
+              result.brain.match(/<用户选中片段\d+>/g)?.length === 9 &&
+              (result.brain.match(/<用户选中片段\d+>[\s\S]*?<\/用户选中片段\d+>/g) || [])
+                .filter((block) => block.includes('选中元素：') || block.includes('选中页面：'))
+                .every(
+                  (block) =>
+                    !block.includes('<选中内容>') &&
+                    !block.includes('<前文>') &&
+                    !block.includes('<后文>')
+                ) &&
+              !result.brain.includes('页面标识：') &&
+              result.groupTexts.every(
+                (text) => !result.brain.includes(text) && result.modelReadContent.includes(text)
+              ) &&
+              result.expectedSourceText
+                .split(/\r?\n/)
+                .filter(Boolean)
+                .every((text) => result.modelReadContent.includes(text)) &&
+              result.modelReadContent.includes(result.groupId) &&
+              result.groupChildIds.every((id) => result.modelReadContent.includes(id)) &&
               !result.brain.includes('选中时的画面：') &&
               result.brain.includes('经营周报.xlsx') &&
               result.brain.includes('深度学习.pdf'),
             {
               name: 'multi-format-brain-and-readonly',
-              message: '真实 AI 收到独立选区块，PPT 引用标识与工具结果匹配，提问不写回源文件。',
+              message:
+                '真实 AI 的 PPT 片段仅包含定位，工具内容进入下一轮模型且组合关系匹配，提问不写回源文件。',
               data: result
             }
           )

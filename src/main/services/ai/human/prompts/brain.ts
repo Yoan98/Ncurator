@@ -1,6 +1,10 @@
 import type { AiRunContext } from '../../types'
 import { PRODUCT_NAME_ZH } from '../../../../../shared/constants'
-import { renderAttachmentsText, renderSelectedReferencesText } from './referenceScope'
+import {
+  renderAttachmentsText,
+  renderSelectedReferencesText,
+  renderUserBlock
+} from './referenceScope'
 import {
   getPartnerAssetsRootDir,
   getPartnerScriptsRootDir
@@ -45,13 +49,6 @@ const renderPreferenceText = (preference: AiRunContext['preference']): string =>
     return '必须只能使用知识库内容和用户工作区域文件内容作为依据来推进任务，禁止使用其他信息与模型能力本身的信息'
   }
   return ''
-}
-
-const renderOptionalUserBlock = (title: string, body: string): string => {
-  const content = body.trim()
-  if (!content) return ''
-  return `${title}：
-${content}`
 }
 
 const renderSkillLine = (skillId: string, description: string, toolCount: number): string =>
@@ -123,14 +120,12 @@ export const buildBrainUserMessageForInput = (input: {
   runStartedAt: number
 }): string =>
   [
-    `用户诉求：
-${input.userInput}`,
-    renderOptionalUserBlock('偏好', renderPreferenceText(input.preference)),
-    renderOptionalUserBlock('默认用户工作区', renderWorkspaceRootsText(input.workspaceRoots)),
-    renderOptionalUserBlock('用户引用的文档', renderSelectedReferencesText(input.referenceScope)),
-    renderOptionalUserBlock('用户添加的附件', renderAttachmentsText(input.referenceScope)),
-    `当前时间：
-${renderCurrentTimeText(input.runStartedAt)}`
+    renderUserBlock('用户诉求', input.userInput),
+    renderUserBlock('偏好', renderPreferenceText(input.preference)),
+    renderUserBlock('默认用户工作区', renderWorkspaceRootsText(input.workspaceRoots)),
+    renderUserBlock('用户引用的文档', renderSelectedReferencesText(input.referenceScope)),
+    renderUserBlock('用户添加的附件', renderAttachmentsText(input.referenceScope)),
+    renderUserBlock('当前时间', renderCurrentTimeText(input.runStartedAt))
   ]
     .filter((block) => block.length > 0)
     .join('\n\n')

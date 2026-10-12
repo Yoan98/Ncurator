@@ -27,34 +27,24 @@ const renderAttachment = (attachment: ChatAttachment, index: number): string => 
   return `第 ${index} 个附件路径：${attachment.path}`
 }
 
-const renderExcerptBlock = (label: string, content: string): string => {
-  if (!content) return ''
-  const longestFence = (content.match(/`+/g) || []).reduce(
-    (longest, run) => Math.max(longest, run.length),
-    0
-  )
-  const fence = '`'.repeat(Math.max(3, longestFence + 1))
-  return `${label}：\n${fence}text\n${content}\n${fence}`
-}
+/** Generated boundaries do not trim or collapse the user's literal content. */
+export const renderUserBlock = (label: string, content: string): string =>
+  content ? `<${label}>\n${content}\n</${label}>` : ''
 
 const renderSelection = (node: DocumentSelectionNode): string => {
-  const parts = [
-    `选中片段 ${node.number}：`,
-    renderSelectionLocation(node),
-    renderExcerptBlock('选中内容', node.selectedText)
-  ]
-
   const anchor = node.anchor
-  if (anchor?.kind === 'text' && anchor.sourceText !== node.selectedText) {
-    parts.push(renderExcerptBlock('源文件片段（定位用）', anchor.sourceText))
+  const parts = [renderSelectionLocation(node)]
+  if (anchor?.kind !== 'ppt') {
+    parts.push(renderUserBlock('选中内容', node.selectedText))
+    if (anchor?.kind === 'text' && anchor.sourceText !== node.selectedText) {
+      parts.push(renderUserBlock('源文件片段', anchor.sourceText))
+    }
+    parts.push(
+      renderUserBlock('前文', node.contextBefore),
+      renderUserBlock('后文', node.contextAfter)
+    )
   }
-
-  parts.push(
-    renderExcerptBlock('前文（上下文，仅供理解与定位）', node.contextBefore),
-    renderExcerptBlock('后文（上下文，仅供理解与定位）', node.contextAfter)
-  )
-
-  return parts.filter(Boolean).join('\n\n')
+  return renderUserBlock(`用户选中片段${node.number}`, parts.filter(Boolean).join('\n\n'))
 }
 
 export const buildReferenceScope = (input: {

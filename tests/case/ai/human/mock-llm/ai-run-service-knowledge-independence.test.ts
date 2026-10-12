@@ -40,7 +40,7 @@ describe('AI runs independent of knowledge configuration', () => {
           let childCalls = 0
           let childReadConfirmed = false
           const script: ScriptedLlmStep[] = Array.from({ length: 10 }, () => (call) => {
-            if (/用户诉求：\nCHILD_LOCAL_READ/.test(call.user)) {
+            if (/<用户诉求>\nCHILD_LOCAL_READ/.test(call.user)) {
               childCalls += 1
               if (childCalls > 1) childReadConfirmed = call.user.includes('LOCAL_READ_EVIDENCE')
               return childCalls === 1

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { getSlides, getSlideText, loadPresentation } from 'pptx-kit'
 import { describe, it } from 'vitest'
+import { AIMessage, ToolMessage } from '@langchain/core/messages'
 import type { JsonObject } from '../../../../../src/shared/types'
 import { createPptToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
@@ -45,11 +46,33 @@ describe('ai human mock-llm ppt backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const sourcePath = path.join(runtime.workspaceRoot, 'existing-review.pptx')
-        await createPptToolHarness(runtime).invoke<JsonObject>('ppt_edit', {
+        const seeded = await createPptToolHarness(runtime).invoke<JsonObject>('ppt_edit', {
           sourcePath,
           ...seedSlide
         })
+        let readToolContent = ''
         const runner = createHumanTestRunner(runtime, {
+          chatToolsWrapper: (realChat) => async (request) => {
+            if (request.caller === 'human.brain') {
+              const readIds = new Set(
+                request.messages.flatMap((message) =>
+                  message instanceof AIMessage
+                    ? (message.tool_calls || [])
+                        .filter((call) => call.name === 'ppt_read_slides')
+                        .map((call) => call.id)
+                    : []
+                )
+              )
+              readToolContent =
+                request.messages
+                  .filter(
+                    (message) => message instanceof ToolMessage && readIds.has(message.tool_call_id)
+                  )
+                  .map((message) => String(message.content))
+                  .join('\n') || readToolContent
+            }
+            return realChat(request)
+          },
           structuredOutputScript: {
             'human.brain': [
               {
@@ -60,10 +83,10 @@ describe('ai human mock-llm ppt backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'ppt_read_outline',
+                  toolName: 'ppt_read_slides',
                   args: {
                     sourcePath,
-                    ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
+                    ranges: [{ type: 'slide_ids', slideIds: [String(seeded.slideId)] }]
                   },
                   summary: '读取页面概览'
                 })
@@ -107,11 +130,10 @@ describe('ai human mock-llm ppt backend', () => {
           taskId: runtime.taskId,
           userInput: '把已有季度复盘 PPT 的负责人改成 Alice，并确认。'
         })
-        const presentation = await loadPresentation(
-          new Uint8Array(await fs.readFile(sourcePath))
-        )
+        const presentation = await loadPresentation(new Uint8Array(await fs.readFile(sourcePath)))
         return {
           output,
+          readToolContent,
           events: runtime.eventCollector.snapshot(),
           texts: getSlides(presentation).map((slide) => getSlideText(slide))
         }
@@ -120,7 +142,9 @@ describe('ai human mock-llm ppt backend', () => {
         const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
         runtime.assertThat(
           result.output.status === 'completed' &&
-            starts.some((event) => event.toolName === 'ppt_read_outline') &&
+            starts.some((event) => event.toolName === 'ppt_read_slides') &&
+            result.readToolContent.includes('负责人：TBD') &&
+            result.readToolContent.includes('elementId=') &&
             starts.filter((event) => event.toolName === 'ppt_search').length >= 2 &&
             starts.filter((event) => event.toolName === 'ppt_edit').length >= 2 &&
             result.texts.some((text) => text.includes('负责人：Alice')) &&

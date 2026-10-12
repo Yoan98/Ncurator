@@ -106,6 +106,8 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 实现：`buildModelToolResultDelivery`（`shared/modelToolResult.ts`）。
 预览常量：`HEAD=6000` chars，`TAIL=2000` chars。
 
+`ppt_read_slides` 的模型正文保留页/元素标识、类型、位置、元素文字与公式，以及表格行、图表数据等内容；组合通过 `details.childElementIds` 列出直接子元素，子元素仍在同一页的元素清单中，不重复构造内容树。图片通过页面图路径读取，无文字对象仍有身份和类型。`detail: images` 只返回页面标识和图路径。
+
 ### 5.1 生产者有界读取（非 delivery 管道）
 
 以下限制在**工具执行层**，不属于上述三档阈值：

@@ -1,4 +1,5 @@
 import path from 'node:path'
+import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import { ChatRunService } from '../../../../../src/main/services/ai/ChatRunService'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
@@ -120,21 +121,23 @@ describe('ai human mock-llm backend', () => {
           contextAfter: '',
           children: [{ kind: 'text', text: '改为更正式的表达' }]
         }
+        const literalText = '首行\n\n  \t单元格\t\n```text\n后文：这是原文\n```\n   '
+        await fs.writeFile(path.join(runtime.workspaceRoot, 'human-input.txt'), literalText)
         const formats: DocumentSelectionNode[] = [
           {
             ...selection,
             id: 'text',
             number: 1,
             filePath: path.join(runtime.workspaceRoot, 'human-input.txt'),
-            selectedText: 'Hello',
+            selectedText: literalText,
             children: [{ kind: 'text', text: '解释文本' }],
             anchor: {
               kind: 'text',
               start: 0,
-              end: 5,
+              end: literalText.length,
               startLine: 1,
-              endLine: 1,
-              sourceText: 'Hello'
+              endLine: 7,
+              sourceText: literalText
             }
           },
           {
@@ -168,9 +171,9 @@ describe('ai human mock-llm backend', () => {
             id: 'ppt',
             number: 1,
             filePath: path.join(runtime.workspaceRoot, '品牌策略提案.pptx'),
-            selectedText: '',
-            contextBefore: '',
-            contextAfter: '',
+            selectedText: 'PPT确认时的文字快照',
+            contextBefore: 'PPT前文快照',
+            contextAfter: 'PPT后文快照',
             children: [{ kind: 'text', text: '解释图片' }],
             anchor: {
               kind: 'ppt',
@@ -323,12 +326,25 @@ describe('ai human mock-llm backend', () => {
         const pending = (await storage.aiRun.getRun(accepted.run.id))?.pendingMessages?.[0]
         await createService().failInterruptedRuns()
         const restored = await createService().listPartnerMessages(partnerId)
+        const restoredRecords = await storage.chatMessageLog.list(partnerId)
+        const restoredUser = restoredRecords.find(
+          (record) =>
+            record.entry.kind === 'user' &&
+            record.entry.context?.contentNodes?.length === 1 &&
+            record.entry.context.contentNodes[0].kind === 'document_selection' &&
+            record.entry.context.contentNodes[0].id === second.id
+        )?.entry
         return {
           rejected,
           completed: output.status === 'completed',
           frozen: brainContent === user.content,
           userCount: afterBrain.filter((record) => record.entry.kind === 'user').length,
           body: user.content,
+          literalText,
+          restoredBody: restoredUser?.kind === 'user' ? restoredUser.content : '',
+          originalUnchanged: restoredRecords.some(
+            (record) => record.entry.kind === 'user' && record.entry.content === user.content
+          ),
           contentNodes: acceptedNodes,
           queued: queued.success && queued.queued === true,
           pendingNodes: pending?.contentNodes || [],
@@ -345,19 +361,26 @@ describe('ai human mock-llm backend', () => {
             result.userCount === 1 &&
             selections.length === 7 &&
             selections.every((node) => node.knowledge?.kbAvailability === 'not_indexed') &&
-            result.body.includes('用户引用的文档：') &&
+            result.body.includes('<用户引用的文档>') &&
+            result.body.startsWith('<用户诉求>\n') &&
+            result.body.includes('</用户诉求>\n\n<默认用户工作区>') &&
+            result.body.includes('</默认用户工作区>\n\n<用户引用的文档>') &&
+            result.body.includes('</用户引用的文档>\n\n<当前时间>') &&
+            !result.body.includes('<偏好>') &&
+            !result.body.includes('<用户添加的附件>') &&
             result.body.includes('Hello') &&
             result.body.includes(' from fixture') &&
             result.body.includes('Hello from ') &&
             result.body.includes('引用内容：整个资源') &&
-            result.body.includes('选中片段 1：\n\n选中内容：\n```text\nHello\n```') &&
-            result.body.includes('后文（上下文，仅供理解与定位）：\n```text\n from fixture\n```') &&
-            result.body.includes('前文（上下文，仅供理解与定位）：\n```text\nHello from \n```') &&
+            result.body.includes('<用户选中片段1>\n<选中内容>\nHello\n</选中内容>') &&
+            result.body.includes('<选中内容>\n' + result.literalText + '\n</选中内容>') &&
+            result.body.includes('<后文>\n from fixture\n</后文>') &&
+            result.body.includes('<前文>\nHello from \n</前文>') &&
             result.body.split('[sample-edit.docx · 1]').length === 2 &&
             result.body.split('[sample-edit.docx · 2]').length === 2 &&
             !result.body.includes('以下选中片段') &&
-            result.body.split('选中片段 ').length === selections.length + 1 &&
-            !result.body.includes('源文件片段（定位用）') &&
+            result.body.match(/<用户选中片段\d+>/g)?.length === selections.length &&
+            !result.body.includes('<源文件片段>') &&
             !result.body.includes('类型：') &&
             !result.body.includes('stale-id') &&
             result.body.split('解释这段文字').length === 2 &&
@@ -365,12 +388,23 @@ describe('ai human mock-llm backend', () => {
             result.body.includes('知识库文档ID：web-document') &&
             !result.body.includes('stale-directory-id') &&
             result.body.includes('Data!B2:C3') &&
-            result.body.includes('页面标识：ppt/slides/slide1.xml') &&
-            result.body.includes('元素标识：ppt/slides/slide1.xml#3') &&
+            result.body.includes(
+              '<用户选中片段1>\n位置：第 1 页\n选中元素：ppt/slides/slide1.xml#3\n</用户选中片段1>'
+            ) &&
+            result.body.includes(
+              '<用户选中片段2>\n位置：第 1 页\n选中页面：ppt/slides/slide1.xml\n</用户选中片段2>'
+            ) &&
+            !result.body.includes('PPT确认时的文字快照') &&
+            !result.body.includes('PPT前文快照') &&
+            !result.body.includes('PPT后文快照') &&
+            !result.body.includes('页面标识：') &&
             !result.body.includes('选中时的画面：') &&
             selections.find((node) => node.id === 'ppt')?.anchor?.kind === 'ppt' &&
             selections.find((node) => node.id === 'ppt-slide')?.anchor?.kind === 'ppt' &&
             result.queued &&
+            result.originalUnchanged &&
+            result.restoredBody.includes('<用户选中片段2>\n<选中内容>\nfixture\n</选中内容>') &&
+            result.restoredBody.includes('<前文>\nHello from \n</前文>') &&
             result.pendingNodes.length === 1 &&
             JSON.stringify(result.restoredNodes) === JSON.stringify(result.pendingNodes),
           {

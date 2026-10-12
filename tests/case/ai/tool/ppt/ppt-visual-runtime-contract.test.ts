@@ -2,6 +2,31 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, it } from 'vitest'
+import { DOMParser } from '@xmldom/xmldom'
+import {
+  createPresentation,
+  addBlankSlide,
+  addSlideTextBox,
+  addSlideShape,
+  addSlideTable,
+  addSlideChart,
+  emu,
+  groupShapes,
+  getGroupChildren,
+  getShapeId,
+  getSlides,
+  getSlideShapes,
+  getSlidePartName,
+  loadPresentation,
+  savePresentation
+} from 'pptx-kit'
+import { renderPptSvg } from '../../../../../src/shared/pptTextMeasurer'
+import {
+  measurePptText,
+  renderPptSlideSvg
+} from '../../../../../src/main/services/ai/human/tools/ppt/textLayout'
+import { buildModelToolResultDelivery } from '../../../../../src/main/services/ai/human/shared/modelToolResult'
+import type { PptReadbackSlide } from '../../../../../src/main/services/ai/human/tools/ppt/types'
 import type { JsonObject } from '../../../../../src/shared/types'
 import { createPptToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -148,7 +173,105 @@ describe('ai tool ppt visual backend', () => {
           ?.flatMap((slide) => slide.elements)
           .find((element) => element.text === '季度经营复盘')
         const images = rendered.images as Array<{ path: string }>
+        // Prepare real source input; all observed output below comes from production readers/renderers.
+        const groupSource = createPresentation()
+        const groupSlide = addBlankSlide(groupSource)
+        const a = addSlideTextBox(groupSlide, {
+          x: emu(80 * 12700),
+          y: emu(50 * 12700),
+          w: emu(250 * 12700),
+          h: emu(50 * 12700),
+          text: '组合子元素甲'
+        })
+        const b = addSlideTextBox(groupSlide, {
+          x: emu(80 * 12700),
+          y: emu(130 * 12700),
+          w: emu(250 * 12700),
+          h: emu(50 * 12700),
+          text: '组合子元素乙'
+        })
+        const nested = groupShapes([a, b])
+        const shape = addSlideShape(groupSlide, {
+          preset: 'rect',
+          x: emu(400 * 12700),
+          y: emu(50 * 12700),
+          w: emu(80 * 12700),
+          h: emu(80 * 12700)
+        })
+        groupShapes([nested, shape])
+        addSlideTable(groupSlide, {
+          x: emu(80 * 12700),
+          y: emu(300 * 12700),
+          w: emu(300 * 12700),
+          h: emu(100 * 12700),
+          rows: [
+            ['指标', '值'],
+            ['收入', '18']
+          ]
+        })
+        addSlideChart(groupSlide, {
+          x: emu(450 * 12700),
+          y: emu(250 * 12700),
+          w: emu(300 * 12700),
+          h: emu(200 * 12700),
+          spec: {
+            kind: 'column',
+            categories: ['Q1', 'Q2'],
+            series: [{ name: '收入', values: [12, 18] }]
+          }
+        })
+        const groupPath = path.join(runtime.workspaceRoot, 'nested-groups.pptx')
+        await fs.writeFile(groupPath, await savePresentation(groupSource))
+        const loaded = await loadPresentation(await fs.readFile(groupPath))
+        const loadedSlide = getSlides(loaded)[0]!
+        const sourceShapes = getSlideShapes(loadedSlide)
+        const idOf = (id: number) => `${getSlidePartName(loadedSlide)}#${id}`
+        const expectedGroups = sourceShapes
+          .filter((item) => getGroupChildren(item).length)
+          .map((item) => ({
+            elementId: idOf(getShapeId(item)),
+            childElementIds: getGroupChildren(item).map((child) => idOf(getShapeId(child)))
+          }))
+        const groupArgs = {
+          sourcePath: groupPath,
+          ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 1 }]
+        }
+        const groupRead = await harness.invoke<JsonObject>('ppt_read_slides', groupArgs)
+        const groupDelivery = await buildModelToolResultDelivery({
+          ctx: harness.ctx,
+          toolCallId: 'group-read',
+          args: groupArgs,
+          result: { toolName: 'ppt_read_slides', ok: true, data: groupRead }
+        })
+        const previewSvg = await renderPptSvg(loaded, loadedSlide, measurePptText, true)
+        const reviewSvg = await renderPptSlideSvg(loaded, loadedSlide)
+        const svgDoc = new DOMParser().parseFromString(previewSvg, 'image/svg+xml')
+        const svgIdentities = Array.from(svgDoc.getElementsByTagName('g'))
+          .filter((item) => item.hasAttribute('data-nc-shape-id'))
+          .map((item) => {
+            let parent = item.parentNode
+            while (parent?.nodeType === 1 && !(parent as Element).hasAttribute('data-nc-shape-id'))
+              parent = parent.parentNode
+            return {
+              elementId: idOf(Number(item.getAttribute('data-nc-shape-id'))),
+              parentId:
+                parent?.nodeType === 1
+                  ? idOf(Number((parent as Element).getAttribute('data-nc-shape-id')))
+                  : undefined
+            }
+          })
         return {
+          groupRead: groupRead.slides as PptReadbackSlide[],
+          groupDelivery,
+          expectedGroups,
+          sourceElementIds: sourceShapes.map((item) => idOf(getShapeId(item))),
+          svgIdentities,
+          previewCounts: ['组合子元素甲', '组合子元素乙'].map(
+            (text) => previewSvg.split(text).length - 1
+          ),
+          reviewCounts: ['组合子元素甲', '组合子元素乙'].map(
+            (text) => reviewSvg.split(text).length - 1
+          ),
           created: cover,
           inserted,
           insertedSlideId,
@@ -172,6 +295,50 @@ describe('ai tool ppt visual backend', () => {
         }
       },
       assert: async (result, runtime) => {
+        runtime.assertThat(
+          result.svgIdentities.length === result.sourceElementIds.length &&
+            result.sourceElementIds.every(
+              (id) => result.svgIdentities.filter((item) => item.elementId === id).length === 1
+            ) &&
+            result.expectedGroups.every((group) =>
+              group.childElementIds.every((id) =>
+                result.svgIdentities.some(
+                  (item) => item.elementId === id && item.parentId === group.elementId
+                )
+              )
+            ) &&
+            result.previewCounts.every((count) => count === 1) &&
+            result.reviewCounts.every((count) => count === 1) &&
+            result.groupDelivery.ok &&
+            [
+              '组合子元素甲',
+              '组合子元素乙',
+              'childElementIds',
+              '指标',
+              'categories',
+              'Q1',
+              'series'
+            ].every((text) => result.groupDelivery.content.includes(text)) &&
+            result.expectedGroups.every(
+              (group) =>
+                JSON.stringify(
+                  result.groupRead[0]?.elements?.find((item) => item.elementId === group.elementId)
+                    ?.details?.childElementIds
+                ) === JSON.stringify(group.childElementIds)
+            ),
+          {
+            name: 'ppt-nested-group-source-and-model-content',
+            message:
+              '组合后代仅渲染一次且保留源身份与父子关系，模型读取结果包含文字、组合子标识、表格和图表内容。',
+            data: {
+              svgIdentities: result.svgIdentities,
+              expectedGroups: result.expectedGroups,
+              groupDelivery: result.groupDelivery,
+              previewCounts: result.previewCounts,
+              reviewCounts: result.reviewCounts
+            }
+          }
+        )
         runtime.assertThat(
           result.slideCount === 2 &&
             result.title?.bounds.x === 144 &&
@@ -211,10 +378,11 @@ describe('ai tool ppt visual backend', () => {
         runtime.assertThat(
           typeof result.invalid.error === 'string' && result.invalidExists === false,
           {
-          name: 'ppt-invalid-spec-is-atomic',
-          message: '出画布元素应整次失败且不留下半成品。',
-          data: result.invalid
-        })
+            name: 'ppt-invalid-spec-is-atomic',
+            message: '出画布元素应整次失败且不留下半成品。',
+            data: result.invalid
+          }
+        )
       }
     })
   }, 90_000)

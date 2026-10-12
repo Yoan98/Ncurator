@@ -21,6 +21,7 @@ import {
   emu,
   findShapeById,
   getShapeBoundsResolved,
+  getGroupChildren,
   getShapeDescription,
   getShapeEffects,
   getShapeFillColor,
@@ -487,7 +488,10 @@ const applyTableLayout = (
   }
 }
 
-const readShapeDetails = (shape: SlideShapeData): JsonObject | undefined => {
+const readShapeDetails = (shape: SlideShapeData, slide: SlideData): JsonObject | undefined => {
+  if (getShapeKind(shape) === 'group') {
+    return { childElementIds: getGroupChildren(shape).map((child) => elementIdOf(slide, child)) }
+  }
   if (isTableShape(shape)) {
     return {
       rows: getTableCells(shape).map((row) => row.map((cell) => getTableCellText(cell))),
@@ -560,7 +564,7 @@ const createPptDiffSlideSnapshots = (presentation: PresentationData): PptDiffSli
         description: getShapeDescription(shape),
         bounds: boundsFromEmu(presentation, getShapeBoundsResolved(presentation, shape)),
         style: readShapeStyle(shape),
-        details: readShapeDetails(shape),
+        details: readShapeDetails(shape, slide),
         effects: getShapeEffects(presentation, shape),
         textMargins: getShapeTextMargins(shape),
         textWrap: getShapeTextWrap(shape),
@@ -606,7 +610,7 @@ const slideReadback = (
           text: getShapeText(shape) || undefined,
           latex,
           style: readShapeStyle(shape),
-          details: readShapeDetails(shape)
+          details: readShapeDetails(shape, slide)
         }
       })
     : undefined

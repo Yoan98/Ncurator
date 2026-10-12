@@ -8,7 +8,7 @@ export function interactivePptSvg(svg: string): string {
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml')
   doc.querySelectorAll('script, foreignObject').forEach((node) => node.remove())
   doc.querySelectorAll('[data-nc-shape-id]').forEach((node) => {
-    // PPT tools expose top-level shapes; select a group by its outer shape ID.
+    // A click inside a nested group references its outermost source object.
     if (node.parentElement?.closest('[data-nc-shape-id]')) node.removeAttribute('data-nc-shape-id')
     else node.setAttribute('pointer-events', 'bounding-box')
   })

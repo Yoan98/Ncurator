@@ -12,7 +12,7 @@ index e0e55e751d25f97e156867bf4129f4b00122bf87..e814b70f7ca74122b51cf8cd93e35263
     *  'svg'; ignored otherwise. */
    readonly measureText?: TextMeasurer;
 diff --git a/dist/src-Q2z_XgT6.js b/dist/src-Q2z_XgT6.js
-index 756391541d8dfb33625f542c2ac84dfde3e3265b..99a0693125688b554bf2e2bbafeb71296990d28f 100644
+index 756391541d8dfb33625f542c2ac84dfde3e3265b..654764bf624c56ac03590fe3581bde921c6381be 100644
 --- a/dist/src-Q2z_XgT6.js
 +++ b/dist/src-Q2z_XgT6.js
 @@ -1,4 +1,4 @@
@@ -21,9 +21,21 @@ index 756391541d8dfb33625f542c2ac84dfde3e3265b..99a0693125688b554bf2e2bbafeb7129
  //#region src/text-layout.ts
  const SANS = "Carlito";
  const SERIF = "Caladea";
-@@ -4014,6 +4014,10 @@ const customGeometryToSvg = (geom, x, y, w, h, fill, stroke, strokeWidthEmu, str
+@@ -4014,6 +4014,22 @@ const customGeometryToSvg = (geom, x, y, w, h, fill, stroke, strokeWidthEmu, str
  	return out.join("");
  };
++// Loaded slides include group descendants in their shape list; groups render them recursively.
++const topLevelShapes = (shapes) => {
++	const childIds = new Set();
++	const collect = (shape) => {
++		for (const child of getGroupChildren(shape)) {
++			childIds.add(getShapeId(child));
++			collect(child);
++		}
++	};
++	shapes.forEach(collect);
++	return shapes.filter((shape) => !childIds.has(getShapeId(shape)));
++};
  const renderShape = (shape, pres, theme, ctx) => {
 +  const svg = renderShapeContent(shape, pres, theme, ctx);
 +  return svg && ctx.selection ? `<g data-nc-shape-id="${getShapeId(shape)}">${svg}</g>` : svg;
@@ -32,7 +44,7 @@ index 756391541d8dfb33625f542c2ac84dfde3e3265b..99a0693125688b554bf2e2bbafeb7129
  	const bounds = getShapeBoundsResolved(pres, shape);
  	if (!bounds) return "";
  	const x = bounds.x;
-@@ -4326,6 +4330,7 @@ const renderSlideSvg = (pres, slide, opts = {}) => {
+@@ -4326,6 +4342,7 @@ const renderSlideSvg = (pres, slide, opts = {}) => {
  	activeColorMap = getEffectiveColorMap(slide);
  	activeDeckTextColor = resolveDeckBodyTextColor(slide) ?? "#000000";
  	const ctx = {
@@ -40,12 +52,15 @@ index 756391541d8dfb33625f542c2ac84dfde3e3265b..99a0693125688b554bf2e2bbafeb7129
  		mode: opts.textLayout ?? "foreignObject",
  		measure: opts.measureText ?? defaultMeasurer
  	};
-@@ -4395,7 +4400,7 @@ const renderSlideSvg = (pres, slide, opts = {}) => {
+@@ -4395,7 +4412,7 @@ const renderSlideSvg = (pres, slide, opts = {}) => {
  	if (layoutForBg) try {
  		const masterShapes = getSlideMasterShapes(pres, layoutForBg);
  		const layoutShapes = getSlideLayoutShapes(pres, layoutForBg);
 -		layoutBgShapes = [...masterShapes, ...layoutShapes].map((s) => renderShape(s, pres, theme, ctx)).join("");
-+		layoutBgShapes = [...masterShapes, ...layoutShapes].map((s) => renderShape(s, pres, theme, { ...ctx, selection: false })).join("");
++		layoutBgShapes = [...topLevelShapes(masterShapes), ...topLevelShapes(layoutShapes)].map((s) => renderShape(s, pres, theme, { ...ctx, selection: false })).join("");
  	} catch {
  		layoutBgShapes = "";
  	}
+@@ -4402 +4419 @@
+-	const shapesSvg = getSlideShapes(slide).map((s) => renderShape(s, pres, theme, ctx)).join("");
++	const shapesSvg = topLevelShapes(getSlideShapes(slide)).map((s) => renderShape(s, pres, theme, ctx)).join("");

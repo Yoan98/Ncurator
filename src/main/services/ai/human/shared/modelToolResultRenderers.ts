@@ -914,6 +914,22 @@ export const renderPptReadSlidesModelResult: ModelResultRenderer = ({ data }) =>
               lines.push(
                 `       ${elementIndex + 1}. type=${readString(element.type) || ''}; elementId=${readString(element.elementId) || ''}`
               )
+              if (isObject(element.bounds)) {
+                lines.push(`          bounds: ${JSON.stringify(element.bounds)}`)
+              }
+              const text = readString(element.text)
+              if (text) lines.push('          text:', indentBlock(text, 6))
+              const latex = readString(element.latex)
+              if (latex) lines.push(`          latex: ${latex}`)
+              if (isObject(element.details)) {
+                // Cell paragraph formatting is not needed to understand source content.
+                const details = Object.fromEntries(
+                  Object.entries(element.details).filter(([key]) => key !== 'paragraphs')
+                )
+                if (Object.keys(details).length) {
+                  lines.push(`          details: ${JSON.stringify(details)}`)
+                }
+              }
             })
           }
           return lines.filter(Boolean)

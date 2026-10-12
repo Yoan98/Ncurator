@@ -172,8 +172,8 @@ describe('ai unit brain prompt cache stability', () => {
     expect(aUser).not.toBe(bUser)
     expect(aUser).toContain('任务 A')
     expect(bUser).toContain('任务 B')
-    expect(aUser).toContain('当前时间：')
-    expect(bUser).toContain('当前时间：')
+    expect(aUser).toContain('<当前时间>')
+    expect(bUser).toContain('<当前时间>')
   })
 
   it('keeps system static when workspace roots change and puts roots only in the user message', () => {
@@ -260,9 +260,9 @@ describe('ai unit brain prompt cache stability', () => {
     expect(prefixBeforeCurrentUser(laterClock)).toBe(prefixBeforeCurrentUser(firstPass))
     expect(prefixBeforeCurrentUser(withPlan)).toBe(prefixBeforeCurrentUser(firstPass))
     expect(messageSignature(withPlan)).toBe(messageSignature(firstPass))
-    expect(String(laterClock.find((message) => isCurrentBrainUserMessage(message))?.content)).not.toBe(
-      String(firstPass.find((message) => isCurrentBrainUserMessage(message))?.content)
-    )
+    expect(
+      String(laterClock.find((message) => isCurrentBrainUserMessage(message))?.content)
+    ).not.toBe(String(firstPass.find((message) => isCurrentBrainUserMessage(message))?.content))
   })
 
   it('does not inject active_state on the first-run current build user', () => {

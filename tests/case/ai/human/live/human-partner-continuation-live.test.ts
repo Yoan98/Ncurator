@@ -179,7 +179,7 @@ describe('ai human live backend', () => {
           const run2LastMessageIsUser =
             run2LastMessage?.getType() === 'human' &&
             typeof run2LastMessage.content === 'string' &&
-            run2LastMessage.content.includes('用户诉求：') &&
+            run2LastMessage.content.includes('<用户诉求>') &&
             run2LastMessage.content.includes(RUN2_INPUT)
           const run2LastUserHasNoMemoryOrActiveState =
             typeof run2LastMessage?.content === 'string' &&
@@ -190,7 +190,7 @@ describe('ai human live backend', () => {
             (message) =>
               message.getType() === 'human' &&
               typeof message.content === 'string' &&
-              message.content.includes('用户诉求：') &&
+              message.content.includes('<用户诉求>') &&
               message.content.includes(RUN1_INPUT)
           )
           const run2HistoryHasRun1Delivery = historyMessages.some(

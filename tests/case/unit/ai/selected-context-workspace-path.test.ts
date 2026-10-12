@@ -122,10 +122,10 @@ describe('ai unit selected context workspace path', () => {
         ]
       })
     )
-    expect(text.split('选中片段 2：')).toHaveLength(2)
-    expect(text).toContain(`选中内容：\n\`\`\`\`text\n${selectedText}\n\`\`\`\``)
-    expect(text).toContain(`前文（上下文，仅供理解与定位）：\n\`\`\`text\n${contextBefore}\n\`\`\``)
-    expect(text).toContain(`后文（上下文，仅供理解与定位）：\n\`\`\`text\n${contextAfter}\n\`\`\``)
+    expect(text.split('<用户选中片段2>')).toHaveLength(2)
+    expect(text).toContain(`<选中内容>\n${selectedText}\n</选中内容>`)
+    expect(text).toContain(`<前文>\n${contextBefore}\n</前文>`)
+    expect(text).toContain(`<后文>\n${contextAfter}\n</后文>`)
     expect(text).not.toContain('引用内容：')
     expect(text).not.toContain('选中片段2的')
     expect(text).not.toContain('[example.docx')
@@ -155,12 +155,12 @@ describe('ai unit selected context workspace path', () => {
       })
     )
     expect(text.split('文档：example.md')).toHaveLength(2)
-    expect(text.split('选中片段 1：')).toHaveLength(2)
-    expect(text.split('选中片段 2：')).toHaveLength(2)
-    expect(text.split('源文件片段（定位用）：')).toHaveLength(2)
+    expect(text.split('<用户选中片段1>')).toHaveLength(2)
+    expect(text.split('<用户选中片段2>')).toHaveLength(2)
+    expect(text.split('<源文件片段>')).toHaveLength(2)
     expect(text).toContain('before **bold** after')
-    expect(text).not.toContain('前文（')
-    expect(text).not.toContain('后文（')
+    expect(text).not.toContain('<前文>')
+    expect(text).not.toContain('<后文>')
   })
 
   const locationCases: {
@@ -240,8 +240,7 @@ describe('ai unit selected context workspace path', () => {
         revision: 'revision-1'
       },
       selectedText: '完整标题',
-      location:
-        '位置：第 1 页 · 整个元素\n页面标识：/ppt/slides/slide1.xml\n元素标识：/ppt/slides/slide1.xml#2'
+      location: '位置：第 1 页\n选中元素：/ppt/slides/slide1.xml#2'
     },
     {
       name: 'PPT element without text',
@@ -255,8 +254,7 @@ describe('ai unit selected context workspace path', () => {
         revision: 'revision-1'
       },
       selectedText: '',
-      location:
-        '位置：第 1 页 · 整个元素\n页面标识：/ppt/slides/slide1.xml\n元素标识：/ppt/slides/slide1.xml#3'
+      location: '位置：第 1 页\n选中元素：/ppt/slides/slide1.xml#3'
     },
     {
       name: 'PPT whole slide',
@@ -269,7 +267,7 @@ describe('ai unit selected context workspace path', () => {
         revision: 'revision-1'
       },
       selectedText: '页面文字',
-      location: '位置：第 1 页 · 整页\n页面标识：/ppt/slides/slide1.xml'
+      location: '位置：第 1 页\n选中页面：/ppt/slides/slide1.xml'
     }
   ]
 
@@ -288,7 +286,7 @@ describe('ai unit selected context workspace path', () => {
     const text = renderSelectedReferencesText(buildReferenceScope({ contentNodes: [node] }))
 
     if (example.location) {
-      expect(text).toContain(`选中片段 1：\n\n${example.location}`)
+      expect(text).toContain(`<用户选中片段1>\n${example.location}`)
       expect(text.split('位置：')).toHaveLength(2)
     } else {
       expect(text).not.toContain('位置：')
@@ -298,14 +296,14 @@ describe('ai unit selected context workspace path', () => {
         ? `${example.location}${example.selectedText ? `\n${example.selectedText}` : ''}`
         : example.selectedText
     )
-    if (example.selectedText) {
-      expect(text).toContain(`选中内容：\n\`\`\`text\n${example.selectedText}\n\`\`\``)
+    if (example.selectedText && example.anchor?.kind !== 'ppt') {
+      expect(text).toContain(`<选中内容>\n${example.selectedText}\n</选中内容>`)
     } else {
-      expect(text).not.toContain('选中内容：')
+      expect(text).not.toContain('<选中内容>')
     }
-    expect(text).not.toContain('源文件片段（定位用）')
-    expect(text).not.toContain('前文（')
-    expect(text).not.toContain('后文（')
+    expect(text).not.toContain('<源文件片段>')
+    expect(text).not.toContain('<前文>')
+    expect(text).not.toContain('<后文>')
   })
 
   it('renders user selected attachments with compact content-info template', () => {

@@ -42,7 +42,7 @@ const steps = (
     call: ScriptedLlmCall
   ) => ReturnType<typeof complete> | Promise<ReturnType<typeof complete>>
 ): ScriptedLlmStep[] => Array.from({ length: 30 }, () => execute)
-const isChild = (call: ScriptedLlmCall): boolean => /用户诉求：\n(?:CHILD_|PHASE_)/.test(call.user)
+const isChild = (call: ScriptedLlmCall): boolean => /<用户诉求>\n(?:CHILD_|PHASE_)/.test(call.user)
 
 describe('temporary subagents through production AiRunService', () => {
   it('human-subagent-approval', async () => {
@@ -264,7 +264,7 @@ describe('temporary subagents through production AiRunService', () => {
                       targets.map(({ name }) => ({ name, instruction: `CHILD_${name} 核对` }))
                     )
                   : complete('结果汇总')
-              const name = call.user.match(/用户诉求：\nCHILD_([A-Z]+)/)![1]
+              const name = call.user.match(/<用户诉求>\nCHILD_([A-Z]+)/)![1]
               const count = (childCalls.get(name) || 0) + 1
               childCalls.set(name, count)
               if (name === 'FIRST' && count === 1)
