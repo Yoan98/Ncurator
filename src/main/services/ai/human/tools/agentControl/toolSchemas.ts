@@ -57,7 +57,7 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
             z.object({
               id: z.string().min(1).describe('选项的稳定标识'),
               label: z.string().min(1).describe('用户看到的选项文字'),
-              description: z.string().min(1).optional().describe('该方案的影响或适用情况'),
+              description: z.string().min(1).optional().describe('该方案的解释描述'),
               recommended: z.boolean().optional().describe('是否推荐该方案')
             })
           )
