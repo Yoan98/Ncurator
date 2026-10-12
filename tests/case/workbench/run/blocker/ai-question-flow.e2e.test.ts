@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { AiRunEvent, PendingHumanInteraction } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -148,11 +148,38 @@ describe('workbench AI question e2e', () => {
               if (
                 !(await input.evaluate((element) => {
                   const style = getComputedStyle(element)
-                  return parseFloat(style.paddingLeft) >= 12 && parseFloat(style.paddingTop) >= 10
+                  return (
+                    element.classList.contains('ant-input') &&
+                    parseFloat(style.paddingLeft) >= 10 &&
+                    parseFloat(style.paddingLeft) <= 12 &&
+                    parseFloat(style.paddingTop) > 0 &&
+                    parseFloat(style.paddingTop) <= 6
+                  )
                 }))
               )
-                throw new Error('question input has insufficient padding')
+                throw new Error('question input does not use standard Ant Design spacing')
+              if (options.length && (await input.boundingBox())!.height > 38)
+                throw new Error('single line question input is taller than a standard Input')
               if (options.length) {
+                const readInputFrame = () =>
+                  input.evaluate((element) => {
+                    const style = getComputedStyle(element)
+                    return { border: style.borderTopColor, shadow: style.boxShadow }
+                  })
+                const hiddenFrame = { border: 'rgba(0, 0, 0, 0)', shadow: 'none' }
+                await card.getByTestId(`${workbenchSelectors.humanQuestionCard}-title`).click()
+                await expect.poll(readInputFrame).toEqual(hiddenFrame)
+                await input.hover()
+                await expect.poll(readInputFrame).toEqual(hiddenFrame)
+                await input.click()
+                await expect
+                  .poll(async () => (await readInputFrame()).border)
+                  .not.toBe(hiddenFrame.border)
+                await expect
+                  .poll(async () => (await readInputFrame()).shadow)
+                  .not.toBe(hiddenFrame.shadow)
+                await card.getByTestId(`${workbenchSelectors.humanQuestionCard}-title`).click()
+                await expect.poll(readInputFrame).toEqual(hiddenFrame)
                 const option = card.getByTestId(
                   `workbench-human-question-option-${question.id}-${options[0].id}`
                 )

@@ -1,5 +1,10 @@
 @import './base.css';
 
+.nc-workbench-interaction-inline-input.ant-input:not(:focus) {
+  border-color: transparent;
+  box-shadow: none;
+}
+
 /* A small thought cloud uses the same white surface and quiet grey text as the process area. */
 .ant-tooltip.nc-subagent-thought-tooltip {
   max-width: min(220px, calc(100vw - 24px)) !important;

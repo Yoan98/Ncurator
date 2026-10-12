@@ -1,5 +1,5 @@
-import React, { useLayoutEffect, useRef } from 'react'
-import { Spin } from 'antd'
+import React from 'react'
+import { Input, Spin } from 'antd'
 import {
   HiArrowRight,
   HiArrowUp,
@@ -182,63 +182,53 @@ type FooterProps = {
   submitTestId: string
 }
 
-export const WorkbenchInteractionFooter: React.FC<FooterProps> = (props) => {
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  useLayoutEffect(() => {
-    const input = inputRef.current
-    if (!input) return
-    input.style.height = 'auto'
-    input.style.height = `${Math.min(164, Math.max(props.expanded ? 76 : 46, input.scrollHeight + 2))}px`
-  }, [props.value, props.expanded, props.inputTestId])
-  return (
-    <div
-      className={`shrink-0 px-[18px] pb-4 ${props.expanded ? '' : 'mt-[15px] border-t border-[#EEEEEC] pt-[14px]'}`}
-    >
-      <div className={`flex items-start gap-2 ${props.expanded ? '' : 'px-[11px]'}`}>
-        {!props.expanded && (
-          <HiOutlinePencil
-            aria-hidden="true"
-            className="mt-[14px] h-[15px] w-[15px] shrink-0 text-[#91918E]"
-          />
-        )}
-        <textarea
-          ref={inputRef}
-          rows={1}
-          aria-label={props.placeholder}
-          placeholder={props.placeholder}
-          value={props.value}
-          disabled={props.inputDisabled || props.submitting}
-          onChange={(event) => props.onChange(event.target.value)}
-          data-testid={props.inputTestId}
-          className={`min-w-0 flex-1 resize-none rounded-[8px] border bg-white px-[12px] py-[10px] text-[15px] leading-6 text-[#37352F] outline-none placeholder:text-[#91918E] focus:border-[#0B6BCB] focus:ring-2 focus:ring-[#0B6BCB]/10 disabled:cursor-not-allowed ${props.expanded ? 'border-[#E0DFDC]' : 'border-transparent'}`}
+export const WorkbenchInteractionFooter: React.FC<FooterProps> = (props) => (
+  <div
+    className={`shrink-0 px-[18px] pb-4 ${props.expanded ? '' : 'mt-[15px] border-t border-[#EEEEEC] pt-[14px]'}`}
+  >
+    <div className={`flex items-start gap-2 ${props.expanded ? '' : 'px-[11px]'}`}>
+      {!props.expanded && (
+        <HiOutlinePencil
+          aria-hidden="true"
+          className="mt-[10px] h-[15px] w-[15px] shrink-0 text-[#91918E]"
         />
-      </div>
-      {props.error && (
-        <div role="alert" className="mt-2 break-words text-xs text-[#B3261E]">
-          {props.error}
-        </div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5">
-        <span aria-live="polite" className="min-w-0 break-words text-xs text-[#91918E]">
-          {props.hint}
-        </span>
-        <button
-          type="button"
-          onClick={props.onSubmit}
-          disabled={props.disabled || props.submitting || props.inputDisabled}
-          data-testid={props.submitTestId}
-          className="ml-auto inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-[6px] bg-[#37352F] px-3 py-[5px] text-[13px] leading-[22px] font-medium text-white focus-visible:outline-2 focus-visible:outline-[#0B6BCB] disabled:cursor-not-allowed disabled:bg-[#F4F4F2] disabled:text-[#91918E]"
-        >
-          {props.label}
-          {props.submitting ? (
-            <Spin size="small" />
-          ) : props.next ? (
-            <HiArrowRight className="h-3.5 w-3.5" />
-          ) : (
-            <HiArrowUp className="h-3.5 w-3.5" />
-          )}
-        </button>
-      </div>
+      <Input.TextArea
+        autoSize={{ minRows: props.expanded ? 3 : 1, maxRows: 6 }}
+        aria-label={props.placeholder}
+        placeholder={props.placeholder}
+        value={props.value}
+        disabled={props.inputDisabled || props.submitting}
+        onChange={(event) => props.onChange(event.target.value)}
+        data-testid={props.inputTestId}
+        className={`min-w-0 flex-1 ${props.expanded ? '' : 'nc-workbench-interaction-inline-input'}`}
+      />
     </div>
-  )
-}
+    {props.error && (
+      <div role="alert" className="mt-2 break-words text-xs text-[#B3261E]">
+        {props.error}
+      </div>
+    )}
+    <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5">
+      <span aria-live="polite" className="min-w-0 break-words text-xs text-[#91918E]">
+        {props.hint}
+      </span>
+      <button
+        type="button"
+        onClick={props.onSubmit}
+        disabled={props.disabled || props.submitting || props.inputDisabled}
+        data-testid={props.submitTestId}
+        className="ml-auto inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-[6px] bg-[#37352F] px-3 py-[5px] text-[13px] leading-[22px] font-medium text-white focus-visible:outline-2 focus-visible:outline-[#0B6BCB] disabled:cursor-not-allowed disabled:bg-[#F4F4F2] disabled:text-[#91918E]"
+      >
+        {props.label}
+        {props.submitting ? (
+          <Spin size="small" />
+        ) : props.next ? (
+          <HiArrowRight className="h-3.5 w-3.5" />
+        ) : (
+          <HiArrowUp className="h-3.5 w-3.5" />
+        )}
+      </button>
+    </div>
+  </div>
+)

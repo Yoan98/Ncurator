@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { access, lstat, mkdir, readFile, readdir, readlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Page } from 'playwright'
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
@@ -333,13 +333,36 @@ const readApprovalWaitingSnapshot = async (
 }> => {
   const card = getApprovalCard(page)
   await card.waitFor({ state: 'visible', timeout: 30_000 })
-  const inputHasPadding = await card
+  const inputUsesStandardSpacing = await card
     .getByTestId(chatSelectors.approvalBatchGuideInput)
     .evaluate((element) => {
       const style = getComputedStyle(element)
-      return parseFloat(style.paddingLeft) >= 12 && parseFloat(style.paddingTop) >= 10
+      return (
+        element.classList.contains('ant-input') &&
+        parseFloat(style.paddingLeft) >= 10 &&
+        parseFloat(style.paddingLeft) <= 12 &&
+        parseFloat(style.paddingTop) > 0 &&
+        parseFloat(style.paddingTop) <= 6 &&
+        element.getBoundingClientRect().height <= 38
+      )
     })
-  if (!inputHasPadding) throw new Error('approval guidance input has insufficient padding')
+  if (!inputUsesStandardSpacing)
+    throw new Error('approval guidance input does not use standard Ant Design spacing and height')
+  const guideInput = card.getByTestId(chatSelectors.approvalBatchGuideInput)
+  const readInputFrame = () =>
+    guideInput.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return { border: style.borderTopColor, shadow: style.boxShadow }
+    })
+  const hiddenFrame = { border: 'rgba(0, 0, 0, 0)', shadow: 'none' }
+  await expect.poll(readInputFrame).toEqual(hiddenFrame)
+  await guideInput.hover()
+  await expect.poll(readInputFrame).toEqual(hiddenFrame)
+  await guideInput.click()
+  await expect.poll(async () => (await readInputFrame()).border).not.toBe(hiddenFrame.border)
+  await expect.poll(async () => (await readInputFrame()).shadow).not.toBe(hiddenFrame.shadow)
+  await card.getByTestId(chatSelectors.approvalBatchCard + '-title').click()
+  await expect.poll(readInputFrame).toEqual(hiddenFrame)
   if (await card.locator('button[aria-pressed] svg').count())
     throw new Error('approval choices still contain redundant check or cross icons')
   const processRoot = await waitForLatestAssistantProcess(page)
@@ -734,7 +757,7 @@ const runTerminalScenario = async (input: {
         throw new Error('Shift+Enter did not insert a newline in approval guidance')
       await input.runtime.captureScreenshot({
         name: 'approval-guide-input',
-        message: '有内边距的多行审批指导输入框'
+        message: '使用标准 Ant Design 样式的多行审批指导输入框'
       })
       await guide.press('Enter')
       const guideDecision = await waitForWorkbenchAiEvent(input.runtime, {
