@@ -5331,7 +5331,7 @@ const ChatPage: React.FC = () => {
           message={`将清空「${clearConfirmPartner?.name || '伙伴'}」的全部对话消息及临时缓存。`}
           checkbox={{
             label: '同时删除文件修改历史',
-            help: '保存每次 AI 任务修改前的源文件备份和差异预览。删除后，无法回退到对应的修改前版本。'
+            help: 'AI 修改的源文件都会进行备份。删除后，将无法回退到对应的修改前版本。'
           }}
           confirmText="清空"
           danger
