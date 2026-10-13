@@ -79,11 +79,6 @@ flowchart TB
 | Tool Runtime        | 文件、终端、浏览器等本地能力；审批、命令安全                                          |
 | File Change Records | 只有受控文件工具写回才记修改、Diff 与回退；terminal 只执行，不扫描记账                |
 
-工作地址是默认执行范围而非硬边界：模型默认在设置页现有文件地址内操作，系统级需求可访问地址外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径；`read_image` 的 `paths` 接受本机绝对路径或 HTTP(S) 地址。内置浏览器由 Electron `WebContentsView` 承载；Stagehand 在操作网页时按 Tab 挂到本机回环 CDP 桥（`webContents.debugger`），不在进程启动时打开 `--remote-debugging-port`。对象存储在 `userData/partners/{id}/objects/sha256/<前 2 位>/<其余>`。
-
-网页搜索由冻结的 Python sidecar 提供搜索与抓取；抓取 sidecar 只把隐藏 crawler view 登记进同一座 CDP 桥。`web_search` 只向 AI 返回结构化结果，不得自动展开右侧面板；右侧浏览器仅由 `browser_use` 或用户手动开标签触发。抓取细节见代码与 `ai-harness/tool-design.md`。
-
-开发版使用独立 `*-dev` user-data 目录；E2E 可通过 `NCURATOR_USER_DATA_PATH` 提供隔离目录。
 
 ## AI 运行时
 
@@ -159,6 +154,6 @@ flowchart LR
 
 `AiFileChangeService` 的文件会话统一管理 Word、PPT、Excel 和普通文本；图片沿用历史图片快照。会话以 partnerId、ownerRunId、规范化文件路径归属，由 `AiRunContext` 提供确认写盘、读取会话和收尾入口。工具先完整替换正式文件、立即回读校验，再持久化最新确认工作版本及结构身份；成功前不生成审核，失败不自动恢复正式文件。
 
-首次原始字节 A 按内容寻址保留。主 run 真正完成、失败或取消时，等待在途写入结束，使用 A 与最后确认的 B 生成自包含审核，再保存统一记录并清理工作快照。子任务、yield 和追加消息续接共用 ownerRunId，不触发最终审核。启动从持久化会话为中断 run 补生成审核，不执行 AI、不修改正式文件。
+首次原始字节 A 在本条修改目录中完整保留。主 run 真正完成、失败或取消时，等待在途写入结束，使用 A 与最后确认的 B 生成自包含审核，再保存统一记录并清理工作快照。子任务、yield 和追加消息续接共用 ownerRunId，不触发最终审核。启动从持久化会话为中断 run 补生成审核，不执行 AI、不修改正式文件。
 
 Renderer 的历史审核只读取对应产物，当前文件预览读取正式路径；后续 C 不改变 A→B。Word 应用记录仅投影统一记录并复用统一撤销。目录与持久化字段见 `doc/db/design.md`、`doc/db/tables.md`，工具错误契约见 `doc/ai-harness/tool-design.md`。

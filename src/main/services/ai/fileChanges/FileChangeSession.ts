@@ -2,9 +2,13 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import type { AiFileChangeCapability, AiFileChangeRecord } from '../../../../shared/types'
-import { getPartnerRuntimeDir, getPartnerObjectsDir } from '../../assets/WorkspaceAssetService'
+import { getPartnerRuntimeDir } from '../../assets/WorkspaceAssetService'
 import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../wps/officeFileWriteNotify'
-import { WorkspaceObjectStore } from './WorkspaceObjectStore'
+import {
+  consolidatePartnerSnapshots,
+  getFileChangeDirectory,
+  saveFileChangeSnapshot
+} from './FileChangeSnapshots'
 import type { AiFileChangeRecordStore } from './AiFileChangeService'
 
 export type ExcelSheetAxes = { sheet: string; rows: (number | null)[]; columns: (number | null)[] }
@@ -121,13 +125,19 @@ export class FileChangeSessions {
       if (input.expectedChecksum && (!before || hash(before) !== input.expectedChecksum))
         throw new Error('文件在操作期间发生变化，请重新读取后再修改')
       const mode = before ? (await fs.stat(input.sourcePath)).mode : 0o644
+      const changeId = previous?.record.id || randomUUID()
+      const dir = getFileChangeDirectory(partnerId, runId, changeId)
       const baseline =
         !previous && before
-          ? await new WorkspaceObjectStore(getPartnerObjectsDir(partnerId)).putBuffer(before)
+          ? await saveFileChangeSnapshot(
+              dir,
+              `before${path.extname(input.sourcePath) || '.bin'}`,
+              before
+            )
           : undefined
       const now = Date.now()
       const record: AiFileChangeRecord = previous?.record || {
-        id: randomUUID(),
+        id: changeId,
         partnerId,
         runId,
         status: 'applied',
@@ -147,7 +157,6 @@ export class FileChangeSessions {
         createdAt: now,
         updatedAt: now
       }
-      const dir = path.join(this.root(partnerId, runId), record.id)
       await fs.mkdir(dir, { recursive: true })
       // Even an interrupted first write retains A; no unconfirmed B is published.
       stage = 'session'
@@ -179,7 +188,11 @@ export class FileChangeSessions {
       await fs.writeFile(workingPath, input.buffer, { flag: 'wx' })
       const imageSnapshot =
         input.capability === 'image'
-          ? await new WorkspaceObjectStore(getPartnerObjectsDir(partnerId)).putBuffer(input.buffer)
+          ? await saveFileChangeSnapshot(
+              dir,
+              `after-${hash(input.buffer)}${path.extname(input.sourcePath) || '.bin'}`,
+              input.buffer
+            )
           : undefined
       const nextRecord = {
         ...record,
@@ -219,8 +232,7 @@ export class FileChangeSessions {
       if (workingPath) await fs.rm(workingPath, { force: true }).catch(() => undefined)
       // A belongs to the first attempted publication, not an edit that never reached the file.
       if (pendingDir && !attempted) {
-        await fs.rm(path.join(pendingDir, 'pending.json'), { force: true }).catch(console.error)
-        await fs.rmdir(pendingDir).catch(console.error)
+        await fs.rm(pendingDir, { recursive: true, force: true }).catch(console.error)
       }
       const error = cause instanceof Error ? cause : new Error(String(cause))
       const code = 'code' in error ? String(error.code) : ''
@@ -264,6 +276,7 @@ export class FileChangeSessions {
   }
 
   public async recoverPartner(partnerId: string): Promise<AiFileChangeRecord[]> {
+    await consolidatePartnerSnapshots(partnerId, this.store)
     const root = path.join(getPartnerRuntimeDir(partnerId), 'file-changes')
     const runs = await readDirectories(root)
     const records: AiFileChangeRecord[] = []
@@ -354,7 +367,8 @@ export class FileChangeSessions {
           })
           if (!changed && session.record.operation !== 'created') {
             await this.store.removeRecord(session.record.id)
-            await fs.rm(reviewDir, { recursive: true, force: true }).catch(console.error)
+            await fs.rm(dir, { recursive: true, force: true })
+            continue
           } else {
             await this.store.saveRecord({
               ...session.record,

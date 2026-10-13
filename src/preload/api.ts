@@ -1,4 +1,10 @@
 import type { ModelSource } from '../shared/modelSources'
+import type {
+  PartnerCacheRequest,
+  PartnerCachePreview,
+  PartnerCacheCleanupResult,
+  PartnerCacheOpenRequest
+} from '../shared/partnerCache'
 import type { FreeModelsSnapshot } from '../shared/freeModels'
 import type { PresetModelsSnapshot } from '../shared/llmPresets'
 import type {
@@ -259,6 +265,11 @@ export type DesktopApi = {
   partnerRunSummaries: (payload: PartnerRunSummariesRequest) => Promise<PartnerRunSummariesResponse>
   partnerSnapshotGet: (payload: PartnerSnapshotRequest) => Promise<PartnerSnapshotResponse>
   partnerClearContext: (payload: PartnerClearContextRequest) => Promise<PartnerClearContextResponse>
+  partnerCachePreview: (payload: PartnerCacheRequest) => Promise<PartnerCachePreview>
+  partnerCacheCleanup: (payload: PartnerCacheRequest) => Promise<PartnerCacheCleanupResult>
+  partnerCacheOpenDirectory: (
+    payload: PartnerCacheOpenRequest
+  ) => Promise<{ success: boolean; error?: string }>
   chatSubmit: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
   chatTurnRetractLatest: (
     payload: ChatTurnRetractLatestRequest

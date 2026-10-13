@@ -789,6 +789,7 @@ export type PartnerSetPinnedRequest = {
 
 export type PartnerClearContextRequest = {
   partnerId: string
+  deleteFileChanges?: boolean
 }
 
 export type PartnerClearContextResponse = {

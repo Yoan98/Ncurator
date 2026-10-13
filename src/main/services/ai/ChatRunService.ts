@@ -13,6 +13,7 @@ import { normalizeSelectedReferences } from './utils/runContext'
 import { validateSelectedReferencesForRun } from '../sourceScope/validation'
 import { deletePartnerRootDir } from '../assets/WorkspaceAssetService'
 import type { AiFileChangeService } from './fileChanges/AiFileChangeService'
+import type { PartnerCacheService } from '../assets/PartnerCacheService'
 import type { DocxApplyService } from './human/tools/docx/review/DocxApplyService'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { PartnerStore } from '../storage/domains/PartnerStore'
@@ -92,6 +93,7 @@ type ActiveRun = {
 
 type ChatRunServiceDeps = {
   partnerStore: PartnerStore
+  partnerCacheService?: PartnerCacheService
   subagentStore: AiSubagentStore
   chatMessageLogStore: ChatMessageLogStore
   aiRunStore: AiRunStore
@@ -198,9 +200,7 @@ export class ChatRunService {
     if (!id) return false
     return (
       this.pendingPartnerSubmissions.has(id) ||
-      Array.from(this.activeRuns.values()).some(
-        (entry) => entry.run.partnerId === id && isActiveRunRecord(entry.run)
-      )
+      Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === id)
     )
   }
 
@@ -382,6 +382,8 @@ export class ChatRunService {
   public async deletePartner(partnerId: string): Promise<void> {
     const normalizedPartnerId = String(partnerId || '').trim()
     if (!normalizedPartnerId) return
+    if (this.deps.partnerCacheService?.isCleaning(normalizedPartnerId))
+      throw new Error('当前伙伴正在清理数据，请稍后再试')
 
     const affectedRuns = Array.from(this.activeRuns.entries()).filter(
       ([, entry]) => entry.run.partnerId === normalizedPartnerId
@@ -406,7 +408,10 @@ export class ChatRunService {
     await deletePartnerRootDir(normalizedPartnerId)
   }
 
-  public async clearPartnerContext(partnerId: string): Promise<PartnerClearContextResponse> {
+  public async clearPartnerContext(
+    partnerId: string,
+    deleteFileChanges = false
+  ): Promise<PartnerClearContextResponse> {
     const normalizedPartnerId = String(partnerId || '').trim()
     if (!normalizedPartnerId) return { success: false, error: 'partnerId is required' }
     const partner = await this.deps.partnerStore.getPartner(normalizedPartnerId)
@@ -419,12 +424,16 @@ export class ChatRunService {
     ) {
       return { success: false, error: '当前伙伴仍在运行，不能清空消息记录' }
     }
-    const clearedAt = Date.now()
-    // 物理删除消息 log 与 ai_run；保留 ai_file_change（回退入口）与伙伴 / UI 状态。
-    this.deps.subagentStore.deleteByPartner(normalizedPartnerId)
-    await this.deps.chatMessageLogStore.deleteByPartner(normalizedPartnerId)
-    await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
-    return { success: true, clearedAt }
+    const clear = async (): Promise<PartnerClearContextResponse> => {
+      await this.deps.partnerCacheService?.clearPartnerFiles(normalizedPartnerId, deleteFileChanges)
+      this.deps.subagentStore.deleteByPartner(normalizedPartnerId)
+      await this.deps.chatMessageLogStore.deleteByPartner(normalizedPartnerId)
+      await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
+      return { success: true, clearedAt: Date.now() }
+    }
+    return this.deps.partnerCacheService
+      ? await this.deps.partnerCacheService.withIdlePartner(normalizedPartnerId, clear)
+      : await clear()
   }
 
   public async submit(payload: ChatSubmitRequest): Promise<ChatSubmitResponse> {
@@ -432,6 +441,8 @@ export class ChatRunService {
     if (!Array.isArray(payload?.contentNodes) || payload.contentNodes.length === 0)
       return { success: false, error: '请输入你的想法后再发送' }
     if (!partnerId) return { success: false, error: 'partnerId is required' }
+    if (this.deps.partnerCacheService?.isCleaning(partnerId))
+      return { success: false, error: '当前伙伴正在清理数据，请稍后再发送' }
     if (this.pendingPartnerSubmissions.has(partnerId)) {
       this.deps.telemetryService?.track('message_submit_completed', {
         outcome: 'failed',

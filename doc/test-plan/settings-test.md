@@ -18,7 +18,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 领域规则：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除，以及预设服务商与自定义配置的类型、锁定和去重语义。
-- `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为，以及错误日志目录入口；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
+- `general` 验证 AI 运行通知开关、错误日志入口及伙伴缓存按目录/日期清理；系统通知中心和 Finder/Explorer 的真实展示按 macOS 与 Windows 发布前手动验证。
 - `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。`SET-WORKSPACE-009` 由独立 `workspace-index-speed` 用临时小目录做两次真实更新索引覆盖，并断言同一嵌入进程 ready 前后的操作系统线程增量；`SET-WORKSPACE-004-AC11` 由 `workspace-prepare-sequential-addresses` 在页面添加两个地址后走真实更新索引覆盖；取消弹框由 `workspace-prepare-cancel` / `web-prepare-cancel` 覆盖；确认框打开时任务已结束再点停止由 `workspace-prepare-cancel-after-complete` 覆盖；慢/高速在独立 Node 进程里的线程增量由 knowledge `index-speed-thread-budget` 覆盖。问号文案与网页 tab 同步不单独测。
 - `vector` 属于 Settings 产品域，页面路由为 `/settings/vector`（`/model-download` 仅为历史重定向），测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“文件地址 + 文件 tab + 全局网页 tab”，不是具名容器。
@@ -267,6 +267,14 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Oracle：失败提示、换源入口与最近失败源标记正确，对齐 `SET-VECTOR-003-AC2/AC3/AC4`；取消后失败状态保留、确认前始终只有第一次下载请求，对齐 `SET-VECTOR-003-AC5/AC6`；确认后第二次 downloadModel 携带 huggingface-mirror 并完成安装，失败目录已清理。
 
 ### 3.6 `general`
+
+#### `partner-cache-cleanup`
+
+- 测试类型：`e2e / live`
+- What：通用设置按伙伴、目录和截止日期清理真实缓存，保留聊天及其他伙伴。
+- Why：永久删除必须核对候选、确认取消、隔离范围和实际磁盘结果。
+- How：通过 Workbench UI 创建两个伙伴、配置真实模型与完全放行权限；第一轮真实 AI 使用文件工具修改临时工作目录的正式文件并生成 runtime/assets 中的运行资源，第二个伙伴用真实 AI 生成独立运行资源。通过设置 UI 打开清理弹框，核对今天/明天截止日期、目录勾选、汇总和空选择禁用；点击文件夹入口观察真实打开 IPC；取消后检查文件仍在，再确认清理第一个伙伴的 assets 和 file-changes。只读 IPC 和磁盘读取补充消息、源文件与隔离证据，不注入业务状态、不改文件日期。
+- Oracle：入口/文案对齐 `SET-GENERAL-004-AC1`；四类目录和无逐文件列表对齐 `SET-GENERAL-004-AC2`；日期筛选和真实删除对齐 `SET-GENERAL-004-AC3`；汇总/空选择对齐 `SET-GENERAL-004-AC4`；打开目录调用与全部伙伴禁用对齐 `SET-GENERAL-004-AC5`（Finder/Explorer 展示发布前人工检查）；取消/确认/刷新对齐 `SET-GENERAL-004-AC6`；伙伴/聊天/其他伙伴和外部文件保留对齐 `SET-GENERAL-004-AC7`。Unit `partner-cache-service` 补充 `SET-GENERAL-004-AC3/AC8/AC9/AC10` 的严格时间边界、完整历史清理、保留备份回退、运行互斥、草稿保护、符号链接和失败恢复；缺失目录提示由 Unit 和人工检查覆盖 `SET-GENERAL-004-AC5`。
 
 #### `settings-titlebar-drag-region`
 

@@ -14,6 +14,7 @@ import { createCompletedAiRunState } from '../../../../../src/main/services/ai/r
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
 import { StorageService } from '../../../../../src/main/services/storage/StorageService'
+import { PartnerCacheService } from '../../../../../src/main/services/assets/PartnerCacheService'
 import type { EmbeddingService } from '../../../../../src/main/services/vector/EmbeddingService'
 import type {
   AiRunEvent,
@@ -86,6 +87,7 @@ const waitForCondition = async (
 }
 
 const createTestService = async (options?: {
+  withCache?: boolean
   autoStartRuns?: boolean
   onRunTerminal?: (run: AiRunRecord, status: 'completed' | 'failed' | 'cancelled') => void
   observeEvent?: (event: AiRunEvent) => void
@@ -105,8 +107,18 @@ const createTestService = async (options?: {
     embed: async () => ({ data: new Float32Array(768) })
   } as EmbeddingService
   const events: AiRunEvent[] = []
+  if (options?.withCache) vi.stubEnv('NCURATOR_USER_DATA_PATH', path.join(root, 'user-data'))
+  const partnerCacheService = options?.withCache
+    ? new PartnerCacheService({
+        partners: storage.partner,
+        ui: storage.workbenchUi,
+        fileChanges: storage.aiFileChange,
+        isPartnerBusy: (id) => service.hasActivePartnerRun(id)
+      })
+    : undefined
   const service = new ChatRunService({
     partnerStore: storage.partner,
+    partnerCacheService,
     chatMessageLogStore: storage.chatMessageLog,
     subagentStore: storage.subagent,
     aiRunStore: storage.aiRun,
@@ -214,6 +226,7 @@ const submitAiRun = async (
 afterEach(async () => {
   await Promise.all(activeStorages.splice(0).map((storage) => storage.close()))
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  vi.unstubAllEnvs()
 })
 
 describe('unit ai persistence backend', () => {
@@ -1389,7 +1402,7 @@ describe('unit ai persistence backend', () => {
   })
 
   it('clear-partner-context-deletes-messages-and-runs-keeps-file-changes', async () => {
-    const setup = await createTestService()
+    const setup = await createTestService({ withCache: true })
     await seedPartner(setup.storage)
     await seedAiTurn(setup.storage, {
       runId: 'run-clear-1',
@@ -1446,6 +1459,48 @@ describe('unit ai persistence backend', () => {
     expect(storedRun).toBeNull()
     expect(fileChanges.items).toHaveLength(1)
     expect(fileChanges.items[0]?.id).toBe('file-change-1')
+  })
+
+  it('clear-partner-context-deletes-caches-and-selected-file-history', async () => {
+    const setup = await createTestService({ withCache: true })
+    await seedPartner(setup.storage)
+    const source = path.join(setup.workspaceRoot, 'formal.md')
+    await writeFile(source, 'A')
+    const files = new AiFileChangeService(setup.storage.aiFileChange)
+    const saved = await files.sessions.write('partner-1', 'clear-cache-run', {
+      sourcePath: source,
+      buffer: Buffer.from('B'),
+      capability: 'text_file'
+    })
+    await files.sessions.finalize('partner-1', 'clear-cache-run')
+    await seedAiTurn(setup.storage, {
+      runId: 'clear-cache-run',
+      userMessageId: 'clear-user',
+      assistantMessageId: 'clear-assistant',
+      userContent: 'edit file',
+      assistantContent: 'done',
+      createdAt: Date.now()
+    })
+    await setup.storage.chatMessageLog.appendBatch({
+      partnerId: 'partner-1',
+      runId: 'clear-cache-run',
+      entries: [
+        {
+          kind: 'user',
+          content: 'edit file',
+          input: 'edit file',
+          context: { selectedReferences: [], attachments: [] }
+        }
+      ]
+    })
+    expect((await setup.service.clearPartnerContext('partner-1', true)).success).toBe(true)
+    expect(await setup.storage.chatMessageLog.list('partner-1')).toEqual([])
+    expect(await setup.storage.aiRun.getRun('clear-cache-run')).toBeNull()
+    expect(
+      (await setup.storage.aiFileChange.listRecords({ partnerId: 'partner-1' })).items
+    ).toEqual([])
+    await expect(access(saved.record.beforeSnapshotPath!)).rejects.toThrow()
+    expect(await readFile(source, 'utf8')).toBe('B')
   })
 
   it('retract-latest-turn-deletes-run-and-message-log', async () => {

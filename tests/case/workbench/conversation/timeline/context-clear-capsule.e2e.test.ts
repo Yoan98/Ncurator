@@ -27,9 +27,8 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['timeline'],
-        description:
-          '清空消息记录胶囊确认后删除对话消息，取消确认不删，仍停留在同一伙伴。',
-        fixtures: ['tests/fixtures/workspace'],
+        description: '清空消息记录胶囊确认后删除对话消息，取消确认不删，仍停留在同一伙伴。',
+        fixtures: [],
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',
@@ -38,6 +37,7 @@ describe('workbench conversation e2e', () => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
+            workspaceContents: 'empty',
             createPartner: false
           })
           await createPartnerThroughWorkbenchUi(page, PARTNER_NAME)
@@ -68,8 +68,14 @@ describe('workbench conversation e2e', () => {
           await clearButton.click()
           const confirmCancel = page.locator('.ant-modal-confirm-btns .ant-btn-default')
           await confirmCancel.waitFor({ state: 'visible' })
+          const deleteHistoryDefault = await page
+            .locator('.ant-modal-confirm input[type="checkbox"]')
+            .isChecked()
           await confirmCancel.click()
-          await page.locator('.ant-modal-confirm').waitFor({ state: 'hidden' }).catch(() => undefined)
+          await page
+            .locator('.ant-modal-confirm')
+            .waitFor({ state: 'hidden' })
+            .catch(() => undefined)
           const userStillVisibleAfterCancel = await getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.userMessagePrefix
@@ -111,6 +117,7 @@ describe('workbench conversation e2e', () => {
 
           return {
             clearLabel,
+            deleteHistoryDefault,
             tooltipText: (tooltipText || '').trim(),
             partnerName: PARTNER_NAME,
             userStillVisibleAfterCancel,
@@ -124,6 +131,7 @@ describe('workbench conversation e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.clearLabel.includes('清空消息记录') &&
+              result.deleteHistoryDefault &&
               result.tooltipText.includes(`「${result.partnerName}」`) &&
               result.tooltipText.includes('无法恢复') &&
               result.userStillVisibleAfterCancel &&

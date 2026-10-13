@@ -364,6 +364,15 @@ const api: DesktopApi = {
   partnerRunSummaries: (payload) => ipcRenderer.invoke('chat-session-run-summaries', payload),
   partnerSnapshotGet: (payload) => ipcRenderer.invoke('chat-session-snapshot-get', payload),
   partnerClearContext: (payload) => ipcRenderer.invoke('partner-clear-context', payload),
+  partnerCachePreview: (payload) => ipcRenderer.invoke('partner-cache-preview', payload),
+  partnerCacheCleanup: (payload) => {
+    emitE2EIpcCall('partnerCacheCleanup')
+    return ipcRenderer.invoke('partner-cache-cleanup', payload)
+  },
+  partnerCacheOpenDirectory: (payload) => {
+    emitE2EIpcCall('partnerCacheOpenDirectory', payload)
+    return ipcRenderer.invoke('partner-cache-open-directory', payload)
+  },
   chatSubmit: (payload) => {
     emitE2EIpcCall('chatSubmit')
     return ipcRenderer.invoke('chat-submit', payload)

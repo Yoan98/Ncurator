@@ -12,7 +12,7 @@ const PARTNER_OBJECTS_DIR = 'objects'
 
 const normalizePartnerId = (partnerId: string): string => {
   const value = String(partnerId || '').trim()
-  if (!value || path.basename(value) !== value) {
+  if (!value || value === '.' || value === '..' || /[\\/]/.test(value)) {
     throw new Error('partnerId 无效')
   }
   return value
@@ -48,12 +48,12 @@ export const deletePartnerRootDir = async (partnerId: string): Promise<void> => 
   await fs.rm(getPartnerRootDir(partnerId), { recursive: true, force: true })
 }
 
-export const ensurePartnerRuntimeDirs = async (partnerId: string): Promise<void> => {  const runtimeDir = getPartnerRuntimeDir(partnerId)
+export const ensurePartnerRuntimeDirs = async (partnerId: string): Promise<void> => {
+  const runtimeDir = getPartnerRuntimeDir(partnerId)
   await Promise.all([
     fs.mkdir(path.join(runtimeDir, PARTNER_ASSETS_DIR), { recursive: true }),
     fs.mkdir(getPartnerScriptsRootDir(partnerId), { recursive: true }),
-    fs.mkdir(getPartnerToolResultDir(partnerId), { recursive: true }),
-    fs.mkdir(getPartnerObjectsDir(partnerId), { recursive: true })
+    fs.mkdir(getPartnerToolResultDir(partnerId), { recursive: true })
   ])
 }
 

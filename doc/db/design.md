@@ -1,4 +1,4 @@
-# NCurator-Desktop 数据库设计
+# NCurator-Desktop 数据库与存储设计
 
 本文说明本地存储边界、SQLite 与 LanceDB 的职责关系、schema 演进规则，以及索引一致性约束。
 
@@ -21,7 +21,7 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 
 与存储布局相关的约束：
 
-- 大对象以 SHA-256 内容寻址落在 `userData/partners/{id}/objects/sha256/<前 2 位>/<其余>`，SQLite 只存引用；相同内容只存一份。
+- 文件备份与审核统一存入 `userData/partners/{id}/runtime/file-changes/{runId}/{changeId}/`。每条记录独立保存原始字节，SQLite 存路径及校验，不依赖共享对象仓库。
 - `document.active_generation_id` 只用于写后删旧 chunk 与孤儿清理，不进入检索 `where`。
 - 外键级联与无 CASCADE 绑定以当前 schema / migration 为准。
 
@@ -124,8 +124,9 @@ LanceDB fragment 是一次或多次写入形成的数据片段，不等于一行
 userData/
 ├── app.sqlite
 └── partners/{partnerId}/
-    ├── objects/sha256/...                         原始 A，内容去重
     └── runtime/file-changes/{ownerRunId}/{changeId}/
+        ├── before.{ext}                          原始 A，用于回退
+        ├── after*.{ext}                          图片历史快照
         ├── working-{version}.{ext}                唯一最新确认 B，临时
         ├── pending.json                          会话和结构身份，临时
         └── review/{artifactId}/                   自包含审核，长期
@@ -133,7 +134,7 @@ userData/
 
 每次发布使用新的工作版本路径，确认后清理上一份。每次审核使用独立产物路径并更新记录引用，避免同路径覆盖和缓存陈旧。Word 保存 review.docx，Excel 保存 review.xlsx，PPT 保存 manifest.json、前后 SVG 与必要资源，文本保存含完整有序行及旧新行数的 review.json。全部资源和记录保存成功后清理工作版本及 pending；失败保留输入，以便重启补生成或重复收尾。已有文件零净变化移除本轮记录，新建空文件仍保留。
 
-内容审核完成后 after_snapshot_path/after_object_hash 为空；图片继续保留历史图片快照。原始 A 保留用于撤销。清空消息保留回退记录和资源；删除伙伴等待运行写入及收尾结束，再清理对应目录。只清理本次产生且无引用的文件。旧审核不迁移、不从当前文件重建，旧记录不删除。
+内容审核完成后 after_snapshot_path/after_object_hash 为空；图片继续保留历史图片快照。原始 A 保留用于撤销。恢复伙伴时把已有快照复制到对应修改目录并更新引用，不重建审核、不改变记录时间。旧共享对象中的无引用文件随修改历史清理按时间回收。清空消息通过勾选项决定是否保留修改历史；设置清理保留 transcript 和 ai_run，只删除选定时段的缓存与修改记录。删除伙伴等待运行写入和收尾结束，再清理对应目录。
 
 ## 子会话消息
 

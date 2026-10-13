@@ -3,11 +3,13 @@ import { Switch, message } from 'antd'
 import { HiFolderOpen } from 'react-icons/hi2'
 import type { AppSettings } from '../../../../shared/types'
 import { settingsSelectors } from '../../testing/selectors'
+import PartnerCacheCleanupModal from './PartnerCacheCleanupModal'
 
 const GeneralSettingsPanel: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [saving, setSaving] = useState(false)
   const [openingLogDirectory, setOpeningLogDirectory] = useState(false)
+  const [cacheCleanupOpen, setCacheCleanupOpen] = useState(false)
 
   useEffect(() => {
     void window.api
@@ -89,7 +91,27 @@ const GeneralSettingsPanel: React.FC = () => {
             <span>打开</span>
           </button>
         </div>
+        <div className="flex items-center justify-between gap-6 border-t border-[#EEEEEC] py-5">
+          <div>
+            <div className="text-[14px] font-medium text-[#37352F]">清理伙伴的缓存数据</div>
+            <div className="mt-1 text-[12px] leading-5 text-[#787774]">
+              按伙伴、内容和时间清理缓存，释放磁盘空间。
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid={settingsSelectors.cacheCleanupOpen}
+            onClick={() => setCacheCleanupOpen(true)}
+            className="nc-no-drag h-8 shrink-0 rounded border border-[#E6E6E3] px-3 text-[12px] font-medium text-[#5F5F5B] hover:bg-[#F6F6F4]"
+          >
+            管理
+          </button>
+        </div>
       </div>
+      <PartnerCacheCleanupModal
+        open={cacheCleanupOpen}
+        onClose={() => setCacheCleanupOpen(false)}
+      />
     </section>
   )
 }

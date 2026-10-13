@@ -17,6 +17,9 @@ import { AttachmentService } from '../services/attachments/AttachmentService'
 import { isModelSource } from '../../shared/modelSources'
 import { emptyPresetModelsSnapshot } from '../../shared/llmPresets'
 import { ChatRunService } from '../services/ai/ChatRunService'
+import { PartnerCacheService } from '../services/assets/PartnerCacheService'
+import type { PartnerCacheRequest, PartnerCacheOpenRequest } from '../../shared/partnerCache'
+import { terminalSessionManager } from '../services/ai/human/tools/terminal/TerminalSessionManager'
 import { ScheduledTaskService } from '../services/scheduler/ScheduledTaskService'
 import { AiRunResourceManager } from '../services/ai/run/AiRunResourceManager'
 import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
@@ -330,8 +333,16 @@ export function registerHandlers(services: {
   })()
   let e2eGraphRecursionLimitUsesRemaining = e2eGraphRecursionLimitOnce ? 1 : 0
   const scheduledTaskServiceRef: { current?: ScheduledTaskService } = {}
+  const partnerCacheService = new PartnerCacheService({
+    partners: partnerStore,
+    ui: workbenchUiStore,
+    fileChanges: storageService.aiFileChange,
+    isPartnerBusy: (partnerId) => chatRunService.hasActivePartnerRun(partnerId),
+    beforeCleanup: (partnerId) => terminalSessionManager.closeByChatSession(partnerId)
+  })
   const chatRunService = new ChatRunService({
     partnerStore,
+    partnerCacheService,
     chatMessageLogStore,
     subagentStore: storageService.subagent,
     aiRunStore,
@@ -3340,10 +3351,36 @@ export function registerHandlers(services: {
     'partner-clear-context',
     async (_event, payload: PartnerClearContextRequest): Promise<PartnerClearContextResponse> => {
       try {
-        return await chatRunService.clearPartnerContext(payload?.partnerId)
+        const result = await chatRunService.clearPartnerContext(
+          payload?.partnerId,
+          payload?.deleteFileChanges === true
+        )
+        if (result.success) emitSessionListRefreshToAll()
+        return result
       } catch (e: unknown) {
         console.error('[PARTNER-CLEAR-CONTEXT] Error:', e)
         return { success: false, error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle('partner-cache-preview', async (_event, payload: PartnerCacheRequest) => {
+    return await partnerCacheService.preview(payload)
+  })
+  ipcMain.handle('partner-cache-cleanup', async (_event, payload: PartnerCacheRequest) => {
+    const result = await partnerCacheService.cleanup(payload)
+    if (result.deletedCount) emitSessionListRefreshToAll()
+    return result
+  })
+  ipcMain.handle(
+    'partner-cache-open-directory',
+    async (_event, payload: PartnerCacheOpenRequest) => {
+      try {
+        const directory = await partnerCacheService.directory(payload.partnerId, payload.category)
+        const error = await shell.openPath(directory)
+        return error ? { success: false, error } : { success: true }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )

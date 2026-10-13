@@ -122,6 +122,17 @@ export class AiFileChangeStore {
     this.sqlite.prepare('DELETE FROM ai_file_change WHERE id = ?').run(id)
   }
 
+  public async removeRecords(ids: string[]): Promise<void> {
+    this.sqlite.transaction(() => {
+      const remove = this.sqlite.prepare('DELETE FROM ai_file_change WHERE id = ?')
+      const removeDocx = this.sqlite.prepare('DELETE FROM docx_apply WHERE id = ?')
+      for (const id of ids) {
+        remove.run(id)
+        removeDocx.run(id)
+      }
+    })
+  }
+
   public async saveRecord(record: AiFileChangeRecord): Promise<void> {
     insertOrReplace(this.sqlite, 'ai_file_change', toWriteRow(record))
   }

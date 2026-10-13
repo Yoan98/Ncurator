@@ -1,6 +1,6 @@
 import { flushReferencedTextFiles } from '../components/fileRenders/pendingTextSaves'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { App as AntdApp, Input, Modal, Tooltip } from 'antd'
+import { App as AntdApp, Checkbox, Input, Modal, Tooltip } from 'antd'
 import {
   HiOutlineClipboardDocument,
   HiOutlineClock,
@@ -3986,15 +3986,32 @@ const ChatPage: React.FC = () => {
   const handleClearPartnerContext = useCallback((): void => {
     if (!currentPartnerId) return
     const partnerName = currentPartner?.name || '伙伴'
+    let deleteFileChanges = true
     modal.confirm({
       title: '清空消息记录？',
-      content: `将删除「${partnerName}」的全部对话消息，此操作无法恢复。伙伴本身会保留。`,
+      content: (
+        <div>
+          <p>将删除「{partnerName}」的全部对话消息及相关缓存，此操作无法恢复。伙伴本身会保留。</p>
+          <Checkbox
+            defaultChecked
+            onChange={(event) => {
+              deleteFileChanges = event.target.checked
+            }}
+          >
+            同时删除所有文件修改历史（删除后无法回退）
+          </Checkbox>
+        </div>
+      ),
       okText: '清空',
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: async () => {
         try {
-          const response = await window.api.partnerClearContext({ partnerId: currentPartnerId })
+          await flushCurrentUiState()
+          const response = await window.api.partnerClearContext({
+            partnerId: currentPartnerId,
+            deleteFileChanges
+          })
           if (!response.success) {
             emitErrorMessage(response.error || '清空消息记录失败')
             return
@@ -4003,6 +4020,10 @@ const ChatPage: React.FC = () => {
           setHasMoreMessagesBefore(false)
           setActiveTimelineDayStart(null)
           setAssistantTurns({})
+          if (deleteFileChanges) {
+            setPartnerFileChangeRecords([])
+            setFileChangeRecords([])
+          }
           if (currentPartnerId) {
             delete liveAssistantTurnsByPartnerRef.current[currentPartnerId]
           }
@@ -4024,7 +4045,8 @@ const ChatPage: React.FC = () => {
     emitErrorMessage,
     loadPartners,
     modal,
-    refreshContextUsage
+    refreshContextUsage,
+    flushCurrentUiState
   ])
 
   const handleScheduledTaskBusyCancelAction = useCallback((): void => {
