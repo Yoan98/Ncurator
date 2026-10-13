@@ -124,8 +124,10 @@ describe('ai unit selected context workspace path', () => {
     )
     expect(text.split('<用户选中片段2>')).toHaveLength(2)
     expect(text).toContain(`<选中内容>\n${selectedText}\n</选中内容>`)
-    expect(text).toContain(`<前文>\n${contextBefore}\n</前文>`)
-    expect(text).toContain(`<后文>\n${contextAfter}\n</后文>`)
+    expect(text).toContain(
+      `</选中内容>\n\n<定位信息>\n以下片段仅用于定位。\n\n<选中内容的前文>\n${contextBefore}\n</选中内容的前文>\n\n<选中内容的后文>\n${contextAfter}\n</选中内容的后文>\n</定位信息>`
+    )
+    expect(text).not.toContain('不属于选中内容')
     expect(text).not.toContain('引用内容：')
     expect(text).not.toContain('选中片段2的')
     expect(text).not.toContain('[example.docx')
@@ -158,9 +160,11 @@ describe('ai unit selected context workspace path', () => {
     expect(text.split('<用户选中片段1>')).toHaveLength(2)
     expect(text.split('<用户选中片段2>')).toHaveLength(2)
     expect(text.split('<源文件片段>')).toHaveLength(2)
-    expect(text).toContain('before **bold** after')
-    expect(text).not.toContain('<前文>')
-    expect(text).not.toContain('<后文>')
+    expect(text).toContain(
+      '<定位信息>\n行号：第 1 行\n\n以下片段仅用于定位。\n\n<源文件片段>\nbefore **bold** after\n</源文件片段>\n</定位信息>'
+    )
+    expect(text).not.toContain('<选中内容的前文>')
+    expect(text).not.toContain('<选中内容的后文>')
   })
 
   const locationCases: {
@@ -169,19 +173,22 @@ describe('ai unit selected context workspace path', () => {
     anchor?: DocumentSelectionAnchor
     selectedText: string
     location: string
+    position: string
   }[] = [
     {
       name: 'DOCX without a format anchor',
       filePath: '/tmp/example.docx',
       selectedText: '选中原文',
-      location: ''
+      location: '',
+      position: ''
     },
     {
       name: 'single text line',
       filePath: '/tmp/example.txt',
       anchor: { kind: 'text', start: 0, end: 4, startLine: 3, endLine: 3, sourceText: '选中原文' },
       selectedText: '选中原文',
-      location: '位置：第 3 行'
+      location: '位置：第 3 行',
+      position: '行号：第 3 行'
     },
     {
       name: 'multiple text lines',
@@ -195,21 +202,24 @@ describe('ai unit selected context workspace path', () => {
         sourceText: '第一行\n第二行\n第三行'
       },
       selectedText: '第一行\n第二行\n第三行',
-      location: '位置：第 3–5 行'
+      location: '位置：第 3–5 行',
+      position: '行号：第 3–5 行'
     },
     {
       name: 'single PDF page',
       filePath: '/tmp/example.pdf',
       anchor: { kind: 'pdf', startPage: 2, endPage: 2, start: 0, end: 4 },
       selectedText: '选中原文',
-      location: '位置：第 2 页'
+      location: '位置：第 2 页',
+      position: '页码：第 2 页'
     },
     {
       name: 'multiple PDF pages',
       filePath: '/tmp/example.pdf',
       anchor: { kind: 'pdf', startPage: 2, endPage: 3, start: 0, end: 4 },
       selectedText: '选中原文',
-      location: '位置：第 2–3 页'
+      location: '位置：第 2–3 页',
+      position: '页码：第 2–3 页'
     },
     {
       name: 'Excel cells',
@@ -226,7 +236,8 @@ describe('ai unit selected context workspace path', () => {
       },
       selectedText:
         '{"display":[["订单"]],"cells":[[{"value":"订单","formula":null}]],"merges":[]}',
-      location: '位置：订单明细!B2'
+      location: '位置：订单明细!B2',
+      position: '工作表：订单明细\n单元格范围：B2'
     },
     {
       name: 'PPT element with text',
@@ -240,7 +251,8 @@ describe('ai unit selected context workspace path', () => {
         revision: 'revision-1'
       },
       selectedText: '完整标题',
-      location: '位置：第 1 页\n选中元素：/ppt/slides/slide1.xml#2'
+      location: '位置：第 1 页\n选中元素：/ppt/slides/slide1.xml#2',
+      position: '页码：第 1 页\n选中元素：/ppt/slides/slide1.xml#2'
     },
     {
       name: 'PPT element without text',
@@ -254,7 +266,8 @@ describe('ai unit selected context workspace path', () => {
         revision: 'revision-1'
       },
       selectedText: '',
-      location: '位置：第 1 页\n选中元素：/ppt/slides/slide1.xml#3'
+      location: '位置：第 1 页\n选中元素：/ppt/slides/slide1.xml#3',
+      position: '页码：第 1 页\n选中元素：/ppt/slides/slide1.xml#3'
     },
     {
       name: 'PPT whole slide',
@@ -267,11 +280,12 @@ describe('ai unit selected context workspace path', () => {
         revision: 'revision-1'
       },
       selectedText: '页面文字',
-      location: '位置：第 1 页\n选中页面：/ppt/slides/slide1.xml'
+      location: '位置：第 1 页\n选中页面：/ppt/slides/slide1.xml',
+      position: '页码：第 1 页\n选中页面：/ppt/slides/slide1.xml'
     }
   ]
 
-  it.each(locationCases)('shares $name location between model input and tooltip', (example) => {
+  it.each(locationCases)('renders $name locator and retains its tooltip snapshot', (example) => {
     const node: DocumentSelectionNode = {
       kind: 'document_selection',
       id: 'excerpt',
@@ -285,25 +299,26 @@ describe('ai unit selected context workspace path', () => {
     }
     const text = renderSelectedReferencesText(buildReferenceScope({ contentNodes: [node] }))
 
-    if (example.location) {
-      expect(text).toContain(`<用户选中片段1>\n${example.location}`)
-      expect(text.split('位置：')).toHaveLength(2)
+    if (example.position) {
+      expect(text).toContain(`<定位信息>\n${example.position}\n</定位信息>`)
     } else {
-      expect(text).not.toContain('位置：')
+      expect(text).not.toContain('<定位信息>')
     }
     expect(selectionTooltip(node)).toBe(
       example.location
         ? `${example.location}${example.selectedText ? `\n${example.selectedText}` : ''}`
         : example.selectedText
     )
-    if (example.selectedText && example.anchor?.kind !== 'ppt') {
+    const locatorOnly = example.anchor?.kind === 'ppt' || example.anchor?.kind === 'excel'
+    if (example.selectedText && !locatorOnly) {
       expect(text).toContain(`<选中内容>\n${example.selectedText}\n</选中内容>`)
     } else {
       expect(text).not.toContain('<选中内容>')
+      if (example.selectedText) expect(text).not.toContain(example.selectedText)
     }
     expect(text).not.toContain('<源文件片段>')
-    expect(text).not.toContain('<前文>')
-    expect(text).not.toContain('<后文>')
+    expect(text).not.toContain('<选中内容的前文>')
+    expect(text).not.toContain('<选中内容的后文>')
   })
 
   it('renders user selected attachments with compact content-info template', () => {

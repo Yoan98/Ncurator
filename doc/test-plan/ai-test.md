@@ -654,14 +654,14 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 
 ##### `human-document-reference-context`
 
-- 多格式扩展：提交校验覆盖 PDF/文本/PPT/Excel 定位与空白格；拒绝超过 10,000 格的区域、页码无效或元素不属于当前页的 PPT 引用；PPT 对象与整页仅以定位进入模型正文，原始引用快照仍由真实消息保存/排队保留。
+- 多格式扩展：提交校验覆盖 PDF/文本/PPT/Excel 定位与空白格；拒绝超过 10,000 格的区域、页码无效或元素不属于当前页的 PPT 引用；PPT 对象、整页与 Excel 区域仅以定位进入模型正文，原始引用快照仍由真实消息保存/排队保留。
 
 - 测试类型：`backend / mock-llm`；suite `human`，group `mock-llm`。
 - What：提交快照、brain 投影与中断恢复保留混合文档引用。
 - Why：避免选区漏传、用户想法重复、索引信息失真或重复写入用户消息。
 - How：使用真实 ChatRunService 与存储提交文字、@ 文件/目录/网页、两个 DOCX 选区及文本/PDF/Excel/PPT 选区，拒绝无效区域与定位；脚本化 brain 决策，核对模型收到的正文与保存的快照一致；随后提交选区消息排队，重建服务并执行中断恢复，检查用户消息。
-- Oracle：User 顶层为无属性标签块，同级生成块间只有一个空白行，可选空块省略；同一文件的 @ 与选区合并，每个片段使用 `<用户选中片段N>`，不另列编号。非 PPT 选中内容与前后文分别嵌套，空块省略，源文与选中文字相同时不重复输出，保留换行、Tab、空白和代码围栏；详情只在文档信息处展示文件名，想法只出现一次。PPT 对象与整页仅输出页码和一个选中元素/页面标识，不含选中文本、前后文或图片路径；索引状态以 Main 解析结果为准；未索引选区可接受；brain 复用保存的正文且不重复写 user；排队正文与中断恢复后的正文一致。
-- 最新验证：2026-10-12 生产 ChatRunService 与存储回归通过；无属性顶层块、片段嵌套、原文空白与代码围栏、PPT 仅定位投递、索引解析、保存/brain 冻结、排队与中断恢复后的块结构及已有消息不改写均通过；raw logs：`tests/logs/ai/human/mock-llm/human-document-reference-context/20261012-173032-299-dd2a1b60`。
+- Oracle：User 顶层为无属性标签块，同级生成块间只有一个空白行，可选空块省略；同一文件的 @ 与选区合并，每个片段使用 `<用户选中片段N>`，不另列编号。文字选中内容独立于 `<定位信息>`，行号、页码、不同于选中文字的源文件片段及 `<选中内容的前文>` / `<选中内容的后文>` 都在定位块内，附定位用途说明；空块省略，源文与选中文字相同时不重复输出，保留换行、Tab、空白和代码围栏。PPT 仅输出页码和一个选中元素/页面标识；Excel 仅输出工作表和单元格范围，不输出值、公式、display/cells/merges 或前后文，原始 Excel 快照仍保存在真实消息中；详情只在文档信息处展示文件名，想法只出现一次。索引状态以 Main 解析结果为准；未索引选区可接受；brain 复用保存的正文且不重复写 user；排队正文与中断恢复后的正文一致。
+- 最新验证：2026-10-12 生产 ChatRunService 与存储回归通过；原文与统一定位块分开，源文空白与代码围栏保留，PPT/Excel 仅定位投递，Excel 值/公式/合并范围快照仍保存，排队与中断恢复后的正文及快照一致，已有消息不改写；raw logs：`tests/logs/ai/human/mock-llm/human-document-reference-context/20261012-191519-441-8427c7f6`。
 - 待覆盖：任意混排顺序的精确比对、选区不收窄实际知识库检索范围，以及排队消息的完整续接执行。
 
 ##### `human-image-generation`
@@ -675,10 +675,11 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `human-excel-read-edit`
 
 - 测试类型：`backend`
-- What：human 学习 Excel 能力后读取已有工作簿、修改并复读验证。
+- What：human 仅凭选区定位学习 Excel 能力，读取已有工作簿、修改并复读验证。
 - Why：补齐 Excel 在真实 human graph 中完全缺失的 non-live 回归。
-- How：通过生产 `AiRunService.run` 包含真正主 run 的文件收尾；只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。脚本调用 `excel_read` / `excel_edit` 学技能后读-写-复读。
-- Oracle：任务完成；调用包含读、写、复读；正式文件、累计 record、artifact 与最终答复一致。
+- How：通过生产 `ChatRunService -> AiRunService.run` 提交选区并完成真正主 run 的文件收尾；传入带内部单元格快照的 Excel 选区，只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。脚本从 User 定位信息取得工作表和范围，再调用 `excel_read` / `excel_edit` 学技能后读-写-复读，采集真正传给下一轮 brain 的工具结果。
+- Oracle：初始 User 只有文件路径、工作表和范围，没有选中内容、单元格值、公式或 merges；按该定位读取后，真实源文件的值和公式进入下一轮 brain。任务完成；调用包含读、写、复读；正式文件、累计 record 与 artifact 一致，区域外单元格及合并关系不变。
+- 最新验证：2026-10-12 生产 ChatRunService → AiRunService 链路通过；模型 User 只含定位，脚本从定位取得工作表和范围，真实 Excel 读取结果中的值/公式进入后续 brain，局部写入、复读、外围保留及文件收尾通过；raw logs：`tests/logs/ai/human/mock-llm/human-excel-read-edit/20261012-191519-442-c4ef6ff2`。
 
 ##### `human-text-file-read-write`
 

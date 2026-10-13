@@ -245,6 +245,16 @@ describe('workbench conversation e2e', () => {
             .click({ position: { x: 110, y: 90 } })
           await page.keyboard.press('Shift+ArrowRight')
           await confirm(page, 'excel', '只解释这些单元格的值或公式，不修改文件。')
+          const excelTitle = (await tokens.last().getAttribute('title')) || ''
+          const excelLocation = excelTitle.match(/\n位置：([^\n]+)!([A-Z]+\d+(?::[A-Z]+\d+)?)\n/)
+          if (!excelLocation) throw new Error('Excel 引用没有工作表和范围')
+          const excelSnapshot = excelTitle.slice(excelLocation.index! + excelLocation[0].length)
+          const excelDisplay = (JSON.parse(excelSnapshot) as { display: string[][] }).display
+          const expectedExcel = {
+            sheetName: excelLocation[1],
+            range: excelLocation[2],
+            values: excelDisplay.flat().filter(Boolean)
+          }
           await runtime.captureScreenshot({
             name: 'excel-reference',
             message: 'Excel 区域引用与原生紫色高亮'
@@ -652,25 +662,42 @@ describe('workbench conversation e2e', () => {
             })
           })
           const records = await collectWorkbenchLlmIoRecords(runtime)
-          const readCallIds = new Set(
-            events
-              .filter(
-                (event) => event.type === 'tool_call_result' && event.toolName === 'ppt_read_slides'
-              )
-              .map((event) => event.toolCallId)
-          )
-          const modelReadContent = records
-            .filter((record) => record.caller === 'human.brain' && record.startedAt >= startedAt)
-            .flatMap(
-              (record) =>
-                record.requestWire?.messages
-                  .filter(
-                    (message) =>
-                      message.role === 'tool' && readCallIds.has(message.toolCallId || '')
-                  )
-                  .map((message) => message.content) || []
+          const toolReadContent = (toolName: string) => {
+            const readCallIds = new Set(
+              events
+                .filter((event) => event.type === 'tool_call_result' && event.toolName === toolName)
+                .map((event) => event.toolCallId)
             )
-            .join('\n')
+            return records
+              .filter((record) => record.caller === 'human.brain' && record.startedAt >= startedAt)
+              .flatMap(
+                (record) =>
+                  record.requestWire?.messages
+                    .filter(
+                      (message) =>
+                        message.role === 'tool' && readCallIds.has(message.toolCallId || '')
+                    )
+                    .map((message) => message.content) || []
+              )
+              .join('\n')
+          }
+          const modelReadContent = toolReadContent('ppt_read_slides')
+          const excelReadContent = toolReadContent('excel_read')
+          const excelRangeReads = events.flatMap((event) => {
+            if (
+              event.type !== 'tool_call_result' ||
+              event.toolName !== 'excel_read' ||
+              !event.result?.ok
+            )
+              return []
+            const data = event.result.data
+            return data &&
+              typeof data === 'object' &&
+              !Array.isArray(data) &&
+              Array.isArray(data.rows)
+              ? [data]
+              : []
+          })
           const brain =
             records
               .find((record) => record.caller === 'human.brain' && record.startedAt >= startedAt)
@@ -684,6 +711,10 @@ describe('workbench conversation e2e', () => {
           return {
             titles,
             brain,
+            expectedExcel,
+            excelSnapshot,
+            excelReadContent,
+            excelRangeReads,
             expectedSlideId,
             expectedElementIds,
             selectedElementId,
@@ -729,13 +760,32 @@ describe('workbench conversation e2e', () => {
                 result.blankShapeId
               ].every((id) => result.brain.includes(`选中元素：${id}`)) &&
               result.brain.match(/<用户选中片段\d+>/g)?.length === 9 &&
+              result.brain.includes(
+                `<定位信息>\n工作表：${result.expectedExcel.sheetName}\n单元格范围：${result.expectedExcel.range}\n</定位信息>`
+              ) &&
+              !result.brain.includes(result.excelSnapshot) &&
+              !result.brain.includes('merges') &&
+              !result.brain.includes('不属于选中内容') &&
+              result.expectedExcel.values.length > 0 &&
+              result.expectedExcel.values.every((value) =>
+                result.excelReadContent.includes(value)
+              ) &&
+              result.excelRangeReads.some(
+                (read) => read.sheetName === result.expectedExcel.sheetName
+              ) &&
               (result.brain.match(/<用户选中片段\d+>[\s\S]*?<\/用户选中片段\d+>/g) || [])
-                .filter((block) => block.includes('选中元素：') || block.includes('选中页面：'))
+                .filter(
+                  (block) =>
+                    block.includes('选中元素：') ||
+                    block.includes('选中页面：') ||
+                    block.includes('工作表：')
+                )
                 .every(
                   (block) =>
                     !block.includes('<选中内容>') &&
-                    !block.includes('<前文>') &&
-                    !block.includes('<后文>')
+                    block.includes('<定位信息>') &&
+                    !block.includes('<选中内容的前文>') &&
+                    !block.includes('<选中内容的后文>')
                 ) &&
               !result.brain.includes('页面标识：') &&
               result.groupTexts.every(
@@ -753,7 +803,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'multi-format-brain-and-readonly',
               message:
-                '真实 AI 的 PPT 片段仅包含定位，工具内容进入下一轮模型且组合关系匹配，提问不写回源文件。',
+                '真实 AI 的 Excel/PPT 片段仅包含定位，工具内容进入下一轮模型且组合关系匹配，提问不写回源文件。',
               data: result
             }
           )

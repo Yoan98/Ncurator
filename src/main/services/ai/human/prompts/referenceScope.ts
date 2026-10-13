@@ -1,4 +1,3 @@
-import { renderSelectionLocation } from '../../../../../shared/documentSelection'
 import { chatReferences } from '../../../../../shared/chatContent'
 import type {
   ChatAttachment,
@@ -33,18 +32,46 @@ export const renderUserBlock = (label: string, content: string): string =>
 
 const renderSelection = (node: DocumentSelectionNode): string => {
   const anchor = node.anchor
-  const parts = [renderSelectionLocation(node)]
-  if (anchor?.kind !== 'ppt') {
-    parts.push(renderUserBlock('选中内容', node.selectedText))
+  const locatorOnly = anchor?.kind === 'ppt' || anchor?.kind === 'excel'
+  const positioning = [renderSelectionPosition(node)]
+  if (!locatorOnly) {
+    const fragments: string[] = []
     if (anchor?.kind === 'text' && anchor.sourceText !== node.selectedText) {
-      parts.push(renderUserBlock('源文件片段', anchor.sourceText))
+      fragments.push(renderUserBlock('源文件片段', anchor.sourceText))
     }
-    parts.push(
-      renderUserBlock('前文', node.contextBefore),
-      renderUserBlock('后文', node.contextAfter)
+    fragments.push(
+      renderUserBlock('选中内容的前文', node.contextBefore),
+      renderUserBlock('选中内容的后文', node.contextAfter)
     )
+    if (fragments.some(Boolean)) positioning.push('以下片段仅用于定位。', ...fragments)
   }
+  const parts = [
+    locatorOnly ? '' : renderUserBlock('选中内容', node.selectedText),
+    renderUserBlock('定位信息', positioning.filter(Boolean).join('\n\n'))
+  ]
   return renderUserBlock(`用户选中片段${node.number}`, parts.filter(Boolean).join('\n\n'))
+}
+
+const renderSelectionPosition = (node: DocumentSelectionNode): string => {
+  const anchor = node.anchor
+  if (!anchor) return ''
+  switch (anchor.kind) {
+    case 'text':
+      return anchor.startLine === anchor.endLine
+        ? `行号：第 ${anchor.startLine} 行`
+        : `行号：第 ${anchor.startLine}–${anchor.endLine} 行`
+    case 'pdf':
+      return anchor.startPage === anchor.endPage
+        ? `页码：第 ${anchor.startPage} 页`
+        : `页码：第 ${anchor.startPage}–${anchor.endPage} 页`
+    case 'ppt':
+      return [
+        `页码：第 ${anchor.page} 页`,
+        anchor.mode === 'element' ? `选中元素：${anchor.elementId}` : `选中页面：${anchor.slideId}`
+      ].join('\n')
+    case 'excel':
+      return `工作表：${anchor.sheetName}\n单元格范围：${anchor.range}`
+  }
 }
 
 export const buildReferenceScope = (input: {
