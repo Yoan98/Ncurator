@@ -9,6 +9,8 @@ import type { ExcelCapabilityToolsInput, ExcelToolRuntime } from './types'
 import type { ExcelEditInput, ExcelReadInput, ExcelStyle } from './toolSchemas'
 import { toExcelArgb, toExcelRgb } from './color'
 import { EXCEL_SEARCH_MAX_MATCHES } from './constants'
+import { calculateExcelFormulas } from './formula'
+import { excelCellValue } from '../../../../../../shared/excelWorkbook'
 
 const EXCEL_READ_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xltx', '.xltm'])
 const EXCEL_WRITE_EXTENSIONS = new Set(['.xlsx'])
@@ -40,11 +42,6 @@ const getFormula = (value: unknown): string | undefined => {
     return formula || undefined
   }
   return undefined
-}
-
-const getFormulaResult = (value: unknown): unknown => {
-  if (!value || typeof value !== 'object' || !('result' in value)) return undefined
-  return (value as { result?: unknown }).result
 }
 
 const columnNumber = (letters: string): number =>
@@ -95,7 +92,10 @@ type CellChange = { sheetName: string; address: string; kind: 'added' | 'modifie
 
 const cloneModel = <T>(value: T): T => structuredClone(value)
 const cellFingerprint = (cell: ExcelJS.Cell): string =>
-  JSON.stringify({ value: cell.value, style: cell.style || {} })
+  JSON.stringify({
+    value: cell.formula ? { formula: cell.formula } : cell.value,
+    style: cell.style || {}
+  })
 const setBorder = (cell: ExcelJS.Cell, color: string): void => {
   const border = { style: 'medium' as const, color: { argb: color } }
   cell.border = { top: border, right: border, bottom: border, left: border }
@@ -252,7 +252,7 @@ const buildDiffWorkbook = async (input: {
         const sourceCell = next || old
         const border = cell.border
         if (sourceCell) {
-          cell.value = cloneModel(sourceCell.value)
+          cell.value = cloneModel(excelCellValue(sourceCell))
           cell.style = cloneModel(sourceCell.style)
         }
         if (border?.top?.color) cell.border = border
@@ -263,7 +263,7 @@ const buildDiffWorkbook = async (input: {
           const deleted =
             old.value !== null && old.value !== '' && (next.value === null || next.value === '')
           if (deleted) {
-            cell.value = cloneModel(old.value)
+            cell.value = cloneModel(excelCellValue(old))
             cell.style = cloneModel(old.style)
           }
           mark(rowIndex + 1, colIndex + 1, deleted ? 'deleted' : 'modified')
@@ -316,6 +316,8 @@ const buildDiffWorkbook = async (input: {
 
 const applyStyle = (cell: ExcelJS.Cell, style: ExcelStyle | undefined): void => {
   if (!style) return
+  if (cell.isMerged && cell.master !== cell) applyStyle(cell.master, style)
+  cell.style = cloneModel(cell.style)
   const currentFont = cell.font || {}
   if (typeof style.bold === 'boolean' || typeof style.italic === 'boolean' || style.fontColor) {
     cell.font = {
@@ -336,8 +338,8 @@ const applyStyle = (cell: ExcelJS.Cell, style: ExcelStyle | undefined): void => 
     const currentAlignment = cell.alignment || {}
     cell.alignment = {
       ...currentAlignment,
-      horizontal: style.horizontalAlignment as ExcelJS.Alignment['horizontal'],
-      vertical: style.verticalAlignment as ExcelJS.Alignment['vertical']
+      horizontal: style.horizontalAlignment || currentAlignment.horizontal,
+      vertical: style.verticalAlignment || currentAlignment.vertical
     }
   }
 }
@@ -380,7 +382,7 @@ const projectRangeCell = (
   | { formula: string; value?: string | number | boolean | null } => {
   const formula = getFormula(cell.value)
   if (formula) {
-    const result = getFormulaResult(cell.value)
+    const result = cell.result
     const serialized = result === undefined ? undefined : serializeLiteral(result, cell.text)
     return serialized === undefined || serialized === null
       ? { formula }
@@ -767,6 +769,8 @@ export const materializeExcelReview = async (input: {
 }) => {
   const before = input.before ? await loadWorkbook(input.before) : null
   const after = await loadWorkbook(input.after)
+  if (before) await calculateExcelFormulas(before)
+  await calculateExcelFormulas(after)
   const sheets = new Map<string, string | null>(
     input.identity?.sheets ||
       after.worksheets.map((sheet) => [

@@ -5,19 +5,13 @@ import type { LoadedFileRenderDocument } from './types'
 import { useEffect, useRef, useState } from 'react'
 import type { DocRendererProps } from 'react-doc-viewer'
 import ExcelJS from 'exceljs'
+import { LocaleType, type IWorkbookData } from '@univerjs/core'
 import {
-  BooleanNumber,
-  BorderStyleTypes,
-  CellValueType,
-  HorizontalAlign,
-  LocaleType,
-  VerticalAlign,
-  WrapStrategy,
-  type ICellData,
-  type IStyleData,
-  type IWorkbookData,
-  type IWorksheetData
-} from '@univerjs/core'
+  excelColor as color,
+  excelSheetId as sheetPreviewId,
+  hasExcelFormulas,
+  toExcelWorkbookData
+} from '../../../../shared/excelWorkbook'
 import '@univerjs/preset-sheets-core/lib/index.css'
 import { workbenchSelectors } from '../../testing/selectors'
 
@@ -41,12 +35,6 @@ const readBytes = async (document: XlsxDocument): Promise<ArrayBuffer> => {
 }
 
 const DIFF_MARKER_RGB = new Set(['#22A06B', '#D14343'])
-
-const color = (input?: Partial<ExcelJS.Color>): { rgb: string } | undefined => {
-  const argb = input?.argb
-  if (!argb) return undefined
-  return { rgb: `#${argb.slice(-6)}` }
-}
 
 const isDiffMarkerColor = (input?: Partial<ExcelJS.Color>): boolean => {
   const rgb = color(input)?.rgb
@@ -73,8 +61,6 @@ const sheetHasDiffMarker = (sheet: ExcelJS.Worksheet): boolean => {
   return found
 }
 
-const sheetPreviewId = (sheet: ExcelJS.Worksheet): string => `sheet-${String(sheet.id)}`
-
 const escapeCssIdent = (value: string): string => {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value)
   return value.replace(/([^\w-])/g, '\\$1')
@@ -91,86 +77,6 @@ ${selector}::after{content:"";position:absolute;top:2px;right:2px;width:6px;heig
     .join('')
 }
 
-const borderStyle = (
-  side?: Partial<ExcelJS.Border>
-): { s: BorderStyleTypes; cl: { rgb: string } } | undefined => {
-  if (!side?.style) return undefined
-  const styles: Partial<Record<ExcelJS.BorderStyle, BorderStyleTypes>> = {
-    thin: BorderStyleTypes.THIN,
-    medium: BorderStyleTypes.MEDIUM,
-    thick: BorderStyleTypes.THICK,
-    double: BorderStyleTypes.DOUBLE,
-    dotted: BorderStyleTypes.DOTTED,
-    dashed: BorderStyleTypes.DASHED,
-    dashDot: BorderStyleTypes.DASH_DOT,
-    dashDotDot: BorderStyleTypes.DASH_DOT_DOT,
-    hair: BorderStyleTypes.HAIR
-  }
-  return {
-    s: styles[side.style] || BorderStyleTypes.THIN,
-    cl: color(side.color) || { rgb: '#D9D9D9' }
-  }
-}
-
-const cellStyle = (cell: ExcelJS.Cell): IStyleData => ({
-  ff: cell.font?.name || undefined,
-  fs: cell.font?.size,
-  bl: cell.font?.bold ? BooleanNumber.TRUE : BooleanNumber.FALSE,
-  it: cell.font?.italic ? BooleanNumber.TRUE : BooleanNumber.FALSE,
-  cl: color(cell.font?.color),
-  bg: cell.fill?.type === 'pattern' && cell.fill.fgColor ? color(cell.fill.fgColor) : undefined,
-  n: cell.numFmt && cell.numFmt !== 'General' ? { pattern: cell.numFmt } : undefined,
-  ht:
-    cell.alignment?.horizontal === 'center'
-      ? HorizontalAlign.CENTER
-      : cell.alignment?.horizontal === 'right'
-        ? HorizontalAlign.RIGHT
-        : cell.alignment?.horizontal === 'left'
-          ? HorizontalAlign.LEFT
-          : undefined,
-  vt:
-    cell.alignment?.vertical === 'middle'
-      ? VerticalAlign.MIDDLE
-      : cell.alignment?.vertical === 'bottom'
-        ? VerticalAlign.BOTTOM
-        : cell.alignment?.vertical === 'top'
-          ? VerticalAlign.TOP
-          : undefined,
-  tb: cell.alignment?.wrapText ? WrapStrategy.WRAP : undefined,
-  bd: {
-    t: borderStyle(cell.border?.top),
-    r: borderStyle(cell.border?.right),
-    b: borderStyle(cell.border?.bottom),
-    l: borderStyle(cell.border?.left)
-  }
-})
-
-const cellData = (cell: ExcelJS.Cell): ICellData => {
-  const formula = cell.formula || undefined
-  const rawValue = formula
-    ? cell.result
-    : cell.value instanceof Date
-      ? cell.value.toISOString()
-      : cell.value
-  const value =
-    typeof rawValue === 'string' || typeof rawValue === 'number' || typeof rawValue === 'boolean'
-      ? rawValue
-      : rawValue == null
-        ? undefined
-        : cell.text
-  return {
-    v: value,
-    f: formula ? `=${formula}` : undefined,
-    t:
-      typeof value === 'number'
-        ? CellValueType.NUMBER
-        : typeof value === 'boolean'
-          ? CellValueType.BOOLEAN
-          : CellValueType.STRING,
-    s: cellStyle(cell)
-  }
-}
-
 type ExcelPreviewWorkbook = {
   data: IWorkbookData
   changedSheetIds: string[]
@@ -180,84 +86,13 @@ type ExcelPreviewWorkbook = {
 const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<ExcelPreviewWorkbook> => {
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(bytes as never)
-  const sheets: Record<string, Partial<IWorksheetData>> = {}
-  const sheetOrder: string[] = []
-  const changedSheetIds: string[] = []
-  const changedSheetNames: string[] = []
-  workbook.eachSheet((sheet) => {
-    const id = sheetPreviewId(sheet)
-    sheetOrder.push(id)
-    if (sheetHasDiffMarker(sheet)) {
-      changedSheetIds.push(id)
-      changedSheetNames.push(sheet.name)
-    }
-    const cells: Record<number, Record<number, ICellData>> = {}
-    sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-      row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-        ;(cells[rowNumber - 1] ||= {})[columnNumber - 1] = cellData(cell)
-      })
-    })
-    const rowData: Record<number, { h: number }> = {}
-    sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-      if (row.height) rowData[rowNumber - 1] = { h: Math.round(row.height * 1.333) }
-    })
-    const columns = sheet.columns || []
-    const layoutColumnCount = Math.max(sheet.columnCount, columns.length, 1)
-    const columnData: Record<number, { w: number }> = {}
-    for (let index = 1; index <= layoutColumnCount; index += 1) {
-      const width = sheet.getColumn(index).width
-      if (width) columnData[index - 1] = { w: Math.round(width * 7) }
-    }
-    const mergeData = (sheet.model.merges || []).map((range) => {
-      const parsed = sheet.getCell(range.split(':')[0])
-      const end = sheet.getCell(range.split(':')[1] || range.split(':')[0])
-      return {
-        startRow: Number(parsed.row) - 1,
-        startColumn: Number(parsed.col) - 1,
-        endRow: Number(end.row) - 1,
-        endColumn: Number(end.col) - 1
-      }
-    })
-    const frozen = (sheet.views || []).find((view) => view.state === 'frozen')
-    const xSplit = frozen?.state === 'frozen' ? frozen.xSplit || 0 : 0
-    const ySplit = frozen?.state === 'frozen' ? frozen.ySplit || 0 : 0
-    sheets[id] = {
-      id,
-      freeze:
-        xSplit || ySplit ? { xSplit, ySplit, startRow: ySplit, startColumn: xSplit } : undefined,
-      name: sheet.name,
-      tabColor: color(sheet.properties.tabColor)?.rgb || '',
-      hidden: sheet.state === 'visible' ? BooleanNumber.FALSE : BooleanNumber.TRUE,
-      rowCount: Math.max(100, sheet.rowCount + 20),
-      columnCount: Math.max(26, layoutColumnCount + 10),
-      cellData: cells,
-      rowData,
-      columnData,
-      mergeData,
-      showGridlines: BooleanNumber.TRUE,
-      rightToLeft: BooleanNumber.FALSE
-    }
-  })
-  if (sheetOrder.length === 0) throw new Error('工作簿没有可预览的工作表')
+  const changedSheets = workbook.worksheets.filter(sheetHasDiffMarker)
   return {
-    data: {
-      id: `xlsx-${Date.now().toString(36)}`,
-      name,
-      appVersion: '1.0.0',
-      locale: LocaleType.ZH_CN,
-      styles: {},
-      sheetOrder,
-      sheets
-    },
-    changedSheetIds,
-    changedSheetNames
+    data: toExcelWorkbookData(workbook, name),
+    changedSheetIds: changedSheets.map(sheetPreviewId),
+    changedSheetNames: changedSheets.map((sheet) => sheet.name)
   }
 }
-
-const withReadOnlySheetUi = (options: unknown): unknown => ({
-  ...((options && typeof options === 'object' ? options : {}) as Record<string, unknown>),
-  disableEdit: true
-})
 
 const waitForRenderedCanvas = async (
   container: HTMLDivElement,
@@ -273,6 +108,7 @@ const waitForRenderedCanvas = async (
 const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const document = mainState.currentDocument as XlsxDocument | undefined
   const containerRef = useRef<HTMLDivElement>(null)
+  const selectionContainerRef = useRef<HTMLDivElement>(null)
   const [selectionAdapter, setSelectionAdapter] = useState<SelectionAdapter | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
@@ -280,8 +116,9 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const [changedSheetNames, setChangedSheetNames] = useState<string[]>([])
 
   useEffect(() => {
-    if (!document || !containerRef.current) return
+    if (!document || !containerRef.current || !selectionContainerRef.current) return
     const container = containerRef.current
+    const selectionContainer = selectionContainerRef.current
     let cancelled = false
     let dispose: (() => void) | undefined
     setReady(false)
@@ -310,6 +147,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             locale: LocaleType.ZH_CN,
             locales: { [LocaleType.ZH_CN]: localeModule.default }
           })
+          dispose = () => univer.dispose()
           const sheetPreviewOptions: Record<string, unknown> = {
             protectedRangeShadow: 'none',
             disableForceStringAlert: true
@@ -319,7 +157,11 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             header: false,
             toolbar: false,
             formulaBar: true,
-            formula: { initialFormulaComputing: CalculationMode.NO_CALCULATION },
+            formula: {
+              initialFormulaComputing: document.metadata?.excelReview
+                ? CalculationMode.NO_CALCULATION
+                : CalculationMode.FORCED
+            },
             footer: {
               sheetBar: true,
               zoomSlider: true,
@@ -331,35 +173,40 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
           })
           for (const entry of preset.plugins) {
             const [plugin, options] = Array.isArray(entry) ? entry : [entry, undefined]
-            const pluginName =
-              plugin && typeof plugin === 'function' && 'pluginName' in plugin
-                ? String((plugin as { pluginName?: unknown }).pluginName)
-                : ''
-            univer.registerPlugin(
-              plugin,
-              pluginName === 'SHEET_UI_PLUGIN' ? withReadOnlySheetUi(options) : options
-            )
+            univer.registerPlugin(plugin, options)
           }
           const univerAPI = FUniver.newAPI(univer)
-          univerAPI.createWorkbook(preview.data)
-          dispose = () => univer.dispose()
+          // Keep Univer's navigation and copy behavior while blocking workbook edits.
+          const workbook = univerAPI.createWorkbook(preview.data)
           if (cancelled) {
             dispose()
             return
           }
+          if (!document.metadata?.excelReview && hasExcelFormulas(preview.data))
+            await univerAPI.getFormula().onCalculationResultApplied(30_000)
+          if (cancelled) return
           const canvasReady = await waitForRenderedCanvas(container, () => cancelled)
           if (!cancelled && !canvasReady) throw new Error('Excel 预览画布加载超时')
           if (!cancelled) {
+            // Apply after UI permission initialization so its defaults cannot overwrite read-only.
+            await workbook
+              .getWorkbookPermission()
+              .setPoint(univerAPI.Enum.WorkbookPermissionPoint.Edit, false)
+            univerAPI.setPermissionDialogVisible(false)
+            if (cancelled) return
             setChangedSheetIds(preview.changedSheetIds)
             setChangedSheetNames(preview.changedSheetNames)
             setReady(true)
             if (document.metadata?.allowDocumentSelection && document.filePath)
-              setSelectionAdapter(excelAdapter(univerAPI, document.filePath, container))
+              setSelectionAdapter(excelAdapter(univerAPI, document.filePath, selectionContainer))
           }
         }
       )
       .catch((reason) => {
         if (!cancelled) {
+          console.error('Excel 预览失败', reason)
+          dispose?.()
+          dispose = undefined
           setReady(false)
           setChangedSheetIds([])
           setChangedSheetNames([])
@@ -369,7 +216,6 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
     return () => {
       cancelled = true
       dispose?.()
-      container.innerHTML = ''
     }
   }, [document])
 
@@ -392,7 +238,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
       ) : null}
       {selectionAdapter && document.filePath && (
         <DocumentSelectionLayer
-          container={containerRef.current}
+          container={selectionContainerRef.current}
           filePath={document.filePath}
           revision={ready ? 1 : 0}
           adapter={selectionAdapter}
@@ -400,10 +246,13 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
         />
       )}
       <div
-        ref={containerRef}
-        className="h-full w-full"
+        ref={selectionContainerRef}
+        className="relative h-full w-full"
         data-testid={workbenchSelectors.excelGrid}
-      />
+      >
+        {/* Univer owns the inner DOM; selection portals belong to the outer React container. */}
+        <div ref={containerRef} className="h-full w-full" />
+      </div>
     </div>
   )
 }

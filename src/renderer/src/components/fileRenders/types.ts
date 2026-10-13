@@ -5,6 +5,7 @@ export type FileRenderMetadata = {
   anchorName?: string
   allowDocumentSelection?: boolean
   docxOverview?: 'references' | 'changes'
+  excelReview?: boolean
 }
 
 export type FileRenderDocument = {

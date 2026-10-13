@@ -836,6 +836,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         editable,
         metadata: {
           docxOverview: documentDisplayMode === 'preview' ? 'references' : 'changes',
+          excelReview: activeApplyRecord.capability === 'excel' && documentDisplayMode === 'review',
           allowDocumentSelection:
             documentDisplayMode === 'preview' && filePath === activeApplyRecord.path
         }

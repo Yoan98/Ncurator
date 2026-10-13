@@ -328,10 +328,11 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `excel-set-style-number-format-persistence`
 
 - 测试类型：`backend`
-- What：`set_range` 写值后 `set_style` 设 `#,##0`，并在 merge/auto_fit 后仍能被 ExcelJS、openpyxl 与 `excel_read type=style` 读回。
-- Why：Create live 曾出现 openpyxl 验算报 D3–D19 为 General 而 D20 有千分位；需守住 standalone `set_style` 的 numberFormat 落盘路径。
-- How：模拟部门明细表写入、合计行 inline style、`set_style D3:D20`、表头样式、merge 标题、auto_fit；分别用 ExcelJS、openpyxl（经 `.pip-cache/test-openpyxl`，缺失时自动 pip install --target）和 `excel_read style` 断言。
-- Oracle：`D3`/`D19`/`D20` 的 number format 均为 `#,##0`。
+- What：`set_range`、`set_style` 的局部格式写入与 numberFormat 落盘，包含共享样式隔离和 merge/auto_fit 后的读回。
+- Why：局部样式写入不得串改其他行或 Sheet，未指定字段必须保留；numberFormat 必须与实际保存和审核标记一致。
+- How：模拟部门明细表写入、合计行 inline style、`set_style D3:D20`、表头样式、merge 标题、auto_fit；分别用 ExcelJS、openpyxl（经 `.pip-cache/test-openpyxl`，缺失时自动 pip install --target）和 `excel_read style` 断言。另加载含跨行、跨 Sheet 共享样式与合并区域的真实工作簿，通过 set_range 和 set_style 局部修改后核对全部外围值、样式及审核边框。
+- Oracle：`D3`/`D19`/`D20` 的 number format 均为 `#,##0`。局部汇总行以外的共享样式单元格完全不变；只修改水平对齐时保留垂直对齐及其他未指定字段；合并区域样式可用，审核只标记目标范围。
+- 最新验证：2026-10-13 backend 通过，覆盖跨行、跨 Sheet 共享样式隔离、部分对齐、合并区域与精确审核标记；raw logs：`tests/logs/ai/tool/excel/excel-set-style-number-format-persistence/20261013-133333-500-af517a67`。
 
 ##### `excel-edit-operations-and-atomicity`
 
@@ -346,8 +347,9 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / tool`
 - What：插入或删除首行、中间行、末行及连续多行时，Diff 按逻辑行对齐，只标记真实新增或删除的行。
 - Why：按单元格地址直接比较会把删除行后的整体上移误判为大量绿色修改，并在末尾生成错误红色重复行。
-- How：构造包含唯一行标签、公式、样式和行高的真实 xlsx，分别执行行插入、行删除、删除后继续修改，以及同一 run 多轮结构编辑；直接解析 preview xlsx 的行顺序、值和每个边框。
-- Oracle：删除中间行只保留该旧行并标红一次；所有仅因上移或下移而换地址的行无边框；末尾没有重复行；插入行只标绿最终新增行；红绿地址集合和 record 统计精确等于净变化；正式 xlsx 无 diff 标记。
+- How：构造包含唯一行标签、公式、样式和行高的真实 xlsx，分别执行行插入、行删除、删除后继续修改，以及同一 run 多轮结构编辑；直接解析 preview xlsx 的行顺序、值和每个边框。加入无结果缓存、错误旧缓存、跨 Sheet、零值、布尔值与日期公式，在真实 A/B 上分别重算后检查联合审核保留的公式结果；另验证仅缓存变化的零净变化。
+- Oracle：删除中间行只保留该旧行并标红一次；所有仅因上移或下移而换地址的行无边框；末尾没有重复行；插入行只标绿最终新增行；红绿地址集合和 record 统计精确等于净变化；正式 xlsx 无 diff 标记。审核公式结果来自真实 A/B 而非混排网格；删除行中的公式保留 A 结果，存续和新增公式使用 B 结果，缓存差异不产生绿框，原始文件字节及回退基线不被审核计算改写。
+- 最新验证：2026-10-13 backend 通过，覆盖行列对齐、真实 A/B 公式结果、缺失及过期缓存、跨 Sheet、零值、布尔值、日期、仅缓存变化和源文件字节保护；raw logs：`tests/logs/ai/tool/excel/excel-diff-row-structure-semantics/20261013-133333-502-f4cd952e`。
 
 ##### `excel-diff-cumulative-net-semantics`
 

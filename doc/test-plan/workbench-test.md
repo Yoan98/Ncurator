@@ -556,8 +556,9 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：右侧普通文件预览态、“全部 / 本次运行改动”文件模式、稳定选中态、多个文件 Tab、定位文件、系统打开方式下拉、PDF 命中定位、Markdown / 纯文本预览，以及 Excel 只读预览。
 - Why：右侧面板是用户消费引用结果和打开文件的主要区域，预览布局错误会直接阻断阅读。
-- How：创建伙伴并添加文件地址后，从文件列表连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；展开打开方式菜单，确认触发系统关联应用查询、存在默认应用标记和至少一个系统返回的 Handler；docx / xlsx 在打开方式含 WPS 时工具栏问号可见，pdf / md / txt / xlsm 不可见；确认产生四个文件 Tab，再切回 Markdown Tab；从文件列表打开 `xlsx/xlsm/xltx/xltm`，对 `xlsx` 尝试双击输入、切 Sheet 和拖列宽。
-- Oracle：加号文件标签、目录懒加载、PDF 命中定位、Markdown / UTF-8 文本预览、Excel 只读且可浏览、选中态、面包屑、系统打开方式与工具栏行为整体对齐 `WB-PANEL-003`、`WB-EXCEL-002-AC1`；WPS 问号提示对齐 `WB-PANEL-003-AC22`；各文件分别保留且旧 Tab 可恢复；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换、不残留，对齐 `WB-PANEL-001-AC1`。目录打开刷新由 `workspace-file-explorer-open-refresh` 覆盖。
+- How：创建伙伴并添加文件地址后，从文件列表连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；展开打开方式菜单，确认触发系统关联应用查询、存在默认应用标记和至少一个系统返回的 Handler；docx / xlsx 在打开方式含 WPS 时工具栏问号可见，pdf / md / txt / xlsm 不可见；确认产生四个文件 Tab，再切回 Markdown Tab；从文件列表打开 `xlsx/xlsm/xltx/xltm`，对 `xlsx` 尝试进入单元格编辑并输入，用原生复制核对内容仍保持原值，再切 Sheet 和拖列宽。在隔离工作簿加入无缓存及过期缓存公式，通过组件只读权限保留选区与复制，使用真实网格选中与复制读取显示结果，包含零值和跨 Sheet 引用。
+- Oracle：加号文件标签、目录懒加载、PDF 命中定位、Markdown / UTF-8 文本预览、Excel 只读且可浏览、选中态、面包屑、系统打开方式与工具栏行为整体对齐 `WB-PANEL-003`、`WB-EXCEL-002-AC1`；WPS 问号提示对齐 `WB-PANEL-003-AC22`；各文件分别保留且旧 Tab 可恢复；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换、不残留，对齐 `WB-PANEL-001-AC1`。目录打开刷新由 `workspace-file-explorer-open-refresh` 覆盖。普通预览 FORCED 计算无缓存与过期缓存公式，结果显示准确，打开预览不写回源文件。
+- 最新验证：2026-10-13 源码真实 E2E 通过，19s、4 条断言；网格复制得到 15、30、0、15，编辑尝试后原值不变，源文件字节保持一致，四种 Excel 格式及原有文件预览操作均通过；raw logs：`tests/logs/workbench/result/preview/file-preview-actions/20261013-140159-360`。
 
 #### `workspace-file-explorer-open-refresh`
 
@@ -629,8 +630,10 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`
 - What：真实 AI 修改已有 Excel 后，用户在同一个只读网格中查看红绿单元格边框，并能回退到原始文件。
 - Why：Excel 修改预览不能依赖模型描述，也不适合 PPT 式左右画面对比，必须直接验证工作簿数据、公式和单元格级 diff。
-- How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改；打开修改记录，显式切换“预览/审核”，在两种模式下尝试编辑、切换工作表和拖列宽；通过 E2E no-op 成功分支打开关联应用，再执行回退。 测试进程将正式工作表重命名为 External C，以界面实际 Sheet 标签验证预览 C、历史审核仍为 B，并确认强制回退。
-- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；同一 run 两轮修改在 UI 上只见一条本 run 修改入口；两种模式都通过 Univer 只读预览、可切换工作表且不出现 PPT 前后预览；审核态被改过的 Data 工作表 tab 有绿点、未改的 Notes 无绿点，预览态均无绿点；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；回退后 bytes 与修改前一致；真实调用包含 `excel_read` 和至少两次 `excel_edit`；对齐 `WB-PANEL-003-AC19`、`WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9`。
+- How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改，限定使用 Excel 工具且无需终端备份，清空含公式的明细行，保留汇总行原位置；整行插入/删除的逻辑对齐另由 AI backend 矩阵覆盖；打开修改记录，显式切换“预览/审核”，在两种模式下尝试编辑并用原生复制核对单元格原值，切换工作表和拖列宽；通过 E2E no-op 成功分支打开关联应用，再执行回退。测试进程将正式工作表重命名为 External C，以界面实际 Sheet 标签验证预览 C、历史审核仍为 B，并确认强制回退。在隔离输入增加共享样式和含公式的清空区域，真实 AI 局部修改后以网格复制取证核对普通预览与固定审核结果，并解析目标范围之外的值、样式和审核边框。
+- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框，Data 第 3 行内容清空，汇总保留在第 4 行且行数保持 46；同一 run 两轮修改在 UI 上只见一条本 run 修改入口；两种模式都通过 Univer 只读预览、可切换工作表且不出现 PPT 前后预览；审核态被改过的 Data 工作表 tab 有绿点、未改的 Notes 无绿点，预览态均无绿点；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；回退后 bytes 与修改前一致；真实调用包含 `excel_read` 和至少两次 `excel_edit`；对齐 `WB-PANEL-003-AC19`、`WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9`。目标范围之外的共享样式不串改；普通预览显示重算结果，审核显示真实 A/B 的固定结果，恢复显示的删除内容不参与再次计算。
+- 最新验证：2026-10-13 源码真实 E2E 通过，104s、5 条断言；真实 AI 局部编辑、外围样式保护、只读、当前 C 预览、固定 A/B 审核、删除公式旧值及精确回退均通过。审核汇总为 40、删除公式为 16，外部 C 预览为 60，再切回审核仍为 40；raw logs：`tests/logs/workbench/result/apply/excel-update-diff-and-revert/20261013-135748-143`。
+- 覆盖边界：整行插入/删除的结构对齐由 AI backend 验证。本次 live 模型曾把 `startRow`、`count` 生成为字符串，严格校验拒绝执行；该数值参数兼容问题未修改，UI E2E 使用清空区域验证删除内容恢复后的固定审核结果。
 
 #### `excel-create-diff-and-revert`
 

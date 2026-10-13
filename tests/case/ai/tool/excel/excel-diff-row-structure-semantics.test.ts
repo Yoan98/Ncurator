@@ -133,6 +133,82 @@ describe('ai tool excel row diff backend', () => {
             green: collectBorderAddresses(inspectedSheet, GREEN)
           }
         }
+        const formulaBook = new ExcelJS.Workbook()
+        const formulaSheet = formulaBook.addWorksheet('Calc')
+        formulaSheet.addRows([
+          ['Item', 'Amount', 'Derived'],
+          ['keep-first', 10, { formula: 'B2*2', result: 999 }],
+          ['remove', 20, { formula: 'SUM(B2:B3)' }],
+          ['keep-last', 30, { formula: 'SUM(B2:B4)', result: -1 }]
+        ])
+        formulaSheet.getCell('D2').value = { formula: 'Notes!A1+B2', result: -1 }
+        formulaSheet.getCell('E2').value = { formula: 'B2-10', result: 99 }
+        formulaSheet.getCell('F2').value = { formula: 'RAND()', result: 42 }
+        formulaSheet.getCell('E3').value = { formula: 'B3>100', result: true }
+        formulaSheet.getCell('D3').value = { formula: 'YEAR(Notes!B1)' }
+        const formulaNotes = formulaBook.addWorksheet('Notes')
+        formulaNotes.getCell('A1').value = 5
+        formulaNotes.getCell('B1').value = new Date('2026-10-13T00:00:00Z')
+        formulaBook.properties.date1904 = true
+        const formulaBytes = Buffer.from(await formulaBook.xlsx.writeBuffer())
+        const formulaPath = path.join(runtime.workspaceRoot, 'formula-delete.xlsx')
+        const formulaInsertPath = path.join(runtime.workspaceRoot, 'formula-insert.xlsx')
+        const cacheOnlyPath = path.join(runtime.workspaceRoot, 'formula-cache-only.xlsx')
+        await Promise.all(
+          [formulaPath, formulaInsertPath, cacheOnlyPath].map((file) =>
+            fs.writeFile(file, formulaBytes)
+          )
+        )
+        await harness.invoke('excel_edit', {
+          type: 'delete_rows',
+          sourcePath: formulaPath,
+          sheetName: 'Calc',
+          startRow: 3,
+          count: 1
+        })
+        const formulaActualBytes = await fs.readFile(formulaPath)
+        const formulaRecord = await recordOf(formulaPath)
+        const formulaReview = new ExcelJS.Workbook()
+        await formulaReview.xlsx.load((await fs.readFile(formulaRecord.previewPath)) as never)
+        const calculated = formulaReview.getWorksheet('Calc')!
+        const sourceUnchangedByCalculation = (await fs.readFile(formulaPath)).equals(
+          formulaActualBytes
+        )
+        const originalRecord = (
+          await harness.ctx.listFileChangeRecords({ runId: runtime.runId })
+        ).find((item) => item.path === formulaPath)
+        const baselinePreserved = Boolean(
+          originalRecord?.beforeSnapshotPath &&
+          (await fs.readFile(originalRecord.beforeSnapshotPath)).equals(formulaBytes)
+        )
+        await harness.invoke('excel_edit', {
+          type: 'insert_rows',
+          sourcePath: formulaInsertPath,
+          sheetName: 'Calc',
+          startRow: 3,
+          count: 1
+        })
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
+          sourcePath: formulaInsertPath,
+          sheetName: 'Calc',
+          range: 'A3:C3',
+          values: [['inserted', 100, { formula: 'SUM(B2:B3)' }]]
+        })
+        const formulaInserted = await recordOf(formulaInsertPath)
+        const insertedReview = new ExcelJS.Workbook()
+        await insertedReview.xlsx.load((await fs.readFile(formulaInserted.previewPath)) as never)
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
+          sourcePath: cacheOnlyPath,
+          sheetName: 'Calc',
+          range: 'C2',
+          values: [[{ formula: 'B2*2' }]]
+        })
+        await harness.ctx.finalizeRunFileChanges()
+        const cacheOnlyRecord = (
+          await harness.ctx.listFileChangeRecords({ runId: runtime.runId })
+        ).find((item) => item.path === cacheOnlyPath)
         return {
           actualLabels: actualSheet.getColumn(1).values.slice(2),
           diffLabels: diffSheet.getColumn(1).values.slice(2),
@@ -144,7 +220,23 @@ describe('ai tool excel row diff backend', () => {
           inserted: await inspectDiff(inserted.previewPath),
           deletedFirst: await inspectDiff(deletedFirst.previewPath),
           deletedLast: await inspectDiff(deletedLast.previewPath),
-          deletedContiguous: await inspectDiff(deletedContiguous.previewPath)
+          deletedContiguous: await inspectDiff(deletedContiguous.previewPath),
+          formulaReview: {
+            staleCacheRecalculated: calculated.getCell('C2').result,
+            deletedFormula: calculated.getCell('C3').result,
+            survivingFormula: calculated.getCell('C4').result,
+            crossSheet: calculated.getCell('D2').result,
+            zero: calculated.getCell('E2').result,
+            deletedBoolean: calculated.getCell('E3').result,
+            dateYear: calculated.getCell('D3').result,
+            red: collectBorderAddresses(calculated, RED),
+            green: collectBorderAddresses(calculated, GREEN),
+            insertedFormula: insertedReview.getWorksheet('Calc')!.getCell('C3').result,
+            shiftedFormula: insertedReview.getWorksheet('Calc')!.getCell('C5').result,
+            sourceUnchangedByCalculation,
+            baselinePreserved,
+            cacheOnlyRecord: Boolean(cacheOnlyRecord)
+          }
         }
       },
       assert: async (result, runtime) => {
@@ -185,6 +277,29 @@ describe('ai tool excel row diff backend', () => {
             name: 'excel-row-delete-produces-one-red-tombstone-without-shift-noise',
             message: '删除中间行时只应标红被删除行，后续上移行不得产生绿色标记或底部重复。',
             data: result
+          }
+        )
+        runtime.assertThat(
+          result.formulaReview.staleCacheRecalculated === 20 &&
+            result.formulaReview.deletedFormula === 30 &&
+            result.formulaReview.survivingFormula === 40 &&
+            result.formulaReview.crossSheet === 15 &&
+            result.formulaReview.zero === 0 &&
+            result.formulaReview.deletedBoolean === false &&
+            result.formulaReview.dateYear === 2026 &&
+            JSON.stringify(result.formulaReview.red) ===
+              JSON.stringify(['A3', 'B3', 'C3', 'D3', 'E3', 'F3']) &&
+            result.formulaReview.green.length === 0 &&
+            result.formulaReview.insertedFormula === 110 &&
+            result.formulaReview.shiftedFormula === 130 &&
+            result.formulaReview.sourceUnchangedByCalculation &&
+            result.formulaReview.baselinePreserved &&
+            !result.formulaReview.cacheOnlyRecord,
+          {
+            name: 'excel-review-source-formula-results',
+            message:
+              '真实 A/B 重算后冻结审核结果，删除与插入行不参与混排重算；跨 Sheet、零值和缓存净变化正确，源文件与原始基线不被改写。',
+            data: result.formulaReview
           }
         )
       }
