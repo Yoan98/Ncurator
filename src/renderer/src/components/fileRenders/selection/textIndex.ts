@@ -13,7 +13,14 @@ const blocks = new Set([
   'DIV',
   'OL',
   'UL',
-  'LI'
+  'LI',
+  'PRE',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6'
 ])
 
 const isHidden = (element: Element): boolean => {
@@ -45,7 +52,10 @@ function tableGrid(table: HTMLTableElement): (HTMLTableCellElement | null)[][] {
   return grid.map((row) => Array.from({ length: columns }, (_, column) => row[column] || null))
 }
 
-export function readPreviewText(container: HTMLElement | SVGElement): PreviewText {
+export function readPreviewText(
+  container: HTMLElement | SVGElement,
+  ignore?: (element: Element) => boolean
+): PreviewText {
   const runs: TextRun[] = []
   let text = ''
   const visit = (node: Node): void => {
@@ -61,7 +71,8 @@ export function readPreviewText(container: HTMLElement | SVGElement): PreviewTex
       node.matches(
         'style, script, template, title, desc, .react-pdf__Page__annotations, canvas, [data-selection-ignore]'
       ) ||
-      isHidden(node)
+      isHidden(node) ||
+      ignore?.(node)
     )
       return
     if (node instanceof HTMLBRElement) {

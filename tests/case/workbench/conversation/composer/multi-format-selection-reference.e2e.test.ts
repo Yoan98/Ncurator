@@ -22,8 +22,9 @@ import {
   savePresentation
 } from 'pptx-kit'
 import { describe, it } from 'vitest'
-import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { runE2ECase, type E2ETestRuntime } from '../../../../harness/e2e/run-e2e-case'
 import { getExcelGridCanvas } from '../../../../harness/e2e/excel'
+import { copyDocumentSelection } from '../../../../harness/e2e/documentSelection'
 import {
   setupWorkbenchWithTempWorkspace,
   openWorkbenchWorkspaceFile,
@@ -40,7 +41,7 @@ import {
 
 const CASE_ID = 'multi-format-selection-reference'
 /** Read geometry only; selection itself always uses the real mouse. */
-async function selectVisibleText(page: Page, selector: string): Promise<void> {
+async function selectVisibleText(page: Page, selector: string, screenshotBefore = false) {
   const root = page.locator(selector).first()
   await root.waitFor({ state: 'visible' })
   await page.waitForFunction(
@@ -72,17 +73,82 @@ async function selectVisibleText(page: Page, selector: string): Promise<void> {
             x1: a.left + 0.5,
             y1: a.top + a.height / 2,
             x2: b.right - 0.5,
-            y2: b.top + b.height / 2
+            y2: b.top + b.height / 2,
+            text: node.data.slice(start, end),
+            clip: { x: a.left, y: a.top, width: b.right - a.left, height: a.height }
           }
       }
       node = walker.nextNode()
     }
     throw new Error('没有可见可选文字')
   })
+  const before = screenshotBefore ? await page.screenshot({ clip: points.clip }) : null
   await page.mouse.move(points.x1, points.y1)
   await page.mouse.down()
   await page.mouse.move(points.x2, points.y2, { steps: 12 })
   await page.mouse.up()
+  return { ...points, before }
+}
+
+async function textPoint(locator: Locator, end = false) {
+  return locator.evaluate((element, end) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    const texts: Text[] = []
+    for (let node = walker.nextNode(); node; node = walker.nextNode())
+      if (
+        node instanceof Text &&
+        node.data.trim() &&
+        !node.parentElement?.closest('.vditor-ir__marker')
+      )
+        texts.push(node)
+    const node = end ? texts.at(-1) : texts[0]
+    if (!node) throw new Error('缺少可选正文')
+    const range = document.createRange()
+    const offset = end ? node.length - 1 : node.data.search(/\S/)
+    range.setStart(node, offset)
+    range.setEnd(node, offset + 1)
+    const rect = range.getBoundingClientRect()
+    return { x: end ? rect.right - 0.5 : rect.left + 0.5, y: rect.top + rect.height / 2 }
+  }, end)
+}
+
+async function dragText(page: Page, start: Locator, end: Locator) {
+  await start.scrollIntoViewIfNeeded()
+  const a = await textPoint(start)
+  const b = await textPoint(end, true)
+  await page.mouse.move(a.x, a.y)
+  await page.mouse.down()
+  await page.mouse.move(b.x, b.y, { steps: 16 })
+  await page.mouse.up()
+}
+
+async function assertPdfTextVisible(
+  runtime: E2ETestRuntime,
+  sample: Awaited<ReturnType<typeof selectVisibleText>>,
+  state: string
+) {
+  if (!sample.before) throw new Error('缺少 PDF 选区基准截图')
+  const after = await runtime.page.screenshot({ clip: sample.clip })
+  const counts = await runtime.electronApp.evaluate(
+    ({ nativeImage }, screenshots) =>
+      screenshots.map((encoded) => {
+        const bitmap = nativeImage.createFromBuffer(Buffer.from(encoded, 'base64')).toBitmap()
+        let dark = 0
+        for (let i = 0; i < bitmap.length; i += 4)
+          if (Math.max(bitmap[i], bitmap[i + 1], bitmap[i + 2]) < 170) dark++
+        return dark
+      }),
+    [sample.before.toString('base64'), after.toString('base64')]
+  )
+  await runtime.assertThat(counts[0] > 20 && counts[1] >= counts[0] * 0.5, {
+    name: `pdf-text-visible-${state}`,
+    message: 'PDF 高亮后选区中的深色文字仍可辨认，未被纯色背景盖住。',
+    data: { before: counts[0], after: counts[1], clip: sample.clip }
+  })
+  await runtime.captureScreenshot({
+    name: `pdf-reference-${state}`,
+    message: `PDF ${state} 高亮保持正文可见`
+  })
 }
 async function confirm(page: Page, prefix: string, thought: string) {
   await page.getByTestId(`${prefix}-selection-ai-reference`).click()
@@ -109,8 +175,8 @@ describe('workbench conversation e2e', () => {
         description: '真实多格式选区引用、定位及混合发送。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
-        windowMode: 'background',
-        execution: 'live',
+        windowMode: 'visible',
+        execution: 'exclusive',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
@@ -122,6 +188,29 @@ describe('workbench conversation e2e', () => {
             '经营周报.xlsx',
             '品牌策略提案.pptx'
           ]
+          const markdownPath = path.join(setup.workspace.rootPath, names[1])
+          const repeatedParagraph = '重复前文'.repeat(20) + '重复定位标记' + '重复后文'.repeat(20)
+          const markdownBody = [
+            '## 0. 范围与总原则',
+            '',
+            '- 只做视觉与版式优化，**绝不遮挡文字**。',
+            '- 主视觉：深藏蓝 `#0A2239 / #122C46` + 白。',
+            '- 保留用户选中正文，中文结束。',
+            '',
+            '## 1. 表格定位',
+            '',
+            '| 检查项 | 结果 |',
+            '| --- | --- |',
+            '| 表格引用 | **准确定位** |',
+            '',
+            '## 2. 重复片段',
+            '',
+            repeatedParagraph,
+            '',
+            repeatedParagraph,
+            ''
+          ].join('\n')
+          await fs.appendFile(markdownPath, '\n' + markdownBody)
           const pptPath = path.join(setup.workspace.rootPath, names[4])
           const deck = await loadPresentation(await fs.readFile(pptPath))
           const imageSource = await JSZip.loadAsync(
@@ -187,6 +276,12 @@ describe('workbench conversation e2e', () => {
           const text = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
           await text.click()
           await text.press('ControlOrMeta+a')
+          const copiedText = await copyDocumentSelection(runtime)
+          await runtime.assertThat(copiedText === before[0].toString('utf8'), {
+            name: 'text-reference-native-copy',
+            message: 'TXT 选中并显示 AI 引用入口后，原生复制保留完整选区。',
+            data: { copiedText }
+          })
           await confirm(page, 'text', '只解释这段文本，不修改文件。')
           await tokens.first().click()
           await runtime.captureScreenshot({
@@ -226,11 +321,109 @@ describe('workbench conversation e2e', () => {
           await text.fill(before[0].toString('utf8'))
           await tokens.first().click()
           await openWorkbenchWorkspaceFile(runtime, names[1])
-          await selectVisibleText(page, '.vditor-ir')
-          await confirm(page, 'text', '只解释这段 Markdown，不修改文件。')
+          const markdown = page.locator('.vditor-ir .vditor-reset')
+          const tableStart = markdown.locator('table').last().locator('th').first()
+          const tableEnd = markdown.locator('table').last().locator('td').last()
+          await dragText(page, tableStart, tableEnd)
+          await confirm(page, 'text', '解释表格引用。')
+          const tableTitle = (await tokens.last().getAttribute('title')) || ''
+          await runtime.assertThat(
+            tableTitle.includes('检查项\t结果') && tableTitle.includes('表格引用\t准确定位'),
+            {
+              name: 'markdown-gfm-table-reference',
+              message: '真实 GFM 表格选区能对应原文，保留行列内容。',
+              data: { title: tableTitle }
+            }
+          )
+          await tableStart.click()
+          await page
+            .getByTestId('text-selection-popup')
+            .getByRole('button', { name: '删除引用' })
+            .click()
+          const repeated = markdown.locator('p').filter({ hasText: '重复定位标记' }).nth(1)
+          await repeated.scrollIntoViewIfNeeded()
+          const repeatedPoint = await textPoint(repeated)
+          await page.mouse.move(repeatedPoint.x, repeatedPoint.y)
+          await page.mouse.down()
+          await page.mouse.move(repeatedPoint.x + 58, repeatedPoint.y, { steps: 8 })
+          await page.mouse.up()
+          await confirm(page, 'text', '解释第二处重复文字。')
+          const repeatedTitle = (await tokens.last().getAttribute('title')) || ''
+          const markdownSource = await fs.readFile(markdownPath, 'utf8')
+          const repeatedLine = markdownSource
+            .slice(0, markdownSource.lastIndexOf(repeatedParagraph))
+            .split('\n').length
+          await runtime.assertThat(repeatedTitle.includes(`位置：第 ${repeatedLine} 行`), {
+            name: 'markdown-repeated-source-position',
+            message: '上下文相同的重复文字按真实选中位置定位到第二段。',
+            data: { title: repeatedTitle, line: repeatedLine }
+          })
+          await page.mouse.click(repeatedPoint.x, repeatedPoint.y)
+          await page
+            .getByTestId('text-selection-popup')
+            .getByRole('button', { name: '删除引用' })
+            .click()
+          const markdownStart = markdown.getByRole('heading', { name: '0. 范围与总原则' })
+          const markdownEnd = markdown.locator('li').filter({ hasText: '中文结束' })
+          await dragText(page, markdownStart, markdownEnd)
+          await page.getByTestId('text-selection-ai-reference').waitFor({ state: 'visible' })
+          const copiedMarkdown = await copyDocumentSelection(runtime)
+          await runtime.assertThat(
+            ['0. 范围与总原则', '绝不遮挡文字', '#0A2239 / #122C46', '中文结束'].every((text) =>
+              copiedMarkdown.includes(text)
+            ) && !copiedMarkdown.includes('1. 表格定位'),
+            {
+              name: 'markdown-reference-native-copy',
+              message: '跨标题、列表、粗体与行内代码选区可正常复制，未带入外围段落。',
+              data: { copied: copiedMarkdown }
+            }
+          )
+          await runtime.captureScreenshot({
+            name: 'markdown-selection-action',
+            message: 'Markdown 跨样式正文选区与引用入口'
+          })
+          await page.getByTestId('text-selection-ai-reference').click()
+          const thought = page.getByTestId('text-selection-thought')
+          await thought.fill('只解释这段 Markdown，不修改文件。')
+          await thought.press('ControlOrMeta+a')
+          const copiedThought = await copyDocumentSelection(runtime)
+          await runtime.assertThat(copiedThought === '只解释这段 Markdown，不修改文件。', {
+            name: 'reference-thought-native-copy',
+            message: '进入想法输入框后，复制遵循输入框选区。',
+            data: { copied: copiedThought }
+          })
+          await page.getByTestId('text-selection-save').click()
+          const markdownTitle = (await tokens.last().getAttribute('title')) || ''
+          await runtime.assertThat(
+            markdownTitle.includes('绝不遮挡文字') &&
+              markdownTitle.includes('#0A2239 / #122C46') &&
+              !markdownTitle.includes('**'),
+            {
+              name: 'markdown-visible-content-reference',
+              message: '引用仅包含可见正文，隐藏 Markdown 标记不混入内容。',
+              data: { title: markdownTitle }
+            }
+          )
+          await tokens.last().click()
+          const returnPoint = await textPoint(markdownStart)
+          await page.mouse.click(returnPoint.x, returnPoint.y)
+          await thought.waitFor({ state: 'visible' })
+          await page.getByTestId('text-selection-save').click()
           await openWorkbenchWorkspaceFile(runtime, names[2])
-          await selectVisibleText(page, '[data-pdf-page="1"] .textLayer')
+          const pdfSample = await selectVisibleText(page, '[data-pdf-page="1"] .textLayer', true)
+          await page.getByTestId('pdf-selection-ai-reference').waitFor({ state: 'visible' })
+          const copiedPdf = await copyDocumentSelection(runtime)
+          await runtime.assertThat(copiedPdf === pdfSample.text, {
+            name: 'pdf-reference-native-copy',
+            message: 'PDF 原生文字选区在 AI 引用入口出现后仍可复制。',
+            data: { expected: pdfSample.text, copied: copiedPdf }
+          })
+          await assertPdfTextVisible(runtime, pdfSample, 'action')
           await confirm(page, 'pdf', '只解释 PDF 引文，不修改文件。')
+          await page.mouse.move(pdfSample.x2 + 150, pdfSample.y2)
+          await assertPdfTextVisible(runtime, pdfSample, 'saved')
+          await page.mouse.move(pdfSample.x1, pdfSample.y1)
+          await assertPdfTextVisible(runtime, pdfSample, 'hover')
           await openWorkbenchWorkspaceFile(runtime, names[3])
           await page.waitForFunction(
             (testId) =>

@@ -55,7 +55,6 @@ export default function DocumentSelectionLayer({
       setHoveredId(null)
       setFloating(null)
       setPopup({ ...candidate, mode })
-      window.getSelection()?.removeAllRanges()
     },
     [message, noticeKey]
   )
@@ -188,7 +187,10 @@ export default function DocumentSelectionLayer({
     }
     const key = `${testPrefix}-${crypto.randomUUID()}`
     const style = document.createElement('style')
-    style.textContent = `::highlight(${key}){background-color:#E9DDFB}::highlight(${key}-active),::highlight(${key}-hover){background-color:#DBC5F6}`
+    const opacity = adapter.highlightOpacity ?? 1
+    const surface = `[data-document-selection-surface="${key}"]`
+    container.setAttribute('data-document-selection-surface', key)
+    style.textContent = `${surface}::selection,${surface} ::selection{background-color:rgb(219 197 246 / ${opacity});color:inherit}::highlight(${key}){background-color:rgb(233 221 251 / ${opacity})}::highlight(${key}-active),::highlight(${key}-hover){background-color:rgb(219 197 246 / ${opacity})}`
     document.head.appendChild(style)
     let frame = 0
     let unpaint: (() => void) | undefined
@@ -285,6 +287,8 @@ export default function DocumentSelectionLayer({
       CSS.highlights.delete(key)
       CSS.highlights.delete(key + '-active')
       CSS.highlights.delete(key + '-hover')
+      if (container.getAttribute('data-document-selection-surface') === key)
+        container.removeAttribute('data-document-selection-surface')
       style.remove()
     }
   }, [
@@ -362,7 +366,6 @@ export default function DocumentSelectionLayer({
     try {
       state.save(popup.node, popup.location)
       setPopup(null)
-      window.getSelection()?.removeAllRanges()
     } catch (e) {
       void message.warning({
         key: noticeKey,

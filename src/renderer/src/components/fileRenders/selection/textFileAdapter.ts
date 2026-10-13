@@ -1,5 +1,9 @@
 import type { SelectionLocation } from '../../workbench/composer/DocumentSelectionContext'
 import { fromMarkdown } from 'mdast-util-from-markdown'
+import {
+  gfmNoAutolinkFromMarkdown,
+  gfmNoAutolinkMicromarkExtension
+} from '../../../../../shared/markdown/remarkGfmNoAutolink'
 type MarkdownNode = {
   type: string
   value?: string
@@ -32,7 +36,8 @@ function markdownSourceRange(
   source: string,
   selected: string,
   before: string,
-  after: string
+  after: string,
+  location: SelectionLocation
 ): { start: number; end: number } {
   let visible = ''
   const positions: { start: number; end: number }[] = []
@@ -64,7 +69,12 @@ function markdownSourceRange(
       }
     }
   }
-  walk(fromMarkdown(source))
+  walk(
+    fromMarkdown(source, {
+      extensions: [gfmNoAutolinkMicromarkExtension],
+      mdastExtensions: [gfmNoAutolinkFromMarkdown]
+    })
+  )
   // Browser rendering can collapse whitespace, but source positions address the normalized editor source.
   const compact = (text: string) => text.replace(/\s/g, '')
   const search = compact(selected)
@@ -77,6 +87,8 @@ function markdownSourceRange(
       normalized += projected[i]
     }
   const matches: { start: number; end: number; score: number }[] = []
+  const aligned = normalized === compact(location.previewText)
+  const selectedOffset = compact(location.previewText.slice(0, location.start)).length
   for (let from = 0; search && from <= normalized.length; ) {
     const index = normalized.indexOf(search, from)
     if (index < 0) break
@@ -86,13 +98,15 @@ function markdownSourceRange(
       start: positions[indices[index]].start,
       end: positions[indices[index + search.length - 1]].end,
       score:
+        Number(aligned && index === selectedOffset) * 4 +
         Number(!!preceding && normalized.slice(0, index).endsWith(preceding)) +
         Number(!!following && normalized.slice(index + search.length).startsWith(following))
     })
     from = index + 1
   }
   matches.sort((a, b) => b.score - a.score)
-  if (!matches.length || (matches.length > 1 && matches[0].score === matches[1].score))
+  if (!matches.length) throw new Error('无法将当前选区对应到 Markdown 原文。')
+  if (matches.length > 1 && matches[0].score === matches[1].score)
     throw new Error('原文位置不唯一，无法引用该选区。')
   return matches[0]
 }
@@ -105,14 +119,28 @@ export function markdownAdapter(
   return createTextAdapter(container, filePath, {
     root: () => container.querySelector<HTMLElement>('.vditor-ir') || container,
     accepts: (node) => node.anchor?.kind === 'text',
-    decorate: (node) => {
+    ignore: (element) => {
+      // IR keeps syntax markers and an alternate code rendering in its DOM even when collapsed.
+      const expanded = !!element.closest('.vditor-ir__node--expand')
+      if (element.matches('.vditor-ir__marker--pre')) return !expanded
+      if (element.matches('.vditor-ir__marker')) return true
+      if (element.matches('.vditor-ir__preview')) return expanded
+      return false
+    },
+    decorate: (node, location) => {
       const source = getSource()
       // Exact source match is also useful for visible IR markers and fenced code.
       const index = source.indexOf(node.selectedText)
       const mapped =
         index >= 0 && source.indexOf(node.selectedText, index + 1) < 0
           ? { start: index, end: index + node.selectedText.length }
-          : markdownSourceRange(source, node.selectedText, node.contextBefore, node.contextAfter)
+          : markdownSourceRange(
+              source,
+              node.selectedText,
+              node.contextBefore,
+              node.contextAfter,
+              location
+            )
       node.anchor = sourceAnchor(source, mapped.start, mapped.end)
     }
   })

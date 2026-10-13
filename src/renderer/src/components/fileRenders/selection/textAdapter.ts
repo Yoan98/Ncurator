@@ -16,13 +16,15 @@ export function createTextAdapter(
     decorate?: (node: DocumentSelectionNode, location: SelectionLocation, range: Range) => void
     accepts?: (node: DocumentSelectionNode) => boolean
     root?: () => HTMLElement | SVGElement
+    ignore?: (element: Element) => boolean
     navigate?: SelectionAdapter['navigate']
   } = {}
 ): SelectionAdapter {
   const root = () => options.root?.() || container
+  const read = () => readPreviewText(root(), options.ignore)
   const locate = (node: DocumentSelectionNode, saved?: SelectionLocation) => {
     if (options.accepts && !options.accepts(node)) return null
-    const preview = readPreviewText(root())
+    const preview = read()
     return locateSelection(preview, node, saved)
   }
   return {
@@ -32,7 +34,7 @@ export function createTextAdapter(
       const range = selection.getRangeAt(0)
       const element = root()
       if (!element.contains(range.commonAncestorContainer)) return null
-      const preview = readPreviewText(element)
+      const preview = read()
       const location = captureSelection(element, preview, range)
       if (!location) throw new Error('当前选区没有可读取的文字。')
       const node = newSelection(filePath, preview.text.slice(location.start, location.end))
@@ -44,7 +46,7 @@ export function createTextAdapter(
     locate: (node, saved): SelectionGeometry | null => {
       const location = locate(node, saved)
       if (!location) return null
-      const preview = readPreviewText(root())
+      const preview = read()
       const range = rangeForLocation(preview, location)
       if (!range) return null
       const textRanges = textRangesForLocation(preview, location)

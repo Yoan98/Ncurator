@@ -27,6 +27,7 @@ export function pdfAdapter(container: HTMLElement, filePath: string): SelectionA
   let start: { x: number; y: number } | null = null
   return {
     ...text,
+    highlightOpacity: 0.35,
     capture: (event) => {
       const candidate = text.capture(event)
       if (candidate) return candidate

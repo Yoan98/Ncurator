@@ -8,6 +8,7 @@ import { describe, it } from 'vitest'
 import type { Page } from 'playwright'
 import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { copyDocumentSelection } from '../../../../harness/e2e/documentSelection'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -205,7 +206,7 @@ describe('workbench conversation e2e', () => {
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         windowMode: 'visible',
-        execution: 'live',
+        execution: 'exclusive',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
@@ -385,6 +386,15 @@ describe('workbench conversation e2e', () => {
             .waitFor({ state: 'visible', timeout: 30_000 })
           await selectText(page, 0, 0, 1, 8, { editor: false })
           const actionUi = await observeSelectionUi(page)
+          const copiedDocx = await copyDocumentSelection(runtime)
+          await runtime.assertThat(
+            !!actionUi.quote && copiedDocx.replace(/\s/g, '') === actionUi.quote.replace(/\s/g, ''),
+            {
+              name: 'docx-reference-native-copy',
+              message: 'DOCX 跨段落选区显示 AI 引用入口后，系统剪贴板仍收到当前原文。',
+              data: { expected: actionUi.quote, copied: copiedDocx }
+            }
+          )
           await runtime.captureScreenshot({
             name: 'selection-action',
             message: '紫色选区与 AI 引用入口'

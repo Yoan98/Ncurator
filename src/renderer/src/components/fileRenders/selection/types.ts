@@ -17,6 +17,8 @@ export type SelectionCandidate = {
 export type SelectionPopup = SelectionCandidate & { mode: 'action' | 'editor' }
 export type SelectionTarget = SelectionCandidate & { geometry: SelectionGeometry }
 export type SelectionAdapter = {
+  /** Canvas text beneath a transparent text layer needs translucent highlight backgrounds. */
+  highlightOpacity?: number
   /** A preview gesture may consume pointer input before it reaches the shared reference UI. */
   acceptPointer?: (event: PointerEvent) => boolean
   hitTest?: (node: DocumentSelectionNode, event: PointerEvent) => boolean
