@@ -27,7 +27,7 @@ export const ASK_USER_QUESTION_TOOL_SPEC: HumanToolSpec<
   inputSchema: ASK_USER_QUESTION_SCHEMA,
   promptSpec: {
     name: 'ask_user_question',
-    description: '如果碰到疑惑或不确定的情况，可以向用户提出问题，获取用户的选择或意见。'
+    description: '碰到疑惑,不确定,需要用户协助等情况，可以向用户提出问题，获取用户的选择或意见。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
