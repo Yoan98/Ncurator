@@ -273,7 +273,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e / live`
 - What：通用设置按伙伴、目录和截止日期清理真实缓存，保留聊天及其他伙伴。
 - Why：永久删除必须核对候选、确认取消、隔离范围和实际磁盘结果。
-- How：通过 Workbench UI 创建两个伙伴、配置真实模型与完全放行权限；第一轮真实 AI 使用文件工具修改临时工作目录的正式文件并生成 runtime/assets 中的运行资源，第二个伙伴用真实 AI 生成独立运行资源。通过设置 UI 打开清理弹框，核对今天/明天截止日期、目录勾选、汇总和空选择禁用；点击文件夹入口观察真实打开 IPC；取消后检查文件仍在，再确认清理第一个伙伴的 assets 和 file-changes。只读 IPC 和磁盘读取补充消息、源文件与隔离证据，不注入业务状态、不改文件日期。
+- How：通过 Workbench UI 创建两个伙伴、配置真实模型与完全放行权限；第一轮真实 AI 使用文件工具修改临时工作目录的正式文件并生成 runtime/assets 中的运行资源，第二个伙伴用真实 AI 生成独立运行资源。通过设置 UI 打开清理弹框，核对今天/明天截止日期、目录勾选、汇总和空选择禁用；点击文件夹入口观察真实打开 IPC；操作真实原生确认子窗口，取消后检查文件仍在，再确认清理第一个伙伴的 assets 和 file-changes。只读 IPC 和磁盘读取补充消息、源文件与隔离证据，不注入业务状态、不改文件日期。
 - Oracle：入口/文案对齐 `SET-GENERAL-004-AC1`；四类目录和无逐文件列表对齐 `SET-GENERAL-004-AC2`；日期筛选和真实删除对齐 `SET-GENERAL-004-AC3`；汇总/空选择对齐 `SET-GENERAL-004-AC4`；打开目录调用与全部伙伴禁用对齐 `SET-GENERAL-004-AC5`（Finder/Explorer 展示发布前人工检查）；取消/确认/刷新对齐 `SET-GENERAL-004-AC6`；伙伴/聊天/其他伙伴和外部文件保留对齐 `SET-GENERAL-004-AC7`。Unit `partner-cache-service` 补充 `SET-GENERAL-004-AC3/AC8/AC9/AC10` 的严格时间边界、完整历史清理、保留备份回退、运行互斥、草稿保护、符号链接和失败恢复；缺失目录提示由 Unit 和人工检查覆盖 `SET-GENERAL-004-AC5`。
 
 #### `settings-titlebar-drag-region`

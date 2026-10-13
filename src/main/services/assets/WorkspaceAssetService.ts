@@ -8,7 +8,6 @@ const PARTNER_RUNTIME_DIR = 'runtime'
 const PARTNER_ASSETS_DIR = 'assets'
 const PARTNER_SCRIPTS_DIR = 'scripts'
 const PARTNER_TOOL_RESULT_DIR = 'toolresult'
-const PARTNER_OBJECTS_DIR = 'objects'
 
 const normalizePartnerId = (partnerId: string): string => {
   const value = String(partnerId || '').trim()
@@ -32,9 +31,6 @@ export const getPartnerScriptsRootDir = (partnerId: string): string =>
 
 export const getPartnerToolResultDir = (partnerId: string): string =>
   path.join(getPartnerRuntimeDir(partnerId), PARTNER_TOOL_RESULT_DIR)
-
-export const getPartnerObjectsDir = (partnerId: string): string =>
-  path.join(getPartnerRootDir(partnerId), PARTNER_OBJECTS_DIR)
 
 export const getPartnerAssetBucketDir = (partnerId: string, assetBucketId: string): string => {
   const normalizedBucketId = String(assetBucketId || '').trim()

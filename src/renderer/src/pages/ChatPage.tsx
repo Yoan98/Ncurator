@@ -1,6 +1,6 @@
 import { flushReferencedTextFiles } from '../components/fileRenders/pendingTextSaves'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { App as AntdApp, Checkbox, Input, Modal, Tooltip } from 'antd'
+import { App as AntdApp, Input, Modal, Tooltip } from 'antd'
 import {
   HiOutlineClipboardDocument,
   HiOutlineClock,
@@ -891,6 +891,10 @@ const ChatPage: React.FC = () => {
   const [hasMoreMessagesBefore, setHasMoreMessagesBefore] = useState(false)
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
   const [deleteConfirmPartner, setDeleteConfirmPartner] = useState<Partner | null>(null)
+  const [clearConfirmPartner, setClearConfirmPartner] = useState<{
+    id: string
+    name: string
+  } | null>(null)
   const [deletingPartnerIds, setDeletingPartnerIds] = useState<Set<string>>(() => new Set())
   const [createPartnerOpen, setCreatePartnerOpen] = useState(false)
   const [editingPartnerId, setEditingPartnerId] = useState<string | null>(null)
@@ -3985,37 +3989,18 @@ const ChatPage: React.FC = () => {
 
   const handleClearPartnerContext = useCallback((): void => {
     if (!currentPartnerId) return
-    const partnerName = currentPartner?.name || '伙伴'
-    let deleteFileChanges = true
-    modal.confirm({
-      title: '清空消息记录？',
-      content: (
-        <div>
-          <p>将删除「{partnerName}」的全部对话消息及相关缓存，此操作无法恢复。伙伴本身会保留。</p>
-          <Checkbox
-            defaultChecked
-            onChange={(event) => {
-              deleteFileChanges = event.target.checked
-            }}
-          >
-            同时删除所有文件修改历史（删除后无法回退）
-          </Checkbox>
-        </div>
-      ),
-      okText: '清空',
-      okButtonProps: { danger: true },
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          await flushCurrentUiState()
-          const response = await window.api.partnerClearContext({
-            partnerId: currentPartnerId,
-            deleteFileChanges
-          })
-          if (!response.success) {
-            emitErrorMessage(response.error || '清空消息记录失败')
-            return
-          }
+    setClearConfirmPartner({ id: currentPartnerId, name: currentPartner?.name || '伙伴' })
+  }, [currentPartner?.name, currentPartnerId])
+
+  const confirmClearPartnerContext = useCallback(
+    async (deleteFileChanges: boolean): Promise<string | void> => {
+      if (!clearConfirmPartner) return
+      const partnerId = clearConfirmPartner.id
+      try {
+        await flushCurrentUiState()
+        const response = await window.api.partnerClearContext({ partnerId, deleteFileChanges })
+        if (!response.success) return response.error || '清空消息记录失败'
+        if (currentPartnerIdRef.current === partnerId) {
           setCurrentMessages([])
           setHasMoreMessagesBefore(false)
           setActiveTimelineDayStart(null)
@@ -4024,30 +4009,22 @@ const ChatPage: React.FC = () => {
             setPartnerFileChangeRecords([])
             setFileChangeRecords([])
           }
-          if (currentPartnerId) {
-            delete liveAssistantTurnsByPartnerRef.current[currentPartnerId]
-          }
-          setContextUsage((previous) =>
-            previous && previous.partnerId === currentPartnerId
-              ? { ...previous, hasEffectiveImageContext: false, usedContextTokens: 0, ratio: 0 }
-              : previous
-          )
-          void loadPartners()
-          void refreshContextUsage(currentPartnerId)
-        } catch (error) {
-          emitErrorMessage(error instanceof Error ? error.message : '清空消息记录失败')
         }
+        delete liveAssistantTurnsByPartnerRef.current[partnerId]
+        setContextUsage((previous) =>
+          previous && previous.partnerId === partnerId
+            ? { ...previous, hasEffectiveImageContext: false, usedContextTokens: 0, ratio: 0 }
+            : previous
+        )
+        setClearConfirmPartner(null)
+        void loadPartners()
+        void refreshContextUsage(partnerId)
+      } catch (error) {
+        return error instanceof Error ? error.message : '清空消息记录失败'
       }
-    })
-  }, [
-    currentPartner?.name,
-    currentPartnerId,
-    emitErrorMessage,
-    loadPartners,
-    modal,
-    refreshContextUsage,
-    flushCurrentUiState
-  ])
+    },
+    [clearConfirmPartner, loadPartners, refreshContextUsage, flushCurrentUiState]
+  )
 
   const handleScheduledTaskBusyCancelAction = useCallback((): void => {
     if (!busyCancelTask) return
@@ -5348,6 +5325,20 @@ const ChatPage: React.FC = () => {
           <p>{applyRevertConfirm?.content}</p>
         </Modal>
         <ImageLightbox image={previewImage} onClose={() => setPreviewImage(null)} />
+        <NativeConfirmDialog
+          open={Boolean(clearConfirmPartner)}
+          title="清空消息记录？"
+          message={`将清空「${clearConfirmPartner?.name || '伙伴'}」的全部对话消息及临时缓存。`}
+          checkbox={{
+            label: '同时删除文件修改历史',
+            help: '保存每次 AI 任务修改前的源文件备份和差异预览。删除后，无法回退到对应的修改前版本。'
+          }}
+          confirmText="清空"
+          danger
+          onConfirm={confirmClearPartnerContext}
+          onCancel={() => setClearConfirmPartner(null)}
+          onError={emitErrorMessage}
+        />
         <NativeConfirmDialog
           open={Boolean(deleteConfirmPartner)}
           title="删除这个伙伴？"

@@ -38,6 +38,7 @@ import {
 } from './settings'
 import { selectDirectoryInWindowsDialog } from './windowsNativeDialog'
 import type { E2ETestRuntime } from './run-e2e-case'
+import { openNativeConfirmation, dismissNativeConfirmation } from './nativeConfirm'
 import {
   pasteTextThroughElectronClipboard,
   queueE2ENativeDialogSelection,
@@ -231,34 +232,21 @@ export const openWorkbenchPartnerDeleteConfirmation = async (
     `${workbenchSelectors.partnerItemPrefix}-${partnerId}`
   )
   await item.hover()
-  const popupPromise = runtime.electronApp.waitForEvent('window', { timeout: 10_000 })
-  await getWorkbenchLocator(
-    runtime.page,
-    `${workbenchSelectors.partnerDeleteButtonPrefix}-${partnerId}`
-  ).click()
-  const popup = await popupPromise
-  await popup.getByRole('dialog', { name: '删除这个伙伴？' }).waitFor({ state: 'visible' })
-  await popup.waitForFunction(() => document.visibilityState === 'visible')
-  return popup
+  return openNativeConfirmation(
+    runtime,
+    getWorkbenchLocator(
+      runtime.page,
+      `${workbenchSelectors.partnerDeleteButtonPrefix}-${partnerId}`
+    ),
+    '删除这个伙伴？'
+  )
 }
 
 export const dismissWorkbenchPartnerDeleteConfirmation = async (
   popup: Page,
   action: 'confirm' | 'cancel' | 'close' | 'escape' | 'mask'
 ): Promise<void> => {
-  const closed = popup.waitForEvent('close', { timeout: 10_000 })
-  try {
-    if (action === 'escape') await popup.keyboard.press('Escape')
-    else if (action === 'mask') await popup.locator('#mask').click({ position: { x: 8, y: 8 } })
-    else {
-      const name = action === 'confirm' ? '删除' : action === 'close' ? '关闭' : '取消'
-      await popup.getByRole('button', { name, exact: true }).click()
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (!/Target page, context or browser has been closed/u.test(message)) throw error
-  }
-  await closed
+  await dismissNativeConfirmation(popup, action, '删除')
 }
 
 export const openWorkbenchWorkspaceFile = async (

@@ -4,7 +4,17 @@ import ExcelJS from 'exceljs'
 import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { runE2ECase, type E2ETestRuntime } from '../../../../harness/e2e/run-e2e-case'
-import { copyExcelCell, verifyExcelCellReadOnly } from '../../../../harness/e2e/excel'
+import {
+  copyExcelCell,
+  getExcelGridCanvas,
+  verifyExcelCellReadOnly
+} from '../../../../harness/e2e/excel'
+import {
+  DEFAULT_WORKSHEET_COLUMN_TITLE_HEIGHT,
+  DEFAULT_WORKSHEET_COLUMN_WIDTH,
+  DEFAULT_WORKSHEET_ROW_HEIGHT,
+  DEFAULT_WORKSHEET_ROW_TITLE_WIDTH
+} from '@univerjs/core'
 import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -40,6 +50,7 @@ const setupPreviewWorkspace = async (
   data.getCell('C2').value = { formula: 'SUM(B1:B2)', result: 999 }
   data.getCell('C3').value = { formula: 'B1-10', result: 99 }
   data.getCell('C4').value = { formula: 'Notes!B1+B1' }
+  for (let row = 5; row <= 80; row++) data.getCell(`C${row}`).value = `引用行 ${row}`
   const notes = workbook.addWorksheet('Notes')
   notes.getCell('A1').value = 'excel secondary sheet'
   notes.getCell('B1').value = 5
@@ -148,6 +159,100 @@ const verifyExcelPreviewReadOnly = async (runtime: E2ETestRuntime): Promise<bool
   )
   const canvasStillVisible = (await viewer.locator('canvas').count()) > 0
   return cellContentPreserved && sheetSwitchWorks && previewStillReady && canvasStillVisible
+}
+
+const verifyExcelSelectionReference = async (runtime: E2ETestRuntime): Promise<void> => {
+  const { page } = runtime
+  const canvas = getExcelGridCanvas(page)
+  const box = await canvas.boundingBox()
+  if (!box) throw new Error('Excel 表格主画布不可见')
+  const x = box.x + DEFAULT_WORKSHEET_ROW_TITLE_WIDTH + 2.5 * DEFAULT_WORKSHEET_COLUMN_WIDTH
+  const cellY = (row: number) =>
+    box.y + DEFAULT_WORKSHEET_COLUMN_TITLE_HEIGHT + (row - 0.5) * DEFAULT_WORKSHEET_ROW_HEIGHT
+  await page.mouse.move(x, cellY(17))
+  await page.mouse.down()
+  await page.mouse.move(x, cellY(20), { steps: 12 })
+  await page.mouse.up()
+  const popup = page.getByTestId('excel-selection-popup')
+  await page.getByTestId('excel-selection-ai-reference').waitFor({ state: 'visible' })
+  const popupBox = await popup.boundingBox()
+  await runtime.assertThat(
+    !!popupBox &&
+      popupBox.x >= box.x &&
+      popupBox.x + popupBox.width <= box.x + box.width &&
+      popupBox.y >= box.y &&
+      popupBox.y + popupBox.height <= box.y + box.height,
+    {
+      name: 'excel-selection-visible-action',
+      message: '真实鼠标拖选 C17:C20 后，AI 引用入口在表格预览内可见。',
+      data: { canvas: box, popup: popupBox }
+    }
+  )
+  await runtime.captureScreenshot({
+    name: 'excel-selection-action',
+    message: '多行选区 AI 引用入口'
+  })
+  await page.getByTestId('excel-selection-ai-reference').click()
+  await page.getByTestId('excel-selection-thought').fill('解释这四行，不修改文件。')
+  await page.getByTestId('excel-selection-save').click()
+  await popup.waitFor({ state: 'detached' })
+  const tokens = getWorkbenchLocator(page, workbenchSelectors.input).locator(
+    '[data-role="document-selection-token"]'
+  )
+  await tokens.last().waitFor({ state: 'visible' })
+  const title = (await tokens.last().getAttribute('title')) || ''
+  await runtime.assertThat(
+    (await tokens.count()) === 1 &&
+      title.includes('位置：Data!C17:C20') &&
+      [17, 18, 19, 20].every((row) => title.includes(`引用行 ${row}`)),
+    {
+      name: 'excel-selection-composer-reference',
+      message: '确认想法后，Composer 保留准确范围和四行内容快照。',
+      data: { title }
+    }
+  )
+  await page.mouse.move(x, cellY(10))
+  await page.mouse.wheel(0, 900)
+  await page.waitForTimeout(200)
+  await tokens.last().click()
+  // Returning to a reference scrolls its starting row and column to the viewport origin.
+  await canvas.click({
+    position: {
+      x: DEFAULT_WORKSHEET_ROW_TITLE_WIDTH + DEFAULT_WORKSHEET_COLUMN_WIDTH / 2,
+      y: DEFAULT_WORKSHEET_COLUMN_TITLE_HEIGHT + DEFAULT_WORKSHEET_ROW_HEIGHT / 2
+    }
+  })
+  await page.getByTestId('excel-selection-thought').waitFor({ state: 'visible' })
+  await runtime.captureScreenshot({
+    name: 'excel-selection-return',
+    message: '滚动后从 Composer 回跳编辑引用'
+  })
+  await popup.getByRole('button', { name: '删除引用' }).click()
+  await tokens.waitFor({ state: 'detached' })
+  const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
+  await viewer.getByText('Notes', { exact: true }).last().click()
+  await copyExcelCell(runtime, 'B1')
+  await page.getByTestId('excel-selection-ai-reference').waitFor({ state: 'visible' })
+  await page.getByTestId('excel-selection-ai-reference').click()
+  await page.getByTestId('excel-selection-thought').fill('解释 Notes 单元格。')
+  await page.getByTestId('excel-selection-save').click()
+  await tokens.last().waitFor({ state: 'visible' })
+  const notesTitle = (await tokens.last().getAttribute('title')) || ''
+  await runtime.assertThat(notesTitle.includes('位置：Notes!B1'), {
+    name: 'excel-selection-sheet-switch',
+    message: '切 Sheet 后单格引用入口仍可用，引用记录属于当前工作表。',
+    data: { title: notesTitle }
+  })
+  await tokens.last().click()
+  await canvas.click({
+    position: {
+      x: DEFAULT_WORKSHEET_ROW_TITLE_WIDTH + DEFAULT_WORKSHEET_COLUMN_WIDTH / 2,
+      y: DEFAULT_WORKSHEET_COLUMN_TITLE_HEIGHT + DEFAULT_WORKSHEET_ROW_HEIGHT / 2
+    }
+  })
+  await popup.getByRole('button', { name: '删除引用' }).click()
+  await tokens.waitFor({ state: 'detached' })
+  await viewer.getByText('Data', { exact: true }).last().click()
 }
 
 const verifyDocxPreviewStaysMountedWhileTyping = async (page: Page): Promise<boolean> => {
@@ -301,6 +406,7 @@ describe('workbench result e2e', () => {
               for (const address of ['C1', 'C2', 'C3', 'C4'])
                 calculatedValues.push(await copyExcelCell(runtime, address))
               excelPreviewReadOnly = await verifyExcelPreviewReadOnly(runtime)
+              await verifyExcelSelectionReference(runtime)
               xlsxOpenWithHasWps = await readOpenWithHasWps(page)
               xlsxWpsHintVisible = await readWpsHintVisible(page)
             }

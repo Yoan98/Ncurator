@@ -85,10 +85,11 @@ export interface ConfirmDialogRequest {
   cancelText?: string
   danger?: boolean
   error?: string
+  checkbox?: { label: string; help?: string }
 }
 
 export type ConfirmDialogResponse =
-  | { success: true; action: 'confirm' | 'cancel' }
+  | { success: true; action: 'confirm' | 'cancel'; checkboxChecked?: boolean }
   | { success: false; error: string }
 
 export interface WebIngestPayload {

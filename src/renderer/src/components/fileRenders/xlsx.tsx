@@ -97,12 +97,16 @@ const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<ExcelPr
 const waitForRenderedCanvas = async (
   container: HTMLDivElement,
   isCancelled: () => boolean
-): Promise<boolean> => {
+): Promise<HTMLCanvasElement | null> => {
   for (let attempt = 0; attempt < 300 && !isCancelled(); attempt += 1) {
-    if (container.querySelector('canvas')) return true
+    // Univer also mounts zero-sized document-editor canvases before the sheet canvas.
+    const canvas = container.querySelector<HTMLCanvasElement>(
+      'canvas[id^="univer-sheet-main-canvas_"]'
+    )
+    if (canvas && canvas.getBoundingClientRect().width > 0) return canvas
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   }
-  return false
+  return null
 }
 
 const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
@@ -118,7 +122,6 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   useEffect(() => {
     if (!document || !containerRef.current || !selectionContainerRef.current) return
     const container = containerRef.current
-    const selectionContainer = selectionContainerRef.current
     let cancelled = false
     let dispose: (() => void) | undefined
     setReady(false)
@@ -185,8 +188,8 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
           if (!document.metadata?.excelReview && hasExcelFormulas(preview.data))
             await univerAPI.getFormula().onCalculationResultApplied(30_000)
           if (cancelled) return
-          const canvasReady = await waitForRenderedCanvas(container, () => cancelled)
-          if (!cancelled && !canvasReady) throw new Error('Excel 预览画布加载超时')
+          const canvas = await waitForRenderedCanvas(container, () => cancelled)
+          if (!cancelled && !canvas) throw new Error('Excel 预览画布加载超时')
           if (!cancelled) {
             // Apply after UI permission initialization so its defaults cannot overwrite read-only.
             await workbook
@@ -197,8 +200,8 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             setChangedSheetIds(preview.changedSheetIds)
             setChangedSheetNames(preview.changedSheetNames)
             setReady(true)
-            if (document.metadata?.allowDocumentSelection && document.filePath)
-              setSelectionAdapter(excelAdapter(univerAPI, document.filePath, selectionContainer))
+            if (document.metadata?.allowDocumentSelection && document.filePath && canvas)
+              setSelectionAdapter(excelAdapter(univerAPI, document.filePath, canvas))
           }
         }
       )

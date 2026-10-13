@@ -4,6 +4,10 @@ import dayjs from 'dayjs'
 import { describe, it } from 'vitest'
 import { settingsSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase, type E2ETestRuntime } from '../../../harness/e2e/run-e2e-case'
+import {
+  openNativeConfirmation,
+  dismissNativeConfirmation
+} from '../../../harness/e2e/nativeConfirm'
 import { navigateToSettingsSection } from '../../../harness/e2e/settings'
 import {
   createPartnerThroughWorkbenchUi,
@@ -133,17 +137,19 @@ describe('settings partner cache e2e', () => {
           const description = await dialog.innerText()
           await page.getByTestId(`${settingsSelectors.cacheOpenPrefix}-assets`).click()
           const signals = await runtime.collectSignals()
-          await clean.click()
-          await page.locator('.ant-modal-confirm-btns .ant-btn-default').click()
-          await page.locator('.ant-modal-confirm').waitFor({ state: 'hidden' })
+          const cancelConfirmation = await openNativeConfirmation(
+            runtime,
+            clean,
+            '清理这些缓存数据？'
+          )
+          await dismissNativeConfirmation(cancelConfirmation, 'cancel', '清理')
           const retainedAfterCancel = await exists(first.file)
           await runtime.captureScreenshot({
             name: 'partner-cache-cleanup',
             message: '伙伴缓存管理展示目录入口、日期汇总和清理范围。'
           })
-          await clean.click()
-          await page.locator('.ant-modal-confirm-btns .ant-btn-dangerous').click()
-          await page.locator('.ant-modal-confirm').waitFor({ state: 'hidden' })
+          const confirmation = await openNativeConfirmation(runtime, clean, '清理这些缓存数据？')
+          await dismissNativeConfirmation(confirmation, 'confirm', '清理')
           await page.waitForFunction(
             (selector) =>
               Boolean(

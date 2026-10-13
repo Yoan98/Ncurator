@@ -1,4 +1,5 @@
 import type { E2ETestRuntime } from './run-e2e-case'
+import type { Page } from 'playwright'
 import { getWorkbenchLocator, workbenchSelectors } from './workbench'
 import {
   DEFAULT_WORKSHEET_COLUMN_TITLE_HEIGHT,
@@ -6,6 +7,11 @@ import {
   DEFAULT_WORKSHEET_ROW_HEIGHT,
   DEFAULT_WORKSHEET_ROW_TITLE_WIDTH
 } from '@univerjs/core'
+
+export const getExcelGridCanvas = (page: Page) =>
+  getWorkbenchLocator(page, workbenchSelectors.excelViewer).locator(
+    'canvas[id^="univer-sheet-main-canvas_"]'
+  )
 
 /** Copy a visible cell from fixtures with default row/column sizes through the real grid. */
 export const copyExcelCell = async (runtime: E2ETestRuntime, address: string): Promise<string> => {
@@ -16,8 +22,11 @@ export const copyExcelCell = async (runtime: E2ETestRuntime, address: string): P
   const { page } = runtime
   await page.bringToFront()
   for (let attempt = 0; attempt < 20; attempt++) {
+    // Dismiss the reference action before it can cover the next cell being copied.
+    if (await page.getByTestId('excel-selection-popup').count())
+      await getWorkbenchLocator(page, workbenchSelectors.input).click({ position: { x: 3, y: 3 } })
     // A mounted canvas can precede its first grid paint; retry the actual UI action too.
-    await getWorkbenchLocator(page, workbenchSelectors.excelViewer).click({
+    await getExcelGridCanvas(page).click({
       position: {
         x: DEFAULT_WORKSHEET_ROW_TITLE_WIDTH + (column - 0.5) * DEFAULT_WORKSHEET_COLUMN_WIDTH,
         y: DEFAULT_WORKSHEET_COLUMN_TITLE_HEIGHT + (row - 0.5) * DEFAULT_WORKSHEET_ROW_HEIGHT

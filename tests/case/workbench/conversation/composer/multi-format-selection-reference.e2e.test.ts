@@ -23,6 +23,7 @@ import {
 } from 'pptx-kit'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { getExcelGridCanvas } from '../../../../harness/e2e/excel'
 import {
   setupWorkbenchWithTempWorkspace,
   openWorkbenchWorkspaceFile,
@@ -231,7 +232,6 @@ describe('workbench conversation e2e', () => {
           await selectVisibleText(page, '[data-pdf-page="1"] .textLayer')
           await confirm(page, 'pdf', '只解释 PDF 引文，不修改文件。')
           await openWorkbenchWorkspaceFile(runtime, names[3])
-          const excel = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
           await page.waitForFunction(
             (testId) =>
               document
@@ -239,10 +239,7 @@ describe('workbench conversation e2e', () => {
                 ?.getAttribute('data-excel-ready') === 'true',
             workbenchSelectors.excelViewer
           )
-          await excel
-            .locator('canvas')
-            .first()
-            .click({ position: { x: 110, y: 90 } })
+          await getExcelGridCanvas(page).click({ position: { x: 110, y: 90 } })
           await page.keyboard.press('Shift+ArrowRight')
           await confirm(page, 'excel', '只解释这些单元格的值或公式，不修改文件。')
           const excelTitle = (await tokens.last().getAttribute('title')) || ''

@@ -19,7 +19,7 @@ const address = (row: number, column: number) => {
 export function excelAdapter(
   api: FUniver,
   filePath: string,
-  container: HTMLElement
+  canvas: HTMLCanvasElement
 ): SelectionAdapter {
   const workbook = () => api.getActiveWorkbook()
   const sheetFor = (a: ExcelAnchor) => workbook()?.getSheetBySheetId(a.sheetId)
@@ -50,12 +50,7 @@ export function excelAdapter(
       : null
   return {
     capture: (event) => {
-      if (
-        event.target instanceof Element &&
-        !event.target.closest('canvas') &&
-        event instanceof PointerEvent
-      )
-        return null
+      if (event instanceof PointerEvent && event.target !== canvas) return null
       const sheet = workbook()?.getActiveSheet()
       const ranges = sheet?.getSelection()?.getActiveRangeList() || []
       if (!sheet || !ranges.length) return null
@@ -113,8 +108,7 @@ export function excelAdapter(
       const sheet = sheetFor(a)!
       return {
         rects: () => {
-          const canvas = container.querySelector('canvas')?.getBoundingClientRect()
-          if (!canvas) return []
+          const canvasRect = canvas.getBoundingClientRect()
           const zoom = sheet.getZoom()
           const scroll = sheet.getScrollState()
           const origin = sheet.getRange(0, 0).getCellRect()
@@ -161,20 +155,24 @@ export function excelAdapter(
               const frozenWidth = freeze.xSplit > 0 ? boundary.left - frozenOrigin.left : 0
               const frozenHeight = freeze.ySplit > 0 ? boundary.top - frozenOrigin.top : 0
               const left = Math.max(
-                canvas.left + (first.left - dx) * zoom,
-                canvas.left + (origin.left + (columns.frozen ? 0 : frozenWidth)) * zoom
+                canvasRect.left + (first.left - dx) * zoom,
+                canvasRect.left + (origin.left + (columns.frozen ? 0 : frozenWidth)) * zoom
               )
               const top = Math.max(
-                canvas.top + (first.top - dy) * zoom,
-                canvas.top + (origin.top + (rows.frozen ? 0 : frozenHeight)) * zoom
+                canvasRect.top + (first.top - dy) * zoom,
+                canvasRect.top + (origin.top + (rows.frozen ? 0 : frozenHeight)) * zoom
               )
               const right = Math.min(
-                canvas.left + (last.right - dx) * zoom,
-                columns.frozen ? canvas.left + (origin.left + frozenWidth) * zoom : canvas.right
+                canvasRect.left + (last.right - dx) * zoom,
+                columns.frozen
+                  ? canvasRect.left + (origin.left + frozenWidth) * zoom
+                  : canvasRect.right
               )
               const bottom = Math.min(
-                canvas.top + (last.bottom - dy) * zoom,
-                rows.frozen ? canvas.top + (origin.top + frozenHeight) * zoom : canvas.bottom
+                canvasRect.top + (last.bottom - dy) * zoom,
+                rows.frozen
+                  ? canvasRect.top + (origin.top + frozenHeight) * zoom
+                  : canvasRect.bottom
               )
               if (right > left && bottom > top)
                 rects.push(new DOMRect(left, top, right - left, bottom - top))

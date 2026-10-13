@@ -4,11 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import type { AiFileChangeCapability, AiFileChangeRecord } from '../../../../shared/types'
 import { getPartnerRuntimeDir } from '../../assets/WorkspaceAssetService'
 import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../wps/officeFileWriteNotify'
-import {
-  consolidatePartnerSnapshots,
-  getFileChangeDirectory,
-  saveFileChangeSnapshot
-} from './FileChangeSnapshots'
+import { getFileChangeDirectory, saveFileChangeSnapshot } from './FileChangeSnapshots'
 import type { AiFileChangeRecordStore } from './AiFileChangeService'
 
 export type ExcelSheetAxes = { sheet: string; rows: (number | null)[]; columns: (number | null)[] }
@@ -148,7 +144,7 @@ export class FileChangeSessions {
         source: input.capability === 'text_file' ? 'text_tool' : `${input.capability}_tool`,
         beforePath: before ? input.sourcePath : undefined,
         afterPath: input.sourcePath,
-        beforeSnapshotPath: baseline?.objectPath,
+        beforeSnapshotPath: baseline?.snapshotPath,
         beforeObjectHash: baseline?.hash,
         beforeChecksum: baseline?.hash,
         changeCount: 0,
@@ -199,7 +195,7 @@ export class FileChangeSessions {
         afterChecksum: hash(input.buffer),
         updatedAt: now,
         error: undefined,
-        afterSnapshotPath: imageSnapshot?.objectPath,
+        afterSnapshotPath: imageSnapshot?.snapshotPath,
         afterObjectHash: imageSnapshot?.hash,
         changeCount: input.capability === 'image' ? 1 : 0
       }
@@ -276,7 +272,6 @@ export class FileChangeSessions {
   }
 
   public async recoverPartner(partnerId: string): Promise<AiFileChangeRecord[]> {
-    await consolidatePartnerSnapshots(partnerId, this.store)
     const root = path.join(getPartnerRuntimeDir(partnerId), 'file-changes')
     const runs = await readDirectories(root)
     const records: AiFileChangeRecord[] = []

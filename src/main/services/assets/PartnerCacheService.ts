@@ -3,15 +3,8 @@ import path from 'node:path'
 import type { PartnerStore } from '../storage/domains/PartnerStore'
 import type { WorkbenchUiStore } from '../storage/domains/WorkbenchUiStore'
 import type { AiFileChangeStore } from '../storage/domains/AiFileChangeStore'
-import {
-  consolidatePartnerSnapshots,
-  getFileChangeDirectory
-} from '../ai/fileChanges/FileChangeSnapshots'
-import {
-  getPartnerRootDir,
-  getPartnerRuntimeDir,
-  getPartnerObjectsDir
-} from './WorkspaceAssetService'
+import { getFileChangeDirectory } from '../ai/fileChanges/FileChangeSnapshots'
+import { getPartnerRootDir, getPartnerRuntimeDir } from './WorkspaceAssetService'
 import {
   PARTNER_CACHE_CATEGORIES,
   type PartnerCacheCategory,
@@ -154,41 +147,26 @@ export class PartnerCacheService {
     const protectedPaths = new Set(
       (state?.composer.draft.attachments || []).map((item) => path.resolve(item.path))
     )
-    const records = (await this.deps.fileChanges.listRecords({ partnerId })).items
-    const allHistoryFiles = await filesIn(path.join(runtime, 'file-changes'))
-    const allObjects = await filesIn(getPartnerObjectsDir(partnerId))
-    const historyFiles = [...allHistoryFiles, ...allObjects]
+    const records = categories.includes('file-changes')
+      ? (await this.deps.fileChanges.listRecords({ partnerId })).items
+      : []
+    const historyFiles = categories.includes('file-changes')
+      ? await filesIn(path.join(runtime, 'file-changes'))
+      : []
     const covered = new Set<string>()
     const units: CacheUnit[] = []
     for (const record of records) {
       const directory = getFileChangeDirectory(partnerId, record.runId, record.id)
-      const references = [
-        record.beforeSnapshotPath,
-        record.afterSnapshotPath,
-        record.previewPath
-      ].filter((value): value is string => Boolean(value))
-      const files = historyFiles.filter(
-        (file) =>
-          within(directory, file.path) ||
-          references.includes(file.path) ||
-          Boolean(
-            record.previewPath &&
-            within(path.dirname(record.previewPath), file.path) &&
-            path.basename(path.dirname(record.previewPath)) !== record.runId
-          )
-      )
+      const files = historyFiles.filter((file) => within(directory, file.path))
       files.forEach((file) => covered.add(file.path))
-      // Kept historical snapshots can also reside in older asset layouts.
-      references.forEach((reference) => protectedPaths.add(path.resolve(reference)))
-      if (categories.includes('file-changes'))
-        units.push({
-          category: 'file-changes',
-          files,
-          timestamp: record.createdAt,
-          count: 1,
-          recordId: record.id,
-          protected: false
-        })
+      units.push({
+        category: 'file-changes',
+        files,
+        timestamp: record.createdAt,
+        count: 1,
+        recordId: record.id,
+        protected: false
+      })
     }
     for (const category of categories) {
       if (category === 'file-changes') {
@@ -288,9 +266,6 @@ export class PartnerCacheService {
     before: number
   ): Promise<PartnerCacheCleanupResult> {
     await this.deps.beforeCleanup?.(partnerId)
-    // Consolidate only retained checkpoints; records being removed do not need readable backups.
-    if (categories.includes('file-changes'))
-      await consolidatePartnerSnapshots(partnerId, this.deps.fileChanges, before)
     const units = await this.collect(partnerId, categories)
     const result: PartnerCacheCleanupResult = {
       success: true,

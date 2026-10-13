@@ -27,10 +27,11 @@ const renderDialog = (request: ConfirmDialogRequest): string => `<!doctype html>
     #dialog { position: relative; width: 520px; max-width: 100%; margin: 0 auto; padding: 20px 24px; border-radius: 8px; background: #fff; box-shadow: 0 16px 40px rgba(15, 15, 15, .12); }
     h1 { margin: 0 32px 16px 0; font-size: 16px; line-height: 24px; font-weight: 600; }
     p { margin: 0; color: #787774; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #message { color: #37352F; }
     #detail { margin-top: 12px; padding: 8px 12px; background: #F7F7F5; border: 1px solid #EEEEEC; border-radius: 6px; font-weight: 500; white-space: pre-wrap; overflow-wrap: anywhere; }
     #error { margin-top: 12px; color: #B3261E; }
     [hidden] { display: none !important; }
-    footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
     button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 4px 15px; border: 1px solid #EEEEEC; border-radius: 6px; background: #fff; color: inherit; font: inherit; cursor: pointer; }
     button:hover { background: #F4F4F2; }
     button:focus-visible { outline: 2px solid #0B6BCB; outline-offset: 2px; }
@@ -41,6 +42,17 @@ const renderDialog = (request: ConfirmDialogRequest): string => `<!doctype html>
     #confirm.danger:hover { background: #ff7875; border-color: #ff7875; }
     #close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; padding: 0; border: 0; color: #91918E; }
     #close svg { width: 16px; height: 16px; }
+    #checkbox-row { position: relative; display: flex; align-items: center; gap: 8px; margin-top: 16px; color: #787774; line-height: 22px; }
+    #checkbox { width: 16px; height: 16px; margin: 0; accent-color: #2F3437; cursor: pointer; }
+    #checkbox:focus-visible { outline: 2px solid #0B6BCB; outline-offset: 2px; }
+    #checkbox-content { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; }
+    #checkbox-content label { cursor: pointer; }
+    #checkbox-space { flex: 1; align-self: stretch; min-width: 12px; }
+    #checkbox-help { flex-shrink: 0; width: 20px; height: 20px; padding: 0; border: 0; background: transparent; color: #91918E; cursor: help; }
+    #checkbox-help:hover { color: #37352F; }
+    #checkbox-help svg { width: 16px; height: 16px; }
+    #checkbox-tooltip { position: absolute; z-index: 1; bottom: calc(100% + 8px); left: 24px; max-width: min(300px, calc(100% - 24px)); padding: 8px 10px; border: 1px solid #E0DFDC; border-radius: 6px; background: #fff; color: #37352F; font-size: 12px; line-height: 20px; box-shadow: 0 8px 24px rgba(15, 15, 15, .08); pointer-events: none; }
+    #checkbox-row:has(#checkbox:disabled) label { cursor: not-allowed; opacity: .65; }
     #spinner { width: 12px; height: 12px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
@@ -52,6 +64,23 @@ const renderDialog = (request: ConfirmDialogRequest): string => `<!doctype html>
       <h1 id="title">${escapeHtml(request.title)}</h1>
       <p id="message">${escapeHtml(request.message)}</p>
       <div id="detail" ${request.detail ? '' : 'hidden'}>${escapeHtml(request.detail || '')}</div>
+      ${
+        request.checkbox
+          ? `<div id="checkbox-row">
+        <input id="checkbox" type="checkbox" aria-labelledby="checkbox-label">
+        <div id="checkbox-content">
+          <label id="checkbox-label" for="checkbox">${escapeHtml(request.checkbox.label)}</label>
+          ${
+            request.checkbox.help
+              ? `<button id="checkbox-help" type="button" aria-label="${escapeHtml(request.checkbox.label)}说明" aria-describedby="checkbox-tooltip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z"/></svg></button>
+          <div id="checkbox-tooltip" role="tooltip" hidden>${escapeHtml(request.checkbox.help)}</div>`
+              : ''
+          }
+          <label id="checkbox-space" for="checkbox" aria-hidden="true"></label>
+        </div>
+      </div>`
+          : ''
+      }
       <p id="error" role="alert" ${request.error ? '' : 'hidden'}>${escapeHtml(request.error || '')}</p>
       <footer>
         <button id="cancel">${escapeHtml(request.cancelText || '取消')}</button>
@@ -63,24 +92,35 @@ const renderDialog = (request: ConfirmDialogRequest): string => `<!doctype html>
     let pending = false;
     function setPending(value) {
       pending = value;
-      for (const id of ['close', 'cancel', 'confirm']) document.getElementById(id).disabled = value;
+      for (const control of document.querySelectorAll('button, input')) control.disabled = value;
+      const tooltip = document.getElementById('checkbox-tooltip');
+      if (tooltip) tooltip.hidden = true;
       document.getElementById('spinner').hidden = !value;
       document.getElementById('dialog').setAttribute('aria-busy', String(value));
     }
     function decide(action) {
       if (pending) return;
       if (action === 'confirm') setPending(true);
-      window.open('ncurator-confirm://' + action, '_blank');
+      const checkbox = document.getElementById('checkbox');
+      const selection = action === 'confirm' && checkbox ? '?checked=' + checkbox.checked : '';
+      window.open('ncurator-confirm://' + action + selection, '_blank');
     }
     document.getElementById('confirm').addEventListener('click', () => decide('confirm'));
     for (const id of ['cancel', 'close']) document.getElementById(id).addEventListener('click', () => decide('cancel'));
     document.getElementById('mask').addEventListener('click', (event) => { if (event.target.id === 'mask') decide('cancel'); });
+    const help = document.getElementById('checkbox-help');
+    const tooltip = document.getElementById('checkbox-tooltip');
+    if (help && tooltip) {
+      for (const event of ['mouseenter', 'focus', 'click']) help.addEventListener(event, () => { tooltip.hidden = false; });
+      help.addEventListener('mouseleave', () => { if (document.activeElement !== help) tooltip.hidden = true; });
+      help.addEventListener('blur', () => { tooltip.hidden = true; });
+    }
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') { event.preventDefault(); decide('cancel'); }
       if (event.key !== 'Tab') return;
-      const buttons = Array.from(document.querySelectorAll('button:not(:disabled)'));
-      if (!buttons.length) { event.preventDefault(); return; }
-      const first = buttons[0], last = buttons[buttons.length - 1];
+      const controls = Array.from(document.querySelectorAll('button:not(:disabled), input:not(:disabled)'));
+      if (!controls.length) { event.preventDefault(); return; }
+      const first = controls[0], last = controls[controls.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
@@ -201,11 +241,18 @@ export class ConfirmDialogWindowService {
       window.webContents.setWindowOpenHandler(({ url }) => {
         if (this.active !== state || state.pending || !state.resolve) return { action: 'deny' }
         if (url === 'ncurator-confirm://cancel') dismiss()
-        if (url === 'ncurator-confirm://confirm') {
+        const decision = new URL(url)
+        if (decision.protocol === 'ncurator-confirm:' && decision.hostname === 'confirm') {
           state.pending = true
           const respond = state.resolve
           state.resolve = null
-          respond({ success: true, action: 'confirm' })
+          respond({
+            success: true,
+            action: 'confirm',
+            ...(request.checkbox
+              ? { checkboxChecked: decision.searchParams.get('checked') === 'true' }
+              : {})
+          })
         }
         return { action: 'deny' }
       })

@@ -4,7 +4,7 @@ import type { ConfirmDialogRequest } from '../../../shared/types'
 type NativeConfirmDialogProps = Omit<ConfirmDialogRequest, 'dialogId' | 'error'> & {
   open: boolean
   /** Return an error to keep the dialog open for retry; return nothing after success. */
-  onConfirm: () => Promise<string | void>
+  onConfirm: (checkboxChecked: boolean) => Promise<string | void>
   onCancel: () => void
   onError: (error: string) => void
 }
@@ -16,6 +16,8 @@ export const NativeConfirmDialog = (props: NativeConfirmDialogProps): null => {
     callbacks.current = props
   })
   const { open, title, message, detail, confirmText, cancelText, danger } = props
+  const checkboxLabel = props.checkbox?.label
+  const checkboxHelp = props.checkbox?.help
 
   useEffect(() => {
     if (!open) return
@@ -34,6 +36,7 @@ export const NativeConfirmDialog = (props: NativeConfirmDialogProps): null => {
           confirmText,
           cancelText,
           danger,
+          checkbox: checkboxLabel ? { label: checkboxLabel, help: checkboxHelp } : undefined,
           error
         })
         if (disposed) return
@@ -47,7 +50,8 @@ export const NativeConfirmDialog = (props: NativeConfirmDialogProps): null => {
           return
         }
         try {
-          error = (await callbacks.current.onConfirm()) || undefined
+          error =
+            (await callbacks.current.onConfirm(response.checkboxChecked === true)) || undefined
         } catch (cause) {
           error = cause instanceof Error ? cause.message : '操作失败，请重试'
         }
@@ -67,7 +71,18 @@ export const NativeConfirmDialog = (props: NativeConfirmDialogProps): null => {
       disposed = true
       close()
     }
-  }, [open, dialogId, title, message, detail, confirmText, cancelText, danger])
+  }, [
+    open,
+    dialogId,
+    title,
+    message,
+    detail,
+    confirmText,
+    cancelText,
+    danger,
+    checkboxLabel,
+    checkboxHelp
+  ])
 
   return null
 }

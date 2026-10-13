@@ -11,10 +11,7 @@ import {
 import { AiFileChangeStore } from '../../../../src/main/services/storage/domains/AiFileChangeStore'
 import { ChatMessageLogStore } from '../../../../src/main/services/storage/domains/ChatMessageLogStore'
 import { PartnerCacheService } from '../../../../src/main/services/assets/PartnerCacheService'
-import {
-  getPartnerRuntimeDir,
-  getPartnerObjectsDir
-} from '../../../../src/main/services/assets/WorkspaceAssetService'
+import { getPartnerRuntimeDir } from '../../../../src/main/services/assets/WorkspaceAssetService'
 import { AiFileChangeService } from '../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { AttachmentService } from '../../../../src/main/services/attachments/AttachmentService'
 import type { PartnerCacheRequest } from '../../../../src/shared/partnerCache'
@@ -169,27 +166,26 @@ describe('partner-cache-service', () => {
     expect(await fs.readFile(source, 'utf8')).toBe('B')
   })
 
-  it('partner-cache-consolidates-legacy-shared-snapshots', async () => {
+  it('partner-cache-identical-backups-remain-independent', async () => {
     const firstPath = path.join(root, 'first.md'),
       secondPath = path.join(root, 'second.md')
     await fs.writeFile(firstPath, 'A')
     await fs.writeFile(secondPath, 'A')
     const first = await edit(firstPath, 'first', 'B', old),
       second = await edit(secondPath, 'second', 'C', before)
-    const legacy = path.join(getPartnerObjectsDir('a'), 'sha256', 'aa', 'old-checkpoint')
-    await fs.mkdir(path.dirname(legacy), { recursive: true })
-    await fs.writeFile(legacy, 'A')
-    await fs.utimes(legacy, new Date(old), new Date(old))
+    expect(first.beforeSnapshotPath).not.toBe(second.beforeSnapshotPath)
     for (const record of [first, second]) {
-      await fs.rm(record.beforeSnapshotPath!)
-      await records.saveRecord({ ...record, beforeSnapshotPath: legacy })
+      expect(record.beforeSnapshotPath).toContain(
+        path.join('file-changes', record.runId, record.id, 'before.md')
+      )
+      expect(await fs.readFile(record.beforeSnapshotPath!, 'utf8')).toBe('A')
     }
     expect((await cache.cleanup(request(['file-changes']))).success).toBe(true)
     const kept = (await records.getRecord({ changeId: second.id })).record!
     expect(kept.createdAt).toBe(before)
-    expect(kept.beforeSnapshotPath).not.toBe(legacy)
+    expect(kept.beforeSnapshotPath).toBe(second.beforeSnapshotPath)
     expect(await fs.readFile(kept.beforeSnapshotPath!, 'utf8')).toBe('A')
-    expect(await exists(legacy)).toBe(false)
+    expect(await exists(first.beforeSnapshotPath!)).toBe(false)
     expect((await changes.revertRecord({ changeId: second.id })).success).toBe(true)
     expect(await fs.readFile(secondPath, 'utf8')).toBe('A')
   })
@@ -257,17 +253,14 @@ describe('partner-cache-service', () => {
     const source = path.join(root, 'formal.md')
     await fs.writeFile(source, 'A')
     const record = await edit(source, 'first', 'B', old)
-    const legacy = path.join(getPartnerObjectsDir('a'), 'sha256', 'bad-checkpoint')
-    await fs.mkdir(path.dirname(legacy), { recursive: true })
-    await fs.writeFile(legacy, 'damaged history')
-    await records.saveRecord({ ...record, beforeSnapshotPath: legacy })
+    await fs.writeFile(record.beforeSnapshotPath!, 'damaged history')
     const script = await writeCache('a', 'scripts/old.py')
     expect((await cache.cleanup(request(['scripts']))).success).toBe(true)
     expect(await exists(script)).toBe(false)
-    expect(await fs.readFile(legacy, 'utf8')).toBe('damaged history')
+    expect(await fs.readFile(record.beforeSnapshotPath!, 'utf8')).toBe('damaged history')
     expect((await records.getRecord({ changeId: record.id })).record).toBeDefined()
     expect((await cache.cleanup(request(['file-changes']))).success).toBe(true)
-    expect(await exists(legacy)).toBe(false)
+    expect(await exists(record.beforeSnapshotPath!)).toBe(false)
     expect(await fs.readFile(source, 'utf8')).toBe('B')
   })
 
