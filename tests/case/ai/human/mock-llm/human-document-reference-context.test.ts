@@ -392,15 +392,21 @@ describe('ai human mock-llm backend', () => {
             result.body.includes(' from fixture') &&
             result.body.includes('Hello from ') &&
             result.body.includes('引用内容：整个资源') &&
+            result.body.includes('引用内容：整个资源\n<用户选中片段1>') &&
+            result.body.includes('</用户选中片段1>\n<用户选中片段2>') &&
+            !/<\/用户选中片段\d+>\n\n<用户选中片段/.test(result.body) &&
+            !result.body.includes('知识库文档ID：无\n\n<用户选中片段') &&
             result.body.includes('<用户选中片段1>\n<选中内容>\nHello\n</选中内容>') &&
             result.body.includes('<选中内容>\n' + result.literalText + '\n</选中内容>') &&
             result.body.includes(
-              '<定位信息>\n以下片段仅用于定位。\n\n<选中内容的后文>\n from fixture\n</选中内容的后文>\n</定位信息>'
+              '<定位信息>\n<选中内容的后文>\n from fixture\n</选中内容的后文>\n</定位信息>'
             ) &&
             result.body.includes('<选中内容的前文>\nHello from \n</选中内容的前文>') &&
             result.body.includes('<定位信息>\n行号：第 1–7 行\n') &&
             result.body.includes('<定位信息>\n页码：第 1–2 页\n') &&
             !result.body.includes('不属于选中内容') &&
+            !result.body.includes('以下片段仅用于定位。') &&
+            !result.body.includes('</选中内容>\n\n<定位信息>') &&
             !result.body.includes('<前文>') &&
             !result.body.includes('<后文>') &&
             result.body.split('[sample-edit.docx · 1]').length === 2 &&
@@ -415,7 +421,7 @@ describe('ai human mock-llm backend', () => {
             result.body.includes('知识库文档ID：web-document') &&
             !result.body.includes('stale-directory-id') &&
             result.body.includes(
-              '<用户选中片段1>\n<定位信息>\n工作表：Data\n单元格范围：B2:C3\n</定位信息>\n</用户选中片段1>'
+              '<用户选中片段1>\n<定位信息>\n工作表：Data\n选中单元格范围：B2:C3\n</定位信息>\n</用户选中片段1>'
             ) &&
             !result.body.includes(result.excelSnapshot) &&
             !result.body.includes('Excel确认时的值') &&
@@ -440,9 +446,9 @@ describe('ai human mock-llm backend', () => {
             result.originalUnchanged &&
             result.restoredBody.includes('<用户选中片段2>\n<选中内容>\nfixture\n</选中内容>') &&
             result.restoredBody.includes(
-              '<定位信息>\n以下片段仅用于定位。\n\n<选中内容的前文>\nHello from \n</选中内容的前文>\n</定位信息>'
+              '<定位信息>\n<选中内容的前文>\nHello from \n</选中内容的前文>\n</定位信息>'
             ) &&
-            result.restoredBody.includes('工作表：Data\n单元格范围：B2:C3') &&
+            result.restoredBody.includes('工作表：Data\n选中单元格范围：B2:C3') &&
             !result.restoredBody.includes(result.excelSnapshot) &&
             result.pendingNodes.length === 2 &&
             JSON.stringify(result.restoredNodes) === JSON.stringify(result.pendingNodes),

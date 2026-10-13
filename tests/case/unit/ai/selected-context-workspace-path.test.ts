@@ -125,7 +125,7 @@ describe('ai unit selected context workspace path', () => {
     expect(text.split('<用户选中片段2>')).toHaveLength(2)
     expect(text).toContain(`<选中内容>\n${selectedText}\n</选中内容>`)
     expect(text).toContain(
-      `</选中内容>\n\n<定位信息>\n以下片段仅用于定位。\n\n<选中内容的前文>\n${contextBefore}\n</选中内容的前文>\n\n<选中内容的后文>\n${contextAfter}\n</选中内容的后文>\n</定位信息>`
+      `</选中内容>\n<定位信息>\n<选中内容的前文>\n${contextBefore}\n</选中内容的前文>\n<选中内容的后文>\n${contextAfter}\n</选中内容的后文>\n</定位信息>`
     )
     expect(text).not.toContain('不属于选中内容')
     expect(text).not.toContain('引用内容：')
@@ -159,9 +159,10 @@ describe('ai unit selected context workspace path', () => {
     expect(text.split('文档：example.md')).toHaveLength(2)
     expect(text.split('<用户选中片段1>')).toHaveLength(2)
     expect(text.split('<用户选中片段2>')).toHaveLength(2)
+    expect(text).toContain('</用户选中片段1>\n<用户选中片段2>')
     expect(text.split('<源文件片段>')).toHaveLength(2)
     expect(text).toContain(
-      '<定位信息>\n行号：第 1 行\n\n以下片段仅用于定位。\n\n<源文件片段>\nbefore **bold** after\n</源文件片段>\n</定位信息>'
+      '<定位信息>\n行号：第 1 行\n<源文件片段>\nbefore **bold** after\n</源文件片段>\n</定位信息>'
     )
     expect(text).not.toContain('<选中内容的前文>')
     expect(text).not.toContain('<选中内容的后文>')
@@ -237,7 +238,7 @@ describe('ai unit selected context workspace path', () => {
       selectedText:
         '{"display":[["订单"]],"cells":[[{"value":"订单","formula":null}]],"merges":[]}',
       location: '位置：订单明细!B2',
-      position: '工作表：订单明细\n单元格范围：B2'
+      position: '工作表：订单明细\n选中单元格范围：B2'
     },
     {
       name: 'PPT element with text',
@@ -298,6 +299,7 @@ describe('ai unit selected context workspace path', () => {
       children: []
     }
     const text = renderSelectedReferencesText(buildReferenceScope({ contentNodes: [node] }))
+    expect(text).toContain('知识库文档ID：无\n<用户选中片段1>')
 
     if (example.position) {
       expect(text).toContain(`<定位信息>\n${example.position}\n</定位信息>`)

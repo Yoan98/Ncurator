@@ -35,21 +35,19 @@ const renderSelection = (node: DocumentSelectionNode): string => {
   const locatorOnly = anchor?.kind === 'ppt' || anchor?.kind === 'excel'
   const positioning = [renderSelectionPosition(node)]
   if (!locatorOnly) {
-    const fragments: string[] = []
     if (anchor?.kind === 'text' && anchor.sourceText !== node.selectedText) {
-      fragments.push(renderUserBlock('源文件片段', anchor.sourceText))
+      positioning.push(renderUserBlock('源文件片段', anchor.sourceText))
     }
-    fragments.push(
+    positioning.push(
       renderUserBlock('选中内容的前文', node.contextBefore),
       renderUserBlock('选中内容的后文', node.contextAfter)
     )
-    if (fragments.some(Boolean)) positioning.push('以下片段仅用于定位。', ...fragments)
   }
   const parts = [
     locatorOnly ? '' : renderUserBlock('选中内容', node.selectedText),
-    renderUserBlock('定位信息', positioning.filter(Boolean).join('\n\n'))
+    renderUserBlock('定位信息', positioning.filter(Boolean).join('\n'))
   ]
-  return renderUserBlock(`用户选中片段${node.number}`, parts.filter(Boolean).join('\n\n'))
+  return renderUserBlock(`用户选中片段${node.number}`, parts.filter(Boolean).join('\n'))
 }
 
 const renderSelectionPosition = (node: DocumentSelectionNode): string => {
@@ -70,7 +68,7 @@ const renderSelectionPosition = (node: DocumentSelectionNode): string => {
         anchor.mode === 'element' ? `选中元素：${anchor.elementId}` : `选中页面：${anchor.slideId}`
       ].join('\n')
     case 'excel':
-      return `工作表：${anchor.sheetName}\n单元格范围：${anchor.range}`
+      return `工作表：${anchor.sheetName}\n选中单元格范围：${anchor.range}`
   }
 }
 
@@ -123,11 +121,11 @@ export const renderSelectedReferencesText = (scope: AiReferenceScope): string =>
   if (!scope.contentNodes) scope.selectedReferences.forEach(addReference)
   return [...documents.values()]
     .map((document, index) => {
-      const excerpts = document.selections.map(renderSelection).join('\n\n')
+      const excerpts = document.selections.map(renderSelection).join('\n')
       return `${index + 1}. 文档：${document.name}
 资源地址：${document.address}
 文档知识库状态：${KB_AVAILABILITY_LABEL[document.knowledge.kbAvailability]}
-知识库文档ID：${document.knowledge.kbDocumentIds.join(', ') || '无'}${document.wholeResource ? '\n引用内容：整个资源' : ''}${excerpts ? `\n\n${excerpts}` : ''}`
+知识库文档ID：${document.knowledge.kbDocumentIds.join(', ') || '无'}${document.wholeResource ? '\n引用内容：整个资源' : ''}${excerpts ? `\n${excerpts}` : ''}`
     })
     .join('\n\n')
 }

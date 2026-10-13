@@ -760,12 +760,18 @@ describe('workbench conversation e2e', () => {
                 result.blankShapeId
               ].every((id) => result.brain.includes(`选中元素：${id}`)) &&
               result.brain.match(/<用户选中片段\d+>/g)?.length === 9 &&
+              result.brain.includes('</用户选中片段1>\n<用户选中片段2>') &&
+              !/<\/用户选中片段\d+>\n\n<用户选中片段/.test(result.brain) &&
+              result.brain.includes('知识库文档ID：无\n<用户选中片段1>') &&
+              !result.brain.includes('知识库文档ID：无\n\n<用户选中片段') &&
               result.brain.includes(
-                `<定位信息>\n工作表：${result.expectedExcel.sheetName}\n单元格范围：${result.expectedExcel.range}\n</定位信息>`
+                `<定位信息>\n工作表：${result.expectedExcel.sheetName}\n选中单元格范围：${result.expectedExcel.range}\n</定位信息>`
               ) &&
               !result.brain.includes(result.excelSnapshot) &&
               !result.brain.includes('merges') &&
               !result.brain.includes('不属于选中内容') &&
+              !result.brain.includes('以下片段仅用于定位。') &&
+              !result.brain.includes('</选中内容>\n\n<定位信息>') &&
               result.expectedExcel.values.length > 0 &&
               result.expectedExcel.values.every((value) =>
                 result.excelReadContent.includes(value)

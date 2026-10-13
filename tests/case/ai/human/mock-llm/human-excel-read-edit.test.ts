@@ -83,7 +83,7 @@ describe('ai human mock-llm excel backend', () => {
             'human.brain': [
               (call) => {
                 const locator = call.user.match(
-                  /<定位信息>\n工作表：([^\n]+)\n单元格范围：([^\n]+)/
+                  /<定位信息>\n工作表：([^\n]+)\n选中单元格范围：([^\n]+)/
                 )
                 if (!locator) throw new Error('Excel 引用缺少定位信息')
                 sheetName = locator[1]
@@ -183,7 +183,7 @@ describe('ai human mock-llm excel backend', () => {
             result.sheetName === 'Data' &&
             result.range === 'A1:C2' &&
             result.initialUser.includes(
-              '<定位信息>\n工作表：Data\n单元格范围：A1:C2\n</定位信息>'
+              '<定位信息>\n工作表：Data\n选中单元格范围：A1:C2\n</定位信息>'
             ) &&
             !result.initialUser.includes('<选中内容>') &&
             !result.initialUser.includes('merges') &&

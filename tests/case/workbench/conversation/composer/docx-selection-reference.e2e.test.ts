@@ -748,7 +748,7 @@ describe('workbench conversation e2e', () => {
             brainInput.includes('<用户选中片段1>') &&
               brainInput.includes('<选中内容>\n') &&
               !brainInput.includes('<选中内容的前文>') &&
-              brainInput.includes('</选中内容>\n\n<定位信息>\n') &&
+              brainInput.includes('</选中内容>\n<定位信息>\n') &&
               brainInput.includes('<选中内容的后文>\n') &&
               brainInput.includes('</选中内容的后文>\n</定位信息>') &&
               !brainInput.includes('不属于选中内容') &&
