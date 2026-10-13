@@ -44,6 +44,17 @@ describe('workbench conversation e2e', () => {
             return ((await activeMention.textContent()) || '').trim()
           }
 
+          const sharedMentionIcons = await mentionPanel
+            .locator('svg[data-file-icon]')
+            .evaluateAll(
+              (icons) =>
+                icons.length > 0 &&
+                icons.every(
+                  (icon) =>
+                    icon.getAttribute('fill') === 'none' &&
+                    icon.getAttribute('stroke-width') === '1.6'
+                )
+            )
           const activeBeforeArrowDown = await readActiveMentionText()
           await page.keyboard.press('ArrowDown')
           await page.waitForFunction(
@@ -62,7 +73,22 @@ describe('workbench conversation e2e', () => {
           await page.waitForTimeout(200)
           const activeAfterSettled = await readActiveMentionText()
 
+          await page.keyboard.press('Enter')
+          const input = getWorkbenchLocator(page, workbenchSelectors.input)
+          const sharedTokenIcon = await input
+            .locator('svg[data-file-icon]')
+            .evaluateAll(
+              (icons) =>
+                icons.length > 0 &&
+                icons.every(
+                  (icon) =>
+                    icon.getAttribute('fill') === 'none' &&
+                    icon.getAttribute('stroke-width') === '1.6'
+                )
+            )
           return {
+            sharedMentionIcons,
+            sharedTokenIcon,
             activeBeforeArrowDown,
             activeAfterArrowDown,
             activeAfterSettled
@@ -70,7 +96,9 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.activeBeforeArrowDown.length > 0 &&
+            result.sharedMentionIcons &&
+              result.sharedTokenIcon &&
+              result.activeBeforeArrowDown.length > 0 &&
               result.activeAfterArrowDown.length > 0 &&
               result.activeAfterArrowDown !== result.activeBeforeArrowDown &&
               result.activeAfterSettled === result.activeAfterArrowDown,

@@ -408,12 +408,16 @@ export interface WorkspaceFileTrashRequest {
   relativePath: string
 }
 
+export interface WorkspaceFileRenameRequest extends WorkspaceFileTrashRequest {
+  fileName: string
+}
+
 export interface WorkspaceFileMutationResponse {
   success: boolean
   error?: string
 }
 
-export interface WorkspaceFileCreateResponse extends WorkspaceFileMutationResponse {
+export interface WorkspaceFileEntryResponse extends WorkspaceFileMutationResponse {
   entry?: WorkspaceTreeEntry
 }
 

@@ -126,7 +126,8 @@ import type {
   WorkspaceTreeListResponse,
   WorkspaceDirectoryListResponse,
   WorkspaceFileCreateRequest,
-  WorkspaceFileCreateResponse,
+  WorkspaceFileRenameRequest,
+  WorkspaceFileEntryResponse,
   WorkspaceFileTrashRequest,
   WorkspaceFileMutationResponse,
   WorkbenchUiStateResponse,
@@ -195,7 +196,8 @@ export type DesktopApi = {
   workspaceDirectoryList: (
     payload: ListWorkspaceDirectoryRequest
   ) => Promise<WorkspaceDirectoryListResponse>
-  workspaceFileCreate: (payload: WorkspaceFileCreateRequest) => Promise<WorkspaceFileCreateResponse>
+  workspaceFileRename: (payload: WorkspaceFileRenameRequest) => Promise<WorkspaceFileEntryResponse>
+  workspaceFileCreate: (payload: WorkspaceFileCreateRequest) => Promise<WorkspaceFileEntryResponse>
   workspaceFileTrash: (payload: WorkspaceFileTrashRequest) => Promise<WorkspaceFileMutationResponse>
   workspaceScan: (payload: { workspaceId: string }) => Promise<WorkspaceJobResponse>
   workspacePrepare: (payload: PrepareWorkspaceRequest) => Promise<WorkspaceJobResponse>

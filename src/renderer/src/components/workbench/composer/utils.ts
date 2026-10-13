@@ -1,3 +1,4 @@
+import { getFileIconPaths } from '../../../utils/fileIcons'
 import { selectionTooltip } from '../../../../../shared/documentSelection'
 import { chatContentText, chatReferences, selectionLabel } from '../../../../../shared/chatContent'
 import type {
@@ -178,77 +179,20 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
   icon.dataset.referenceIconKind = visualSpec.kind
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  svg.setAttribute(
-    'viewBox',
-    visualSpec.kind === 'directory' || visualSpec.kind === 'web' ? '0 0 24 24' : '0 0 18 18'
-  )
+  svg.setAttribute('viewBox', '0 0 24 24')
   svg.setAttribute('aria-hidden', 'true')
+  svg.setAttribute('data-file-icon', visualSpec.kind)
   svg.setAttribute('class', `h-[0.9em] w-[0.9em] ${visualSpec.iconClassName}`)
-
-  if (visualSpec.kind === 'directory' || visualSpec.kind === 'web') {
-    svg.setAttribute('fill', 'none')
-    svg.setAttribute('stroke', 'currentColor')
-    svg.setAttribute('stroke-width', '1.8')
-    svg.setAttribute('stroke-linecap', 'round')
-    svg.setAttribute('stroke-linejoin', 'round')
-    const paths =
-      visualSpec.kind === 'directory'
-        ? [
-            'M3.5 6.5h5.15l1.45 1.65h10.4v8.9c0 .8-.65 1.45-1.45 1.45H4.95c-.8 0-1.45-.65-1.45-1.45V6.5z'
-          ]
-        : [
-            'M3.5 12h17',
-            'M12 3.5c2.15 2.2 3.2 5.05 3.2 8.5s-1.05 6.3-3.2 8.5M12 3.5C9.85 5.7 8.8 8.55 8.8 12s1.05 6.3 3.2 8.5'
-          ]
-    if (visualSpec.kind === 'web') {
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
-      circle.setAttribute('cx', '12')
-      circle.setAttribute('cy', '12')
-      circle.setAttribute('r', '8.5')
-      svg.appendChild(circle)
-    }
-    paths.forEach((item) => {
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      path.setAttribute('d', item)
-      svg.appendChild(path)
-    })
-  } else {
-    const background = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-    background.setAttribute(
-      'd',
-      'M4.3 1.7h6.5l3.1 3.1v10.4c0 .7-.6 1.2-1.2 1.2H4.3c-.7 0-1.2-.6-1.2-1.2V2.9c0-.7.5-1.2 1.2-1.2z'
-    )
-    background.setAttribute('class', visualSpec.documentFillClassName)
-    svg.appendChild(background)
-    if (!visualSpec.documentLabel) {
-      const sheet = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      sheet.setAttribute('d', 'M4.3 2.7h6.1l2.5 2.5v10.1H4.3V2.7z')
-      sheet.setAttribute('class', 'fill-white')
-      svg.appendChild(sheet)
-    }
-    const fold = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-    fold.setAttribute('d', 'M10.4 1.7v3.4h3.5l-3.5-3.4z')
-    fold.setAttribute('class', visualSpec.documentAccentClassName)
-    svg.appendChild(fold)
-    if (visualSpec.documentLabel) {
-      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-      label.setAttribute('x', '8.55')
-      label.setAttribute('y', '11.2')
-      label.setAttribute('class', 'fill-white')
-      label.setAttribute('dominant-baseline', 'middle')
-      label.setAttribute('font-family', 'Arial, sans-serif')
-      label.setAttribute('font-size', '4')
-      label.setAttribute('font-weight', '700')
-      label.setAttribute('text-anchor', 'middle')
-      label.textContent = visualSpec.documentLabel
-      svg.appendChild(label)
-    } else {
-      const lines = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      lines.setAttribute('d', 'M6 7.2h5.1v1.2H6zM6 9.4h5.1v1.2H6zM6 11.6h3.6v1.2H6z')
-      lines.setAttribute('class', visualSpec.documentAccentClassName)
-      svg.appendChild(lines)
-    }
-  }
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '1.6')
+  svg.setAttribute('stroke-linecap', 'round')
+  svg.setAttribute('stroke-linejoin', 'round')
+  getFileIconPaths(visualSpec.kind).forEach((d) => {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    path.setAttribute('d', d)
+    svg.appendChild(path)
+  })
   icon.appendChild(svg)
   container.appendChild(icon)
 }

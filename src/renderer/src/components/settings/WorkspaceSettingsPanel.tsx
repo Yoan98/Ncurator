@@ -1,4 +1,5 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import FileIcon from '../FileIcon'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Button, Empty, Modal, Popover, Tabs, Tooltip, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import type {
@@ -12,8 +13,6 @@ import {
   HiChevronDown,
   HiChevronRight,
   HiCircleStack,
-  HiDocumentText,
-  HiFolder,
   HiOutlineFolderPlus,
   HiOutlineQuestionMarkCircle,
   HiOutlineTrash
@@ -363,7 +362,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
             <React.Fragment key={entry.id}>
               <button
                 type="button"
-                className="ant-tree-treenode flex min-h-8 w-full items-center gap-2 rounded-[4px] px-2 text-left text-[13px] text-[#37352F] hover:bg-[#F4F4F2]"
+                className="ant-tree-treenode flex min-h-[30px] w-full items-center gap-1.5 rounded-[4px] px-2 text-left text-[13px] text-[#37352F]"
                 style={{ paddingLeft: 8 + depth * 18 }}
                 onClick={() =>
                   isDirectory ? toggleWorkspaceDirectory(workspaceId, entry) : undefined
@@ -372,11 +371,12 @@ const WorkspaceSettingsPanel: React.FC = () => {
                 <span className="ant-tree-switcher flex h-4 w-4 shrink-0 items-center justify-center text-[#91918E]">
                   {isDirectory ? isExpanded ? <HiChevronDown /> : <HiChevronRight /> : null}
                 </span>
-                {isDirectory ? (
-                  <HiFolder className="h-4 w-4 shrink-0 text-[#787774]" />
-                ) : (
-                  <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
-                )}
+                <FileIcon
+                  name={entry.name}
+                  extension={entry.file_ext}
+                  kind={isDirectory ? 'directory' : undefined}
+                  expanded={isExpanded}
+                />
                 <span className="min-w-0 flex-1 truncate">{entry.name}</span>
                 {entryStatus ? (
                   <span
@@ -504,7 +504,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
         async (workspaceId) => {
           filePrepareSessionRef.current.startedIds.add(workspaceId)
           const response = await window.api.workspacePrepare({ workspaceId })
-          if (response.job && (response.job.status === 'succeeded' || response.job.status === 'failed')) {
+          if (
+            response.job &&
+            (response.job.status === 'succeeded' || response.job.status === 'failed')
+          ) {
             filePrepareSessionRef.current.completed += response.job.processed_count
           }
           return response
@@ -777,10 +780,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                     key={workspace.id}
                                     data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
                                   >
-                                    <div className="group flex min-h-8 w-full items-center gap-2 rounded-[4px] px-2 text-[13px] text-[#37352F] hover:bg-[#F4F4F2]">
+                                    <div className="group flex min-h-[30px] w-full items-center gap-1.5 rounded-[4px] px-2 text-[13px] text-[#37352F]">
                                       <button
                                         type="button"
-                                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                                         onClick={() =>
                                           isDirectoryRoot
                                             ? toggleRootCollapsed(workspace.id)
@@ -796,11 +799,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                             )
                                           ) : null}
                                         </span>
-                                        {isDirectoryRoot ? (
-                                          <HiFolder className="h-4 w-4 shrink-0 text-[#787774]" />
-                                        ) : (
-                                          <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
-                                        )}
+                                        <FileIcon
+                                          name={getRootDisplayName(workspace)}
+                                          kind={isDirectoryRoot ? 'directory' : undefined}
+                                          expanded={!isRootCollapsed}
+                                        />
                                         <div className="min-w-0 flex-1">
                                           <div className="truncate font-medium">
                                             {getRootDisplayName(workspace)}

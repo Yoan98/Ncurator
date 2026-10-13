@@ -1,13 +1,11 @@
-﻿import React, { useEffect, useMemo, useState } from 'react'
+import FileIcon from '../FileIcon'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Dropdown, Empty, Spin, Tooltip, message, type MenuProps } from 'antd'
 import {
   HiArrowLeft,
   HiArrowTopRightOnSquare,
   HiArrowUturnLeft,
   HiArrowsRightLeft,
-  HiDocumentText,
-  HiFolder,
-  HiFolderOpen,
   HiChevronDown,
   HiOutlineQuestionMarkCircle
 } from 'react-icons/hi2'
@@ -15,7 +13,8 @@ import type {
   AiFileChangeRecord,
   BrowserTabState,
   OpenWithApplication,
-  WorkspaceSource
+  WorkspaceSource,
+  WorkspaceTreeEntry
 } from '../../../../shared/types'
 import { FileRenderViewer } from '../fileRenders'
 import type { FileRenderDocument } from '../fileRenders'
@@ -63,6 +62,7 @@ type WorkbenchContentPanelProps = {
   onCollapse: () => void
   onBrowserStateChange: (state: BrowserTabState) => void
   onOpenWorkspaceFile: (filePath: string, fileName: string) => void
+  onWorkspaceFileRenamed: (oldPath: string, entry: WorkspaceTreeEntry) => void
   onOpenWorkspaceChange: (changeId: string) => void
   browserPresentationEnabled: boolean
   browserTransitionImage?: { tabId: string; dataUrl: string } | null
@@ -121,7 +121,7 @@ export const FileChangeNotice: React.FC<{ record: AiFileChangeRecord }> = ({ rec
       data-testid={workbenchSelectors.applyChangeNotice}
     >
       <div className="max-w-[460px]">
-        <HiDocumentText className="mx-auto h-10 w-10 text-[#B7B5AF]" />
+        <FileIcon className="mx-auto h-10 w-10 text-[#B7B5AF]" />
         <div className="mt-4 text-[15px] font-semibold text-[#37352F]">{title}</div>
         {record.operation === 'renamed' && record.status !== 'reverted' ? (
           <div className="mt-4 grid grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)] items-center gap-2 text-left text-[13px]">
@@ -519,9 +519,9 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 aria-pressed={explorerOpen}
                 icon={
                   explorerOpen ? (
-                    <HiFolderOpen className="h-4 w-4" />
+                    <FileIcon kind="directory" expanded />
                   ) : (
-                    <HiFolder className="h-4 w-4" />
+                    <FileIcon kind="directory" />
                   )
                 }
                 className={`!h-8 !w-8 !rounded-[6px] !border !p-0 !text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] ${
@@ -621,6 +621,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   onCollapse,
   onBrowserStateChange,
   onOpenWorkspaceFile,
+  onWorkspaceFileRenamed,
   onOpenWorkspaceChange,
   isAiRunActive,
   onSuccessMessage,
@@ -918,7 +919,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               hasWorkspace ? (
                 <div className="flex h-full items-center justify-center text-center">
                   <div>
-                    <HiFolderOpen className="mx-auto h-10 w-10 text-[#91918E]" />
+                    <FileIcon
+                      kind="directory"
+                      expanded
+                      className="mx-auto h-10 w-10 text-[#91918E]"
+                    />
                     <div className="mt-4 text-[18px] font-semibold text-[#37352F]">打开文件</div>
                     <div className="mt-2 text-sm text-[#91918E]">从右侧工作区文件列表中选择</div>
                   </div>
@@ -1027,8 +1032,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                 mode={explorerMode}
                 reloadToken={explorerReloadToken}
                 liveRefreshEnabled={explorerOpen}
-                activeFilePath={activePath}
-                activeChangeId={activeApplyRecord?.id}
                 onModeChange={setExplorerMode}
                 onOpenFile={(entry) => {
                   onOpenWorkspaceFile(entry.absolute_path, entry.name)
@@ -1036,6 +1039,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                 }}
                 onOpenChange={openWorkspaceChangeFromExplorer}
                 onFileChanged={handleExplorerFileChanged}
+                onFileRenamed={onWorkspaceFileRenamed}
               />
             </div>
           ) : null}
@@ -1061,8 +1065,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   mode={explorerMode}
                   reloadToken={explorerReloadToken}
                   liveRefreshEnabled={explorerOpen}
-                  activeFilePath={activePath}
-                  activeChangeId={activeApplyRecord?.id}
                   onModeChange={setExplorerMode}
                   onOpenFile={(entry) => {
                     onOpenWorkspaceFile(entry.absolute_path, entry.name)
@@ -1070,6 +1072,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   }}
                   onOpenChange={openWorkspaceChangeFromExplorer}
                   onFileChanged={handleExplorerFileChanged}
+                  onFileRenamed={onWorkspaceFileRenamed}
                 />
               </div>
             </>
@@ -1096,6 +1099,7 @@ const areContentPanelPropsEqual = (
   previous.workspaceLoadState === next.workspaceLoadState &&
   previous.onOpenWorkspaceSettings === next.onOpenWorkspaceSettings &&
   previous.onReloadWorkspaces === next.onReloadWorkspaces &&
+  previous.onWorkspaceFileRenamed === next.onWorkspaceFileRenamed &&
   previous.fileChangeRecords === next.fileChangeRecords &&
   previous.partnerFileChangeRecords === next.partnerFileChangeRecords &&
   previous.isAiRunActive === next.isAiRunActive &&

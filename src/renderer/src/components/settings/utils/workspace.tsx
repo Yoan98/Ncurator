@@ -1,9 +1,8 @@
-﻿import { Tag, Tooltip } from 'antd'
+import FileIcon from '../../FileIcon'
+import { Tag, Tooltip } from 'antd'
 import {
   HiArrowPath,
   HiCheckCircle,
-  HiDocumentText,
-  HiFolder,
   HiOutlineClock,
   HiOutlineExclamationCircle
 } from 'react-icons/hi2'
@@ -84,13 +83,11 @@ export const createWorkspaceTree = (entries: WorkspaceTreeEntry[]): WorkspaceTre
       key: entry.id,
       title: (
         <div className="grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 py-1">
-          {entry.kind === 'directory' ? (
-            <HiFolder className="h-4 w-4 shrink-0 text-[#37352F]" />
-          ) : (
-            <HiDocumentText
-              className={`h-4 w-4 shrink-0 ${entry.supported_for_index ? 'text-[#787774]' : 'text-[#9B9A97]'}`}
-            />
-          )}
+          <FileIcon
+            name={entry.name}
+            extension={entry.file_ext}
+            kind={entry.kind === 'directory' ? 'directory' : undefined}
+          />
           <div className="min-w-0">{fileNameNode}</div>
           {entry.kind === 'file' ? (
             entry.supported_for_index && statusMeta ? (

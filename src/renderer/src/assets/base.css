@@ -201,6 +201,44 @@ textarea,
   color: var(--ink-3) !important;
 }
 
+.workspace-file-menu .ant-dropdown-menu,
+.workspace-file-menu.ant-dropdown-menu-submenu .ant-dropdown-menu {
+  min-width: 176px;
+  padding: 4px;
+  border: 1px solid var(--notion-line-strong) !important;
+  border-radius: 8px;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.workspace-file-menu .ant-dropdown-menu-item,
+.workspace-file-menu .ant-dropdown-menu-submenu-title {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.workspace-file-menu .ant-dropdown-menu-item-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-inline-end: 8px;
+  color: var(--notion-text-soft);
+}
+
+.workspace-file-menu .ant-dropdown-menu-item-danger,
+.workspace-file-menu .ant-dropdown-menu-item-danger .ant-dropdown-menu-item-icon {
+  color: var(--notion-red) !important;
+}
+
+.workspace-file-menu .ant-dropdown-menu-item-divider {
+  margin: 4px 8px;
+}
+
 .workbench-open-with-menu .ant-dropdown-menu {
   width: 260px;
   min-width: 0;

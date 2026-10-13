@@ -38,6 +38,10 @@ describe('settings workspace e2e', () => {
           await mkdir(path.join(rootPath, 'node_modules'), { recursive: true })
           await mkdir(path.join(rootPath, '.private'), { recursive: true })
           await writeFile(path.join(rootPath, 'visible.txt'), 'visible', 'utf8')
+          await writeFile(path.join(rootPath, 'brief.docx'), '')
+          await writeFile(path.join(rootPath, 'grid.xlsx'), '')
+          await writeFile(path.join(rootPath, 'slides.pptx'), '')
+          await writeFile(path.join(rootPath, 'source.bin'), '')
           await writeFile(path.join(rootPath, '.hidden.txt'), 'hidden', 'utf8')
           await writeFile(path.join(rootPath, 'docs', 'brief.txt'), 'brief', 'utf8')
           await writeFile(path.join(rootPath, 'docs', '.draft.txt'), 'draft', 'utf8')
@@ -55,12 +59,30 @@ describe('settings workspace e2e', () => {
           const hiddenDirectoryCount = await tree.getByText('.private', { exact: true }).count()
 
           const docsNode = tree.locator('.ant-tree-treenode').filter({ hasText: 'docs' }).first()
+          const rowBefore = await docsNode.evaluate((node) => ({
+            height: node.getBoundingClientRect().height,
+            background: getComputedStyle(node).backgroundColor
+          }))
+          await docsNode.hover()
+          const rowAfter = await docsNode.evaluate((node) => ({
+            height: node.getBoundingClientRect().height,
+            background: getComputedStyle(node).backgroundColor
+          }))
+          const sharedIcons = await tree.evaluate((node) =>
+            ['directory', 'docx', 'xlsx', 'ppt', 'file'].every((kind) => {
+              const svg = node.querySelector(`svg[data-file-icon="${kind}"]`)
+              return (
+                svg?.getAttribute('fill') === 'none' &&
+                svg.getAttribute('stroke') === 'currentColor'
+              )
+            })
+          )
+          const rowStyleConsistent =
+            rowBefore.height === 30 && rowAfter.background === rowBefore.background
           await docsNode.locator('.ant-tree-switcher').click()
           await tree.getByText('brief.txt').waitFor({ state: 'visible' })
           const hiddenChildCount = await tree.getByText('.draft.txt', { exact: true }).count()
-          const globalTreeControls = await tree
-            .getByLabel(/全部折叠|恢复默认展开/u)
-            .count()
+          const globalTreeControls = await tree.getByLabel(/全部折叠|恢复默认展开/u).count()
 
           await getSettingsLocator(page, importSelectors.workspaceTreeRefreshButton).click()
           await tree.getByText('brief.txt').waitFor({ state: 'visible' })
@@ -68,6 +90,8 @@ describe('settings workspace e2e', () => {
           const moduleFileAfterRefresh = await tree.getByText('package.txt').count()
 
           return {
+            sharedIcons,
+            rowStyleConsistent,
             briefBeforeExpand,
             moduleFileBeforeExpand,
             hiddenRootCount,
@@ -80,7 +104,9 @@ describe('settings workspace e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.briefBeforeExpand === 0 &&
+            result.sharedIcons &&
+              result.rowStyleConsistent &&
+              result.briefBeforeExpand === 0 &&
               result.moduleFileBeforeExpand === 0 &&
               result.hiddenRootCount === 0 &&
               result.hiddenDirectoryCount === 0 &&

@@ -36,6 +36,7 @@ import type {
   SelectedReference,
   WorkbenchModelSelection,
   WorkspaceSource,
+  WorkspaceTreeEntry,
   PendingHumanInteraction,
   AskUserQuestionResult,
   AiRunHumanInteractionRequest,
@@ -3465,6 +3466,81 @@ const ChatPage: React.FC = () => {
     [openFile]
   )
 
+  const handleWorkspaceFileRenamed = useCallback(
+    (oldPath: string, entry: WorkspaceTreeEntry): void => {
+      const platform = detectRendererPlatform()
+      const oldId = getFileTabId(oldPath, platform)
+      const newId = getFileTabId(entry.absolute_path, platform)
+      const updatePreview = (state: WorkbenchContentPanelState): WorkbenchContentPanelState =>
+        state.kind === 'file_preview' && getFileTabId(state.file.path, platform) === oldId
+          ? { ...state, file: { ...state.file, path: entry.absolute_path, fileName: entry.name } }
+          : state
+      const updateWorkspace = (
+        workspace: WorkbenchTabWorkspaceState
+      ): WorkbenchTabWorkspaceState => {
+        const renamedActive = workspace.tabs.some(
+          (tab) =>
+            tab.id === workspace.activeTabId &&
+            tab.state.kind === 'file_preview' &&
+            getFileTabId(tab.state.file.path, platform) === oldId
+        )
+        const tabs = workspace.tabs.map((tab) => {
+          if (
+            tab.state.kind !== 'file_preview' ||
+            getFileTabId(tab.state.file.path, platform) !== oldId
+          )
+            return tab
+          return {
+            ...tab,
+            id: newId,
+            title: entry.name,
+            filePath: entry.absolute_path,
+            state: {
+              ...tab.state,
+              file: { ...tab.state.file, path: entry.absolute_path, fileName: entry.name }
+            }
+          }
+        })
+        return {
+          ...workspace,
+          tabs: tabs.filter((tab, index) => tabs.findIndex((item) => item.id === tab.id) === index),
+          activeTabId: renamedActive ? newId : workspace.activeTabId
+        }
+      }
+      setTabWorkspaces((current) =>
+        Object.fromEntries(
+          Object.entries(current).map(([key, workspace]) => [key, updateWorkspace(workspace)])
+        )
+      )
+      // Persist the paths in already opened background partners without changing their drafts.
+      for (const [key, workspace] of Object.entries(tabWorkspacesRef.current)) {
+        if (
+          !key ||
+          key === currentPartnerIdRef.current ||
+          !workspace.tabs.some(
+            (tab) =>
+              tab.state.kind === 'file_preview' &&
+              getFileTabId(tab.state.file.path, platform) === oldId
+          )
+        )
+          continue
+        void updateBackgroundPanelState(key, (state) => {
+          const updated = updateWorkspace({
+            tabs: state.panel.tabs as WorkbenchResourceTab[],
+            activeTabId: state.panel.activeTabId,
+            panelCollapsed: state.panel.collapsed
+          })
+          return {
+            ...state,
+            panel: { ...state.panel, tabs: updated.tabs, activeTabId: updated.activeTabId }
+          }
+        })
+      }
+      setContentPanel(updatePreview)
+    },
+    [updateBackgroundPanelState]
+  )
+
   const openWorkspaceChange = useCallback(
     (changeId: string): void => {
       openFileChange(changeId)
@@ -5291,6 +5367,7 @@ const ChatPage: React.FC = () => {
                         onCollapse={collapseContentPanel}
                         onBrowserStateChange={handleBrowserStateChange}
                         onOpenWorkspaceFile={openWorkspaceFile}
+                        onWorkspaceFileRenamed={handleWorkspaceFileRenamed}
                         onOpenWorkspaceChange={openWorkspaceChange}
                         isAiRunActive={Boolean(aiRunId)}
                         onSuccessMessage={emitSuccessMessage}

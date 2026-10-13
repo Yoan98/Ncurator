@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest'
 import path from 'node:path'
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import JSZip from 'jszip'
 import { WorkspaceFileService } from '../../../../../src/main/services/workspace/WorkspaceFileService'
@@ -101,7 +101,82 @@ describe('unit workspace backend', () => {
               () => false,
               () => true
             )
+          const renameSource = await files.createFile({ ...fileInput, fileName: '原名称.txt' })
+          await writeFile(renameSource.absolute_path, '保留内容与格式\r\n')
+          const renameInput = {
+            workspaceId: fileInput.workspaceId,
+            rootPath: parent,
+            relativePath: renameSource.relative_path
+          }
+          const renameFailures = await Promise.all(
+            ['并发.txt', '../escape.txt', 'bad:name.txt', 'CON.txt', '更换后缀.md'].map(
+              (fileName) =>
+                files.renameFile({ ...renameInput, fileName }).then(
+                  () => false,
+                  () => true
+                )
+            )
+          )
+          const sourcePreservedAfterFailure =
+            (await readFile(renameSource.absolute_path, 'utf8')) === '保留内容与格式\r\n'
+          const renamed = await files.renameFile({ ...renameInput, fileName: '重命名.txt' })
+          const renameOutside = await files
+            .renameFile({
+              ...renameInput,
+              relativePath: path.join(sibling, 'outside.txt'),
+              fileName: 'renamed.txt'
+            })
+            .then(
+              () => false,
+              () => true
+            )
+          const renameDirectory = await files
+            .renameFile({ ...renameInput, relativePath: 'docs', fileName: 'folder' })
+            .then(
+              () => false,
+              () => true
+            )
+          const renameSymlinkEscape = await files
+            .renameFile({
+              ...renameInput,
+              relativePath: 'escape/outside.txt',
+              fileName: 'renamed.txt'
+            })
+            .then(
+              () => false,
+              () => true
+            )
+          const competingSource = await files.createFile({
+            ...fileInput,
+            fileName: '并发重命名.txt'
+          })
+          const competingRenames = await Promise.allSettled(
+            [1, 2].map(() =>
+              files.renameFile({
+                ...renameInput,
+                relativePath: competingSource.relative_path,
+                fileName: '并发目标.txt'
+              })
+            )
+          )
           const fileOperations = {
+            renamePreservesContents:
+              renamed.name === '重命名.txt' &&
+              renamed.relative_path === 'docs/重命名.txt' &&
+              (await readFile(renamed.absolute_path, 'utf8')) === '保留内容与格式\r\n' &&
+              !(await stat(renameSource.absolute_path).then(
+                () => true,
+                () => false
+              )),
+            renameFailureIsSafe:
+              renameFailures.every(Boolean) &&
+              sourcePreservedAfterFailure &&
+              renameOutside &&
+              renameDirectory &&
+              renameSymlinkEscape,
+            concurrentRenameExclusive:
+              competingRenames.filter((result) => result.status === 'fulfilled').length === 1,
+
             blankOfficeFilesValid:
               Boolean(docxZip.file('word/document.xml')) &&
               Boolean(workbookXml?.includes('name="Sheet1"')) &&

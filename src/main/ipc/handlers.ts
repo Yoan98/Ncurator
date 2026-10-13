@@ -44,7 +44,8 @@ import type {
   WriteTextFileRequest,
   WriteTextFileResponse,
   WorkspaceFileCreateRequest,
-  WorkspaceFileCreateResponse,
+  WorkspaceFileRenameRequest,
+  WorkspaceFileEntryResponse,
   WorkspaceFileTrashRequest,
   WorkspaceFileMutationResponse,
   AiRunHumanInteractionRequest,
@@ -2235,11 +2236,28 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'workspace-file-create',
-    async (_event, payload: WorkspaceFileCreateRequest): Promise<WorkspaceFileCreateResponse> => {
+    async (_event, payload: WorkspaceFileCreateRequest): Promise<WorkspaceFileEntryResponse> => {
       try {
         const workspace = await workspaceStore.getWorkspaceById(payload.workspaceId)
         if (!workspace) throw new Error('当前工作目录已被移除')
         const entry = await workspaceFileService.createFile({
+          ...payload,
+          rootPath: workspace.root_path
+        })
+        return { success: true, entry }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'workspace-file-rename',
+    async (_event, payload: WorkspaceFileRenameRequest): Promise<WorkspaceFileEntryResponse> => {
+      try {
+        const workspace = await workspaceStore.getWorkspaceById(payload.workspaceId)
+        if (!workspace) throw new Error('当前工作目录已被移除')
+        const entry = await workspaceFileService.renameFile({
           ...payload,
           rootPath: workspace.root_path
         })

@@ -46,6 +46,38 @@ const createBlankFileBytes = async (extension: string): Promise<Uint8Array> => {
 }
 
 export class WorkspaceFileService {
+  private async describeFile(
+    workspaceId: string,
+    rootPath: string,
+    absolutePath: string
+  ): Promise<WorkspaceTreeEntry> {
+    const root = await fs.realpath(rootPath)
+    const relativePath = path.relative(root, absolutePath).replace(/\\/g, '/')
+    const parentPath = path.posix.dirname(relativePath)
+    return {
+      id: `${workspaceId}:file:${relativePath}`,
+      workspace_id: workspaceId,
+      parent_id: parentPath === '.' ? undefined : `${workspaceId}:directory:${parentPath}`,
+      kind: 'file',
+      name: path.basename(absolutePath),
+      relative_path: relativePath,
+      absolute_path: absolutePath,
+      file_ext: path.extname(absolutePath).slice(1).toLowerCase() || undefined,
+      supported_for_index: isSupportedLocalFilePath(absolutePath),
+      size: (await fs.stat(absolutePath)).size
+    }
+  }
+
+  private async resolveFile(rootPath: string, relativePath: string): Promise<string> {
+    const root = await fs.realpath(rootPath)
+    const requestedPath = path.resolve(root, relativePath.replace(/\\/g, '/'))
+    assertInsideRoot(root, requestedPath)
+    const filePath = await fs.realpath(requestedPath)
+    assertInsideRoot(root, filePath)
+    if (!(await fs.lstat(requestedPath)).isFile()) throw new Error('只能操作普通文件')
+    return filePath
+  }
+
   private async resolveDirectory(rootPath: string, relativePath: string): Promise<string> {
     const root = await fs.realpath(rootPath)
     if (!(await fs.stat(root)).isDirectory()) throw new Error('当前文件地址不是目录')
@@ -75,33 +107,46 @@ export class WorkspaceFileService {
       }
       throw error
     }
-    const root = await fs.realpath(input.rootPath)
-    const relativePath = path.relative(root, absolutePath).replace(/\\/g, '/')
-    const parentPath = path.posix.dirname(relativePath)
-    return {
-      id: `${input.workspaceId}:file:${relativePath}`,
-      workspace_id: input.workspaceId,
-      parent_id: parentPath === '.' ? undefined : `${input.workspaceId}:directory:${parentPath}`,
-      kind: 'file',
-      name: fileName,
-      relative_path: relativePath,
-      absolute_path: absolutePath,
-      file_ext: path.extname(fileName).slice(1).toLowerCase() || undefined,
-      supported_for_index: isSupportedLocalFilePath(absolutePath),
-      size: bytes.byteLength
+    return this.describeFile(input.workspaceId, input.rootPath, absolutePath)
+  }
+
+  async renameFile(input: {
+    workspaceId: string
+    rootPath: string
+    relativePath: string
+    fileName: string
+  }): Promise<WorkspaceTreeEntry> {
+    const fileName = normalizeFileName(input.fileName)
+    const source = await this.resolveFile(input.rootPath, input.relativePath)
+    if (path.extname(fileName) !== path.extname(source)) throw new Error('重命名需保留原文件后缀')
+    const destination = path.join(path.dirname(source), fileName)
+    if (source === destination) return this.describeFile(input.workspaceId, input.rootPath, source)
+    try {
+      // Link is exclusive: a concurrently created destination can never be overwritten.
+      await fs.link(source, destination)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      const sameCaseOnlyPath =
+        path.basename(source).toLowerCase() === fileName.toLowerCase() &&
+        (await fs.realpath(destination)) === source
+      if (!sameCaseOnlyPath) throw new Error('同名文件或文件夹已存在，请修改名称')
+      await fs.rename(source, destination)
+      return this.describeFile(input.workspaceId, input.rootPath, destination)
     }
+    try {
+      await fs.unlink(source)
+    } catch (error) {
+      await fs.unlink(destination)
+      throw error
+    }
+    return this.describeFile(input.workspaceId, input.rootPath, destination)
   }
 
   async trashFile(
     input: { rootPath: string; relativePath: string },
     moveToTrash: (filePath: string) => Promise<void>
   ): Promise<void> {
-    const root = await fs.realpath(input.rootPath)
-    const requestedPath = path.resolve(root, input.relativePath.replace(/\\/g, '/'))
-    assertInsideRoot(root, requestedPath)
-    const filePath = await fs.realpath(requestedPath)
-    assertInsideRoot(root, filePath)
-    if (!(await fs.lstat(requestedPath)).isFile()) throw new Error('只能删除文件')
+    const filePath = await this.resolveFile(input.rootPath, input.relativePath)
     await moveToTrash(filePath)
   }
 }

@@ -2,7 +2,7 @@ type TextSaveControl = {
   save: () => Promise<void>
   pause: () => void
   resume: () => void
-  discard: () => void
+  discard: (reason: 'deleted' | 'renamed') => void
 }
 
 const saves = new Map<string, TextSaveControl>()
@@ -22,17 +22,19 @@ export async function flushReferencedTextFiles(filePaths: string[]): Promise<voi
   await Promise.all([...new Set(filePaths)].map((filePath) => saves.get(filePath)?.save()))
 }
 
-export async function withTextFileDeletion(
+export async function withTextFileMutation<T>(
   filePath: string,
-  deleteFile: () => Promise<void>
-): Promise<void> {
+  reason: 'deleted' | 'renamed',
+  mutateFile: () => Promise<T>
+): Promise<T> {
   const control = saves.get(filePath)
   control?.pause()
   try {
     await control?.save()
-    await deleteFile()
-    control?.discard()
+    const result = await mutateFile()
+    control?.discard(reason)
     if (saves.get(filePath) === control) saves.delete(filePath)
+    return result
   } catch (error) {
     control?.resume()
     throw error

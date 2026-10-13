@@ -203,6 +203,7 @@ const api: DesktopApi = {
     })
     return ipcRenderer.invoke('workspace-directory-list', payload)
   },
+  workspaceFileRename: (payload) => ipcRenderer.invoke('workspace-file-rename', payload),
   workspaceFileCreate: (payload) => ipcRenderer.invoke('workspace-file-create', payload),
   workspaceFileTrash: (payload) => ipcRenderer.invoke('workspace-file-trash', payload),
   workspaceScan: (payload) => {

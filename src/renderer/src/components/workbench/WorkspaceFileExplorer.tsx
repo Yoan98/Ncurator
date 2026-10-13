@@ -1,23 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { App, Dropdown, Modal, type MenuProps } from 'antd'
-import {
-  HiChevronDown,
-  HiChevronRight,
-  HiDocumentText,
-  HiFolder,
-  HiOutlineMagnifyingGlass
-} from 'react-icons/hi2'
+import { HiChevronDown, HiChevronRight, HiOutlineMagnifyingGlass } from 'react-icons/hi2'
 import type {
   AiFileChangeRecord,
   WorkspaceSource,
   WorkspaceTreeEntry
 } from '../../../../shared/types'
 import { filterVisibleFileChangeRecords } from '../../../../shared/fileChangeVisibility'
+import { LuFilePlus2, LuPencil, LuTrash2 } from 'react-icons/lu'
+import FileIcon from '../FileIcon'
+import FileNameInput from './FileNameInput'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspaceFilesEmptyState from './WorkspaceFilesEmptyState'
 import type { WorkspaceLoadState } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
-import { withTextFileDeletion } from '../fileRenders/pendingTextSaves'
+import { withTextFileMutation } from '../fileRenders/pendingTextSaves'
 import {
   groupSessionFileChanges,
   normalizeFileChangePath as normalizePath
@@ -36,30 +33,28 @@ type WorkspaceFileExplorerProps = {
   reloadToken?: number
   /** 为 true 时才响应窗口焦点 / 可见性变化并刷新目录 */
   liveRefreshEnabled?: boolean
-  activeFilePath?: string | null
-  activeChangeId?: string | null
   onModeChange: (mode: WorkspaceFileExplorerMode) => void
   onOpenFile: (entry: WorkspaceTreeEntry) => void
   onOpenChange: (change: AiFileChangeRecord) => void
   onFileChanged: (filePath: string) => void
+  onFileRenamed: (oldPath: string, entry: WorkspaceTreeEntry) => void
 }
 
 type NewFileType = 'docx' | 'xlsx' | 'pptx' | 'other'
-type NewFileDraft = {
+type FileNameDraft = {
   parentPath: string
-  type: NewFileType
   name: string
-  extension: string
+  suffix: string
   error: string | null
-}
+} & ({ kind: 'create' } | { kind: 'rename'; entry: WorkspaceTreeEntry })
 
 const getParentPath = (relativePath: string): string =>
   relativePath.split('/').slice(0, -1).join('/')
 
 const newFileTypes: { type: NewFileType; label: string; name: string }[] = [
-  { type: 'docx', label: 'Word 文档 (.docx)', name: '新建文档' },
-  { type: 'xlsx', label: 'Excel 工作簿 (.xlsx)', name: '新建工作簿' },
-  { type: 'pptx', label: 'PPT 演示 (.pptx)', name: '新建演示文稿' },
+  { type: 'docx', label: 'Word 文档', name: '新建文档' },
+  { type: 'xlsx', label: 'Excel 工作簿', name: '新建工作簿' },
+  { type: 'pptx', label: 'PPT 演示', name: '新建演示文稿' },
   { type: 'other', label: '其他类型', name: '新建文件' }
 ]
 
@@ -82,12 +77,11 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   mode,
   reloadToken = 0,
   liveRefreshEnabled = false,
-  activeFilePath,
-  activeChangeId,
   onModeChange,
   onOpenFile,
   onOpenChange,
-  onFileChanged
+  onFileChanged,
+  onFileRenamed
 }) => {
   const { message } = App.useApp()
   const [childrenByPath, setChildrenByPath] = useState<Record<string, WorkspaceTreeEntry[]>>({})
@@ -98,21 +92,23 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   const [query, setQuery] = useState('')
   const [contextTarget, setContextTarget] = useState<WorkspaceTreeEntry | null>(null)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
-  const [draft, setDraft] = useState<NewFileDraft | null>(null)
-  const [creating, setCreating] = useState(false)
+  const [draft, setDraft] = useState<FileNameDraft | null>(null)
+  const [savingFile, setSavingFile] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<WorkspaceTreeEntry | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [highlightedPath, setHighlightedPath] = useState<string | null>(null)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const inputRowRef = useRef<HTMLDivElement | null>(null)
-  const nameInputRef = useRef<HTMLInputElement | null>(null)
-  const highlightedFileRef = useRef<HTMLButtonElement | null>(null)
+  const explorerRef = useRef<HTMLDivElement | null>(null)
+  const selectedFileRef = useRef<HTMLButtonElement | null>(null)
   const mutationInFlightRef = useRef(false)
   const workspaceIdRef = useRef(workspace?.id)
-  workspaceIdRef.current = workspace?.id
   const directoryRequestIds = useRef<Record<string, number>>({})
   const expandedRef = useRef(expanded)
   const appliedReloadTokenRef = useRef(reloadToken)
-  expandedRef.current = expanded
+  useLayoutEffect(() => {
+    workspaceIdRef.current = workspace?.id
+    expandedRef.current = expanded
+  }, [workspace?.id, expanded])
 
   const activeChanges = useMemo(
     () => groupSessionFileChanges(filterVisibleFileChangeRecords(changeRecords)),
@@ -184,7 +180,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     setDraft(null)
     setContextMenuOpen(false)
     setDeleteTarget(null)
-    setHighlightedPath(null)
+    setSelectedKey(null)
     if (workspace) void loadDirectory('')
     // reloadToken 只在工作区切换时同步，避免每次刷新都清空展开态
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when workspace/loader changes
@@ -196,81 +192,112 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   }, [mode])
 
   useEffect(() => {
-    nameInputRef.current?.focus()
-    nameInputRef.current?.select()
-    inputRowRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [draft?.parentPath, draft?.type])
-
-  useEffect(() => {
-    if (!draft || creating) return
-    const cancelOnOutsideClick = (event: PointerEvent): void => {
-      if (event.target instanceof Node && !inputRowRef.current?.contains(event.target))
-        setDraft(null)
+    const onOutsideClick = (event: PointerEvent): void => {
+      if (!(event.target instanceof Element)) return
+      if (draft && !savingFile && !inputRowRef.current?.contains(event.target)) setDraft(null)
+      if (
+        !event.target.closest('.workspace-file-menu') &&
+        !(
+          explorerRef.current?.contains(event.target) &&
+          event.target.closest('[data-workspace-entry]')
+        ) &&
+        !inputRowRef.current?.contains(event.target)
+      )
+        setSelectedKey(null)
     }
-    document.addEventListener('pointerdown', cancelOnOutsideClick, true)
-    return () => document.removeEventListener('pointerdown', cancelOnOutsideClick, true)
-  }, [draft, creating])
+    document.addEventListener('pointerdown', onOutsideClick, true)
+    return () => document.removeEventListener('pointerdown', onOutsideClick, true)
+  }, [draft, savingFile])
 
   useEffect(() => {
-    if (highlightedPath) highlightedFileRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [childrenByPath, highlightedPath])
-
-  useEffect(() => {
-    if (!highlightedPath) return
-    const timer = window.setTimeout(() => setHighlightedPath(null), 2500)
-    return () => window.clearTimeout(timer)
-  }, [highlightedPath])
+    if (selectedKey) selectedFileRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [selectedKey])
 
   const beginCreate = (type: NewFileType): void => {
-    const parentPath =
-      contextTarget?.kind === 'directory'
-        ? contextTarget.relative_path
-        : getParentPath(contextTarget?.relative_path || '')
+    const parentPath = contextTarget?.kind === 'directory' ? contextTarget.relative_path : ''
+    const suffix = type === 'other' ? '' : `.${type}`
     setQuery('')
     if (parentPath) setExpanded((current) => new Set(current).add(parentPath))
     void loadDirectory(parentPath)
     setDraft({
+      kind: 'create',
       parentPath,
-      type,
-      name: newFileTypes.find((item) => item.type === type)?.name || '新建文件',
-      extension: type === 'other' ? '' : type,
+      suffix,
+      name: `${newFileTypes.find((item) => item.type === type)?.name || '新建文件'}${suffix}`,
       error: null
     })
   }
 
-  const createFile = async (): Promise<void> => {
+  const beginRename = (entry: WorkspaceTreeEntry): void => {
+    const dot = entry.name.lastIndexOf('.')
+    setDraft({
+      kind: 'rename',
+      entry,
+      parentPath: getParentPath(entry.relative_path),
+      name: entry.name,
+      suffix: dot > 0 ? entry.name.slice(dot) : '',
+      error: null
+    })
+  }
+
+  const submitFileName = async (): Promise<void> => {
     if (!workspace || !draft || mutationInFlightRef.current) return
-    const extension = draft.extension.trim().replace(/^\./, '')
-    if (!draft.name.trim()) {
+    const fileName = draft.name.trim()
+    const baseName = draft.suffix ? fileName.slice(0, -draft.suffix.length) : fileName
+    const dot = fileName.lastIndexOf('.')
+    if (!baseName.trim()) {
       setDraft({ ...draft, error: '请输入文件名' })
       return
     }
-    if (!/^[\p{L}\p{N}_-]+(?:\.[\p{L}\p{N}_-]+)*$/u.test(extension)) {
-      setDraft({ ...draft, error: '请输入有效后缀，例如 txt 或 md' })
+    if (
+      draft.kind === 'create' &&
+      !draft.suffix &&
+      (dot <= 0 || !/^[\p{L}\p{N}_-]+$/u.test(fileName.slice(dot + 1)))
+    ) {
+      setDraft({ ...draft, error: '请输入文件名和有效后缀，例如 笔记.md' })
+      return
+    }
+    if (draft.kind === 'rename' && fileName === draft.entry.name) {
+      setDraft(null)
       return
     }
     mutationInFlightRef.current = true
-    setCreating(true)
+    setSavingFile(true)
     try {
-      const response = await window.api.workspaceFileCreate({
-        workspaceId: workspace.id,
-        parentRelativePath: draft.parentPath,
-        fileName: `${draft.name.trim()}.${extension}`
-      })
-      if (!response.success || !response.entry) throw new Error(response.error || '新建文件失败')
+      let entry: WorkspaceTreeEntry
+      if (draft.kind === 'rename') {
+        entry = await withTextFileMutation(draft.entry.absolute_path, 'renamed', async () => {
+          const response = await window.api.workspaceFileRename({
+            workspaceId: workspace.id,
+            relativePath: draft.entry.relative_path,
+            fileName
+          })
+          if (!response.success || !response.entry) throw new Error(response.error || '重命名失败')
+          return response.entry
+        })
+        onFileRenamed(draft.entry.absolute_path, entry)
+      } else {
+        const response = await window.api.workspaceFileCreate({
+          workspaceId: workspace.id,
+          parentRelativePath: draft.parentPath,
+          fileName
+        })
+        if (!response.success || !response.entry) throw new Error(response.error || '新建文件失败')
+        entry = response.entry
+        onFileChanged(entry.absolute_path)
+      }
       if (workspaceIdRef.current !== workspace.id) return
       setDraft(null)
+      setQuery('')
       await loadDirectory(draft.parentPath)
       if (workspaceIdRef.current !== workspace.id) return
-      setHighlightedPath(response.entry.relative_path)
-      onFileChanged(response.entry.absolute_path)
+      setSelectedKey(`file:${normalizePath(entry.absolute_path)}`)
     } catch (error) {
-      if (workspaceIdRef.current === workspace.id) {
-        setDraft({ ...draft, error: error instanceof Error ? error.message : '新建文件失败' })
-      }
+      if (workspaceIdRef.current === workspace.id)
+        setDraft({ ...draft, error: error instanceof Error ? error.message : '文件操作失败' })
     } finally {
       mutationInFlightRef.current = false
-      setCreating(false)
+      setSavingFile(false)
     }
   }
 
@@ -279,7 +306,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     mutationInFlightRef.current = true
     setDeleting(true)
     try {
-      await withTextFileDeletion(deleteTarget.absolute_path, async () => {
+      await withTextFileMutation(deleteTarget.absolute_path, 'deleted', async () => {
         const response = await window.api.workspaceFileTrash({
           workspaceId: workspace.id,
           relativePath: deleteTarget.relative_path
@@ -289,6 +316,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       onFileChanged(deleteTarget.absolute_path)
       if (workspaceIdRef.current !== workspace.id) return
       setDeleteTarget(null)
+      setSelectedKey(null)
       await loadDirectory(getParentPath(deleteTarget.relative_path))
       void message.success('文件已移到回收站')
     } catch (error) {
@@ -300,70 +328,61 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   }
 
   const contextMenu: MenuProps = {
-    items: [
-      {
-        key: 'create',
-        label: '新建文件',
-        children: newFileTypes.map(({ type, label }) => ({ key: type, label }))
-      },
-      ...(contextTarget?.kind === 'file' ? [{ key: 'delete', label: '删除', danger: true }] : [])
-    ],
+    selectable: false,
+    items:
+      contextTarget?.kind === 'file'
+        ? [
+            { key: 'rename', label: '重命名', icon: <LuPencil aria-hidden className="h-4 w-4" /> },
+            { type: 'divider' },
+            {
+              key: 'delete',
+              label: '删除',
+              danger: true,
+              icon: <LuTrash2 aria-hidden className="h-4 w-4" />
+            }
+          ]
+        : [
+            {
+              key: 'create',
+              label: '新建文件',
+              icon: <LuFilePlus2 aria-hidden className="h-4 w-4" />,
+              popupClassName: 'workspace-file-menu',
+              children: newFileTypes.map(({ type, label }) => ({
+                key: type,
+                label,
+                icon: (
+                  <FileIcon
+                    extension={type === 'other' ? '' : type}
+                    className="h-4 w-4 shrink-0 text-[#787774]"
+                  />
+                )
+              }))
+            }
+          ],
     onClick: ({ key }) => {
       setContextMenuOpen(false)
       if (key === 'delete') setDeleteTarget(contextTarget)
+      else if (key === 'rename' && contextTarget) beginRename(contextTarget)
       else if (newFileTypes.some((item) => item.type === key)) beginCreate(key as NewFileType)
     }
   }
 
   const renderDraft = (parentPath: string, depth: number): React.ReactNode =>
     draft?.parentPath === parentPath ? (
-      <div ref={inputRowRef} className="py-1 pr-2" style={{ paddingLeft: 30 + depth * 14 }}>
-        <div className="flex min-h-7 items-center gap-1 rounded-[6px] border border-[#0B6BCB] bg-white px-1.5 text-[13px]">
-          <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
-          <input
-            ref={nameInputRef}
-            aria-label="新建文件名"
-            value={draft.name}
-            disabled={creating}
-            className="min-w-0 flex-1 bg-transparent text-[#37352F] outline-none"
-            onChange={(event) => setDraft({ ...draft, name: event.target.value, error: null })}
-            onKeyDown={handleDraftKeyDown}
-          />
-          <span className="text-[#787774]">.</span>
-          {draft.type === 'other' ? (
-            <input
-              aria-label="文件后缀"
-              placeholder="后缀"
-              value={draft.extension}
-              disabled={creating}
-              className="w-14 min-w-0 bg-transparent text-[#37352F] outline-none"
-              onChange={(event) =>
-                setDraft({ ...draft, extension: event.target.value, error: null })
-              }
-              onKeyDown={handleDraftKeyDown}
-            />
-          ) : (
-            <span className="text-[#787774]">{draft.extension}</span>
-          )}
-        </div>
-        {draft.error ? (
-          <div role="alert" className="mt-1 text-xs text-[#B3261E]">
-            {draft.error}
-          </div>
-        ) : null}
+      <div ref={inputRowRef} className="py-1 pr-2" style={{ paddingLeft: 25 + depth * 18 }}>
+        <FileNameInput
+          key={draft.kind === 'rename' ? draft.entry.id : `create:${parentPath}:${draft.suffix}`}
+          value={draft.name}
+          suffix={draft.suffix}
+          renaming={draft.kind === 'rename'}
+          busy={savingFile}
+          error={draft.error}
+          onChange={(name) => setDraft({ ...draft, name, error: null })}
+          onSubmit={() => void submitFileName()}
+          onCancel={() => setDraft(null)}
+        />
       </div>
     ) : null
-
-  function handleDraftKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      event.stopPropagation()
-      if (!creating) setDraft(null)
-    } else if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
-      event.preventDefault()
-      void createFile()
-    }
-  }
 
   useEffect(() => {
     if (!workspace || reloadToken === appliedReloadTokenRef.current) return
@@ -398,80 +417,97 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   }
 
   const renderEntries = (parentPath: string, depth: number): React.ReactNode => {
-    const entries = childrenByPath[parentPath] || []
+    const entries = [...(childrenByPath[parentPath] || [])].sort((a, b) =>
+      a.kind === b.kind ? 0 : a.kind === 'directory' ? -1 : 1
+    )
+    const firstFileIndex = entries.findIndex((entry) => entry.kind === 'file')
     const normalizedQuery = query.trim().toLowerCase()
     return (
       <>
-        {renderDraft(parentPath, depth)}
-        {entries.map((entry) => {
+        {draft?.kind === 'create' && firstFileIndex === -1 && entries.length === 0
+          ? renderDraft(parentPath, depth)
+          : null}
+        {entries.map((entry, index) => {
           const isDirectory = entry.kind === 'directory'
           const isExpanded = expanded.has(entry.relative_path)
           const change = changesByPath.get(normalizePath(entry.absolute_path))
           const visible =
             !normalizedQuery || entry.relative_path.toLowerCase().includes(normalizedQuery)
-          const selected =
-            !isDirectory &&
-            Boolean(activeFilePath) &&
-            normalizePath(entry.absolute_path) === normalizePath(activeFilePath || '')
+          const entryKey = `file:${normalizePath(entry.absolute_path)}`
+          const selected = selectedKey === entryKey
           return (
             <React.Fragment key={entry.id}>
-              <button
-                type="button"
-                className={`relative flex h-7 w-full items-center gap-1.5 pr-2 text-left text-[13px] transition-colors ${
-                  selected
-                    ? 'bg-[#EEEEEB] font-medium text-[#2F2E2A] before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:bg-[#787774]'
-                    : highlightedPath === entry.relative_path
-                      ? 'bg-[#EDF3F8] text-[#2F5F8F]'
-                      : 'text-[#57554F] hover:bg-[#F4F4F2]'
-                } ${visible ? '' : 'hidden'}`}
-                style={{ paddingLeft: 8 + depth * 14 }}
-                title={entry.relative_path}
-                aria-current={selected ? 'page' : undefined}
-                data-workspace-entry="true"
-                ref={highlightedPath === entry.relative_path ? highlightedFileRef : undefined}
-                onContextMenu={() => setContextTarget(entry)}
-                onKeyDown={(event) => {
-                  if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-                    event.preventDefault()
+              {draft?.kind === 'create' && index === firstFileIndex
+                ? renderDraft(parentPath, depth)
+                : null}
+              {draft?.kind === 'rename' && draft.entry.id === entry.id ? (
+                renderDraft(parentPath, depth)
+              ) : (
+                <button
+                  type="button"
+                  className={`relative flex h-[30px] w-full items-center gap-1.5 pr-2 text-left text-[13px] transition-colors ${
+                    selected ? 'bg-[#EEEEEB] text-[#37352F]' : 'text-[#57554F]'
+                  } ${visible ? '' : 'hidden'}`}
+                  style={{ paddingLeft: 8 + depth * 18 }}
+                  title={entry.relative_path}
+                  aria-current={selected ? 'true' : undefined}
+                  data-workspace-entry="true"
+                  ref={selected ? selectedFileRef : undefined}
+                  onContextMenu={() => {
                     setContextTarget(entry)
-                    setContextMenuOpen(true)
-                  }
-                }}
-                onClick={() => (isDirectory ? toggleDirectory(entry) : onOpenFile(entry))}
-              >
-                <span className="flex h-5 w-4 shrink-0 items-center justify-center text-[#91918E]">
-                  {isDirectory ? (
-                    isExpanded ? (
-                      <HiChevronDown className="h-4 w-4" />
-                    ) : (
-                      <HiChevronRight className="h-4 w-4" />
-                    )
-                  ) : null}
-                </span>
-                {isDirectory ? (
-                  <HiFolder className="h-4 w-4 shrink-0 text-[#787774]" />
-                ) : (
-                  <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
-                )}
-                <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-                {change ? (
-                  <span title="当前运行中已修改">
-                    {change.insertCount > 0 || change.deleteCount > 0 ? (
-                      <ChangeCountBadges
-                        insertCount={change.insertCount}
-                        deleteCount={change.deleteCount}
-                        mode="compact"
-                      />
-                    ) : (
-                      <span className="text-[11px] font-medium text-[#787774]">已改</span>
-                    )}
+                    setSelectedKey(entryKey)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+                      event.preventDefault()
+                      setContextTarget(entry)
+                      setSelectedKey(entryKey)
+                      setContextMenuOpen(true)
+                    }
+                  }}
+                  onClick={() => {
+                    setSelectedKey(entryKey)
+                    isDirectory ? toggleDirectory(entry) : onOpenFile(entry)
+                  }}
+                >
+                  <span className="flex h-5 w-4 shrink-0 items-center justify-center text-[#91918E]">
+                    {isDirectory ? (
+                      isExpanded ? (
+                        <HiChevronDown className="h-4 w-4" />
+                      ) : (
+                        <HiChevronRight className="h-4 w-4" />
+                      )
+                    ) : null}
                   </span>
-                ) : null}
-              </button>
+                  <FileIcon
+                    name={entry.name}
+                    extension={entry.file_ext}
+                    kind={isDirectory ? 'directory' : undefined}
+                    expanded={isExpanded}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                  {change ? (
+                    <span title="当前运行中已修改">
+                      {change.insertCount > 0 || change.deleteCount > 0 ? (
+                        <ChangeCountBadges
+                          insertCount={change.insertCount}
+                          deleteCount={change.deleteCount}
+                          mode="compact"
+                        />
+                      ) : (
+                        <span className="text-[11px] font-medium text-[#787774]">已改</span>
+                      )}
+                    </span>
+                  ) : null}
+                </button>
+              )}
               {isDirectory && isExpanded ? renderEntries(entry.relative_path, depth + 1) : null}
             </React.Fragment>
           )
         })}
+        {draft?.kind === 'create' && firstFileIndex === -1 && entries.length > 0
+          ? renderDraft(parentPath, depth)
+          : null}
       </>
     )
   }
@@ -494,7 +530,10 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white">
+    <div
+      ref={explorerRef}
+      className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white"
+    >
       <div className="shrink-0 px-2 pt-2">
         <div
           className="grid h-8 grid-cols-2 rounded-[6px] bg-[#F3F3F1] p-0.5"
@@ -529,8 +568,10 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       </div>
       <Dropdown
         trigger={['contextMenu']}
+        destroyPopupOnHide
+        overlayClassName="workspace-file-menu"
         menu={contextMenu}
-        disabled={mode !== 'all' || creating || deleting}
+        disabled={mode !== 'all' || savingFile || deleting}
         open={contextMenuOpen && mode === 'all'}
         onOpenChange={setContextMenuOpen}
         dropdownRender={(menu) => (
@@ -556,6 +597,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
               !event.target.closest('[data-workspace-entry]')
             ) {
               setContextTarget(null)
+              setSelectedKey(null)
             }
           }}
         >
@@ -583,10 +625,8 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
               renderEntries('', 0)
             )
           ) : filteredChanges.length > 0 ? (
-            filteredChanges.map(({ latest, records, paths }) => {
-              const selected =
-                records.some((record) => record.id === activeChangeId) ||
-                (Boolean(activeFilePath) && paths.has(normalizePath(activeFilePath || '')))
+            filteredChanges.map(({ latest, records }) => {
+              const selected = selectedKey === `change:${latest.id}`
               const isExpanded = expandedChangeGroups.has(latest.id)
               const displayPath = getRelativePath(
                 workspace,
@@ -596,10 +636,14 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                 <React.Fragment key={latest.id}>
                   <button
                     type="button"
-                    className={`relative flex h-9 w-full items-center gap-2 px-2 text-left text-[13px] transition-colors ${selected ? 'bg-[#EEEEEB] font-medium text-[#2F2E2A] before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:bg-[#787774]' : 'text-[#57554F] hover:bg-[#F4F4F2]'}`}
-                    aria-current={selected ? 'page' : undefined}
+                    className={`relative flex h-9 w-full items-center gap-2 px-2 text-left text-[13px] transition-colors ${selected ? 'bg-[#EEEEEB] text-[#37352F]' : 'text-[#57554F]'}`}
+                    aria-current={selected ? 'true' : undefined}
+                    data-workspace-entry="true"
                     data-testid={`${workbenchSelectors.workspaceFileChangePrefix}-${latest.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
-                    onClick={() => onOpenChange(latest)}
+                    onClick={() => {
+                      setSelectedKey(`change:${latest.id}`)
+                      onOpenChange(latest)
+                    }}
                   >
                     {records.length > 1 ? (
                       <span
@@ -633,7 +677,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                         )}
                       </span>
                     ) : null}
-                    <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
+                    <FileIcon name={displayPath} />
                     <span className="min-w-0 flex-1 truncate" title={displayPath}>
                       {displayPath}
                     </span>
@@ -662,11 +706,15 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                     <div className="border-b border-[#EEEEEC] bg-[#FAFAF9] py-1">
                       {records.map((record, index) => (
                         <button
+                          data-workspace-entry="true"
                           key={record.id}
                           type="button"
-                          className={`flex h-8 w-full items-center gap-2 pl-9 pr-2 text-left text-[12px] ${record.id === activeChangeId ? 'bg-[#EEEEEB] text-[#37352F]' : 'text-[#787774] hover:bg-[#F4F4F2]'}`}
-                          aria-current={record.id === activeChangeId ? 'page' : undefined}
-                          onClick={() => onOpenChange(record)}
+                          className={`flex h-8 w-full items-center gap-2 pl-9 pr-2 text-left text-[12px] ${selectedKey === `change:${record.id}` ? 'bg-[#EEEEEB] text-[#37352F]' : 'text-[#787774]'}`}
+                          aria-current={selectedKey === `change:${record.id}` ? 'page' : undefined}
+                          onClick={() => {
+                            setSelectedKey(`change:${record.id}`)
+                            onOpenChange(record)
+                          }}
                         >
                           <span className="shrink-0">
                             {index === 0 ? '最新' : `第 ${records.length - index} 次`}

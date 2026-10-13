@@ -1,56 +1,22 @@
-import React from 'react'
-import type { FileReference } from '../../../../../shared/types'
-import ReferenceIcon from './ReferenceIcon'
-import { getReferenceVisualSpec } from './referenceVisuals'
+import type { FC } from 'react'
+import FileIcon from '../../FileIcon'
 
 type AttachmentFileIconProps = {
   fileName: string
   className?: string
-  /** 尺寸类单独传，避免与默认尺寸在 Tailwind 中互相覆盖失败 */
   sizeClassName?: string
 }
 
-const getFileExtension = (fileName: string): string => {
-  const lastSegment = String(fileName || '')
-    .split(/[\\/]/u)
-    .pop()
-  if (!lastSegment) return ''
-  const dotIndex = lastSegment.lastIndexOf('.')
-  return dotIndex > -1
-    ? lastSegment
-        .slice(dotIndex + 1)
-        .trim()
-        .toLowerCase()
-    : ''
-}
-
-const createAttachmentFileReference = (fileName: string): FileReference => ({
-  kind: 'file',
-  workspaceId: '',
-  nodeId: `attachment:${fileName}`,
-  name: fileName,
-  relativePath: fileName,
-  absolutePath: '',
-  fileExt: getFileExtension(fileName),
-  kbDocumentIds: [],
-  kbAvailability: 'not_indexed'
-})
-
-export const AttachmentFileIcon: React.FC<AttachmentFileIconProps> = ({
+const AttachmentFileIcon: FC<AttachmentFileIconProps> = ({
   fileName,
   className = '',
   sizeClassName = 'h-8 w-8'
-}) => {
-  const reference = createAttachmentFileReference(fileName)
-  const visualSpec = getReferenceVisualSpec(reference)
-
-  return (
-    <span
-      className={`flex shrink-0 items-center justify-center rounded-[8px] bg-[#F4F4F2] ${sizeClassName} ${visualSpec.iconClassName} ${className}`}
-    >
-      <ReferenceIcon reference={reference} size="md" />
-    </span>
-  )
-}
+}) => (
+  <span
+    className={`flex shrink-0 items-center justify-center rounded-[8px] bg-[#F4F4F2] ${sizeClassName} ${className}`}
+  >
+    <FileIcon name={fileName} className="h-[21px] w-[21px] text-[#787774]" />
+  </span>
+)
 
 export default AttachmentFileIcon

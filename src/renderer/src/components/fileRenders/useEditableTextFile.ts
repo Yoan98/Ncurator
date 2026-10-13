@@ -120,15 +120,19 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     [clearSaveTimer, flushSave]
   )
 
-  const discardDeletedFile = useCallback((): void => {
-    deletedRef.current = true
-    pausedRef.current = true
-    clearSaveTimer()
-    pendingContentRef.current = null
-    unsavedRef.current = false
-    setReadOnly(true)
-    setState({ loading: false, text: null, hash: null, error: '文件已删除' })
-  }, [clearSaveTimer])
+  const discardDeletedFile = useCallback(
+    (reason: 'deleted' | 'renamed' = 'deleted'): void => {
+      deletedRef.current = true
+      pausedRef.current = true
+      clearSaveTimer()
+      pendingContentRef.current = null
+      unsavedRef.current = false
+      setReadOnly(true)
+      if (reason === 'deleted')
+        setState({ loading: false, text: null, hash: null, error: '文件已删除' })
+    },
+    [clearSaveTimer]
+  )
 
   useEffect(
     () =>
@@ -182,13 +186,16 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
   }, [discardDeletedFile])
 
   const checkExternalChange = useCallback(async (): Promise<void> => {
+    if (pausedRef.current) return
     try {
       const bytes = await window.api.readFile(filePathRef.current)
       const currentHash = await sha256Hex(bytes)
+      if (pausedRef.current) return
       if (currentHash === lastWrittenHashRef.current) return
       if (unsavedRef.current) return
       await load()
     } catch (error) {
+      if (pausedRef.current) return
       if (!(await window.api.fileExists(filePathRef.current))) discardDeletedFile()
       else console.error('[EDITABLE-FILE] external change check failed', error)
     }
