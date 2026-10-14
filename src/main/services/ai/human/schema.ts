@@ -3,6 +3,7 @@ import { aiArtifactRefSchema } from '../schema'
 import { jsonObjectSchema, jsonValueSchema, toolResourceContextSchema } from './toolSchemas'
 import {
   AI_TOOL_FAMILY_IDS,
+  HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_SOURCES,
   HUMAN_STAGES,
   HUMAN_STATUSES,
@@ -12,11 +13,12 @@ import {
 } from './constants'
 import { BUILTIN_RUNTIME_SKILL_IDS } from './skills'
 
-const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
-const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
-const humanStageSchema = z.enum(HUMAN_STAGES)
-const humanStatusSchema = z.enum(HUMAN_STATUSES)
-const humanSkillSourceSchema = z.enum(HUMAN_SKILL_SOURCES)
+export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
+export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
+export const humanStageSchema = z.enum(HUMAN_STAGES)
+export const humanStatusSchema = z.enum(HUMAN_STATUSES)
+export const humanSkillSourceSchema = z.enum(HUMAN_SKILL_SOURCES)
+export const humanRoundExecutionKindSchema = z.enum(HUMAN_ROUND_EXECUTION_KINDS)
 
 export const humanTaskInputSchema = z.object({
   taskId: z.string(),
@@ -126,7 +128,7 @@ export const humanNextActionSchema = z.discriminatedUnion('action', [
   })
 ])
 
-const humanDeliveryPayloadSchema = z.object({
+export const humanDeliveryPayloadSchema = z.object({
   deliveryMarkdown: z.string().default('')
 })
 

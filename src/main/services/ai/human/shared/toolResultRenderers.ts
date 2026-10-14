@@ -1,5 +1,5 @@
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
-import type { ToolCallResult } from '../types'
+import type { ToolCallResult, ToolResourceContext } from '../types'
 
 const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value))
@@ -356,6 +356,20 @@ const renderWebSearchResult = (obj: JsonObject): string => {
 
 const renderDocxMutationResult = (obj: JsonObject): string | undefined =>
   Array.isArray(obj.createdIds) ? `createdIds:\n${renderGenericArray(obj.createdIds)}` : undefined
+
+export const renderToolResourceContextText = (
+  resourceContext: ToolResourceContext | undefined
+): string | undefined => {
+  if (!resourceContext) return undefined
+
+  return renderKeyValuePairs([
+    ['family', resourceContext.family],
+    ['effectKind', resourceContext.effectKind],
+    ['sourcePath', resourceContext.sourcePath],
+    ['previousRevisionRef', resourceContext.previousRevisionRef],
+    ['currentRevisionRef', resourceContext.currentRevisionRef]
+  ])
+}
 
 export const renderToolResultDataText = (
   result: Pick<ToolCallResult, 'toolName' | 'data'>

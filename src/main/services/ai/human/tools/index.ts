@@ -11,10 +11,11 @@ import { webToolFamily } from './web'
 import { agentControlToolFamily } from './agentControl'
 import { scheduledTasksToolFamily } from './scheduledTasks'
 
-const kbToolFamily: ToolFamilyDefinition = {
+export const kbToolFamily: ToolFamilyDefinition = {
   familyId: 'kb',
   buildTools: ({ ctx, runId, taskId }) => buildKbCapabilityTools({ ctx, runId, taskId })
 }
+
 
 export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinition> = {
   terminal: terminalToolFamily,
@@ -29,3 +30,6 @@ export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinitio
   'agent-control': agentControlToolFamily,
   'scheduled-tasks': scheduledTasksToolFamily
 }
+
+export const getToolFamilyDefinition = (familyId: AiToolFamilyId): ToolFamilyDefinition =>
+  TOOL_FAMILY_DEFINITIONS[familyId]

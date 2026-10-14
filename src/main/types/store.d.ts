@@ -288,6 +288,11 @@ export type {
 export interface TableConfig {
   name: string
   schema: arrow.Schema
+  scalarIndexColumns?: string[]
+  vectorIndexConfig?: {
+    column: string
+    options?: Record<string, unknown>
+  }
   ftsIndexConfig?: {
     column: string
     options?: Record<string, unknown>

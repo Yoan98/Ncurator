@@ -57,7 +57,8 @@ export class LanceDbCore {
 
   public async close(): Promise<void> {
     for (const table of this.tableCache.values()) {
-      table.close()
+      const maybeTable = table as { close?: () => void }
+      if (typeof maybeTable.close === 'function') maybeTable.close()
     }
     this.tableNamesCache = null
     this.tableCache.clear()
@@ -86,6 +87,38 @@ export class LanceDbCore {
     const wrapped = this.createSerializedTable(tableName, table)
     this.tableCache.set(tableName, wrapped)
     return wrapped
+  }
+
+  public async ensureLanceScalarIndexes(name: string, columns: string[]): Promise<void> {
+    const normalizedColumns = columns.map((column) => String(column || '').trim()).filter(Boolean)
+    if (normalizedColumns.length === 0) return
+
+    const table = await this.openTable(name)
+    const existing = await table.listIndices()
+    const existingNames = new Set(
+      existing.flatMap((index) => {
+        const value = index as { name?: unknown; columns?: unknown }
+        const names = [String(value.name || '')]
+        if (Array.isArray(value.columns)) {
+          names.push(...value.columns.map((column) => `${String(column)}_idx`))
+        }
+        return names.filter(Boolean)
+      })
+    )
+
+    for (const column of normalizedColumns) {
+      const indexName = `${column}_idx`
+      if (existingNames.has(indexName)) continue
+      await table.createIndex(column)
+      existingNames.add(indexName)
+    }
+  }
+
+  public async optimizeTables(names: string[]): Promise<void> {
+    for (const name of names) {
+      const table = await this.openTable(name)
+      await table.optimize({ cleanupOlderThan: new Date(), deleteUnverified: true })
+    }
   }
 
   public escapeSqlString(value: string): string {
@@ -241,6 +274,10 @@ export class LanceDbCore {
 
     const table = await this.db.openTable(config.name)
     await this.assertTableSchemaMatches(config, table)
+
+    if (config.scalarIndexColumns && config.scalarIndexColumns.length > 0) {
+      await this.createMissingLanceScalarIndexes(table, config.scalarIndexColumns)
+    }
   }
 
   private async createTable(config: TableConfig): Promise<void> {
@@ -250,8 +287,16 @@ export class LanceDbCore {
     this.tableNamesCache = null
     this.tableCache.delete(config.name)
 
+    if (config.vectorIndexConfig) {
+      await table.createIndex(config.vectorIndexConfig.column, config.vectorIndexConfig.options)
+    }
+
     if (config.ftsIndexConfig) {
       await table.createIndex(config.ftsIndexConfig.column, config.ftsIndexConfig.options)
+    }
+
+    if (config.scalarIndexColumns) {
+      await this.createMissingLanceScalarIndexes(table, config.scalarIndexColumns)
     }
   }
 
@@ -279,6 +324,24 @@ export class LanceDbCore {
     )
     this.logError(error, 'schema-mismatch', config.name)
     throw error
+  }
+
+  private async createMissingLanceScalarIndexes(
+    table: {
+      listIndices: () => Promise<unknown[]>
+      createIndex: (column: string) => Promise<void>
+    },
+    columns: string[]
+  ): Promise<void> {
+    const indices = await table.listIndices()
+    const existingNames = new Set(
+      indices.map((index) => String((index as { name?: unknown }).name || '')).filter(Boolean)
+    )
+    for (const column of columns) {
+      if (existingNames.has(`${column}_idx`)) continue
+      await table.createIndex(column)
+      existingNames.add(`${column}_idx`)
+    }
   }
 
   private getTableConfigs(): TableConfig[] {

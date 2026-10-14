@@ -27,3 +27,8 @@ export const mergeDeliveryGuidanceItems = (
   if (alreadyExists) return existingItems
   return [...existingItems, incoming]
 }
+
+export const renderDeliveryGuidanceItems = (items: DeliveryGuidanceItem[] | undefined): string =>
+  items && items.length > 0
+    ? items.map((item, index) => `${index + 1}. ${item.text}`).join('\n')
+    : 'none'

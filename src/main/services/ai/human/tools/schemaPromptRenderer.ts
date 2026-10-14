@@ -403,7 +403,7 @@ const buildSchemaRenderOutput = (
   }
 }
 
-const renderSchemaShape = (
+export const renderSchemaShape = (
   schema: z.ZodType,
   options?: { brainPromptFriendly?: boolean }
 ): string => {
@@ -424,6 +424,23 @@ export const renderToolInputSchemaForPrompt = (
   if (!options?.compact) return renderSchemaShape(schema)
 
   const { rootSchema, definitionBlocks } = buildCompactSchemaRenderOutput(schema)
+  return [
+    rootSchema,
+    ...(definitionBlocks.length > 0 ? ['类型定义：', ...definitionBlocks] : [])
+  ].join('\n')
+}
+
+export const renderBrainOutputSchemaForPrompt = (
+  schema: z.ZodType,
+  options?: { compact?: boolean }
+): string => {
+  if (!options?.compact) {
+    return renderSchemaShape(schema, { brainPromptFriendly: true })
+  }
+
+  const { rootSchema, definitionBlocks } = buildCompactSchemaRenderOutput(schema, {
+    brainPromptFriendly: true
+  })
   return [
     rootSchema,
     ...(definitionBlocks.length > 0 ? ['类型定义：', ...definitionBlocks] : [])
