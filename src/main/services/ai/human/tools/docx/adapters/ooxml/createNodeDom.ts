@@ -1,17 +1,17 @@
 import type JSZip from 'jszip'
 import path from 'node:path'
-import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
+import { DOMParser,XMLSerializer } from '@xmldom/xmldom'
 import type {
-  DocxBorder,
-  DocxBorders,
-  DocxCreateContainerChildNode,
-  DocxCreateHyperlinkNode,
-  DocxCreateParagraphNode,
-  DocxCreateRunNode,
-  DocxCreateTableCellNode,
-  DocxCreateTableNode,
-  DocxCreateTableRowNode,
-  DocxLength
+DocxBorder,
+DocxBorders,
+DocxCreateContainerChildNode,
+DocxCreateHyperlinkNode,
+DocxCreateParagraphNode,
+DocxCreateRunNode,
+DocxCreateTableCellNode,
+DocxCreateTableNode,
+DocxCreateTableRowNode,
+DocxLength
 } from '../../types'
 import { normalizeDocxHexColor } from '../../utils/color'
 import { childElements } from './dom'
@@ -332,41 +332,3 @@ export const createNodeFromNode = (
   node.type === 'paragraph'
     ? createParagraphFromNode(doc, node, relationships)
     : createTable(doc, node, relationships)
-
-export const replaceCellContentFromNodes = (
-  cell: Element,
-  children: readonly DocxCreateContainerChildNode[],
-  relationships: DocxRelationshipWriter
-): void => {
-  childElements(cell)
-    .filter((child) => child.localName !== 'tcPr')
-    .forEach((child) => cell.removeChild(child))
-  children.forEach((child) =>
-    cell.appendChild(createNodeFromNode(cell.ownerDocument, child, relationships))
-  )
-  const last = cell.lastChild
-  if (!last || !('localName' in last) || (last as Element).localName !== 'p') {
-    cell.appendChild(
-      createParagraphFromNode(
-        cell.ownerDocument,
-        { type: 'paragraph', children: [{ type: 'run', children: [{ type: 'text', text: '' }] }] },
-        relationships
-      )
-    )
-  }
-}
-
-export const createNodeText = (node: DocxCreateContainerChildNode): string => {
-  if (node.type === 'paragraph') {
-    return node.children
-      .flatMap((child) => (child.type === 'run' ? [child] : child.children))
-      .flatMap((run) => run.children)
-      .map((child) => (child.type === 'text' ? child.text : child.type === 'tab' ? '\t' : '\n'))
-      .join('')
-  }
-  return node.children
-    .flatMap((row) => row.children)
-    .flatMap((cell) => cell.children)
-    .map(createNodeText)
-    .join('\n')
-}

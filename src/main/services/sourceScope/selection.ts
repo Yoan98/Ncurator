@@ -10,25 +10,8 @@ import type {
   WorkspaceTreeEntry
 } from '../../../shared/types'
 
-export const getWorkspaceScopeKey = (
-  node: Pick<WorkspaceTreeEntry, 'kind' | 'relative_path'>
-): string => `${node.kind}:${node.relative_path}`
-
 const isIndexedWorkspaceFile = (record?: WorkspaceFileIndexRecord): boolean =>
   Boolean(record && record.index_status === 'indexed' && record.document_id)
-
-const collectIndexedFileRecords = (
-  records: WorkspaceFileIndexRecord[]
-): WorkspaceFileIndexRecord[] => records.filter((record) => isIndexedWorkspaceFile(record))
-
-const collectIndexedDocumentIds = (records: WorkspaceFileIndexRecord[]): string[] =>
-  Array.from(
-    new Set(
-      collectIndexedFileRecords(records)
-        .map((record) => record.document_id)
-        .filter(Boolean)
-    )
-  ) as string[]
 
 const resolveDirectoryAvailability = (fileCount: number, indexedCount: number): KbAvailability => {
   if (fileCount === 0 || indexedCount === 0) return 'not_indexed'
@@ -36,23 +19,7 @@ const resolveDirectoryAvailability = (fileCount: number, indexedCount: number): 
   return 'partial'
 }
 
-export const isLocalReference = (reference: SelectedReference): boolean => reference.kind !== 'web'
-
-export const buildWorkspaceDefaultDocumentIds = (records: WorkspaceFileIndexRecord[]): string[] =>
-  collectIndexedDocumentIds(records)
-
-export const collectReferenceDocumentIds = (references?: SelectedReference[]): string[] =>
-  Array.from(
-    new Set(
-      (references || []).flatMap((reference) =>
-        Array.isArray(reference.kbDocumentIds)
-          ? reference.kbDocumentIds.map((item) => String(item).trim())
-          : []
-      )
-    )
-  ).filter(Boolean)
-
-export const buildWorkspaceReferenceItems = (input: {
+const buildWorkspaceReferenceItems = (input: {
   workspace: WorkspaceSource
   entries: WorkspaceTreeEntry[]
   records: WorkspaceFileIndexRecord[]

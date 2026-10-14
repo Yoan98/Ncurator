@@ -1,9 +1,5 @@
 import { z } from 'zod/v4'
-import type {
-  TextFileEditOutput,
-  TextFileReadOutput,
-  TextFileSearchOutput
-} from './outputTypes'
+import type { TextFileEditOutput,TextFileReadOutput,TextFileSearchOutput } from './outputTypes'
 
 const STRUCTURED_FILE_EXTENSION_PATTERN = /\.(?:doc|docx|ppt|pptx|pdf|xls|xlsx|odt|ods|odp)$/iu
 
@@ -89,5 +85,3 @@ export type FileEditOutput = TextFileEditOutput
 export type FileSearchOutput = TextFileSearchOutput
 
 export type { TextFileEditOutput, TextFileReadOutput, TextFileSearchOutput } from './outputTypes'
-
-export { TEXT_FILE_SEARCH_OUTPUT } from './outputTypes'

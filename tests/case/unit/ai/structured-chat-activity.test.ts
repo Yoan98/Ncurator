@@ -3,7 +3,7 @@ import {
   runLlmCallWithActivity,
   runStructuredChatWithActivity
 } from '../../../../src/main/services/ai/utils/structuredChatActivity'
-import { classifyLlmCallRetry } from '../../../../src/main/services/ai/llmExecutor'
+import { classifyLlmRetry } from '../../../../src/main/services/ai/llmRetry'
 import type { AiLlmIoRecord, AiRunEvent } from '../../../../src/shared/types'
 
 describe('ai unit structured chat activity', () => {
@@ -97,7 +97,7 @@ describe('ai unit structured chat activity', () => {
       { status: 503, code: 'resource_exhausted' }
     )
 
-    expect([1, 2, 3, 4, 5].map((attempt) => classifyLlmCallRetry(error, attempt))).toEqual(
+    expect([1, 2, 3, 4, 5].map((attempt) => classifyLlmRetry(error, attempt))).toEqual(
       [2_000, 4_000, 8_000, 15_000, 15_000].map((delayMs) => ({
         retryable: true,
         message: error.message,

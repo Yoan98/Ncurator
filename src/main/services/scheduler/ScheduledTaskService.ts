@@ -313,4 +313,3 @@ export class ScheduledTaskService {
       this.timer = this.deps.setTimer(() => void this.runDue(), Math.max(0, next - this.deps.now()))
   }
 }
-export const SCHEDULED_TASK_PARTNER_BUSY_ERROR = PARTNER_BUSY_ERROR

@@ -8,8 +8,6 @@ import {
   readImageDisplayName
 } from '../../../../shared/workbench/readImageThumbUtils'
 
-export { readImageDisplayName, readImagePathsFromInput } from '../../../../shared/workbench/readImageThumbUtils'
-
 type ReadImageThumbsProps = {
   paths: string[]
   onPreviewImage?: (image: ImageLightboxImage) => void
@@ -67,9 +65,10 @@ const ReadImageThumbs: React.FC<ReadImageThumbsProps> = ({ paths, onPreviewImage
   }, [pathsKey])
 
   useEffect(() => {
+    const blobUrls = blobUrlsRef.current
     return () => {
-      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
-      blobUrlsRef.current.clear()
+      blobUrls.forEach((url) => URL.revokeObjectURL(url))
+      blobUrls.clear()
       previewUrlsRef.current = {}
     }
   }, [])

@@ -87,11 +87,11 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
     status !== undefined ||
     Boolean(
       code ||
-        type ||
-        readString(providerError?.message) ||
-        readString(responseDataObject?.message) ||
-        readString(root?.providerCode) ||
-        readNumber(root?.httpStatus) !== undefined
+      type ||
+      readString(providerError?.message) ||
+      readString(responseDataObject?.message) ||
+      readString(root?.providerCode) ||
+      readNumber(root?.httpStatus) !== undefined
     )
 
   const rawParts = [
@@ -113,9 +113,6 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
     hasProviderSignal
   }
 }
-
-export const getErrorText = (error: unknown): string =>
-  normalizeStructuredOutputError(error).message
 
 export const extractTextContent = (content: unknown): string => {
   if (typeof content === 'string') {
@@ -181,7 +178,7 @@ export const serializeMessageContentForTelemetry = (content: unknown): string =>
   return JSON.stringify(summarize(content))
 }
 
-export const normalizePromptJsonText = (raw: string): string => {
+const normalizePromptJsonText = (raw: string): string => {
   const trimmed = raw.trim()
   if (!trimmed.startsWith('```')) {
     return trimmed
@@ -222,10 +219,6 @@ export const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
   return parseRepairableJsonObjectText(raw, 'prompt_json_empty_response')
 }
 
-export const parseJsonObjectText = (raw: string): Record<string, unknown> => {
-  return parseRepairableJsonObjectText(raw, 'structured_output_empty_response')
-}
-
 export type JsonRepairResult =
   | { ok: true; value: Record<string, unknown> }
   | { ok: false; error: string }
@@ -240,7 +233,7 @@ const resolveJsonParseErrorMessage = (error: unknown): string => {
 
 const JSON_PARSE_POSITION_PATTERN = /at position (\d+)(?: \(line \d+ column \d+\))?/i
 
-export const extractJsonErrorPosition = (errorMessage: string): number | undefined => {
+const extractJsonErrorPosition = (errorMessage: string): number | undefined => {
   const match = JSON_PARSE_POSITION_PATTERN.exec(errorMessage)
   if (!match) return undefined
   const position = Number(match[1])

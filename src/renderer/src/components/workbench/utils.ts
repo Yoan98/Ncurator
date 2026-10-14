@@ -5,8 +5,7 @@ import type {
   IpcJsonArray,
   IpcJsonObject,
   IpcJsonValue,
-  RuntimeSkillId,
-  SearchResult
+  RuntimeSkillId
 } from '../../../../shared/types'
 import { RUNTIME_TOOL_CATALOG, type RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 import {
@@ -37,19 +36,6 @@ export const getSubagentAvatar = (runId: string) => {
     shape: PARTNER_AVATAR_SHAPES[seed % PARTNER_AVATAR_SHAPES.length],
     color: PARTNER_AVATAR_COLORS[(seed >>> 8) % PARTNER_AVATAR_COLORS.length]
   }
-}
-
-const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number | undefined => {
-  if (!metadata) return undefined
-  if (typeof metadata === 'string') {
-    try {
-      const parsed = JSON.parse(metadata) as { page?: number }
-      return typeof parsed.page === 'number' ? parsed.page : undefined
-    } catch {
-      return undefined
-    }
-  }
-  return typeof metadata.page === 'number' ? metadata.page : undefined
 }
 
 const isIpcJsonObject = (value: IpcJsonValue): value is IpcJsonObject => {
@@ -87,9 +73,6 @@ const text = (
 })
 
 const sentence = (...segments: AssistantRichTextSegment[]): AssistantRichTextSegment[] => segments
-
-const plainText = (segments: AssistantRichTextSegment[]): string =>
-  segments.map((segment) => segment.text).join('')
 
 const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessSkillKey => {
   if (display.kind === 'tool') return getToolUiKind(normalizeToolName(display.toolName))
@@ -159,12 +142,9 @@ const getDisplayItemText = (
   }
   return getDisplayGroupText(display, status)
 }
-
 export {
   buildAssistantExecutionSummaryText,
-  resolveAssistantExecutionIcon,
-  resolveAssistantExecutionStatus,
-  resolveItemIconKind
+  resolveAssistantExecutionIcon
 } from '../../../../shared/assistantExecutionSummary'
 
 const createProcessGroup = (input: {
@@ -321,9 +301,6 @@ const createFileRefFromObject = (
   }
 }
 
-export const getAssistantToolNarrative = (toolName?: string): string =>
-  plainText(getToolSummaryText(getToolUiKind(normalizeToolName(String(toolName || ''))), 'running'))
-
 export const resolveQuestionInteraction = (
   item: AssistantProcessGroupItem
 ): AssistantProcessGroupItem['interaction'] | undefined => {
@@ -334,58 +311,6 @@ export const resolveQuestionInteraction = (
   }
   return Array.isArray(input.questions) ? { questions: input.questions } : undefined
 }
-
-export const buildAssistantProcessText = (event: AiRunEvent): string | null => {
-  if (event.type === 'assistant_process_group_started') {
-    return plainText(getDisplayGroupText(event.display, 'running'))
-  }
-  if (event.type === 'assistant_process_group_completed') {
-    return event.display ? plainText(getDisplayGroupText(event.display, 'completed')) : null
-  }
-  if (event.type === 'assistant_process_group_failed') {
-    return event.display ? plainText(getDisplayGroupText(event.display, 'failed')) : null
-  }
-  if (event.type === 'assistant_process_item_started') {
-    return plainText(getDisplayItemText(event.display, 'running'))
-  }
-  if (event.type === 'assistant_process_item_completed') {
-    return event.display ? plainText(getDisplayItemText(event.display, 'completed')) : null
-  }
-  if (event.type === 'assistant_process_item_failed') {
-    return event.display ? plainText(getDisplayItemText(event.display, 'failed')) : null
-  }
-  return null
-}
-
-export const createAssistantThinkingGroup = (messageId: string): AssistantProcessGroup =>
-  createProcessGroup({
-    id: `${messageId}:thinking`,
-    kind: 'thinking',
-    skillKey: 'generic',
-    iconKind: 'default',
-    status: 'running',
-    runningText: sentence(text('让俺想想')),
-    completedText: [],
-    failedText: [],
-    partialFailedText: [],
-    createdAt: Date.now(),
-    sourceEventType: 'thinking'
-  })
-
-export const createSearchProcessGroup = (messageId: string): AssistantProcessGroup =>
-  createProcessGroup({
-    id: `${messageId}:search`,
-    kind: 'skill',
-    skillKey: 'kb',
-    iconKind: 'search',
-    status: 'running',
-    runningText: getToolSummaryText('kb', 'running'),
-    completedText: getToolSummaryText('kb', 'completed'),
-    failedText: getToolSummaryText('kb', 'failed'),
-    partialFailedText: getToolSummaryText('kb', 'partial_failed'),
-    createdAt: Date.now(),
-    sourceEventType: 'thinking'
-  })
 
 export const completeAssistantProcessGroups = (
   groups: AssistantProcessGroup[],
@@ -1005,12 +930,7 @@ export const shouldShowAssistantApplyTargets = (input: {
   runFinished: boolean
   applyTargetCount: number
 }): boolean => input.runFinished && input.applyTargetCount > 0
-
-export {
-  isAssistantActivityToolGroup,
-  shouldShowAssistantThinkingIndicator,
-  shouldActivityHeaderShimmer
-} from '../../../../shared/assistantThinkingWait'
+export { isAssistantActivityToolGroup } from '../../../../shared/assistantThinkingWait'
 
 export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] => {
   const seen = new Set<string>()
@@ -1020,17 +940,6 @@ export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] =>
     seen.add(key)
     return true
   })
-}
-
-export const getSearchResultFileRef = (result: SearchResult): WorkbenchFileRef | null => {
-  const path = result.document?.file_path
-  if (!path) return null
-  return {
-    path,
-    fileName: result.document_name,
-    origin: result.source_type === 'web' ? 'artifact' : 'search_hit',
-    pageNumber: getPageNumberFromMetadata(result.metadata)
-  }
 }
 
 export const extractReadableFilesFromToolOutput = (
@@ -1048,11 +957,6 @@ export const extractReadableFilesFromToolOutput = (
     return single ? [single] : []
   }
   return []
-}
-
-export const formatSessionDate = (timestamp: number): string => {
-  const date = new Date(timestamp)
-  return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
 }
 
 export const formatRelativeTime = (timestamp: number): string => {

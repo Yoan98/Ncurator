@@ -13,7 +13,7 @@ type ErrorBoundaryState = {
  * React 18 会卸载整棵组件树导致整页白屏。此边界拦截后展示降级 UI，
  * 并把错误信息写入 console 供排查。
  */
-export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {

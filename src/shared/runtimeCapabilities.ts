@@ -66,7 +66,7 @@ export const RUNTIME_SKILL_IDS = [
   ...new Set(RUNTIME_TOOL_NAMES.map((toolName) => RUNTIME_TOOL_CATALOG[toolName].skillId))
 ] as RuntimeSkillId[]
 
-export const RUNTIME_SKILL_DISPLAY_NAMES = {
+const RUNTIME_SKILL_DISPLAY_NAMES = {
   terminal: '命令执行器',
   'text-file': '文件编辑器',
   'kb-retrieval': '资料查阅器',
@@ -82,9 +82,6 @@ export const RUNTIME_SKILL_DISPLAY_NAMES = {
   'agent-control': '任务控制',
   'scheduled-tasks': '定时任务'
 } as const satisfies Record<RuntimeSkillId, string>
-
-export const isRuntimeSkillId = (value: unknown): value is RuntimeSkillId =>
-  typeof value === 'string' && RUNTIME_SKILL_IDS.includes(value as RuntimeSkillId)
 
 export const getRuntimeSkillDisplayName = (skillId: string): string | undefined =>
   RUNTIME_SKILL_DISPLAY_NAMES[skillId as RuntimeSkillId]

@@ -1,12 +1,13 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["scripts/**/*.{mjs,mts,js}"],
+  "entry": ["scripts/**/*.{mjs,mts,js}", "tests/harness/backend/docxVisualHost.ts"],
   "project": [
     "src/**/*.{ts,tsx}",
     "src/**/*.d.ts",
     "scripts/**/*.{mjs,mts,js}",
-    "tests/**/*.{ts,tsx}"
+    "tests/**/*.{ts,tsx}",
+    "!tests/fixtures/**"
   ],
   "ignoreDependencies": ["tailwindcss", "prebuild-install", "node-abi", "7zip-bin"],
-  "ignoreBinaries": ["taskkill.exe"]
+  "ignoreBinaries": ["taskkill.exe", "reg"]
 }

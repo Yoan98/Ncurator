@@ -83,18 +83,3 @@ export const collectText = (node: Element): string => {
   }
   return text
 }
-
-export const findFirstElementByLocalName = (doc: Document, localName: string): Element | null => {
-  const stack: Node[] = [doc.documentElement]
-  while (stack.length > 0) {
-    const current = stack.pop()
-    if (!current || !isElementNode(current)) continue
-    if (current.localName === localName) return current
-    const children = current.childNodes
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      const child = children.item(index)
-      if (child) stack.push(child)
-    }
-  }
-  return null
-}

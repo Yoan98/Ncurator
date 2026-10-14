@@ -13,15 +13,4 @@ export const renderFileMutationProse = (input: {
   return renderProse([base, input.suffix || ''])
 }
 
-export const renderResourceMutationProse = (input: {
-  resourceLabel: string
-  path: string
-  operation?: string
-  suffix?: string
-}): string => {
-  const operation = input.operation ? `: ${input.operation}` : ''
-  const base = `${input.resourceLabel} ${input.path}${operation} completed successfully.`
-  return renderProse([base, input.suffix || ''])
-}
-
 export const renderPlainConfirmation = (message: string): string => renderProse([message])

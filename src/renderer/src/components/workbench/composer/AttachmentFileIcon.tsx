@@ -36,7 +36,7 @@ const createAttachmentFileReference = (fileName: string): FileReference => ({
   kbAvailability: 'not_indexed'
 })
 
-export const AttachmentFileIcon: React.FC<AttachmentFileIconProps> = ({
+const AttachmentFileIcon: React.FC<AttachmentFileIconProps> = ({
   fileName,
   className = '',
   sizeClassName = 'h-8 w-8'

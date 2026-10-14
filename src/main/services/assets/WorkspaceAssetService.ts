@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { getUserDataPath } from '../../utils/userDataPath'
@@ -44,7 +43,7 @@ export const deletePartnerRootDir = async (partnerId: string): Promise<void> => 
   await fs.rm(getPartnerRootDir(partnerId), { recursive: true, force: true })
 }
 
-export const ensurePartnerRuntimeDirs = async (partnerId: string): Promise<void> => {
+const ensurePartnerRuntimeDirs = async (partnerId: string): Promise<void> => {
   const runtimeDir = getPartnerRuntimeDir(partnerId)
   await Promise.all([
     fs.mkdir(path.join(runtimeDir, PARTNER_ASSETS_DIR), { recursive: true }),
@@ -61,14 +60,4 @@ export const ensurePartnerAssetBucket = async (
   const directoryPath = getPartnerAssetBucketDir(partnerId, assetBucketId)
   await fs.mkdir(directoryPath, { recursive: true })
   return directoryPath
-}
-
-export const createPartnerAssetBucket = async (
-  partnerId: string
-): Promise<{ assetBucketId: string; directoryPath: string }> => {
-  const assetBucketId = randomUUID()
-  return {
-    assetBucketId,
-    directoryPath: await ensurePartnerAssetBucket(partnerId, assetBucketId)
-  }
 }

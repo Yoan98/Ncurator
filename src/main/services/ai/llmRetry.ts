@@ -10,16 +10,16 @@ export type LlmRetryDecision = {
   delayMs?: number
 }
 
-export const FATAL_STATUS_CODES = new Set([401, 402, 403])
-export const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504])
-export const FATAL_ERROR_CODES = new Set([
+const FATAL_STATUS_CODES = new Set([401, 402, 403])
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504])
+const FATAL_ERROR_CODES = new Set([
   'invalid_api_key',
   'insufficient_balance',
   'quota_exceeded',
   'invalid_authentication',
   'authentication_error'
 ])
-export const RETRYABLE_ERROR_CODES = new Set([
+const RETRYABLE_ERROR_CODES = new Set([
   'rate_limit_exceeded',
   'timeout',
   'request_timeout',
@@ -57,10 +57,7 @@ const isTransportErrorNode = (error: unknown): boolean => {
 export const isLlmTransportError = (error: unknown): boolean =>
   isTransportErrorNode(error) || isTransportErrorNode(readCause(error))
 
-const isRateLimitOrCapacityError = (info: {
-  status?: number
-  code?: string
-}): boolean => {
+const isRateLimitOrCapacityError = (info: { status?: number; code?: string }): boolean => {
   if (info.status === 429) return true
   const normalizedCode = normalizeSignal(info.code)
   return normalizedCode === 'rate_limit_exceeded' || normalizedCode === 'resource_exhausted'
@@ -93,10 +90,7 @@ export const classifyLlmErrorKind = (error: unknown): LlmErrorClassification => 
   return 'unknown'
 }
 
-export const classifyLlmRetry = (
-  error: unknown,
-  attempt = 1
-): LlmRetryDecision => {
+export const classifyLlmRetry = (error: unknown, attempt = 1): LlmRetryDecision => {
   const info = normalizeStructuredOutputError(error)
   const message = info.message || 'unknown'
 
@@ -120,10 +114,3 @@ export const classifyLlmRetry = (
     ...(isRateLimitOrCapacityError(info) ? { delayMs: resolveCapacityBackoffDelay(attempt) } : {})
   }
 }
-
-/** Compatibility alias for older imports. */
-export const classifyLlmError = classifyLlmErrorKind
-
-export const isFatalLlmError = (error: unknown): boolean => classifyLlmErrorKind(error) === 'fatal'
-export const isRetryableLlmError = (error: unknown): boolean =>
-  classifyLlmErrorKind(error) === 'retryable'

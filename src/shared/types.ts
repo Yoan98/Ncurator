@@ -315,9 +315,6 @@ export interface ReferenceItemListResponse {
 /** @ 候选单次拉取上限 */
 export const REFERENCE_ITEM_PAGE_SIZE = 50
 
-/** 相对工作地址根最多收录的路径深度（根=0，其下两级=2） */
-export const REFERENCE_ITEM_MAX_PATH_DEPTH = 2
-
 export interface ListReferenceItemsRequest {
   referenceKinds?: ReferenceKind[]
   query?: string

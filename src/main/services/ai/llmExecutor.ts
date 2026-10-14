@@ -342,7 +342,9 @@ const toInvocationMetadata = (input: {
 })
 
 const normalizeFinishReason = (value: unknown): AiLlmFinishReason => {
-  const reason = String(value || '').trim().toLowerCase()
+  const reason = String(value || '')
+    .trim()
+    .toLowerCase()
   if (reason === 'stop' || reason === 'end_turn' || reason === 'completed') return 'stop'
   if (reason === 'tool_calls' || reason === 'tool_call' || reason === 'tool_use') {
     return 'tool_calls'
@@ -444,9 +446,6 @@ const createTextRunnable = (input: {
     streaming: input.streaming,
     timeout: AI_LLM_CALL_TIMEOUT_MS
   }) as TextRunnable
-
-/** @deprecated Prefer classifyLlmRetry from llmRetry.ts */
-export const classifyLlmCallRetry = classifyLlmRetry
 
 const invokeTextChat = async (input: {
   driver?: AiLlmDriver
@@ -670,8 +669,7 @@ const streamToolCallingCore = async (input: {
   })
   const finishReason = resolveFinishReason({
     responseMetadata: metadata.responseMetadata,
-    hasToolCalls:
-      collapsed.tool_calls.length > 0 || collapsed.invalid_tool_calls.length > 0
+    hasToolCalls: collapsed.tool_calls.length > 0 || collapsed.invalid_tool_calls.length > 0
   })
   assertFinishReasonIsUsable(finishReason)
   return {
@@ -1054,5 +1052,3 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(in
     usage: result.usage
   }
 }
-
-export { classifyLlmRetry }

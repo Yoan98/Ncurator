@@ -488,5 +488,3 @@ export const resolveAssistantExecutionIcon = (
   }
   return 'workflow'
 }
-
-export const resolveAssistantExecutionStatus = getExecutionStatus

@@ -1,7 +1,5 @@
-import path from 'node:path'
 import type {
   DocxDetailedNode,
-  DocxDetailedCellNode,
   DocxDetailedContainerNode,
   DocxDetailedParagraphNode,
   DocxDetailedTableNode,
@@ -643,7 +641,7 @@ const parseParagraphChildren = (
   return result
 }
 
-export const readNodeText = (node: DocxReadNode): string => {
+const readNodeText = (node: DocxReadNode): string => {
   if (node.type === 'text') return node.text
   if (node.type === 'tab') return '\t'
   if (node.type === 'break') return '\n'
@@ -917,43 +915,6 @@ export const buildContainerDetail = (input: {
       }
 }
 
-export const buildCellDetail = (input: {
-  nodeId: string
-  story: DocxStoryRef
-  partName: string
-  tableNodeId: string
-  nodeIndex: number
-  layoutMode: DocxDetailedCellNode['layoutMode']
-  row: number
-  col: number
-  cell: Element
-  previousNodeId?: string
-  nextNodeId?: string
-  relationshipTargets: ReadonlyMap<string, string>
-  relationshipTypes: ReadonlyMap<string, string>
-  relationshipTargetModes: ReadonlyMap<string, string>
-  availableRelationshipTargetIds?: ReadonlySet<string>
-  nodesById: NodeMapById
-  styleContext: DocxStyleContext
-}): DocxDetailedCellNode => {
-  const parsed = parseCell(input.cell, createContext(input), 'root', input.row, input.col)
-  return {
-    nodeId: input.nodeId,
-    tableNodeId: input.tableNodeId,
-    nodeIndex: input.nodeIndex,
-    layoutMode: input.layoutMode,
-    previousNodeId: input.previousNodeId,
-    nextNodeId: input.nextNodeId,
-    type: 'table_cell',
-    row: input.row,
-    col: input.col,
-    style: parsed.style,
-    text: parsed.text,
-    children: parsed.children,
-    story: input.story
-  }
-}
-
 const collectVisualKinds = (node: DocxReadNode, out: DocxReadVisualNode[]): void => {
   if (node.type === 'visual') out.push(node)
   if ('children' in node && node.children) {
@@ -969,9 +930,4 @@ export const visualSummaryForNode = (node: DocxDetailedNode): DocxVisualSummary 
     count: visuals.length,
     kinds: [...new Set(visuals.map((visual) => visual.kind))]
   }
-}
-
-export const resolveRelationshipTarget = (target: string): string => {
-  const normalized = path.posix.normalize(path.posix.join('word', target))
-  return normalized.startsWith('../') ? normalized.slice(3) : normalized
 }

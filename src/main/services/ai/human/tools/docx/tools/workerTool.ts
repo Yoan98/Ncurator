@@ -4,30 +4,13 @@ import type { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../../shared/types'
 import type { DocxToolFailure, DocxToolRuntime } from '../runtime'
 import { buildDocxToolCallResult } from '../runtime'
-import type { DocxWorkerAction, DocxWorkerRequest, DocxWorkerSuccessPayload } from '../worker/types'
 import { withToolLifecycle } from '../../utils/lifecycle'
-
-export const isDocxToolFailure = (
-  value: DocxToolFailure | DocxWorkerSuccessPayload
-): value is DocxToolFailure => 'error' in value && typeof value.error === 'string' && !('action' in value)
 
 type DocxToolActivityConfig<TResult extends object> = {
   actionType: string
   startedSummary?: string
   buildCompletedSummary?: (result: TResult) => string
   buildFailedSummary?: (failure: DocxToolFailure) => string
-}
-
-const emitDocxToolStarted = <TResult extends object>(input: {
-  runtime: DocxToolRuntime
-  activity?: DocxToolActivityConfig<TResult>
-}) => {
-  if (!input.activity?.startedSummary) return
-  input.runtime.input.emitActivity({
-    actionType: input.activity.actionType,
-    status: 'started',
-    summary: input.activity.startedSummary
-  })
 }
 
 export const finalizeDocxToolFailure = <TResult extends object>(input: {
@@ -72,87 +55,6 @@ export const finalizeDocxToolSuccess = <TResult extends object>(input: {
     })
   }
   return input.result
-}
-
-export const callExpectedWorkerAction = async <TAction extends DocxWorkerAction>(input: {
-  runtime: DocxToolRuntime
-  toolName: string
-  toolCallId: string
-  request: Omit<DocxWorkerRequest, 'requestId' | 'runId'>
-  expectedAction: TAction
-  draftDocId?: string
-}): Promise<Extract<DocxWorkerSuccessPayload, { action: TAction }> | DocxToolFailure> => {
-  const workerResponse = await input.runtime.callWorker(input.request)
-  if (!workerResponse.ok) {
-    return input.runtime.emitWorkerFailure({
-      toolName: input.toolName,
-      toolCallId: input.toolCallId,
-      response: workerResponse,
-      draftDocId: input.draftDocId
-    })
-  }
-  if (workerResponse.payload.action !== input.expectedAction) {
-    return input.runtime.emitFailure({
-      toolName: input.toolName,
-      toolCallId: input.toolCallId,
-      reason: 'failed',
-      error: `worker protocol mismatch (${input.expectedAction})`,
-      draftDocId: input.draftDocId
-    })
-  }
-  return workerResponse.payload as Extract<DocxWorkerSuccessPayload, { action: TAction }>
-}
-
-export const runDocxWorkerToolAction = async <
-  TAction extends DocxWorkerAction,
-  TResult extends object
->(input: {
-  runtime: DocxToolRuntime
-  toolName: string
-  toolCallId: string
-  request: Omit<DocxWorkerRequest, 'requestId' | 'runId'>
-  expectedAction: TAction
-  draftDocId?: string
-  activity?: DocxToolActivityConfig<TResult>
-  buildSuccess: (payload: Extract<DocxWorkerSuccessPayload, { action: TAction }>) =>
-    | {
-        result: TResult
-        draftDocId?: string
-      }
-    | Promise<{
-        result: TResult
-        draftDocId?: string
-      }>
-}): Promise<TResult | DocxToolFailure> => {
-  emitDocxToolStarted({
-    runtime: input.runtime,
-    activity: input.activity
-  })
-  const workerPayload = await callExpectedWorkerAction({
-    runtime: input.runtime,
-    toolName: input.toolName,
-    toolCallId: input.toolCallId,
-    request: input.request,
-    expectedAction: input.expectedAction,
-    draftDocId: input.draftDocId
-  })
-  if (isDocxToolFailure(workerPayload)) {
-    return finalizeDocxToolFailure({
-      runtime: input.runtime,
-      failure: workerPayload,
-      activity: input.activity
-    })
-  }
-
-  const success = await input.buildSuccess(workerPayload)
-  return finalizeDocxToolSuccess({
-    runtime: input.runtime,
-    toolName: input.toolName,
-    toolCallId: input.toolCallId,
-    result: success.result,
-    draftDocId: success.draftDocId,
-    activity: input.activity
-  })
 }
 
 export const createDocxTool = <TSchema extends z.ZodType, TResult extends object>(input: {

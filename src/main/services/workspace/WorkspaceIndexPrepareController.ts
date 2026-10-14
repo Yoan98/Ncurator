@@ -62,42 +62,6 @@ export const resolveCancelledPrepareJobStatus = (input: {
   return 'cancelled'
 }
 
-export const runCancellablePrepareLoop = async <T>(input: {
-  items: readonly T[]
-  isCancelled: () => boolean
-  runItem: (item: T) => Promise<void>
-}): Promise<{ cancelled: boolean; startedCount: number; remaining: T[] }> => {
-  const items = [...input.items]
-  for (let index = 0; index < items.length; index += 1) {
-    if (input.isCancelled()) {
-      return {
-        cancelled: true,
-        startedCount: index,
-        remaining: items.slice(index)
-      }
-    }
-    const item = items[index]
-    if (item === undefined) continue
-    try {
-      await input.runItem(item)
-    } catch (error) {
-      if (isIndexPrepareCancelledError(error) || input.isCancelled()) {
-        return {
-          cancelled: true,
-          startedCount: index,
-          remaining: items.slice(index)
-        }
-      }
-      throw error
-    }
-  }
-  return {
-    cancelled: input.isCancelled(),
-    startedCount: items.length,
-    remaining: []
-  }
-}
-
 type SessionState = {
   cancelled: boolean
   abort: AbortController

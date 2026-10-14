@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { LlmOutputError, LlmProviderError } from '../../../../src/main/services/ai/errors'
-import { classifyLlmError, classifyLlmRetry } from '../../../../src/main/services/ai/llmRetry'
+import { classifyLlmErrorKind, classifyLlmRetry } from '../../../../src/main/services/ai/llmRetry'
 
 describe('ai unit llm error classification', () => {
   it('classifies response_format unavailable errors as unknown (no capability fallback)', () => {
     expect(
-      classifyLlmError({
+      classifyLlmErrorKind({
         status: 400,
         response: {
           status: 400,
@@ -22,7 +22,7 @@ describe('ai unit llm error classification', () => {
 
   it('classifies insufficient balance errors as fatal', () => {
     expect(
-      classifyLlmError({
+      classifyLlmErrorKind({
         status: 402,
         response: {
           status: 402,
@@ -39,7 +39,7 @@ describe('ai unit llm error classification', () => {
 
   it('classifies invalid api key errors as fatal', () => {
     expect(
-      classifyLlmError({
+      classifyLlmErrorKind({
         status: 401,
         response: {
           status: 401,
@@ -56,7 +56,7 @@ describe('ai unit llm error classification', () => {
 
   it('classifies rate limit errors as retryable', () => {
     expect(
-      classifyLlmError({
+      classifyLlmErrorKind({
         status: 429,
         response: {
           status: 429,
@@ -73,7 +73,7 @@ describe('ai unit llm error classification', () => {
 
   it('classifies 502 as retryable regardless of body text', () => {
     expect(
-      classifyLlmError({
+      classifyLlmErrorKind({
         status: 502,
         response: {
           status: 502,
@@ -88,9 +88,9 @@ describe('ai unit llm error classification', () => {
   })
 
   it('classifies our call timeout via TIMEOUT code as retryable', () => {
-    expect(classifyLlmError(Object.assign(new Error('llm_call_timeout'), { code: 'TIMEOUT' }))).toBe(
-      'retryable'
-    )
+    expect(
+      classifyLlmErrorKind(Object.assign(new Error('llm_call_timeout'), { code: 'TIMEOUT' }))
+    ).toBe('retryable')
   })
 
   it('classifies SDK connection errors via constructor name as retryable', () => {
@@ -101,7 +101,7 @@ describe('ai unit llm error classification', () => {
       }
     }
     const error = new APIConnectionError()
-    expect(classifyLlmError(error)).toBe('retryable')
+    expect(classifyLlmErrorKind(error)).toBe('retryable')
     expect(classifyLlmRetry(error).delayMs).toBeUndefined()
   })
 
@@ -112,7 +112,7 @@ describe('ai unit llm error classification', () => {
         this.name = 'Error'
       }
     }
-    expect(classifyLlmError(new Error('wrapper', { cause: new APIConnectionError() }))).toBe(
+    expect(classifyLlmErrorKind(new Error('wrapper', { cause: new APIConnectionError() }))).toBe(
       'retryable'
     )
   })
@@ -120,7 +120,7 @@ describe('ai unit llm error classification', () => {
   it('classifies LangChain TimeoutError name as retryable', () => {
     const error = new Error('Request timed out.')
     error.name = 'TimeoutError'
-    expect(classifyLlmError(error)).toBe('retryable')
+    expect(classifyLlmErrorKind(error)).toBe('retryable')
     expect(classifyLlmRetry(error).delayMs).toBeUndefined()
   })
 
@@ -131,12 +131,12 @@ describe('ai unit llm error classification', () => {
         this.name = 'Error'
       }
     }
-    expect(classifyLlmError(new APIConnectionTimeoutError())).toBe('retryable')
+    expect(classifyLlmErrorKind(new APIConnectionTimeoutError())).toBe('retryable')
   })
 
   it('classifies unknown status errors as unknown', () => {
     expect(
-      classifyLlmError({
+      classifyLlmErrorKind({
         status: 404,
         response: {
           status: 404,
@@ -153,18 +153,20 @@ describe('ai unit llm error classification', () => {
   })
 
   it('does not treat connection or timeout copy as retryable without type signals', () => {
-    expect(classifyLlmError(new Error('network socket disconnected unexpectedly'))).toBe('unknown')
-    expect(classifyLlmError(new Error('Connection error.'))).toBe('unknown')
-    expect(classifyLlmError(new Error('Request timed out.'))).toBe('unknown')
+    expect(classifyLlmErrorKind(new Error('network socket disconnected unexpectedly'))).toBe(
+      'unknown'
+    )
+    expect(classifyLlmErrorKind(new Error('Connection error.'))).toBe('unknown')
+    expect(classifyLlmErrorKind(new Error('Request timed out.'))).toBe('unknown')
   })
 
   it('does not treat balance copy as fatal without status or provider code', () => {
-    expect(classifyLlmError(new Error('Insufficient Balance'))).toBe('unknown')
+    expect(classifyLlmErrorKind(new Error('Insufficient Balance'))).toBe('unknown')
   })
 
   it('does not treat 409 as retryable', () => {
     expect(
-      classifyLlmError({
+      classifyLlmErrorKind({
         status: 409,
         response: { status: 409, data: { error: { message: 'conflict' } } }
       })
@@ -274,6 +276,6 @@ describe('ai unit llm error classification', () => {
 
   it('does not treat aborted copy without cancel name or code as cancelled retry skip', () => {
     expect(classifyLlmRetry(new Error('aborted')).retryable).toBe(false)
-    expect(classifyLlmError(new Error('aborted'))).toBe('unknown')
+    expect(classifyLlmErrorKind(new Error('aborted'))).toBe('unknown')
   })
 })

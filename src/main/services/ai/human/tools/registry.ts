@@ -66,11 +66,5 @@ export function getToolSpec(
   return TOOL_SPEC_BY_NAME.get(toolName)
 }
 
-export const listAllToolNames = (): string[] => [...TOOL_SPEC_BY_NAME.keys()]
-
 export const listToolNamesByFamily = (familyId: AiToolFamilyId): string[] =>
   [...(TOOL_SPECS_BY_FAMILY.get(familyId) || [])].map((spec) => spec.name)
-
-export const listToolSpecsByFamily = (familyId: AiToolFamilyId): HumanToolSpec[] => [
-  ...(TOOL_SPECS_BY_FAMILY.get(familyId) || [])
-]

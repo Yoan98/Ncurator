@@ -13,7 +13,6 @@ import {
 } from '../../../../harness/e2e/embeddingRuntimeThreads'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
-  SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
   addWorkspaceDirectoryThroughNativeDialog,
   getSettingsLocator,

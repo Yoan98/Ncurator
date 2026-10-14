@@ -1,4 +1,3 @@
-﻿import type { WorkbenchFileOrigin } from './types'
 import {
   WORKBENCH_CONTENT_PANEL_DEFAULT_RATIO,
   WORKBENCH_CONTENT_PANEL_MAX_RATIO,
@@ -35,11 +34,3 @@ export const WORKBENCH_LEGACY_PREFERENCE_STORAGE_KEYS = [
   'workbench.preference.model',
   'workbench.preference.workspace-id'
 ] as const
-
-export const FILE_ORIGIN_LABELS: Record<WorkbenchFileOrigin, string> = {
-  search_hit: '搜索命中',
-  read: '读取',
-  artifact: '产物',
-  preview: '预览',
-  source: '源文件'
-}

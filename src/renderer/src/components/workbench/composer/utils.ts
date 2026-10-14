@@ -9,7 +9,7 @@ import type {
   SelectedReference
 } from '../../../../../shared/types'
 import type { ComposerDraftValue, ComposerNode } from './types'
-import { getReferenceKey, pruneReferencesByWorkspace } from '../../../utils/reference'
+import { getReferenceKey } from '../../../utils/reference'
 import {
   INLINE_TOKEN_LABEL_CLASS_NAME,
   REFERENCE_TOKEN_CLASS_NAME,
@@ -19,13 +19,13 @@ import {
   selectionFileName
 } from './referenceVisuals'
 
-export const createTextNode = (text = ''): ComposerNode => ({
+const createTextNode = (text = ''): ComposerNode => ({
   id: crypto.randomUUID(),
   kind: 'text',
   text
 })
 
-export const createScopeNode = (scope: SelectedReference): ComposerNode => ({
+const createScopeNode = (scope: SelectedReference): ComposerNode => ({
   id: crypto.randomUUID(),
   kind: 'scope',
   scope
@@ -38,7 +38,7 @@ export const hasComposerContent = (
   nodes: readonly (ComposerNode | ChatMessageContentNode)[]
 ): boolean => nodes.some((node) => node.kind !== 'text' || node.text.length > 0)
 
-export const normalizeComposerNodes = (nodes: ComposerNode[]): ComposerNode[] => {
+const normalizeComposerNodes = (nodes: ComposerNode[]): ComposerNode[] => {
   const nextNodes: ComposerNode[] = []
   nodes.forEach((node) => {
     if (node.kind === 'text') {
@@ -136,17 +136,6 @@ export const syncComposerTokens = (
     updateSelectionToken(token, selection)
   }
 }
-
-export const pruneComposerNodesByWorkspace = (
-  nodes: ComposerNode[],
-  workspaceId: string | null
-): ComposerNode[] =>
-  normalizeComposerNodes(
-    nodes.filter((node) => {
-      if (node.kind !== 'scope') return true
-      return pruneReferencesByWorkspace([node.scope], workspaceId).length > 0
-    })
-  )
 
 export const readComposerNodesFromEditor = (
   editor: HTMLElement,

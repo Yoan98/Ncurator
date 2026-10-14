@@ -6,17 +6,16 @@ export type OrtThreadBudget = {
   allowSpinning: boolean
 }
 
-export const resolveLogicalCoreCount = (logicalCores?: number): number => {
+const resolveLogicalCoreCount = (logicalCores?: number): number => {
   const resolved =
     logicalCores ??
     (typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length)
   return Math.max(1, Math.floor(resolved))
 }
 
-export const EMBEDDING_INTRA_OP_THREADS_ENV = 'NCURATOR_EMBEDDING_INTRA_OP_THREADS'
-export const EMBEDDING_ALLOW_SPINNING_ENV = 'NCURATOR_EMBEDDING_ALLOW_SPINNING'
-export const EMBEDDING_RUNTIME_PROCESS_TITLE = 'ncurator-emb'
-export const EMBEDDING_RUNTIME_PROCESS_ARG = `--${EMBEDDING_RUNTIME_PROCESS_TITLE}`
+const EMBEDDING_INTRA_OP_THREADS_ENV = 'NCURATOR_EMBEDDING_INTRA_OP_THREADS'
+const EMBEDDING_ALLOW_SPINNING_ENV = 'NCURATOR_EMBEDDING_ALLOW_SPINNING'
+const EMBEDDING_RUNTIME_PROCESS_TITLE = 'ncurator-emb'
 
 export const embeddingRuntimeProcessTitle = (intraOpNumThreads: number): string =>
   `${EMBEDDING_RUNTIME_PROCESS_TITLE}-${intraOpNumThreads}`

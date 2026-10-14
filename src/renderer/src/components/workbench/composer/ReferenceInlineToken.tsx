@@ -9,7 +9,7 @@ type ReferenceInlineTokenProps = {
   role?: 'scope-token' | 'reference-inline-token'
 }
 
-export const ReferenceInlineToken: React.FC<ReferenceInlineTokenProps> = ({
+const ReferenceInlineToken: React.FC<ReferenceInlineTokenProps> = ({
   reference,
   className = '',
   role = 'reference-inline-token'

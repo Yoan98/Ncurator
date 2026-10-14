@@ -47,12 +47,7 @@ export type PresetModelsSnapshot = {
   providers: LlmPresetProvider[]
 }
 
-const PRESET_PROVIDER_IDS = new Set<LlmPresetProviderId>([
-  'deepseek',
-  'dashscope',
-  'mimo',
-  'zhipu'
-])
+const PRESET_PROVIDER_IDS = new Set<LlmPresetProviderId>(['deepseek', 'dashscope', 'mimo', 'zhipu'])
 
 export const isLlmPresetProviderId = (value: string): value is LlmPresetProviderId =>
   PRESET_PROVIDER_IDS.has(value as LlmPresetProviderId)
@@ -81,9 +76,6 @@ export const getPresetProviderByBaseUrl = (baseUrl: string): LlmPresetProviderMe
   const resolved = resolveLlmProvider(baseUrl)
   return getPresetProvider(resolved.providerId)
 }
-
-export const isPresetProviderId = (providerId: LlmProviderId): boolean =>
-  getPresetProvider(providerId) !== null
 
 export const getProviderRegistryEntry = (providerId: LlmProviderId) =>
   LLM_PROVIDER_REGISTRY.find((provider) => provider.id === providerId) || null

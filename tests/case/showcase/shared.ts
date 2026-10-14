@@ -1,9 +1,8 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@playwright/test'
-import type { ElectronApplication } from 'playwright'
-import type { AiLlmUsage, AiRunEvent } from '../../../../src/shared/types'
+import type { Page, ElectronApplication } from 'playwright'
+import type { AiLlmUsage, AiRunEvent } from '../../../src/shared/types'
 import {
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
@@ -148,21 +147,7 @@ export const screenshotExcelUsedRange = async (
   target: ReturnType<Page['locator']>,
   outputPath: string
 ): Promise<void> => {
-  const box = await target.boundingBox()
-  if (!box) {
-    await target.screenshot({ path: outputPath, type: 'png' })
-    return
-  }
-  await target.screenshot({
-    path: outputPath,
-    type: 'png',
-    clip: {
-      x: 0,
-      y: 0,
-      width: Math.max(1, Math.floor(box.width)),
-      height: Math.max(1, Math.min(520, Math.floor(box.height)))
-    }
-  })
+  await target.screenshot({ path: outputPath, type: 'png' })
 }
 
 export const inspectExcelEditResult = async (
@@ -308,8 +293,7 @@ export const screenshotAssistantAnswer = async (page: Page, outputPath: string):
   }
   await answer.screenshot({
     path: outputPath,
-    type: 'png',
-    clip: { x: 0, y: 0, width, height }
+    type: 'png'
   })
 }
 

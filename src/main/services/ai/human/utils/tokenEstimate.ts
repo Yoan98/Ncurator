@@ -3,6 +3,3 @@ export const estimateTextTokens = (text: string): number => {
   if (!value) return 0
   return Math.ceil(value.length / 4)
 }
-
-export const estimatePromptTokens = (input: { system: string; user: string }): number =>
-  estimateTextTokens(`${input.system}\n${input.user}`)

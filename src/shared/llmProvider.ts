@@ -1,12 +1,6 @@
 import type { LlmProviderId, LlmProviderKind } from './types'
 import { normalizeOpenAIBaseUrl } from './llmBaseUrl'
 
-export const LLM_PROVIDER_KINDS: LlmProviderKind[] = [
-  'openai',
-  'deepseek',
-  'openai-compatible'
-]
-
 export const isLlmProviderKind = (value: unknown): value is LlmProviderKind =>
   value === 'openai' || value === 'deepseek' || value === 'openai-compatible'
 

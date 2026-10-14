@@ -10,7 +10,6 @@ import type {
   DocxOutlineTableNode,
   DocxOpenStats,
   DocxOutlineNode,
-  DocxParagraphSpec,
   DocxTextRunSpec
 } from '../../types'
 import type { NodeIndex, DocxStoryPart, NodeMapById, ParsedDocxBundle } from './types'
@@ -35,14 +34,6 @@ import { createStyleContext } from './styleResolver'
 import type { DocxStyleContext } from './styleResolver'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-const paragraphStyle = (paragraph: Element): string => {
-  const pPr = firstChildElement(paragraph, 'pPr')
-  if (!pPr) return 'Normal'
-  const pStyle = firstChildElement(pPr, 'pStyle')
-  if (!pStyle) return 'Normal'
-  const value = getAttr(pStyle, 'val')
-  return value || 'Normal'
-}
 
 const paragraphTextRuns = (paragraph: Element): DocxTextRunSpec[] => {
   const runs: DocxTextRunSpec[] = []
@@ -693,27 +684,6 @@ export const extractNodeText = (index: NodeIndex, nodeId: string): string => {
   const detail = getDetailedNode(index, nodeId)
   if (!detail) return ''
   return detail.text
-}
-
-const normalizeRuns = (runs: DocxTextRunSpec[]): DocxTextRunSpec[] => {
-  return runs
-    .map((run) => ({
-      text: String(run.text || ''),
-      bold: run.bold || undefined,
-      italic: run.italic || undefined,
-      underline: run.underline || undefined,
-      color: run.color || undefined
-    }))
-    .filter((run) => run.text.length > 0)
-}
-
-export const paragraphNodeToSpec = (paragraph: Element): DocxParagraphSpec => {
-  const runs = normalizeRuns(paragraphTextRuns(paragraph))
-  return {
-    kind: 'paragraph',
-    style: paragraphStyle(paragraph),
-    runs: runs.length > 0 ? runs : [{ text: paragraphText(paragraph) }]
-  }
 }
 
 export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> => {

@@ -1,4 +1,4 @@
-import type { AiLlmUsage, JsonObject, JsonValue, LlmProviderKind } from '../../../shared/types'
+import type { AiLlmUsage, JsonObject, LlmProviderKind } from '../../../shared/types'
 
 type MetadataMessage = {
   response_metadata?: unknown
@@ -82,10 +82,7 @@ const normalizeFromPayload = (input: {
     ['completion_tokens'],
     ['completionTokens']
   ])
-  const totalTokens = firstNumber(input.payload, [
-    ['total_tokens'],
-    ['totalTokens']
-  ])
+  const totalTokens = firstNumber(input.payload, [['total_tokens'], ['totalTokens']])
   const cachedInputTokens = firstNumber(input.payload, [
     ['input_token_details', 'cache_read'],
     ['input_token_details', 'cached_tokens'],
@@ -165,6 +162,3 @@ export const normalizeLlmUsage = (input: {
 }
 
 export const normalizeJsonObject = (value: unknown): JsonObject | undefined => toJsonObject(value)
-
-export const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
-  isRecord(value)

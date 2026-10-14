@@ -1,5 +1,3 @@
-import FileIcon from '../../FileIcon'
-import { Tag, Tooltip } from 'antd'
 import {
   HiArrowPath,
   HiCheckCircle,
@@ -7,8 +5,7 @@ import {
   HiOutlineExclamationCircle
 } from 'react-icons/hi2'
 import type { WebSourceRecord, WorkspaceTreeEntry } from '../../../../../shared/types'
-import { WORKSPACE_TREE_FILE_NAME_MAX_WIDTH } from '../constants'
-import type { StatusBadgeVisual, WorkspaceTreeDisplayStrategy, WorkspaceTreeNode } from '../types'
+import type { StatusBadgeVisual } from '../types'
 
 const STATUS_SPIN_ICON_CLASSNAME = 'h-3.5 w-3.5 animate-spin'
 const STATUS_ICON_CLASSNAME = 'h-3.5 w-3.5'
@@ -35,115 +32,6 @@ export const getTreeEntryStatusMeta = (
       return { label: '可索引', className: 'border-[#EEEEEC] bg-[#F7F7F5] text-[#787774]' }
   }
 }
-
-export const getWorkspaceActionTooltip = (
-  action: 'scan' | 'prepare',
-  progress?: { message?: string }
-): string => {
-  if (action === 'scan') {
-    return progress?.message || '检查当前目录里有哪些新增、变更或删除。'
-  }
-  return progress?.message || '检查目录变化并更新可索引文件。'
-}
-
-const isHiddenPathSegment = (value: string): boolean =>
-  value
-    .split('/')
-    .filter(Boolean)
-    .some((segment) => segment.startsWith('.'))
-
-export const getVisibleWorkspaceTreeEntries = (
-  entries: WorkspaceTreeEntry[]
-): WorkspaceTreeEntry[] => entries.filter((entry) => !isHiddenPathSegment(entry.relative_path))
-
-export const createWorkspaceTree = (entries: WorkspaceTreeEntry[]): WorkspaceTreeNode[] => {
-  const sortedEntries = [...entries].sort((left, right) => {
-    if (left.kind !== right.kind) {
-      return left.kind === 'directory' ? -1 : 1
-    }
-    return left.relative_path.localeCompare(right.relative_path)
-  })
-
-  const nodeMap = new Map<string, WorkspaceTreeNode>()
-  const roots: WorkspaceTreeNode[] = []
-
-  sortedEntries.forEach((entry) => {
-    const statusMeta = getTreeEntryStatusMeta(entry)
-    const fileNameNode = (
-      <Tooltip title={entry.name} placement="topLeft">
-        <span
-          className="block min-w-0 truncate text-[14px] leading-6 text-[#37352F]"
-          style={{ maxWidth: WORKSPACE_TREE_FILE_NAME_MAX_WIDTH }}
-        >
-          {entry.name}
-        </span>
-      </Tooltip>
-    )
-    const treeNode: WorkspaceTreeNode = {
-      key: entry.id,
-      title: (
-        <div className="grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 py-1">
-          <FileIcon
-            name={entry.name}
-            extension={entry.file_ext}
-            kind={entry.kind === 'directory' ? 'directory' : undefined}
-          />
-          <div className="min-w-0">{fileNameNode}</div>
-          {entry.kind === 'file' ? (
-            entry.supported_for_index && statusMeta ? (
-              <Tag className={`!mr-0 shrink-0 rounded-full ${statusMeta.className}`}>
-                {statusMeta.label}
-              </Tag>
-            ) : (
-              <Tag className="!mr-0 shrink-0 rounded-full border-[#EEEEEC] bg-[#F7F7F5] text-[#9B9A97]">
-                不支持
-              </Tag>
-            )
-          ) : null}
-        </div>
-      ),
-      children: []
-    }
-    nodeMap.set(entry.id, treeNode)
-  })
-
-  sortedEntries.forEach((entry) => {
-    const treeNode = nodeMap.get(entry.id)
-    if (!treeNode) return
-    if (entry.parent_id && nodeMap.has(entry.parent_id)) {
-      const parentNode = nodeMap.get(entry.parent_id)
-      parentNode?.children?.push(treeNode)
-      return
-    }
-    roots.push(treeNode)
-  })
-
-  return roots
-}
-
-export const getWorkspaceTreeDisplayStrategy = (
-  entries: WorkspaceTreeEntry[]
-): WorkspaceTreeDisplayStrategy => {
-  const directoryCount = entries.filter((entry) => entry.kind === 'directory').length
-  const totalNodes = entries.length
-  if (totalNodes >= 800 || directoryCount >= 220) {
-    return {
-      defaultExpandDepth: 1,
-      isLargeTree: true,
-      helperText: '大型目录默认仅展开首层，深层目录按需查看。'
-    }
-  }
-  return {
-    defaultExpandDepth: 2,
-    isLargeTree: totalNodes >= 260 || directoryCount >= 80,
-    helperText: '默认展开前两层目录。'
-  }
-}
-
-export const getDefaultExpandedKeys = (entries: WorkspaceTreeEntry[], depth: number): string[] =>
-  entries
-    .filter((entry) => entry.kind === 'directory' && entry.relative_path.split('/').length <= depth)
-    .map((entry) => entry.id)
 
 export const getWebStatusBadge = (
   source: Pick<WebSourceRecord, 'index_status' | 'last_indexed_at' | 'last_error'>,

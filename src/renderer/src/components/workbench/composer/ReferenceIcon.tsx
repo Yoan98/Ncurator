@@ -17,7 +17,7 @@ const containerSizeClassName = {
   inline: 'relative top-[0.15em] h-[18px] w-[18px]'
 } as const
 
-export const ReferenceIcon: React.FC<ReferenceIconProps> = ({ reference, size = 'md' }) => {
+const ReferenceIcon: React.FC<ReferenceIconProps> = ({ reference, size = 'md' }) => {
   const visualSpec = getReferenceVisualSpec(reference)
   const iconSize =
     visualSpec.kind === 'directory'
