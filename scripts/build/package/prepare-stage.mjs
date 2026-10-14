@@ -472,6 +472,8 @@ const main = async () => {
   const runtimeDependencies = Object.fromEntries(
     runtimePackageNames.map((name) => [name, resolveInstalledVersion(name)])
   )
+  const patchedDependencies = rootPackage.pnpm?.patchedDependencies || {}
+  const patchFiles = Object.values(patchedDependencies)
   const stagePackage = {
     name: rootPackage.name,
     version: rootPackage.version,
@@ -480,7 +482,8 @@ const main = async () => {
     author: rootPackage.author,
     homepage: rootPackage.homepage,
     private: true,
-    dependencies: runtimeDependencies
+    dependencies: runtimeDependencies,
+    ...(patchFiles.length > 0 ? { pnpm: { patchedDependencies } } : {})
   }
 
   fs.rmSync(DIST_DIR, { recursive: true, force: true })
@@ -511,6 +514,11 @@ const main = async () => {
   fs.rmSync(path.join(STAGE_DIR, 'resources', 'web_crawler_sidecar', 'bin', '.source.sha256'), {
     force: true
   })
+  for (const patchFile of patchFiles) {
+    const target = path.join(STAGE_DIR, patchFile)
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.copyFileSync(path.join(ROOT, patchFile), target)
+  }
   fs.writeFileSync(
     path.join(STAGE_DIR, 'package.json'),
     `${JSON.stringify(stagePackage, null, 2)}\n`
@@ -518,6 +526,15 @@ const main = async () => {
   writeStageLockfile(runtimeDependencies)
 
   installRuntimeDependencies()
+  for (const patchFile of patchFiles) {
+    fs.rmSync(path.join(STAGE_DIR, patchFile))
+  }
+  for (const directory of new Set(
+    patchFiles.map((file) => path.dirname(path.join(STAGE_DIR, file)))
+  )) {
+    if (fs.readdirSync(directory).length === 0) fs.rmdirSync(directory)
+  }
+  delete stagePackage.pnpm
   if (runtimePackageNames.includes('node-pty')) installPreparedNodePtyNative()
   fs.rmSync(path.join(STAGE_DIR, 'pnpm-lock.yaml'), { force: true })
   pruneCompiledOutput()
