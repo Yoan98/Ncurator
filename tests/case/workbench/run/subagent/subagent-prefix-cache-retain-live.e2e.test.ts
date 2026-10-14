@@ -280,9 +280,28 @@ describe('workbench subagent prefix cache e2e', () => {
                   call.requestWire?.messages.filter((message) => message.role === 'tool') || []
               )
             )
-            const files = result.taskFiles.find((sources) => toolMessages.includes(sources[0]))
+            const files = result.taskFiles.find(
+              (sources) =>
+                toolMessages.includes(sources[0]) ||
+                toolMessages.includes(
+                  `${path.basename(path.dirname(sources[0]))}/${path.basename(sources[0])}`
+                )
+            )
             expect(files).toBeDefined()
-            for (const file of files!) expect(toolMessages).toContain(file)
+            for (const file of files!) {
+              const relativePath = `${path.basename(path.dirname(file))}/${path.basename(file)}`
+              expect(toolMessages.includes(file) || toolMessages.includes(relativePath)).toBe(true)
+              const original = await fs.readFile(
+                path.resolve('tests/fixtures/workspace/工作', path.basename(file)),
+                'utf8'
+              )
+              for (const line of original.split(/\r?\n/u).filter(Boolean).slice(0, 2)) {
+                expect(toolMessages).toContain(line)
+              }
+              expect(
+                event.update.result?.includes(file) || event.update.result?.includes(relativePath)
+              ).toBe(true)
+            }
             expect(toolMessages).toContain('Alice')
             expect(toolMessages).toContain('保持跟进')
             results.push(event.update.result || '')
