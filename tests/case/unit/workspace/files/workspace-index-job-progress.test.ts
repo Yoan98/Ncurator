@@ -1,7 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import { getIndexJobProgressNumbers } from '../../../../../src/shared/indexJobProgress'
+import { resolveCancelledPrepareJobStatus } from '../../../../../src/main/services/workspace/WorkspaceIndexPrepareController'
 
 describe('unit workspace files', () => {
+  it('preserves completed terminal states and cancels unfinished work', () => {
+    const completed = {
+      unfinishedCount: 0,
+      processedCount: 3,
+      totalCount: 3,
+      failedCount: 0
+    }
+    expect(resolveCancelledPrepareJobStatus(completed)).toBe('succeeded')
+    expect(resolveCancelledPrepareJobStatus({ ...completed, failedCount: 1 })).toBe('failed')
+    expect(
+      resolveCancelledPrepareJobStatus({
+        unfinishedCount: 1,
+        processedCount: 2,
+        totalCount: 3,
+        failedCount: 0
+      })
+    ).toBe('cancelled')
+  })
+
   it('workspace-index-job-progress', () => {
     expect(
       getIndexJobProgressNumbers({ total_count: 0, processed_count: 0, failed_count: 0 })

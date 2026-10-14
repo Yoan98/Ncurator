@@ -127,6 +127,28 @@ describe('workbench conversation e2e', () => {
               data: { fileResizeHandles, browserResizeHandles, nativeResizeCursors }
             }
           )
+          const panelWidth = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.contentPanelShell
+          ).evaluate((element) => element.getBoundingClientRect().width)
+          const resizePoint = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.contentPanelResizer
+          ).evaluate((element) => {
+            const rect = element.getBoundingClientRect()
+            return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+          })
+          await page.mouse.move(resizePoint.x, resizePoint.y)
+          await page.mouse.down()
+          await page.mouse.move(resizePoint.x + panelWidth - 440, resizePoint.y, { steps: 10 })
+          await page.mouse.up()
+          await page.waitForFunction((testId) => {
+            const element = document.querySelector(`[data-testid="${testId}"]`)
+            return (
+              element instanceof HTMLElement &&
+              Math.abs(element.getBoundingClientRect().width - 440) < 2
+            )
+          }, workbenchSelectors.contentPanelShell)
           const readTabDragLayout = async () =>
             await page.evaluate(
               (selectors) => {
@@ -342,10 +364,9 @@ describe('workbench conversation e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             activeBrowserTabId
           )
-          const closeMenuResponse = await page.evaluate(() => window.api.browserPanelCloseMenu())
-          if (!closeMenuResponse.success) {
-            throw new Error(closeMenuResponse.error || 'failed to close browser menu')
-          }
+          const menuClosed = browserMenuPage.waitForEvent('close')
+          await browserMenuPage.keyboard.press('Escape')
+          await menuClosed
           await page.waitForFunction(
             (testId) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===

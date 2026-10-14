@@ -15,7 +15,7 @@
 
 - 不替代 Settings「更新索引」产品 E2E。E2E 在真实 Electron 里对独立小目录各做一次慢/高速更新索引，断言同一嵌入进程的操作系统线程增量；本计划在干净 Node 子进程里用生产 `session_options` 建真实 embedding session，断言线程增量随档位变化。
 - 不替代 `ai-test` 中的 kb tool / live。
-- 不登记 unit。函数级补足仍在 `tests/case/unit/knowledge/**`。
+- 函数级补足放在 `tests/case/unit/**`，本计划只引用证据，不另登记 Unit。
 
 ## 2. Suite 设计
 
@@ -103,18 +103,18 @@
 #### `prepare-workspaces-sequentially`
 
 - 测试类型：`backend`
-- What：多地址更新索引按顺序等待前一个完成再启动下一个；首个结果 cancelled 时不再启动后续地址。
-- Why：并行 kickoff 会叠满嵌入线程，和慢/高速档位冲突；取消必须拦住还没开始的地址。
-- How：三个真实工作目录各写一个 txt，用生产 `prepareWorkspacesSequentially` 依次调用 `WorkspaceKnowledgePrepareService.indexLocalFile`（切分走生产 `prepareWorkspaceSource`，嵌入走生产 embedding），记录 start/end。另用 `shouldContinue` 在首个结果 cancelled 时停止，确认后续 prepare 不被调用。
-- Oracle：事件顺序为每个地址 start→end 后再开始下一个，对齐 `SET-WORKSPACE-004-AC11`；cancelled 后不再 kickoff 后续地址，对齐 `SET-WORKSPACE-004-AC15`。
+- What：多地址真实索引按顺序等待前一个完成再启动下一个。
+- Why：避免多个地址并行占用嵌入线程，验证顺序编排与真实索引服务能够协作。
+- How：三个真实工作目录各写一个 txt，用生产 `prepareWorkspacesSequentially` 依次调用 `WorkspaceKnowledgePrepareService.indexLocalFile`（切分走生产 `prepareWorkspaceSource`，嵌入走生产 embedding），记录 start/end。
+- Oracle：各地址完成真实索引，事件顺序为每个地址 start→end 后再开始下一个，对齐 `SET-WORKSPACE-004-AC11`。首个结果 cancelled 后停止调用的函数契约由 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts` 补充 `SET-WORKSPACE-004-AC15`，不作为本 backend 的真实取消链路证据。
 
 #### `workspace-index-cancel-contract`
 
 - 测试类型：`backend`
-- What：取消 prepare 后 job 为 cancelled；已完成保留；未完成回退且不失败；后续地址不启动；检索恢复。网页 crawling/indexing 同样回退。
+- What：生产取消控制器与真实 Store 协作，保留已完成文件 / 网页，将执行中条目回退为进入本轮前的可索引或失败状态。
 - Why：用户取消不是故障，剩余资料必须还能再次更新索引，也不能继续占用嵌入或拦截检索。
-- How：生产 store + 取消控制器；多文件/多地址用可闸门的索引函数在第二份未写库时取消；网页写执行中条目后调同一回退。另用可闸门的多批 `buildWorkspaceKnowledgeVectors` 验证取消后不再送后续批次。另写入已成功 job 后再走取消收口，确认不改写终态。
-- Oracle：job 为 cancelled；已索引保留；未完成回到 `needs_index` 或原 `failed`，不出现成批失败，对齐 `SET-WORKSPACE-004-AC14`、`SET-WORKSPACE-004-AC16`；后续地址不启动，对齐 `SET-WORKSPACE-004-AC15`；取消后 `hasRunningPrepareJob` 为 false，检索不再拦截，对齐 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`；网页执行中条目回到进入本轮前状态，对齐 `SET-WEB-004-AC12`、`SET-WEB-004-AC13`。当前文件多批嵌入时，取消后只完成当前批、后续批不得调用，对齐 `SET-WORKSPACE-004-AC16`。已是 succeeded 后再取消，状态仍为 succeeded，对齐 `SET-WORKSPACE-004-AC17`。不测弹框。
+- How：向真实 Store 准备已完成、执行中、待处理和旧失败条目；控制器记住各条目原状态后接收取消，检查取消标志、AbortSignal 与真实回退结果。另以预置 cancelled job 调用生产 KB 工具检查不触发索引拦截，不将它视作完整索引取消过程。
+- Oracle：取消标志与 signal 生效；已完成保持 `indexed`，未完成回到 `needs_index` 或原 `failed` 并保留原错误，对齐 `SET-WORKSPACE-004-AC14` 及 `SET-WORKSPACE-004-AC16` 的条目回退部分；网页回到原 `needs_index / index_failed`，已完成保留，补充 `SET-WEB-004-AC12/AC13`；预置 cancelled job 不是 running，查询不触发索引拦截，补充 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。当前批后停止及顺序 helper 的取消契约由 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts` 补充 `SET-WORKSPACE-004-AC15/AC16`；成功 / 失败终态不改为取消的纯函数契约由 `tests/case/unit/workspace/files/workspace-index-job-progress.test.ts` 补充 `SET-WORKSPACE-004-AC17`。这些 Unit 不能代替完整索引取消、任务收口和 UI 确认竞态。
 
 ## 5. 覆盖边界
 

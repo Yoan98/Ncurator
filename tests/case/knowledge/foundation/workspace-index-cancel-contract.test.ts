@@ -1,16 +1,14 @@
 import { describe, it } from 'vitest'
-import { buildKbCapabilityTools, KB_INDEXING_IN_PROGRESS_ERROR } from '../../../../src/main/services/ai/human/tools/kb/retrievalTools'
-import type { KnowledgeRetrievalContext } from '../../../../src/main/services/ai/types'
-import type { EmbeddingService } from '../../../../src/main/services/vector/EmbeddingService'
 import {
-  IndexPrepareCancelledError,
-  resolveCancelledPrepareJobStatus,
-  runCancellablePrepareLoop,
+  buildKbCapabilityTools,
+  KB_INDEXING_IN_PROGRESS_ERROR
+} from '../../../../src/main/services/ai/human/tools/kb/retrievalTools'
+import type { KnowledgeRetrievalContext } from '../../../../src/main/services/ai/types'
+import {
   toFilePreparePreviousSnapshot,
   toWebPreparePreviousSnapshot,
   WorkspaceIndexPrepareController
 } from '../../../../src/main/services/workspace/WorkspaceIndexPrepareController'
-import { buildWorkspaceKnowledgeVectors } from '../../../../src/main/services/workspace/utils/knowledge'
 import type {
   WebSourceRecord,
   WorkspaceFileIndexRecord,
@@ -79,7 +77,7 @@ describe('knowledge foundation', () => {
       harnessMode: 'tool-real',
       domain: 'knowledge',
       suite: 'foundation',
-      description: '取消 prepare 后已完成保留、未完成回退且不失败，后续地址不启动，检索恢复。',
+      description: '生产取消控制器与真实 Store 保留完成条目，并将执行中条目回退到原状态。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -91,51 +89,37 @@ describe('knowledge foundation', () => {
 
         const indexed = createFileRecord('file-indexed', 'indexed')
         const current = createFileRecord('file-current', 'needs_index')
+        const currentFailed = createFileRecord('file-current-failed', 'failed', 'previous-error')
         const pending = createFileRecord('file-pending', 'needs_index')
         const failed = createFileRecord('file-failed', 'failed', 'old-error')
         await runtime.storageService.workspace.replaceWorkspaceFileIndexRecords(WORKSPACE.id, [
           indexed,
           current,
+          currentFailed,
           pending,
           failed
         ])
 
         controller.beginSession('file')
-        const started: string[] = []
-        let releaseCurrent: () => void = () => {}
-        const currentGate = new Promise<void>((resolve) => {
-          releaseCurrent = resolve
-        })
-        let notifyCurrentStarted: () => void = () => {}
-        const currentStarted = new Promise<void>((resolve) => {
-          notifyCurrentStarted = resolve
-        })
-        const loopPromise = runCancellablePrepareLoop({
-          items: [current, pending, failed],
-          isCancelled: () => controller.isCancelled('file'),
-          runItem: async (record) => {
-            started.push(record.id)
-            controller.rememberFilePrevious(record.id, toFilePreparePreviousSnapshot(record))
-            await runtime.storageService.workspace.upsertWorkspaceFileIndexRecords([
-              { ...record, index_status: 'indexing', updated_at: Date.now() }
-            ])
-            if (record.id === 'file-current') {
-              notifyCurrentStarted()
-              await currentGate
-              if (controller.isCancelled('file')) throw new IndexPrepareCancelledError()
-            }
-            if (controller.isCancelled('file')) throw new IndexPrepareCancelledError()
-            await runtime.storageService.workspace.updateWorkspaceFileIndexRecord(record.id, {
-              index_status: 'indexed',
-              last_error: undefined,
-              updated_at: Date.now()
-            })
+        controller.rememberFilePrevious(
+          indexed.id,
+          toFilePreparePreviousSnapshot({ index_status: 'needs_index' })
+        )
+        controller.rememberFilePrevious(current.id, toFilePreparePreviousSnapshot(current))
+        controller.rememberFilePrevious(
+          currentFailed.id,
+          toFilePreparePreviousSnapshot(currentFailed)
+        )
+        await runtime.storageService.workspace.upsertWorkspaceFileIndexRecords([
+          { ...current, index_status: 'indexing', updated_at: Date.now() },
+          {
+            ...currentFailed,
+            index_status: 'indexing',
+            last_error: undefined,
+            updated_at: Date.now()
           }
-        })
-        await currentStarted
+        ])
         controller.requestCancel('file')
-        releaseCurrent()
-        const loopResult = await loopPromise
         const revertedFiles = await controller.revertUnfinishedFiles()
         const fileRecords = await runtime.storageService.workspace.listWorkspaceFileIndexRecords(
           WORKSPACE.id
@@ -157,6 +141,11 @@ describe('knowledge foundation', () => {
         controller.beginSession('web')
         controller.rememberWebPrevious(crawling.id, previousCrawling)
         controller.rememberWebPrevious(indexing.id, previousIndexing)
+        controller.rememberWebPrevious(
+          webIndexed.id,
+          toWebPreparePreviousSnapshot({ index_status: 'needs_index' })
+        )
+        controller.requestCancel('web')
         const revertedWeb = await controller.revertUnfinishedWebSources()
         const webSources = await runtime.storageService.webSource.listWebSources()
 
@@ -182,91 +171,11 @@ describe('knowledge foundation', () => {
           await runtime.storageService.workspaceIndexJob.hasRunningPrepareJob()
         const searchError = await invokeKbSearch(runtime.createAiRunContext())
 
-        controller.beginSession('file')
-        controller.requestCancel('file')
-        const sequentialCalls: string[] = []
-        await Promise.resolve().then(async () => {
-          for (const workspaceId of ['ws-a', 'ws-b']) {
-            if (controller.isCancelled('file')) break
-            sequentialCalls.push(workspaceId)
-          }
-        })
-
-        const idleController = new WorkspaceIndexPrepareController({
-          workspaceStore: runtime.storageService.workspace,
-          webSourceStore: runtime.storageService.webSource
-        })
-        const succeededJob = {
-          id: 'already-succeeded-job',
-          workspace_id: WORKSPACE.id,
-          source_kind: 'file',
-          action: 'prepare',
-          status: 'succeeded',
-          phase: 'complete',
-          step_index: 1,
-          step_total: 1,
-          total_count: 1,
-          processed_count: 1,
-          failed_count: 0,
-          target_ids: [indexed.id],
-          started_at: now,
-          updated_at: now,
-          finished_at: now
-        } satisfies WorkspaceIndexJobRecord
-        await runtime.storageService.workspaceIndexJob.saveJob(succeededJob)
-        idleController.requestCancel('file')
-        const storedSucceeded = await runtime.storageService.workspaceIndexJob.getJobById(
-          succeededJob.id
-        )
-
-        const batchController = new WorkspaceIndexPrepareController({
-          workspaceStore: runtime.storageService.workspace,
-          webSourceStore: runtime.storageService.webSource
-        })
-        batchController.beginSession('file')
-        const chunks = Array.from({ length: 8 }, (_, index) => ({
-          text: `chunk-${index}`,
-          page: 1
-        }))
-        let embedCalls = 0
-        let releaseFirstBatch: () => void = () => {}
-        const firstBatchGate = new Promise<void>((resolve) => {
-          releaseFirstBatch = resolve
-        })
-        let notifyFirstBatchStarted: () => void = () => {}
-        const firstBatchStarted = new Promise<void>((resolve) => {
-          notifyFirstBatchStarted = resolve
-        })
-        const vectorPromise = buildWorkspaceKnowledgeVectors({
-          embeddingService: {
-            embed: async (texts: string[]) => {
-              embedCalls += 1
-              if (embedCalls === 1) {
-                notifyFirstBatchStarted()
-                await firstBatchGate
-              }
-              return {
-                data: new Float32Array(texts.length * 4),
-                dims: [texts.length, 4]
-              }
-            }
-          } as EmbeddingService,
-          chunks,
-          signal: batchController.getSignal('file')
-        })
-        await firstBatchStarted
-        batchController.requestCancel('file')
-        releaseFirstBatch()
-        let vectorCancelled = false
-        try {
-          await vectorPromise
-        } catch (error) {
-          vectorCancelled = error instanceof IndexPrepareCancelledError
-        }
-
         return {
-          loopResult,
-          started,
+          fileCancelled: controller.isCancelled('file'),
+          fileSignalAborted: controller.getSignal('file').aborted,
+          webCancelled: controller.isCancelled('web'),
+          webSignalAborted: controller.getSignal('web').aborted,
           revertedFiles,
           fileRecords: fileRecords.map((record) => ({
             id: record.id,
@@ -280,53 +189,35 @@ describe('knowledge foundation', () => {
             lastError: source.last_error || ''
           })),
           hasRunningPrepareJob,
-          searchError,
-          sequentialCalls,
-          storedSucceededStatus: storedSucceeded?.status,
-          finishedAllStatus: resolveCancelledPrepareJobStatus({
-            unfinishedCount: 0,
-            processedCount: 3,
-            totalCount: 3,
-            failedCount: 0
-          }),
-          unfinishedStatus: resolveCancelledPrepareJobStatus({
-            unfinishedCount: 1,
-            processedCount: 2,
-            totalCount: 3,
-            failedCount: 0
-          }),
-          embedCalls,
-          vectorCancelled
+          searchError
         }
       },
       assert: async (result, runtime) => {
         const byId = Object.fromEntries(result.fileRecords.map((record) => [record.id, record]))
         runtime.assertThat(
-          result.loopResult.cancelled === true &&
-            result.started.join(',') === 'file-current' &&
+          result.fileCancelled &&
+            result.fileSignalAborted &&
             byId['file-indexed']?.status === 'indexed' &&
             byId['file-current']?.status === 'needs_index' &&
+            byId['file-current-failed']?.status === 'failed' &&
+            byId['file-current-failed']?.lastError === 'previous-error' &&
             byId['file-pending']?.status === 'needs_index' &&
             byId['file-failed']?.status === 'failed' &&
             byId['file-failed']?.lastError === 'old-error' &&
-            result.revertedFiles >= 1,
+            result.revertedFiles === 2,
           {
             name: 'cancel-keeps-completed-and-reverts-unfinished',
             message:
-              '取消后已完成保留，未完成回退为可索引或原失败，当前未写完的不落成已索引，对齐 SET-WORKSPACE-004-AC14、SET-WORKSPACE-004-AC16。',
+              '取消控制器回退执行中条目、恢复旧失败与错误，并保留完成条目，补充 SET-WORKSPACE-004-AC14、SET-WORKSPACE-004-AC16 的数据状态证据。',
             data: result
           }
         )
 
-        runtime.assertThat(result.sequentialCalls.length === 0, {
-          name: 'cancel-blocks-remaining-addresses',
-          message: '取消后后续地址不得 kickoff，对齐 SET-WORKSPACE-004-AC15。',
-          data: result
-        })
-
         const webById = Object.fromEntries(result.webSources.map((source) => [source.id, source]))
         runtime.assertThat(
-          result.revertedWeb === 2 &&
+          result.webCancelled &&
+            result.webSignalAborted &&
+            result.revertedWeb === 2 &&
             webById['web-crawling']?.status === 'needs_index' &&
             webById['web-indexing']?.status === 'index_failed' &&
             webById['web-indexing']?.lastError === 'index boom' &&
@@ -345,29 +236,7 @@ describe('knowledge foundation', () => {
           {
             name: 'cancel-unblocks-kb-search',
             message:
-              'cancelled 后不再拦截知识库检索，对齐 SET-WORKSPACE-004-AC9、SET-WEB-004-AC8。',
-            data: result
-          }
-        )
-
-        runtime.assertThat(
-          result.embedCalls === 1 && result.vectorCancelled === true,
-          {
-            name: 'cancel-stops-after-current-embedding-batch',
-            message:
-              '取消后只再完成当前嵌入批次，不得继续该文件剩余批次，对齐 SET-WORKSPACE-004-AC16。',
-            data: result
-          }
-        )
-
-        runtime.assertThat(
-          result.storedSucceededStatus === 'succeeded' &&
-            result.finishedAllStatus === 'succeeded' &&
-            result.unfinishedStatus === 'cancelled',
-          {
-            name: 'cancel-after-complete-keeps-succeeded',
-            message:
-              '任务已全部完成后取消不得改成 cancelled，对齐 SET-WORKSPACE-004-AC17。',
+              '预置 cancelled job 不再是 running，查询不触发索引拦截，补充 SET-WORKSPACE-004-AC9、SET-WEB-004-AC8。',
             data: result
           }
         )

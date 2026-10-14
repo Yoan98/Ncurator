@@ -2,21 +2,76 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import type { EmbeddingService } from '../../../../../src/main/services/vector/EmbeddingService'
+import { IndexPrepareCancelledError } from '../../../../../src/main/services/workspace/WorkspaceIndexPrepareController'
 import {
   WORKSPACE_EMBEDDING_BATCH_CHUNK_COUNT,
   WORKSPACE_EMBEDDING_BATCH_MAX_CHARS,
   WORKSPACE_EMBEDDING_CHUNK_MAX_CHARS
 } from '../../../../../src/main/services/workspace/constants'
 import {
+  buildWorkspaceKnowledgeVectors,
   computeWorkspaceFileContentHash,
   createWorkspaceEmbeddingBatches
 } from '../../../../../src/main/services/workspace/utils/knowledge'
 import { handleWorkspacePrepareWorkerRequest } from '../../../../../src/main/services/workspace/worker/workspacePrepareWorker'
 import { WorkspacePrepareWorkerClient } from '../../../../../src/main/services/workspace/worker/workspacePrepareWorkerClient'
 import type { WorkspacePrepareWorkerRequest } from '../../../../../src/main/services/workspace/types'
+import { prepareWorkspacesSequentially } from '../../../../../src/shared/prepareWorkspacesSequentially'
 const createChunk = (length: number, page: number) => ({ text: 'x'.repeat(length), page })
 
 describe('workspace worker adapters', () => {
+  it('stops after the current embedding batch when its signal is cancelled', async () => {
+    const cancellation = new AbortController()
+    const chunks = Array.from({ length: WORKSPACE_EMBEDDING_BATCH_CHUNK_COUNT + 1 }, (_, index) =>
+      createChunk(10, index + 1)
+    )
+    let embedCalls = 0
+    let releaseFirstBatch: () => void = () => {}
+    const firstBatchGate = new Promise<void>((resolve) => {
+      releaseFirstBatch = resolve
+    })
+    let notifyFirstBatchStarted: () => void = () => {}
+    const firstBatchStarted = new Promise<void>((resolve) => {
+      notifyFirstBatchStarted = resolve
+    })
+    const vectors = buildWorkspaceKnowledgeVectors({
+      embeddingService: {
+        embed: async (texts: string[]) => {
+          embedCalls += 1
+          notifyFirstBatchStarted()
+          await firstBatchGate
+          return {
+            data: new Float32Array(texts.length * 4),
+            dims: [texts.length, 4]
+          }
+        }
+      } as EmbeddingService,
+      chunks,
+      signal: cancellation.signal
+    })
+    const cancelled = expect(vectors).rejects.toBeInstanceOf(IndexPrepareCancelledError)
+    await firstBatchStarted
+    cancellation.abort()
+    releaseFirstBatch()
+    await cancelled
+    expect(embedCalls).toBe(1)
+  })
+
+  it('does not start remaining addresses after the first result is cancelled', async () => {
+    const calls: string[] = []
+    const results = await prepareWorkspacesSequentially(
+      ['ws-a', 'ws-b', 'ws-c'],
+      async (workspaceId) => {
+        calls.push(workspaceId)
+        return { cancelled: workspaceId === 'ws-a' }
+      },
+      (result) => !result.cancelled
+    )
+    expect(calls).toEqual(['ws-a'])
+    expect(results).toEqual([{ cancelled: true }])
+  })
+
   it('respects batch count, character budget and oversized chunk boundaries', () => {
     const normalChunks = [
       createChunk(1000, 1),

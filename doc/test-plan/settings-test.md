@@ -166,7 +166,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：更新索引进行中点「取消」，确认框说明尚未完成的不再继续；继续后进度仍可见，停止后按钮恢复且仍有未完成文件。
 - Why：用户需要能停掉长时间索引并关掉应用，不能把没做完的文件标成失败。
 - How：添加含多个真实文件的临时目录，进度可见且 `processed_count < total_count` 后点「取消」；先选「继续更新」检查进度仍可见，再点「取消」并「停止」。
-- Oracle：进行中按钮文案为「取消」且可点，对齐 `SET-WORKSPACE-004-AC12`；弹框不展示已完成/剩余数量，并说明尚未完成的将不会继续索引，继续后进度仍可见，对齐 `SET-WORKSPACE-004-AC13`；停止后按钮回到「更新索引」，仍有可索引或失败文件且未全部变成失败，部分覆盖 `SET-WORKSPACE-004-AC3/AC14`。已完成条目保留、未完成回退、多地址不再启动与当前批之后停由 Knowledge `workspace-index-cancel-contract` 补充 `SET-WORKSPACE-004-AC14/AC15/AC16`。
+- Oracle：进行中按钮文案为「取消」且可点，对齐 `SET-WORKSPACE-004-AC12`；弹框不展示已完成/剩余数量，并说明尚未完成的将不会继续索引，继续后进度仍可见，对齐 `SET-WORKSPACE-004-AC13`；停止后按钮回到「更新索引」，仍有可索引或失败文件且未全部变成失败，部分覆盖 `SET-WORKSPACE-004-AC3/AC14`。已完成保留和未完成状态回退由 Knowledge `workspace-index-cancel-contract` 补充；地址顺序停止和当前批之后停由 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts` 补充 `SET-WORKSPACE-004-AC15/AC16`，完整取消链路未逐项验证。
 
 #### `workspace-prepare-cancel-after-complete`
 
@@ -174,7 +174,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：运行中打开取消确认框，任务自然成功后确认框自动关闭，原任务和文件保持完成状态。
 - Why：避免任务已经完成后仍残留取消入口，或把已完成结果回退为取消。
 - How：添加含唯一内容的真实文件，通过 Settings UI 启动索引并记录 running prepare job ID；必须在运行中打开确认框，再等待任务自然完成和确认框关闭。只读查询同一 job 的 SQLite 终态，核对预期文件集合与索引状态；未打开确认框即失败，不跳过场景或吞掉操作错误。
-- Oracle：确认框实际在 running 期间可见；自然完成后确认框和进度隐藏，按钮恢复「更新索引」；同一 job 为 `succeeded`、目标数和处理数等于输入文件数、失败数为 0，预期文件集合非空且全部 `indexed`。这是 `SET-WORKSPACE-004-AC17` 的成功终态 UI 补充；完成后取消不改终态由 Knowledge `workspace-index-cancel-contract` 验证，失败终态和 UI 点击竞态未全覆盖。
+- Oracle：确认框实际在 running 期间可见；自然完成后确认框和进度隐藏，按钮恢复「更新索引」；同一 job 为 `succeeded`、目标数和处理数等于输入文件数、失败数为 0，预期文件集合非空且全部 `indexed`。这是 `SET-WORKSPACE-004-AC17` 的成功终态 UI 补充；终态状态判断由 `tests/case/unit/workspace/files/workspace-index-job-progress.test.ts` 补充，完整任务收口、失败终态和 UI 点击竞态未全覆盖。
 
 ### 3.4 `workspace / web`
 
@@ -208,7 +208,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：网页更新索引进行中点「取消」，确认框说明尚未完成的不再继续，停止后未完成网页不落成已索引。
 - Why：网页抓取可能很慢，用户需要和文件 tab 同一套停法。
 - How：添加延迟响应的本地真实网页，进度可见后点「取消」；覆盖继续与停止。
-- Oracle：进行中按钮为「取消」且可点，弹框不展示数量并说明尚未完成的将不会继续索引，继续后进度仍可见，对齐 `SET-WEB-004-AC10`、`SET-WEB-004-AC11`；停止后没有 `crawling / indexing`、至少一项未索引、没有新失败，按钮回到「更新索引」，部分覆盖 `SET-WEB-004-AC12/AC13`。已完成保留、旧失败状态回退和当前批取消由 Knowledge `workspace-index-cancel-contract` 补充，不算本 UI case 的逐项证据。
+- Oracle：进行中按钮为「取消」且可点，弹框不展示数量并说明尚未完成的将不会继续索引，继续后进度仍可见，对齐 `SET-WEB-004-AC10`、`SET-WEB-004-AC11`；停止后没有 `crawling / indexing`、至少一项未索引、没有新失败，按钮回到「更新索引」，部分覆盖 `SET-WEB-004-AC12/AC13`。已完成保留与旧失败状态回退由 Knowledge `workspace-index-cancel-contract` 补充；共用嵌入函数的当前批取消由 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts` 补充，不能算作本 UI case 的逐项证据。
 
 #### `web-detail-and-delete`
 
@@ -333,4 +333,4 @@ Settings 顶层 suite 对齐 PRD 模块：
 | `SET-WEB-003-AC5` | 不测：网页空列表及可索引为 0 时的检查按钮门禁，不单独建立自动化 case。 |
 | `SET-WEB-004-AC7` | 手动 / 暂缓：向量模型缺失时的网页索引按钮禁用与说明、安装后恢复没有独立 UI 验证。 |
 | `SET-WEB-004-AC9` | 不测：可索引为 0 时的网页索引按钮门禁，不单独建立自动化 case。 |
-| `SET-WEB-004-AC14` | 暂缓独立 UI 自动化；文件侧的自然完成 UI 和完成后取消底层契约仅作相关证据，不能代替网页成功 / 失败终态的确认竞态。 |
+| `SET-WEB-004-AC14` | 暂缓独立 UI 自动化；文件侧的自然完成 UI 与取消终态判断 Unit 仅作相关证据，不能代替网页成功 / 失败终态的确认竞态。 |
