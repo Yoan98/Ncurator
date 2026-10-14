@@ -27,6 +27,8 @@ import { getExcelGridCanvas } from '../../../../harness/e2e/excel'
 import { copyDocumentSelection } from '../../../../harness/e2e/documentSelection'
 import {
   setupWorkbenchWithTempWorkspace,
+  appendWorkbenchInputText,
+  waitForWorkbenchMentionPanelText,
   openWorkbenchWorkspaceFile,
   getWorkbenchLocator,
   workbenchSelectors,
@@ -122,12 +124,13 @@ async function dragText(page: Page, start: Locator, end: Locator) {
   await page.mouse.up()
 }
 
-async function assertPdfTextVisible(
+async function assertSelectedTextVisible(
   runtime: E2ETestRuntime,
-  sample: Awaited<ReturnType<typeof selectVisibleText>>,
+  format: 'pdf' | 'text',
+  sample: Pick<Awaited<ReturnType<typeof selectVisibleText>>, 'before' | 'clip'>,
   state: string
 ) {
-  if (!sample.before) throw new Error('缺少 PDF 选区基准截图')
+  if (!sample.before) throw new Error('缺少选区基准截图')
   const after = await runtime.page.screenshot({ clip: sample.clip })
   const counts = await runtime.electronApp.evaluate(
     ({ nativeImage }, screenshots) =>
@@ -141,15 +144,90 @@ async function assertPdfTextVisible(
     [sample.before.toString('base64'), after.toString('base64')]
   )
   await runtime.assertThat(counts[0] > 20 && counts[1] >= counts[0] * 0.5, {
-    name: `pdf-text-visible-${state}`,
-    message: 'PDF 高亮后选区中的深色文字仍可辨认，未被纯色背景盖住。',
+    name: `${format}-text-visible-${state}`,
+    message: `${format} 高亮后选区中的深色文字仍可辨认，未被纯色背景盖住。`,
     data: { before: counts[0], after: counts[1], clip: sample.clip }
   })
   await runtime.captureScreenshot({
-    name: `pdf-reference-${state}`,
-    message: `PDF ${state} 高亮保持正文可见`
+    name: `${format}-reference-${state}`,
+    message: `${format} ${state} 高亮保持正文可见`
   })
 }
+async function assertSelectionPointer(
+  runtime: E2ETestRuntime,
+  format: string,
+  point: { x: number; y: number }
+) {
+  const { page } = runtime
+  const moveEvent = page.evaluate(
+    () =>
+      new Promise<{
+        buttons: number
+        target: string | null
+        surface: string | null
+        hovered: boolean
+      } | null>((resolve) => {
+        const finish = (event: PointerEvent) => {
+          document.removeEventListener('pointermove', finish)
+          clearTimeout(timeout)
+          const target = event.target instanceof Element ? event.target : null
+          resolve({
+            buttons: event.buttons,
+            target: target?.tagName || null,
+            surface:
+              target
+                ?.closest('[data-document-selection-surface]')
+                ?.getAttribute('data-document-selection-surface') || null,
+            hovered: Boolean(target?.closest('[data-document-selection-hover]'))
+          })
+        }
+        const timeout = setTimeout(() => {
+          document.removeEventListener('pointermove', finish)
+          resolve(null)
+        }, 1000)
+        document.addEventListener('pointermove', finish)
+      })
+  )
+  await page.mouse.move(point.x, point.y)
+  const move = await moveEvent
+  await page
+    .waitForFunction(
+      (point) => {
+        const element = document.elementFromPoint(point.x, point.y)
+        return element && getComputedStyle(element).cursor === 'pointer'
+      },
+      point,
+      { timeout: 5_000 }
+    )
+    .catch(() => {})
+  const observed = await page.evaluate((point) => {
+    const element = document.elementFromPoint(point.x, point.y)
+    return {
+      cursor: element ? getComputedStyle(element).cursor : null,
+      element: element?.outerHTML.slice(0, 300),
+      hovered: Boolean(element?.closest('[data-document-selection-hover]')),
+      highlights: [...CSS.highlights].flatMap(([key, value]) =>
+        [...value].flatMap((range) =>
+          range instanceof Range
+            ? [...range.getClientRects()].map((rect) => ({
+                key,
+                left: rect.left,
+                top: rect.top,
+                right: rect.right,
+                bottom: rect.bottom
+              }))
+            : []
+        )
+      )
+    }
+  }, point)
+  await runtime.assertThat(observed.cursor === 'pointer', {
+    name: `${format}-saved-selection-pointer`,
+    message: `${format} 已保存选区悬停时，实际命中的编辑控件使用点击光标。`,
+    data: { point, move, ...observed }
+  })
+}
+
 async function confirm(page: Page, prefix: string, thought: string) {
   await page.getByTestId(`${prefix}-selection-ai-reference`).click()
   await page.getByTestId(`${prefix}-selection-thought`).fill(thought)
@@ -270,12 +348,31 @@ describe('workbench conversation e2e', () => {
           const before = await Promise.all(
             names.map((name) => fs.readFile(path.join(setup.workspace.rootPath, name)))
           )
+          const openPreviewFile = async (name: string) => {
+            await openWorkbenchWorkspaceFile(runtime, name)
+            const overlay = getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerOverlay)
+            if (await overlay.isVisible())
+              await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+            await overlay.waitFor({ state: 'hidden' })
+          }
           const composer = getWorkbenchLocator(page, workbenchSelectors.input)
           const tokens = composer.locator('[data-role="document-selection-token"]')
-          await openWorkbenchWorkspaceFile(runtime, names[0])
+          await appendWorkbenchInputText(page, '@sample-edit.docx')
+          await waitForWorkbenchMentionPanelText(page)
+          await getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
+            .getByRole('button', { name: /sample-edit\.docx/ })
+            .click()
+          await openPreviewFile(names[0])
           const text = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
+          const textClip = await text.evaluate((element) => {
+            const rect = element.getBoundingClientRect()
+            return { x: rect.left + 32, y: rect.top + 24, width: 195, height: 24 }
+          })
+          const textSample = { clip: textClip, before: await page.screenshot({ clip: textClip }) }
           await text.click()
           await text.press('ControlOrMeta+a')
+          await page.getByTestId('text-selection-ai-reference').waitFor({ state: 'visible' })
+          await assertSelectedTextVisible(runtime, 'text', textSample, 'action')
           const copiedText = await copyDocumentSelection(runtime)
           await runtime.assertThat(copiedText === before[0].toString('utf8'), {
             name: 'text-reference-native-copy',
@@ -283,7 +380,34 @@ describe('workbench conversation e2e', () => {
             data: { copiedText }
           })
           await confirm(page, 'text', '只解释这段文本，不修改文件。')
+          await runtime.assertThat(
+            await composer.evaluate((element) => {
+              const reference = element.querySelector('[data-role="scope-token"]')
+              const selection = element.querySelector('[data-role="document-selection-token"]')
+              if (!reference || !selection) return false
+              const a = reference.getBoundingClientRect(),
+                b = selection.getBoundingClientRect()
+              return !element.textContent?.includes('\n') && Math.abs(a.bottom - b.bottom) < 6
+            }),
+            {
+              name: 'reference-append-inline',
+              message: '宽度足够时，@ 文件和追加的选区引用保持同行，没有主动插入换行。'
+            }
+          )
+          await assertSelectedTextVisible(runtime, 'text', textSample, 'saved')
+          const textHover = { x: textClip.x + 8, y: textClip.y + 12 }
+          await assertSelectionPointer(runtime, 'text', textHover)
+          await assertSelectedTextVisible(runtime, 'text', textSample, 'hover')
           await tokens.first().click()
+          await page.waitForFunction((testId) => {
+            const element = document.querySelector(`[data-testid="${testId}"]`)
+            return (
+              element instanceof HTMLTextAreaElement &&
+              document.activeElement === element &&
+              element.selectionStart === 0 &&
+              element.selectionEnd === element.value.length
+            )
+          }, workbenchSelectors.plainTextEditor)
           await runtime.captureScreenshot({
             name: 'text-reference',
             message: '文本选区回跳与持久高亮'
@@ -320,12 +444,25 @@ describe('workbench conversation e2e', () => {
           )
           await text.fill(before[0].toString('utf8'))
           await tokens.first().click()
-          await openWorkbenchWorkspaceFile(runtime, names[1])
+          await composer.click()
+          await page.keyboard.press('ControlOrMeta+End')
+          await page.keyboard.press('Shift+Enter')
+          const textBeforeMarkdown = await composer.textContent()
+          await openPreviewFile(names[1])
           const markdown = page.locator('.vditor-ir .vditor-reset')
           const tableStart = markdown.locator('table').last().locator('th').first()
           const tableEnd = markdown.locator('table').last().locator('td').last()
           await dragText(page, tableStart, tableEnd)
           await confirm(page, 'text', '解释表格引用。')
+          await runtime.assertThat(
+            Boolean(textBeforeMarkdown?.includes('\n')) &&
+              Boolean((await composer.textContent())?.startsWith(textBeforeMarkdown || '')),
+            {
+              name: 'reference-manual-newline-preserved',
+              message: '用户输入的换行在追加引用后原样保留。',
+              data: { textBeforeMarkdown, after: await composer.textContent() }
+            }
+          )
           const tableTitle = (await tokens.last().getAttribute('title')) || ''
           await runtime.assertThat(
             tableTitle.includes('检查项\t结果') && tableTitle.includes('表格引用\t准确定位'),
@@ -406,10 +543,11 @@ describe('workbench conversation e2e', () => {
           )
           await tokens.last().click()
           const returnPoint = await textPoint(markdownStart)
+          await assertSelectionPointer(runtime, 'markdown', returnPoint)
           await page.mouse.click(returnPoint.x, returnPoint.y)
           await thought.waitFor({ state: 'visible' })
           await page.getByTestId('text-selection-save').click()
-          await openWorkbenchWorkspaceFile(runtime, names[2])
+          await openPreviewFile(names[2])
           const pdfSample = await selectVisibleText(page, '[data-pdf-page="1"] .textLayer', true)
           await page.getByTestId('pdf-selection-ai-reference').waitFor({ state: 'visible' })
           const copiedPdf = await copyDocumentSelection(runtime)
@@ -418,13 +556,13 @@ describe('workbench conversation e2e', () => {
             message: 'PDF 原生文字选区在 AI 引用入口出现后仍可复制。',
             data: { expected: pdfSample.text, copied: copiedPdf }
           })
-          await assertPdfTextVisible(runtime, pdfSample, 'action')
+          await assertSelectedTextVisible(runtime, 'pdf', pdfSample, 'action')
           await confirm(page, 'pdf', '只解释 PDF 引文，不修改文件。')
           await page.mouse.move(pdfSample.x2 + 150, pdfSample.y2)
-          await assertPdfTextVisible(runtime, pdfSample, 'saved')
+          await assertSelectedTextVisible(runtime, 'pdf', pdfSample, 'saved')
           await page.mouse.move(pdfSample.x1, pdfSample.y1)
-          await assertPdfTextVisible(runtime, pdfSample, 'hover')
-          await openWorkbenchWorkspaceFile(runtime, names[3])
+          await assertSelectedTextVisible(runtime, 'pdf', pdfSample, 'hover')
+          await openPreviewFile(names[3])
           await page.waitForFunction(
             (testId) =>
               document
@@ -435,6 +573,15 @@ describe('workbench conversation e2e', () => {
           await getExcelGridCanvas(page).click({ position: { x: 110, y: 90 } })
           await page.keyboard.press('Shift+ArrowRight')
           await confirm(page, 'excel', '只解释这些单元格的值或公式，不修改文件。')
+          const excelCanvasBox = await getExcelGridCanvas(page).boundingBox()
+          if (!excelCanvasBox) throw new Error('Excel 主画布不可见')
+          await assertSelectionPointer(runtime, 'excel', {
+            x: excelCanvasBox.x + 110,
+            y: excelCanvasBox.y + 90
+          })
+          await page.mouse.click(excelCanvasBox.x + 110, excelCanvasBox.y + 90)
+          await page.getByTestId('excel-selection-thought').waitFor({ state: 'visible' })
+          await page.getByTestId('excel-selection-save').click()
           const excelTitle = (await tokens.last().getAttribute('title')) || ''
           const excelLocation = excelTitle.match(/\n位置：([^\n]+)!([A-Z]+\d+(?::[A-Z]+\d+)?)\n/)
           if (!excelLocation) throw new Error('Excel 引用没有工作表和范围')
@@ -449,7 +596,7 @@ describe('workbench conversation e2e', () => {
             name: 'excel-reference',
             message: 'Excel 区域引用与原生紫色高亮'
           })
-          await openWorkbenchWorkspaceFile(runtime, names[4])
+          await openPreviewFile(names[4])
           await page.locator('[data-ppt-interactive] svg').waitFor({ state: 'visible' })
           await page.waitForFunction(() =>
             [...CSS.highlights.keys()].some((key) => key.startsWith('ppt-'))
@@ -791,6 +938,25 @@ describe('workbench conversation e2e', () => {
           const startedAt = Date.now()
           await submitWorkbenchCurrentDraft(page)
           await tokens.first().waitFor({ state: 'detached' })
+          const sentReference = getWorkbenchLocator(page, workbenchSelectors.userMessageReferences)
+            .last()
+            .locator('[data-role="reference-inline-token"]')
+          await sentReference.waitFor({ state: 'visible' })
+          await runtime.assertThat(
+            await sentReference.evaluate((token) => {
+              const style = getComputedStyle(token)
+              const icon = token.querySelector('[data-reference-icon-kind] svg')
+              return (
+                style.color === 'rgb(55, 53, 47)' &&
+                style.backgroundColor === 'rgba(0, 0, 0, 0)' &&
+                icon?.getBoundingClientRect().width === 18
+              )
+            }),
+            {
+              name: 'reference-sent-message-style',
+              message: '已发送用户消息中的 @ 引用与输入区一致：正文色、无灰底、18px 图标。'
+            }
+          )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAt,

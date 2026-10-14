@@ -1,4 +1,4 @@
-import { LuFolder, LuFolderOpen } from 'react-icons/lu'
+import FileIcon from '../FileIcon'
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Dropdown, Empty, Spin, Tooltip, message, type MenuProps } from 'antd'
 import {
@@ -8,7 +8,6 @@ import {
   HiArrowsRightLeft,
   HiChevronDown,
   HiDocumentText,
-  HiFolderOpen,
   HiOutlineQuestionMarkCircle
 } from 'react-icons/hi2'
 import type {
@@ -519,13 +518,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 size="small"
                 aria-label={explorerOpen ? '收起文件列表' : '展开文件列表'}
                 aria-pressed={explorerOpen}
-                icon={
-                  explorerOpen ? (
-                    <LuFolderOpen className="h-4 w-4" />
-                  ) : (
-                    <LuFolder className="h-4 w-4" />
-                  )
-                }
+                icon={<FileIcon kind="directory" expanded={explorerOpen} className="h-4 w-4" />}
                 className={`!h-8 !w-8 !rounded-[6px] !border !p-0 !text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] ${
                   explorerOpen
                     ? '!border-[#D9D8D4] !bg-[#F1F1EF] !text-[#37352F]'
@@ -923,7 +916,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               hasWorkspace ? (
                 <div className="flex h-full items-center justify-center text-center">
                   <div>
-                    <HiFolderOpen className="mx-auto h-10 w-10 text-[#91918E]" />
+                    <FileIcon
+                      kind="directory"
+                      expanded
+                      className="mx-auto h-10 w-10 text-[#91918E]"
+                    />
                     <div className="mt-4 text-[18px] font-semibold text-[#37352F]">打开文件</div>
                     <div className="mt-2 text-sm text-[#91918E]">从右侧工作区文件列表中选择</div>
                   </div>

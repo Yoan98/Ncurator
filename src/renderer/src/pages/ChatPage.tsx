@@ -4791,13 +4791,15 @@ const ChatPage: React.FC = () => {
       const existing = documentSelections(draft.contentNodes).find((item) => item.id === node.id)
       const saved: DocumentSelectionNode = { ...node, number: existing?.number || 0 }
       if (location) locations.set(saved.id, location)
+      const lastNode = draft.contentNodes.at(-1)
+      const needsSeparator = lastNode && (lastNode.kind !== 'text' || !/\s$/.test(lastNode.text))
       const contentNodes: ChatMessageContentNode[] = existing
         ? draft.contentNodes.map((item) =>
             item.kind === 'document_selection' && item.id === saved.id ? saved : item
           )
         : [
             ...draft.contentNodes,
-            ...(draft.contentNodes.length ? [{ kind: 'text' as const, text: '\n' }] : []),
+            ...(needsSeparator ? [{ kind: 'text' as const, text: ' ' }] : []),
             saved
           ]
       const next = {

@@ -11,7 +11,6 @@ import type {
 import type { ComposerDraftValue, ComposerNode } from './types'
 import { getReferenceKey, pruneReferencesByWorkspace } from '../../../utils/reference'
 import {
-  getReferenceVisualSpec,
   INLINE_TOKEN_LABEL_CLASS_NAME,
   REFERENCE_TOKEN_CLASS_NAME,
   selectionIconPath,
@@ -183,9 +182,8 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
 }
 
 export const createScopeTokenElement = (scope: SelectedReference): HTMLElement => {
-  const visualSpec = getReferenceVisualSpec(scope)
   const token = document.createElement('span')
-  token.className = `${REFERENCE_TOKEN_CLASS_NAME} ${visualSpec.labelClassName}`
+  token.className = REFERENCE_TOKEN_CLASS_NAME
   token.contentEditable = 'false'
   token.title = scope.name
   referenceElements.set(token, scope)

@@ -131,6 +131,11 @@ textarea,
   cursor: text;
 }
 
+[data-document-selection-hover],
+[data-document-selection-hover] * {
+  cursor: pointer !important;
+}
+
 .ant-select-dropdown,
 .ant-dropdown .ant-dropdown-menu,
 .ant-popover .ant-popover-inner,

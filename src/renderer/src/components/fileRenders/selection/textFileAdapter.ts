@@ -165,9 +165,11 @@ export function plainTextAdapter(
         const rect = range.getBoundingClientRect(),
           viewport = textarea.getBoundingClientRect()
         textarea.scrollTop += rect.top - viewport.top - viewport.height / 2
+        textarea.dispatchEvent(new Event('scroll'))
+      },
+      select: () => {
         textarea.focus()
         textarea.setSelectionRange(location.start, location.end)
-        textarea.dispatchEvent(new Event('scroll'))
       }
     }
   }

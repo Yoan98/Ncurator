@@ -117,7 +117,7 @@ const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> 
         <pre
           ref={setMirror}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 m-0 overflow-hidden whitespace-pre-wrap break-words px-8 py-6 font-mono text-[13px] leading-6 text-transparent"
+          className="pointer-events-none absolute inset-0 z-0 m-0 overflow-hidden whitespace-pre-wrap break-words px-8 py-6 font-mono text-[13px] leading-6 text-transparent"
           style={{ overflowWrap: 'break-word' }}
         >
           {displayValue}
@@ -125,7 +125,7 @@ const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> 
         <textarea
           ref={bindTextarea}
           readOnly={file.readOnly || Boolean(selectionState?.locked)}
-          className="m-0 h-full w-full resize-none whitespace-pre-wrap break-words border-0 bg-transparent px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F] outline-none"
+          className="relative z-[1] m-0 h-full w-full resize-none whitespace-pre-wrap break-words border-0 bg-transparent px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F] outline-none"
           data-testid={workbenchSelectors.plainTextEditor}
           value={displayValue}
           onChange={handleChange}

@@ -54,6 +54,15 @@ describe('workbench conversation e2e', () => {
               word.getBoundingClientRect().width === 18
             )
           })
+          const neutralMentionLabels = await mentionPanel.evaluate((node) => {
+            const labels = Array.from(node.querySelectorAll('button[data-reference-kind]')).map(
+              (button) => button.children[1]?.firstElementChild
+            )
+            return (
+              labels.length > 1 &&
+              labels.every((label) => label && getComputedStyle(label).color === 'rgb(55, 53, 47)')
+            )
+          })
           const activeBeforeArrowDown = await readActiveMentionText()
           await page.keyboard.press('ArrowDown')
           await page.waitForFunction(
@@ -81,17 +90,27 @@ describe('workbench conversation e2e', () => {
                 icons.length > 0 &&
                 icons.every(
                   (icon) =>
-                    ['0 0 18 18', '0 0 24 24'].includes(icon.getAttribute('viewBox') || '') &&
-                    icon.getBoundingClientRect().width < 18
+                    ['0 0 18 18', '0 0 24 24', '0 0 256 256'].includes(icon.getAttribute('viewBox') || '') &&
+                    icon.getBoundingClientRect().width === 18
                 )
             )
+          const neutralToken = await input
+            .locator('[data-role="scope-token"]')
+            .evaluate((token) => {
+              const style = getComputedStyle(token)
+              return (
+                style.color === 'rgb(55, 53, 47)' && style.backgroundColor === 'rgba(0, 0, 0, 0)'
+              )
+            })
           await runtime.captureScreenshot({
-            name: 'composer-original-reference-icons',
-            message: '输入框恢复原有引用图标、配色和内联尺寸，键盘插入保持稳定。'
+            name: 'composer-reference-icons',
+            message: '引用名称统一正文色、无灰底，图标与候选同为 18px，键盘插入保持稳定。'
           })
           return {
             originalMentionIcons,
             originalTokenIcon,
+            neutralMentionLabels,
+            neutralToken,
             activeBeforeArrowDown,
             activeAfterArrowDown,
             activeAfterSettled
@@ -101,6 +120,8 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             result.originalMentionIcons &&
               result.originalTokenIcon &&
+              result.neutralMentionLabels &&
+              result.neutralToken &&
               result.activeBeforeArrowDown.length > 0 &&
               result.activeAfterArrowDown.length > 0 &&
               result.activeAfterArrowDown !== result.activeBeforeArrowDown &&

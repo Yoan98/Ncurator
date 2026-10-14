@@ -77,8 +77,9 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：目录树只读取各地址或被展开目录的直属子项，并以加载反馈承载读取过程。
 - Why：文件地址可能包含 `node_modules` 等超大目录；进入设置页不能递归枚举整个森林。
-- How：添加包含根目录文件、普通子目录、`node_modules` 和点开头文件/目录的真实临时目录；进入文件 tab 后验证顶层首层，展开普通子目录后验证其直属文件，再确认点开头项始终不可见。检查目录开/关的 `react-icons` 图形、Office 原有彩色专属图标、MD 与普通文件的实心图标、与 `@` 候选一致的 18px 尺寸、行高及 hover 背景，再展开后点击目录树右上刷新，确认已展开节点仍展开、未展开目录不会被全部展开。
+- How：添加包含根目录文件、普通子目录、`node_modules` 和点开头文件/目录的真实临时目录；进入文件 tab 后验证顶层首层，展开普通子目录后验证其直属文件，再确认点开头项始终不可见。检查目录开/关的 `react-icons` 图形、Office 原有彩色专属图标、MD、普通文件与目录的 Phosphor Light 细线图标、与 `@` 候选一致的 18px 尺寸、行高及 hover 背景，再展开后点击目录树右上刷新，确认已展开节点仍展开、未展开目录不会被全部展开。
 - Oracle：`node_modules` 在顶层可见但其内容不会在首次加载时出现；子目录展开前不读取其子项，展开时显示局部 loading；点开头文件或目录在任意层级均不显示；页面没有全部展开/折叠入口，顶层地址行可单独折叠，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。目录树右上刷新只更新已展示节点状态、不重置展开折叠，对齐 `SET-WORKSPACE-008-AC6`。Office 原有彩色图标、MD/普通文件/目录库图标、18px 尺寸与开/关形状、行对齐和未选中行无 hover 底色对齐 `SET-WORKSPACE-008-AC7`。新添加后只展开该地址、其余折叠由产品交互覆盖，本 case 不强制断言。
+- 最新验证：2026-10-14 源码真实 E2E 通过；Phosphor Light 细线目录/MD/普通文件图标、Office 图形配色、18px 尺寸、目录开关形状、行对齐、懒加载和刷新展开态通过。raw logs：`tests/logs/settings/workspace/core/workspace-directory-lazy-load/20261014-100543-266`。
 
 #### `workspace-remove-from-list`
 

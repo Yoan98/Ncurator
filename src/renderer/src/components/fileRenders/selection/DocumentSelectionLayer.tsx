@@ -61,9 +61,9 @@ export default function DocumentSelectionLayer({
 
   useEffect(() => {
     if (!container || !state?.enabled || !revision) return
-    const cursor = container.style.cursor
     let start: { x: number; y: number } | null = null
     let clicked: SelectionTarget | undefined
+    let pointer: PointerEvent | null = null
     const hit = (event: PointerEvent) =>
       targets.current.find(
         (target) =>
@@ -79,7 +79,7 @@ export default function DocumentSelectionLayer({
             )
       )
     const hover = (target?: SelectionTarget) => {
-      if (manageCursor) container.style.cursor = target ? 'pointer' : cursor
+      if (manageCursor) container.toggleAttribute('data-document-selection-hover', Boolean(target))
       setHoveredId(target?.node.id || null)
     }
     const capture = (event: PointerEvent | KeyboardEvent) => {
@@ -107,6 +107,7 @@ export default function DocumentSelectionLayer({
       }
     }
     const down = (e: PointerEvent) => {
+      pointer = null
       clicked = undefined
       start = e.button === 0 ? { x: e.clientX, y: e.clientY } : null
       hover()
@@ -135,12 +136,21 @@ export default function DocumentSelectionLayer({
       clicked = undefined
       if (target && e.detail === 1 && !latest.current.state?.locked) open(target, 'editor')
     }
-    const move = (e: PointerEvent) =>
-      hover(!e.buttons && !latest.current.state?.locked ? hit(e) : undefined)
+    const move = (e: PointerEvent) => {
+      pointer = e.buttons ? null : e
+      hover(pointer && !latest.current.state?.locked ? hit(pointer) : undefined)
+    }
     const leave = () => {
       start = null
       clicked = undefined
+      pointer = null
       hover()
+    }
+    const scroll = () => {
+      start = null
+      clicked = undefined
+      // A queued scroll can follow mousemove; keep hover consistent with the new geometry.
+      hover(pointer && !latest.current.state?.locked ? hit(pointer) : undefined)
     }
     const key = (e: KeyboardEvent) => {
       if (
@@ -161,7 +171,7 @@ export default function DocumentSelectionLayer({
     container.addEventListener('pointermove', move)
     container.addEventListener('pointerleave', leave)
     container.addEventListener('keyup', key)
-    document.addEventListener('scroll', leave, true)
+    document.addEventListener('scroll', scroll, true)
     window.addEventListener('blur', leave)
     return () => {
       container.removeEventListener('pointerdown', down)
@@ -171,9 +181,9 @@ export default function DocumentSelectionLayer({
       container.removeEventListener('pointermove', move)
       container.removeEventListener('pointerleave', leave)
       container.removeEventListener('keyup', key)
-      document.removeEventListener('scroll', leave, true)
+      document.removeEventListener('scroll', scroll, true)
       window.removeEventListener('blur', leave)
-      if (manageCursor) container.style.cursor = cursor
+      if (manageCursor) container.removeAttribute('data-document-selection-hover')
     }
   }, [container, filePath, state?.enabled, revision, open, message, noticeKey, manageCursor])
 
@@ -318,7 +328,8 @@ export default function DocumentSelectionLayer({
       return
     }
     geometry.reveal()
-    if (geometry.ranges?.length) {
+    if (geometry.select) geometry.select()
+    else if (geometry.ranges?.length) {
       const selected = window.getSelection()
       selected?.removeAllRanges()
       selected?.addRange(geometry.ranges[0])

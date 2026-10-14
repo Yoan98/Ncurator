@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import { HiOutlineMusicalNote, HiOutlineVideoCamera } from 'react-icons/hi2'
-import { BiSolidFile, BiSolidFileMd } from 'react-icons/bi'
-import { LuFolder, LuFolderOpen, LuGlobe } from 'react-icons/lu'
+import { PiFileMdLight, PiFileTextLight, PiFolderLight, PiFolderOpenLight } from 'react-icons/pi'
+import { LuGlobe } from 'react-icons/lu'
 import {
   FILE_ICON_SIZE_CLASSES,
   getFileIconKind,
@@ -41,8 +41,8 @@ const FileIcon: FC<FileIconProps> = ({
   const Icon =
     iconKind === 'directory'
       ? expanded
-        ? LuFolderOpen
-        : LuFolder
+        ? PiFolderOpenLight
+        : PiFolderLight
       : iconKind === 'audio'
         ? HiOutlineMusicalNote
         : iconKind === 'video'
@@ -50,8 +50,8 @@ const FileIcon: FC<FileIconProps> = ({
           : iconKind === 'web'
             ? LuGlobe
             : iconKind === 'markdown'
-              ? BiSolidFileMd
-              : BiSolidFile
+              ? PiFileMdLight
+              : PiFileTextLight
   return <Icon {...iconProps} />
 }
 

@@ -4,7 +4,7 @@ import type { SelectedReference } from '../../../../../shared/types'
 import { workbenchSelectors } from '../../../testing/selectors'
 import { getKbAvailabilityLabel } from '../../../utils/reference'
 import ReferenceIcon from './ReferenceIcon'
-import { getReferenceVisualSpec } from './referenceVisuals'
+import { REFERENCE_LABEL_CLASS_NAME } from './referenceVisuals'
 import { getScopeKey } from './utils'
 
 type ReferenceMentionPanelProps = {
@@ -176,7 +176,6 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                     )
                     const active = activeIndex === optionIndex
                     const parentPath = getReferenceParentDisplayPath(reference)
-                    const visualSpec = getReferenceVisualSpec(reference)
                     return (
                       <button
                         key={getScopeKey(reference)}
@@ -195,7 +194,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                         <ReferenceIcon reference={reference} size="sm" />
                         <span className="flex min-w-0 flex-1 items-center gap-2">
                           <span
-                            className={`truncate text-[13px] font-normal leading-5 ${visualSpec.labelClassName}`}
+                            className={`truncate text-[13px] font-normal leading-5 ${REFERENCE_LABEL_CLASS_NAME}`}
                           >
                             {reference.name}
                           </span>

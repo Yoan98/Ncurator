@@ -14,7 +14,7 @@ type ReferenceIconProps = {
 const containerSizeClassName = {
   sm: 'h-[22px] w-[22px]',
   md: 'h-8 w-8',
-  inline: 'relative top-[0.1em] h-[1em] w-[1em]'
+  inline: 'relative top-[0.15em] h-[18px] w-[18px]'
 } as const
 
 export const ReferenceIcon: React.FC<ReferenceIconProps> = ({ reference, size = 'md' }) => {

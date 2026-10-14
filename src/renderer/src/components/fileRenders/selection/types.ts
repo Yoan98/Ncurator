@@ -9,6 +9,8 @@ export type SelectionGeometry = {
   ranges?: Range[]
   outline?: boolean
   reveal: () => void
+  /** Editable controls restore their own native selection instead of selecting a mirror range. */
+  select?: () => void
 }
 export type SelectionCandidate = {
   node: DocumentSelectionNode

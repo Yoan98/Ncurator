@@ -3,7 +3,8 @@ import type { DocumentSelectionNode, SelectedReference } from '../../../../../sh
 
 export const INLINE_TOKEN_CLASS_NAME =
   'mr-1.5 inline-flex max-w-full items-baseline gap-1 rounded-md px-1.5 py-0.5 align-baseline text-[0.9em] font-medium leading-[1.4]'
-export const REFERENCE_TOKEN_CLASS_NAME = INLINE_TOKEN_CLASS_NAME + ' bg-[#F4F4F2]'
+export const REFERENCE_LABEL_CLASS_NAME = 'text-[#37352F]'
+export const REFERENCE_TOKEN_CLASS_NAME = INLINE_TOKEN_CLASS_NAME + ' ' + REFERENCE_LABEL_CLASS_NAME
 export const INLINE_TOKEN_LABEL_CLASS_NAME = 'min-w-0 max-w-[180px] truncate'
 export const SELECTION_TOKEN_CLASS_NAME =
   INLINE_TOKEN_CLASS_NAME +

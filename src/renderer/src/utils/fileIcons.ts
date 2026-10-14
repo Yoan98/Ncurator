@@ -13,13 +13,12 @@ export type FileIconKind =
 export const FILE_ICON_SIZE_CLASSES = {
   sm: 'h-[18px] w-[18px]',
   md: 'h-[21px] w-[21px]',
-  inline: 'h-[0.9em] w-[0.9em]'
+  inline: 'h-[18px] w-[18px]'
 } as const
 
 export type FileVisualSpec = {
   kind: FileIconKind
   iconClassName: string
-  labelClassName: string
   documentFillClassName: string
   documentAccentClassName: string
   documentLabel?: string
@@ -29,21 +28,18 @@ const FILE_VISUAL_SPECS: Record<FileIconKind, FileVisualSpec> = {
   directory: {
     kind: 'directory',
     iconClassName: 'text-[#787774]',
-    labelClassName: 'text-[#787774]',
     documentFillClassName: 'fill-none',
     documentAccentClassName: 'fill-[#787774]'
   },
   web: {
     kind: 'web',
     iconClassName: 'text-[#2F6F4E]',
-    labelClassName: 'text-[#2F6F4E]',
     documentFillClassName: 'fill-none',
     documentAccentClassName: 'fill-[#2F6F4E]'
   },
   pdf: {
     kind: 'pdf',
     iconClassName: 'text-[#C92A2A]',
-    labelClassName: 'text-[#B42318]',
     documentFillClassName: 'fill-[#E5484D]',
     documentAccentClassName: 'fill-[#F9B4B4]',
     documentLabel: 'PDF'
@@ -51,7 +47,6 @@ const FILE_VISUAL_SPECS: Record<FileIconKind, FileVisualSpec> = {
   docx: {
     kind: 'docx',
     iconClassName: 'text-[#2563EB]',
-    labelClassName: 'text-[#1D4ED8]',
     documentFillClassName: 'fill-[#3B82F6]',
     documentAccentClassName: 'fill-[#BFDBFE]',
     documentLabel: 'DOC'
@@ -59,7 +54,6 @@ const FILE_VISUAL_SPECS: Record<FileIconKind, FileVisualSpec> = {
   xlsx: {
     kind: 'xlsx',
     iconClassName: 'text-[#16803C]',
-    labelClassName: 'text-[#166534]',
     documentFillClassName: 'fill-[#22A06B]',
     documentAccentClassName: 'fill-[#BBF7D0]',
     documentLabel: 'XLS'
@@ -67,7 +61,6 @@ const FILE_VISUAL_SPECS: Record<FileIconKind, FileVisualSpec> = {
   ppt: {
     kind: 'ppt',
     iconClassName: 'text-[#D97706]',
-    labelClassName: 'text-[#B45309]',
     documentFillClassName: 'fill-[#F59E0B]',
     documentAccentClassName: 'fill-[#FDE68A]',
     documentLabel: 'PPT'
@@ -75,28 +68,24 @@ const FILE_VISUAL_SPECS: Record<FileIconKind, FileVisualSpec> = {
   audio: {
     kind: 'audio',
     iconClassName: 'text-[#8B5CF6]',
-    labelClassName: 'text-[#7C3AED]',
     documentFillClassName: 'fill-none',
     documentAccentClassName: 'fill-none'
   },
   video: {
     kind: 'video',
     iconClassName: 'text-[#0F766E]',
-    labelClassName: 'text-[#0F766E]',
     documentFillClassName: 'fill-none',
     documentAccentClassName: 'fill-none'
   },
   markdown: {
     kind: 'markdown',
     iconClassName: 'text-[#787774]',
-    labelClassName: 'text-[#787774]',
     documentFillClassName: 'fill-[#787774]',
     documentAccentClassName: 'fill-[#787774]'
   },
   file: {
     kind: 'file',
     iconClassName: 'text-[#787774]',
-    labelClassName: 'text-[#787774]',
     documentFillClassName: 'fill-[#787774]',
     documentAccentClassName: 'fill-[#787774]'
   }

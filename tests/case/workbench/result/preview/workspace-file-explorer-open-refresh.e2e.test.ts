@@ -213,10 +213,10 @@ describe('workbench result e2e', () => {
           }
           const rootCreationResults: boolean[] = []
           for (const [extension, label] of [
-            ['docx', 'Word 文档'],
-            ['xlsx', 'Excel 工作簿'],
-            ['pptx', 'PPT 演示'],
-            ['md', '其他类型']
+            ['docx', 'Word'],
+            ['xlsx', 'Excel'],
+            ['pptx', 'PPT'],
+            ['md', '其他文件']
           ] as const) {
             await page.getByPlaceholder('筛选文件…').fill('不会匹配的筛选')
             await startFileCreation(page, label)
@@ -253,7 +253,7 @@ describe('workbench result e2e', () => {
               .length === 1 &&
             (await fs.readFile(path.join(workspace.rootPath, `${fileNames.md}.md`))).length === 0
 
-          await startFileCreation(page, 'Word 文档')
+          await startFileCreation(page, 'Word')
           const newNameInput = page.getByRole('textbox', { name: '新建文件名', exact: true })
           await newNameInput.fill(fileNames.docx)
           await newNameInput.press('Enter')
@@ -276,7 +276,7 @@ describe('workbench result e2e', () => {
 
           await fs.mkdir(path.join(workspace.rootPath, '子目录'))
           await triggerWindowFocusRefresh(page)
-          await startFileCreation(page, '其他类型', '子目录')
+          await startFileCreation(page, '其他文件', '子目录')
           await newNameInput.fill('文件夹内新建.txt')
           await newNameInput.press('Enter')
           await page
@@ -322,7 +322,7 @@ describe('workbench result e2e', () => {
               () => true,
               () => false
             )) && (await fs.stat(path.join(workspace.rootPath, '子目录/同级重命名.txt'))).isFile()
-          await startFileCreation(page, '其他类型', '子目录/同级重命名.txt')
+          await startFileCreation(page, '其他文件', '子目录/同级重命名.txt')
           await newNameInput.fill('同目录新增.md')
           await newNameInput.press('Enter')
           await page
@@ -334,7 +334,7 @@ describe('workbench result e2e', () => {
               () => true,
               () => false
             ))
-          await startFileCreation(page, 'Word 文档')
+          await startFileCreation(page, 'Word')
           const list = getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerList)
           const draftPositionCorrect = await list.evaluate((node) => {
             const input = node.querySelector('input[aria-label="新建文件名"]')
@@ -450,7 +450,7 @@ describe('workbench result e2e', () => {
 
           await page.getByPlaceholder('筛选文件…').fill('')
           await page.getByPlaceholder('筛选文件…').fill('无匹配项')
-          await startFileCreation(page, '其他类型')
+          await startFileCreation(page, '其他文件')
           await newNameInput.press('Escape')
           const floatingEscapePreservedList =
             !(await newNameInput.isVisible()) &&
@@ -459,7 +459,7 @@ describe('workbench result e2e', () => {
               workbenchSelectors.workspaceExplorerOverlay
             ).isVisible())
           await page.getByPlaceholder('筛选文件…').fill('无匹配项')
-          await startFileCreation(page, '其他类型')
+          await startFileCreation(page, '其他文件')
           await page.getByPlaceholder('筛选文件…').click()
           const outsideClickCancelled = !(await newNameInput.isVisible())
 
@@ -471,7 +471,7 @@ describe('workbench result e2e', () => {
             .locator('..')
             .getAttribute('data-testid')
           await page.getByPlaceholder('筛选文件…').fill('无匹配项')
-          await startFileCreation(page, '其他类型')
+          await startFileCreation(page, '其他文件')
           await newNameInput.fill(deleteFileName)
           await newNameInput.press('Enter')
           await page.getByTitle(deleteFileName, { exact: true }).waitFor({ state: 'visible' })

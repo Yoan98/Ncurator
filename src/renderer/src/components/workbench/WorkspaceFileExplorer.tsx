@@ -52,10 +52,10 @@ const getParentPath = (relativePath: string): string =>
   relativePath.split('/').slice(0, -1).join('/')
 
 const newFileTypes: { type: NewFileType; label: string; name: string }[] = [
-  { type: 'docx', label: 'Word 文档', name: '新建文档' },
-  { type: 'xlsx', label: 'Excel 工作簿', name: '新建工作簿' },
-  { type: 'pptx', label: 'PPT 演示', name: '新建演示文稿' },
-  { type: 'other', label: '其他类型', name: '新建文件' }
+  { type: 'docx', label: 'Word', name: '新建文档' },
+  { type: 'xlsx', label: 'Excel', name: '新建工作簿' },
+  { type: 'pptx', label: 'PPT', name: '新建演示文稿' },
+  { type: 'other', label: '其他文件', name: '新建文件' }
 ]
 
 const getRelativePath = (workspace: WorkspaceSource | null, filePath: string): string => {

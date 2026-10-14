@@ -91,7 +91,8 @@ describe('settings workspace e2e', () => {
                 return (
                   !!svg &&
                   svg.getBoundingClientRect().width === 18 &&
-                  svg.getAttribute('fill') === (kind === 'directory' ? 'none' : 'currentColor')
+                  svg.getAttribute('fill') === 'currentColor' &&
+                  svg.getAttribute('viewBox') === '0 0 256 256'
                 )
               })
             )
