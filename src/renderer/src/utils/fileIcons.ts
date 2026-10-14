@@ -7,43 +7,127 @@ export type FileIconKind =
   | 'ppt'
   | 'audio'
   | 'video'
+  | 'markdown'
   | 'file'
 
-const documentOutline = 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6'
-const iconPaths: Record<FileIconKind, string[]> = {
-  directory: ['M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2Z'],
-  web: ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18'],
-  pdf: [documentOutline, 'M8 17l4-6 4 6M9.5 15h5'],
-  docx: [documentOutline, 'M8 12h8M8 16h8'],
-  xlsx: [
-    'M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM3 9h18M3 15h18M9 3v18'
-  ],
-  ppt: ['M2 3h20M3 3v12a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V3M12 16v5M8 21h8M7 7h10M7 11h6'],
-  audio: ['M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'],
-  video: [
-    'M4 5h11a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM17 10l5-3v10l-5-3'
-  ],
-  file: [documentOutline]
+export const FILE_ICON_SIZE_CLASSES = {
+  sm: 'h-[18px] w-[18px]',
+  md: 'h-[21px] w-[21px]',
+  inline: 'h-[0.9em] w-[0.9em]'
+} as const
+
+export type FileVisualSpec = {
+  kind: FileIconKind
+  iconClassName: string
+  labelClassName: string
+  documentFillClassName: string
+  documentAccentClassName: string
+  documentLabel?: string
 }
 
-export const getFileIconPaths = (kind: FileIconKind, expanded = false): string[] =>
-  kind === 'directory' && expanded
-    ? [
-        'M3 8V6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2M3 20h16a2 2 0 0 0 2-1.5l2-7a1 1 0 0 0-1-1.5H7a2 2 0 0 0-2 1.5L3 20ZM3 20a2 2 0 0 1-2-2V9a1 1 0 0 1 1-1h3'
-      ]
-    : iconPaths[kind]
+const FILE_VISUAL_SPECS: Record<FileIconKind, FileVisualSpec> = {
+  directory: {
+    kind: 'directory',
+    iconClassName: 'text-[#787774]',
+    labelClassName: 'text-[#787774]',
+    documentFillClassName: 'fill-none',
+    documentAccentClassName: 'fill-[#787774]'
+  },
+  web: {
+    kind: 'web',
+    iconClassName: 'text-[#2F6F4E]',
+    labelClassName: 'text-[#2F6F4E]',
+    documentFillClassName: 'fill-none',
+    documentAccentClassName: 'fill-[#2F6F4E]'
+  },
+  pdf: {
+    kind: 'pdf',
+    iconClassName: 'text-[#C92A2A]',
+    labelClassName: 'text-[#B42318]',
+    documentFillClassName: 'fill-[#E5484D]',
+    documentAccentClassName: 'fill-[#F9B4B4]',
+    documentLabel: 'PDF'
+  },
+  docx: {
+    kind: 'docx',
+    iconClassName: 'text-[#2563EB]',
+    labelClassName: 'text-[#1D4ED8]',
+    documentFillClassName: 'fill-[#3B82F6]',
+    documentAccentClassName: 'fill-[#BFDBFE]',
+    documentLabel: 'DOC'
+  },
+  xlsx: {
+    kind: 'xlsx',
+    iconClassName: 'text-[#16803C]',
+    labelClassName: 'text-[#166534]',
+    documentFillClassName: 'fill-[#22A06B]',
+    documentAccentClassName: 'fill-[#BBF7D0]',
+    documentLabel: 'XLS'
+  },
+  ppt: {
+    kind: 'ppt',
+    iconClassName: 'text-[#D97706]',
+    labelClassName: 'text-[#B45309]',
+    documentFillClassName: 'fill-[#F59E0B]',
+    documentAccentClassName: 'fill-[#FDE68A]',
+    documentLabel: 'PPT'
+  },
+  audio: {
+    kind: 'audio',
+    iconClassName: 'text-[#8B5CF6]',
+    labelClassName: 'text-[#7C3AED]',
+    documentFillClassName: 'fill-none',
+    documentAccentClassName: 'fill-none'
+  },
+  video: {
+    kind: 'video',
+    iconClassName: 'text-[#0F766E]',
+    labelClassName: 'text-[#0F766E]',
+    documentFillClassName: 'fill-none',
+    documentAccentClassName: 'fill-none'
+  },
+  markdown: {
+    kind: 'markdown',
+    iconClassName: 'text-[#787774]',
+    labelClassName: 'text-[#787774]',
+    documentFillClassName: 'fill-[#787774]',
+    documentAccentClassName: 'fill-[#787774]'
+  },
+  file: {
+    kind: 'file',
+    iconClassName: 'text-[#787774]',
+    labelClassName: 'text-[#787774]',
+    documentFillClassName: 'fill-[#787774]',
+    documentAccentClassName: 'fill-[#787774]'
+  }
+}
+
+const normalizeFileExtension = (value: string | undefined): string => {
+  const trimmed = String(value || '')
+    .trim()
+    .toLowerCase()
+  if (!trimmed) return ''
+  return trimmed.startsWith('.') ? trimmed.slice(1) : trimmed
+}
 
 export const getFileIconKind = (name: string, extension?: string): FileIconKind => {
-  const ext = (extension || name.split(/[\\/]/u).pop()?.split('.').slice(1).pop() || '')
-    .replace(/^\./u, '')
-    .toLowerCase()
-  if (ext === 'pdf') return 'pdf'
-  if (['doc', 'docx'].includes(ext)) return 'docx'
-  if (['xls', 'xlsx', 'xlsm', 'xltx', 'xltm', 'csv'].includes(ext)) return 'xlsx'
-  if (['ppt', 'pptx'].includes(ext)) return 'ppt'
-  if (['aac', 'flac', 'm4a', 'mp3', 'oga', 'ogg', 'opus', 'wav', 'weba'].includes(ext))
+  const filename = name.split(/[\\/]/u).pop() || name
+  const dotIndex = filename.lastIndexOf('.')
+  const fileExt =
+    normalizeFileExtension(extension) ||
+    (dotIndex > -1 ? normalizeFileExtension(filename.slice(dotIndex + 1)) : '')
+  if (fileExt === 'md' || fileExt === 'markdown') return 'markdown'
+  if (fileExt === 'pdf') return 'pdf'
+  if (fileExt === 'docx') return 'docx'
+  if (['xls', 'xlsx', 'xlsm', 'xltx', 'xltm', 'csv'].includes(fileExt)) return 'xlsx'
+  if (fileExt === 'ppt' || fileExt === 'pptx') return 'ppt'
+  if (['aac', 'flac', 'm4a', 'mp3', 'oga', 'ogg', 'opus', 'wav', 'weba'].includes(fileExt)) {
     return 'audio'
-  if (['avi', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ogv', 'webm', 'wmv'].includes(ext))
+  }
+  if (['avi', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ogv', 'webm', 'wmv'].includes(fileExt)) {
     return 'video'
+  }
   return 'file'
 }
+
+export const getFileVisualSpec = (kind: FileIconKind): FileVisualSpec => FILE_VISUAL_SPECS[kind]

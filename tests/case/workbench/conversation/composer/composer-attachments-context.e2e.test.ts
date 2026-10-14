@@ -181,9 +181,9 @@ describe('workbench conversation e2e', () => {
             .filter({ hasText: 'sample-video.mp4' })
             .first()
           const audioIconVisible =
-            (await audioCard.locator('[data-file-icon="audio"]').count()) > 0
+            (await audioCard.locator('[data-reference-icon-kind="audio"]').count()) > 0
           const videoIconVisible =
-            (await videoCard.locator('[data-file-icon="video"]').count()) > 0
+            (await videoCard.locator('[data-reference-icon-kind="video"]').count()) > 0
           await audioCard.click()
           await videoCard.click()
           const mediaRevealCalls = (await runtime.collectSignals()).ipcInvokeEntries.filter(

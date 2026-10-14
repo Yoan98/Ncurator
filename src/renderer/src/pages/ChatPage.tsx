@@ -1,10 +1,10 @@
+import FileIcon from '../components/FileIcon'
 import { flushReferencedTextFiles } from '../components/fileRenders/pendingTextSaves'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Input, Modal, Tooltip } from 'antd'
 import {
   HiOutlineClipboardDocument,
   HiOutlineClock,
-  HiOutlineFolder,
   HiOutlinePencilSquare,
   HiOutlineQuestionMarkCircle,
   HiPhoto,
@@ -4485,7 +4485,10 @@ const ChatPage: React.FC = () => {
                         ) : attachment.kind === 'directory' ? (
                           <>
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
-                              <HiOutlineFolder className="h-4 w-4" />
+                              <FileIcon
+                                kind="directory"
+                                className="h-[21px] w-[21px] text-[#787774]"
+                              />
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">

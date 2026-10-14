@@ -1,4 +1,4 @@
-import { getFileIconKind, type FileIconKind } from '../../../utils/fileIcons'
+import { getFileIconKind, getFileVisualSpec, type FileVisualSpec } from '../../../utils/fileIcons'
 import type { DocumentSelectionNode, SelectedReference } from '../../../../../shared/types'
 
 export const INLINE_TOKEN_CLASS_NAME =
@@ -15,20 +15,12 @@ export const SELECTION_DOCUMENT_ICON_PATH =
 export const selectionFileName = (node: DocumentSelectionNode): string =>
   node.filePath.split(/[/\\]/).pop() || node.filePath
 
-export type ReferenceVisualSpec = {
-  kind: FileIconKind
-  iconClassName: string
-  labelClassName: string
-}
-
-export const getReferenceVisualSpec = (reference: SelectedReference): ReferenceVisualSpec => ({
-  kind:
+export const getReferenceVisualSpec = (reference: SelectedReference): FileVisualSpec =>
+  getFileVisualSpec(
     reference.kind === 'file'
       ? getFileIconKind(reference.relativePath || reference.name, reference.fileExt)
-      : reference.kind,
-  iconClassName: 'text-[#787774]',
-  labelClassName: 'text-[#37352F]'
-})
+      : reference.kind
+  )
 
 /** Keep the same purple selection token while distinguishing the selected file format. */
 export const selectionIconPath = (node: DocumentSelectionNode): string => {

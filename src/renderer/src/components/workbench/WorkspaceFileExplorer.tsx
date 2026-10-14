@@ -214,7 +214,10 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   }, [selectedKey])
 
   const beginCreate = (type: NewFileType): void => {
-    const parentPath = contextTarget?.kind === 'directory' ? contextTarget.relative_path : ''
+    const parentPath =
+      contextTarget?.kind === 'directory'
+        ? contextTarget.relative_path
+        : getParentPath(contextTarget?.relative_path || '')
     const suffix = type === 'other' ? '' : `.${type}`
     setQuery('')
     if (parentPath) setExpanded((current) => new Set(current).add(parentPath))
@@ -329,11 +332,27 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
 
   const contextMenu: MenuProps = {
     selectable: false,
-    items:
-      contextTarget?.kind === 'file'
+    items: [
+      {
+        key: 'create',
+        label: '新建文件',
+        icon: <LuFilePlus2 aria-hidden className="h-4 w-4" />,
+        popupClassName: 'workspace-file-menu',
+        children: newFileTypes.map(({ type, label }) => ({
+          key: type,
+          label,
+          icon: (
+            <FileIcon
+              extension={type === 'other' ? '' : type}
+              className="h-4 w-4 shrink-0 text-[#787774]"
+            />
+          )
+        }))
+      },
+      ...(contextTarget?.kind === 'file'
         ? [
+            { type: 'divider' as const },
             { key: 'rename', label: '重命名', icon: <LuPencil aria-hidden className="h-4 w-4" /> },
-            { type: 'divider' },
             {
               key: 'delete',
               label: '删除',
@@ -341,24 +360,8 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
               icon: <LuTrash2 aria-hidden className="h-4 w-4" />
             }
           ]
-        : [
-            {
-              key: 'create',
-              label: '新建文件',
-              icon: <LuFilePlus2 aria-hidden className="h-4 w-4" />,
-              popupClassName: 'workspace-file-menu',
-              children: newFileTypes.map(({ type, label }) => ({
-                key: type,
-                label,
-                icon: (
-                  <FileIcon
-                    extension={type === 'other' ? '' : type}
-                    className="h-4 w-4 shrink-0 text-[#787774]"
-                  />
-                )
-              }))
-            }
-          ],
+        : [])
+    ],
     onClick: ({ key }) => {
       setContextMenuOpen(false)
       if (key === 'delete') setDeleteTarget(contextTarget)

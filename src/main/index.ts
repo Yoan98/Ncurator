@@ -105,10 +105,10 @@ app.on('before-quit', (event) => {
   })
 })
 
-const INITIAL_WINDOW_WIDTH = 1400
-const INITIAL_WINDOW_HEIGHT = 800
-const MIN_WINDOW_WIDTH = 1100
-const MIN_WINDOW_HEIGHT = 720
+const INITIAL_WINDOW_WIDTH = 1600
+const INITIAL_WINDOW_HEIGHT = 820
+const MIN_WINDOW_WIDTH = 1400
+const MIN_WINDOW_HEIGHT = 800
 
 function getInitialWindowBounds(): { width: number; height: number; x: number; y: number } {
   const { workArea } = screen.getPrimaryDisplay()

@@ -1,5 +1,14 @@
 import type { FC } from 'react'
-import { getFileIconKind, getFileIconPaths, type FileIconKind } from '../utils/fileIcons'
+import { HiOutlineMusicalNote, HiOutlineVideoCamera } from 'react-icons/hi2'
+import { BiSolidFile, BiSolidFileMd } from 'react-icons/bi'
+import { LuFolder, LuFolderOpen, LuGlobe } from 'react-icons/lu'
+import {
+  FILE_ICON_SIZE_CLASSES,
+  getFileIconKind,
+  getFileVisualSpec,
+  type FileIconKind
+} from '../utils/fileIcons'
+import DocumentFileGlyph from './DocumentFileGlyph'
 
 type FileIconProps = {
   name?: string
@@ -14,28 +23,36 @@ const FileIcon: FC<FileIconProps> = ({
   extension,
   kind,
   expanded,
-  className = 'h-4 w-4 shrink-0 text-[#787774]'
+  className = `${FILE_ICON_SIZE_CLASSES.sm} shrink-0 text-[#787774]`
 }) => {
   const iconKind = kind || getFileIconKind(name, extension)
-  return (
-    <svg
-      aria-hidden="true"
-      data-file-icon={iconKind}
-      className={className}
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {getFileIconPaths(iconKind, expanded).map((d) => (
-        <path key={d} d={d} />
-      ))}
-    </svg>
-  )
+  const visualSpec = getFileVisualSpec(iconKind)
+  const iconProps = { 'aria-hidden': true as const, 'data-file-icon': iconKind, className }
+  if (['docx', 'xlsx', 'ppt', 'pdf'].includes(iconKind)) {
+    return (
+      <DocumentFileGlyph
+        {...iconProps}
+        fillClassName={visualSpec.documentFillClassName}
+        accentClassName={visualSpec.documentAccentClassName}
+        label={visualSpec.documentLabel}
+      />
+    )
+  }
+  const Icon =
+    iconKind === 'directory'
+      ? expanded
+        ? LuFolderOpen
+        : LuFolder
+      : iconKind === 'audio'
+        ? HiOutlineMusicalNote
+        : iconKind === 'video'
+          ? HiOutlineVideoCamera
+          : iconKind === 'web'
+            ? LuGlobe
+            : iconKind === 'markdown'
+              ? BiSolidFileMd
+              : BiSolidFile
+  return <Icon {...iconProps} />
 }
 
 export default FileIcon

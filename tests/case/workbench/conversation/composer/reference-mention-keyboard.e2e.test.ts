@@ -44,17 +44,16 @@ describe('workbench conversation e2e', () => {
             return ((await activeMention.textContent()) || '').trim()
           }
 
-          const sharedMentionIcons = await mentionPanel
-            .locator('svg[data-file-icon]')
-            .evaluateAll(
-              (icons) =>
-                icons.length > 0 &&
-                icons.every(
-                  (icon) =>
-                    icon.getAttribute('fill') === 'none' &&
-                    icon.getAttribute('stroke-width') === '1.6'
-                )
+          const originalMentionIcons = await mentionPanel.evaluate((node) => {
+            const word = node.querySelector('[data-reference-icon-kind="docx"] svg')
+            const shape = word?.querySelector('path')
+            return (
+              word?.querySelector('text')?.textContent === 'DOC' &&
+              !!shape &&
+              getComputedStyle(shape).fill === 'rgb(59, 130, 246)' &&
+              word.getBoundingClientRect().width === 18
             )
+          })
           const activeBeforeArrowDown = await readActiveMentionText()
           await page.keyboard.press('ArrowDown')
           await page.waitForFunction(
@@ -75,20 +74,24 @@ describe('workbench conversation e2e', () => {
 
           await page.keyboard.press('Enter')
           const input = getWorkbenchLocator(page, workbenchSelectors.input)
-          const sharedTokenIcon = await input
-            .locator('svg[data-file-icon]')
+          const originalTokenIcon = await input
+            .locator('[data-reference-icon-kind] svg')
             .evaluateAll(
               (icons) =>
                 icons.length > 0 &&
                 icons.every(
                   (icon) =>
-                    icon.getAttribute('fill') === 'none' &&
-                    icon.getAttribute('stroke-width') === '1.6'
+                    ['0 0 18 18', '0 0 24 24'].includes(icon.getAttribute('viewBox') || '') &&
+                    icon.getBoundingClientRect().width < 18
                 )
             )
+          await runtime.captureScreenshot({
+            name: 'composer-original-reference-icons',
+            message: '输入框恢复原有引用图标、配色和内联尺寸，键盘插入保持稳定。'
+          })
           return {
-            sharedMentionIcons,
-            sharedTokenIcon,
+            originalMentionIcons,
+            originalTokenIcon,
             activeBeforeArrowDown,
             activeAfterArrowDown,
             activeAfterSettled
@@ -96,8 +99,8 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.sharedMentionIcons &&
-              result.sharedTokenIcon &&
+            result.originalMentionIcons &&
+              result.originalTokenIcon &&
               result.activeBeforeArrowDown.length > 0 &&
               result.activeAfterArrowDown.length > 0 &&
               result.activeAfterArrowDown !== result.activeBeforeArrowDown &&

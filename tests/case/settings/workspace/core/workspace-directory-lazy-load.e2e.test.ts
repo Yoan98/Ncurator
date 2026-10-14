@@ -42,6 +42,7 @@ describe('settings workspace e2e', () => {
           await writeFile(path.join(rootPath, 'grid.xlsx'), '')
           await writeFile(path.join(rootPath, 'slides.pptx'), '')
           await writeFile(path.join(rootPath, 'source.bin'), '')
+          await writeFile(path.join(rootPath, 'notes.md'), '# Notes')
           await writeFile(path.join(rootPath, '.hidden.txt'), 'hidden', 'utf8')
           await writeFile(path.join(rootPath, 'docs', 'brief.txt'), 'brief', 'utf8')
           await writeFile(path.join(rootPath, 'docs', '.draft.txt'), 'draft', 'utf8')
@@ -68,19 +69,45 @@ describe('settings workspace e2e', () => {
             height: node.getBoundingClientRect().height,
             background: getComputedStyle(node).backgroundColor
           }))
-          const sharedIcons = await tree.evaluate((node) =>
-            ['directory', 'docx', 'xlsx', 'ppt', 'file'].every((kind) => {
-              const svg = node.querySelector(`svg[data-file-icon="${kind}"]`)
-              return (
-                svg?.getAttribute('fill') === 'none' &&
-                svg.getAttribute('stroke') === 'currentColor'
-              )
-            })
-          )
+          const sharedIcons = await tree.evaluate((node) => {
+            const coloredLabels = [
+              ['docx', 'DOC', 'rgb(59, 130, 246)'],
+              ['xlsx', 'XLS', 'rgb(34, 160, 107)'],
+              ['ppt', 'PPT', 'rgb(245, 158, 11)']
+            ]
+            return (
+              coloredLabels.every(([kind, label, color]) => {
+                const svg = node.querySelector(`svg[data-file-icon="${kind}"]`)
+                const shape = svg?.querySelector('path')
+                return (
+                  svg?.querySelector('text')?.textContent === label &&
+                  svg.getBoundingClientRect().width === 18 &&
+                  !!shape &&
+                  getComputedStyle(shape).fill === color
+                )
+              }) &&
+              ['directory', 'markdown', 'file'].every((kind) => {
+                const svg = node.querySelector(`svg[data-file-icon="${kind}"]`)
+                return (
+                  !!svg &&
+                  svg.getBoundingClientRect().width === 18 &&
+                  svg.getAttribute('fill') === (kind === 'directory' ? 'none' : 'currentColor')
+                )
+              })
+            )
+          })
+          const folderBefore = await docsNode.locator('svg[data-file-icon="directory"]').innerHTML()
           const rowStyleConsistent =
             rowBefore.height === 30 && rowAfter.background === rowBefore.background
           await docsNode.locator('.ant-tree-switcher').click()
           await tree.getByText('brief.txt').waitFor({ state: 'visible' })
+          const folderAfter = await docsNode.locator('svg[data-file-icon="directory"]').innerHTML()
+          const folderChangesWhenExpanded = folderBefore !== folderAfter
+          await runtime.captureScreenshot({
+            name: 'workspace-tree-file-icons',
+            message:
+              '目录使用库里的打开/关闭图标，Office 文件复用原输入框彩色图标；MD/普通文件使用库内实心图标，统一 18px。'
+          })
           const hiddenChildCount = await tree.getByText('.draft.txt', { exact: true }).count()
           const globalTreeControls = await tree.getByLabel(/全部折叠|恢复默认展开/u).count()
 
@@ -91,6 +118,7 @@ describe('settings workspace e2e', () => {
 
           return {
             sharedIcons,
+            folderChangesWhenExpanded,
             rowStyleConsistent,
             briefBeforeExpand,
             moduleFileBeforeExpand,
@@ -105,6 +133,7 @@ describe('settings workspace e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.sharedIcons &&
+              result.folderChangesWhenExpanded &&
               result.rowStyleConsistent &&
               result.briefBeforeExpand === 0 &&
               result.moduleFileBeforeExpand === 0 &&

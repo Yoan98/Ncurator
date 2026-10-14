@@ -1,4 +1,4 @@
-import FileIcon from '../FileIcon'
+import { LuFolder, LuFolderOpen } from 'react-icons/lu'
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Dropdown, Empty, Spin, Tooltip, message, type MenuProps } from 'antd'
 import {
@@ -7,6 +7,8 @@ import {
   HiArrowUturnLeft,
   HiArrowsRightLeft,
   HiChevronDown,
+  HiDocumentText,
+  HiFolderOpen,
   HiOutlineQuestionMarkCircle
 } from 'react-icons/hi2'
 import type {
@@ -121,7 +123,7 @@ export const FileChangeNotice: React.FC<{ record: AiFileChangeRecord }> = ({ rec
       data-testid={workbenchSelectors.applyChangeNotice}
     >
       <div className="max-w-[460px]">
-        <FileIcon className="mx-auto h-10 w-10 text-[#B7B5AF]" />
+        <HiDocumentText className="mx-auto h-10 w-10 text-[#B7B5AF]" />
         <div className="mt-4 text-[15px] font-semibold text-[#37352F]">{title}</div>
         {record.operation === 'renamed' && record.status !== 'reverted' ? (
           <div className="mt-4 grid grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)] items-center gap-2 text-left text-[13px]">
@@ -519,9 +521,9 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 aria-pressed={explorerOpen}
                 icon={
                   explorerOpen ? (
-                    <FileIcon kind="directory" expanded />
+                    <LuFolderOpen className="h-4 w-4" />
                   ) : (
-                    <FileIcon kind="directory" />
+                    <LuFolder className="h-4 w-4" />
                   )
                 }
                 className={`!h-8 !w-8 !rounded-[6px] !border !p-0 !text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] ${
@@ -639,6 +641,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   const [editableKind, setEditableKind] = useState<EditableTextKind>(null)
   const aiRunActiveRef = React.useRef(isAiRunActive)
   const previousAiRunActiveRef = React.useRef(isAiRunActive)
+  const explorerNavigationRef = React.useRef(false)
   const previousExplorerOpenRef = React.useRef(explorerOpen)
   const suppressExternalNoticeUntilRef = React.useRef(isAiRunActive ? Number.POSITIVE_INFINITY : 0)
   const floatingExplorer = state.kind === 'file_preview' || state.kind === 'apply_workspace'
@@ -694,9 +697,10 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       bumpExplorerReload()
     }
     if (state.kind === 'apply_workspace') {
-      setExplorerOpen(false)
+      if (!explorerNavigationRef.current) setExplorerOpen(false)
       setExplorerMode('changed')
     }
+    explorerNavigationRef.current = false
   }, [bumpExplorerReload, state.kind])
   useEffect(() => {
     if (explorerOpen && !previousExplorerOpenRef.current) {
@@ -891,8 +895,8 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   }, [activePath])
   const openWorkspaceChangeFromExplorer = (change: AiFileChangeRecord): void => {
     setDocumentDisplayMode(getDefaultDocumentDisplayMode(change.status))
+    explorerNavigationRef.current = state.kind !== 'apply_workspace'
     onOpenWorkspaceChange(change.id)
-    setExplorerOpen(false)
   }
   const handleExplorerFileChanged = (filePath: string): void => {
     if (filePath === activePathRef.current) setPreviewRevision((current) => current + 1)
@@ -919,11 +923,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               hasWorkspace ? (
                 <div className="flex h-full items-center justify-center text-center">
                   <div>
-                    <FileIcon
-                      kind="directory"
-                      expanded
-                      className="mx-auto h-10 w-10 text-[#91918E]"
-                    />
+                    <HiFolderOpen className="mx-auto h-10 w-10 text-[#91918E]" />
                     <div className="mt-4 text-[18px] font-semibold text-[#37352F]">打开文件</div>
                     <div className="mt-2 text-sm text-[#91918E]">从右侧工作区文件列表中选择</div>
                   </div>
@@ -1021,8 +1021,28 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               />
             ) : null}
           </div>
-          {state.kind === 'file_launcher' && hasWorkspace && explorerOpen ? (
-            <div className="w-[min(38%,300px)] min-w-[240px] shrink-0">
+          {floatingExplorer && explorerOpen ? (
+            <button
+              type="button"
+              aria-label="关闭文件列表"
+              className="absolute inset-x-0 bottom-0 top-11 z-10 cursor-default bg-transparent"
+              data-testid={workbenchSelectors.workspaceExplorerBackdrop}
+              onClick={() => setExplorerOpen(false)}
+            />
+          ) : null}
+          {explorerOpen &&
+          (floatingExplorer || (state.kind === 'file_launcher' && hasWorkspace)) ? (
+            <div
+              key="workspace-file-explorer"
+              className={
+                floatingExplorer
+                  ? 'absolute bottom-0 right-0 top-11 z-20 w-[300px] max-w-[85%] overflow-hidden bg-white shadow-[-8px_8px_24px_rgba(0,0,0,0.12)]'
+                  : 'w-[min(38%,300px)] min-w-[240px] shrink-0'
+              }
+              data-testid={
+                floatingExplorer ? workbenchSelectors.workspaceExplorerOverlay : undefined
+              }
+            >
               <WorkspaceFileExplorer
                 workspace={selectedWorkspace}
                 workspaceLoadState={workspaceLoadState}
@@ -1033,49 +1053,12 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                 reloadToken={explorerReloadToken}
                 liveRefreshEnabled={explorerOpen}
                 onModeChange={setExplorerMode}
-                onOpenFile={(entry) => {
-                  onOpenWorkspaceFile(entry.absolute_path, entry.name)
-                  setExplorerOpen(false)
-                }}
+                onOpenFile={(entry) => onOpenWorkspaceFile(entry.absolute_path, entry.name)}
                 onOpenChange={openWorkspaceChangeFromExplorer}
                 onFileChanged={handleExplorerFileChanged}
                 onFileRenamed={onWorkspaceFileRenamed}
               />
             </div>
-          ) : null}
-          {floatingExplorer && explorerOpen ? (
-            <>
-              <button
-                type="button"
-                aria-label="关闭文件列表"
-                className="absolute inset-x-0 bottom-0 top-11 z-10 cursor-default bg-transparent"
-                data-testid={workbenchSelectors.workspaceExplorerBackdrop}
-                onClick={() => setExplorerOpen(false)}
-              />
-              <div
-                className="absolute bottom-0 right-0 top-11 z-20 w-[300px] max-w-[85%] overflow-hidden bg-white shadow-[-8px_8px_24px_rgba(0,0,0,0.12)]"
-                data-testid={workbenchSelectors.workspaceExplorerOverlay}
-              >
-                <WorkspaceFileExplorer
-                  workspace={selectedWorkspace}
-                  workspaceLoadState={workspaceLoadState}
-                  onOpenWorkspaceSettings={onOpenWorkspaceSettings}
-                  onReloadWorkspaces={onReloadWorkspaces}
-                  changeRecords={fileChangeRecords}
-                  mode={explorerMode}
-                  reloadToken={explorerReloadToken}
-                  liveRefreshEnabled={explorerOpen}
-                  onModeChange={setExplorerMode}
-                  onOpenFile={(entry) => {
-                    onOpenWorkspaceFile(entry.absolute_path, entry.name)
-                    setExplorerOpen(false)
-                  }}
-                  onOpenChange={openWorkspaceChangeFromExplorer}
-                  onFileChanged={handleExplorerFileChanged}
-                  onFileRenamed={onWorkspaceFileRenamed}
-                />
-              </div>
-            </>
           ) : null}
         </div>
       </div>

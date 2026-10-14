@@ -112,6 +112,7 @@ const startFileCreation = async (
   }))
   if (iconSize.width !== 16 || iconSize.height !== 16)
     throw new Error(`Menu icon must be 16px: ${JSON.stringify(iconSize)}`)
+  await typeItem.hover()
   await typeItem.click()
   await page.getByRole('textbox', { name: '新建文件名', exact: true }).waitFor({ state: 'visible' })
   await typeItem.waitFor({ state: 'hidden' })
@@ -284,7 +285,7 @@ describe('workbench result e2e', () => {
           const nestedFile = page.getByTitle('子目录/文件夹内新建.txt', { exact: true })
           await nestedFile.click({ button: 'right' })
           const fileMenuCorrect =
-            (await page.getByRole('menuitem', { name: /^新建文件/u }).count()) === 0 &&
+            (await page.getByRole('menuitem', { name: /^新建文件/u }).count()) === 1 &&
             (await page.getByRole('menuitem', { name: '重命名', exact: true }).isVisible())
           await page
             .getByRole('menuitem', { name: '重命名', exact: true })
@@ -292,7 +293,7 @@ describe('workbench result e2e', () => {
           await page.waitForTimeout(250)
           await runtime.captureScreenshot({
             name: 'workspace-file-context-menu',
-            message: '紧凑文件菜单只提供重命名和删除，右键行保持灰色选择。'
+            message: '紧凑文件菜单提供同目录新建、重命名和删除，右键行保持灰色选择。'
           })
           await page.keyboard.press('Escape')
           const selectionSurvivedMenu = (await nestedFile.getAttribute('aria-current')) === 'true'
@@ -321,6 +322,18 @@ describe('workbench result e2e', () => {
               () => true,
               () => false
             )) && (await fs.stat(path.join(workspace.rootPath, '子目录/同级重命名.txt'))).isFile()
+          await startFileCreation(page, '其他类型', '子目录/同级重命名.txt')
+          await newNameInput.fill('同目录新增.md')
+          await newNameInput.press('Enter')
+          await page
+            .getByTitle('子目录/同目录新增.md', { exact: true })
+            .waitFor({ state: 'visible' })
+          const fileCreationUsesParent =
+            (await fs.stat(path.join(workspace.rootPath, '子目录/同目录新增.md'))).isFile() &&
+            !(await fs.stat(path.join(workspace.rootPath, '同目录新增.md')).then(
+              () => true,
+              () => false
+            ))
           await startFileCreation(page, 'Word 文档')
           const list = getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerList)
           const draftPositionCorrect = await list.evaluate((node) => {
@@ -372,6 +385,36 @@ describe('workbench result e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.plainTextEditor).waitFor({
             state: 'visible',
             timeout: 30_000
+          })
+          const explorerStayedOpen =
+            (await getWorkbenchLocator(
+              page,
+              workbenchSelectors.workspaceExplorerOverlay
+            ).isVisible()) &&
+            (await page.getByPlaceholder('筛选文件…').inputValue()) === SEED_FILE &&
+            (await page.getByTitle(SEED_FILE, { exact: true }).getAttribute('aria-current')) ===
+              'true'
+          await page.getByPlaceholder('筛选文件…').fill('')
+          const expandedDirectoryPreserved = await page
+            .getByTitle('子目录/同目录新增.md', { exact: true })
+            .isVisible()
+          await page.getByPlaceholder('筛选文件…').fill('子目录/同级重命名.txt')
+          await page.getByTitle('子目录/同级重命名.txt', { exact: true }).click()
+          const continuousOpenKeepsExplorer =
+            (await getWorkbenchLocator(
+              page,
+              workbenchSelectors.workspaceExplorerOverlay
+            ).isVisible()) &&
+            (await page
+              .getByTitle('子目录/同级重命名.txt', { exact: true })
+              .getAttribute('aria-current')) === 'true' &&
+            (await page.getByPlaceholder('筛选文件…').inputValue()) === '子目录/同级重命名.txt' &&
+            (await tabs.count()) === 2
+          await page.getByPlaceholder('筛选文件…').fill(SEED_FILE)
+          await page.getByTitle(SEED_FILE, { exact: true }).click()
+          await runtime.captureScreenshot({
+            name: 'workspace-selection-keeps-explorer',
+            message: '点击文件后列表持续展开，并保留筛选、目录展开和当前选中状态。'
           })
           await closeExplorerIfOpen(page)
 
@@ -562,6 +605,10 @@ describe('workbench result e2e', () => {
             invalidCancelled,
             nestedCreationCorrect,
             fileMenuCorrect,
+            fileCreationUsesParent,
+            explorerStayedOpen,
+            expandedDirectoryPreserved,
+            continuousOpenKeepsExplorer,
             selectionSurvivedMenu,
             noHoverHighlight,
             outsideClearedSelection,
@@ -586,6 +633,10 @@ describe('workbench result e2e', () => {
               result.invalidCancelled &&
               result.nestedCreationCorrect &&
               result.fileMenuCorrect &&
+              result.fileCreationUsesParent &&
+              result.explorerStayedOpen &&
+              result.expandedDirectoryPreserved &&
+              result.continuousOpenKeepsExplorer &&
               result.selectionSurvivedMenu &&
               result.noHoverHighlight &&
               result.outsideClearedSelection &&

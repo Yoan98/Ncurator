@@ -1,4 +1,6 @@
-import { getFileIconPaths } from '../../../utils/fileIcons'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import ReferenceIcon from './ReferenceIcon'
 import { selectionTooltip } from '../../../../../shared/documentSelection'
 import { chatContentText, chatReferences, selectionLabel } from '../../../../../shared/chatContent'
 import type {
@@ -173,28 +175,11 @@ export const readComposerNodesFromEditor = (
 }
 
 const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): void => {
-  const visualSpec = getReferenceVisualSpec(scope)
-  const icon = document.createElement('span')
-  icon.className = `relative top-[0.1em] inline-flex h-[1em] w-[1em] shrink-0 items-center justify-center ${visualSpec.iconClassName}`
-  icon.dataset.referenceIconKind = visualSpec.kind
-
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  svg.setAttribute('viewBox', '0 0 24 24')
-  svg.setAttribute('aria-hidden', 'true')
-  svg.setAttribute('data-file-icon', visualSpec.kind)
-  svg.setAttribute('class', `h-[0.9em] w-[0.9em] ${visualSpec.iconClassName}`)
-  svg.setAttribute('fill', 'none')
-  svg.setAttribute('stroke', 'currentColor')
-  svg.setAttribute('stroke-width', '1.6')
-  svg.setAttribute('stroke-linecap', 'round')
-  svg.setAttribute('stroke-linejoin', 'round')
-  getFileIconPaths(visualSpec.kind).forEach((d) => {
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-    path.setAttribute('d', d)
-    svg.appendChild(path)
-  })
-  icon.appendChild(svg)
-  container.appendChild(icon)
+  const template = document.createElement('template')
+  template.innerHTML = renderToStaticMarkup(
+    createElement(ReferenceIcon, { reference: scope, size: 'inline' })
+  )
+  container.appendChild(template.content)
 }
 
 export const createScopeTokenElement = (scope: SelectedReference): HTMLElement => {

@@ -127,7 +127,7 @@ describe('workbench conversation e2e', () => {
             (await mentionPanel.locator('[data-reference-icon-kind="docx"]').count()) > 0
           const pdfIconPresent =
             (await mentionPanel.locator('[data-reference-icon-kind="pdf"]').count()) > 0
-          const unexpectedMarkdownIconPresent =
+          const markdownIconPresent =
             (await mentionPanel.locator('[data-reference-icon-kind="markdown"]').count()) > 0
           const genericFileIconPresent =
             (await mentionPanel
@@ -135,11 +135,11 @@ describe('workbench conversation e2e', () => {
               .filter({ hasText: 'human-input.txt' })
               .locator('[data-reference-icon-kind="file"]')
               .count()) > 0
-          const markdownUsesGenericFileIcon =
+          const markdownUsesDedicatedIcon =
             (await mentionPanel
               .getByRole('button')
               .filter({ hasText: 'workbench-preview.md' })
-              .locator('[data-reference-icon-kind="file"]')
+              .locator('[data-reference-icon-kind="markdown"]')
               .count()) > 0
           const duplicateCandidateVisible = await mentionPanel
             .getByText('sample-edit.docx')
@@ -230,9 +230,9 @@ describe('workbench conversation e2e', () => {
             webIconVisible,
             docxIconPresent,
             pdfIconPresent,
-            unexpectedMarkdownIconPresent,
+            markdownIconPresent,
             genericFileIconPresent,
-            markdownUsesGenericFileIcon,
+            markdownUsesDedicatedIcon,
             duplicateCandidateVisible,
             textFileIndexedVisible,
             markdownFileIndexedVisible,
@@ -265,9 +265,9 @@ describe('workbench conversation e2e', () => {
               result.webIconVisible &&
               result.docxIconPresent &&
               result.pdfIconPresent &&
-              !result.unexpectedMarkdownIconPresent &&
+              result.markdownIconPresent &&
               result.genericFileIconPresent &&
-              result.markdownUsesGenericFileIcon &&
+              result.markdownUsesDedicatedIcon &&
               !result.duplicateCandidateVisible &&
               result.textFileIndexedVisible &&
               result.markdownFileIndexedVisible &&

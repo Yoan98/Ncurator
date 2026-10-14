@@ -1,7 +1,8 @@
-﻿import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import FileIcon from '../FileIcon'
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { DocumentSelectionContext } from './composer/DocumentSelectionContext'
 import { App as AntdApp, Spin, Tooltip } from 'antd'
-import { HiArrowUp, HiOutlineFolder, HiPhoto, HiPlus, HiStop, HiXMark } from 'react-icons/hi2'
+import { HiArrowUp, HiPhoto, HiPlus, HiStop, HiXMark } from 'react-icons/hi2'
 import type {
   ChatAttachment,
   LLMConfig,
@@ -967,7 +968,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   </span>
                 ) : attachment.kind === 'directory' ? (
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
-                    <HiOutlineFolder className="h-4 w-4" />
+                    <FileIcon kind="directory" className="h-[21px] w-[21px] text-[#787774]" />
                   </span>
                 ) : (
                   <AttachmentFileIcon fileName={attachment.name} />
