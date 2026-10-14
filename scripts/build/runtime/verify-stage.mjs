@@ -168,6 +168,22 @@ export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDire
     throw new Error('ExcelJS staged runtime round trip failed')
   }
 
+  const formulaModules = [
+    '@univerjs/core/lib/cjs/index.js',
+    '@univerjs/core/lib/cjs/facade.js',
+    '@univerjs/engine-formula/lib/cjs/index.js',
+    '@univerjs/engine-formula/lib/cjs/facade.js',
+    '@univerjs/sheets/lib/cjs/index.js',
+    '@univerjs/sheets/lib/cjs/facade.js',
+    '@univerjs/sheets-formula/lib/cjs/index.js',
+    '@univerjs/sheets-formula/lib/cjs/facade.js'
+  ]
+  for (const specifier of formulaModules) {
+    loadStageModule(stageRequire, stageNodeModules, specifier)
+  }
+  const { Tiktoken } = loadStageModule(stageRequire, stageNodeModules, 'js-tiktoken/lite')
+  if (typeof Tiktoken !== 'function') throw new Error('staged tokenizer constructor is missing')
+
   return {
     packages: report.packages.length,
     requiredFiles: report.requiredFiles.length,
@@ -175,6 +191,7 @@ export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDire
     pdfDocuments: pdfDocuments.length,
     formulaSvgBytes: Buffer.byteLength(formulaMarkup),
     excelWorkbookBytes: workbookBytes.byteLength,
+    excelFormulaModules: formulaModules.length,
     suppressedPdfWarnings
   }
 }

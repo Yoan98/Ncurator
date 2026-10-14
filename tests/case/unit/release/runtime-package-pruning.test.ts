@@ -40,6 +40,61 @@ const writeFixture = async (relativePath: string): Promise<void> => {
 }
 
 describe('targeted runtime package pruning', () => {
+  it('retains traced Node entries while removing unused Univer and tokenizer distributions', async () => {
+    temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-runtime-pruning-'))
+    const retained = [
+      '@univerjs/sheets-formula/lib/cjs/index.js',
+      '@univerjs/sheets-formula/lib/es/index.js',
+      'js-tiktoken/dist/lite.cjs',
+      'js-tiktoken/dist/lite.js',
+      'js-tiktoken/dist/chunk-VL2OQCWN.js'
+    ]
+    const removable = [
+      '@univerjs/sheets-formula/lib/umd/index.js',
+      '@univerjs/sheets-formula/lib/index.js',
+      '@univerjs/sheets-formula/lib/locale/zh-CN.js',
+      '@univerjs/sheets-formula/lib/cjs/locale/zh-CN.js',
+      '@univerjs/sheets-formula/lib/es/locale/en-US.js',
+      'js-tiktoken/dist/index.cjs',
+      'js-tiktoken/dist/index.js',
+      'js-tiktoken/dist/ranks/cl100k_base.js'
+    ]
+    await Promise.all([...retained, ...removable].map(writeFixture))
+    const result = pruneRuntimePackages({
+      nodeModulesDirectory: temporaryDirectory,
+      runtimeTrace: {
+        ...runtimeTrace,
+        trace: {
+          files: [...runtimeTrace.trace.files, ...retained.map((file) => `node_modules/${file}`)]
+        }
+      },
+      platform: 'darwin'
+    })
+
+    for (const file of retained)
+      expect(fs.existsSync(path.join(temporaryDirectory, file))).toBe(true)
+    for (const file of removable)
+      expect(fs.existsSync(path.join(temporaryDirectory, file))).toBe(false)
+    expect(result.totalBytes).toBeGreaterThan(0)
+  })
+
+  it('rejects new consumers of a distribution before deleting any files', () => {
+    for (const unsafePath of [
+      '@univerjs/core/lib/index.js',
+      '@univerjs/engine-render/lib/umd/index.js',
+      '@univerjs/sheets-formula/lib/cjs/locale/zh-CN.js',
+      'js-tiktoken/dist/index.cjs',
+      'js-tiktoken/dist/ranks/o200k_base.js'
+    ]) {
+      expect(() =>
+        assertRuntimePruningTrace({
+          ...runtimeTrace,
+          trace: { files: [...runtimeTrace.trace.files, `node_modules/${unsafePath}`] }
+        })
+      ).toThrow('trace reaches a removable distribution')
+    }
+  })
+
   it('removes only approved redundant distributions on non-Windows targets', async () => {
     temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-runtime-pruning-'))
     const removable = [

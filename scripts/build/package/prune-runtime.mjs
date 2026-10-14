@@ -34,7 +34,45 @@ const assertTracedPackage = (runtimeTrace, packageName) => {
   return paths
 }
 
+const UNUSED_DISTRIBUTIONS = [
+  ...[
+    '@univerjs/core',
+    '@univerjs/engine-formula',
+    '@univerjs/engine-render',
+    '@univerjs/sheets',
+    '@univerjs/sheets-formula'
+  ].map((packageName) => ({
+    packageName,
+    paths: [
+      'lib/umd',
+      'lib/index.js',
+      'lib/facade.js',
+      'lib/locale',
+      'lib/cjs/locale',
+      'lib/es/locale'
+    ]
+  })),
+  { packageName: 'js-tiktoken', paths: ['dist/index.js', 'dist/index.cjs', 'dist/ranks'] }
+]
+
+const unusedDistributionTargets = (runtimeTrace) => {
+  const targets = []
+  for (const { packageName, paths } of UNUSED_DISTRIBUTIONS) {
+    const traced = collectPackageTracePaths(runtimeTrace, packageName)
+    if (!traced.some((file) => /\.(?:js|cjs|mjs)$/u.test(file))) continue
+    for (const relativePath of paths) {
+      const used = traced.find(
+        (file) => file === relativePath || file.startsWith(`${relativePath}/`)
+      )
+      if (used) throw new Error(`${packageName} trace reaches a removable distribution: ${used}`)
+      targets.push([packageName, relativePath])
+    }
+  }
+  return targets
+}
+
 export const assertRuntimePruningTrace = (runtimeTrace, platform = process.platform) => {
+  unusedDistributionTargets(runtimeTrace)
   const mathJaxPaths = assertTracedPackage(runtimeTrace, 'mathjax-full')
   const unsafeMathJaxPath = mathJaxPaths.find(
     (relativePath) => relativePath !== 'package.json' && !relativePath.startsWith('js/')
@@ -105,6 +143,12 @@ export const pruneRuntimePackages = ({
     ],
     ['exceljs/dist', path.join(nodeModulesDirectory, 'exceljs', 'dist')]
   ]
+  for (const [packageName, relativePath] of unusedDistributionTargets(runtimeTrace)) {
+    targets.push([
+      `${packageName}/${relativePath}`,
+      path.join(nodeModulesDirectory, packageName, relativePath)
+    ])
+  }
   if (platform !== 'win32') {
     targets.push([
       'node-pty Windows ConPTY',

@@ -124,6 +124,7 @@
     "react-syntax-highlighter": "^16.1.0",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0",
+    "rxjs": "7.8.2",
     "uuid": "^13.0.0",
     "vditor": "^3.11.3",
     "word-extractor": "^1.0.4",
