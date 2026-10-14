@@ -4,18 +4,18 @@
 
 - 本计划定义 Workbench 用户可见交互的测试范围，并对齐 [workbench.md](../prd/workbench.md) 的 `WB-*` 需求和验收编号。
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
-- Workbench UI E2E 测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。设置页可另加文件地址，但发送不再要求绑定工作空间目录。
-- 涉及 AI 的 Workbench UI E2E 测试必须使用真实模型调用；live 配置只读内置服务商 Key 池与选中目标：`AI_LIVE_KEY_<PROVIDER>`（`DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`）、可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）、可选 `AI_LIVE_MODEL`（默认该服务商测试默认模型，通义为 `qwen3.8-flash`）。`baseUrl` / `providerKind` 由产品 registry 推导。日常 case 通过 Settings「推荐」类型写入当前目标服务商；全服务商冒烟见 `live-preset-provider-smoke`。
+- Workbench UI E2E 测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。依赖资料时通过设置页添加文件地址，普通发送不要求资料目录。
+- 涉及 AI 的 Workbench UI E2E 使用真实模型，共享 live 配置见 [测试规范](../test.md)。通过 Settings「推荐」类型准备当前目标服务商；全服务商冒烟见 `live-preset-provider-smoke`。
 - case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
 ## 2. 测试边界
 
-- Workbench UI E2E 测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；需要文件资料时通过 Settings UI 添加文件地址、检查更新和更新索引。前置始终是创建伙伴；不断言工作区选择器、`.ncurator` 或 `__draft__`。
-- Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。下列 case 仍用写 IPC 造状态，待改为真实 UI 点击：`partner-ui-state-isolation`、`partner-ui-state-restart-persistence`、`background-partner-ui-event-isolation`、`partner-pin-toggle`；`browser-view-lifecycle` 中部分 `browserTabNavigate` 同样待改。只读 IPC 取证仍允许。
+- Workbench UI E2E 测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；需要文件资料时通过 Settings UI 添加文件地址、检查更新和更新索引。前置是创建伙伴；文件地址按场景添加，不作为通用发送门禁。
+- Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。现有用例的执行缺口见第 6 节。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选；未命中再按展示名；仍未命中则进入「自定义模型」按名称搜索。
 - Workbench UI E2E 测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖列表打开/焦点刷新、右键行内新建和确认移到回收站，以及删除后禁止自动保存重建。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；WPS 通道机制见 `WB-WPS-001`。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖列表打开/焦点刷新、右键行内新建和确认移到回收站，以及删除后禁止自动保存重建。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；用户行为见 `WB-WPS-001`。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
@@ -23,8 +23,6 @@
 - `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 验证 type=fetch 读取网页正文后再回答。两类 case 均验证结果只回模型、不自动展开右侧面板，对齐 `WB-CORE-007-AC4`。
 - Workbench 附件链路不限制文件扩展名、大小、数量或目录大小；点击 `+` 直接打开可选择文件或目录的系统选择器，拖放接受文件与目录并保留源绝对路径，目录不递归扫描；附件卡片采用紧凑内边距，文件夹、音频和视频分别使用对应图标；图片保持灯箱预览，支持右侧文件预览的文档打开资源 Tab，文件夹打开系统文件管理器，音视频和其他不支持右侧预览的文件定位到系统文件所在位置；粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
 - Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 测试承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧（`WB-EXCEL-001` / `WB-EXCEL-002`）覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（`WB-EXCEL-002-AC3` 记录/baseline **只在 ai-test 硬断言**）；Workbench e2e 覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9` 用户闭环（UI 可见单入口，不重复硬断言 AC3）。
-- DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示统一的 `nodeId`、visual kind、`imagePath` 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。图片理解统一由 `agent-control` 内置的 `read_image` 把图片加入主模型请求。
-- Workbench 历史只展示白名单内的必要 DOCX 字段，不展示 worker、identity 或净审阅内部状态。DOCX 事件以 `nodeId` 定位，PPT 继续使用自己的 `location`，两套协议互不复用。
 
 ### 文件审核共同验收
 
@@ -44,16 +42,15 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - `conversation` 验证伙伴、composer、时间轴与清空、模型偏好和 `@` 参考资料 token。发送门禁是已有伙伴 + 输入非空。
 - `run` 验证智能模式运行中的过程流、追加消息安全交接、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
 - `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及馆长 WPS 通道对 docx / xlsx / pptx 的 dispatch 与本机已授权 WPS 文字 / 表格 / 演示窗口刷新。
-- `scheduled-task` 验证任务名称 / 描述 / 伙伴字段顺序、手动及 AI 创建的伙伴列表选择（最多显示四项后滚动）、描述输入框的行内引用和 120px 默认高度滚动、候选面板空间碰撞定位、关闭按钮 / 取消 / Esc 未保存确认、手动创建默认开启、AI 创建预填聊天草稿、删除伙伴后任务停用，以及执行时读取伙伴最新 Composer 配置。
+- `scheduled-task` 验证创建、编辑、资料引用、伙伴绑定、启用、定时与立即执行，以及删除和失效边界。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
 - AI 提问统一归入 `run/blocker`：真实 UI 展示数字徽标单选、方框多选和无选项输入，无独立其他选项，推荐为轻量文字，覆盖手动下一步、多问题切换与刷新恢复；等待回答时侧栏伙伴行显示「需要你的协助」，刷新或切换伙伴后仍保留，提交、取消或结束后清除，审批等待不显示；提交后在对应 Activity 工具行下按顺序显示问题与用户答案。审批结果也在对应工具行下显示，不再使用旧图标前缀或 hover 替换文案。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足测试 case 口径。
 - 依赖本地文件语义的测试统一复用 `tests/fixtures/workspace` 作为共享输入目录，但该目录只作为真实输入文件来源；运行时通过设置页添加为文件地址，并先创建伙伴。
-- `How` 和 `Oracle` 必须映射到 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - `WB-BLOCKER-003`（上下文压缩提示）依赖真实模型使用量与正式压缩阈值触发，运行成本不确定，不作为每次源码测试的固定 case，发布时按影响评估单独执行真实检查，检查运行中与完成态过程组，且不得为 E2E 降低生产阈值或伪造 compaction 事件。压缩阈值随当前模型 effectiveWindow（`min(256000, floor(modelContext × 0.8))`）。
-- `WB-WPS-001` 正式 E2E 由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 写盘后的 open dispatch；真窗口刷新由 `wps-office-reload-on-write-and-revert`（`pnpm test:workbench:wps-office`）覆盖已授权 WPS 文字 / 表格 / 演示，发布时按影响范围选择，正式 E2E 全量测试包含该组。已打开文档在写盘前由加载项 close 放锁，加载项复查文档确实已关闭才上报成功，关不掉则上报失败且馆长不写盘；写盘前等到文件可写，写成功后再刷新窗口。通道按 close-result 的 `remaining` 与占位文档是否建起来选择，不得用 SSE 是否断开判断；`remaining` 为 0 且占位已建起时仍走加载项 open，占位建不起来才用对应组件 exe 拉起并轮询 list 要摘录，不得 `cmd start`；被指派实例 open 失败或超时降级为一次系统打开。未安装 WPS 或对应组件加载项未授权时后者跳过该格式；已授权却连不上则算该格式失败，不得只测 docx 就当作三种格式都过。Workbench e2e 启动时跳过覆盖拷加载项文件，仍启动回环 `/addon`；`publish.xml` 与授权 path 固定优先端口 `18723`，不得改写到临时端口。xlsx / pptx 窗口刷新还要求 `/status` 的 `clients` 出现 `et` / `wpp`，不能只靠文字组件。加载项不得探测其他组件 `Active*` 对象；同组件多实例时 close / open 只投给持有该文档的 `clientId`，旧实例的文档列表和失败回报都不得影响当前实例。
+- WPS 由 `wps-sync-dispatch-on-write-and-revert` 验证三格式写回后的 dispatch，`wps-office-reload-on-write-and-revert`（`pnpm test:workbench:wps-office`）验证真实窗口刷新。后者覆盖已授权的文字／表格／演示，全量 E2E 包含该组，发布按影响选择。未安装或对应组件未授权时跳过该格式；已授权但连接失败则失败，不得只测 DOCX 即宣称三格式通过。E2E 启动不覆盖加载项代码；通过 `/status` 检查对应组件、目标实例、close／reload 结果及重开后内容，具体断言见对应 case Oracle。
 - WPS 相关 e2e 必须自带环境归零：进用例前和用例结束后各做一次「先不带 `/F` 请求关闭 wps / et / wpp，超时再强杀」，并清掉 `ncurator-workbench-wps-*` 临时工作区；三种格式之间也要归零。不归零时上一轮残留实例会连上本轮回环冒充本轮客户端，让 registry、dispatch 与断言随机失败，且临时工作区因文件锁删不掉。
 
 ## 4. 目录与命令
@@ -192,7 +189,6 @@ pnpm test:update:e2e
 - Why：默认 E2E 模型准备不能掩盖首次使用的运行门禁。
 - How：通过既有 NCURATOR_MODELS_PATH 注入独立空模型目录，跳过 harness 默认模型预热；真实 UI 配聊天模型、创建伙伴并发送；只读 observer 收集运行事件、下载状态和 embedding runtime。
 - Oracle：真实 run completed；模型目录没有下载产物；无下载任务；embedding runtime uninitialized 且 pid 为空，对齐 WB-COMPOSER-001-AC5。
-- 最新验证：2026-10-09 本轮通过；原始日志：`tests/logs/workbench/conversation/composer/chat-without-knowledge-model/20261009-104143-882`。
 
 #### `send-guard-and-preferences`
 
@@ -273,7 +269,6 @@ pnpm test:update:e2e
 - Why：`@` 候选选择依赖键盘稳定性；高亮项被刷新会导致用户插入错误资料范围。
 - How：通过真实 Settings / Workbench UI 创建伙伴，并在设置页添加真实文件地址；在 composer 输入 `@` 打开候选列表，检查 Office/PDF 图标保留配色和尺寸，目录/MD/普通文件复用库图标，并在候选和插入后的引用标签中一致；读取名称文字色、token 底色及图标尺寸；按 `ArrowDown` 后观察 active 候选项，再插入目录并继续输入，核对重绘后图标、文字及光标输入保持正确。随后通过全选删除引用和正文验证真正空态；Shift+Enter、空格/制表符/零宽字符粘贴后内容原样保留且占位隐藏，通过上下方向键和点击删除换行后恢复占位；普通多行正文、引用边界前后删除、原生撤销及清空后继续输入保持正常。
 - Oracle：候选项数量大于 1；按下方向键后 active 候选项发生变化，并在短暂停留后保持不变，对齐 `WB-SCOPE-002-AC1`；候选及插入的引用标签保留 DOCX 等类型的原有彩色图标，目录图标为 16px、其他类型为 18px；名称统一正文色，token 无独立灰底；目录使用 Bootstrap 的 `BsFolder / BsFolder2Open`，MD/普通文件使用 Phosphor Light 细线库图标，对齐 `WB-PANEL-003-AC30`；仅空白/换行/零宽字符保留输入并隐藏占位；删除到真正为空后占位显示，光标占位与零长度空节点不撑出幽灵空行；正常多行正文、引用前后删除、撤销及继续输入通过，符合 `WB-COMPOSER-001-AC4`、`WB-COMPOSER-002-AC2`。
-- 最新验证：2026-10-14 源码真实 E2E 通过；空格、手动换行和零宽字符保留输入并隐藏占位，真正清空后占位恢复且无额外空行；引用前后的 Delete / Backspace、正常多行文字、原生撤销与继续输入通过。候选、输入图标和文字样式保持一致。raw logs：`tests/logs/workbench/conversation/composer/reference-mention-keyboard/20261014-115641-998`。
 
 #### `reference-token-lifecycle`
 
@@ -330,7 +325,6 @@ pnpm test:update:e2e
 - Why：确保原文准确，引用与想法关联，两侧使用同一内容。
 - How：通过鼠标起点与 Shift 终点选择部分单词、跨段落、跨单元格、整表及正文/表格混选；复用 workspace DOCX，并用 `docx-selection-layout.docx` 覆盖单元格内换行、空单元格、横向/纵向合并、跨页、页眉页脚、图片混选及反向选择。只读 DOM 取证和引用原文核对；AI 引用入口出现后按 Ctrl/Cmd+C，读取系统剪贴板并核对当前所选原文；确认、高亮、点击重新编辑和定位均走真实 UI。纯图片选区检查系统 toast 合并与自动消失，文档内无提示条；重复/重叠选区保持静默。核对 AI 引用入口、“描述你想对引用内容做什么”placeholder、对勾提示、字号、高度、浮层翻转/缩放和未确认输入；发送后检查真实脑模型输入的引用分块及源文件未被提问修改；再用真实临时 DOCX 选择定位段，仅输入“精简下”，核对写回后所选段变短、未选中的同章场景段完全保留，普通 DOCX 预览自动出现切换并可进入审核；双向编辑、跳转和两侧删除，核对左侧编号、原文与想法关联及右侧高亮清理；切换伙伴和文件，实际发送后新增选区检查从 1 开始，再编辑历史消息并刷新 Renderer 检查持久化草稿。
 - Oracle：覆盖 `WB-DOCUMENT-REFERENCE-001-AC1` 的跨段落/跨页/跨单元格/整表/正文混选、页眉页脚、反向选择、表格行列分隔与空/合并占位、单元格内换行、图片混选和无文字 toast，`WB-DOCUMENT-REFERENCE-001-AC2` 的两阶段入口、对勾及新增/编辑提示、小字号紧凑高度、输入后保留紫色高亮、浮层边界/翻转/滚动/缩放、空内容禁用、Enter 确认、Shift+Enter 换行和 Esc/外部点击关闭，`WB-DOCUMENT-REFERENCE-001-AC3` 的图标编号胶囊和两侧编辑同步，`WB-DOCUMENT-REFERENCE-001-AC4` 的右侧无编号、仅高亮文字可悬停和点击、定位、重复/重叠选择静默保留、删除后左侧连续编号与右侧高亮清理、删空及发送后从 1 开始和内容不串，`WB-DOCUMENT-REFERENCE-001-AC5` 的伙伴隔离及内存/持久化边界，`WB-DOCUMENT-REFERENCE-001-AC6` 的接受后清理、历史编号保留和历史编辑。刷新后选区消失，普通文字与 @ 引用保留；真实局部精简保留未选中正文，提问不写文件，引用按片段标题分块且选中内容与前后文清楚分隔，DOCX 改动收尾后普通预览自动提供审核切换。
-- 最新验证：2026-10-14 源码真实 E2E 完整用例通过；16px 共用轨道的拖动、滚轮、空白点击、滑块同步、覆盖色块定位及拖动不误触全部通过，引用循环、原文复制、浮层避让、双向编辑、删除、发送清理和真实 AI 局部修改保持通过；raw logs：`tests/logs/workbench/conversation/composer/docx-selection-reference/20261014-113634-357`。
 - 待覆盖：文本框文字、IME、想法内 @ 混排、关闭资源 Tab、应用进程重启及附件恢复、外部原文变化后的定位 toast、提交期间锁定、提交失败保留、排队成功清理及历史复制。
 - 浮层边界：缩小窗口并通过真实分栏拖拽缩窄预览，确保正文溢出；选择段落末尾文字并用真实滚轮将选区靠近预览底部，验证输入条向上避让及恢复分栏/窗口后输入保留，不依赖窗口尺寸低于应用最小值或固定文字换行位置。
 - 双向编辑取证：通过真实鼠标将光标放在左侧想法文字内部再输入，验证右侧读取到更新内容；不使用会跨过内联引用边界的整行 End 键作为想法编辑的前置定位。
@@ -344,7 +338,6 @@ pnpm test:update:e2e
 - Why：确保复用交互仍保留各格式的准确定位和内部快照，模型能按 Excel 范围与 PPT 对象标识读取源内容。
 - How：使用真实可见 Electron 窗口并串行独占桌面焦点，以便验证系统剪贴板；通过文件列表打开预览后手动收起列表，再通过鼠标/键盘选择文本、单元格以及 PPT 文本框/图片/整页，确认引用并切换文件；TXT 和 PDF 在 AI 引用入口出现后直接按 Ctrl/Cmd+C 并读取系统剪贴板。隔离 Markdown 副本增加标题、列表、粗体、行内代码、GFM 表格及重复段落，真实跨样式拖选、复制、确认、回跳编辑与删除，核对源片段、行号及源字节；PDF 对选区截图统计深色文字像素，覆盖临时、确认后及悬停高亮，文字仍清楚可见。想法输入框另选部分文字复制，证明复制遵循当前焦点。Excel 明确操作表格主画布，验证浮层可见、想法确认和 Composer token，再由真实 AI 按引用范围读取；在隔离工作区的 PPT 副本加入既有 DOCX fixture 的真实内嵌 PNG，以及含两个文字子元素与无文字形状的嵌套组合，作为图片/组合点击与拖动输入，不改原始 fixture。核对组合子元素只渲染一次，点击任一子元素都引用最外层组合；真实 AI 通过页/元素标识读取源内容及子元素关系。PPT 在 100%、最小 25% 和放大后从文字、图片、已引用元素及空白处左键拖动，包含超过旧边界的大幅位移；通过真实鼠标与只读 DOM 观测精确画布位移、光标、浮层、原生文字选区和 toast，核对缩放按钮保留位移、滚轮跨越 100% 时保持鼠标锚点、“适应窗口”恢复中心；覆盖拖回起点、Esc 取消手势、单击编辑以及空格/中键快捷操作，整页引用后仍可点击新元素引用。只读采集可选 PPT 元素 ID，与真实 `ppt_read_slides` 返回的 ID 比对；TXT 编辑想法、删除重建、修改原文后回跳验证失效，再恢复原文；TXT 临时、已保存及悬停高亮截图统计深色文字像素，确认文字未被覆盖。真实悬停 TXT、MD、Excel 已保存选区（含回跳定位后的滚动）并读取命中控件的计算光标，验证单击编辑仍正常。已配置真实模型时，纯空格、换行或零宽字符保持输入、隐藏占位且发送禁用，Enter 不提交；删除后确认首个 TXT 引用位于第一行，输入有效想法后发送可用。随后插入一个 @ 文件，通过 composer DOM 几何与文本核对宽度足够时保持同行且未插入换行；主动留下首行空行、将光标移到末尾后手动新增一个换行再追加 MD 引用；逐字核对只新增这个换行，引用追加不额外增行。混合发送前附加首尾空白，读取提交前编辑区实际首尾空白，与用户消息及真实模型请求逐字比对；核对手动首行换行数量、首尾和段内换行保留，并检查用户消息 token 的文字色、透明底色、18px 图标与源文件字节。
 - Oracle：覆盖 `WB-DOCUMENT-REFERENCE-002-AC1`、`WB-DOCUMENT-REFERENCE-002-AC2`、`WB-DOCUMENT-REFERENCE-002-AC3`、`WB-DOCUMENT-REFERENCE-002-AC4`、`WB-DOCUMENT-REFERENCE-002-AC5` 的基础引用与提交链路；混合引用使用无属性标签及必要嵌套，片段编号只在标签名出现，文档元数据与首个片段、同一文档内不同片段之间没有空白行，文字内容独立于定位块，行号、页码与前后文在 `<定位信息>` 内，片段内部不插入空白行或额外定位说明句。Excel 片段只含“工作表”与“选中单元格范围”，没有内部 display/cells/merges 快照，真实模型按范围读取值或公式，工具内容进入下一轮模型。PPT 片段只含页码与一个选中页面/元素标识，无文字快照、重复页面字段或选区图片路径。PPT 点击引用完整文本框、图片、无文字形状和最外层嵌套组合，子元素不重复渲染；标识与真实工具结果匹配，下一轮模型收到工具读取的文字及组合子元素标识；任意缩放比例下拖拽位移完整跟随鼠标且不受画布边界限制，无浮层、toast、原生文字选择或新增引用，拖回起点不误触编辑；缩放不强制回中，滚轮保持鼠标位置对应的画布点，适应窗口恢复 100% 和中心；空白处始终使用抓手，元素点击光标与拖动抓紧光标分开；纯提问不写源文件，失效文本选区不错误高亮；消息保存/排队/恢复由 AI `human-document-reference-context` 生产服务测试覆盖，DOCX 共用交互及原生复制由既有 case 回归；文字原生选区在引用入口出现时仍可复制，PDF 高亮各状态保留透明度且不盖住 canvas 正文，Markdown 源位置与跨样式可见正文正确对应，重复文字通过块位置和上下文定位；TXT 高亮各状态保留正文像素，MD/TXT/Excel 已保存选区命中控件显示手形且可单击编辑；空草稿首个引用从第一行开始；纯空白输入占位隐藏且不能发送，发送按钮与 Main 正文校验一致，对齐 `WB-COMPOSER-001-AC1/AC4`；追加引用不主动换行，手动首行及段内换行保留，发送后模型用户诉求保留首尾空白；@ 候选、composer 和已发送消息统一名称正文色、透明 token 底色及 18px 图标，对齐 `WB-SCOPE-002-AC4/AC5`、`WB-DOCUMENT-REFERENCE-001-AC3/AC4`。
-- 最新验证：2026-10-14 源码独占真实 E2E 通过，453s、53 条断言；真实模型配置下纯空白/换行/不可见字符保留输入、隐藏占位且不能发送，有效正文可发送。首行和末尾手动换行逐字保留，引用追加不额外增行；提交前编辑区、已发送用户消息与实际模型用户诉求的首尾空白一致。九条混合引用完成真实提交，源文件字节不变；TXT/MD/PDF/Excel/PPT 的高亮、复制、回跳、编辑及真实定位读取通过。raw logs：`tests/logs/workbench/conversation/composer/multi-format-selection-reference/20261014-120559-999`。
 - 待覆盖：`WB-DOCUMENT-REFERENCE-002-AC1` 的跨 Sheet/缩放与各格式双向编辑排列；`WB-DOCUMENT-REFERENCE-002-AC2` 的真实 AI 局部改字外围不变；`WB-DOCUMENT-REFERENCE-002-AC3` 的合并/空白格 UI、范围拒绝 UI 及真实 AI 局部填公式；`WB-DOCUMENT-REFERENCE-002-AC4` 的跨 PDF 页及磁盘保存失败；`WB-DOCUMENT-REFERENCE-002-AC5` 的选区草稿伙伴切换和进程重启。
 
 ### 5.2 `run`
@@ -356,7 +349,6 @@ pnpm test:update:e2e
 - Why：覆盖独立标签、共享 sidecar、背景 UI 和临时实例资源之间的真实交互风险。
 - How：真实 UI 配置模型和完全访问权限、发送、切伙伴、悬浮及回退。请求每位开始操作前及完成网页提交后简短说明进展，供同一子任务多轮真实文字流 UI 验证；只读 DOM observer 记录新消息自动开云、黑球及隐藏周期，自动观察忽略手动悬浮和聚焦时段，并记录消息替换及隐藏状态；三项任务分别提交独立表单、读取 JS 资料和真实搜索，配置和报告使用受控文本编辑；另以独立伙伴分别运行停止、崩溃阶段，保存文件的子任务完成时中断另一个待加载网页，再续聊同会话创建新执行实例。续接消息提供完整新任务文本，先检查真实派发参数包含新资料 URL，再等待交付；漏传新目标立即失败，避免误访问永不返回的旧网页。真实网站为输入，禁用 localhost 抓取快路；observer、只读 IPC 和原生视图检查只取证；harness 仅终止自身应用进程并以同 userData 重启。
 - Oracle：对齐 `WB-SUBAGENT-001-AC1`、`WB-SUBAGENT-001-AC2`、`WB-SUBAGENT-001-AC3`、`WB-SUBAGENT-001-AC4`、`WB-SUBAGENT-001-AC5`、`WB-SUBAGENT-001-AC6`、`WB-SUBAGENT-001-AC7`。标签和页面结果不串；后台视图隐藏、viewport 有效、真实截图有效且不遮挡界面；sidecar 完成 JS 抓取与搜索；切换和折叠不抢选择，切回后的子列表与实际派发事件逐项一致，不写死模型派发数量。竖排头像/名称、排队灰态、运行及完成头像状态、最新消息流式云与黑球、隐藏滚动条和自动滚底符合 PRD。派发调用不出现在 Activity；派发失败及刷新后的错误展示由 `subagent-delegation-display` 验证。尚无可见文案时悬浮显示「我在思考中」且无文字流黑球；同一子任务连续多条消息均在首个可见字自动开云、文字流结束后黑球消失及 2 秒隐藏；同一消息的片段、快照和工具状态更新不重开，新消息重置周期、同组只有一个自动云、hover/focus 优先且历史不自动重播。长文字与黑球不越过云轮廓安全区域。修改归主回答且真实 UI 回退恢复磁盘。停止释放控制并保留文件；重启保留完成记录、未完成投影中断；续聊相同 agentId、新执行 ID，并使用新的网页输入。
-- 最新验证：2026-10-10 真实 qwen3.8-flash 三阶段全部通过，986s；raw logs：`tests/logs/workbench/run/subagent/subagent-delegation-browser-sidecar/20261010-180230-027`。首段文案前悬浮显示「我在思考中」且无黑球；同一子任务连续新消息自动开云，文字流结束后约 2150ms 隐藏；排队、手动悬浮/聚焦、文字安全区、隐藏滚动条及自动滚底通过。切换伙伴后列表与真实派发一致，完成后悬浮「已完成」；独立表单、JS 资料、真实搜索、主修改回退、停止续接及崩溃重启续聊通过。人工质量评分 88/100：事实与文件交付准确，续接可靠；反复网页提取和额外源码/散列校验增加耗时。主 25 次调用，输入/输出 287,026 / 12,113；子 66 次，557,325 / 23,075；缓存读 717,312（84.95%）。保留思考、自动、排队、运行、完成云截图与重启前后 trace。
 
 #### `subagent-delegation-display`
 
@@ -365,7 +357,6 @@ pnpm test:update:e2e
 - Why：隐藏通用工具记录后仍须看见失败原因，不能把派发失败误当作真实子执行。
 - How：真实 UI 配模型、伙伴及完全访问权限，要求原样续接不存在的会话，执行生产 Store 校验；从真实失败事件读取原因并悬浮核对云，刷新后再次核对。随后自然语言请求创建一位助手核对简单数字，检查真实调用使用 agents/instruction、助手完成及成功记录无 Activity。无事件、状态或输出注入。
 - Oracle：对齐 `WB-SUBAGENT-001-AC2`。失败只出现一个临时帮手行，云显示「我干失败了：」加实际错误，刷新保留原因；未产生真实子执行。成功调用使用新字段，出现真实助手及完成结果；派发不出现在 Activity。缺失错误的未知错误兜底由文案逻辑保证；已有目标重试去重由过程投影维护。
-- 最新验证：2026-10-10 源码真实 E2E（qwen3.8-flash）通过，32s；raw logs：`tests/logs/workbench/run/subagent/subagent-delegation-display/20261010-184900-575`。实际错误「子 agent 不存在或不属于当前伙伴」在失败云与刷新后保持一致，失败行无 childRunId；创建数字帮手使用 agents/instruction 并完成 17+25=42，成功及失败均无派发 Activity。保留失败云截图与 Playwright trace。人工完成度评分 100/100：上述真实界面断言全部通过。
 
 #### `subagent-prefix-cache-retain-live`
 
@@ -375,7 +366,6 @@ pnpm test:update:e2e
 - How：真实 UI 配置模型、派发两项任务，复制现有排期/口径/备注/财务跟进 fixture 到临时资料目录，待续接任务依次核对排期、主负责人和财务执行动作。一个完成，另一个读完后进入真实待加载网页；通过 UI 停止并要求查询、续接原子会话。相同模型/工作区短间隔续接，不填充提示或伪造输出/usage。真实本地页面只作输入，observer/只读 IPC 只取证。
 - Oracle：对齐 `WB-SUBAGENT-001-AC10`。同 agentId、不同 childRunId；原任务/历史事实保留，最终交付正确且输入不变，完成清理子日志。比较中断前末次带完整 usage 请求与续接首次请求的工具及已有消息前缀，实际 cachedInputTokens 超过该子会话首次请求的 inputTokens，证明复用包含新增历史；前缀变化、usage 缺失或仅公共前缀命中失败。复用率为续接 cachedInputTokens / 中断前 inputTokens，85%为评估参考，记录首轮/末轮输入规模区分公共前缀和历史复用，不要求所有短请求达 85%。保留请求差异、主子关联、截图、usage 和人工评估。重启持久性由恢复 E2E 验证。
 
-- 最新验证：2026-10-10 真实 qwen3.8-flash 通过，164s；raw logs：`tests/logs/workbench/run/subagent/subagent-prefix-cache-retain-live/20261010-145411-893`。停止后同 agentId、新执行续接；首轮输入 5,486，中断前末轮 7,743，续接首次 input/cached 为 8,163 / 7,168，历史前缀及工具定义保持，复用率 92.57%，缓存超过首轮规模，包含新增历史；不要求所有短请求达 85%。五份复制输入未改，事实与 Alice/Bob 分工正确。人工质量评分 87/100：续接与事实完整；额外跨目录查阅、KB 核验和较长汇总增加开销。主 4 次，输入/输出 35,405 / 1,780；子 16 次，120,654 / 5,678；缓存读 130,304（83.5%）。
 
 #### `subagent-approval-flow`
 
@@ -386,7 +376,6 @@ pnpm test:update:e2e
 - 补充验收：指导 placeholder 与可见来源均使用当前子伙伴名；下一批来源和草稿不串，单次选择不提交，最后明确提交整批。
 - Oracle：对齐 `WB-SUBAGENT-001-AC8`、`WB-SUBAGENT-001-AC9`，以及 `WB-SUBAGENT-001-AC2` 的审批等待态。真实审核输入保留各子任务及命令 ID，不含工具的命令说明；人工卡片仍显示原操作说明。仅一个可操作批次，来源及指导 placeholder 准确；两项等待时主状态保持 waiting_approval（读取伙伴快照的 `run.status`），头像静止、云为「等待你审核操作」且无黑球。决定前目录未删除；允许后原 childRunId 继续、命令只执行一次，拒绝/指导不执行原命令；下一批不串来源并清空草稿。切换/刷新保留当前批次；停止清除等待、未执行命令且保留先前文件；重启旧审批失效、子任务中断，续聊相同未完成 agentId 的新执行实例。同步回归主审批 `approval-batch-flow` 和 `stop-running-or-approval-run`。
 
-- 最新验证：2026-10-11 真实 qwen3.8-flash 四阶段通过，319s；raw logs：`tests/logs/workbench/run/subagent/subagent-approval-flow/20261011-094445-513`。新审核卡来源与指导提示使用子伙伴名，显式允许/拒绝/指导、FIFO、切伙伴与刷新、停止及崩溃恢复均通过。
 
 #### `ai-process-stream-and-final-answer`
 
@@ -457,7 +446,6 @@ pnpm test:update:e2e
 - Oracle：只读轮至少有一个 `terminal_step_started`，没有 `human.terminal_review` 调用、审批事件或审批卡，且 workspace 文件树和文件内容前后相同。创建轮的真实审核输出必须对实际 terminal command 返回 `auto_approve` 与非空 reason；允许命令附加只读核验，仍须实际执行指定创建命令、退出成功且仅新增命名目录；无审批事件/卡片。三个删除轮都必须有完成态 `human.terminal_review` 输出，decision 为 `needs_human_review`、reason 非空；decision 的 `commandId` 与审批项 `itemId` 对应，审批项命令与该轮要求执行的命令一致（Windows 可由 `powershell -NoProfile -Command` 透明包装，但命令体须逐字一致），并真实出现审批卡。卡片等待态及布局对齐 `WB-BLOCKER-001-AC1`、`WB-BLOCKER-001-AC2`、`WB-BLOCKER-001-AC3`、`WB-BLOCKER-001-AC4`、`WB-BLOCKER-001-AC6`。同意轮记录 `approve` 并执行待审命令，目标临时目录被删除且其余 workspace 文件树不变；拒绝轮记录 `reject`，待审删除命令未启动或执行（允许审批前只读核验），两份文件及内容保持原样；指导轮记录 `guide`、run 正常完成、没有执行删除命令，两份文件及内容保持原样，刷新后 Activity 中仍显示指导结果，对齐 `WB-BLOCKER-001-AC7`。审批决定文字须与实际 UI 动作相符。只读查询对齐 `WB-BLOCKER-001-AC13`；自动通过、人工决策后的影响范围和完全访问边界共同覆盖 `WB-BLOCKER-001-AC5`、`WB-BLOCKER-001-AC14`。AI backend case `hand-terminal-approval-batch`、`hand-terminal-ai-review-auto-approve`、`hand-terminal-ai-review-failure`、`hand-terminal-ai-review-incomplete` 继续覆盖稳定分类与失败回退契约。完全访问轮真实创建目标文件且没有审核调用、审批事件或审批卡片。记录模型、耗时、完成度评分和失败归因。
 - Oracle：在发送前安装只读 DOM 观察记录 `正在审核终端命令` 是否出现；审核期间尚无 `terminal_step_started`；从审核到执行 / 人工等待 / 拒绝，同一命令只对应一个 Activity 工具项且只计一次，对齐 `WB-BLOCKER-001-AC15`。AI 自动通过和转人工结果、人工同意/拒绝/指导结果均显示在命令项下带内嵌竖线的审核结果区域；审核区域只对 AI / 人工审核产生，不展示内部 reason。审核期间流光动效只在 Activity header，展开后的命令行没有流光动效。刷新后过程与审核结论从持久化日志恢复，拒绝或指导显示「命令未执行」，不显示为工具执行失败。Activity header 在成功、失败和部分失败状态下均保持中性灰色层级（流光期间可使用正文色），展开后的失败工具行保留红色提示，对齐 `WB-COMPOSER-009-AC16`。
 
-- 最新验证：2026-10-12 真实 UI E2E 六轮通过，150s；raw logs：`tests/logs/workbench/run/blocker/approval-batch-flow/20261012-145501-357`。指导输入采用 Ant Design 默认间距与标准单行高度，默认及悬停无边框和阴影，点击聚焦显示、失焦隐藏；Enter 允许、拒绝与发送指导，Shift+Enter 换行及刷新后的 Activity 恢复均通过；截图已检查。
 
 #### `stop-running-or-approval-run`
 
@@ -467,7 +455,6 @@ pnpm test:update:e2e
 - How：E2E 发送真实长任务；随后在隔离 workspace 中准备 `cache.tmp` 和 `keep.txt`，要求通过 terminal 工具提交删除整个目录的命令，并明确当前尚未授权删除，需先在人工审批卡决定。使用真实模型和 UI，不注入审核结果；发送前安装只读 DOM 观察审核期间 header 与命令项的流光状态。任务要求一致；模型未提交操作而另走提问时保留证据并失败。只有收到当前 run 的 `approval_batch_required` 且审批卡可见后才点击停止；命令未进入审批等待或 run 已结束时立即以事件证据失败，不继续等待一个永远不会出现的审批卡。
 - Oracle：运行中停止入口和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中唯一主按钮转圈且禁用，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`；取消后用时停止递增、过程默认收起且仍可展开，对齐 `WB-COMPOSER-016-AC2`；审批等待时普通输入框和 Composer 主按钮均不存在，且不显示「需要你的协助」，对齐 `WB-COMPOSER-017-AC4`、`WB-SESSION-014-AC1`。真实审核期间 Activity header 有流光，展开命令项没有流光；取消审批 run 后清除等待卡和运行态，待审删除命令没有 `terminal_step_started`，`cache.tmp` 与 `keep.txt` 均原样保留，对齐 `WB-BLOCKER-001-AC10`。 已核对的具体验收：`WB-COMPOSER-006-AC2`、`WB-COMPOSER-006-AC3`。
 
-- 最新验证：2026-10-11 真实 qwen3.8-flash 通过，137s；raw logs：`tests/logs/workbench/run/blocker/stop-running-or-approval-run/20261011-095354-111`。运行中及新审核卡等待时停止均收口，待审命令未执行，文件保持原样。
 
 #### `interrupted-task-resume-flow`
 
@@ -494,7 +481,6 @@ pnpm test:update:e2e
 - 补充验收：追加真实网页人工协作场景：模型打开既有本地页面后发起无选项提问；等待期间通过原生鼠标事件点击页面真实“用户确认”按钮，再在卡片回复；页面正文以“协作确认结果”明确标注反馈，模型重新提取该实际结果后继续。使用真实 UI、真实页面和真实模型，不依赖外部验证码、不增加模拟路径。
 - Oracle：`navigate` 结果含 `tabId`；后续 observe/act 必带该 `tabId`；成功 `navigate` 给模型拆成 Title / URL 而不是一行 Page；`act` 使用 `actionId`，支持输入类动作注入 `text` 参数；observe actions 含 `actionId/method/description/arguments/selector`；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成输入、hover 与退出，展开后同一个 `webContents.id` 直接显示最新包含退出口令与备注内容的 `LOGOUT_OK_*` 结果；操作期间光标常驻且仅在 AI Run 结束时释放隐藏；对齐 `WB-PANEL-004`、`WB-PANEL-004-AC10`、`WB-PANEL-004-AC13`、`WB-PANEL-004-AC18`。Playwright 驱动 Electron 窗口自带的调试口不作为本 case 失败条件；应用启动不得 `appendSwitch('remote-debugging-port')` 由 unit `cdp-endpoint-service` 守住。
 
-- 最新验证：2026-10-11 真实 qwen3.8-flash 完整用例未通过，372s；raw logs：`tests/logs/workbench/run/browser/browser-use-task-panel/20261011-095555-836`。日志确认无选项协作卡等待用户、原生点击后提交文字回复，随后真实 extract 返回 `USER_CONFIRMED_4738`；后续网页操作在完成期限内未完成，`#status` 仍为“已登录”。保留完整流程与状态核验断言，不将局部协作成功计作整例通过。
 
 #### `browser-view-lifecycle`
 
@@ -561,7 +547,6 @@ pnpm test:update:e2e
 - Why：右侧面板是用户消费引用结果和打开文件的主要区域，预览布局错误会直接阻断阅读。
 - How：创建伙伴并添加文件地址后，从文件列表连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；展开打开方式菜单，确认触发系统关联应用查询、存在默认应用标记和至少一个系统返回的 Handler；docx / xlsx 在打开方式含 WPS 时工具栏问号可见，pdf / md / txt / xlsm 不可见；确认产生四个文件 Tab，再切回 Markdown Tab；从文件列表打开 `xlsx/xlsm/xltx/xltm`，对 `xlsx` 尝试进入单元格编辑并输入，用原生复制核对内容仍保持原值，再切 Sheet 和拖列宽。在隔离工作簿加入无缓存及过期缓存公式，通过组件只读权限保留选区与复制，使用真实网格选中与复制读取显示结果，包含零值和跨 Sheet 引用。工作簿同时包含足够的行，通过真实鼠标拖选 C17:C20，检查 AI 引用浮层可见且位于预览内，输入想法后添加到 Composer，核对工作表、范围和四行快照；滚动后从 Composer 回跳编辑并删除引用，再切 Sheet 验证单格引用入口。只读读取 DOM 区分表格主画布与内嵌文字编辑器画布，不用任意第一个 canvas 作为网格。
 - Oracle：加号文件标签、目录懒加载、PDF 命中定位、Markdown / UTF-8 文本预览、Excel 只读且可浏览、选中态、面包屑、系统打开方式与工具栏行为整体对齐 `WB-PANEL-003`、`WB-EXCEL-002-AC1`；WPS 问号提示对齐 `WB-PANEL-003-AC22`；各文件分别保留且旧 Tab 可恢复；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换、不残留，对齐 `WB-PANEL-001-AC1`。目录打开刷新由 `workspace-file-explorer-open-refresh` 覆盖。普通预览 FORCED 计算无缓存与过期缓存公式，结果显示准确，打开预览不写回源文件。多行区域和跨 Sheet 单格都能显示 AI 引用入口，确认后范围与快照准确，滚动后 Composer 回跳、编辑和删除可用；对齐 `WB-DOCUMENT-REFERENCE-002-AC1`。
-- 最新验证：2026-10-13 源码真实 E2E 通过，20s、7 条断言；原生网格复制得到 15、30、0、15，编辑尝试后原值不变，源文件字节保持一致。C17:C20 拖选后的引用入口、确认、Composer 范围与快照、滚动回跳编辑、删除及跨 Sheet 单格引用通过，四种 Excel 格式及既有文件预览操作均通过；raw logs：`tests/logs/workbench/result/preview/file-preview-actions/20261013-172205-815`。
 
 #### `workspace-file-explorer-open-refresh`
 
@@ -570,7 +555,6 @@ pnpm test:update:e2e
 - Why：列表若继续使用挂载时缓存，用户在资源管理器或 AI 写盘后打开列表会长时间看不到新文件；同时若收起时仍因焦点/Run 后台刷目录，会造成无谓 IO。新建还须保证 Office 文件有效且不覆盖同名文件，删除须防止延迟自动保存重建。
 - How：使用独立空模型目录，不复用 runner 的已安装向量模型缓存；无文件地址且未下载向量模型时，通过 UI 创建两个伙伴，在第二个伙伴填写草稿并新建“打开文件”Tab；检查全宽统一空态，点击“前往设置”进入工作空间文件页，通过系统目录选择器添加真实临时空目录，点击“返回工作台”检查原伙伴、草稿、活动 Tab 与空目录提示；测试进程写入种子文件，打开文件后依次写入新文件，再展开列表验证刷新。列表收起时模拟窗口失焦/聚焦并断言 `workspaceDirectoryList` 调用数不增加，展开时模拟焦点确认刷新。最后从普通文件预览跳到设置，通过 UI 移除目录，返回后检查预览仍在且悬浮文件列表复用统一空态。在同一 case 的真实临时目录，通过右键菜单分别创建 DOCX/XLSX/PPTX/自定义后缀，读取实际 OOXML 包检查空白内容结构；准备真实子目录，通过目录右键验证创建位置及输入行顺序；文件右键检查新建/重命名/删除，并通过文件的新建子菜单验证在其所在目录创建，并验证关闭菜单后持续高亮、未选中行无 hover 背景和外部点击清除选择。通过原行重命名确认文件内容、旧路径消失、重名不覆盖与打开 Tab 的标题/预览路径更新。常驻与悬浮列表分别检查不自动打开、不切换活动 Tab 和预览；验证重名与非法名称的提示、Escape/外部点击取消及筛选清空，并断言选择类型后主/子菜单完全关闭。通过真实 UI 打开新建文本、编辑后确认移到回收站，等待超过自动保存延时并切换 Tab，确认文件不被重建。选择根文件从常驻切到悬浮列表后，检查目录展开、筛选和选中状态保持；连续打开两份文件检查列表不关闭且两份预览均可用，对齐 `WB-PANEL-003-AC13`。所有被测创建、重命名、编辑与删除均通过 UI，不直接调用写入 IPC。
 - Oracle：无目录统一引导和设置往返对齐 `WB-PANEL-003-AC23`；打开/展开时焦点刷新对齐 `WB-PANEL-003-AC13`。菜单显示 `Word / Excel / PPT / 其他文件`，不显示中文类型说明或后缀；四种类型、三种目录定位、常驻/悬浮右键对齐 `WB-PANEL-003-AC24`；行内命名、重名/非法输入、取消对齐 `WB-PANEL-003-AC25`；真实 Office 结构有效、新建后原 Tab/预览保持且列表可见对齐 `WB-PANEL-003-AC26`；删除取消、确认后的磁盘移除与列表更新对齐 `WB-PANEL-003-AC27`；删除已编辑文本后显示已删除且延迟/关闭不重建文件对齐 `WB-PANEL-003-AC28`；持久选择/清除、菜单与统一图标对齐 `WB-PANEL-003-AC30`；原行重命名、重名不覆盖、Tab/预览更新与旧路径不重建对齐 `WB-PANEL-003-AC31`。输入法组词、切换工作目录期间取消、回收站失败保留弹窗与重试、AI 历史审核快照保留列入本 case 人工验收边界；主进程路径范围/排他创建与失败无永久删除由 Unit `workspace-root-containment-contract` 补证，编辑保存拒绝重建由 Unit `text-file-write-service` 补证。
-- 最新验证：2026-10-14 源码真实 E2E 通过；`Word / Excel / PPT / 其他文件` 菜单标签、16px 菜单图标、四类真实新建、重命名、删除、持久选择及打开文件后列表保持通过。raw logs：`tests/logs/workbench/result/preview/workspace-file-explorer-open-refresh/20261014-100205-368`。
 
 #### `file-preview-external-change-auto-refresh`
 
@@ -584,7 +568,7 @@ pnpm test:update:e2e
 
 - 测试类型：`e2e`
 - What：右侧打开真实 Markdown 文件后直接进入即时渲染（IR）编辑态，无工具栏/操作按钮；点击任意位置输入文字并实时渲染，编辑后无需保存按钮自动落盘；点击 `https` 链接触发 `openExternal`；空闲时外部保存自动重载，编辑中外部保存被自动覆盖；编辑区撑满面板无右侧灰色残留；标题前不显示 H1/H2 等标题级别标签（Vditor 默认 `::before`）与 `#`/`##` 等标题源标记、标题无下划线；拉宽窗口后页面不白屏。
-- Why：即时渲染点击即编辑与自动保存是本次产品能力核心，任何渲染、保存或外部覆盖分支错误都会导致内容丢失或磁盘不一致；编辑区布局、标题标签/标记与窗口缩放稳定性影响核心编辑体验；链接点击打开是 Markdown 阅读可用性的基础。
+- Why：即时渲染点击即编辑与自动保存是该产品能力核心，任何渲染、保存或外部覆盖分支错误都会导致内容丢失或磁盘不一致；编辑区布局、标题标签/标记与窗口缩放稳定性影响核心编辑体验；链接点击打开是 Markdown 阅读可用性的基础。
 - How：用真实临时文件地址创建 Markdown 文件（含标题、段落、链接、代码块），从文件列表打开；确认编辑器无工具栏且内容渲染为排版；点击段落输入追加文字，等待约 500ms 后读取磁盘校验已自动落盘且编辑区实时渲染；点击 `https://example.com` 链接，断言观测到 `openExternal` 调用且 payload 为该 URL；空闲时测试进程外部写入文件，确认编辑区自动重载为外部内容；编辑中输入新内容后外部写入文件，等待自动保存，确认磁盘为本地新内容（纯覆盖，无冲突提示）；测量编辑区宽度与父容器宽度一致（无灰色残留）；点击标题后确认 `.vditor-ir__marker--heading` 保持隐藏、标题 `::before` 计算样式 `content` 为 `none`（无 H1/H2 标签）；通过 Electron `setSize` 拉宽窗口后确认根节点仍在且编辑器仍可见（不白屏）。
 - Oracle：Markdown 打开即 IR 编辑态，无保存按钮/工具栏/未保存标记；输入自动落盘，磁盘字节与编辑结果一致；点击 https 链接调用 `openExternal`，对齐 `WB-EDIT-001-AC2`；空闲外部写入自动重载、编辑中外部写入被自动覆盖，对齐 `WB-EDIT-001-AC1`、`WB-EDIT-001-AC4`、`WB-EDIT-001-AC5`；AI 修改记录「审核」态仍为只读 Diff，切入「预览」后可编辑文本进入编辑态，对齐 `WB-EDIT-001-AC7`；保存不产生 AI 修改记录，对齐 `WB-EDIT-001-AC8`；编辑区宽度等于父容器宽度且背景为白（无灰色残留）；标题前无可见标题级别标签与标题源标记、标题无下划线，对齐 `WB-EDIT-001-AC9`；拉宽窗口后页面保持存活不白屏。
 
@@ -608,7 +592,6 @@ pnpm test:update:e2e
 
 - 测试类型：`e2e`
 - 模式入口补充：在审核切到真实预览后，重复点击对话中的同一修改入口，必须重新打开当前批次审核且不新增 Tab；从悬浮列表选择当前修改文件进入审核后保持列表展开，对齐 `WB-PANEL-003-AC13/AC14`。
-- 最新验证：2026-10-14 真实 E2E 完整用例通过；同一修改入口重回审核、当前文件从悬浮列表重回审核且列表保持展开、真实文本 Diff 与后续修改回退均通过；raw logs：`tests/logs/workbench/result/apply/text-file-apply-preview-and-revert/20261014-112047-071`。
 - What：同一个 Markdown 文件打开即进入编辑态并展示最新内容，AI 运行完成后无需点击修改项即可出现预览/审核切换且保持阅读位置，同时显示非零修改数量，切换伙伴再切回后不点击仍保持真实数量，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：编辑态和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容；伙伴切换后的数量恢复不能依赖用户点击触发补算。
 - How：先打开 Markdown（进入编辑态）；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件，等待 run 完成但不点击修改项，确认 assistant 修改列表已经显示非零 `+/-` 数量；检查编辑态静默刷新为最新内容、原 Tab 和文档视图保留，新增切换入口但仍在预览；从“全部”重新打开该文件确认带切换入口，再切审核检查 Diff；保持审核并发送不修改文件的后续提问，确认该历史批次不会被新运行清空；切换伙伴再切回，不点击修改项确认数量仍为非零；再点击 assistant 修改入口检查 `TextFileDiffViewer`、工具栏没有独立定位按钮且系统应用下拉包含“打开所在文件夹”；通过 E2E no-op 外部启动成功分支检查重新打开提醒，最后执行回退。 测试进程在审核打开后真实写入 C，切到预览检查 C、切回审核检查 B，并展开完整未变行；回退验证后续修改确认。
@@ -629,7 +612,6 @@ pnpm test:update:e2e
 - Why：创建态与更新态的差异语义不同，不能只用新建 PPT case 代替。
 - How：在空临时 workspace 中准备四页基线 PPT，让真实 AI 主动移动一页、修改一页、删除中间页、新增一页，并要求末页完全不变；打开修改记录并操作审核/预览、筛选、同步切页、缩放、拖动、关联应用打开和回退。审核视图在 100% 从左侧拖动，在 25% 从右侧大幅拖动，核对两侧精确同步位移；再验证滚轮放大后的平移。关联应用启动在 E2E 中使用 no-op 成功分支，不实际启动 Office/WPS。测试进程将正式 PPT 首页面文字改为 C，直接读取普通预览的交互 SVG 与审核的固定 SVG，验证预览 C、历史审核仍为 B，并确认强制回退。
 - Oracle：正式 PPT 内容和顺序正确；审核显示准确 `+3/-1`、三个绿色页面标记和一个红色删除标记；删除中间页不会把未改末页标绿，变化筛选为四页、全部模式为五个 before/after 对齐项；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；审核/预览切换、同步缩放拖动不变，任意缩放比例下左右画布精确跟随拖拽且不受边界限制，底部「滚轮缩放 / 拖拽平移」提示固定可见（缩放或拖拽后仍在），回退后 bytes 与 baseline 完全一致，对齐 `WB-PANEL-003-AC19`、`WB-PPT-002`、`WB-APPLY-003`。
-- 最新验证：2026-10-12 源码真实 E2E 通过，85s、4 条断言；真实 AI 更新后的前后页、净变化统计、缩略图筛选、100%/25% 左右画布同步自由平移、缩放和提示持续可见、预览 C/固定审核 B 与强制回退均通过；raw logs：`tests/logs/workbench/result/apply/ppt-update-diff-interactions/20261012-172410-941`。
 
 #### `excel-update-diff-and-revert`
 
@@ -638,7 +620,6 @@ pnpm test:update:e2e
 - Why：Excel 修改预览不能依赖模型描述，也不适合 PPT 式左右画面对比，必须直接验证工作簿数据、公式和单元格级 diff。
 - How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改，限定使用 Excel 工具且无需终端备份，清空含公式的明细行，保留汇总行原位置；整行插入/删除的逻辑对齐另由 AI backend 矩阵覆盖；打开修改记录，显式切换“预览/审核”，在两种模式下尝试编辑并用原生复制核对单元格原值，切换工作表和拖列宽；通过 E2E no-op 成功分支打开关联应用，再执行回退。测试进程将正式工作表重命名为 External C，以界面实际 Sheet 标签验证预览 C、历史审核仍为 B，并确认强制回退。在隔离输入增加共享样式和含公式的清空区域，真实 AI 局部修改后以网格复制取证核对普通预览与固定审核结果，并解析目标范围之外的值、样式和审核边框。
 - Oracle：正式 xlsx 的值和公式准确且没有 diff 边框，Data 第 3 行内容清空，汇总保留在第 4 行且行数保持 46；同一 run 两轮修改在 UI 上只见一条本 run 修改入口；两种模式都通过 Univer 只读预览、可切换工作表且不出现 PPT 前后预览；审核态被改过的 Data 工作表 tab 有绿点、未改的 Notes 无绿点，预览态均无绿点；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；回退后 bytes 与修改前一致；真实调用包含 `excel_read` 和至少两次 `excel_edit`；对齐 `WB-PANEL-003-AC19`、`WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9`。目标范围之外的共享样式不串改；普通预览显示重算结果，审核显示真实 A/B 的固定结果，恢复显示的删除内容不参与再次计算。
-- 最新验证：2026-10-13 源码真实 E2E 通过，72s、5 条断言；真实 AI 局部编辑、外围样式保护、只读、当前 C 预览、固定 A/B 审核、删除公式旧值及精确回退均通过。审核汇总为 40、删除公式为 16，外部 C 预览为 60，再切回审核仍为 40；AI 引用浮层恢复后，通过真实 UI 关闭浮层并复制单元格，公式、审核和回退检查保持通过；raw logs：`tests/logs/workbench/result/apply/excel-update-diff-and-revert/20261013-152127-961`。
 - 覆盖边界：整行插入/删除的结构对齐由 AI backend 验证；UI E2E 使用清空区域验证删除内容恢复后的固定审核结果，数值参数字符串兼容不在本次改动范围。
 
 #### `excel-create-diff-and-revert`
@@ -657,7 +638,6 @@ pnpm test:update:e2e
 - How：隔离 Word 包含长正文、两处通过字符样式继承的加粗概念及段落缩进；通过真实 UI 自然语言要求精简并保留核心概念和原格式，同时移动风险段落、修改指定单字和加粗指定文字（含原有前景色与黄色底色）。收集实际模型读取结果与写入调用，检查最终文件、审核与预览，再回退；不指定工具顺序或精简后的完整文案。
 - Oracle：长段落确实精简，核心概念、继承加粗和原有缩进保留，普通文字不误加粗，其他内容不变；完全未变的文字及有效格式不误标。删除段落在原位置，新增在最终位置；同位置改字只标实际字符，格式只标目标文字；已有底色用绿色边框，原色和底色保留；不复制或新增说明；审核/预览与最终文件一致，回退恢复原始 bytes。对齐 WB-APPLY-003-AC8/AC11/AC12/AC13。
 - 位置标记条验收：补充 `WB-PANEL-003-AC29`，检查 Review DOM 保留 inserted/deleted/formatted 语义，红绿分列、点击定位真实范围与强调、半透明滑块与标记同轨、原有字体颜色不误标、模式切换无残留；人工验收补充密集循环、重复文字、图片与表格变化、字体/图片延迟加载和文档首尾长区域。
-- 最新验证：2026-10-14 真实 E2E 完整用例通过，130.1s；包含标记与滑块同轨叠层、红删绿增分列、格式修改真实语义、点击定位与强调及预览无残留断言；raw logs：`tests/logs/workbench/result/apply/docx-review-position-and-inline-diff/20261014-111635-583`。
 
 #### `docx-apply-panel-preview-and-revert`
 
@@ -668,7 +648,6 @@ pnpm test:update:e2e
 - Oracle：受支持写回类型边界对齐 `WB-CORE-003`；修改后源文件成为最终净稿，Run 结束后入口在未点击时已显示真实非零数量；DOCX 已应用记录成功交给外部应用后显示“关闭后重新打开”提示；右侧默认选中、Review Docx、写回和回退闭环对齐 `WB-PANEL-003-AC19`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`。
 - 位置标记条验收：补充 `WB-PANEL-003-AC29`，通过真实 UI 验证切入预览与回退后保留 16px 滚动轨道且无审核标记；审核标记语义与导航由 `docx-review-position-and-inline-diff` 覆盖，历史批次切换列入人工验收。
 - 模式入口验收：补充 `WB-PANEL-003-AC13/AC14`，审核切预览后重复点击对话中的同一修改入口必须重回审核；从普通文件预览点击修改入口必须审核且复用原 Tab；切换其他 Tab 再回来保留预览；回退后再次点修改入口默认预览。文本文件的同一入口规则由 `text-file-apply-preview-and-revert` 补证，PPT/Excel 共用入口的逐格式重复点击保留人工验收边界。
-- 最新验证：2026-10-14 真实 E2E 完整用例通过，57.7s；包含重复点同一修改入口重回审核、普通预览点修改入口审核且复用 Tab、切 Tab 保留预览、回退后重开预览以及 16px 共用轨道无审核残留断言；raw logs：`tests/logs/workbench/result/apply/docx-apply-panel-preview-and-revert/20261014-112047-063`。
 
 #### `wps-sync-dispatch-on-write-and-revert`
 
@@ -726,7 +705,6 @@ pnpm test:update:e2e
 - How：真实模型通过一次提问询问单选、多选和纯输入三题，真实 UI 点选、取消、填写、翻页与提交；选项行获得焦点后 Enter 下一步，回复框 Enter 下一步和最终发送，空回答 Enter 不前进，Shift+Enter 换行；检查输入采用 Ant Design 默认间距与标准单行高度、无尾部勾叉与选项键盘焦点无整行蓝色外描边；切伙伴和刷新后恢复待处理卡并清空草稿，后续交互继续回答。通过日志检查提交前后运行和工具状态，不注入 UI / IPC 状态。
 - Oracle：对应 `WB-BLOCKER-001-AC9`、`WB-BLOCKER-001-AC11`、`WB-BLOCKER-001-AC12`、`WB-SESSION-014-AC2`；无普通 Composer，单项无分页、多项显示数量与箭头；推荐为文字、多选有轻提示；输入为 Ant Design TextArea，默认间距紧凑、单行不额外撑高，多行按内容增长；有选项时输入默认和悬停无边框及阴影，点击聚焦后显示，失焦后隐藏，纯输入题保留完整细描边；选择行无尾部勾叉和蓝色焦点外描边；纯输入无需选项，空白不能发送；选择后仍停留当前题，翻页保留草稿，最后统一提交，选项焦点与回复框 Enter 执行对应主动作，Shift+Enter 换行，空回答按 Enter 不前进，问答在 Activity 回显。协助标签正确出现和清除，新交互不继承草稿。
 
-- 最新验证：2026-10-12 真实 UI E2E 通过，85s；raw logs：`tests/logs/workbench/run/blocker/human-interaction-question-card/20261012-145501-357`。单选、多选与纯输入题均完成，Ant Design 默认间距与单行高度正常；补充输入默认及悬停无边框和阴影，点击聚焦显示、失焦隐藏；Enter 下一步与最终发送、Shift+Enter 换行、草稿隔离及 Activity 回显通过，截图已检查。
 
 ### 5.4 `scheduled-task`
 
@@ -844,3 +822,7 @@ pnpm test:update:e2e
 | `ST-VIEW-001-AC5` | 部分覆盖：`scheduled-task-partner-deletion` 没有定时视图下删除弹窗可见与可操作的独立 Oracle。 |
 | `ST-LIST-001-AC1/AC3` | 部分覆盖：`scheduled-task-config-lifecycle` 检查创建后列表、摘要与入口；重开初始化及无任务空态没有明确断言。 |
 | `ST-SWITCH-001-AC2` | 部分覆盖：`scheduled-task-config-lifecycle` 检查开关值；关闭后等待到点不触发尚无 E2E。 |
+
+### 真实 UI 执行缺口
+
+下列 case 仍用写 IPC 造状态，待改为真实 UI 点击：`partner-ui-state-isolation`、`partner-ui-state-restart-persistence`、`background-partner-ui-event-isolation`、`partner-pin-toggle`；`browser-view-lifecycle` 中部分 `browserTabNavigate` 同样待改。只读 IPC 取证仍允许。

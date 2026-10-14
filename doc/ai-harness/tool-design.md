@@ -1,11 +1,5 @@
 # Tool Design
 
-工具契约与结果投递设计约束。涉及 `src/main/services/ai/human/**` 的 tool schema、modelResult 与 hand 投递逻辑时必读。
-
-活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，输出 `doc/ai-tool-prompt-audit.md`，不入库）；human 消息上下文见 `human-harness.md`；测试约束见 `doc/test-plan/ai-test.md`。
-
----
-
 ## 1. 设计原则
 
 AI 通过工具操作本地环境。工具应像「手」：模型指定**位置（锚点）**和**意图（动作）**，工具执行并返回**下一步决策所需的最小可靠反馈**。工具契约（schema + 结果形态）是模型唯一能依赖的语义来源。
@@ -64,6 +58,8 @@ HumanToolSpec = {
 
 **family 组织**：docx / pdf / ppt / excel / text-file / kb / web / terminal / image-generation / agent-control 等；`getToolSpec(name, platform?)` 为唯一查表入口（terminal_run 可按平台变体）。
 
+单工具完整输入、输出与渲染例子由契约源码维护，使用 `pnpm doc:ai-tool-prompt-audit` 按需生成对照，生成产物不入库。
+
 ---
 
 ## 4. 参数规范化
@@ -106,19 +102,9 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 实现：`buildModelToolResultDelivery`（`shared/modelToolResult.ts`）。
 预览常量：`HEAD=6000` chars，`TAIL=2000` chars。
 
-`ppt_read_slides` 的模型正文保留页/元素标识、类型、位置、元素文字与公式，以及表格行、图表数据等内容；组合通过 `details.childElementIds` 列出直接子元素，子元素仍在同一页的元素清单中，不重复构造内容树。图片通过页面图路径读取，无文字对象仍有身份和类型。`detail: images` 只返回页面标识和图路径。
+### 5.1 生产者有界读取
 
-### 5.1 生产者有界读取（非 delivery 管道）
-
-以下限制在**工具执行层**，不属于上述三档阈值：
-
-| 类型                    | 默认上限                       |
-| ----------------------- | ------------------------------ |
-| 搜索类 match            | 10 条                          |
-| `text_file_read`        | `startLine` / `lineCount` 分页 |
-| docx / ppt / pdf search | 各域 constants                 |
-
-Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 terminal 工具 spec）。
+搜索、列表和文件读取在工具执行层限制结果范围，通过分页或数量上限控制单次返回；参数和缺省值由各工具 schema 维护。生产者有界读取与上述 delivery 大小守卫分别生效。
 
 ---
 
@@ -141,11 +127,11 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 | `learn_skill`       | 由 `learning` 节点直接写 ToolMessage（loaded / duplicate / unknown / evicted 摘要），不走 `buildModelToolResultDelivery` |
 | `update_plan`       | 由 `plan` 节点直接写 ToolMessage（计划项列表 `[status] title`），不走 `buildModelToolResultDelivery`                     |
 | `read_image`        | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness 第 3.5 节）                                                   |
-| `ask_user_question` | 询问信息或请求用户协作操作；每次 1 至 3 题；options 可省略或为空，非空时 2 至 4 项；单选选项互斥，始终允许直接文字回复；结果使用问题 / 选项 ID 与用户文字，不依赖显示编号；                     |
+| `ask_user_question` | 用户协作结果使用问题／选项 ID 与用户文字，不依赖显示编号 |
 
 ### 6.2 写工具输出
 
-写成功多为 **A** 或 `{}`（excel 写回不返回系统锚点）；**不**返回 diff 全文——模型应再 read 验证。
+写成功使用简短确认或继续操作所需的新锚点，不返回 diff 全文；模型通过 read 验证。
 
 ## 7. 执行与 hand 节点
 
@@ -167,36 +153,17 @@ hand 收到 call batch
 
 ---
 
-### 子任务工具与资源范围
+### 7.1 子任务与审批
 
-`list_agent({})` 返回当前伙伴未清理子会话的 `agentId/name/task/status`，不提供详情或过程摘要。`delegate_to_subagent` 属于内置 `agent-control`：`agents` 非空、数量不限，每项为创建 `{name,instruction}`（名称最多八字符）或续接 `{agentId,instruction}`；`instruction` 是发给该子助手的完整工作指令，`name` 与 `agentId` 互斥；无效、跨伙伴或活跃会话返回错误。结果含会话/执行关联及交付，走公共 modelResult / 大小守卫。执行与存储见 [`human-harness.md`](human-harness.md)。
+主子共用工具链和审核，子任务的能力限制在执行层持续生效，不因学习技能而解除。人工决定返回原执行位置，待审操作在允许前不执行。子会话的派发、续接与生命周期见 [Human Harness](human-harness.md#17-子会话与派发)。
 
-主子共用工具链及审核；子额外禁用查询/派发子 agent、提问和定时任务管理，学习技能后仍受限制。人工决定返回原执行位置，待审操作在允许前不执行。
+子任务交付走公共 modelResult 和大小守卫；各工具参数由 schema 维护。
 
-资源边界：
+### 7.2 执行资源范围
 
-- 浏览器标签列表、CDP 发现及操作限定执行范围，使用 Chromium 真实 Target ID。后台视图隐藏显示并保留有效页面尺寸，不改变用户选择或面板；控制释放后标签归主伙伴。页面恢复和内容检查有时限，导航与检查均响应取消，光标清理也限时。截图仍由 Stagehand 执行；截图调用超过 20 秒返回工具错误，Stagehand 关闭最多等待 3 秒，避免后续工具无限排队。
-- sidecar 搜索与抓取共享 FIFO 串行队列；排队可取消、不计入执行超时。已提交请求取消后仍占位到完成或超时，不关闭共享进程。
-- 受控文件使用 `ownerRunId`，同路径复用首次基线与最新确认版本，Office 工作态持排他租约。主运行收尾生成审核，子结果只列参与文件；终态清理工作快照，保留原始对象与审核。
-
-## 8. 与测试 / 生成文档的关系
-
-| 文档 / 测试                                  | 职责                                                                                                  |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 本文                                         | 设计原则与管道约束                                                                                    |
-| `doc/ai-tool-prompt-audit.md`                | 各工具 input/output/渲染活例子（按需生成，不入库）                                                    |
-| `doc/test-plan/ai-test.md`                   | tool / human 回归范围与 Oracle                                                                        |
-| `tests/case/unit/ai/*-tool-contract.test.ts` | 已有 family 的轻量契约（schema + renderSuccess 存在性；覆盖 docx / pdf / ppt / text-file / terminal） |
-| `tests/case/ai/tool/**`                      | 领域工具行为与 terminal 契约                                                                          |
-
-新增工具检查清单：
-
-1. 注册进 `ALL_TOOL_SPECS` 且 `renderSuccess` 已实现；
-2. `inputSchema` 字段 describe 完整；
-3. `promptSpec.description` 不教流程；
-4. 必要时补充 family 契约测试与 audit 文档条目。
-
----
+- 浏览器标签发现与操作限定当前执行范围，以真实 Target ID 定位；控制释放后标签归主伙伴。导航、检查响应取消，恢复与清理有时限，避免后续调用无限排队。
+- sidecar 搜索与抓取共用 FIFO 串行队列；排队可取消且不计入执行超时。已提交请求取消后仍占位到完成或超时，不关闭共享进程。
+- 受控文件按 ownerRunId 归属主运行，Office 工作态持排他租约。版本、备份与审核的保留清理见 [存储设计](../storage/design.md#5-生命周期与一致性)。
 
 ## 附录：关键代码索引
 

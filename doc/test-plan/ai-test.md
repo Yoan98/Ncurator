@@ -16,20 +16,20 @@
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作地址内修改记录、Artifact、安全校验和工作地址外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。`browser_use` 网址协议、系统错误页、加载超时与 `navigate` 成败字段由 Workbench `browser-navigate-error-page` 与 unit `navigate-plan` 覆盖。
-- `RUNTIME_TOOL_CATALOG` 中的全部工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](../../src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
+- 工具契约由 family unit contract（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）和 backend tool integration 共同验证；注册完整性由 [registry 编译检查](../../src/main/services/ai/human/tools/registry.ts) 保证。不对 prompt 措辞或 Renderer 投影字句做 unit 单测。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。参数分发、SERP 字段裁剪、tabId 透传与 act 文本覆盖由 `tests/case/unit/ai/web-tool-contract.test.ts` 验证；其替身服务只证明适配契约，真实网页抓取和浏览器操作分别由本域 tool 与 Workbench E2E 验证。
-- `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再让冻结 sidecar bin 的 Python Playwright 显式复用该测试 Electron 的 Node，通过隔离 context 抓取；host 必须 headless 且不得挂主窗口。该独立 host 可以继续开进程级调试口，与正式 App 无关。正式 App 的 `browser_use` 在无进程级 `--remote-debugging-port` 下，于 observe/act 时按 Tab 挂本机 CDP 桥。另覆盖 `browser_use` 服务不可用诊断。禁止使用 sidecar 内置 Node/浏览器或 Electron 默认 context。`web_search` 结果只回模型，不得自动展开右侧搜索列表（该面板已不存在）。
+- `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再让冻结 sidecar bin 的 Python Playwright 显式复用该测试 Electron 的 Node，通过隔离 context 抓取；host 必须 headless 且不得挂主窗口。该独立 host 可以继续开进程级调试口，与正式 App 无关。另覆盖 `browser_use` 服务不可用诊断。禁止使用 sidecar 内置 Node/浏览器或 Electron 默认 context。`web_search` 结果只回模型，不得自动展开右侧搜索列表。
 
 ### 2.2 `human`
 
 - `mock-llm`：在 non-live 下验证 `AiRunService -> human` 入口与主链；只允许固定 LLM 输入输出，必须真实走 `createAiRunContext -> human graph -> learning / hand -> store / apply / artifact`；禁止 `humanReasonOverrides`、`toolExecutionOverrides`、手工串 node、fake tool/store/docx apply service。要通过不同 case 把关键节点与关键边都跑到。
-- `live`：验证真实模型下的真实业务执行；必须走真实 LLM executor、真实 KB、真实工具与 apply / artifact；禁止 scripted driver、`chatStructuredOverride`、fixture store override。用户输入不得包含内部工具名或固定调用顺序。至少保留 1 条简单与 1 条复杂回归 case；全内置服务商连通性由 Workbench `live-preset-provider-smoke` 覆盖。case 不设评分门槛，人工依据 raw logs 与 artifact 将 0–100 评估回写本文 §5 快照。live 环境变量复用 `doc/test-plan/workbench-test.md`「总体目标」中的共享服务商配置；通用断言规则遵循 `doc/test.md`。
+- `live`：验证真实模型下的真实业务执行；必须走真实 LLM executor、真实 KB、真实工具与 apply / artifact；禁止 scripted driver、`chatStructuredOverride`、fixture store override。用户输入不得包含内部工具名或固定调用顺序。至少保留 1 条简单与 1 条复杂回归 case；全内置服务商连通性由 Workbench `live-preset-provider-smoke` 覆盖。质量评估按各场景 Oracle 人工复核并写入运行结论，不回填本计划。共享 live 环境变量与断言规则见 [测试规范](../test.md)。
 
 ## 3. 领域特有规则
 
 ### 3.1 Harness 规则
 
-- fixture 可用 `tests/fixtures/workspace`；运行时作为设置页文件地址 + 伙伴，不再「绑定工作区才能跑」。
+- fixture 可用 `tests/fixtures/workspace`；依赖本地资料时准备文件地址和伙伴；普通 AI 运行不要求资料目录。
 - AI backend 回归以生产 `createAiRunContext` 为唯一 runtime 入口，使用真实 store、apply service 和 embedding service；文档 worker 经 `AiRunResourceManager` 在 run 结束时释放，释放失败不得覆盖任务结果。
 - `mock-llm` 只固定 LLM 输出，其余全部真实；`live` 走真实 `LlmConfigStore` 与生产 LLM executor。
 - AI run 与 human harness 不准备 embedding；KB 工具调用时统一检查模型安装与本地初始化，不隐式下载或静默降级。需要 KB 的 fixture 显式通过真实下载 / 索引准备模型和资料；不使用 KB 的回归不准备模型。所有支持文件前置「文件名锚点」内容块；Excel 只索引文件名、文档标题与工作表名等元数据。
@@ -53,23 +53,22 @@
 - 涉及文件写入、审核交付的 Live case 使用生产 `AiRunService.run`，经过真正主 run 收尾后再断言审核。正式文件、最终校验值、自包含审核内容及工作快照清理均须核对，不能以 graph 回答结束代替收尾；同一伙伴多轮使用独立 runId。若最后一次受控写入后又由 terminal 修改正式文件，日志须记录当前校验与确认 B 的差异并复核原因，审核仍以确认 B 为准。
 - case 使用真实用户风格输入；断言口径遵循 `doc/test.md` 的真实 AI / live 规则。
 - 涉及计算 / 对账 / 统计时，brain 要求经 terminal 真实计算；live case 硬断言完成态、关键产物与 terminal 计算是否发生。终端改文件不进修改记录。
-- 完整证据写入测试运行产物，文件交付同时归档正式文件和自包含审核（PPT 连同 SVG 资源），便于结束后复核实际效果；§5“最新 Live 评估”仅由人工复核后覆盖更新。
+- 完整证据写入测试运行产物，文件交付同时归档正式文件和自包含审核（PPT 连同 SVG 资源），便于结束后复核实际效果。
 
 ### 3.3 文件写盘、Run 收尾与历史审核
 
-Word、PPT、Excel、普通文本统一由主 run 的文件会话管理。工具成功前正式文件完整写入、立即回读验证，并持久化唯一最新确认工作版本及结构身份。首次实际写入前保存原始字节 A；主 run 真正完成、失败或取消时仅计算 A→最后成功版本 B 的净差异。子任务结束、yield、模型回答及追加消息续接不触发收尾。正式文件后来变为 C，历史审核和最终校验值仍属于 B。
+文件版本与恢复约束见 [存储设计](../storage/design.md#5-生命周期与一致性)，运行收尾见 [Human Harness](../ai-harness/human-harness.md#8-交付与失败)。测试分工如下：
 
-主要覆盖归 `ai/tool`：四类真实工具逐次解析正式文件；运行中无审核产物；收尾一次、恢复原样不留修改记录、新建空文件仍可撤销；连续修改、runtime 重建、子任务共享基线、纯格式和结构变化；A→B 后外部写 C 的历史审核；PPT 连续公式替换并在中途重建 runtime、移动/恢复、页码/层级顺移、纯文字对齐及备注仅修改标记；Excel 行列对齐、Sheet 重命名/同名重建、空白样式/尺寸/合并及合并区域行列操作。断言正式文件、审核中的实际内容、样式和标记，不能仅检查存在或计数。
-
-`unit/ai` 覆盖共用发布边界和算法：保存前失败、保存后失败、回读不一致、快照持久化失败；错误包含实际原因和真实文件状态，不暴露内部路径，不自动恢复；下一次编辑重新读取磁盘。首次修改在尝试替换正式文件前失败时，不固定该次基线；重试以当时正式文件为 A。AI 生命周期覆盖正常/失败/取消、在途写入等待、进程中断和启动补生成、重复收尾及审核失败保留计算输入。不得增加生产故障开关。Excel 持久化失败用例必须到达目标失败阶段。
-
-审核产物自包含：Word review.docx、Excel review.xlsx、PPT manifest.json 与前后 SVG/资源、文本 review.json（完整有序差异行及旧新行数）。完成记录保存后清理临时工作版本和 pending.json；每条修改记录独立保存原始 A 及校验值，以支持原始字节回退。覆盖清理 B 后仍可渲染、文本未变行展开、新建撤销、后续修改确认、两轮依次撤销。Word 既有净比较、字符差异、格式和资源矩阵完整回归。失败或取消不否认已落盘事实。
+- `ai/tool` 验证 Word、PPT、Excel 和普通文本真实读写：成功后解析正式文件，运行中不提前生成审核；连续修改、runtime 重建、子任务共享基线、格式与结构变化、零净变化及新建空文件均检查真实内容。
+- 历史审核验证首次原始 A 到确认 B 的净变化；外部再写 C 不改变历史。PPT 检查公式替换、结构顺移、移动恢复、对齐及备注；Excel 检查行列对齐、Sheet 身份、空白样式、尺寸和合并；Word 检查净比较、字符差异、格式与资源，不能只断言文件存在或数量。
+- `unit/ai` 补充保存前后失败、回读不一致、持久化失败、首次失败后重试基线、在途等待、正常／失败／取消收尾、进程中断补生成、重复收尾及审核失败恢复。必须到达目标失败阶段，不增加生产故障开关；错误要符合实际文件状态，不自动恢复文件，不暴露内部路径。
+- 清理临时 B 后仍须解析自包含审核、展开文本未变行、回退新建／后续修改及两轮依次撤销。回退核对原始字节与每条记录的独立备份、校验；失败或取消不能抹去已落盘修改。
 
 ### 3.4 结构化输出与服务重试
 
-结构化输出统一走 `prompt_json`：所有结构化调用都是纯文本请求（不发送 `response_format`），模型按提示词中的 schema 描述输出 JSON，本地通过 `normalizePromptJsonText`（剥离代码块）+ `jsonrepair` + Schema 校验兜底。供应商对 `json_schema` / `json_object` 的能力支持无法可靠探测（`/v1/models` 大多不返回能力声明且分模型差异），因此不再维护任何运行期降级链、策略偏好存储或 transport 切换。
+结构化输出回归验证纯文本请求、代码块解析、JSON 修复和 Schema 校验的单一路径；相关证据在 `tests/case/unit/ai/structured-output-single-path.test.ts`。
 
-LLM 失败分类与重试信号遵循 `doc/ai-harness/human-harness.md` §8.4；测试验证结构化信号、不可重试边界及退避事件。相关单元覆盖在 `tests/case/unit/ai/structured-output-single-path.test.ts`（prompt_json 单一路径与解析兜底矩阵）、`tests/case/unit/ai/llm-error-classification.test.ts`（fatal/retryable/unknown 分类，含连接/超时类型信号）和 `tests/case/unit/ai/structured-chat-activity.test.ts`（退避与重试事件）。
+LLM 错误分类与退避按 [Human Harness](../ai-harness/human-harness.md#84-失败告警与重试) 验证结构化信号、不可重试边界及重试事件，Unit 证据分别由 `llm-error-classification.test.ts` 与 `structured-chat-activity.test.ts` 提供。
 
 ## 4. 回归测试清单
 
@@ -297,7 +296,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：这是生产 PPT 工具的运行时契约，不应由 Unit 重复拥有完整 runtime 流程。
 - How：用元素规格创建、插入、渲染和解析产物；在隔离工作区另准备含嵌套组合、文字和无文字形状的真实 PPTX，经生产读取工具、普通预览 SVG 入口与审核渲染检查身份和内容。非法出画布（960×540，单位 pt）或字号超过框高的输入应失败。
 - Oracle：合法页面生成可解析 PPTX 且关键元素位置与字号（pt，与 bounds 同单位）稳定；非法页面返回可解释错误且不留下半成品。中文、全角标点的 SVG 换行按实际字体宽度测量；普通预览和审核生成使用同一测量规则。组合及所有后代仅渲染一次，保留源对象 ID 和嵌套关系；模型工具结果包含元素文字、组合子元素标识及表格/图表内容，无文字对象仍返回类型和定位。
-- 最新验证：2026-10-12 生产工具回归通过，5 条断言；嵌套组合及所有后代在普通预览与审核 SVG 中只出现一次，源 ID 和父子关系保持一致；模型投递包含文字、组合子标识、表格行与图表数据，非法布局仍原子失败；raw logs：`tests/logs/ai/tool/ppt/ppt-visual-runtime-contract/20261012-172800-998-6ce3abad`。
 
 #### excel 类别
 
@@ -332,7 +330,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：局部样式写入不得串改其他行或 Sheet，未指定字段必须保留；numberFormat 必须与实际保存和审核标记一致。
 - How：模拟部门明细表写入、合计行 inline style、`set_style D3:D20`、表头样式、merge 标题、auto_fit；分别用 ExcelJS、openpyxl（经 `.pip-cache/test-openpyxl`，缺失时自动 pip install --target）和 `excel_read style` 断言。另加载含跨行、跨 Sheet 共享样式与合并区域的真实工作簿，通过 set_range 和 set_style 局部修改后核对全部外围值、样式及审核边框。
 - Oracle：`D3`/`D19`/`D20` 的 number format 均为 `#,##0`。局部汇总行以外的共享样式单元格完全不变；只修改水平对齐时保留垂直对齐及其他未指定字段；合并区域样式可用，审核只标记目标范围。
-- 最新验证：2026-10-13 backend 通过，覆盖跨行、跨 Sheet 共享样式隔离、部分对齐、合并区域与精确审核标记；raw logs：`tests/logs/ai/tool/excel/excel-set-style-number-format-persistence/20261013-133333-500-af517a67`。
 
 ##### `excel-edit-operations-and-atomicity`
 
@@ -349,7 +346,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：按单元格地址直接比较会把删除行后的整体上移误判为大量绿色修改，并在末尾生成错误红色重复行。
 - How：构造包含唯一行标签、公式、样式和行高的真实 xlsx，分别执行行插入、行删除、删除后继续修改，以及同一 run 多轮结构编辑；直接解析 preview xlsx 的行顺序、值和每个边框。加入无结果缓存、错误旧缓存、跨 Sheet、零值、布尔值与日期公式，在真实 A/B 上分别重算后检查联合审核保留的公式结果；另验证仅缓存变化的零净变化。
 - Oracle：删除中间行只保留该旧行并标红一次；所有仅因上移或下移而换地址的行无边框；末尾没有重复行；插入行只标绿最终新增行；红绿地址集合和 record 统计精确等于净变化；正式 xlsx 无 diff 标记。审核公式结果来自真实 A/B 而非混排网格；删除行中的公式保留 A 结果，存续和新增公式使用 B 结果，缓存差异不产生绿框，原始文件字节及回退基线不被审核计算改写。
-- 最新验证：2026-10-13 backend 通过，覆盖行列对齐、真实 A/B 公式结果、缺失及过期缓存、跨 Sheet、零值、布尔值、日期、仅缓存变化和源文件字节保护；raw logs：`tests/logs/ai/tool/excel/excel-diff-row-structure-semantics/20261013-133333-502-f4cd952e`。
 
 ##### `excel-diff-cumulative-net-semantics`
 
@@ -618,7 +614,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：子任务不能读主聊天、再次派发或主动询问用户；子事件不能终止主 run。
 - How：生产 `AiRunService.run`，只脚本化 LLM 决策，其他依赖使用真实服务与存储。
 - Oracle：派发参数使用 `agents` / `instruction`，创建名称和续接 ID 互斥；参数失败保留具体错误及原始输入，反馈回主模型修正，执行失败保留已知标题与原始原因。一次提交超过 2 项仍被接受，峰值并发为默认 2，排队任务仅在前序释放后启动，全部结果进入主工具消息；公开文本真实流式投递，实际请求状态成对开关且原始推理不转发；子完整日志按会话隔离存入 SQLite，完成事务清理；状态与精简行动 annotation 持久化；受限工具不可绑定和执行。
-- 最新验证：2026-10-10 生产回归通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-isolation/20261010-183921-036-f2b4c851`。混用名称与 ID 的失败原因保留，主模型修正后使用 agents/instruction 完成批量派发及结果汇集。
 
 ##### `human-subagent-prefix-stability`
 
@@ -627,7 +622,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：确定性区分请求前缀改写与供应商缓存低命中，守住临时实例隔离和文字流生命周期。
 - How：生产 AiRunService、人类 graph、真实文本文件及工具；只脚本化 LLM 派发、学习及读取决策，连续两轮使用相同公开文案以核对消息身份。保存真实 requestWire，比较稳定工具集合下的相邻主子 brain；两次派发创建新会话。另经生产 ChatRunService 让子任务读文件后进入真实终端等待，停止主运行、重新打开 SQLite，通过 list_agent 查询并续接原会话。
 - Oracle：已有消息逐项保留，工具定义和顺序不变；新子 System/初始工具相同且无旧子历史；主上下文只含派发汇总，没有子过程 annotation；续接沿用 agentId、名称和原任务，执行 ID 改变，首次请求保留原末次有效请求的消息和工具前缀，完成后子会话被清理。公开文字每轮使用独立消息标识，同轮 delta 与完成快照标识一致；delta 开始流、completed/reset/取消结束流，审核请求不能冒充文字流。服务端缓存由 Workbench `subagent-prefix-cache-retain-live` 验证，mock 不伪造命中。
-- 最新验证：2026-10-10 生产 AiRunService / ChatRunService 通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-prefix-stability/20261010-183921-097-bdaa66fe`。四个子实例各三轮公开消息标识独立，同轮片段与完成快照一致，相同文案仍有独立消息身份；连续请求前缀、新会话隔离、真实终端等待中停止及 SQLite 重开续接通过。
 
 ##### `human-subagent-file-cancellation`
 
@@ -652,7 +646,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：避免人工审批导致子实例提前结束、并发决定串任务、提交前执行或取消后执行。
 - How：生产 ChatRunService → AiRunService，透传既有 AiLlmDriver，只脚本化 brain 与 terminal_review；真实 SQLite、审批入口、终端、文件和资源管理。通过生产决定入口操作，不替换执行器或审批服务。
 - Oracle：同一 childRunId 在决定后继续；允许只执行一次，拒绝/指导不执行原命令；等待前磁盘无副作用；两个子审批 FIFO、第三项仍排队；事务提交后执行，重复/过期决定无效；取消清理全部等待并保留先前文件；子 brain 上下文独立，审核使用当前子任务输入，共用主运行的审核入口；文件归属隔离；规则直通、AI 自动通过、审核异常转人工及完全访问均覆盖。
-- 最新验证：2026-10-10 生产 ChatRunService 链路通过；raw logs：`tests/logs/ai/human/mock-llm/human-subagent-approval/20261010-183920-470-5817a69d`。允许、拒绝、指导、FIFO、停止和中断修复通过；规则直通、AI 自动通过、审核异常转人工及完全访问通过。
 
 ##### `human-document-reference-context`
 
@@ -663,7 +656,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：避免选区漏传、用户想法重复、索引信息失真或重复写入用户消息。
 - How：使用真实 ChatRunService 与存储提交文字、@ 文件/目录/网页、两个 DOCX 选区及文本/PDF/Excel/PPT 选区，拒绝无效区域与定位；脚本化 brain 决策，核对模型收到的正文与保存的快照一致；随后提交选区消息排队，重建服务并执行中断恢复，检查用户消息。
 - Oracle：User 顶层为无属性标签块，顶层块与文档之间只有一个空白行，可选空块省略；同一文件的 @ 与选区合并，每个片段使用 `<用户选中片段N>`，不另列编号；文档元数据与首个片段、同一文档内不同片段之间没有空白行。文字选中内容独立于 `<定位信息>`，行号、页码、不同于选中文字的源文件片段及 `<选中内容的前文>` / `<选中内容的后文>` 都在定位块内；片段内部不插入空白行或额外定位说明句；空块省略，源文与选中文字相同时不重复输出，保留换行、Tab、空白和代码围栏。PPT 仅输出页码和一个选中元素/页面标识；Excel 仅输出“工作表”和“选中单元格范围”，不输出值、公式、display/cells/merges 或前后文，原始 Excel 快照仍保存在真实消息中；详情只在文档信息处展示文件名，想法只出现一次。索引状态以 Main 解析结果为准；未索引选区可接受；brain 复用保存的正文且不重复写 user；排队正文与中断恢复后的正文一致。
-- 最新验证：2026-10-13 生产 ChatRunService 与存储回归通过；文档元数据紧接首个片段，同文档不同片段之间只换行，片段内部没有自动空白行或额外定位说明句；Excel 字段为“选中单元格范围”。原文空白与代码围栏、内部快照、索引解析、冻结正文、排队和中断恢复通过；raw logs：`tests/logs/ai/human/mock-llm/human-document-reference-context/20261013-101356-374-3d5d8a42`。
 - 待覆盖：任意混排顺序的精确比对、选区不收窄实际知识库检索范围，以及排队消息的完整续接执行。
 
 ##### `human-image-generation`
@@ -681,7 +673,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：补齐 Excel 在真实 human graph 中完全缺失的 non-live 回归。
 - How：通过生产 `ChatRunService -> AiRunService.run` 提交选区并完成真正主 run 的文件收尾；传入带内部单元格快照的 Excel 选区，只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。脚本从 User 定位信息取得工作表和范围，再调用 `excel_read` / `excel_edit` 学技能后读-写-复读，采集真正传给下一轮 brain 的工具结果。
 - Oracle：初始 User 只有文件路径、工作表和范围，没有选中内容、单元格值、公式或 merges；按该定位读取后，真实源文件的值和公式进入下一轮 brain。任务完成；调用包含读、写、复读；正式文件、累计 record 与 artifact 一致，区域外单元格及合并关系不变。
-- 最新验证：2026-10-13 生产 ChatRunService → AiRunService 链路通过；从“工作表”和“选中单元格范围”定位读取值与公式，局部写入、复读、外围与合并区域保留及文件收尾通过；raw logs：`tests/logs/ai/human/mock-llm/human-excel-read-edit/20261013-100358-091-bd9eeb6c`。
 
 ##### `human-text-file-read-write`
 
@@ -706,7 +697,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：现有 Human PPT 只覆盖创建，缺少已有文件修改主链。
 - How：脚本化 LLM 决策，真实调用 PPT read/search/edit runtime；按页标识读取具体元素后，从下一轮 brain 的真实 ToolMessage 检查内容投递。
 - Oracle：读取结果中的元素 ID 与文字确实进入下一轮 brain；目标页和元素被修改，其他页面保持不变；正式文件、record 与 artifact 一致。
-- 最新验证：2026-10-12 生产 human graph 通过，实际 ToolMessage 将页/元素标识与读取的文字送入下一轮 brain；读取、搜索、局部写回和复读完成；raw logs：`tests/logs/ai/human/mock-llm/human-ppt-read-search-edit/20261012-172801-003-8e33bd0c`。
 
 ##### `human-web-search-crawl`
 
@@ -747,7 +737,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：普通 AI 运行不能受知识库配置影响，也不能隐式下载模型。
 - How：隔离空模型目录，使用生产 AiRunService 和 scripted LLM 完成 DOCX literal 读取、子任务与续接；另在真实损坏模型目录下完成聊天。不调用 KB，不替换 embedding executor 或就绪检查。
 - Oracle：run 完成；真实文件读取命中；主子运行有 brain 事件；模型目录不变，embedding 保持 uninitialized；不产生模型下载。
-- 最新验证：2026-10-10 本轮通过；原始日志：`tests/logs/ai/human/mock-llm/ai-run-service-without-knowledge/20261010-184027-387-ad80a32d`。
 
 ##### `ai-run-service-kb-error-continues`
 
@@ -756,7 +745,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：知识库失败应交给 AI 决策，不能终止整个 run。
 - How：隔离空模型目录，生产 AiRunService 中 scripted LLM 先调用 kb_search，再读取真实文本并交付；捕获下一轮模型上下文。
 - Oracle：KB 结果 ok=false 且上下文含模型缺失原因及停止调用 KB 指引；真实文本读取成功；run completed，无 run_failed，目录无下载产物。
-- 最新验证：2026-10-10 本轮通过；原始日志：`tests/logs/ai/human/mock-llm/ai-run-service-kb-error-continues/20261010-184027-567-c95cb1f2`。
 
 ##### `learning-hand-mouth-smoke`
 
@@ -918,7 +906,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：三位临时帮手分别核对经营表、修改文本配置和 DOCX，主伙伴写交接报告。
 - Why：验证真实派发的任务完成度、证据和整合质量，以及文件统一归属。
 - How：自然语言任务经生产 `AiRunService.run`；现有 XLSX、DOCX 和固定配置 fixture 复制到临时 workspace；请求配置和报告使用受控文本编辑，计算仍使用真实终端；真实模型、工具和存储。保留主子 LLM I/O、事件、耗时与 token/cache 数据。
-- Oracle：三项子任务完成；终端产出数值事实；源经营表不变；配置与 DOCX 指定修改落盘且保护内容不变；主报告包含核对事实与依据；文件记录均归主 run。执行者根据 raw logs 评估完成度、准确性、依据和整合质量，回写 0–100 分，不设自动评分门槛。
+- Oracle：三项子任务完成；终端产出数值事实；源经营表不变；配置与 DOCX 指定修改落盘且保护内容不变；主报告包含核对事实与依据；文件记录均归主 run。执行者根据 raw logs 评估完成度、准确性、依据和整合质量，将 0–100 分写入该次运行结论，不设自动评分门槛。
 
 ##### `human-queued-message-safe-boundary-live`
 
@@ -1014,7 +1002,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：同一伙伴在生产 `HUMAN_MAX_ACTIVE_TOOLS=30` 下先学满多项阅读技能，再学写入技能触发 FIFO 淘汰；淘汰后续做仍能完成，随后在再次需要被淘汰 skill 时自动再学（可在同一 Run 内闭环，也可跨 Run3）；跨 run 首轮 brain 须明显复用上一 run 末次前缀缓存。
 - Why：技能遗忘若只靠 unit/mock，无法证明真实模型在自然语言任务下会触发淘汰、淘汰后不卡死、需要时再学；这是学习预算闭环的生产风险；续做跨 run 时前缀缓存也不应因消息重建漂移而丢失。
 - How：共用伙伴，测值与生产一致（无 maxActiveTools override）。fixture 含 `学习笔记/深度学习.docx`、`学习笔记/深度学习.pdf`、`品牌策略提案.pptx`、`经营周报.xlsx`。Run 1 按顺序只读四类资料并口头汇总（期望学会含 `docx-read` 在内的多项阅读技能，不淘汰）。Run 2 新建 Word 备忘、给 PPT 加附录页并新建 Excel 资料索引，触发 Word/PPT/Excel 写入技能，总工具数超过 30，淘汰最早的 `docx-read`；若 Run2 同轮已再学回 `docx-read`，则闭环完成且不启 Run3；否则 Run 3 再读课件核对备忘，迫使再学。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）。
-- Oracle：Run 1 `completed`，`learnedSkillIds` 含 `docx-read` 且至少另一项 external，无淘汰证据，并有 docx 读工具证据。Run 2 `completed`，learning summary 出现淘汰 `docx-read`，且 Word/PPT 写入或备忘文件落地，并有 Excel 写入证据。再学闭环二选一成立：Run2 同轮再学 `docx-read` 并有读工具证据，或 Run3 `completed` 再学并有读工具证据。Run2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`；若启动 Run3，则 Run3 首次 brain 相对 Run2 末次同样满足该门槛。人工依据 raw logs 回写顶部评分。
+- Oracle：Run 1 `completed`，`learnedSkillIds` 含 `docx-read` 且至少另一项 external，无淘汰证据，并有 docx 读工具证据。Run 2 `completed`，learning summary 出现淘汰 `docx-read`，且 Word/PPT 写入或备忘文件落地，并有 Excel 写入证据。再学闭环二选一成立：Run2 同轮再学 `docx-read` 并有读工具证据，或 Run3 `completed` 再学并有读工具证据。Run2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`；若启动 Run3，则 Run3 首次 brain 相对 Run2 末次同样满足该门槛。人工依据 raw logs 评价并写入该次运行结论。
 
 ##### `human-ppt-edit-management-review-live`
 
@@ -1030,7 +1018,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：真实模型在空文件地址从零创建约 5–6 页可开会用的 16:9 管理层汇报（封面、执行摘要、KPI、趋势图、风险与负责人、下一步）。
 - Why：创建主路径要验收「真人能开会用」的交付，而不只是文件可解析。
 - How：无 fixture；用户指定文件名与页结构诉求；模型自行 `ppt_edit` 创建并自检。
-- Oracle：`ppt_edit` 成功；正式文件可解析；`slideCount` 5–8；正文含执行摘要/风险/下一步（中英均可）；出画布 0、error 0、1 artifact；正式文件中的表格按实际 SVG 字形无单元格溢出，且表格边界不与其他文字框重叠。质量完成度由 raw logs + artifact 人工评分回写顶部快照。
+- Oracle：`ppt_edit` 成功；正式文件可解析；`slideCount` 5–8；正文含执行摘要/风险/下一步（中英均可）；出画布 0、error 0、1 artifact；正式文件中的表格按实际 SVG 字形无单元格溢出，且表格边界不与其他文字框重叠。质量完成度由 raw logs + artifact 人工评分写入该次运行结论。
 
 ##### `human-terminal-data-reconciliation-live`
 
@@ -1152,34 +1140,8 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - How：在临时 workspace 的 `preview-site` 中创建带唯一标记的页面，为用户提供一个随机空闲端口；用户只描述启动预览、真实访问确认标记、确认服务收到请求、用完关闭的诉求，不指定工具或命令。由真实模型自主决策。
 - Oracle：任务 `completed`；页面标记出现在最终交付或真实工具结果中；服务在模型完成后不可达（由模型关闭，框架不在会话结束时强杀拆出去的后台进程）。路径满足其一即可：① 出现 `command_still_running`/`terminal_command_yielded` 且随后有成功的 `terminal_read` 或 wait-like 终端命令；② 出现 wait-like 终端命令（`sleep` / `Start-Sleep` / `time.sleep` / `ping -c|-n` / `timeout` 等跨平台等待语义）。
 
-## 5. 最新 Live 评估
+## 5. 覆盖边界
 
-| caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                                  | 简短依据                                                                                                                                                                                                                                                         |
-| --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| human-subagent-collaboration-live | 完成 | 88 | qwen3.8-flash | 2026-10-10 14:47 CST | tests/logs/ai/human/live/human-subagent-collaboration-live/20261010-144742-669-e69ff387 | 555s；三项完成，销售/退货/净额为 91,824,000 / 422,000 / 91,402,000；配置与 DOCX 的受控审核、主文件归属及保护项通过，完成子会话清理。人工质量评分 88/100：事实及文件交付完整；主伙伴重复独立计算，122 行报告及多轮链接/时间修订增加耗时和 token。主 24 次调用，输入/输出 501,127 / 16,888；子 34 次，518,455 / 16,974；总缓存读 941,824（92.4%）。 |
-| human-risk-report-draft-live                        | 完成 |            94 | deepseek-flash                   | 2026-10-05 15:05 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20261005-150552-320-b3053e8c                        | 11 次 Word 编辑交付新周报，来源文件保护和先生成后舍弃的草稿清理通过；独立审核可解析、确认 B 保留。73s。                                                                                                                                                          |
-| human-context-compaction-natural-trigger-live       | 完成 |            90 | qwen3.8-flash                    | 2026-09-12 13:38 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260912-130017-162                | 去掉 discard/digest 后四断言通过（2269s）。Run1 未压；Run2 预算 36297 过 36k，半截 throughSeq=75 后多次历史压（112/136/182/235/283/304）并交付；Run3 再压 333/366（半截）/376/397/437。`historyFloorKind` 仅 none/compaction。跨 run 缓存 0.993（35840/36101）。 |
-| human-excel-read-weekly-review-live                 | 完成 |            91 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                          | Oracle 通过；四表结构/公式/退货异常/口径不对等讲清；6×excel_read。过程仍 6×terminal 验算略多。缓存 83.6%。                                                                                                                                                       |
-| human-excel-edit-weekly-review-live                 | 完成 |            95 | deepseek-flash                   | 2026-10-05 15:06 CST | tests/logs/ai/human/live/human-excel-edit-weekly-review-live/20261005-150618-395-56b40350                 | 4 次 excel_edit：表头、680000 和扣退货净额公式正确，保护区保持原样；单条审核工作簿与 B 清理通过。38s。                                                                                                                                                           |
-| human-excel-create-monthly-budget-live              | 完成 |            92 | deepseek-flash                   | 2026-10-05 15:06 CST | tests/logs/ai/human/live/human-excel-create-monthly-budget-live/20261005-150658-161-c84b8c3c              | 两表预算、SUMIF/COUNTIF 和金额格式断言通过，正式文件与独立审核均可解析；14 次编辑、10 次读取，复核略多。38s。                                                                                                                                                    |
-| human-kb-guided-docx-comparison-draft-live          | 完成 |            95 | deepseek-flash                   | 2026-10-05 15:09 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20261005-150900-453-4712c312          | KB 证据与原文读取后两次编辑，按明确主题映射更新两份 Word；来源保护、独立审核、B 清理通过。79s。                                                                                                                                                                  |
-| human-ppt-create-executive-deck-live | 完成 | 94 | deepseek-flash | 2026-10-05 17:02 CST | tests/logs/ai/human/live/human-ppt-create-executive-deck-live/20261005-170203-691-aad35e9c | 6 页简报、正式 PPT 和自包含 SVG 审核通过；按实际字体检查表格无单元格溢出、无其他文字框重叠。审核图与 LibreOffice 独立渲染人工复核，中文、全角括号和底部说明完整。87s。 |
-| human-ppt-edit-management-review-live | 完成 | 94 | deepseek-flash | 2026-10-05 17:02 CST | tests/logs/ai/human/live/human-ppt-edit-management-review-live/20261005-170203-693-c804081e | 3 次编辑新增摘要、改汇报人与成立年份；议程/愿景保护、9→10 页、独立前后 SVG 和确认 B 清理通过。56s。 |
-| human-ppt-read-management-risk-review-live          | 完成 |            90 | qwen3.8-flash                    | 2026-08-30 12:39 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260830-123903-652                   | 中文提案只读，Oracle 通过；KPI 85% 正确。缓存 74.1%（首轮占比高）。                                                                                                                                                                                              |
-| human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775                      | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。                                                                                                                                                                        |
-| human-runtime-script-system-python-live | 完成 | 95 | qwen3.8-flash | 2026-10-08 18:21 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20261008-182147-485-1b65adb5 | 含 JSON 样例的公共审核通过七组授权边界，八次审核 ID 与 reason 准确；真实 Python 得到 338350，普通工作区保持。85s；报告和旧临时脚本说明略长。 |
-| human-runtime-download-python-live                  | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415                           | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。                                                                                                                                                                                                  |
-| human-partner-resume-with-new-selection-live | 缓存未达标 | 93 | deepseek-flash | 2026-10-05 17:02 CST | tests/logs/ai/human/live/human-partner-resume-with-new-selection-live/20261005-170203-704-8862e8b1 | 中断后同伙伴续做，保留旧事实并使用新选择文件完成草稿，功能断言通过；请求前缀及工具定义完整保留，但服务端返回缓存复用 64.75%（19456/30047），未达 85%。66s。 |
-| human-partner-continuation-live | 完成 | 91 | deepseek-flash | 2026-10-05 17:03 CST | tests/logs/ai/human/live/human-partner-continuation-live/20261005-170302-079-ba8b5605 | 两轮正常完成，历史追加、新选文件和双主题事实通过；日志等待落盘并按真实 runId 配对后，前缀及工具定义一致，缓存复用 90.95%（73344/80646），达到 85% 门槛。338s。 |
-| human-docx-positioned-structural-edit-fallback-live | 完成 |            85 | deepseek-flash                   | 2026-10-05 15:09 CST | tests/logs/ai/human/live/human-docx-positioned-structural-edit-fallback-live/20261005-150900-453-0b6d3dc1 | 复杂定位原稿 hash 未变，非定位文件编辑与独立审核通过；模型在临时副本多次试探保护边界并处理 stale nodeId，过程有冗余。79s。                                                                                                                                       |
-| human-legacy-doc-reading-live                       | 完成 |            94 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815                                | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。                                                                                                                                                                                     |
-| human-text-file-write-checkout-cutover-live         | 完成 |            96 | deepseek-flash                   | 2026-10-05 15:07 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20261005-150706-485-43600589         | 两处端点及超时准确更新，重试/telemetry 不变；两次编辑，完整行 JSON 审核与 B 清理通过。9s。                                                                                                                                                                       |
-| human-text-file-read-checkout-readiness-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554                 | 只读审查准确识别就绪性风险与保留配置，源文件未改。                                                                                                                                                                                                               |
-| human-web-search-by-url-live                        | 完成 |            95 | qwen3.8-flash                    | 2026-09-01 16:24 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260901-162353-087                                 | 指定地址后连续 2×fetch 通知页与指南页，事实回答正确，errors=0。                                                                                                                                                                                                  |
-| human-web-search-intent-query-live                  | 完成 |            90 | qwen3.8-flash                    | 2026-09-01 16:24 CST | tests/logs/ai/human/live/human-web-search-intent-query-live/20260901-162353-087                           | 2×search + 2×fetch 成功读取 read_csv 与 DataFrame.to_csv 官方 API 页，errors=0。                                                                                                                                                                                 |
-| human-terminal-preview-service-live                 | 完成 |            88 | qwen3.8-flash                    | 2026-08-31 18:30 CST | tests/logs/ai/human/live/human-terminal-preview-service-live/20260831-183019-685                          | 启动预览服务、确认页面并关闭服务，前台 yield/读终端或后台+wait 两条路径均可。                                                                                                                                                                                    |
-| human-legacy-doc-edit-skip-live                     | 完成 |            88 | deepseek-v4-flash                | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129                              | .doc 写入失败后停止重试，源文件不变，任务完成。                                                                                                                                                                                                                  |
-| human-docx-visual-reading-live | 完成 | 93 | deepseek-flash | 2026-10-05 17:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20261005-170424-148-371e1d67 | 读取正文和真实图片，回答图片中的关键事实，来源文件 hash 不变；工具及完成态断言通过。31s。 |
-| human-pdf-visual-reading-live                       | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871                                | PDF 页级视觉读取与识图，正确回答图形差异，源 PDF 未改。                                                                                                                                                                                                          |
-| human-docx-dangling-image-edit-live | 完成 | 94 | qwen3.8-flash | 2026-10-05 20:52 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20261005-205238-152-888b3656 | 按 .env 配置执行，14 次 Word 编辑补齐 13 项评估和总览；原正文顺序与 7 张图片字节保留，审核包含全部评估及绿色标记。正式文件与确认 B 校验一致，清理工作快照后审核独立解析通过；原有 NULL 坏链保持不变。293s，本轮整体缓存命中 90.80%。 |
-| human-skill-eviction-relearn-loop-live | 缓存未达标 | 92 | deepseek-flash | 2026-10-05 17:03 CST | tests/logs/ai/human/live/human-skill-eviction-relearn-loop-live/20261005-170332-050-46c8fb53 | 两轮完成 FIFO 淘汰、同轮重学、Word/PPT 写入；独立审核与 B 清理通过。读图和学习混合批次无消息顺序错误。前缀和工具定义一致，缓存复用 50.69%（9088/17929），未达 85%。51s。 |
+- 本域 backend 验证工具与 human 执行；Workbench 交互、真实页面和系统应用行为由对应 E2E／人工检查验证。
+- Live 质量依据 raw logs 与实际产物复核，评价写入该次运行结论；测试计划不保存单次评分或通过记录。
+- 跨 run 缓存仍按各 case Oracle 的 85% 门槛验证。`human-partner-resume-with-new-selection-live` 与 `human-skill-eviction-relearn-loop-live` 尚缺满足该门槛的有效通过证据，不能列为已验证通过。

@@ -17,14 +17,10 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 领域规则：
 
-- `model` 验证大模型可用服务配置的加载、创建、编辑、删除，以及预设服务商与自定义配置的类型、锁定和去重语义。
-- `general` 验证 AI 运行通知开关、错误日志入口及伙伴缓存按目录/日期清理；系统通知中心和 Finder/Explorer 的真实展示按 macOS 与 Windows 发布前手动验证。
-- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。`SET-WORKSPACE-009` 由独立 `workspace-index-speed` 用临时小目录做两次真实更新索引覆盖，并断言同一嵌入进程 ready 前后的操作系统线程增量；`SET-WORKSPACE-004-AC11` 由 `workspace-prepare-sequential-addresses` 在页面添加两个地址后走真实更新索引覆盖；取消弹框由 `workspace-prepare-cancel` / `web-prepare-cancel` 覆盖；确认框打开时任务已结束再点停止由 `workspace-prepare-cancel-after-complete` 覆盖；慢/高速在独立 Node 进程里的线程增量由 knowledge `index-speed-thread-budget` 覆盖。问号文案与网页 tab 同步不单独测。
-- `vector` 属于 Settings 产品域，页面路由为 `/settings/vector`（`/model-download` 仅为历史重定向），测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
-- `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“文件地址 + 文件 tab + 全局网页 tab”，不是具名容器。
-- `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
-- Workbench 发送不再由 Settings case 承担「未绑目录不能发」；该门禁改由 Workbench「未创建伙伴」覆盖。
-- `How` 和 `Oracle` 必须映射到 [settings.md](../prd/settings.md) 的需求或验收编号。
+- `model` 验证模型服务配置的加载、创建、编辑、删除，以及推荐／自定义类型与去重。
+- `general` 验证通知、日志入口和伙伴缓存清理；系统通知中心及 Finder／Explorer 的真实展示按发布前检查验证。
+- `workspace` 按 core／files／web 验证文件地址、真实目录、索引操作与全局网页，默认复用 `tests/fixtures/workspace` 输入。索引速度以真实 UI 和同一嵌入进程的操作系统线程增量取证，底层独立进程证据由 Knowledge 提供。
+- `vector` 验证向量模型列表、下载、删除和换源；页面为 `/settings/vector`，测试归 `tests/case/settings/vector/**`。
 
 ## 3. 回归测试清单
 
@@ -79,7 +75,6 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：文件地址可能包含 `node_modules` 等超大目录；进入设置页不能递归枚举整个森林。
 - How：添加包含根目录文件、普通子目录、`node_modules` 和点开头文件/目录的真实临时目录；进入文件 tab 后验证顶层首层，展开普通子目录后验证其直属文件，再确认点开头项始终不可见。检查目录开/关的 `react-icons` 图形、Office 原有彩色专属图标、MD/普通文件的 Phosphor Light 细线图标及目录的 Bootstrap `BsFolder / BsFolder2Open` 图标、与 `@` 候选一致的目录 16px / 文件 18px 尺寸、行高及 hover 背景，再展开后点击目录树右上刷新，确认已展开节点仍展开、未展开目录不会被全部展开。
 - Oracle：`node_modules` 在顶层可见但其内容不会在首次加载时出现；子目录展开前不读取其子项，展开时显示局部 loading；点开头文件或目录在任意层级均不显示；页面没有全部展开/折叠入口，顶层地址行可单独折叠，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。目录树右上刷新只更新已展示节点状态、不重置展开折叠，对齐 `SET-WORKSPACE-008-AC6`。Office 原有彩色图标、MD/普通文件/目录库图标、目录 16px / 文件 18px 尺寸与开/关形状、行对齐和未选中行无 hover 底色对齐 `SET-WORKSPACE-008-AC7`。新添加后只展开该地址、其余折叠由产品交互覆盖，本 case 不强制断言。
-- 最新验证：2026-10-14 源码真实 E2E 通过；Bootstrap `BsFolder / BsFolder2Open` 目录图标、Phosphor Light MD/普通文件图标、Office 图形配色、目录 16px / 文件 18px 尺寸、目录开关形状、行对齐、懒加载和刷新展开态通过。raw logs：`tests/logs/settings/workspace/core/workspace-directory-lazy-load/20261014-104404-173`。
 
 #### `workspace-remove-from-list`
 

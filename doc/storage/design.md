@@ -1,15 +1,15 @@
 # NCurator-Desktop 数据库与存储设计
 
-本文说明本地数据库、向量索引与文件资源的存储边界、目录布局和持久化关系，以及版本演进、一致性、恢复与清理约束。
+## 1. 存储总览
 
-## 总体原则
+- SQLite 是业务与元数据真相，位于 `userData/app.sqlite`。
+- LanceDB 是可重建的 `vector_chunk` 索引，位于 `userData/lancedb`。
+- 文件资源保存附件、工具结果、备份、工作版本与审核产物，SQLite 保存其业务关联及校验。
+- 同一业务状态不能同时以 SQLite 和 LanceDB 为真相；完整表字段见 [数据表目录](tables.md)。
 
-- SQLite 是业务真相，文件位于 `userData/app.sqlite`。
-- LanceDB 是可重建索引，目录位于 `userData/lancedb`，只保存 `vector_chunk`。
-- SQLite schema 通过 migration 向前演进；LanceDB 按文档 generation 写入后删除旧 chunk，检索时库内只留最新数据。
-- 同一业务状态不能同时以 SQLite 和 LanceDB 为真相。
+## 2. 数据库存储
 
-## SQLite
+### SQLite 初始化
 
 SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 
@@ -19,15 +19,11 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 - 在任何迁移写入前读取并校验 `schema_migrations`。
 - 数据库版本兼容时设置 `PRAGMA journal_mode = WAL`，并执行全部待执行 migration。
 
-与存储布局相关的约束：
+外键级联与无 CASCADE 绑定以当前 schema／migration 为准。
 
-- 文件备份与审核统一存入 `userData/partners/{id}/runtime/file-changes/{runId}/{changeId}/`。每条记录独立保存原始字节，SQLite 存路径及校验，不依赖共享对象仓库。
-- `document.active_generation_id` 只用于写后删旧 chunk 与孤儿清理，不进入检索 `where`。
-- 外键级联与无 CASCADE 绑定以当前 schema / migration 为准。
+### Schema 演进
 
-## SQLite Migration
-
-### 当前边界
+#### 当前边界
 
 - 当前代码支持的最终 schema version 由 `CURRENT_SCHEMA_VERSION` 定义。
 - 已随正式版发布的 migration 永久保留且不可改写，发布边界以 `released-migrations.json` 为准。
@@ -35,7 +31,7 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 - 各版本具体 DDL / 数据变更以对应 migration 源码为准；空库执行完整版本序列后，结构与主升级路径一致。
 - 未进入发布清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
 
-### 版本身份与执行规则
+#### 版本身份与执行规则
 
 - migration 记录在 `schema_migrations`，身份由 `version + name` 共同确定，不能只看最大版本号。
 - migration 定义统一放在 `migrations/00X_*.ts`。版本必须从 1 开始连续、严格递增且唯一；文件版本、定义版本和执行顺序必须一致。
@@ -44,14 +40,14 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 - 一次启动中的全部待执行 migration、对应的 `schema_migrations` 记录、`PRAGMA quick_check` 和 `PRAGMA foreign_key_check` 位于同一个 SQLite transaction。任一步失败，整批升级回滚，数据库不会停留在半升级状态。声明了 `afterCommit` 的版本在同一事务中写入 `schema_migration_hooks(status=pending)`；事务提交后、LanceDB 连接前执行这些 hook，成功后标 `done`。`afterCommit` 不在 SQLite 事务里，不得回写 schema。
 - migration 必须可重复初始化：已经完整执行的版本不会再次执行。`afterCommit` 只在 hook 仍为 `pending` 时重试。不提供 down migration、自动数据库复制、自动备份或自动恢复。
 
-### 启动与禁止降级
+#### 启动与禁止降级
 
 - 数据库兼容且迁移成功：继续初始化 Storage、LanceDB 与业务服务。
 - 数据库版本高于当前应用支持版本：抛出 `DatabaseVersionTooNewError`，不初始化业务服务。
 - 其他迁移错误按启动错误处理，不能把 schema 损坏误判成可更新状态。
 - 官方最新版本必须支持所有已公开发布的数据库版本。
 
-### DDL 与数据安全规则
+#### DDL 与数据安全规则
 
 - 新增普通字段优先使用 `ALTER TABLE ... ADD COLUMN`。
 - 删除无索引、外键、唯一约束等依赖的普通字段，可以直接使用 SQLite `DROP COLUMN`。
@@ -60,93 +56,96 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 - 启动迁移应保持可控时长。确实需要处理大量数据时，应先设计可恢复的产品流程，不能把长时间分批任务偷偷塞进启动 migration。
 - 本项目不做自动数据库备份。备份无法替代版本兼容和原子事务，而且应用无法替用户判断何时恢复。对“SQL 本身错误但成功提交”的风险，通过已发布迁移冻结、正式 fixture 升级测试、完整性检查和发布门禁控制。
 
-### 发布锁与测试门禁
+#### 已发布迁移锁
 
-- `released-migrations.json` 保存已发布 migration 的 version、name、文件和源码 SHA-256。
-- `release:start` 在 Tag 前先验证所有已锁 migration 未被修改；Unit 全部通过后，把当前连续 migration 纳入锁清单，再与版本号一起提交。任一已锁源码变化都会直接阻止发布。
-- 独立迁移 Unit 必须覆盖：空库到当前版本、正式带数据升级路径、两条路径最终 schema 一致、重复初始化、批量失败整批回滚、高版本零写入拒绝、历史缺号/重名/名称冲突、已知别名、锁文件篡改以及两项 SQLite 完整性检查。
-- 高版本拒绝初始化的 E2E（隔离 `userData` 写入高版本 migration 记录）验证不初始化业务层；fixture 只准备启动前数据库，不改生产 schema 检查逻辑。
+`released-migrations.json` 保存已发布 migration 的 version、name、文件及源码 SHA-256。锁定的源码变化会阻止发布，只能新增更高版本修复。升级保障包括正式带数据 fixture、结构一致性与完整性检查；发布操作与门禁顺序见 [发布流程](../deploy/release.md#11-发布准备与-tag)。
 
-## Native 依赖
+### Native 运行环境
 
-`better-sqlite3` 是 native 模块，Node backend 测试和 Electron e2e 使用不同 ABI。项目通过独立缓存保存两套 binding，不覆盖 `node_modules` 中的同一个 `.node` 文件。
+`better-sqlite3` 在 Node backend 与 Electron 中使用不同 ABI。两套 binding 通过独立缓存准备和注入，不覆盖 `node_modules` 中的同一个 `.node` 文件；测试 runner 和打包流程负责选择正确 binding。
 
-测试 runner 和打包流程会自动准备并注入正确 binding，正常开发与回归不手工 rebuild。
+## 3. 索引存储
 
-## LanceDB
+### 数据边界与检索
 
-LanceDB 只创建和使用 `vector_chunk` 表。
+LanceDB 只创建和使用 `vector_chunk`：支持批量写入、向量及全文搜索、按 document／workspace／generation 删除，以及 optimize。禁止高频业务 update、业务状态 mergeInsert，或保存 SQLite 已承担的业务真相。
 
-允许操作：
+SQLite 决定数据是否有效。检索按 `document_id`、`source_type`、`workspace_id` 收窄，并由 SQLite 补齐来源路径或 URL，不将 `generation_id` 加入检索过滤。
 
-- 批量写入 chunks。
-- 向量搜索和全文搜索 chunks。
-- 按 `document_id / workspace_id / generation_id` 删除 chunks。
-- 对向量表执行 optimize。
+### Generation 与清理
 
-禁止操作：
+文件和网页索引先写入新 generation；成功后切换 SQLite 的 `document.active_generation_id`，并 **await 删除旧 generation**。失败时删除新 generation，保留旧 chunk。启动恢复和索引任务结束后，清理非当前 generation 及没有对应 document 的孤儿 chunk。
 
-- 高频业务 update。
-- 业务状态 mergeInsert。
-- 用 LanceDB 保存 SQLite 已承担的业务真相。
-
-## SQLite 与 LanceDB 的关系
-
-SQLite 决定什么数据有效。检索时 LanceDB 中应只留下最新 chunk；搜索按 `document_id` / `source_type` / `workspace_id` 收窄，不再加 `generation_id`。用 SQLite document 元数据补来源路径或 URL。
-
-## Generation 机制
-
-文件和网页索引先写入新 `generation_id`，成功后切换 SQLite `active_generation_id` 并 **await 删除旧 generation**。失败则删除刚写入的新 generation，保留旧 chunk。启动恢复和索引任务结束后会清理非当前 generation 以及没有对应 document 的孤儿 chunk。generation 只用于这次删除，不用于检索过滤。
-
-## Fragment 和 Optimize
+### Fragment 与性能
 
 LanceDB fragment 是一次或多次写入形成的数据片段，不等于一行数据。
 
-维护规则：
+- chunk 批量写入，避免大量小 batch。
+- 大量写入或删除后可 optimize；它只整理向量索引文件，不承担业务 migration。
+- 不在启动时自动删表重建。
+- 慢查询先检查 workspace、source type、documentIds 过滤及 fragment 数量，不用缓存掩盖错误的数据边界。
 
-- chunk 必须批量写入。
-- 避免大量小 batch 写入。
-- 大量写入或删除后可以执行 optimize。
-- optimize 只用于整理向量索引文件，不承担业务 migration。
-- 不允许启动时自动删表重建。
+## 4. 文件资源与目录布局
 
-## 性能约束
+### 伙伴运行资源
 
-- chunk 写入必须批量进行。
-- 慢查询优先检查 workspace 过滤、source type 过滤、documentIds 过滤和 fragment 数量。
-- 不用缓存掩盖错误的数据边界。
-
-## 伙伴运行资源
-
-伙伴运行资源统一位于 `userData/partners/{partnerId}/runtime/`：
+伙伴资源位于 `userData/partners/{partnerId}/runtime/`：
 
 | 目录 | 用途 |
 | --- | --- |
 | `scripts/` | 一次性临时脚本 |
 | `toolresult/{runId}/` | 大工具结果的落盘正文 |
-| `assets/` | 附件及运行期生成的文件、渲染中间资源 |
-| `file-changes/{ownerRunId}/{changeId}/` | 原始备份、临时工作版本及长期审核产物 |
+| `assets/` | 附件、生成文件与渲染中间资源 |
+| `file-changes/{ownerRunId}/{changeId}/` | 独立原始备份、临时工作版本与长期审核 |
 
-## 文件版本持久化
+读取图片的缓存位于 `assets/read_image-cache/<hash>-v1.webp`，按源图 SHA-256 寻址，消息只存路径引用。该缓存不是用于文件回退的原始备份。模型图标缓存位于 `userData/llm-icons/`，不属于伙伴数据。
 
-文件会话和结构身份是 Main 内部元数据，不新增业务表。使用现有 `ai_file_change` 保存首次 A 的备份路径、最终确认 B 的校验、审核路径、统计、撤销状态和错误；Word 应用记录通过统一记录投影，不再维护另一套基线及撤销。
+### 文件版本资源
 
 ```text
-userData/
-├── app.sqlite
-└── partners/{partnerId}/
-    └── runtime/file-changes/{ownerRunId}/{changeId}/
-        ├── before.{ext}                          原始 A，用于回退
-        ├── after*.{ext}                          图片历史快照
-        ├── working-{version}.{ext}                唯一最新确认 B，临时
-        ├── pending.json                          会话和结构身份，临时
-        └── review/{artifactId}/                   自包含审核，长期
+file-changes/{ownerRunId}/{changeId}/
+├── before.{ext}                原始 A，用于回退
+├── after*.{ext}                图片历史快照
+├── working-{version}.{ext}     最新确认 B，临时
+├── pending.json               会话与结构身份，临时
+└── review/{artifactId}/        自包含审核，长期
 ```
 
-每次发布使用新的工作版本路径，确认后清理上一份。每次审核使用独立产物路径并更新记录引用，避免同路径覆盖和缓存陈旧。Word 保存 review.docx，Excel 保存 review.xlsx，PPT 保存 manifest.json、前后 SVG 与必要资源，文本保存含完整有序行及旧新行数的 review.json。全部资源和记录保存成功后清理工作版本及 pending；失败保留输入，以便重启补生成或重复收尾。已有文件零净变化移除本轮记录，新建空文件仍保留。
+文件会话与结构身份是 Main 内部元数据，不新增业务表。`ai_file_change` 保存首次 A 的备份路径、确认 B 的校验、审核路径、统计、撤销状态和错误；Word 应用记录通过统一记录投影，共用基线及撤销。
 
-内容审核完成后 after_snapshot_path/after_object_hash 为空；图片继续保留历史图片快照。原始 A 保留用于撤销，每条记录独立保存备份和审核。恢复伙伴只为未完成的文件会话补生成审核；缓存清理覆盖上述四类 runtime 目录。清空消息默认保留修改历史，主动勾选后删除；设置清理保留 transcript 和 ai_run，只删除选定时段的缓存与修改记录。删除伙伴等待运行写入和收尾结束，再清理对应目录。
+每条修改独立保存原始字节、备份与审核，SQLite 保存路径及校验，不依赖共享对象仓库。每次确认使用新工作版本路径，确认后清理上一份；审核使用独立产物路径并更新记录引用，避免覆盖与缓存陈旧。
 
-## 子会话消息
+| 类型 | 自包含审核产物 |
+| --- | --- |
+| Word | review.docx |
+| Excel | review.xlsx，固定原始与最终文件的公式结果 |
+| PPT | manifest.json、前后 SVG 及必要资源 |
+| 文本 | review.json，包含完整有序行及旧、新行数 |
+| 图片 | 历史图片快照 |
 
-`ai_subagent` 保存子会话身份；主子完整日志共用 `chat_session_message_log`，由可空 `subagent_id` 隔离。主会话和各子会话分别分配 seq 与唯一索引。完成交付的父 annotation 与子会话删除同事务提交，失败则保留子上下文；未完成会话不自动恢复执行。主查询排除子完整日志，公共投影与压缩以绑定会话为范围。
+## 5. 生命周期与一致性
+
+### 文件确认、收尾与恢复
+
+正式文件完成替换并回读校验后，才持久化确认工作版本与结构身份。失败不自动恢复正式文件；未确认版本不成为最终审核的 B。
+
+主运行完成、失败或取消时，等待在途写入结束，使用原始 A 和最后确认 B 生成审核。子任务、yield 和追加消息续接共用 ownerRunId，不单独触发最终审核；执行终态见 [Human Harness](../ai-harness/human-harness.md#8-交付与失败)。
+
+全部资源和记录保存成功后清理工作版本及 pending；失败保留输入，供重启补生成或重复收尾。已有文件零净变化移除本轮记录，新建空文件仍保留。内容审核完成后 `after_snapshot_path/after_object_hash` 为空；图片继续保留历史快照，原始 A 保留用于回退。
+
+历史审核只依赖本条记录的产物，不读取后来修改的正式文件。启动或伙伴恢复只补生成未完成文件会话的审核，不执行 AI、不修改正式文件。
+
+### 消息与子会话
+
+`ai_subagent` 保存子会话身份，主子完整日志共用 `chat_session_message_log`，由可空 `subagent_id` 隔离。主会话和各子会话分别分配 seq 与唯一索引，主查询排除子完整日志。
+
+完成交付时，父 annotation 与子会话删除同事务提交；失败保留子上下文。启动标记中断，不自动恢复执行。消息投影和压缩规则见 [Human Harness](../ai-harness/human-harness.md)。
+
+### 保留与删除
+
+| 操作 | 数据与资源处理 |
+| --- | --- |
+| 清空消息、保留修改历史 | 删除消息与子会话，保留文件修改记录和回退、审核资源 |
+| 清空消息并删除修改历史 | 同时删除关联修改记录及资源，不回滚已写正式文件 |
+| Settings 缓存清理 | 保留 transcript 和 ai_run，按选定时段删除对应缓存及修改记录，覆盖四类伙伴 runtime 目录 |
+| 删除伙伴 | 等待运行写入与收尾结束，删除关联数据及伙伴目录 |

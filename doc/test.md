@@ -1,9 +1,7 @@
 # NCurator-Desktop 测试架构
 
-## 1. 文档定位
+## 1. 测试体系总览
 
-- 本文是 NCurator-Desktop 的唯一测试总规范。
-- 各业务域的 suite、case 和领域规则只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case。
 - `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`knowledge-test` 专门覆盖知识库的功能测试（如搜索和索引等），优化设计测试（如召回率、检索与索引优化等），全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑；`showcase` 是独立官网样例采集，不进入领域测试计划。
 
 测试体系只沉淀一层长期执行产物：
@@ -12,9 +10,7 @@
 
 测试样例只记录事实，不直接写失败原因分析、优化建议或能力判断。
 
-## 2. 测试体系总览
-
-### 2.1 测试分类
+### 1.1 测试分类
 
 - 测试用例
   - 列入 `doc/test-plan/**`，放在 `tests/case/<domain>/<suite>/**`。
@@ -28,7 +24,7 @@
   - 独立官网样例采集，走真实 E2E 链路，用 `pnpm test:showcase` 单独执行。
 - 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Knowledge、Settings、Workbench、Showcase 或 Unit。
 
-### 2.2 目录结构
+### 1.2 目录结构
 
 ```text
 tests/
@@ -58,20 +54,20 @@ tests/
 - `tests/fixtures/**` 全部是只读测试输入：测试禁止对其中任何文件原地写入、覆盖或修改；需要写入时，必须通过 `fixtures: []` 声明由 runner/harness 复制到隔离临时 workspace（或按 E2E 规则复制到临时目录），测完删除。fixture 需要更新时直接提交新二进制，禁止引入任何 fixture 生成器脚本（生成器不得以 `.test.ts` 形态进入 `tests/case/**` 自动发现）。
 - 当 case 直接传入 `tests/fixtures/workspace` 目录时，runner 应把该目录下的子内容原样复制到临时 workspace 根目录，而不是保留 `tests/fixtures/**` 中间层路径。
 
-### 2.3 稳定映射模型
+### 1.3 稳定映射模型
 
 测试按 `domain / suite / groups... / caseId` 映射到目录和日志；普通 `.test.ts` 为 backend，`.e2e.test.ts` 为 E2E，`.showcase.test.ts` 为独立样例采集。固定边界为：`ai`、`knowledge`、`unit` 只能是 backend，`settings`、`workbench` 只能是 E2E。
 
-## 3. 测试用例规则
+## 2. 测试用例规则
 
-### 3.1 准入规则
+### 2.1 准入规则
 
 - 新增任何测试文件前，必须先与用户确认目标分类。
 - `doc/test-plan/**` 是测试 case 的唯一规格来源；新增、修改或补齐测试 case 时，必须先更新对应测试计划，再修改测试代码。
 - `tests/case/<domain>/**` 只能放已登记的测试 case；`tests/case/unit/**` 不进入领域测试计划，但仍必须满足 Unit backend 边界。
 - 每个测试 `caseId` 都必须稳定映射到唯一测试定义与唯一日志目录。一个测试文件可以承载多个紧密相关的 case，但 `--case <caseId>` 必须能只执行目标 case。
 
-### 3.2 测试 case 共享字段
+### 2.2 测试 case 共享字段
 
 测试 case 在 `doc/test-plan/**` 中统一使用以下字段：
 
@@ -88,7 +84,7 @@ tests/
 
 Settings / Workbench 每项 PRD 验收必须通过完整 AC 编号登记到具体 case 的 Oracle，或本域计划的人工验收 / 自动化覆盖边界；可使用同需求的 `AC1/AC2` 缩写与明确的闭区间。仅引用需求编号不能代替逐项登记。跨 AI / Unit 的证据须指明实际 case / 文件和覆盖层次。架构校验只检查验收登记及 case 文件关系，不证明行为已执行或断言充分。
 
-### 3.3 backend 正式 case 规则
+### 2.3 backend 正式 case 规则
 
 - `ai` / `knowledge` 正式 backend 必须打到页面或 IPC 会调用的生产实现（真实 store、真实服务、真实文件、真实工具）。
 - 禁止用假 executor、假 store、假 `assert*`、`vi.fn` / `vi.mock` / `vi.spyOn` 顶替被测依赖。
@@ -96,7 +92,7 @@ Settings / Workbench 每项 PRD 验收必须通过完整 AC 编号登记到具�
 - How 必须写明生产入口。vitest 起不了 Electron `utilityProcess` / Worker 时，允许同一份生产实现 in-process，缺口写进 How，禁止另写假类。
 - 新增任何模拟路径必须先说明必要性、取得用户确认，并写入该 case 所在测试计划。
 
-### 3.4 UI E2E 测试规则
+### 2.4 UI E2E 测试规则
 
 - UI E2E 必须通过真实 UI 和产品链路完成被测行为；禁止 fake、mock、stub、直接写状态或内部写 IPC 绕过。
 - fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
@@ -105,17 +101,17 @@ Settings / Workbench 每项 PRD 验收必须通过完整 AC 编号登记到具�
 - observer、只读 IPC 和截图只能收集证据，不能触发被测行为或改变运行结果。
 - 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。不为 E2E 增加生产环境变量、故障开关、全局探针或其他生产代码入口；确需修改生产代码时，必须先取得用户确认。
 
-### 3.5 真实 AI / live 断言规则
+### 2.5 真实 AI / live 断言规则
 
-- live 模型配置（backend `ai/human/live` 与 Workbench AI E2E 共用）与 opt-in 命令只在对应 `doc/test-plan/**` 维护，本文不重复。
+- backend AI 与 Workbench AI E2E 共用 live 环境配置（第 3.2 节）；各域维护其 opt-in 命令与真实前置。
 - 涉及真实 AI 调用的测试，硬断言只验证完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地；最终自然语言回答不得作为主要正确性证据。
 - 不对最终文案做逐字断言，不断言固定工具顺序，不断言固定 prompt 原文，不因表达差异判失败。
 - 如果用户诉求已落地但断言过严，应先调整 `Oracle` 和测试代码，再根据 raw logs 记录完成度评分。
 - 完成度评分由执行者或 agent 写入运行结论；测试代码不得在执行过程中修改文档。
 
-## 4. 测试执行闭环
+## 3. 测试执行闭环
 
-### 4.1 固定顺序
+### 3.1 固定顺序
 
 1. 先确认是否新增或调整测试，以及目标分类。
 2. 如果是测试用例，先更新对应 `doc/test-plan/**`，再修改 `tests/case/<domain>/**`。
@@ -124,7 +120,14 @@ Settings / Workbench 每项 PRD 验收必须通过完整 AC 编号登记到具�
 5. 先看 `timeline.jsonl`；不足时再看 `runtime-events.jsonl`、`meta.json` 和 `artifacts.json`。
 6. 最后基于 raw logs 回流结论，决定是否需要更新测试计划或实现代码。
 
-### 4.2 runner 与常用命令
+### 3.2 runner 与常用命令
+
+backend `ai/human/live` 与 Workbench AI E2E 共用：
+
+- Key 池：`AI_LIVE_KEY_<PROVIDER>`，服务商为 `DEEPSEEK`／`DASHSCOPE`／`MIMO`／`ZHIPU`。
+- `AI_LIVE_PROVIDER` 可选，默认 `dashscope`。
+- `AI_LIVE_MODEL` 可选，默认该服务商的测试模型；通义为 `qwen3.8-flash`。
+- baseUrl／providerKind 由产品 registry 推导；领域计划定义如何通过真实 executor 或 Settings UI 准备服务配置。
 
 统一入口默认是 `scripts/test/workflow.mjs`。
 
@@ -194,7 +197,7 @@ runner 支持的过滤参数：
 - `source` 是源码目标，直接复用内容缓存；`package` 只接受既有 release bundle，安装后运行所选 E2E，不负责构建。
 - native binding、知识库缓存和临时 Electron app 由 runner 自动准备；普通测试不手工修改 `node_modules` 或复用正式包缓存。
 
-### 4.3 读取与分析 raw logs
+### 3.3 读取与分析 raw logs
 
 - 默认先读取目标 run 的 `timeline.jsonl`，理解语义步骤、断言事实和失败位置。
 - 如果 `timeline.jsonl` 仍不足以解释结果，再继续读取 `runtime-events.jsonl` 与关键附件。
@@ -202,9 +205,9 @@ runner 支持的过滤参数：
 - 必要时回看 `meta.json` 与 `artifacts.json`，确认 run 摘要、统计值和附件索引。
 - 所有分析结论都必须可回溯到 raw logs 与 artifacts，不得脱离证据做推断。
 
-## 5. runner 与原始产物契约
+## 4. runner 与原始产物契约
 
-### 5.1 run 目录
+### 4.1 run 目录
 
 每个 run 固定目录：
 
@@ -261,7 +264,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - backend 正式 case 运行开始后，runner 应尽快创建对应 run 目录，并对 `timeline.jsonl / runtime-events.jsonl / llm-io.jsonl` 采用渐进式落盘；不得要求等到 run 结束后才首次出现日志目录。
 - backend raw logs 的完整记录以磁盘上的 JSONL 文件为唯一真相源；测试进程内允许不再长期保留这些日志的全量副本。
 
-### 5.2 `meta.json`
+### 4.2 `meta.json`
 
 固定字段：
 
@@ -295,7 +298,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - 如果测试需要保留 fixture 依赖信息，应写在 `timeline.jsonl` 的 `run/start` 事件 `data` 中。
 - 为降低长 live run 的内存压力，`stats` 可以来自运行中计数器或基于磁盘日志的回读统计；不要求依赖内存里的全量 timeline 副本。
 
-### 5.3 `timeline.jsonl`
+### 4.3 `timeline.jsonl`
 
 固定字段：
 
@@ -333,7 +336,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - `run` 之外的业务状态不要塞进 `timeline.status`。
   - 例如 `blocked`、`completed`、`cancelled` 应保留在 `runtime-events.jsonl` 或写进 `data`。
 
-### 5.4 `runtime-events.jsonl`
+### 4.4 `runtime-events.jsonl`
 
 - 文件内容是逐行原始运行时事件 JSON，不包额外 wrapper，不做 schema 投影。
 - 范围固定为完整 runtime 原始事件流。
@@ -341,7 +344,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - `runtime-events.jsonl` 始终写出；如果本次 run 没有 runtime 事件，则写空文件。E2E observer 为每条事件分配独立标识，重复采集按该标识去重；同毫秒的并行事件或流式片段均保留。
 - 当 `Oracle`、断言 `data` 或 `timeline.jsonl` 仍不足以解释失败原因时，必须继续回看 `runtime-events.jsonl`。
 
-### 5.5 `artifacts.json`
+### 4.5 `artifacts.json`
 
 固定字段：
 
@@ -374,7 +377,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - `artifacts/` 目录只有在确实存在实体附件文件时才创建。
 - human live 可按 case 选择写出 `artifacts/message-log-annotations.json`（`kind=other`）：只含 `compaction_checkpoint` 的 seq、`throughSeq`、`compactBlockId` 与摘要长度，不含摘要全文。默认关闭。
 
-### 5.6 不同测试类型的统一约束
+### 4.6 不同测试类型的统一约束
 
 - 普通测试与 e2e 共用同一份 `meta.json` / `timeline.jsonl` / `runtime-events.jsonl` / `artifacts.json` 基础契约。
 - 两类测试的差异只体现在：
@@ -384,7 +387,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - `runtime-events.jsonl` 的采集路径
   - `timeline.jsonl` 中出现的语义事件名与信号类型
 
-### 5.7 e2e 默认附件策略
+### 4.7 e2e 默认附件策略
 
 - 成功 run：
   - 始终保留 Playwright trace。
