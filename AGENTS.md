@@ -14,6 +14,7 @@
 
 - `doc/brand.md`：涉及产品显示名、下载文件名、缓存/技术标识分层或中英品牌口径时阅读。
 - `doc/ui-style.md`：涉及全前端视觉系统、主题或通用交互规范时阅读。
+- `doc/doc-guidelines.md`：新增、修改或整理文档时阅读，定义各文档的骨架、内容归属和编写要求。
 
 ### 1.3 部署打包相关
 
@@ -43,6 +44,7 @@
 ├── AGENTS.md                         # 根规则、文档入口、目录结构和协作规范
 ├── doc/                              # 项目文档
 │   ├── architecture.md               # 项目总架构
+│   ├── doc-guidelines.md             # 各文档的骨架与编写准则
 │   ├── ai-harness/                   # AI human harness 与工具契约
 │   │   ├── human-harness.md          # 消息、投影、范围判定、compaction、resume
 │   │   └── tool-design.md            # 工具 schema 与结果投递
@@ -171,5 +173,6 @@
 
 ### 文档相关
 
+- 新增或修改文档前，阅读 `doc/doc-guidelines.md`，遵循目标文档的骨架、内容归属和编写要求。
 - 代码变更必须要看是否要同步更新prd和test文档
 - 更新文档禁止保留历史信息，只需要更新成最新信息，遵循各自文档引用规则，避免内容写入不匹配的文档。
