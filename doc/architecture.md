@@ -94,9 +94,9 @@ AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`c
 **稳定结构摘要**
 
 - **子会话协作**：`delegate_to_subagent` 创建或续接持久子会话，调用同一 `AiRunService` / human graph；主子 SQLite transcript 按会话隔离，共用投影与 compaction。完成清理子会话，未完成保留供续接；过程和交付进入主任务日志，文件归本次主运行。不创建侧栏伙伴。
-- **主任务 Transcript 真相源**：`chat_session_message_log`（append-only，行挂 `partner_id`）；字段见 `doc/db/tables.md`。压缩、恢复与投影细节见 `ai-harness/human-harness.md`。
+- **主任务 Transcript 真相源**：`chat_session_message_log`（append-only，行挂 `partner_id`）；字段见 `doc/storage/tables.md`。压缩、恢复与投影细节见 `ai-harness/human-harness.md`。
 - **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载子任务查询/派发、技能加载、计划、用户提问和图像读取。
-- **伙伴 UI 状态**：`partner_ui_state(partner_id PK)` 与 `workbench_ui_state.active_view_key` 保存伙伴 UI 快照与当前伙伴。存储边界见下文「存储与索引」，字段见 `doc/db/tables.md`。
+- **伙伴 UI 状态**：`partner_ui_state(partner_id PK)` 与 `workbench_ui_state.active_view_key` 保存伙伴 UI 快照与当前伙伴。存储边界见下文「存储与索引」，字段见 `doc/storage/tables.md`。
 
 ### AI 数据源与消费方
 
@@ -139,7 +139,7 @@ flowchart LR
 
 ## 存储与索引
 
-业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为持久化真相；未发送的文档选区、关联想法及定位状态保留在 Renderer 的伙伴级内存。DOCX、PDF、Markdown/文本、PPT 与 Excel 通过各自的选区适配器接入共用的浮层、草稿、高亮与回跳交互；Excel 使用原生区域高亮，其他预览使用文本 Range 或位置矩形。PPT 画布统一判定元素点击与拖拽平移，引用完整元素或整页，并携带与工具一致的 slideId/elementId；AI 按标识读取源文件。提交时 Main 校验格式锚点，无需新增数据库表。文本文件提交前等待当前自动保存完成。索引 generation、写后清理与检索过滤规则见 `doc/db/design.md`，表字段见 `doc/db/tables.md`。
+业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为持久化真相；未发送的文档选区、关联想法及定位状态保留在 Renderer 的伙伴级内存。DOCX、PDF、Markdown/文本、PPT 与 Excel 通过各自的选区适配器接入共用的浮层、草稿、高亮与回跳交互；Excel 使用原生区域高亮，其他预览使用文本 Range 或位置矩形。PPT 画布统一判定元素点击与拖拽平移，引用完整元素或整页，并携带与工具一致的 slideId/elementId；AI 按标识读取源文件。提交时 Main 校验格式锚点，无需新增数据库表。文本文件提交前等待当前自动保存完成。索引 generation、写后清理与检索过滤规则见 `doc/storage/design.md`，表字段见 `doc/storage/tables.md`。
 
 ## 主链路
 
@@ -158,4 +158,4 @@ Excel 普通预览与审核生成复用 ExcelJS → Univer 工作簿转换及同
 
 首次原始字节 A 在本条修改目录中完整保留。主 run 真正完成、失败或取消时，等待在途写入结束，使用 A 与最后确认的 B 生成自包含审核，再保存统一记录并清理工作快照。子任务、yield 和追加消息续接共用 ownerRunId，不触发最终审核。启动从持久化会话为中断 run 补生成审核，不执行 AI、不修改正式文件。
 
-Renderer 的历史审核只读取对应产物，当前文件预览读取正式路径；后续 C 不改变 A→B。Word 应用记录仅投影统一记录并复用统一撤销。目录与持久化字段见 `doc/db/design.md`、`doc/db/tables.md`，工具错误契约见 `doc/ai-harness/tool-design.md`。
+Renderer 的历史审核只读取对应产物，当前文件预览读取正式路径；后续 C 不改变 A→B。Word 应用记录仅投影统一记录并复用统一撤销。目录与持久化字段见 `doc/storage/design.md`、`doc/storage/tables.md`，工具错误契约见 `doc/ai-harness/tool-design.md`。

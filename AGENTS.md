@@ -7,8 +7,8 @@
 - `doc/architecture.md`：项目整体架构、模块关系、领域能力概要。
 - `doc/ai-harness/human-harness.md`：human graph 消息、投影、范围判定、compaction、resume、brain 上下文。
 - `doc/ai-harness/tool-design.md`：工具 schema、modelResult、统一投递管道。
-- `doc/db/design.md`：涉及 SQLite、LanceDB、索引、持久化关系或数据库设计时阅读。
-- `doc/db/tables.md`：涉及当前 SQLite / LanceDB 表名、作用或字段时阅读。
+- `doc/storage/design.md`：涉及本地数据库、索引、文件资源、目录布局、持久化关系或存储生命周期时阅读。
+- `doc/storage/tables.md`：涉及当前 SQLite / LanceDB 表名、作用或字段时阅读。
 
 ### 1.2 项目整体相关
 
@@ -48,8 +48,8 @@
 │   ├── ai-harness/                   # AI human harness 与工具契约
 │   │   ├── human-harness.md          # 消息、投影、范围判定、compaction、resume
 │   │   └── tool-design.md            # 工具 schema 与结果投递
-│   ├── db/                           # 数据库设计与表目录
-│   │   ├── design.md                 # SQLite 与 LanceDB 存储设计
+│   ├── storage/                      # 数据库与本地资源存储
+│   │   ├── design.md                 # 数据库与存储设计
 │   │   └── tables.md                 # 当前表名、作用与字段
 │   ├── deploy/                       # 发布与部署
 │   │   ├── release.md                # 发版操作流程（AI 遵循）

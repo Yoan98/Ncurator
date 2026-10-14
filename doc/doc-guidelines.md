@@ -26,35 +26,35 @@
 - **职责**：解释系统如何组成、模块如何协作及关键架构选择。
 - **骨架**：技术栈（主要技术及用途）→ 系统分层（进程与存储边界）→ 核心模块（职责与依赖）→ 主要数据流（请求、执行、存储和展示主链路）→ 关键架构设计（领域概要及设计取舍）。
 - **编写要求**：围绕职责、依赖、边界和设计理由展开；图与文字互相补充，领域能力只保留架构概要，不逐项登记操作、参数、字段和局部算法。
-- **内容归属**：用户交互归 `prd/`，human 与工具机制归 `ai-harness/`，存储约束与表字段归 `db/`，测试场景归 `test-plan/`。
+- **内容归属**：用户交互归 `prd/`，human 与工具机制归 `ai-harness/`，数据库、索引及文件资源的存储设计归 `storage/design.md`，表字段归 `storage/tables.md`，测试场景归 `test-plan/`。
 
 ### [doc/ai-harness/human-harness.md](ai-harness/human-harness.md)
 
 - **职责**：定义 human graph 如何使用消息上下文推进任务并完成交付。
 - **骨架**：Graph 流转（节点、路由与安全交接）→ 数据源（消息协议及读写分工）→ 投影设计（brain、UI 与多模态投影）→ 前缀缓存（稳定与失效条件）→ Compaction（触发、切点与压缩）→ Resume（恢复与中断修复）→ Skill 与 Plan（运行态管理）→ 交付与失败（收尾、错误与重试）；必要时附关键代码索引。
 - **编写要求**：写清机制、状态流转、消息顺序、范围及不变量；字段和示例限于解释协议所需，不能复制完整数据库字段目录或 Workbench 操作流程。
-- **内容归属**：用户可见交互及验收归 `prd/workbench.md`，工具 schema 与统一投递归 `ai-harness/tool-design.md`，持久化结构归 `db/`，测试方法归 `test-plan/ai-test.md`。
+- **内容归属**：用户可见交互及验收归 `prd/workbench.md`，工具 schema 与统一投递归 `ai-harness/tool-design.md`，数据库与文件资源的持久化关系归 `storage/design.md`，表字段归 `storage/tables.md`，测试方法归 `test-plan/ai-test.md`。
 
 ### [doc/ai-harness/tool-design.md](ai-harness/tool-design.md)
 
 - **职责**：定义工具契约的设计原则及共用执行、结果投递机制。
 - **骨架**：设计原则（契约约束）→ 描述分层（skill、工具与字段的分工）→ 工具规格结构（注册与类型关系）→ 参数规范化（共用校验边界）→ 统一结果投递（管道与大小处理）→ 渲染格式族（模型反馈形态）→ 执行机制（hand、审批及资源范围）；必要时附关键代码索引。
 - **编写要求**：说明共用规则、边界和必要的典型例子；单工具的完整参数、输出与调用例子由代码及生成契约维护，不将本文扩成工具使用手册。
-- **内容归属**：消息上下文和 graph 编排归 `human-harness.md`，逐工具契约活例子归生成的 `ai-tool-prompt-audit.md`，回归场景归 `test-plan/ai-test.md`。
+- **内容归属**：消息上下文和 graph 编排归 `ai-harness/human-harness.md`，文件资源的持久化与目录布局归 `storage/design.md`，逐工具契约活例子归生成的 `ai-tool-prompt-audit.md`，回归场景归 `test-plan/ai-test.md`。
 
-### [doc/db/design.md](db/design.md)
+### [doc/storage/design.md](storage/design.md)
 
-- **职责**：定义数据库、索引及持久化资源的职责与一致性约束。
-- **骨架**：存储分工（SQLite 与 LanceDB 的关系）→ SQLite 与 migration（事务、演进、兼容和发布锁）→ Native 依赖（运行环境约束）→ LanceDB 与索引（generation、清理、优化和检索约束）→ 持久化资源关系（文件版本及会话生命周期）。
-- **编写要求**：围绕数据所有权、事务、版本、恢复及清理说明机制和理由；保存必要的目录与资源关系，完整字段定义引用表目录。
-- **内容归属**：表字段归 `db/tables.md`，消息与 graph 编排归 `ai-harness/human-harness.md`，用户行为归 PRD，测试矩阵归测试计划，具体发版步骤归 `deploy/release.md`。
+- **职责**：定义本地数据库、索引、文件资源与运行缓存的存储布局、持久化关系及生命周期约束。
+- **骨架**：存储总览（资源分类、所有权与真相来源）→ 数据库存储（SQLite、schema 演进、事务及运行环境约束）→ 索引存储（LanceDB、generation、清理与优化）→ 文件资源与目录布局（附件、工具结果、备份、审核及缓存的存放关系）→ 生命周期与一致性（创建、版本、恢复、保留和清理）。
+- **编写要求**：兼顾数据库与文件存储，写清资源归属、路径用途、持久化关联、版本及恢复清理约束；区分长期数据、可重建索引和临时缓存，完整表字段引用表目录，不展开 AI 执行或用户操作流程。
+- **内容归属**：表字段归 `storage/tables.md`，消息协议与 graph 编排归 `ai-harness/human-harness.md`，用户可见的恢复与清理行为归 PRD，测试矩阵归测试计划，安装包与发布对象存储归 `deploy/design.md`，发布操作归 `deploy/release.md`。
 
-### [doc/db/tables.md](db/tables.md)
+### [doc/storage/tables.md](storage/tables.md)
 
 - **职责**：提供当前 SQLite 与 LanceDB 表结构目录。
 - **骨架**：SQLite（每表用途与字段）→ LanceDB（每表用途与字段）；每表按用途说明、字段表和必要结构约束组织。
 - **编写要求**：字段表写名称、类型、含义及必要的主键、索引或关联约束，与当前 schema 一致；不复制字段背后的完整业务流程，不记录历次 schema 变化。
-- **内容归属**：存储与 migration 机制归 `db/design.md`，消息正文协议归 `human-harness.md`，产品规则归 PRD，具体 migration 变更由 migration 源码承载。
+- **内容归属**：数据库与文件资源的存储机制、目录布局和生命周期归 `storage/design.md`，消息正文协议归 `ai-harness/human-harness.md`，产品规则归 PRD，具体 migration 变更由 migration 源码承载。
 
 ### [doc/brand.md](brand.md)
 
@@ -75,14 +75,14 @@
 - **职责**：定义 Settings 的用户功能、行为边界及验收标准。
 - **骨架**：产品目标（解决的问题）→ 范围与术语（能力边界和产品概念）→ 需求明细（按通用设置、模型、工作地址、文件与网页资料、向量模型、帮助等主题组织）→ 非目标（明确排除的能力）。
 - **编写要求**：每项需求包含稳定编号、用户操作或触发条件、系统行为、状态反馈及验收编号；约束用产品语言说明，内部重构不写成新需求。编号规则在此准则维护：使用 `SET-<模块>-<三位序号>`，验收追加 `-AC<序号>`；删除后保留编号空缺，不重排或复用。
-- **内容归属**：Workbench 对话与回退流程归 `prd/workbench.md`，通用视觉归 `ui-style.md`，索引及存储机制归设计文档，验证方法与覆盖缺口归 `test-plan/settings-test.md` 或 `knowledge-test.md`。
+- **内容归属**：Workbench 对话与回退流程归 `prd/workbench.md`，通用视觉归 `ui-style.md`，索引与本地资源的存储机制归 `storage/design.md`，验证方法与覆盖缺口归 `test-plan/settings-test.md` 或 `knowledge-test.md`。
 
 ### [doc/prd/workbench.md](prd/workbench.md)
 
 - **职责**：定义 Workbench 的用户任务流程、能力边界及验收标准。
 - **骨架**：产品目标与原则（任务体验）→ 范围、能力边界与术语（产品概念）→ 需求明细（按伙伴、Composer、资料引用、运行交互、内容面板、文件处理与定时任务等主题组织）→ 非目标（明确排除的能力）。
 - **编写要求**：按用户操作、系统行为、状态反馈、异常边界和验收组织需求，不混入节点、类名、数据库字段和局部算法。编号规则在此准则维护：基础需求使用 `WB-<模块>-<三位序号>`，定时任务使用 `ST-<模块>-<三位序号>`，验收追加 `-AC<序号>`；删除后保留编号空缺，不重排或复用。
-- **内容归属**：human 与工具机制归 `ai-harness/`，存储结构归 `db/`，通用视觉归 `ui-style.md`，测试步骤、断言及覆盖缺口归 `test-plan/workbench-test.md` 或 `ai-test.md`。
+- **内容归属**：human 与工具机制归 `ai-harness/`，数据库及文件资源的持久化与清理机制归 `storage/design.md`，表字段归 `storage/tables.md`，通用视觉归 `ui-style.md`，测试步骤、断言及覆盖缺口归 `test-plan/workbench-test.md` 或 `ai-test.md`。
 
 ### [doc/test.md](test.md)
 
@@ -103,7 +103,7 @@
 - **职责**：定义知识库功能及效果优化的验证范围。
 - **骨架**：总体目标（功能与效果）→ Suite 设计（foundation 与 optimization 分工）→ 领域测试约束（真实输入、索引及评价依据）→ 回归清单（功能契约与优化场景）→ 覆盖边界（证据及缺口）。
 - **编写要求**：区分功能正确性和优化效果，写清输入、方法、Oracle 及真实证据；尚无用例的范围如实标明，不以计划表述冒充已覆盖。
-- **内容归属**：设置页操作闭环归 `settings-test.md`，产品行为归 `prd/settings.md`，索引机制归设计文档，共用测试规则归 `test.md`，具体实验结果归运行产物。
+- **内容归属**：设置页操作闭环归 `settings-test.md`，产品行为归 `prd/settings.md`，索引存储机制归 `storage/design.md`，共用测试规则归 `test.md`，具体实验结果归运行产物。
 
 ### [doc/test-plan/settings-test.md](test-plan/settings-test.md)
 
