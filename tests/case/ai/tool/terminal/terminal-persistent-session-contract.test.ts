@@ -30,7 +30,7 @@ describe('ai tool terminal backend', () => {
       suite: 'tool',
       groups: ['terminal'],
       description:
-        '验证终端在用户主目录执行命令、长命令让出控制权并可增量读取、退出码与分离执行。',
+        '验证真实终端在隔离工作目录执行命令、长命令让出控制权并可增量读取、退出码与分离执行。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {

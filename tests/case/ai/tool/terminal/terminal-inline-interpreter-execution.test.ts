@@ -28,7 +28,7 @@ describe('ai tool terminal backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证内联 Node.js 代码在审批通过后能够真实执行，且不会生成脚本文件。',
+      description: '直接调用生产终端执行内联 Node.js 代码，返回真实输出且不生成脚本文件。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {

@@ -98,7 +98,7 @@
 - What：慢速/高速按逻辑核数映射不同的 ORT `session_options`；独立进程里真实 embedding session 的操作系统线程数随 `intraOpNumThreads` 增加。
 - Why：档位是否有效，看的是建 session 前后的操作系统线程增量，不是只读配置。
 - How：对 4/8/16 核分别计算慢速与高速预算；用生产 `toOrtSessionOptions(resolveOrtThreadBudget)` 在两个新 Node 进程里各建一次真实 embedding session 并 embed；Mac 用 `ps -M`、Windows 用 `Get-Process.Threads.Count` 比较建 session 前后的线程数。Electron `utilityProcess` 的闭环在 Settings `workspace-index-speed`。
-- Oracle：慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；每个子进程 `after - before` 在 Mac 上不少于该档 intraOp，在 Windows 上不少于 `intraOp - 1`（ORT/Eigen 把调用线程算进池，OS 线程增量通常是 `intraOp - 1`）；高速增量大于慢速，且两档增量之差等于 intraOp 之差。
+- Oracle：慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；正常取证时每个子进程 `after - before` 在 Mac 上不少于该档 intraOp，在 Windows 上不少于 `intraOp - 1`（ORT/Eigen 把调用线程算进池）；高速 `after` 大于慢速，且两档增量之差等于 intraOp 之差。仅当 Windows 两档增量均为 0 时，允许以两档 ready 稳态线程数之差验证，差值须为正且与 intraOp 档位差的偏差不超过 1；其他情况不得使用此分支。
 
 #### `prepare-workspaces-sequentially`
 

@@ -26,7 +26,7 @@
 
 ### 文件审核共同验收
 
-`result/apply` E2E 覆盖四类文件正式 A→B 后外部修改为 C：审核始终展示 A→B，预览展示 C；删除临时工作快照后仍可审核及展开文本未变行。审核只消费长期产物，缺失、损坏、不支持时明确报错，不回退到当前文件。Excel 空白样式、行高列宽及合并区域保留；PPT 备注只显示修改标记。完成、失败、取消后展示已保存变化；强制撤销和两轮回退恢复原始字节。
+`result/apply` E2E 验证正式文件预览、固定审核内容、模式切换与回退的用户闭环。临时工作快照清理、首次字节基线、净差异及文件结构由 AI 的 `file-change-immutable-review` 和 Excel / PPT 工具用例补充；各层已验证子项与缺口见 §6。
 
 ## 3. Suite 设计
 
@@ -798,7 +798,7 @@ pnpm test:update:e2e
 | `WB-SESSION-008-AC5/AC6` | 部分覆盖：现有偏好/面板用例未对删除 UI 快照及失效模型、引用、附件修复逐项断言。 |
 | `WB-SESSION-009-AC1/AC3/AC4` | 部分覆盖：`partner-pin-toggle` 验证取消后图钉不常驻；图标样式、取消后区域排序及重启持久化待补。 |
 | `WB-SESSION-012-AC1/AC2` | 部分覆盖：`partner-edit` 验证名称回填、伙伴数量、新形象和侧栏；形象初始回填、顶栏及消息保留缺少独立断言。 |
-| `WB-COMPOSER-001-AC1/AC2/AC3/AC4` | 部分覆盖：`send-guard-and-preferences` 检查无伙伴空态与无模型提示；空白输入、提交去重、全部禁用原因和改名后占位/自称待补。 |
+| `WB-COMPOSER-001-AC2/AC3/AC4` | 部分覆盖：`send-guard-and-preferences` 检查无伙伴空态与无模型提示，`queue-message-during-run` 验证运行中追加；空白发送和占位见 `multi-format-selection-reference`、`reference-mention-keyboard`。提交去重、全部禁用原因及改名后占位 / 自称待补。 |
 | `WB-COMPOSER-007-AC6/AC7/AC11/AC15` | 部分覆盖：`model-selector-and-provider-error` 走自定义与免费目录；失效快照回退、付费目录、入口图标及偏好实际影响资料边界待补。 |
 | `WB-COMPOSER-017-AC1/AC2/AC3/AC5/AC6/AC7` | 部分覆盖：`queue-message-during-run` 检查单一按钮、两条浅灰追加消息、续接输入和固定用时；最终回答期追加、异常保留、悬空工具修复与校验竞态未完整验证。 |
 | `WB-COMPOSER-010-AC1/AC3/AC4/AC5/AC6` | 部分覆盖：`composer-attachments-context` 核对多格式附件、路径与无预解析、图标、预览及横滑证据；无伙伴添加、任意数量/大小边界和系统目录原生拖放未全部自动化，原生目录拖放需人工验收。 |
@@ -822,7 +822,3 @@ pnpm test:update:e2e
 | `ST-VIEW-001-AC5` | 部分覆盖：`scheduled-task-partner-deletion` 没有定时视图下删除弹窗可见与可操作的独立 Oracle。 |
 | `ST-LIST-001-AC1/AC3` | 部分覆盖：`scheduled-task-config-lifecycle` 检查创建后列表、摘要与入口；重开初始化及无任务空态没有明确断言。 |
 | `ST-SWITCH-001-AC2` | 部分覆盖：`scheduled-task-config-lifecycle` 检查开关值；关闭后等待到点不触发尚无 E2E。 |
-
-### 真实 UI 执行缺口
-
-下列 case 仍用写 IPC 造状态，待改为真实 UI 点击：`partner-ui-state-isolation`、`partner-ui-state-restart-persistence`、`background-partner-ui-event-isolation`、`partner-pin-toggle`；`browser-view-lifecycle` 中部分 `browserTabNavigate` 同样待改。只读 IPC 取证仍允许。

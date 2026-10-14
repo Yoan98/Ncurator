@@ -201,7 +201,7 @@ describe('settings partner cache e2e', () => {
             {
               name: 'partner-cache-ui-and-cutoff',
               message:
-                '缓存入口、目录说明、打开目录及日期汇总符合 SET-GENERAL-004-AC1/AC2/AC3/AC4/AC5。',
+                '缓存入口、目录说明、日期筛选、资源类型汇总与打开目录符合 SET-GENERAL-004-AC1/AC2/AC3/AC5，并部分验证 AC4 的无候选禁用。',
               data: result
             }
           )

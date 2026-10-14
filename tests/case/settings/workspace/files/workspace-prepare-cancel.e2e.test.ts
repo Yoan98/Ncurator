@@ -32,7 +32,7 @@ describe('settings workspace e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['files'],
-        description: '更新索引进行中可取消，确认框说明尚未完成的不再继续，停止后保留已完成并回退未完成。',
+        description: '更新索引进行中可取消，停止后按钮恢复且仍有未完成文件。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -61,9 +61,9 @@ describe('settings workspace e2e', () => {
               })
               return Boolean(
                 response.job &&
-                  response.job.status === 'running' &&
-                  response.job.total_count > 1 &&
-                  response.job.processed_count < response.job.total_count
+                response.job.status === 'running' &&
+                response.job.total_count > 1 &&
+                response.job.processed_count < response.job.total_count
               )
             },
             workspaceId,
@@ -116,8 +116,7 @@ describe('settings workspace e2e', () => {
             result.cancelLabel.includes('取消') && result.cancelDisabled === false,
             {
               name: 'prepare-button-becomes-cancel',
-              message:
-                '更新索引执行中按钮文案应为「取消」且可点，对齐 SET-WORKSPACE-004-AC12。',
+              message: '更新索引执行中按钮文案应为「取消」且可点，对齐 SET-WORKSPACE-004-AC12。',
               data: result
             }
           )
@@ -140,9 +139,9 @@ describe('settings workspace e2e', () => {
               result.summary.needs_index_count + result.summary.failed_file_count > 0 &&
               result.summary.failed_file_count < result.summary.file_count,
             {
-              name: 'cancel-keeps-completed-without-batch-failure',
+              name: 'cancel-restores-button-and-leaves-unfinished-files',
               message:
-                '停止后已完成保留，剩余仍为可索引，按钮回到「更新索引」，不出现成批失败，对齐 SET-WORKSPACE-004-AC14。',
+                '停止后按钮回到「更新索引」，仍有可索引或失败文件且未全部变成失败，部分验证 SET-WORKSPACE-004-AC14。',
               data: result
             }
           )

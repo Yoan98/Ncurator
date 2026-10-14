@@ -418,18 +418,18 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `terminal-inline-interpreter-execution`
 
 - 测试类型：`backend`
-- What：终端 inline interpreter 能在受控工作区执行内联 Node/Python 代码并返回真实结果。
+- What：终端在隔离工作目录执行内联 Node.js 代码并返回真实结果，不生成脚本文件。
 - Why：AI 需要可靠的短脚本执行入口，不能把解释器调用误当成普通 shell 文本。
-- How：通过 terminal 工具执行内联代码，检查命令、输出、工作目录和边界错误。
-- Oracle：返回真实标记和正确退出状态；越界或不可用解释器被明确拒绝。
+- How：直接调用生产 `terminal_run` 执行 `node -e`，检查完成状态、确定性输出标记与运行脚本目录；本 case 不经过 hand 审批。
+- Oracle：命令状态为 `succeeded`，输出包含真实标记，运行脚本目录没有脚本文件；不覆盖 Python、解释器不可用或越界拒绝。
 
 ##### `terminal-execution-contract`
 
 - 测试类型：`backend`
-- What：真实 PTY 终端从用户主目录执行命令、长命令让出控制权并可增量读取，退出码正确；允许后台分离执行，放行 fd 合并重定向。
+- What：真实 PTY 终端在隔离工作目录执行命令，验证长命令让出控制权、增量读取、退出状态、后台分离执行与 fd 合并重定向。
 - Why：后台服务和长任务不能依赖单次 shell 超时；分离执行（`&` / `Start-Process`）由模型自行管理生命周期，框架只关闭 PTY 会话本身；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为危险重定向。
-- How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 携带返回的 `readEndPosition` 增量读取持续输出命令，验证单次读取有字符上限、`hasMoreOutput` 指示未读完且可用返回位置连续读完。以 `sleep … & wait`（windows `Start-Process … -Wait`）验证分离执行可完成，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。`maxWaitSeconds` 由本 case 与 unit 覆盖：指定后本次调用按该秒数盯，到点命令仍在跑。
-- Oracle：命令默认从用户主目录（`os.homedir()`）执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出。写文件命令只落磁盘，不产生修改记录或 `file_artifact`。Windows 会话内覆写的 `Set-Location` 必须接受 `-LiteralPath`/`-Path`。分离执行成功完成且输出含 `detached-ok`；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。`maxWaitSeconds` 到点后为 `command_still_running` 且进程仍在，对齐 `WB-TERMINAL-001-AC8`。
+- How：通过 tool harness 在隔离目录构建生产终端工具，分别执行 `pwd`、单命令内 `cd + pwd`、写文件后的长命令、持续输出与非零退出；携带返回的 `readEndPosition` 调用 `terminal_read`。以 `sleep … & wait`（Windows `Start-Process … -Wait`）验证分离执行，以 `echo redirect-ok 2>&1` 验证输出流合并；指定 `maxWaitSeconds` 观察到点后命令仍运行。
+- Oracle：目录查询和切换成功；长命令返回 `running`，增量读取包含真实输出并最终 `succeeded`；非零退出为 `failed`。写文件只落磁盘，不产生修改记录；分离执行和重定向成功，包含对应输出标记。`maxWaitSeconds` 到点返回时命令仍在运行，对齐 `WB-TERMINAL-001-AC8`。分页字符上限、`hasMoreOutput` / 游标连续读取和 Windows `Set-Location -LiteralPath` 由 `tests/case/unit/ai/terminal-session-manager.test.ts` 补充；生产入口默认主目录不由本隔离 backend 验证。
 
 #### web-browsing 类别
 

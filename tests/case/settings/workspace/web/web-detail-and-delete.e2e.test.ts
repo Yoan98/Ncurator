@@ -79,7 +79,8 @@ describe('settings workspace web e2e', () => {
               result.webCardText.includes('删除'),
             {
               name: 'web-list-item-shows-required-fields',
-              message: '网页列表项应展示标题、URL、状态和抓取时间，对齐 SET-WEB-005-AC1。',
+              message:
+                '网页列表项包含目标 URL、最近更新时间标签和删除入口，部分验证 SET-WEB-005-AC1。',
               data: result
             }
           )

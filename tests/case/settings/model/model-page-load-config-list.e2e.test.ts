@@ -52,10 +52,7 @@ describe('settings model e2e', () => {
           })
 
           const zhipuRow = page.locator('tbody tr').filter({ hasText: '智谱 GLM' }).first()
-          const customRow = page
-            .locator('tbody tr')
-            .filter({ hasText: '公司自定义' })
-            .first()
+          const customRow = page.locator('tbody tr').filter({ hasText: '公司自定义' }).first()
 
           return {
             rowCount: await page.locator('tbody tr').count(),
@@ -81,7 +78,7 @@ describe('settings model e2e', () => {
             {
               name: 'model-list-distinguishes-preset-and-custom',
               message:
-                '配置列表应展示服务商图标与名称；自定义配置以「自定义」标签区分，预设配置不展示，对齐 SET-MODEL-001-AC1、SET-MODEL-001-AC2、SET-MODEL-001-AC3。',
+                '配置列表展示预设与自定义名称；自定义配置以「自定义」标签区分，预设配置不展示，对齐 SET-MODEL-001-AC1、SET-MODEL-001-AC3。',
               data: result
             }
           )
