@@ -1,11 +1,7 @@
+import FileIcon from '../FileIcon'
 import React from 'react'
 import { Modal } from 'antd'
-import {
-  HiCommandLine,
-  HiExclamationTriangle,
-  HiFolder,
-  HiOutlineGlobeAlt
-} from 'react-icons/hi2'
+import { HiCommandLine, HiExclamationTriangle, HiOutlineGlobeAlt } from 'react-icons/hi2'
 import { workbenchSelectors } from '../../testing/selectors'
 
 export interface FullAccessConfirmModalProps {
@@ -57,12 +53,13 @@ export const FullAccessConfirmModal: React.FC<FullAccessConfirmModalProps> = ({
     >
       <div className="flex flex-col gap-3.5 pt-1 text-[13px] leading-relaxed text-[#787774]">
         <p className="mb-0 text-[#37352F]">
-          AI 将能够在未经您许可的情况下，在这台计算机上的任何位置运行命令、使用互联网，以及创建、修改或删除文件。这包括但不限于：
+          AI
+          将能够在未经您许可的情况下，在这台计算机上的任何位置运行命令、使用互联网，以及创建、修改或删除文件。这包括但不限于：
         </p>
 
         <div className="flex flex-col overflow-hidden rounded-[8px] border border-[#EEEEEC] bg-[#FBFBFA]">
           <div className="flex items-start gap-3 p-3">
-            <HiFolder className="h-5 w-5 shrink-0 mt-0.5 text-[#2563EB]" />
+            <FileIcon kind="directory" className="h-5 w-5 shrink-0 mt-0.5 text-[#2563EB]" />
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="font-medium text-[#37352F]">文件和文件夹</span>
               <span className="text-xs leading-5 text-[#787774]">

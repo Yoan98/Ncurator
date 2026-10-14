@@ -13,7 +13,6 @@ import {
   HiChevronDown,
   HiChevronRight,
   HiCircleStack,
-  HiOutlineFolderPlus,
   HiOutlineQuestionMarkCircle,
   HiOutlineTrash
 } from 'react-icons/hi2'
@@ -646,7 +645,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             <Button
                               type="primary"
                               className="w-full"
-                              icon={<HiOutlineFolderPlus className="h-4 w-4" />}
+                              icon={<FileIcon kind="directory" className="h-4 w-4" />}
                               onClick={() => void handleAddRoot()}
                               data-testid={importSelectors.createWorkspaceButton}
                             >

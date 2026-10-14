@@ -90,9 +90,10 @@ describe('settings workspace e2e', () => {
                 const svg = node.querySelector(`svg[data-file-icon="${kind}"]`)
                 return (
                   !!svg &&
-                  svg.getBoundingClientRect().width === 18 &&
+                  svg.getBoundingClientRect().width === (kind === 'directory' ? 16 : 18) &&
                   svg.getAttribute('fill') === 'currentColor' &&
-                  svg.getAttribute('viewBox') === '0 0 256 256'
+                  svg.getAttribute('viewBox') ===
+                    (kind === 'directory' ? '0 0 16 16' : '0 0 256 256')
                 )
               })
             )

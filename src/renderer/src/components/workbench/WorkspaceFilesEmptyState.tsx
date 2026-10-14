@@ -1,5 +1,6 @@
+import FileIcon from '../FileIcon'
 import { Button, Spin } from 'antd'
-import { HiArrowRight, HiOutlineFolderPlus } from 'react-icons/hi2'
+import { HiArrowRight } from 'react-icons/hi2'
 import { workbenchSelectors } from '../../testing/selectors'
 import type { WorkspaceLoadState } from './types'
 
@@ -25,7 +26,7 @@ const WorkspaceFilesEmptyState = ({
       </div>
     ) : (
       <div className="w-full max-w-[320px]">
-        <HiOutlineFolderPlus className="mx-auto h-8 w-8 text-[#91918E]" />
+        <FileIcon kind="directory" className="mx-auto h-8 w-8 text-[#91918E]" />
         <div className="mt-4 text-[16px] font-semibold text-[#37352F]">
           {loadState === 'error' ? '文件目录加载失败' : '尚未添加文件目录'}
         </div>

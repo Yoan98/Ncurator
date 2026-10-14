@@ -97,11 +97,27 @@ const updateSelectionToken = (token: HTMLElement, selection: DocumentSelectionNo
   if (number) number.textContent = String(selection.number)
 }
 
-/** Update only token metadata after deletion, preserving the editable content and caret. */
-export const syncComposerSelectionTokens = (
+/** Refresh atomic token visuals and metadata without replacing editable content or the caret. */
+export const syncComposerTokens = (
   editor: HTMLElement,
   contentNodes: ChatMessageContentNode[]
 ): void => {
+  const references = new Map(
+    chatReferences(contentNodes).map((scope) => [getScopeKey(scope), scope])
+  )
+  for (const token of editor.querySelectorAll<HTMLElement>('[data-role="scope-token"]')) {
+    const scope = references.get(token.dataset.scopeKey || '') || referenceElements.get(token)
+    if (!scope) continue
+    referenceElements.set(token, scope)
+    token.className = REFERENCE_TOKEN_CLASS_NAME
+    const markup = referenceIconMarkup(scope)
+    const icon = token.firstElementChild
+    if (icon?.outerHTML === markup) continue
+    const template = document.createElement('template')
+    template.innerHTML = markup
+    if (icon) icon.replaceWith(template.content)
+    else token.prepend(template.content)
+  }
   const selections = new Map(
     contentNodes.filter((node) => node.kind === 'document_selection').map((node) => [node.id, node])
   )
@@ -173,11 +189,12 @@ export const readComposerNodesFromEditor = (
   return read(editor)
 }
 
+const referenceIconMarkup = (scope: SelectedReference): string =>
+  renderToStaticMarkup(createElement(ReferenceIcon, { reference: scope, size: 'inline' }))
+
 const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): void => {
   const template = document.createElement('template')
-  template.innerHTML = renderToStaticMarkup(
-    createElement(ReferenceIcon, { reference: scope, size: 'inline' })
-  )
+  template.innerHTML = referenceIconMarkup(scope)
   container.appendChild(template.content)
 }
 

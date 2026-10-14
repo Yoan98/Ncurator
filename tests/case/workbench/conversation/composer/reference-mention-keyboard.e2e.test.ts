@@ -63,6 +63,20 @@ describe('workbench conversation e2e', () => {
               labels.every((label) => label && getComputedStyle(label).color === 'rgb(55, 53, 47)')
             )
           })
+          const mentionIconShapes = await mentionPanel
+            .locator('[data-reference-icon-kind]')
+            .evaluateAll((icons) =>
+              Object.fromEntries(
+                icons.map((icon) => [
+                  icon.getAttribute('data-reference-icon-kind'),
+                  icon.querySelector('svg')?.innerHTML
+                ])
+              )
+            )
+          const compactDirectoryIcon = await mentionPanel
+            .locator('[data-reference-icon-kind="directory"] svg')
+            .first()
+            .evaluate((icon) => icon.getBoundingClientRect().width === 16)
           const activeBeforeArrowDown = await readActiveMentionText()
           await page.keyboard.press('ArrowDown')
           await page.waitForFunction(
@@ -86,13 +100,22 @@ describe('workbench conversation e2e', () => {
           const originalTokenIcon = await input
             .locator('[data-reference-icon-kind] svg')
             .evaluateAll(
-              (icons) =>
+              (icons, shapes) =>
                 icons.length > 0 &&
-                icons.every(
-                  (icon) =>
-                    ['0 0 18 18', '0 0 24 24', '0 0 256 256'].includes(icon.getAttribute('viewBox') || '') &&
-                    icon.getBoundingClientRect().width === 18
-                )
+                icons.every((icon) => {
+                  const kind =
+                    icon
+                      .closest('[data-reference-icon-kind]')
+                      ?.getAttribute('data-reference-icon-kind') || ''
+                  return (
+                    ['0 0 16 16', '0 0 18 18', '0 0 24 24', '0 0 256 256'].includes(
+                      icon.getAttribute('viewBox') || ''
+                    ) &&
+                    icon.getBoundingClientRect().width === (kind === 'directory' ? 16 : 18) &&
+                    icon.innerHTML === shapes[kind]
+                  )
+                }),
+              mentionIconShapes
             )
           const neutralToken = await input
             .locator('[data-role="scope-token"]')
@@ -102,15 +125,23 @@ describe('workbench conversation e2e', () => {
                 style.color === 'rgb(55, 53, 47)' && style.backgroundColor === 'rgba(0, 0, 0, 0)'
               )
             })
+          const tokenBeforeTyping = await input.locator('[data-role="scope-token"]').innerHTML()
+          await appendWorkbenchInputText(page, '继续输入')
+          const tokenStableAfterTyping =
+            (await input.locator('[data-role="scope-token"]').innerHTML()) === tokenBeforeTyping &&
+            (await input.textContent())?.endsWith('继续输入')
           await runtime.captureScreenshot({
             name: 'composer-reference-icons',
-            message: '引用名称统一正文色、无灰底，图标与候选同为 18px，键盘插入保持稳定。'
+            message:
+              '目录图标为 16px、其他类型为 18px；候选与输入图形一致，后续输入保留引用与文字。'
           })
           return {
             originalMentionIcons,
             originalTokenIcon,
             neutralMentionLabels,
             neutralToken,
+            compactDirectoryIcon,
+            tokenStableAfterTyping,
             activeBeforeArrowDown,
             activeAfterArrowDown,
             activeAfterSettled
@@ -122,6 +153,8 @@ describe('workbench conversation e2e', () => {
               result.originalTokenIcon &&
               result.neutralMentionLabels &&
               result.neutralToken &&
+              result.compactDirectoryIcon &&
+              result.tokenStableAfterTyping &&
               result.activeBeforeArrowDown.length > 0 &&
               result.activeAfterArrowDown.length > 0 &&
               result.activeAfterArrowDown !== result.activeBeforeArrowDown &&

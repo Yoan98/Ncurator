@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { App, Checkbox, DatePicker, Modal, Select, Spin, Tooltip } from 'antd'
-import { HiFolderOpen } from 'react-icons/hi2'
+import FileIcon from '../FileIcon'
 import dayjs from 'dayjs'
 import {
   PARTNER_CACHE_CATEGORIES,
@@ -271,7 +271,7 @@ export default function PartnerCacheCleanupModal({
                     onClick={() => void openDirectory(category)}
                     className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded text-[#787774] hover:bg-[#F4F4F2] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <HiFolderOpen className="h-4 w-4" />
+                    <FileIcon kind="directory" expanded className="h-4 w-4" />
                   </button>
                 </Tooltip>
               </div>

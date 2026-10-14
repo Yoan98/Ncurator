@@ -271,9 +271,9 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：`@` 候选列表使用方向键移动时，当前高亮项能停在移动后的选项，不会因候选刷新跳回第一项。
 - Why：`@` 候选选择依赖键盘稳定性；高亮项被刷新会导致用户插入错误资料范围。
-- How：通过真实 Settings / Workbench UI 创建伙伴，并在设置页添加真实文件地址；在 composer 输入 `@` 打开候选列表，检查 Office/PDF 图标保留配色和尺寸，目录/MD/普通文件复用库图标，并在候选和插入后的引用标签中一致；读取名称文字色、token 底色及图标尺寸，再按 `ArrowDown` 后观察 active 候选项。
-- Oracle：候选项数量大于 1；按下方向键后 active 候选项发生变化，并在短暂停留后保持不变，对齐 `WB-SCOPE-002-AC1`；候选及插入的引用标签保留 DOCX 等类型的原有彩色图标，图标均为 18px；名称统一正文色，token 无独立灰底；目录/MD/普通文件共用 Phosphor Light 细线库图标，对齐 `WB-PANEL-003-AC30`。
-- 最新验证：2026-10-14 源码真实 E2E 通过；候选和输入 token 名称统一正文色、token 无灰底、图标同为 18px、Office 配色与键盘 active 状态稳定。raw logs：`tests/logs/workbench/conversation/composer/reference-mention-keyboard/20261014-100205-386`。
+- How：通过真实 Settings / Workbench UI 创建伙伴，并在设置页添加真实文件地址；在 composer 输入 `@` 打开候选列表，检查 Office/PDF 图标保留配色和尺寸，目录/MD/普通文件复用库图标，并在候选和插入后的引用标签中一致；读取名称文字色、token 底色及图标尺寸；按 `ArrowDown` 后观察 active 候选项，再插入目录并继续输入，核对重绘后图标、文字及光标输入保持正确。
+- Oracle：候选项数量大于 1；按下方向键后 active 候选项发生变化，并在短暂停留后保持不变，对齐 `WB-SCOPE-002-AC1`；候选及插入的引用标签保留 DOCX 等类型的原有彩色图标，目录图标为 16px、其他类型为 18px；名称统一正文色，token 无独立灰底；目录使用 Bootstrap 的 `BsFolder / BsFolder2Open`，MD/普通文件使用 Phosphor Light 细线库图标，对齐 `WB-PANEL-003-AC30`。
+- 最新验证：2026-10-14 源码真实 E2E 通过；候选和输入 token 名称统一正文色、token 无灰底、Bootstrap 目录图标为 16px、其他类型为 18px，候选与输入图形一致；继续输入后图标、正文与光标输入保持正确，Office 配色与键盘 active 状态稳定。raw logs：`tests/logs/workbench/conversation/composer/reference-mention-keyboard/20261014-104346-350`。
 
 #### `reference-token-lifecycle`
 

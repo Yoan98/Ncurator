@@ -16,6 +16,12 @@ export const FILE_ICON_SIZE_CLASSES = {
   inline: 'h-[18px] w-[18px]'
 } as const
 
+export const DIRECTORY_ICON_SIZE_CLASSES = {
+  sm: 'h-[16px] w-[16px]',
+  md: FILE_ICON_SIZE_CLASSES.md,
+  inline: 'h-[16px] w-[16px]'
+} as const
+
 export type FileVisualSpec = {
   kind: FileIconKind
   iconClassName: string

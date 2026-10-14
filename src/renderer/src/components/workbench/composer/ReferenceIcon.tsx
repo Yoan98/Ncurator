@@ -1,5 +1,5 @@
 import FileIcon from '../../FileIcon'
-import { FILE_ICON_SIZE_CLASSES } from '../../../utils/fileIcons'
+import { DIRECTORY_ICON_SIZE_CLASSES, FILE_ICON_SIZE_CLASSES } from '../../../utils/fileIcons'
 import DocumentFileGlyph from '../../DocumentFileGlyph'
 import React from 'react'
 import { HiOutlineMusicalNote, HiOutlineVideoCamera } from 'react-icons/hi2'
@@ -19,7 +19,11 @@ const containerSizeClassName = {
 
 export const ReferenceIcon: React.FC<ReferenceIconProps> = ({ reference, size = 'md' }) => {
   const visualSpec = getReferenceVisualSpec(reference)
-  const iconClassName = `${FILE_ICON_SIZE_CLASSES[size]} ${visualSpec.iconClassName}`
+  const iconSize =
+    visualSpec.kind === 'directory'
+      ? DIRECTORY_ICON_SIZE_CLASSES[size]
+      : FILE_ICON_SIZE_CLASSES[size]
+  const iconClassName = `${iconSize} ${visualSpec.iconClassName}`
 
   return (
     <span

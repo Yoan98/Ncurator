@@ -1,5 +1,13 @@
 import FileIcon from '../FileIcon'
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { DocumentSelectionContext } from './composer/DocumentSelectionContext'
 import { App as AntdApp, Spin, Tooltip } from 'antd'
 import { HiArrowUp, HiPhoto, HiPlus, HiStop, HiXMark } from 'react-icons/hi2'
@@ -37,7 +45,7 @@ import {
   readComposerNodesFromEditor,
   removeComposerTokenBeforeCaret,
   renderComposerNodesToEditor,
-  syncComposerSelectionTokens
+  syncComposerTokens
 } from './composer/utils'
 import WorkbenchSelect from './WorkbenchSelect'
 import WorkbenchModelSelector from './WorkbenchModelSelector'
@@ -155,13 +163,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   useEffect(() => {
     draftValueRef.current = draftValue
-    if (editorRef.current) syncComposerSelectionTokens(editorRef.current, draftValue.contentNodes)
     setHasContent(
       draftValue.contentNodes.length > 0 ||
         Boolean(draftValue.input.trim()) ||
         draftValue.attachments.length > 0
     )
   }, [draftValue])
+
+  useLayoutEffect(() => {
+    if (editorRef.current) syncComposerTokens(editorRef.current, draftValue.contentNodes)
+  })
 
   const closeMention = useCallback(() => {
     mentionQueryRef.current = null

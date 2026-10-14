@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Switch, message } from 'antd'
-import { HiFolderOpen } from 'react-icons/hi2'
+import FileIcon from '../FileIcon'
 import type { AppSettings } from '../../../../shared/types'
 import { settingsSelectors } from '../../testing/selectors'
 import PartnerCacheCleanupModal from './PartnerCacheCleanupModal'
@@ -87,7 +87,7 @@ const GeneralSettingsPanel: React.FC = () => {
             aria-label="打开错误日志目录"
             title="打开错误日志目录"
           >
-            <HiFolderOpen className="h-4 w-4" />
+            <FileIcon kind="directory" expanded className="h-4 w-4" />
             <span>打开</span>
           </button>
         </div>
