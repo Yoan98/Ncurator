@@ -33,12 +33,10 @@ export const createScopeNode = (scope: SelectedReference): ComposerNode => ({
 
 export const getScopeKey = (scope: SelectedReference): string => getReferenceKey(scope)
 
-export const isComposerTextEmpty = (text: string): boolean =>
-  !text.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').trim()
-
+/** Editor content includes whitespace; send validation separately requires user text. */
 export const hasComposerContent = (
   nodes: readonly (ComposerNode | ChatMessageContentNode)[]
-): boolean => nodes.some((node) => node.kind !== 'text' || !isComposerTextEmpty(node.text))
+): boolean => nodes.some((node) => node.kind !== 'text' || node.text.length > 0)
 
 export const normalizeComposerNodes = (nodes: ComposerNode[]): ComposerNode[] => {
   const nextNodes: ComposerNode[] = []
@@ -68,7 +66,7 @@ export const renumberComposerSelections = (draft: ComposerDraftValue): ComposerD
     changed = true
     return { ...node, number }
   })
-  return changed ? { ...draft, contentNodes, input: chatContentText(contentNodes).trim() } : draft
+  return changed ? { ...draft, contentNodes, input: chatContentText(contentNodes) } : draft
 }
 
 export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftValue => {
@@ -78,7 +76,7 @@ export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftV
     return node.selection
   })
   return renumberComposerSelections({
-    input: chatContentText(contentNodes).trim(),
+    input: chatContentText(contentNodes),
     contentNodes,
     selectedReferences: chatReferences(contentNodes),
     attachments: []
@@ -187,8 +185,10 @@ export const readComposerNodesFromEditor = (
       }
       if (child instanceof HTMLBRElement) nodes.push(createTextNode('\n'))
       else {
+        const children = read(child)
+        if (!children.length) return
         if (['DIV', 'P'].includes(child.tagName) && nodes.length) nodes.push(createTextNode('\n'))
-        nodes.push(...read(child))
+        nodes.push(...children)
       }
     })
     return normalizeComposerNodes(nodes)
@@ -292,25 +292,43 @@ export const renderComposerNodesToEditor = (editor: HTMLElement, nodes: Composer
 }
 
 /** Atomic tokens share the same deletion behavior, including tokens nested in a selection. */
-export const removeComposerTokenBeforeCaret = (editor: HTMLElement): boolean => {
+export const removeComposerTokenAtCaret = (
+  editor: HTMLElement,
+  direction: 'backward' | 'forward'
+): boolean => {
   const selection = window.getSelection()
   if (!selection?.rangeCount || !selection.isCollapsed || !editor.contains(selection.anchorNode))
     return false
-  let anchor = selection.anchorNode
-  if (!anchor || selection.anchorOffset !== 0) {
-    if (!(anchor instanceof HTMLElement) || selection.anchorOffset < 1) return false
-    anchor = anchor.childNodes[selection.anchorOffset - 1] || null
-  } else {
-    while (anchor && anchor !== editor && !anchor.previousSibling) anchor = anchor.parentNode
-    anchor = anchor?.previousSibling || null
+  const backward = direction === 'backward'
+  const adjacent = (node: Node): Node | null => {
+    let current: Node | null = node
+    while (current && current !== editor) {
+      const sibling = backward ? current.previousSibling : current.nextSibling
+      if (sibling) return sibling
+      current = current.parentNode
+    }
+    return null
   }
-  if (
-    !(anchor instanceof HTMLElement) ||
-    !['scope-token', 'document-selection-token', 'document-selection-fragment'].includes(
-      anchor.dataset.role || ''
-    )
-  )
-    return false
+  let anchor = selection.anchorNode
+  if (anchor instanceof Text) {
+    if (selection.anchorOffset !== (backward ? 0 : anchor.data.length)) return false
+    anchor = adjacent(anchor)
+  } else if (anchor instanceof HTMLElement) {
+    const index = selection.anchorOffset - (backward ? 1 : 0)
+    anchor = anchor.childNodes[index] || adjacent(anchor)
+  }
+  const roles = ['scope-token', 'document-selection-token', 'document-selection-fragment']
+  while (anchor) {
+    if (anchor instanceof Text) {
+      if (anchor.data) return false
+      anchor = adjacent(anchor)
+    } else if (anchor instanceof HTMLElement && !roles.includes(anchor.dataset.role || '')) {
+      if (anchor instanceof HTMLBRElement && anchor.dataset.role !== 'composer-caret-anchor')
+        return false
+      anchor = (backward ? anchor.lastChild : anchor.firstChild) || adjacent(anchor)
+    } else break
+  }
+  if (!(anchor instanceof HTMLElement) || !roles.includes(anchor.dataset.role || '')) return false
   const target =
     anchor.dataset.role === 'document-selection-token'
       ? anchor.closest<HTMLElement>('[data-role="document-selection-fragment"]')

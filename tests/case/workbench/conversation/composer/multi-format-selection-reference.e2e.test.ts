@@ -28,6 +28,7 @@ import { copyDocumentSelection } from '../../../../harness/e2e/documentSelection
 import {
   setupWorkbenchWithTempWorkspace,
   appendWorkbenchInputText,
+  pasteWorkbenchText,
   waitForWorkbenchMentionPanelText,
   openWorkbenchWorkspaceFile,
   getWorkbenchLocator,
@@ -42,6 +43,8 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'multi-format-selection-reference'
+const INPUT_PREFIX = ' \n\n'
+const INPUT_SUFFIX = ' \n\n '
 /** Read geometry only; selection itself always uses the real mouse. */
 async function selectVisibleText(page: Page, selector: string, screenshotBefore = false) {
   const root = page.locator(selector).first()
@@ -357,9 +360,30 @@ describe('workbench conversation e2e', () => {
           }
           const composer = getWorkbenchLocator(page, workbenchSelectors.input)
           const tokens = composer.locator('[data-role="document-selection-token"]')
-          await composer.click()
-          await composer.press('Shift+Enter')
-          await composer.press('Shift+Enter')
+          const placeholder = composer.locator('..').getByText(/^输入你想让.*做的事情或者@文件$/)
+          const send = getWorkbenchLocator(page, workbenchSelectors.sendButton)
+          const blankInputs = [' ', '\n\n', '\u200b\ufeff']
+          for (const blank of blankInputs) {
+            await appendWorkbenchInputText(page, blank)
+            await composer.press('Enter')
+            await runtime.assertThat(
+              (await composer.textContent()) === blank &&
+                !(await placeholder.isVisible()) &&
+                (await send.isDisabled()) &&
+                (await getWorkbenchLocator(
+                  page,
+                  workbenchSelectors.userMessageReferences
+                ).count()) === 0,
+              {
+                name: 'blank-draft-placeholder-and-send',
+                message: '纯空白/换行/不可见字符保留输入并隐藏占位，已配置模型时仍禁止发送。',
+                data: { blank, actual: await composer.textContent() }
+              }
+            )
+            await composer.press('ControlOrMeta+a')
+            await composer.press('Backspace')
+            await placeholder.waitFor({ state: 'visible' })
+          }
           await openPreviewFile(names[0])
           const text = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
           const textClip = await text.evaluate((element) => {
@@ -387,7 +411,7 @@ describe('workbench conversation e2e', () => {
             }),
             {
               name: 'first-reference-no-blank-line',
-              message: '空草稿残留的换行不进入首个文档引用，引用从第一行开始。'
+              message: '真正空草稿的光标占位不进入首个文档引用，引用从第一行开始。'
             }
           )
           await appendWorkbenchInputText(page, ' @sample-edit.docx')
@@ -410,6 +434,29 @@ describe('workbench conversation e2e', () => {
             {
               name: 'reference-append-inline',
               message: '宽度足够时，@ 文件和追加的选区引用保持同行，没有主动插入换行。'
+            }
+          )
+          await runtime.assertThat(await send.isEnabled(), {
+            name: 'meaningful-draft-can-send',
+            message: '真实模型配置及其他条件相同时，有效正文让发送按钮可用。'
+          })
+          const textBeforePrefix = (await composer.textContent()) || ''
+          await composer.evaluate((element) => {
+            if (!(element instanceof HTMLElement)) return
+            element.focus()
+            const range = document.createRange()
+            range.selectNodeContents(element)
+            range.collapse(true)
+            const selection = window.getSelection()
+            selection?.removeAllRanges()
+            selection?.addRange(range)
+          })
+          await pasteWorkbenchText(page, INPUT_PREFIX)
+          await runtime.assertThat(
+            (await composer.textContent()) === INPUT_PREFIX + textBeforePrefix,
+            {
+              name: 'manual-leading-newlines',
+              message: '在开头输入空格和换行时只新增实际输入，不附加额外空行。'
             }
           )
           await assertSelectedTextVisible(runtime, 'text', textSample, 'saved')
@@ -462,11 +509,17 @@ describe('workbench conversation e2e', () => {
           )
           await text.fill(before[0].toString('utf8'))
           await tokens.first().click()
-          const composerWidth = await composer.evaluate(
-            (element) => element.getBoundingClientRect().width
-          )
-          await composer.click({ position: { x: composerWidth - 4, y: 4 } })
-          await composer.press('ControlOrMeta+End')
+          const textBeforeLineBreak = (await composer.textContent()) || ''
+          await composer.evaluate((element) => {
+            if (!(element instanceof HTMLElement)) return
+            element.focus()
+            const range = document.createRange()
+            range.selectNodeContents(element)
+            range.collapse(false)
+            const selection = window.getSelection()
+            selection?.removeAllRanges()
+            selection?.addRange(range)
+          })
           await composer.press('Shift+Enter')
           const textBeforeMarkdown = await composer.textContent()
           await openPreviewFile(names[1])
@@ -476,12 +529,12 @@ describe('workbench conversation e2e', () => {
           await dragText(page, tableStart, tableEnd)
           await confirm(page, 'text', '解释表格引用。')
           await runtime.assertThat(
-            Boolean(textBeforeMarkdown?.includes('\n')) &&
+            textBeforeMarkdown === textBeforeLineBreak + '\n' &&
               Boolean((await composer.textContent())?.startsWith(textBeforeMarkdown || '')),
             {
               name: 'reference-manual-newline-preserved',
               message: '用户输入的换行在追加引用后原样保留。',
-              data: { textBeforeMarkdown, after: await composer.textContent() }
+              data: { textBeforeLineBreak, textBeforeMarkdown, after: await composer.textContent() }
             }
           )
           const tableTitle = (await tokens.last().getAttribute('title')) || ''
@@ -956,13 +1009,38 @@ describe('workbench conversation e2e', () => {
           )
           await tokens.first().click()
           await text.waitFor({ state: 'visible' })
+          await appendWorkbenchInputText(page, INPUT_SUFFIX)
+          const draftText = (await composer.textContent()) || ''
+          const expectedLeadingWhitespace = draftText.match(/^\s*/)?.[0] || ''
+          await runtime.assertThat(
+            draftText.startsWith(INPUT_PREFIX) &&
+              expectedLeadingWhitespace.match(/\n/g)?.length === 2 &&
+              draftText.endsWith(INPUT_SUFFIX),
+            {
+              name: 'draft-whitespace-before-send',
+              message: '引用编辑后，提交前草稿保留主动输入的两次首行换行和末尾空白。',
+              data: { leading: expectedLeadingWhitespace, trailing: draftText.slice(-10) }
+            }
+          )
           const startedAt = Date.now()
           await submitWorkbenchCurrentDraft(page)
           await tokens.first().waitFor({ state: 'detached' })
-          const sentReference = getWorkbenchLocator(page, workbenchSelectors.userMessageReferences)
-            .last()
-            .locator('[data-role="reference-inline-token"]')
+          const sentContent = getWorkbenchLocator(
+            page,
+            workbenchSelectors.userMessageReferences
+          ).last()
+          const sentReference = sentContent.locator('[data-role="reference-inline-token"]')
           await sentReference.waitFor({ state: 'visible' })
+          const sentText = (await sentContent.textContent()) || ''
+          await runtime.assertThat(
+            sentText.match(/^\s*/)?.[0] === expectedLeadingWhitespace &&
+              sentText.endsWith(INPUT_SUFFIX),
+            {
+              name: 'sent-user-content-preserves-whitespace',
+              message: '实际用户消息保留首尾空格和主动换行。',
+              data: { leading: sentText.slice(0, 10), trailing: sentText.slice(-10) }
+            }
+          )
           await runtime.assertThat(
             await sentReference.evaluate((token) => {
               const style = getComputedStyle(token)
@@ -1081,6 +1159,16 @@ describe('workbench conversation e2e', () => {
               ?.requestWire?.messages.filter((message) => message.role === 'human')
               .map((message) => message.content)
               .join('\n') || ''
+          const userRequest = brain.match(/<用户诉求>\n([\s\S]*?)\n<\/用户诉求>/)?.[1] || ''
+          await runtime.assertThat(
+            userRequest.match(/^\s*/)?.[0] === expectedLeadingWhitespace &&
+              userRequest.endsWith(INPUT_SUFFIX),
+            {
+              name: 'model-user-content-preserves-whitespace',
+              message: 'Main 接受正文与真实模型用户诉求保留首尾空格及主动换行，判空未裁剪原文。',
+              data: { leading: userRequest.slice(0, 10), trailing: userRequest.slice(-10) }
+            }
+          )
           const after = await Promise.all(
             names.map((name) => fs.readFile(path.join(setup.workspace.rootPath, name)))
           )

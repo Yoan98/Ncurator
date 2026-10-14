@@ -11,7 +11,7 @@ import {
   getScopeKey,
   moveCaretToTextNode,
   readComposerNodesFromEditor,
-  removeComposerTokenBeforeCaret,
+  removeComposerTokenAtCaret,
   renderComposerNodesToEditor
 } from './utils'
 
@@ -273,7 +273,7 @@ const ComposerInputEditor: React.FC<Props> = ({
           if (
             event.key === 'Backspace' &&
             editorRef.current &&
-            removeComposerTokenBeforeCaret(editorRef.current)
+            removeComposerTokenAtCaret(editorRef.current, 'backward')
           ) {
             event.preventDefault()
             sync()

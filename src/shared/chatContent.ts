@@ -39,7 +39,10 @@ export const documentSelections = (
   nodes.filter((node): node is DocumentSelectionNode => node.kind === 'document_selection')
 
 export const hasUserText = (nodes: readonly ChatMessageContentNode[]): boolean =>
-  chatInlineNodes(nodes).some((node) => node.kind === 'text' && Boolean(node.text.trim()))
+  chatInlineNodes(nodes).some(
+    (node) =>
+      node.kind === 'text' && Boolean(node.text.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').trim())
+  )
 
 export const persistentChatContent = (
   nodes: readonly ChatMessageContentNode[]

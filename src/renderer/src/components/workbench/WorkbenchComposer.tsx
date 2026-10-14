@@ -41,11 +41,10 @@ import {
   extractComposerDraftValue,
   getScopeKey,
   hasComposerContent,
-  isComposerTextEmpty,
   moveCaretToEnd,
   moveCaretToTextNode,
   readComposerNodesFromEditor,
-  removeComposerTokenBeforeCaret,
+  removeComposerTokenAtCaret,
   renderComposerNodesToEditor,
   syncComposerTokens
 } from './composer/utils'
@@ -99,6 +98,19 @@ type WorkbenchComposerProps = {
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
+
+/** Native deletion can leave one empty BR; user line breaks are inserted as text. */
+const markEmptyCaretAnchor = (editor: HTMLElement): boolean => {
+  if (
+    editor.textContent ||
+    editor.querySelector('[data-role="scope-token"], [data-role="document-selection-token"]')
+  )
+    return false
+  const breaks = editor.querySelectorAll('br')
+  if (breaks.length !== 1) return false
+  breaks[0].dataset.role = CARET_ANCHOR_ROLE
+  return true
+}
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   partnerName,
@@ -261,12 +273,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const editor = editorRef.current
     if (!editor) return
     const lastChild = editor.lastChild
-    if (isTextNode(lastChild)) {
+    if (isTextNode(lastChild) && !lastChild.data.endsWith('\n')) {
       return
     }
     if (lastChild instanceof HTMLBRElement && lastChild.dataset.role === CARET_ANCHOR_ROLE) {
       return
     }
+    if (markEmptyCaretAnchor(editor)) return
     const anchor = document.createElement('br')
     anchor.dataset.role = CARET_ANCHOR_ROLE
     editor.appendChild(anchor)
@@ -288,10 +301,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   }, [ensureEditorHasCaretTarget])
 
   const renderDraftNodes = useCallback(
-    (incomingNodes: ComposerNode[], options?: { restoreCaret?: boolean }): void => {
+    (nodes: ComposerNode[], options?: { restoreCaret?: boolean }): void => {
       const editor = editorRef.current
       if (!editor) return
-      const nodes = hasComposerContent(incomingNodes) ? incomingNodes : []
       rememberScopes(nodes)
       draftNodesRef.current = nodes
       renderComposerNodesToEditor(editor, nodes)
@@ -335,18 +347,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const editor = editorRef.current
     if (!editor) return
     stripCaretPlaceholderFromEditor()
-    const parsedNodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
-    const nodes = hasComposerContent(parsedNodes) ? parsedNodes : []
-    if (!nodes.length) {
-      const child = editor.childNodes.length === 1 ? editor.firstChild : null
-      // Keep native empty nodes connected so deleting the last character remains undoable.
-      if (child instanceof HTMLBRElement) child.dataset.role = CARET_ANCHOR_ROLE
-      else if (!isTextNode(child) || child.data) {
-        editor.replaceChildren()
-        ensureEditorHasCaretTarget()
-        if (document.activeElement === editor) moveCaretToEnd(editor)
-      }
-    }
+    markEmptyCaretAnchor(editor)
+    const nodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
+    // A trailing newline needs a caret anchor; retain native nodes for undo.
+    ensureEditorHasCaretTarget()
     draftNodesRef.current = nodes
     setHasContent(hasComposerContent(nodes))
     const draft = extractComposerDraftValue(nodes)
@@ -564,7 +568,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const handleEditorInput = (): void => {
     if (isComposingRef.current) {
       const editor = editorRef.current
-      const hasText = !isComposerTextEmpty(editor?.textContent || '')
+      const hasText = Boolean(editor?.textContent)
       const hasToken = Boolean(
         editor?.querySelector('[data-role="scope-token"], [data-role="document-selection-token"]')
       )
@@ -808,10 +812,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       return
     }
 
-    if (event.key !== 'Backspace') return
+    if (event.key !== 'Backspace' && event.key !== 'Delete') return
 
     const editor = editorRef.current
-    if (!editor || !removeComposerTokenBeforeCaret(editor)) return
+    if (
+      !editor ||
+      !removeComposerTokenAtCaret(editor, event.key === 'Backspace' ? 'backward' : 'forward')
+    )
+      return
     event.preventDefault()
     syncDraftFromEditor()
     ensureEditorHasCaretTarget()

@@ -144,29 +144,34 @@ describe('workbench conversation e2e', () => {
           )
           await input.press('Shift+Enter')
           await input.press('Shift+Enter')
+          const emptyLinesPreserved =
+            (await input.textContent()) === '\n\n' && !(await placeholder.isVisible())
           await input.press('ArrowUp')
           await input.press('ArrowDown')
-          await input.click({ position: { x: 4, y: 4 } })
-          await input.press('Delete')
-          await appendWorkbenchInputText(page, ' \n\t\u200b\ufeff')
+          await input.press('ControlOrMeta+a')
+          await input.press('Backspace')
           await placeholder.waitFor({ state: 'visible' })
-          const emptyAfterWhitespace = await input.evaluate((element) => ({
+          const whitespaceInput = ' \n\t\u200b\ufeff'
+          await appendWorkbenchInputText(page, whitespaceInput)
+          const whitespacePreserved =
+            (await input.textContent()) === whitespaceInput && !(await placeholder.isVisible())
+          await input.press('ControlOrMeta+a')
+          await input.press('Delete')
+          await placeholder.waitFor({ state: 'visible' })
+          const emptyAfterDeletion = await input.evaluate((element) => ({
             text: element.textContent,
             height: element.getBoundingClientRect().height,
-            tokens: element.querySelectorAll('[data-role="scope-token"]').length,
-            children: Array.from(element.children).map((child) => ({
-              tag: child.tagName,
-              role: child.getAttribute('data-role')
-            }))
+            tokens: element.querySelectorAll('[data-role="scope-token"]').length
           }))
-          await appendWorkbenchInputText(page, '第一行\n第二行')
+          const multilineInput = ' \n第一行\n第二行\n '
+          await appendWorkbenchInputText(page, multilineInput)
           const manualNewlinePreserved =
-            (await input.textContent()) === '第一行\n第二行' && !(await placeholder.isVisible())
+            (await input.textContent()) === multilineInput && !(await placeholder.isVisible())
           await input.press('ControlOrMeta+a')
           await input.press('Delete')
           await placeholder.waitFor({ state: 'visible' })
           await input.press('ControlOrMeta+z')
-          const undoPreservedText = (await input.textContent()) === '第一行\n第二行'
+          const undoPreservedText = (await input.textContent()) === multilineInput
           await input.press('ControlOrMeta+a')
           await input.press('Delete')
           await appendWorkbenchInputText(page, '待删除')
@@ -176,9 +181,34 @@ describe('workbench conversation e2e', () => {
           await page.keyboard.press('Tab')
           await input.click()
           await placeholder.waitFor({ state: 'visible' })
+          const referenceBoundaryDeletion: boolean[] = []
+          for (const direction of ['forward', 'backward'] as const) {
+            await appendWorkbenchInputText(page, '@sample-edit.docx')
+            await waitForWorkbenchMentionPanelText(page)
+            await mentionPanel.getByRole('button', { name: /sample-edit\.docx/ }).click()
+            await mentionPanel.waitFor({ state: 'detached' })
+            await input.evaluate((element, direction) => {
+              if (!(element instanceof HTMLElement)) return
+              element.focus()
+              const range = document.createRange()
+              range.selectNodeContents(element)
+              range.collapse(direction === 'forward')
+              const selection = window.getSelection()
+              selection?.removeAllRanges()
+              selection?.addRange(range)
+            }, direction)
+            const key = direction === 'forward' ? 'Delete' : 'Backspace'
+            await input.press(key)
+            await input.press(key)
+            await placeholder.waitFor({ state: 'visible' })
+            referenceBoundaryDeletion.push(
+              (await input.textContent()) === '' &&
+                (await input.locator('[data-role="scope-token"]').count()) === 0
+            )
+          }
           await runtime.captureScreenshot({
             name: 'composer-placeholder-restored',
-            message: '删除引用和正文后恢复占位，空白换行与零宽字符不残留幽灵空行。'
+            message: '删除实际内容后占位恢复；空格和手动换行保留输入并隐藏占位。'
           })
           await appendWorkbenchInputText(page, '已恢复')
           const typingAfterEmpty = (await input.textContent()) === '已恢复'
@@ -190,7 +220,10 @@ describe('workbench conversation e2e', () => {
             compactDirectoryIcon,
             tokenStableAfterTyping,
             emptyHeight,
-            emptyAfterWhitespace,
+            emptyAfterDeletion,
+            emptyLinesPreserved,
+            whitespacePreserved,
+            referenceBoundaryDeletion,
             manualNewlinePreserved,
             undoPreservedText,
             typingAfterEmpty,
@@ -218,19 +251,19 @@ describe('workbench conversation e2e', () => {
             }
           )
           await runtime.assertThat(
-            result.emptyAfterWhitespace.text === '' &&
-              result.emptyAfterWhitespace.tokens === 0 &&
-              result.emptyAfterWhitespace.height <= result.emptyHeight + 1 &&
-              result.emptyAfterWhitespace.children.every(
-                (child) => child.tag === 'BR' && child.role === 'composer-caret-anchor'
-              ) &&
+            result.emptyAfterDeletion.text === '' &&
+              result.emptyAfterDeletion.tokens === 0 &&
+              result.emptyAfterDeletion.height <= result.emptyHeight + 1 &&
+              result.emptyLinesPreserved &&
+              result.whitespacePreserved &&
+              result.referenceBoundaryDeletion.every(Boolean) &&
               result.manualNewlinePreserved &&
               result.undoPreservedText &&
               result.typingAfterEmpty,
             {
               name: 'composer-empty-content-placeholder',
               message:
-                '清空引用/正文、空白/零宽字符与空换行后占位恢复，无幽灵空行，正常多行输入保留。',
+                '空格/换行保留输入并隐藏占位，删除到空后占位恢复；引用前后删除、原生撤销与继续输入正常。',
               data: result
             }
           )

@@ -165,7 +165,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 #### `entry_json` 示例
 
-**`user`** — `content` 是发给模型的 build 全文；`input` 是用户正文的可读文本。气泡使用 `input` 和结构化正文，不展示 `content`。
+**`user`** — `content` 是发给模型的 build 全文；`input` 是用户正文的可读文本。
 
 `context` 保存当次引用、附件与结构化正文，供 Workbench 还原用户消息；模型投影直接使用保存的 `content`。
 

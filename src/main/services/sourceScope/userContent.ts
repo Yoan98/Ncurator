@@ -85,7 +85,7 @@ export const resolveUserContent = async (
   return {
     ...request,
     contentNodes,
-    input: chatContentText(contentNodes).trim(),
+    input: chatContentText(contentNodes),
     selectedReferences: chatReferences(contentNodes)
   }
 }

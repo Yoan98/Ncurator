@@ -841,7 +841,7 @@ const toPersistedComposerDraft = (
 ): PartnerUiStateV1['composer']['draft'] => {
   const contentNodes = persistentChatContent(draft.contentNodes)
   return {
-    input: chatContentText(contentNodes).trim(),
+    input: chatContentText(contentNodes),
     contentNodes,
     selectedReferences: chatReferences(contentNodes),
     attachments: draft.attachments,
@@ -3865,7 +3865,7 @@ const ChatPage: React.FC = () => {
 
     const submitPartnerId = currentPartnerId
     const queueAttempt = Boolean(aiRunId)
-    const userQuery = input.trim()
+    const userQuery = input
     const submittedContentNodes = composerContentNodes
     const submittedReferences = selectedReferences
     const submittedAttachments = attachments
@@ -4818,7 +4818,7 @@ const ChatPage: React.FC = () => {
       const next = {
         ...draft,
         contentNodes,
-        input: chatContentText(contentNodes).trim(),
+        input: chatContentText(contentNodes),
         selectedReferences: chatReferences(contentNodes)
       }
       saveComposerDraftForPartner(currentPartnerId, next)
@@ -4833,7 +4833,7 @@ const ChatPage: React.FC = () => {
       const next = {
         ...draft,
         contentNodes,
-        input: chatContentText(contentNodes).trim(),
+        input: chatContentText(contentNodes),
         selectedReferences: chatReferences(contentNodes)
       }
       locations.delete(id)
