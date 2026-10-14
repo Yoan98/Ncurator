@@ -95,7 +95,7 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 ## 5. 统一结果投递
 
-工具执行 → 结构化 `ToolCallResult` → `modelResult.render*` → `renderedText` → **整段文本**统一判断：
+工具执行 → 结构化 `ToolCallResult` → `modelResult.render*` → `renderedText`；成功结果的**整段文本**按以下规则处理，失败结果经错误渲染后直接投递：
 
 | 条件                                   | 行为                                                                                                                   |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -158,7 +158,8 @@ hand 收到 call batch
   → buildModelToolResultDelivery
   → append ToolMessage + log tool
   → 同一 assistant 的全部 tool 结果齐全后：append 多模态 HumanMessage
-  → context_budget
+  → dispatch 继续消费调用队列
+  → 队列清空后进入 context_budget
 ```
 
 - 工具失败：`renderError` 或通用错误 → `ok: false` ToolMessage。

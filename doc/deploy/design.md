@@ -37,7 +37,7 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 公开对象键使用用户可见文件名（如 `馆长-X.Y.Z-macos-arm64.dmg` / `馆长-X.Y.Z-Windows-x64.exe`），官网 `/api/download/*` 仍 307 到该直链；浏览器保存名取自 URL 末段。本地构建产物与 fragment 的 `storageName` 可仍为 ASCII（如 `Ncurator-mac-arm64.dmg`），仅用于解析磁盘文件。
 
-当前正式发布只写 COS：环境变量 `SecretId` / `SecretKey`（或 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`）。桶与公开地址已固化为 `ncurator-1324873382` / `ap-guangzhou` / `https://download.guanzhangai.cn`，无需写入 `.env`。CDN、DNS、资费与采购见 [`tencent-cdn-billing.md`](./tencent-cdn-billing.md)。发布子用户权限模板：[`scripts/release/cos/cam-policy.json`](../../scripts/release/cos/cam-policy.json)。
+当前正式发布只写 COS：环境变量 `SecretId` / `SecretKey`（或 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`）。桶与区域默认使用 `ncurator-1324873382` / `ap-guangzhou`，可通过 `COS_BUCKET` / `COS_REGION` 覆盖；公开地址必须为 `https://download.guanzhangai.cn`。使用默认配置时无需将这些值写入 `.env`。CDN、DNS、资费与采购见 [`tencent-cdn-billing.md`](./tencent-cdn-billing.md)。发布子用户权限模板：[`scripts/release/cos/cam-policy.json`](../../scripts/release/cos/cam-policy.json)。
 
 国内官网 / 下载：`https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`。海外官网 `www.ncurator.com` 存在，但当前桌面端发行包与自动更新只走国内通道。国内 COS 发布完成后不要再同步同一 Tag 到 R2。
 
