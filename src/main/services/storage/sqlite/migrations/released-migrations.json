@@ -1,5 +1,5 @@
 {
-  "publishedThrough": 15,
+  "publishedThrough": 16,
   "migrations": [
     {
       "version": 1,
@@ -90,6 +90,12 @@
       "name": "ai_run_pending_messages",
       "file": "015_ai_run_pending_messages.ts",
       "sha256": "0253a6db8158648fd3540ece4e0d25db43fcc7ec14dd0aa084b6117de83c9111"
+    },
+    {
+      "version": 16,
+      "name": "subagent_sessions",
+      "file": "016_subagent_sessions.ts",
+      "sha256": "9f6dd4be81abc304ad7adcf188bf7e72febdbf7d84d1a43b4f195e63b035bf3b"
     }
   ]
 }
