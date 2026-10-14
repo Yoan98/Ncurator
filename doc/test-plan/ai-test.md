@@ -534,9 +534,9 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `human-ask-user-question`
 
 - 测试类型：`backend / mock-llm`
-- What：提问工具校验 1 至 3 个问题，支持单选、多选、无选项纯文本和用户协作请求；选项省略或为空均可，非空为 2 至 4 项；回答前阻止排在其后的副作用工具。
+- What：提问工具校验 1 至 3 个问题，支持单选、多选、无选项纯文本和用户协作请求；每题允许 0 至 4 个选项，省略或为空均可，单个候选项也可提交；回答前阻止排在其后的副作用工具。
 - Why：信息澄清和用户协作需要可靠等待与反馈；审批权限不能替用户回答或确认操作已完成。
-- How：`ask-user-question.test.ts` 通过生产 `createAiRunContext -> human graph -> real text_file_edit`，只脚本化 brain 输出；另用真实 dispatch 验证多个提问及提问与副作用工具混合时严格按原顺序执行，并在 `full_access` 策略下不提供 resolver。
+- How：`ask-user-question.test.ts` 通过生产 `createAiRunContext -> human graph -> real text_file_edit`，只脚本化 brain 输出；另用真实 dispatch 验证多个提问及提问与副作用工具混合时严格按原顺序执行，混合工具与连续提问包含单个候选项，并在 `full_access` 策略下不提供 resolver。
 - Oracle：run 进入 `waiting_human`；回答前排在提问后的写操作不会执行；结构化 `{ answers: [...] }` tool result 回到下一轮 brain；任一时刻只有一个 pending interaction；`full_access` 不会自动回答。
 
 ##### `hand-invalid-tool-input`

@@ -7,7 +7,7 @@ import {
 import { renderAskUserQuestionModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 
 describe('ask_user_question contract', () => {
-  it('accepts one to three questions with two to four options each', () => {
+  it('accepts one to three questions with zero to four options each', () => {
     const question = {
       id: 'goal',
       question: '选择目标',
@@ -21,11 +21,15 @@ describe('ask_user_question contract', () => {
       ASK_USER_QUESTION_SCHEMA.safeParse({ questions: [question, question, question, question] })
         .success
     ).toBe(false)
-    expect(
-      ASK_USER_QUESTION_SCHEMA.safeParse({
-        questions: [{ ...question, options: [{ id: 'a', label: '方案 A' }] }]
-      }).success
-    ).toBe(false)
+    for (const count of [0, 1, 2, 3, 4]) {
+      const options = Array.from({ length: count }, (_, index) => ({
+        id: `option-${index}`,
+        label: `方案 ${index + 1}`
+      }))
+      expect(
+        ASK_USER_QUESTION_SCHEMA.safeParse({ questions: [{ ...question, options }] }).success
+      ).toBe(true)
+    }
     expect(
       ASK_USER_QUESTION_SCHEMA.safeParse({
         questions: [

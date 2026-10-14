@@ -64,7 +64,7 @@ describe('workbench AI question e2e', () => {
           await selectWorkbenchExecutionPermission(page, '完全访问')
           await sendWorkbenchMessage(
             page,
-            '请帮我完善当前工作区里的 brief。请先用一次 ask_user_question 提出三题：单选主色（2至4项）、多选视觉风格（2至4项）、纯文字询问需要写入的主题（不提供选项）。等我回答完三题后再继续修改。'
+            '请帮我完善当前工作区里的 brief。请先用一次 ask_user_question 提出三题：单选主色（只提供蓝色一个选项）、多选视觉风格（2至4项）、纯文字询问需要写入的主题（不提供选项）。等我回答完三题后再继续修改。'
           )
 
           const required = await waitForWorkbenchAiEvent(runtime, {
@@ -98,21 +98,16 @@ describe('workbench AI question e2e', () => {
           if (questions.length < 1 || questions.length > 3) {
             throw new Error(`expected one to three questions, received ${questions.length}`)
           }
-          if (
-            questions.some(
-              (question) =>
-                (question.options?.length ?? 0) === 1 || (question.options?.length ?? 0) > 4
-            )
-          ) {
-            throw new Error('expected absent options or two to four options')
+          if (questions.some((question) => (question.options?.length ?? 0) > 4)) {
+            throw new Error('expected zero to four options')
           }
           if (
             !questions.some((question) => !question.options?.length) ||
             !questions.some((question) => question.multiSelect && question.options?.length) ||
-            !questions.some((question) => !question.multiSelect && question.options?.length)
+            !questions.some((question) => !question.multiSelect && question.options?.length === 1)
           )
             throw new Error(
-              'requested single, multiple and text question coverage was not produced'
+              'requested single-option, multiple-selection and text question coverage was not produced'
             )
           if (await card.getByText('其他，请填写').count())
             throw new Error('legacy other option is still present')

@@ -10,10 +10,7 @@ const questionArgs = {
     {
       id: 'accent',
       question: '封面强调哪种主色？',
-      options: [
-        { id: 'blue', label: '蓝色', recommended: true },
-        { id: 'green', label: '绿色', description: '更偏自然和稳定' }
-      ],
+      options: [{ id: 'blue', label: '蓝色', recommended: true }],
       multiSelect: false
     }
   ]
