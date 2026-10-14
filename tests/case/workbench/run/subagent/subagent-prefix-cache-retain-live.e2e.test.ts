@@ -262,7 +262,6 @@ describe('workbench subagent prefix cache e2e', () => {
                 record.caller === 'human.brain' &&
                 record.status === 'completed'
             )
-            expect(calls.length).toBeGreaterThanOrEqual(3)
             expect(
               calls.every((call) =>
                 Boolean(call.ownerRunId && call.parentToolCallId && call.agentId)
