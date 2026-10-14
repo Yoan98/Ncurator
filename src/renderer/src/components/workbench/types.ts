@@ -264,6 +264,9 @@ export type WorkbenchResourceTab = {
   >
 }
 
+/** An explicit user action, consumed once after its record is loaded. */
+export type WorkbenchReviewOpenRequest = { changeId: string }
+
 export type WorkbenchTabWorkspaceState = {
   tabs: WorkbenchResourceTab[]
   activeTabId: string | null

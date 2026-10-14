@@ -40,6 +40,8 @@ import {
   createScopeTokenElement,
   extractComposerDraftValue,
   getScopeKey,
+  hasComposerContent,
+  isComposerTextEmpty,
   moveCaretToEnd,
   moveCaretToTextNode,
   readComposerNodesFromEditor,
@@ -163,11 +165,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   useEffect(() => {
     draftValueRef.current = draftValue
-    setHasContent(
-      draftValue.contentNodes.length > 0 ||
-        Boolean(draftValue.input.trim()) ||
-        draftValue.attachments.length > 0
-    )
+    setHasContent(hasComposerContent(draftValue.contentNodes))
   }, [draftValue])
 
   useLayoutEffect(() => {
@@ -290,14 +288,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   }, [ensureEditorHasCaretTarget])
 
   const renderDraftNodes = useCallback(
-    (nodes: ComposerNode[], options?: { restoreCaret?: boolean }): void => {
+    (incomingNodes: ComposerNode[], options?: { restoreCaret?: boolean }): void => {
       const editor = editorRef.current
       if (!editor) return
+      const nodes = hasComposerContent(incomingNodes) ? incomingNodes : []
       rememberScopes(nodes)
       draftNodesRef.current = nodes
       renderComposerNodesToEditor(editor, nodes)
       ensureEditorHasCaretTarget()
-      setHasContent(nodes.length > 0 || draftValueRef.current.attachments.length > 0)
+      setHasContent(hasComposerContent(nodes))
       if (options?.restoreCaret && document.activeElement === editor) {
         moveCaretToEnd(editor)
       }
@@ -336,14 +335,25 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const editor = editorRef.current
     if (!editor) return
     stripCaretPlaceholderFromEditor()
-    const nodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
+    const parsedNodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
+    const nodes = hasComposerContent(parsedNodes) ? parsedNodes : []
+    if (!nodes.length) {
+      const child = editor.childNodes.length === 1 ? editor.firstChild : null
+      // Keep native empty nodes connected so deleting the last character remains undoable.
+      if (child instanceof HTMLBRElement) child.dataset.role = CARET_ANCHOR_ROLE
+      else if (!isTextNode(child) || child.data) {
+        editor.replaceChildren()
+        ensureEditorHasCaretTarget()
+        if (document.activeElement === editor) moveCaretToEnd(editor)
+      }
+    }
     draftNodesRef.current = nodes
-    setHasContent(nodes.length > 0)
+    setHasContent(hasComposerContent(nodes))
     const draft = extractComposerDraftValue(nodes)
     draft.attachments = draftValueRef.current.attachments || []
     rememberScopes(nodes)
     onDraftChange(draft)
-  }, [onDraftChange, rememberScopes, stripCaretPlaceholderFromEditor])
+  }, [onDraftChange, rememberScopes, stripCaretPlaceholderFromEditor, ensureEditorHasCaretTarget])
 
   const getMentionContext = useCallback((): MentionContext | null => {
     const editor = editorRef.current
@@ -554,9 +564,11 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const handleEditorInput = (): void => {
     if (isComposingRef.current) {
       const editor = editorRef.current
-      const hasText = Boolean(editor?.textContent?.trim())
-      const hasScopeToken = Boolean(editor?.querySelector('[data-role="scope-token"]'))
-      setHasContent(hasText || hasScopeToken)
+      const hasText = !isComposerTextEmpty(editor?.textContent || '')
+      const hasToken = Boolean(
+        editor?.querySelector('[data-role="scope-token"], [data-role="document-selection-token"]')
+      )
+      setHasContent(hasText || hasToken)
       return
     }
     syncDraftFromEditor()
@@ -575,11 +587,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         attachments: nextAttachments
       }
       draftValueRef.current = nextDraft
-      setHasContent(
-        nextDraft.contentNodes.length > 0 ||
-          Boolean(nextDraft.input.trim()) ||
-          nextDraft.attachments.length > 0
-      )
+      setHasContent(hasComposerContent(nextDraft.contentNodes))
       onDraftChange(nextDraft)
     },
     [onDraftChange]
@@ -595,11 +603,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         attachments: [...(current.attachments || []), ...nextItems]
       }
       draftValueRef.current = nextDraft
-      setHasContent(
-        nextDraft.contentNodes.length > 0 ||
-          Boolean(nextDraft.input.trim()) ||
-          nextDraft.attachments.length > 0
-      )
+      setHasContent(hasComposerContent(nextDraft.contentNodes))
       onDraftChange(nextDraft)
     },
     [onDraftChange]

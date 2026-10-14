@@ -152,3 +152,122 @@ export async function assertDocxReviewOverview(runtime: E2ETestRuntime): Promise
     message: 'DOCX 红删绿增位置概览'
   })
 }
+
+export async function assertDocxSharedScrollTrack(runtime: E2ETestRuntime): Promise<void> {
+  const { page } = runtime
+  const rail = page.getByTestId(workbenchSelectors.docxOverview)
+  const thumb = page.getByTestId(workbenchSelectors.docxOverviewThumb)
+  await thumb.waitFor({ state: 'visible' })
+  const read = () =>
+    rail.evaluate((element, ids) => {
+      const container = document.querySelector<HTMLElement>('.docx-content')!
+      const slider = element.querySelector<HTMLElement>(`[data-testid="${ids.docxOverviewThumb}"]`)!
+      const bounds = element.getBoundingClientRect(),
+        box = slider.getBoundingClientRect()
+      const max = container.scrollHeight - container.clientHeight
+      return {
+        scrollTop: container.scrollTop,
+        max,
+        rail: { x: bounds.left, y: bounds.top, height: bounds.height, width: bounds.width },
+        thumb: { x: box.left, y: box.top, height: box.height, width: box.width },
+        expectedTop: max ? (container.scrollTop / max) * (bounds.height - box.height) : 0,
+        thumbTop: box.top - bounds.top,
+        nativeWidth: getComputedStyle(container, '::-webkit-scrollbar').width,
+        focusCount: document.querySelectorAll(`[data-testid="${ids.docxOverviewFocus}"]`).length
+      }
+    }, workbenchSelectors)
+  const waitSynchronized = () =>
+    page.waitForFunction((ids) => {
+      const container = document.querySelector<HTMLElement>('.docx-content')!
+      const track = document.querySelector<HTMLElement>(`[data-testid="${ids.docxOverview}"]`)!
+      const slider = track.querySelector<HTMLElement>(`[data-testid="${ids.docxOverviewThumb}"]`)
+      if (!slider) return false
+      const box = slider.getBoundingClientRect(),
+        railBox = track.getBoundingClientRect()
+      const expected =
+        (container.scrollTop / (container.scrollHeight - container.clientHeight)) *
+        (railBox.height - box.height)
+      return Math.abs(box.top - railBox.top - expected) < 1
+    }, workbenchSelectors)
+  await rail.press('Home')
+  await waitSynchronized()
+  const initial = await read()
+  await page.mouse.click(initial.rail.x + 7, initial.rail.y + initial.rail.height - 5)
+  await page.waitForFunction(() => document.querySelector('.docx-content')!.scrollTop > 50)
+  await waitSynchronized()
+  const clicked = await read()
+  await page.mouse.move(clicked.rail.x + 7, clicked.rail.y + clicked.rail.height / 2)
+  await page.mouse.wheel(0, -120)
+  await page.waitForFunction(
+    (top) => document.querySelector('.docx-content')!.scrollTop < top,
+    clicked.scrollTop
+  )
+  await waitSynchronized()
+  const wheeled = await read()
+  await page.mouse.move(wheeled.thumb.x + 7, wheeled.thumb.y + wheeled.thumb.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(wheeled.rail.x + 7, wheeled.rail.y + wheeled.thumb.height / 2, {
+    steps: 10
+  })
+  await page.mouse.up()
+  await page.waitForFunction(() => document.querySelector('.docx-content')!.scrollTop < 1)
+  await waitSynchronized()
+  const dragged = await read()
+  const marker = page.getByTestId(workbenchSelectors.docxOverviewMarker).first()
+  const markerBox = await marker.boundingBox()
+  if (!markerBox) throw new Error('引用标记不可见')
+  const overlapsThumb =
+    markerBox.y < dragged.thumb.y + dragged.thumb.height &&
+    markerBox.y + markerBox.height > dragged.thumb.y
+  await marker.click()
+  await page.getByTestId(workbenchSelectors.docxOverviewFocus).first().waitFor({ state: 'visible' })
+  const focused = await readFocusedReference(page)
+  await page
+    .getByTestId(workbenchSelectors.docxOverviewFocus)
+    .first()
+    .waitFor({ state: 'detached' })
+  const markerBeforeDrag = await marker.boundingBox()
+  if (!markerBeforeDrag) throw new Error('引用标记不可见')
+  await page.mouse.move(
+    markerBeforeDrag.x + markerBeforeDrag.width / 2,
+    markerBeforeDrag.y + markerBeforeDrag.height / 2
+  )
+  await page.mouse.down()
+  await page.mouse.move(
+    markerBeforeDrag.x + markerBeforeDrag.width / 2,
+    markerBeforeDrag.y + markerBeforeDrag.height / 2 + 50,
+    { steps: 10 }
+  )
+  await page.mouse.up()
+  await waitSynchronized()
+  const draggedFromMarker = await read()
+  await runtime.assertThat(
+    initial.max > 50 &&
+      initial.rail.width === 16 &&
+      initial.thumb.width === 14 &&
+      initial.nativeWidth === '0px' &&
+      clicked.scrollTop > 50 &&
+      wheeled.scrollTop < clicked.scrollTop &&
+      dragged.scrollTop < 1 &&
+      dragged.focusCount === 0 &&
+      overlapsThumb &&
+      focused.length > 0 &&
+      draggedFromMarker.focusCount === 0 &&
+      draggedFromMarker.scrollTop > dragged.scrollTop &&
+      [clicked, wheeled, dragged, draggedFromMarker].every(
+        (e) => Math.abs(e.thumbTop - e.expectedTop) < 1
+      ),
+    {
+      name: 'docx-shared-scroll-track',
+      message:
+        'DOCX 仅保留 16px 共用轨道；空白点击、滚轮与拖动同步滑块，覆盖色块可定位，从色块拖动不误触定位。',
+      data: { initial, clicked, wheeled, dragged, overlapsThumb, focused, draggedFromMarker }
+    }
+  )
+  await rail.press('Home')
+  await page.locator('.docx-content').click({ position: { x: 5, y: 5 } })
+  await runtime.captureScreenshot({
+    name: 'docx-shared-scroll-track',
+    message: 'DOCX 标记与滑块同轨叠层'
+  })
+}

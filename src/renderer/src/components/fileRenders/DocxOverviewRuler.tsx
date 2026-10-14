@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { workbenchSelectors } from '../../testing/selectors'
 import type { SelectionRect } from './selection/floatingLayout'
@@ -12,6 +12,16 @@ type Target = {
   rects: () => SelectionRect[]
 }
 type Marker = { key: string; top: number; bottom: number; targets: Target[] }
+type Scrollbar = { top: number; height: number }
+type ScrollGesture = {
+  pointerId: number
+  startY: number
+  grabOffset: number
+  onThumb: boolean
+  dragging: boolean
+  marker?: Marker
+  button: HTMLButtonElement | null
+}
 const colors = {
   reference: '#A480C5',
   inserted: '#2F6F4E',
@@ -19,6 +29,19 @@ const colors = {
   formatted: '#2F6F4E'
 }
 const changeLabels = { inserted: '新增', deleted: '删除', formatted: '格式修改' }
+
+function measureScrollbar(container: HTMLElement, height: number): Scrollbar | null {
+  const maxScroll = container.scrollHeight - container.clientHeight
+  if (maxScroll <= 1 || height <= 0) return null
+  const thumbHeight = Math.min(
+    height,
+    Math.max(24, (height * container.clientHeight) / container.scrollHeight)
+  )
+  return {
+    top: Math.max(0, Math.min(1, container.scrollTop / maxScroll)) * (height - thumbHeight),
+    height: thumbHeight
+  }
+}
 
 function reviewTargets(container: HTMLElement): Target[] {
   return [...container.querySelectorAll<HTMLElement>('[data-docx-change]')].flatMap(
@@ -93,15 +116,21 @@ export default function DocxOverviewRuler({
 }) {
   const rail = useRef<HTMLDivElement>(null)
   const cycles = useRef(new Map<string, number>())
+  const gesture = useRef<ScrollGesture | null>(null)
   const [markers, setMarkers] = useState<Marker[]>([])
+  const [scrollbar, setScrollbar] = useState<Scrollbar | null>(null)
+  const [dragging, setDragging] = useState(false)
   const [active, setActive] = useState<Target | null>(null)
   const [focusRects, setFocusRects] = useState<SelectionRect[]>([])
 
   useEffect(() => {
     setActive(null)
     cycles.current.clear()
+    gesture.current = null
+    setDragging(false)
     if (!container || !rail.current || !revision) {
       setMarkers([])
+      setScrollbar(null)
       return
     }
     let targets =
@@ -121,9 +150,18 @@ export default function DocxOverviewRuler({
             }))
     let frame = 0
     let cancelled = false
+    const updateScrollbar = () => {
+      if (cancelled || !rail.current) return
+      const next = measureScrollbar(container, rail.current.clientHeight)
+      setScrollbar((previous) =>
+        previous?.top === next?.top && previous?.height === next?.height ? previous : next
+      )
+    }
     const measure = () => {
-      if (!cancelled && rail.current)
+      if (!cancelled && rail.current) {
         setMarkers(measureMarkers(targets, container, rail.current.clientHeight))
+        updateScrollbar()
+      }
     }
     const schedule = () => {
       cancelAnimationFrame(frame)
@@ -150,6 +188,7 @@ export default function DocxOverviewRuler({
       attributes: true
     })
     container.addEventListener('load', schedule, true)
+    container.addEventListener('scroll', updateScrollbar)
     document.fonts.addEventListener('loadingdone', schedule)
     void document.fonts.ready.then(() => {
       if (!cancelled) schedule()
@@ -161,9 +200,27 @@ export default function DocxOverviewRuler({
       resize.disconnect()
       mutations.disconnect()
       container.removeEventListener('load', schedule, true)
+      container.removeEventListener('scroll', updateScrollbar)
       document.fonts.removeEventListener('loadingdone', schedule)
     }
   }, [container, mode, revision, references])
+
+  useEffect(() => {
+    const element = rail.current
+    if (!container || !element) return
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault()
+      const unit =
+        event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? container.clientHeight
+          : event.deltaMode === WheelEvent.DOM_DELTA_LINE
+            ? 16
+            : 1
+      container.scrollBy({ top: event.deltaY * unit, behavior: 'instant' })
+    }
+    element.addEventListener('wheel', wheel, { passive: false })
+    return () => element.removeEventListener('wheel', wheel)
+  }, [container])
 
   useEffect(() => {
     if (!active || !container) {
@@ -218,16 +275,105 @@ export default function DocxOverviewRuler({
     setActive({ ...target })
   }
 
+  const scrollAtPointer = (clientY: number, grabOffset: number) => {
+    if (!container || !rail.current) return
+    const thumb = measureScrollbar(container, rail.current.clientHeight)
+    if (!thumb) return
+    const travel = rail.current.clientHeight - thumb.height
+    const top = clientY - rail.current.getBoundingClientRect().top - grabOffset
+    container.scrollTo({
+      top:
+        (Math.max(0, Math.min(travel, top)) / Math.max(1, travel)) *
+        (container.scrollHeight - container.clientHeight),
+      behavior: 'instant'
+    })
+  }
+
+  const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!container || event.button !== 0 || !event.isPrimary) return
+    event.preventDefault()
+    const element = event.currentTarget
+    const thumb = measureScrollbar(container, element.clientHeight)
+    const y = event.clientY - element.getBoundingClientRect().top
+    const onThumb = !!thumb && y >= thumb.top && y <= thumb.top + thumb.height
+    const button =
+      event.target instanceof Element
+        ? event.target.closest<HTMLButtonElement>('[data-marker-index]')
+        : null
+    gesture.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      grabOffset: thumb && onThumb ? y - thumb.top : (thumb?.height || 0) / 2,
+      onThumb,
+      dragging: false,
+      marker: button ? markers[Number(button.dataset.markerIndex)] : undefined,
+      button
+    }
+    element.setPointerCapture(event.pointerId)
+  }
+
+  const pointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const current = gesture.current
+    if (!current || current.pointerId !== event.pointerId) return
+    if (!current.dragging && Math.abs(event.clientY - current.startY) > 3) {
+      current.dragging = true
+      setDragging(true)
+    }
+    if (current.dragging) scrollAtPointer(event.clientY, current.grabOffset)
+  }
+
+  const endGesture = () => {
+    gesture.current = null
+    setDragging(false)
+  }
+
+  const pointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const current = gesture.current
+    if (!current || current.pointerId !== event.pointerId) return
+    endGesture()
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    if (current.dragging) return
+    if (current.marker) {
+      current.button?.focus({ preventScroll: true })
+      activate(current.marker)
+    } else if (!current.onThumb && container) {
+      const thumb = measureScrollbar(container, event.currentTarget.clientHeight)
+      if (thumb) scrollAtPointer(event.clientY, thumb.height / 2)
+    }
+  }
+
   return (
     <div
       ref={rail}
-      className="relative h-full w-[16px] shrink-0 border-l border-[#EEEEEC] bg-[#FBFBFA]"
+      className="docx-overview relative h-full w-[16px] shrink-0 touch-none select-none bg-[#F7F7F5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0B6BCB]"
       data-testid={workbenchSelectors.docxOverview}
       data-mode={mode}
+      data-dragging={dragging}
       role="navigation"
-      aria-label="文档位置标记"
+      aria-label="文档滚动与位置标记"
+      tabIndex={0}
+      onPointerDown={pointerDown}
+      onPointerMove={pointerMove}
+      onPointerUp={pointerUp}
+      onPointerCancel={endGesture}
+      onLostPointerCapture={endGesture}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || !container) return
+        const steps: Record<string, number> = {
+          ArrowUp: -40,
+          ArrowDown: 40,
+          PageUp: -container.clientHeight,
+          PageDown: container.clientHeight,
+          Home: -container.scrollHeight,
+          End: container.scrollHeight
+        }
+        if (!(event.key in steps)) return
+        event.preventDefault()
+        container.scrollBy({ top: steps[event.key], behavior: 'instant' })
+      }}
     >
-      {markers.map((marker) => {
+      {markers.map((marker, index) => {
         const kind = marker.targets[0].kind
         const label =
           [...new Set(marker.targets.map((t) => t.label))].join('、') +
@@ -239,6 +385,7 @@ export default function DocxOverviewRuler({
             title={label}
             aria-label={label}
             data-testid={workbenchSelectors.docxOverviewMarker}
+            data-marker-index={index}
             data-kinds={[...new Set(marker.targets.map((t) => t.kind))].join(' ')}
             className="absolute cursor-pointer rounded-[1px] border-0 p-0 hover:brightness-90 focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0B6BCB]"
             style={{
@@ -248,10 +395,22 @@ export default function DocxOverviewRuler({
               width: kind === 'reference' ? 13 : 6,
               backgroundColor: colors[kind]
             }}
-            onClick={() => activate(marker)}
+            onClick={(event) => {
+              // Pointer gestures are handled by the shared track; native button
+              // activation (Enter/Space and assistive technology) still locates.
+              if (event.detail === 0) activate(marker)
+            }}
           />
         )
       })}
+      {scrollbar && (
+        <div
+          aria-hidden="true"
+          data-testid={workbenchSelectors.docxOverviewThumb}
+          className="docx-overview-thumb pointer-events-none absolute left-[1px] w-[14px] rounded-[2px]"
+          style={{ top: scrollbar.top, height: scrollbar.height }}
+        />
+      )}
       {active &&
         createPortal(
           focusRects.map((rect, index) => (

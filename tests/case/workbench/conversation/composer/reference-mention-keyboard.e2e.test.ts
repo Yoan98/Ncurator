@@ -135,6 +135,53 @@ describe('workbench conversation e2e', () => {
             message:
               '目录图标为 16px、其他类型为 18px；候选与输入图形一致，后续输入保留引用与文字。'
           })
+          const placeholder = input.locator('..').getByText(/^输入你想让.*做的事情或者@文件$/)
+          await input.press('ControlOrMeta+a')
+          await input.press('Backspace')
+          await placeholder.waitFor({ state: 'visible' })
+          const emptyHeight = await input.evaluate(
+            (element) => element.getBoundingClientRect().height
+          )
+          await input.press('Shift+Enter')
+          await input.press('Shift+Enter')
+          await input.press('ArrowUp')
+          await input.press('ArrowDown')
+          await input.click({ position: { x: 4, y: 4 } })
+          await input.press('Delete')
+          await appendWorkbenchInputText(page, ' \n\t\u200b\ufeff')
+          await placeholder.waitFor({ state: 'visible' })
+          const emptyAfterWhitespace = await input.evaluate((element) => ({
+            text: element.textContent,
+            height: element.getBoundingClientRect().height,
+            tokens: element.querySelectorAll('[data-role="scope-token"]').length,
+            children: Array.from(element.children).map((child) => ({
+              tag: child.tagName,
+              role: child.getAttribute('data-role')
+            }))
+          }))
+          await appendWorkbenchInputText(page, '第一行\n第二行')
+          const manualNewlinePreserved =
+            (await input.textContent()) === '第一行\n第二行' && !(await placeholder.isVisible())
+          await input.press('ControlOrMeta+a')
+          await input.press('Delete')
+          await placeholder.waitFor({ state: 'visible' })
+          await input.press('ControlOrMeta+z')
+          const undoPreservedText = (await input.textContent()) === '第一行\n第二行'
+          await input.press('ControlOrMeta+a')
+          await input.press('Delete')
+          await appendWorkbenchInputText(page, '待删除')
+          await input.press('Backspace')
+          await input.press('Backspace')
+          await input.press('Backspace')
+          await page.keyboard.press('Tab')
+          await input.click()
+          await placeholder.waitFor({ state: 'visible' })
+          await runtime.captureScreenshot({
+            name: 'composer-placeholder-restored',
+            message: '删除引用和正文后恢复占位，空白换行与零宽字符不残留幽灵空行。'
+          })
+          await appendWorkbenchInputText(page, '已恢复')
+          const typingAfterEmpty = (await input.textContent()) === '已恢复'
           return {
             originalMentionIcons,
             originalTokenIcon,
@@ -142,6 +189,11 @@ describe('workbench conversation e2e', () => {
             neutralToken,
             compactDirectoryIcon,
             tokenStableAfterTyping,
+            emptyHeight,
+            emptyAfterWhitespace,
+            manualNewlinePreserved,
+            undoPreservedText,
+            typingAfterEmpty,
             activeBeforeArrowDown,
             activeAfterArrowDown,
             activeAfterSettled
@@ -162,6 +214,23 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-reference-mention-keyboard-active-index',
               message: '@ 候选列表按下键后，高亮项应移动到下一项，并在短暂停留后保持不变。',
+              data: result
+            }
+          )
+          await runtime.assertThat(
+            result.emptyAfterWhitespace.text === '' &&
+              result.emptyAfterWhitespace.tokens === 0 &&
+              result.emptyAfterWhitespace.height <= result.emptyHeight + 1 &&
+              result.emptyAfterWhitespace.children.every(
+                (child) => child.tag === 'BR' && child.role === 'composer-caret-anchor'
+              ) &&
+              result.manualNewlinePreserved &&
+              result.undoPreservedText &&
+              result.typingAfterEmpty,
+            {
+              name: 'composer-empty-content-placeholder',
+              message:
+                '清空引用/正文、空白/零宽字符与空换行后占位恢复，无幽灵空行，正常多行输入保留。',
               data: result
             }
           )

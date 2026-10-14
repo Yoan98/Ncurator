@@ -108,7 +108,10 @@ import {
 } from '../../../shared/chatContent'
 import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
 import type { ComposerDraftValue } from '../components/workbench/composer/types'
-import { renumberComposerSelections } from '../components/workbench/composer/utils'
+import {
+  hasComposerContent,
+  renumberComposerSelections
+} from '../components/workbench/composer/utils'
 import {
   WORKBENCH_CONTENT_PANEL_COLLAPSE_WIDTH,
   WORKBENCH_CONTENT_PANEL_DEFAULT_RATIO,
@@ -130,6 +133,7 @@ import type {
   AssistantTurnViewModel,
   WorkbenchContextUsage,
   WorkbenchContentPanelState,
+  WorkbenchReviewOpenRequest,
   WorkbenchFileRef,
   WorkbenchResourceTab,
   WorkbenchTabWorkspaceState,
@@ -966,6 +970,10 @@ const ChatPage: React.FC = () => {
   const restoreContentPanelWithoutAnimationRef = useRef(false)
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
+  const [reviewOpenRequest, setReviewOpenRequest] = useState<WorkbenchReviewOpenRequest | null>(
+    null
+  )
+  const reviewOpenSequence = useRef(0)
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
   const [partnerFileChangeRecords, setPartnerFileChangeRecords] = useState<AiFileChangeRecord[]>([])
   const partnerFileChangeLoadRequestRef = useRef(0)
@@ -3311,7 +3319,11 @@ const ChatPage: React.FC = () => {
   )
 
   const openFileChange = useCallback((changeId: string): void => {
+    const sequence = ++reviewOpenSequence.current
     void window.api.aiFileChangeGet({ changeId }).then((response) => {
+      if (sequence !== reviewOpenSequence.current) return
+      if (response.record && response.record.partnerId !== currentPartnerIdRef.current) return
+      setReviewOpenRequest({ changeId })
       if (response.record) {
         void loadFileChangesForPartnerRef.current(
           response.record.partnerId,
@@ -4791,14 +4803,15 @@ const ChatPage: React.FC = () => {
       const existing = documentSelections(draft.contentNodes).find((item) => item.id === node.id)
       const saved: DocumentSelectionNode = { ...node, number: existing?.number || 0 }
       if (location) locations.set(saved.id, location)
-      const lastNode = draft.contentNodes.at(-1)
+      const currentContent = hasComposerContent(draft.contentNodes) ? draft.contentNodes : []
+      const lastNode = currentContent.at(-1)
       const needsSeparator = lastNode && (lastNode.kind !== 'text' || !/\s$/.test(lastNode.text))
       const contentNodes: ChatMessageContentNode[] = existing
         ? draft.contentNodes.map((item) =>
             item.kind === 'document_selection' && item.id === saved.id ? saved : item
           )
         : [
-            ...draft.contentNodes,
+            ...currentContent,
             ...(needsSeparator ? [{ kind: 'text' as const, text: ' ' }] : []),
             saved
           ]
@@ -5351,6 +5364,7 @@ const ChatPage: React.FC = () => {
                         tabs={tabWorkspace.tabs}
                         activeTabId={tabWorkspace.activeTabId}
                         activeApplyRecord={activeApplyRecord}
+                        reviewOpenRequest={reviewOpenRequest}
                         applyLoading={applyLoading}
                         applyReverting={applyReverting}
                         workspaces={workspaces}

@@ -13,6 +13,30 @@
   overflow-x: hidden;
 }
 
+.docx-content-with-overview {
+  scrollbar-width: none;
+}
+
+.docx-content-with-overview::-webkit-scrollbar {
+  width: 0;
+}
+
+.docx-overview-thumb {
+  background: rgba(95, 93, 87, 0.26);
+}
+
+.docx-overview:hover .docx-overview-thumb {
+  background: rgba(95, 93, 87, 0.38);
+}
+
+.docx-overview[data-dragging='true'] .docx-overview-thumb {
+  background: rgba(95, 93, 87, 0.48);
+}
+
+.docx-overview[data-dragging='true'] {
+  cursor: grabbing;
+}
+
 .docx-content ::selection {
   background: #dbc5f6;
   color: inherit;

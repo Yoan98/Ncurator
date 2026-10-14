@@ -246,7 +246,8 @@ describe('workbench result e2e', () => {
             .waitFor({ state: 'visible', timeout: 30_000 })
           const previewContainsExternalC = true
           const previewModeTag = (await documentModeTag.textContent())?.trim()
-          await documentModeToggle.click()
+          await restoredApplyEntry.click()
+          await documentModeTag.getByText('审核', { exact: true }).waitFor()
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
           const restoredToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const restoredModeTag = (await documentModeTag.textContent())?.trim()
@@ -431,11 +432,10 @@ describe('workbench result e2e', () => {
           await currentSessionChanges.first().click()
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
           const modeAfterLatestGroupClick = (await documentModeTag.textContent())?.trim()
-          const latestGroupClickClosedExplorer =
-            (await getWorkbenchLocator(
-              page,
-              workbenchSelectors.workspaceExplorerOverlay
-            ).count()) === 0
+          const latestGroupClickPreservedExplorer = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.workspaceExplorerOverlay
+          ).isVisible()
 
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
@@ -501,7 +501,7 @@ describe('workbench result e2e', () => {
             currentSessionChangeMarkerCount,
             modeBeforeLatestGroupClick,
             modeAfterLatestGroupClick,
-            latestGroupClickClosedExplorer,
+            latestGroupClickPreservedExplorer,
             restoredBytes: afterRevertBytes.equals(beforeBytes),
             fileStillVisible
           }
@@ -562,7 +562,7 @@ describe('workbench result e2e', () => {
               result.currentSessionChangeMarkerCount >= 1 &&
               result.modeBeforeLatestGroupClick === '预览' &&
               result.modeAfterLatestGroupClick === '审核' &&
-              result.latestGroupClickClosedExplorer &&
+              result.latestGroupClickPreservedExplorer &&
               result.restoredBytes &&
               result.fileStillVisible,
             {

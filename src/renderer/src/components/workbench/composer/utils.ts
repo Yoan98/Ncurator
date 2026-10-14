@@ -33,6 +33,13 @@ export const createScopeNode = (scope: SelectedReference): ComposerNode => ({
 
 export const getScopeKey = (scope: SelectedReference): string => getReferenceKey(scope)
 
+export const isComposerTextEmpty = (text: string): boolean =>
+  !text.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').trim()
+
+export const hasComposerContent = (
+  nodes: readonly (ComposerNode | ChatMessageContentNode)[]
+): boolean => nodes.some((node) => node.kind !== 'text' || !isComposerTextEmpty(node.text))
+
 export const normalizeComposerNodes = (nodes: ComposerNode[]): ComposerNode[] => {
   const nextNodes: ComposerNode[] = []
   nodes.forEach((node) => {

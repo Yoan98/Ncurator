@@ -22,7 +22,12 @@ import type { FileRenderDocument } from '../fileRenders'
 import { classifyEditableTextKind, type EditableTextKind } from '../fileRenders/editableTextKind'
 import { resolveRegisteredPreviewType } from '../fileRenders/capabilities'
 import WorkbenchBrowserPanel from './WorkbenchBrowserPanel'
-import type { WorkbenchContentPanelState, WorkbenchResourceTab, WorkspaceLoadState } from './types'
+import type {
+  WorkbenchContentPanelState,
+  WorkbenchResourceTab,
+  WorkbenchReviewOpenRequest,
+  WorkspaceLoadState
+} from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
@@ -39,6 +44,7 @@ type WorkbenchContentPanelProps = {
   tabs: WorkbenchResourceTab[]
   activeTabId: string | null
   activeApplyRecord: AiFileChangeRecord | null
+  reviewOpenRequest: WorkbenchReviewOpenRequest | null
   applyLoading: boolean
   applyReverting: boolean
   workspaces: WorkspaceSource[]
@@ -70,6 +76,7 @@ type WorkbenchContentPanelProps = {
 }
 
 type DocumentDisplayMode = 'preview' | 'review'
+type DocumentDisplayState = { mode: DocumentDisplayMode; status: AiFileChangeRecord['status'] }
 
 const getDefaultDocumentDisplayMode = (
   status: AiFileChangeRecord['status'] | null | undefined
@@ -595,6 +602,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   tabs,
   activeTabId,
   activeApplyRecord,
+  reviewOpenRequest,
   applyLoading,
   applyReverting,
   workspaces,
@@ -629,7 +637,22 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     state.kind === 'apply_workspace' ? 'changed' : 'all'
   )
   const [explorerReloadToken, setExplorerReloadToken] = useState(0)
-  const [documentDisplayMode, setDocumentDisplayMode] = useState<DocumentDisplayMode>('review')
+  const [documentDisplayModes, setDocumentDisplayModes] = useState<
+    Record<string, DocumentDisplayState>
+  >({})
+  const handledReviewOpen = React.useRef<WorkbenchReviewOpenRequest | null>(null)
+  const savedMode = activeApplyRecord ? documentDisplayModes[activeApplyRecord.id] : undefined
+  const documentDisplayMode =
+    savedMode && savedMode.status === activeApplyRecord?.status
+      ? savedMode.mode
+      : getDefaultDocumentDisplayMode(activeApplyRecord?.status)
+  const setDocumentDisplayMode = (mode: DocumentDisplayMode): void => {
+    if (!activeApplyRecord) return
+    setDocumentDisplayModes((current) => ({
+      ...current,
+      [activeApplyRecord.id]: { mode, status: activeApplyRecord.status }
+    }))
+  }
   const [previewRevision, setPreviewRevision] = useState(0)
   const [editableKind, setEditableKind] = useState<EditableTextKind>(null)
   const aiRunActiveRef = React.useRef(isAiRunActive)
@@ -701,10 +724,33 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     }
     previousExplorerOpenRef.current = explorerOpen
   }, [bumpExplorerReload, explorerOpen])
-  useEffect(
-    () => setDocumentDisplayMode(getDefaultDocumentDisplayMode(activeApplyRecord?.status)),
-    [activeApplyRecord?.id, activeApplyRecord?.status]
-  )
+  React.useLayoutEffect(() => {
+    if (
+      !reviewOpenRequest ||
+      handledReviewOpen.current === reviewOpenRequest ||
+      state.kind !== 'apply_workspace' ||
+      state.applyId !== reviewOpenRequest.changeId ||
+      activeApplyRecord?.id !== reviewOpenRequest.changeId
+    )
+      return
+    handledReviewOpen.current = reviewOpenRequest
+    const { id, status } = activeApplyRecord
+    const mode = getDefaultDocumentDisplayMode(status)
+    setDocumentDisplayModes((current) =>
+      current[id]?.mode === mode && current[id]?.status === status
+        ? current
+        : { ...current, [id]: { mode, status } }
+    )
+  }, [reviewOpenRequest, state, activeApplyRecord])
+  useEffect(() => {
+    const openRecords = new Set(
+      tabs.flatMap((tab) => (tab.state.kind === 'apply_workspace' ? [tab.state.applyId] : []))
+    )
+    setDocumentDisplayModes((current) => {
+      const entries = Object.entries(current).filter(([id]) => openRecords.has(id))
+      return entries.length === Object.keys(current).length ? current : Object.fromEntries(entries)
+    })
+  }, [tabs])
   useEffect(() => {
     aiRunActiveRef.current = isAiRunActive
     if (isAiRunActive) {
@@ -887,7 +933,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     activePathRef.current = activePath
   }, [activePath])
   const openWorkspaceChangeFromExplorer = (change: AiFileChangeRecord): void => {
-    setDocumentDisplayMode(getDefaultDocumentDisplayMode(change.status))
     explorerNavigationRef.current = state.kind !== 'apply_workspace'
     onOpenWorkspaceChange(change.id)
   }
@@ -987,8 +1032,8 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   onSwitchDisplayMode={
                     canSwitchDocumentDisplayMode(activeApplyRecord)
                       ? () =>
-                          setDocumentDisplayMode((current) =>
-                            current === 'review' ? 'preview' : 'review'
+                          setDocumentDisplayMode(
+                            documentDisplayMode === 'review' ? 'preview' : 'review'
                           )
                       : undefined
                   }
@@ -1071,6 +1116,7 @@ const areContentPanelPropsEqual = (
   previous.tabs === next.tabs &&
   previous.activeTabId === next.activeTabId &&
   previous.activeApplyRecord === next.activeApplyRecord &&
+  previous.reviewOpenRequest === next.reviewOpenRequest &&
   previous.applyLoading === next.applyLoading &&
   previous.applyReverting === next.applyReverting &&
   previous.workspaces === next.workspaces &&

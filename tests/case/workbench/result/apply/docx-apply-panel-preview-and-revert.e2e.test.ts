@@ -7,6 +7,7 @@ import {
   assertNoWorkbenchFakeSignals,
   getWorkbenchLocator,
   insertWorkbenchReferenceToken,
+  openWorkbenchWorkspaceFile,
   readDocxPlainText,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
@@ -116,9 +117,43 @@ describe('workbench result e2e', () => {
             page,
             workbenchSelectors.applyRevertButton
           ).count()
-          await documentModeToggle.click()
+          await applyEntry.click()
+          await documentModeTag.getByText('审核', { exact: true }).waitFor()
           const restoredToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const restoredModeTag = (await documentModeTag.textContent())?.trim()
+          await documentModeToggle.click()
+          await documentModeTag.getByText('预览', { exact: true }).waitFor()
+          const openOrdinaryFile = async (name: string): Promise<void> => {
+            const modes = getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerModeSwitch)
+            if (!(await modes.isVisible()))
+              await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+            await modes.getByRole('button', { name: '全部', exact: true }).click()
+            await openWorkbenchWorkspaceFile(runtime, name)
+            await page.keyboard.press('Escape')
+          }
+          await openOrdinaryFile('工作/客户周会纪要.docx')
+          const originalTab = page
+            .locator(`[data-testid^="${workbenchSelectors.resourceTabPrefix}-"]`)
+            .filter({ hasText: 'sample-edit.docx' })
+          await originalTab.getByRole('button').first().click()
+          await documentModeTag.getByText('预览', { exact: true }).waitFor()
+          const modeAfterTabSwitch = (await documentModeTag.textContent())?.trim()
+          await openOrdinaryFile('sample-edit.docx')
+          await documentModeTag.getByText('预览', { exact: true }).waitFor()
+          await applyEntry.click()
+          await documentModeTag.getByText('审核', { exact: true }).waitFor()
+          await runtime.assertThat(
+            restoredModeTag === '审核' &&
+              modeAfterTabSwitch === '预览' &&
+              (await originalTab.count()) === 1 &&
+              (await documentModeTag.textContent())?.trim() === '审核',
+            {
+              name: 'docx-modification-entry-opens-review',
+              message:
+                '同一修改入口重复点击及普通预览进入修改都打开审核，原 Tab 复用，单纯切 Tab 保留预览。',
+              data: { restoredModeTag, modeAfterTabSwitch, tabCount: await originalTab.count() }
+            }
+          )
           const openSystemButtonVisible = await getWorkbenchLocator(
             page,
             workbenchSelectors.applyOpenSystemButton
@@ -171,6 +206,9 @@ describe('workbench result e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           await documentModeTag.getByText('预览', { exact: true }).waitFor({ state: 'visible' })
+          await assertEmptyDocxOverview(runtime)
+          await applyEntry.click()
+          await documentModeTag.getByText('预览', { exact: true }).waitFor()
           await assertEmptyDocxOverview(runtime)
           const revertedModeTag = (await documentModeTag.textContent())?.trim()
           const revertedToggleLabel = await documentModeToggle.getAttribute('aria-label')

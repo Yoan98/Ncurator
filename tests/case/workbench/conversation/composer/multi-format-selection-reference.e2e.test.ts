@@ -357,11 +357,9 @@ describe('workbench conversation e2e', () => {
           }
           const composer = getWorkbenchLocator(page, workbenchSelectors.input)
           const tokens = composer.locator('[data-role="document-selection-token"]')
-          await appendWorkbenchInputText(page, '@sample-edit.docx')
-          await waitForWorkbenchMentionPanelText(page)
-          await getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
-            .getByRole('button', { name: /sample-edit\.docx/ })
-            .click()
+          await composer.click()
+          await composer.press('Shift+Enter')
+          await composer.press('Shift+Enter')
           await openPreviewFile(names[0])
           const text = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
           const textClip = await text.evaluate((element) => {
@@ -380,6 +378,26 @@ describe('workbench conversation e2e', () => {
             data: { copiedText }
           })
           await confirm(page, 'text', '只解释这段文本，不修改文件。')
+          await runtime.assertThat(
+            await tokens.first().evaluate((token) => {
+              const editor = token.closest('[contenteditable="true"]')
+              return (
+                editor && token.getBoundingClientRect().top - editor.getBoundingClientRect().top < 5
+              )
+            }),
+            {
+              name: 'first-reference-no-blank-line',
+              message: '空草稿残留的换行不进入首个文档引用，引用从第一行开始。'
+            }
+          )
+          await appendWorkbenchInputText(page, ' @sample-edit.docx')
+          await waitForWorkbenchMentionPanelText(page)
+          await getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
+            .getByRole('button', { name: /sample-edit\.docx/ })
+            .click()
+          await getWorkbenchLocator(page, workbenchSelectors.mentionPanel).waitFor({
+            state: 'detached'
+          })
           await runtime.assertThat(
             await composer.evaluate((element) => {
               const reference = element.querySelector('[data-role="scope-token"]')
@@ -444,9 +462,12 @@ describe('workbench conversation e2e', () => {
           )
           await text.fill(before[0].toString('utf8'))
           await tokens.first().click()
-          await composer.click()
-          await page.keyboard.press('ControlOrMeta+End')
-          await page.keyboard.press('Shift+Enter')
+          const composerWidth = await composer.evaluate(
+            (element) => element.getBoundingClientRect().width
+          )
+          await composer.click({ position: { x: composerWidth - 4, y: 4 } })
+          await composer.press('ControlOrMeta+End')
+          await composer.press('Shift+Enter')
           const textBeforeMarkdown = await composer.textContent()
           await openPreviewFile(names[1])
           const markdown = page.locator('.vditor-ir .vditor-reset')

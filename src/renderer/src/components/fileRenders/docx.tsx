@@ -220,7 +220,7 @@ export const DocxPreview = ({
     >
       <div
         ref={setContainer}
-        className="docx-content h-full min-w-0 flex-1 overflow-auto px-3 py-3"
+        className={`docx-content h-full min-w-0 flex-1 overflow-auto px-3 py-3 ${currentDocument.metadata?.docxOverview ? 'docx-content-with-overview' : ''}`}
       />
       {currentDocument.metadata?.allowDocumentSelection && currentDocument.filePath && ready ? (
         <DocxSelectionLayer

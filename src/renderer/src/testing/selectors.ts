@@ -295,6 +295,7 @@ export const workbenchSelectors = {
   docxViewer: 'workbench-docx-viewer',
   docxOverview: 'workbench-docx-overview',
   docxOverviewMarker: 'workbench-docx-overview-marker',
+  docxOverviewThumb: 'workbench-docx-overview-thumb',
   docxOverviewFocus: 'workbench-docx-overview-focus',
   pptDiffViewer: 'workbench-ppt-diff-viewer',
   pptDiffBefore: 'workbench-ppt-diff-before',

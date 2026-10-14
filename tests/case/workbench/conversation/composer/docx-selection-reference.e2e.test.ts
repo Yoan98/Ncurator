@@ -1,5 +1,6 @@
 import {
   assertDocxReferenceOverview,
+  assertDocxSharedScrollTrack,
   assertEmptyDocxOverview
 } from '../../../../harness/e2e/docxOverview'
 import fs from 'node:fs/promises'
@@ -210,6 +211,10 @@ describe('workbench conversation e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const openDocxFile = async (name: string): Promise<void> => {
+            await openWorkbenchWorkspaceFile(runtime, name)
+            await page.keyboard.press('Escape')
+          }
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
           const composer = getWorkbenchLocator(page, workbenchSelectors.input)
           const sourcePaths = ['工作/客户周会纪要.docx', 'docx-selection-layout.docx'].map((name) =>
@@ -234,7 +239,7 @@ describe('workbench conversation e2e', () => {
                   ?.textContent
               }))
             )
-          await openWorkbenchWorkspaceFile(runtime, 'sample-edit.docx')
+          await openDocxFile('sample-edit.docx')
           await page.locator('.docx-content article p').first().waitFor({ state: 'visible' })
           await assertEmptyDocxOverview(runtime)
           for (const selection of [
@@ -379,7 +384,7 @@ describe('workbench conversation e2e', () => {
           })
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
           await composer.fill('')
-          await openWorkbenchWorkspaceFile(runtime, '工作/客户周会纪要.docx')
+          await openDocxFile('工作/客户周会纪要.docx')
           await page
             .locator('.docx-content article p')
             .first()
@@ -444,6 +449,7 @@ describe('workbench conversation e2e', () => {
           const tokenIcon =
             (await composer.locator('[data-role="document-selection-token"] svg').count()) === 1
           const highlightedQuote = await observeSavedSelections(page)
+          await assertDocxSharedScrollTrack(runtime)
           const blankPoint = await page
             .locator('.docx-content article p')
             .nth(1)
@@ -464,7 +470,40 @@ describe('workbench conversation e2e', () => {
           const windowHandle = await runtime.electronApp.browserWindow(page)
           const originalSize = await windowHandle.evaluate((window) => window.getSize())
           await windowHandle.evaluate((window) => window.setSize(1100, 720))
-          await selectText(page, 9, 0, 9, 2)
+          const shell = getWorkbenchLocator(page, workbenchSelectors.contentPanelShell)
+          const originalPanelWidth = await shell.evaluate(
+            (element) => element.getBoundingClientRect().width
+          )
+          const resizePanel = async (width: number): Promise<void> => {
+            const handle = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.contentPanelResizer
+            ).boundingBox()
+            if (!handle) throw new Error('右栏分隔条不可见')
+            const currentWidth = await shell.evaluate(
+              (element) => element.getBoundingClientRect().width
+            )
+            const x = handle.x + handle.width / 2,
+              y = handle.y + handle.height / 2
+            await page.mouse.move(x, y)
+            await page.mouse.down()
+            await page.mouse.move(x + currentWidth - width, y, { steps: 10 })
+            await page.mouse.up()
+            await page.waitForFunction(
+              ({ id, width }) =>
+                Math.abs(
+                  document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().width -
+                    width
+                ) < 2,
+              { id: workbenchSelectors.contentPanelShell, width }
+            )
+          }
+          await resizePanel(360)
+          const lastParagraphLength = await page
+            .locator('.docx-content article p')
+            .nth(9)
+            .evaluate((paragraph) => paragraph.textContent?.length || 0)
+          await selectText(page, 9, lastParagraphLength - 2, 9, lastParagraphLength)
           await page.getByTestId('docx-selection-thought').fill('缩放保留此输入')
           const scroll = await page.evaluate(() => {
             const viewer = document.querySelector('.docx-content')!
@@ -476,13 +515,31 @@ describe('workbench conversation e2e', () => {
             const end = range instanceof Range ? [...range.getClientRects()].at(-1) : null
             if (!end) throw new Error('选区未高亮')
             return {
-              x: viewport.left + 5,
+              x: viewport.left + viewport.width / 2,
               y: viewport.top + 20,
+              scrollTop: viewer.scrollTop,
               delta: end.bottom - (viewport.bottom - 12)
             }
           })
           await page.mouse.move(scroll.x, scroll.y)
           await page.mouse.wheel(0, scroll.delta)
+          runtime.signal({
+            name: 'selection-flip-scroll-evidence',
+            message: '记录真实滚轮目标、滚动位置和浮层避让位置。',
+            data: await page.evaluate((point) => {
+              const viewer = document.querySelector<HTMLElement>('.docx-content')!
+              const popup = document.querySelector<HTMLElement>(
+                '[data-testid="docx-selection-popup"]'
+              )
+              return {
+                requested: point,
+                scrollTop: viewer.scrollTop,
+                maxScroll: viewer.scrollHeight - viewer.clientHeight,
+                target: document.elementFromPoint(point.x, point.y)?.className,
+                placement: popup?.dataset.placement
+              }
+            }, scroll)
+          })
           await page.waitForFunction(
             () =>
               document.querySelector<HTMLElement>('[data-testid="docx-selection-popup"]')?.dataset
@@ -493,6 +550,7 @@ describe('workbench conversation e2e', () => {
             name: 'selection-flipped',
             message: '预览底部选区的输入条向上避让'
           })
+          await resizePanel(originalPanelWidth)
           await windowHandle.evaluate(
             (window, size) => window.setSize(size[0], size[1]),
             originalSize
@@ -513,9 +571,24 @@ describe('workbench conversation e2e', () => {
           const resizedText = await page.getByTestId('docx-selection-thought').textContent()
           await page.getByTestId('docx-selection-thought').press('Escape')
           await composer.locator('[data-role="document-selection-token"]').click()
-          await composer.locator('[data-role="document-selection-thought"]').click()
-          await page.keyboard.press('End')
-          await page.keyboard.type(' 重点说明谨慎表述。')
+          const thoughtPoint = await composer
+            .locator('[data-role="document-selection-thought"]')
+            .evaluate((element) => {
+              const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+              let last: Text | null = null
+              while (walker.nextNode()) {
+                if (walker.currentNode instanceof Text && walker.currentNode.length)
+                  last = walker.currentNode
+              }
+              if (!last) throw new Error('引用想法没有文字')
+              const range = document.createRange()
+              range.setStart(last, last.length - 1)
+              range.setEnd(last, last.length)
+              const box = range.getBoundingClientRect()
+              return { x: box.left + box.width / 4, y: box.top + box.height / 2 }
+            })
+          await page.mouse.click(thoughtPoint.x, thoughtPoint.y)
+          await page.keyboard.type(' 重点说明谨慎表述')
           const locatedUi = await observeSavedSelections(page)
           await runtime.assertThat(locatedUi.quotes.length === 1 && locatedUi.numberCount === 0, {
             name: 'selection-highlight-after-locating',
@@ -566,7 +639,7 @@ describe('workbench conversation e2e', () => {
             .click()
           await composer.locator('[data-role="document-selection-token"]').waitFor()
           const memoryRestored = (await composer.textContent())?.includes('风险控制建议') || false
-          await openWorkbenchWorkspaceFile(runtime, '人工智能探究课堂PRD.docx')
+          await openDocxFile('人工智能探究课堂PRD.docx')
           await page
             .locator('.docx-content article td p')
             .first()
@@ -598,7 +671,7 @@ describe('workbench conversation e2e', () => {
           await clickSavedText(page, 0, 0, 'article td p')
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
 
-          await openWorkbenchWorkspaceFile(runtime, 'docx-selection-layout.docx')
+          await openDocxFile('docx-selection-layout.docx')
           await page.locator('.docx-content article table').waitFor({ state: 'visible' })
           const cellSelector = 'article table td p'
           const cellTexts = await page
@@ -865,7 +938,7 @@ describe('workbench conversation e2e', () => {
           await composer.click()
           await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
           await page.keyboard.press('Backspace')
-          await openWorkbenchWorkspaceFile(runtime, 'selection-scope.docx')
+          await openDocxFile('selection-scope.docx')
           await selectText(page, 1, 0, 1, selectedParagraph.length)
           await page.getByTestId('docx-selection-thought').fill('精简下')
           await page.getByTestId('docx-selection-save').click()
