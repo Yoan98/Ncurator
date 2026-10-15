@@ -41,28 +41,37 @@ const updates = async (runtime: E2ETestRuntime, started: number) => {
   )
 }
 
-const assertCloudTextInside = async (cloud: Locator): Promise<void> => {
-  expect(
-    await cloud.evaluate((element) => {
-      const lines = element.querySelector<HTMLElement>('.nc-subagent-thought-lines')!
-      const outline = element.querySelector<SVGPathElement>('.nc-subagent-thought-outline path')!
-      const inverse = outline.getScreenCTM()!.inverse()
-      const bounds = lines.getBoundingClientRect()
-      const corners = [
-        [bounds.left, bounds.top],
-        [bounds.right, bounds.top],
-        [bounds.left, bounds.bottom],
-        [bounds.right, bounds.bottom]
-      ]
-      return (
+const readCloudSnapshot = async (cloud: Locator) =>
+  await cloud.evaluateAll((elements) => {
+    if (elements.length !== 1) return null
+    const element = elements[0]
+    const lines = element.querySelector<HTMLElement>('.nc-subagent-thought-lines')
+    const outline = element.querySelector<SVGPathElement>('.nc-subagent-thought-outline path')
+    const matrix = outline?.getScreenCTM()
+    if (!lines || !outline || !matrix) return null
+    const inverse = matrix.inverse()
+    const bounds = lines.getBoundingClientRect()
+    const corners = [
+      [bounds.left, bounds.top],
+      [bounds.right, bounds.top],
+      [bounds.left, bounds.bottom],
+      [bounds.right, bounds.bottom]
+    ]
+    const dot = element.querySelector('[data-testid="subagent-stream-dot"]')
+    return {
+      message: element.querySelector('[data-testid="subagent-message"]')?.textContent || '',
+      streamAnimation: dot ? getComputedStyle(dot).animationName : null,
+      inside:
         corners.every(([x, y]) =>
           outline.isPointInFill(new DOMPoint(x, y).matrixTransform(inverse))
         ) &&
         lines.scrollWidth <= lines.clientWidth &&
         getComputedStyle(lines).overflowX === 'hidden'
-      )
-    })
-  ).toBe(true)
+    }
+  })
+
+const assertCloudTextInside = async (cloud: Locator): Promise<void> => {
+  expect((await readCloudSnapshot(cloud))?.inside).toBe(true)
 }
 
 // Real website input: forms send server receipts, source facts are rendered by JavaScript.
@@ -335,20 +344,22 @@ describe('subagent browser and sidecar real UI', () => {
             5000
           )
           // No hover: the real public text stream opens the cloud and shows its trailing dot.
-          const automaticCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
-          await waitUntil(
-            async () =>
-              (await automaticCloud.count()) === 1 &&
-              (await automaticCloud.getByTestId('subagent-stream-dot').count()) === 1 &&
-              Boolean((await automaticCloud.getByTestId('subagent-message').textContent())?.trim()),
-            120_000
+          const automaticCloud = runtime.page.locator(
+            '.ant-tooltip:not(.ant-tooltip-hidden):not([class*="-leave"]) [data-testid="subagent-thought"]:visible'
           )
-          await assertCloudTextInside(automaticCloud)
-          expect(
-            await automaticCloud
-              .getByTestId('subagent-stream-dot')
-              .evaluate((dot) => getComputedStyle(dot).animationName)
-          ).toBe('nc-subagent-dot-breathe')
+          const automaticDeadline = Date.now() + 120_000
+          let automaticSnapshot = await readCloudSnapshot(automaticCloud)
+          while (
+            !automaticSnapshot ||
+            automaticSnapshot.streamAnimation === null ||
+            !automaticSnapshot.message.trim()
+          ) {
+            if (Date.now() > automaticDeadline) throw new Error('未观察到唯一的自动文字流云')
+            await runtime.page.waitForTimeout(50)
+            automaticSnapshot = await readCloudSnapshot(automaticCloud)
+          }
+          expect(automaticSnapshot.inside).toBe(true)
+          expect(automaticSnapshot.streamAnimation).toBe('nc-subagent-dot-breathe')
           await runtime.captureScreenshot({
             name: 'subagent-cloud-auto',
             message: '未悬浮时最新公开消息自动显示，文字及黑球位于云内'
