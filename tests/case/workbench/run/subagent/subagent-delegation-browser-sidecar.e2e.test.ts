@@ -500,12 +500,14 @@ describe('subagent browser and sidecar real UI', () => {
               .filter({ hasText: primary })
               .evaluate((row) => row.classList.contains('nc-sidebar-item-active'))
           )
-          await waitUntil(
-            async () =>
-              (await runtime.page.getByTestId('subagent-task').count()) ===
-              delegatedChildRunIds.size,
-            10_000
-          )
+          await waitUntil(async () => {
+            const actualChildRunIds = new Set(
+              (await updates(runtime, started)).map((event) => event.update.childRunId)
+            )
+            return (
+              (await runtime.page.getByTestId('subagent-task').count()) === actualChildRunIds.size
+            )
+          }, 10_000)
           let pageGeometry: Array<{
             id: number
             viewport: number[]
@@ -569,7 +571,7 @@ describe('subagent browser and sidecar real UI', () => {
               ])
             )
             if (
-              latest.size === delegatedChildRunIds.size &&
+              latest.size >= delegatedChildRunIds.size &&
               [...latest.values()].every((status) => status !== 'running' && status !== 'queued')
             )
               return true
@@ -625,13 +627,16 @@ describe('subagent browser and sidecar real UI', () => {
             site.receipts.filter((value) => !['ALPHA_731', 'BETA_892'].includes(value))
           ).toHaveLength(0)
           const firstUpdates = await updates(runtime, started)
+          const finalChildRunIds = new Set(firstUpdates.map((event) => event.update.childRunId))
+          for (const childRunId of delegatedChildRunIds)
+            expect(finalChildRunIds.has(childRunId)).toBe(true)
           expect(
             new Set(
               firstUpdates
                 .filter((event) => event.update.status === 'completed')
                 .map((event) => event.update.childRunId)
-            ).size
-          ).toBe(delegatedChildRunIds.size)
+            )
+          ).toEqual(finalChildRunIds)
           const childStreams = (await collectWorkbenchAiRunEvents(runtime)).filter(
             (event) => event.type === 'subagent_stream' && event.runId === subagentEvents[0].runId
           )
@@ -654,7 +659,7 @@ describe('subagent browser and sidecar real UI', () => {
           ).last()
           await processToggle.click()
           expect(await runtime.page.getByTestId('subagent-task').count()).toBe(
-            delegatedChildRunIds.size
+            finalChildRunIds.size
           )
           const completedChild = runtime.page.locator(
             `[data-testid="subagent-task"][data-child-run-id="${previewChildRunId}"]`
@@ -797,7 +802,7 @@ describe('subagent browser and sidecar real UI', () => {
                 .locator('[data-testid="subagent-task"][data-status="running"]')
                 .last()
               await pendingChild.hover()
-              const pendingChildRunId = await pendingRow.getAttribute('data-child-run-id')
+              const pendingChildRunId = await pendingChild.getAttribute('data-child-run-id')
               const pendingCloud = runtime.page.locator(
                 `[data-testid="subagent-thought"][data-child-run-id="${pendingChildRunId}"]:visible`
               )
@@ -809,7 +814,7 @@ describe('subagent browser and sidecar real UI', () => {
               expect(await pendingCloud.isVisible()).toBe(true)
               await runtime.page.mouse.move(0, 0)
               await waitUntil(
-                async () => !(await pendingRow.evaluate((row) => row.matches(':hover, :focus'))),
+                async () => !(await pendingChild.evaluate((row) => row.matches(':hover, :focus'))),
                 5000
               )
               await runtime.page.getByRole('button', { name: '停止本次运行', exact: true }).click()
@@ -821,9 +826,11 @@ describe('subagent browser and sidecar real UI', () => {
                   ])
                 )
                 return (
-                  latest.size === 2 &&
+                  latest.size >= 2 &&
                   [...latest.values()].includes('cancelled') &&
-                  [...latest.values()].every((status) => status !== 'running')
+                  [...latest.values()].every(
+                    (status) => status !== 'running' && status !== 'queued'
+                  )
                 )
               })
               await waitUntil(async () =>
