@@ -3,6 +3,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { pathToFileURL } from 'node:url'
 import { build } from 'vite'
 import type { AiRunEvent } from '../../../src/shared/types'
 
@@ -43,7 +44,8 @@ export const runElectronDocxRead = async (
         external: (id) => !id.startsWith('.') && !path.isAbsolute(id),
         output: {
           entryFileNames: 'host.mjs',
-          paths: (id) => (id.startsWith('@node-rs/jieba/') ? require.resolve(id) : id)
+          paths: (id) =>
+            id.startsWith('@node-rs/jieba/') ? pathToFileURL(require.resolve(id)).href : id
         }
       }
     }

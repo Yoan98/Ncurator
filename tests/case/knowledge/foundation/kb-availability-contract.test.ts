@@ -129,11 +129,16 @@ describe('knowledge availability through real services', () => {
           ).toEqual({ items: [], total: 0 })
 
           // A runtime cache must not bypass a fresh installation check.
-          await fs.rename(modelPath, `${modelPath}-hidden`)
-          await expect(
-            harness.invoke('kb_search', { queryText: '全局网页', strategy: 'keyword' })
-          ).rejects.toThrow(EMBEDDING_MODEL_NOT_INSTALLED_ERROR)
-          await fs.rename(`${modelPath}-hidden`, modelPath)
+          // ONNX holds the model directory open on Windows; move only a required metadata file.
+          const configPath = path.join(modelPath, 'config.json')
+          await fs.rename(configPath, `${configPath}-hidden`)
+          try {
+            await expect(
+              harness.invoke('kb_search', { queryText: '全局网页', strategy: 'keyword' })
+            ).rejects.toThrow(EMBEDDING_MODEL_NOT_INSTALLED_ERROR)
+          } finally {
+            await fs.rename(`${configPath}-hidden`, configPath)
+          }
           const downloadService = VectorModelDownloadService.getInstance({
             modelService,
             embeddingService: runtime.embeddingService

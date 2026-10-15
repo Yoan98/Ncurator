@@ -93,7 +93,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`；suite `tool`，group `docx`，非 live。
 - What：公开 DOCX 精读工具把 chart / diagram / shape 转为真实非空图片。
 - Why：Node Unit 无法验证 Electron 预览与截图，工具返回的图片必须可供后续读取。
-- How：隔离复制视觉 fixture，测试 harness 启动真实 Electron 宿主、真实 store 和 `createAiRunContext`，经生产 `docx_read_nodes` 精读视觉节点并解码图片；worker 使用同一生产 handler 的 in-process 路径，不调用模型。
+- How：隔离复制视觉 fixture，测试 harness 在 Windows / macOS 启动真实 Electron 宿主、真实 store 和 `createAiRunContext`，外部原生资源使用 file URL 导入，经生产 `docx_read_nodes` 精读视觉节点并解码图片；worker 使用同一生产 handler 的 in-process 路径，不调用模型。
 - Oracle：三种视觉节点均返回可解码 PNG，尺寸和非白像素达到有效范围；原始文档字节未变；宿主、临时资源和文档运行会话清理。
 
 ##### `docx-public-tools`
