@@ -10,6 +10,7 @@ import {
 import type { ChatMessageImageRef } from '../../../../../src/shared/types'
 import { createAgentControlToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+import { TOOL_REAL_LLM_CONFIG_ID } from '../../../../harness/backend/llmConfig'
 
 type ReadImageResult = {
   message: string
@@ -62,7 +63,14 @@ describe('ai tool agent-control backend', () => {
           fs.writeFile(secondPath, await secondCanvas.encode('png'))
         ])
 
-        const harness = createAgentControlToolHarness(runtime)
+        await runtime.llmStore.save({
+          id: TOOL_REAL_LLM_CONFIG_ID,
+          name: 'Read image contract',
+          providerKind: 'openai-compatible',
+          base_url: 'https://example.test/v1',
+          api_key: 'not-used'
+        })
+        const harness = createAgentControlToolHarness(runtime, { modelName: 'image-contract' })
         const result = await harness.invoke<ReadImageResult>('read_image', {
           paths: [firstPath, duplicatePath, secondPath]
         })
@@ -88,7 +96,8 @@ describe('ai tool agent-control backend', () => {
             !result.persistentContent.includes(';base64,'),
           {
             name: 'read-image-uses-one-main-model-multimodal-message',
-            message: 'read_image 应复用同内容缓存，持久消息不含 Base64，请求消息按原顺序包含全部图片。',
+            message:
+              'read_image 应复用同内容缓存，持久消息不含 Base64，请求消息按原顺序包含全部图片。',
             data: result
           }
         )

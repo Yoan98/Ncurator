@@ -1,5 +1,9 @@
 import { describe, it } from 'vitest'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { AIMessage, type BaseMessage } from '@langchain/core/messages'
+import type { FreeModelCatalogEntry } from '../../../../../src/shared/freeModels'
+import { hasEffectiveImageContextInMessageLog } from '../../../../../src/shared/messageLogVisionContext'
 import { messagesFromLogEntries } from '../../../../../src/main/services/ai/human/memory/conversationLogMessages'
 import { projectMessagesForMainModel } from '../../../../../src/main/services/ai/human/memory/multimodal'
 import { createPdfToolHarness } from '../../../../harness/backend/aiToolHarness'
@@ -16,6 +20,148 @@ import {
 } from '../testUtils'
 
 describe('ai human mock-llm backend', () => {
+  it('human-read-image-no-vision', async () => {
+    await runBackendCase({
+      caseId: 'human-read-image-no-vision',
+      harnessMode: 'mock-llm',
+      domain: 'ai',
+      suite: 'human',
+      groups: ['mock-llm'],
+      description: '验证免费无视觉模型收到读图能力限制后继续完成文字交付。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const originalUserDataPath = process.env.NCURATOR_USER_DATA_PATH
+        const userDataPath = path.join(runtime.workspaceRoot, 'user-data')
+        const imagePath = path.join(runtime.workspaceRoot, 'source.png')
+        const imageBytes = Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          'base64'
+        )
+        const entry: FreeModelCatalogEntry = {
+          id: 'test-text-only',
+          providerKind: 'openai-compatible',
+          modelName: 'test-text-only',
+          label: 'Test text only',
+          description: '',
+          capabilities: ['text'],
+          iconUrl: 'https://example.test/icon.png',
+          baseUrl: 'https://scripted.local/v1',
+          apiKey: 'scripted'
+        }
+        await fs.mkdir(userDataPath, { recursive: true })
+        await fs.writeFile(imagePath, imageBytes)
+        await fs.writeFile(
+          path.join(userDataPath, 'free-models-catalog.json'),
+          JSON.stringify({ fetchedAt: Date.now(), updatedAt: null, models: [entry] })
+        )
+        process.env.NCURATOR_USER_DATA_PATH = userDataPath
+        try {
+          let followupMessages: BaseMessage[] = []
+          const runner = createHumanTestRunner(runtime, {
+            mainModel: { configId: `free:${entry.id}`, modelName: entry.modelName },
+            chatToolsWrapper: (chatTools) => async (request) => {
+              if (request.messages.some((message) => message.getType() === 'tool')) {
+                followupMessages = request.messages
+              }
+              return chatTools(request)
+            },
+            structuredOutputScript: {
+              'human.brain': [
+                {
+                  output: {
+                    nextAction: {
+                      action: 'hand',
+                      calls: [{ toolName: 'read_image', args: { paths: [imagePath] } }]
+                    }
+                  }
+                },
+                {
+                  output: buildCompleteTaskDecision({
+                    summary: '说明图片能力限制并完成文字部分。',
+                    deliveryMarkdown: '当前模型不支持图片理解，可以继续处理文字。'
+                  })
+                }
+              ]
+            }
+          })
+          const output = await runner.run({
+            taskId: runtime.taskId,
+            userInput: `读取图片 ${imagePath}，如果无法读取请说明限制并继续处理文字。`
+          })
+          const records = await runner.ctx.loadMessageLog()
+          const toolEntry = records.find((record) => record.entry.kind === 'tool')?.entry
+          const noImageCache = await fs
+            .access(
+              path.join(
+                userDataPath,
+                'partners',
+                runner.ctx.partnerId,
+                'runtime/assets/read_image-cache'
+              )
+            )
+            .then(
+              () => false,
+              () => true
+            )
+          return {
+            output,
+            events: runtime.eventCollector.snapshot(),
+            toolEntry,
+            followupToolText: followupMessages
+              .filter((message) => message.getType() === 'tool')
+              .map((message) => String(message.content))
+              .join('\n'),
+            imageBlockCount: followupMessages.reduce(
+              (count, message) =>
+                count +
+                (Array.isArray(message.content)
+                  ? message.content.filter((block) => block.type === 'image_url').length
+                  : 0),
+              0
+            ),
+            hasEffectiveImages: hasEffectiveImageContextInMessageLog(records),
+            sourceUnchanged: (await fs.readFile(imagePath)).equals(imageBytes),
+            noImageCache
+          }
+        } finally {
+          if (originalUserDataPath === undefined) delete process.env.NCURATOR_USER_DATA_PATH
+          else process.env.NCURATOR_USER_DATA_PATH = originalUserDataPath
+        }
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(
+          result.output.status === 'completed' &&
+            result.toolEntry?.kind === 'tool' &&
+            result.toolEntry.toolName === 'read_image' &&
+            !result.toolEntry.ok &&
+            !result.toolEntry.images?.length &&
+            result.followupToolText.includes('does not support image input') &&
+            result.followupToolText.includes('No image content was loaded') &&
+            result.followupToolText.includes('Do not retry read_image') &&
+            result.imageBlockCount === 0 &&
+            !result.hasEffectiveImages &&
+            result.sourceUnchanged &&
+            result.noImageCache &&
+            !result.events.some((event) => event.type === 'run_failed'),
+          {
+            name: 'no-vision-read-image-error-keeps-graph-running',
+            message: '无视觉模型应收到明确能力反馈，不加入图片并继续完成任务。',
+            data: {
+              status: result.output.status,
+              toolFailed: result.toolEntry?.kind === 'tool' && !result.toolEntry.ok,
+              followupToolText: result.followupToolText,
+              imageBlockCount: result.imageBlockCount,
+              hasEffectiveImages: result.hasEffectiveImages,
+              sourceUnchanged: result.sourceUnchanged,
+              noImageCache: result.noImageCache
+            }
+          }
+        )
+      }
+    })
+  }, 30_000)
+
   it('human-pdf-read-image-collaboration', async () => {
     await runBackendCase({
       caseId: 'human-pdf-read-image-collaboration',

@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { describe, it } from 'vitest'
 import type { AiRunEvent } from '../../../../../src/shared/types'
+import type { DesktopApi } from '../../../../../src/preload/api'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import { createModelConfigThroughSettingsUi } from '../../../../harness/e2e/settings'
 import {
@@ -9,6 +10,7 @@ import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   createTemporaryWorkbenchWorkspace,
   createPartnerThroughWorkbenchUi,
+  collectWorkbenchAiRunEvents,
   getWorkbenchLocator,
   loadWorkbenchLiveModelEnv,
   navigateToWorkbench,
@@ -16,6 +18,7 @@ import {
   selectWorkbenchModel,
   sendWorkbenchMessage,
   waitForWorkbenchAiRunCompletion,
+  waitForWorkbenchAiEvent,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
@@ -23,6 +26,35 @@ const CASE_ID = 'model-selector-and-provider-error'
 const MISSING_MODEL_NAME = 'missing-model-must-not-be-created'
 const UNAVAILABLE_MODEL_NAME = 'missing-provider-model-must-fail'
 const WORKSPACE_NAME = 'Model Provider Error Workspace'
+const CANCEL_PROMPT =
+  '请先调用 terminal_run 执行 pwd，成功后连续撰写一篇不少于三千字的科普文章，介绍海洋生态。'
+const FAILURE_PROMPT = '请先调用 terminal_run 执行 pwd，成功后只回复“测试失败”。'
+
+const verifyContextUsageForRun = async (
+  runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0],
+  runId: string
+): Promise<number> => {
+  const started = (await collectWorkbenchAiRunEvents(runtime)).find(
+    (event) => event.type === 'run_started' && event.runId === runId
+  )
+  if (started?.type !== 'run_started') throw new Error('run_started event is missing')
+  const expected = await runtime.page.evaluate(async (partnerId) => {
+    const currentWindow = window as Window & { api?: Pick<DesktopApi, 'aiContextUsageGet'> }
+    if (!currentWindow.api) throw new Error('desktop API is unavailable')
+    const usage = await currentWindow.api.aiContextUsageGet({ partnerId })
+    if (!usage.success) throw new Error(usage.error || 'context usage query failed')
+    const used = usage.usedContextTokens || 0
+    const total = usage.contextWindowTokens || 0
+    return { used, text: `${used.toLocaleString()} / ${total.toLocaleString()} tokens` }
+  }, started.partnerId)
+  await getWorkbenchLocator(runtime.page, workbenchSelectors.contextRing).hover()
+  await runtime.page.getByRole('tooltip').getByText(expected.text, { exact: true }).waitFor({
+    state: 'visible',
+    timeout: 10_000
+  })
+  await runtime.page.mouse.move(0, 0)
+  return expected.used
+}
 
 type ProviderServer = {
   baseUrl: string
@@ -51,17 +83,21 @@ const startProviderServer = async (upstream: {
   const server = createServer(async (request, response) => {
     const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname
     const isChatRequest = request.method === 'POST' && pathname.endsWith('/chat/completions')
-    if (isChatRequest) {
-      if (unavailableModelEnabled) chatRequestCount += 1
-      else successfulChatRequestCount += 1
-    }
     try {
       const chunks: Buffer[] = []
       for await (const chunk of request) chunks.push(Buffer.from(chunk))
       let body = Buffer.concat(chunks)
-      if (isChatRequest && unavailableModelEnabled) {
-        const payload = JSON.parse(body.toString('utf8')) as Record<string, unknown>
-        body = Buffer.from(JSON.stringify({ ...payload, model: UNAVAILABLE_MODEL_NAME }))
+      if (isChatRequest) {
+        const payload = JSON.parse(body.toString('utf8')) as {
+          model: string
+          messages: Array<{ role: string }>
+        }
+        if (unavailableModelEnabled && payload.messages.at(-1)?.role === 'tool') {
+          chatRequestCount += 1
+          body = Buffer.from(JSON.stringify({ ...payload, model: UNAVAILABLE_MODEL_NAME }))
+        } else {
+          successfulChatRequestCount += 1
+        }
       }
       const upstreamResponse = await fetch(
         `${upstream.baseUrl.replace(/\/$/u, '')}${pathname.replace(/^\/v1/u, '')}`,
@@ -215,9 +251,7 @@ describe('workbench conversation e2e', () => {
               ? true
               : ((await freeOptions.first().innerText()) || '').includes('免费')
           const freeRowHasIcon =
-            freeOptionCount === 0
-              ? true
-              : (await freeOptions.first().locator('img').count()) > 0
+            freeOptionCount === 0 ? true : (await freeOptions.first().locator('img').count()) > 0
           const visionUiTextAbsent = !/(视觉模型|跟随主模型|图片能力)/u.test(
             (await menu.textContent()) || ''
           )
@@ -268,14 +302,60 @@ describe('workbench conversation e2e', () => {
             240_000,
             { page }
           )
+          const successRun = successEvidence.events.find((event) => event.type === 'run_completed')
+          if (!successRun) throw new Error('successful run completion event is missing')
+          const successContextTokens = await verifyContextUsageForRun(runtime, successRun.runId)
+
+          await sendWorkbenchMessage(page, CANCEL_PROMPT)
+          const cancelStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'context-usage-cancel-started',
+            matches: (event) => event.type === 'run_started' && event.input === CANCEL_PROMPT
+          })
+          const firstCancelRequest = await waitForWorkbenchAiEvent(runtime, {
+            name: 'context-usage-cancel-requesting',
+            matches: (event) =>
+              event.type === 'llm_request_state' &&
+              event.runId === cancelStarted.runId &&
+              event.requesting
+          })
+          if (firstCancelRequest.type !== 'llm_request_state') {
+            throw new Error('cancel request state event is missing')
+          }
+          await waitForWorkbenchAiEvent(runtime, {
+            name: 'context-usage-cancel-tool-result',
+            matches: (event) =>
+              event.type === 'tool_call_result' &&
+              event.runId === cancelStarted.runId &&
+              event.toolName === 'terminal_run' &&
+              event.result?.ok === true
+          })
+          await waitForWorkbenchAiEvent(runtime, {
+            name: 'context-usage-cancel-followup-request',
+            matches: (event) =>
+              event.type === 'llm_request_state' &&
+              event.runId === cancelStarted.runId &&
+              event.callId !== firstCancelRequest.callId &&
+              event.requesting
+          })
+          await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
+          await waitForWorkbenchAiEvent(runtime, {
+            name: 'context-usage-run-cancelled',
+            matches: (event) =>
+              event.type === 'run_cancelled' && event.runId === cancelStarted.runId
+          })
+          const cancelledContextTokens = await verifyContextUsageForRun(
+            runtime,
+            cancelStarted.runId
+          )
 
           provider.enableUnavailableModel()
-          await sendWorkbenchMessage(page, '不要调用任何工具，只回复“测试失败”。')
+          await sendWorkbenchMessage(page, FAILURE_PROMPT)
 
           const runFailed = await waitForRunFailed(async () => {
             const signals = await runtime.collectSignals()
             return signals.aiRunEventEntries.map((entry) => entry.event)
           })
+          const failedContextTokens = await verifyContextUsageForRun(runtime, runFailed.runId)
           const failureCard = page
             .getByTestId(new RegExp(`^${workbenchSelectors.assistantRunFailurePrefix}-`, 'u'))
             .last()
@@ -319,11 +399,28 @@ describe('workbench conversation e2e', () => {
             chatRequestCount: provider.getChatRequestCount(),
             modelName: liveEnv.modelName,
             runFailed,
+            successContextTokens,
+            cancelledContextTokens,
+            failedContextTokens,
             detailText,
             pageText
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.successContextTokens > 0 &&
+              result.cancelledContextTokens > result.successContextTokens &&
+              result.failedContextTokens > result.cancelledContextTokens,
+            {
+              name: 'context-usage-refreshes-after-all-terminal-states',
+              message: '成功、取消和失败后用量均应即时对齐上下文记录，无需切换伙伴。',
+              data: {
+                success: result.successContextTokens,
+                cancelled: result.cancelledContextTokens,
+                failed: result.failedContextTokens
+              }
+            }
+          )
           const catalogSettled =
             result.freeOptionCount > 0 ||
             result.presetEmptyStateVisible ||

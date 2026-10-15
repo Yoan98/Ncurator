@@ -936,6 +936,7 @@ const ChatPage: React.FC = () => {
   })
   const [composerDraftKey, setComposerDraftKey] = useState('initial')
   const [contextUsage, setContextUsage] = useState<WorkbenchContextUsage | null>(null)
+  const contextUsageRequestRef = useRef(0)
   const [messageAttachmentPreviewUrls, setMessageAttachmentPreviewUrls] = useState<
     Record<string, string>
   >({})
@@ -2235,13 +2236,21 @@ const ChatPage: React.FC = () => {
   }
 
   const refreshContextUsage = useCallback(async (partnerId: string | null): Promise<void> => {
+    if (partnerId !== currentPartnerIdRef.current) return
+    const requestId = ++contextUsageRequestRef.current
     if (!partnerId) {
       setContextUsage(null)
       return
     }
     try {
       const response = await window.api.aiContextUsageGet({ partnerId })
-      if (!response.success) return
+      if (
+        !response.success ||
+        requestId !== contextUsageRequestRef.current ||
+        partnerId !== currentPartnerIdRef.current
+      ) {
+        return
+      }
       setContextUsage({
         partnerId,
         contextWindowTokens: response.contextWindowTokens || 0,
@@ -3585,6 +3594,7 @@ const ChatPage: React.FC = () => {
           setPartnerRunningState(eventPartnerId, false)
           setPartnerQuestionState(eventPartnerId, false)
           delete activeRunPartnerIdsRef.current[event.runId]
+          void refreshContextUsage(eventPartnerId)
         }
         void loadPartners()
       }
@@ -3772,7 +3782,6 @@ const ChatPage: React.FC = () => {
             notifyNoEffectiveChange: true
           })
         }
-        void refreshContextUsage(eventPartnerId || currentPartnerIdRef.current)
       }
     })
     return () => {

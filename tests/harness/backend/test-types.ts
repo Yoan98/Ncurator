@@ -27,7 +27,8 @@ import type {
   JsonObject,
   JsonValue,
   LlmRuntimeConfig,
-  SelectedReference
+  SelectedReference,
+  WorkbenchSelectedModel
 } from '../../../src/shared/types'
 import type {
   AiRunEventStage,
@@ -191,6 +192,7 @@ export type CreateAiRunContextInput = {
   userMessageId?: string
   streamingModeOverride?: AiLlmStreamingMode
   modelName?: string
+  mainModel?: WorkbenchSelectedModel
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   questionResolver?: QuestionResolver
   checkCancelledOverride?: () => void

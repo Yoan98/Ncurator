@@ -508,7 +508,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend`
 - What：`read_image(paths)` 按输入顺序返回 1 至 10 个图片引用，并由同一个主模型在下一次请求中直接读取。
 - Why：图片理解不再经过独立视觉模型或描述文本，消息历史也不能持久化 Base64。
-- How：对内容相同的本地图片与多张不同图片调用真实 `read_image`，检查持久消息与请求投影。
+- How：通过真实非免费模型配置准备工具上下文，对内容相同的本地图片与多张不同图片调用真实 `read_image`，检查持久消息与请求投影；无需调用模型服务。
 - Oracle：同内容缓存路径复用；多图按输入顺序投影到同一主模型消息；持久消息不含 Base64。本地尺寸边界、HTTP 原址、损坏缓存修复、上下文估算与缺失占位由 unit `read-image-multimodal` 覆盖。
 
 ##### `multimodal-image-budget-contract`
@@ -873,6 +873,14 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：扫描 PDF 需要页面图片路径，但图片理解应由主模型完成。
 - How：脚本化 human 先调用真实 `pdf_read_pages`；下一批把返回的 `pageImagePath` 交给两次 `read_image`，中间夹入 `learn_skill`，覆盖跨 hand/learning 节点分段投影。
 - Oracle：下一次真实 brain 请求中，同一 assistant 的全部工具结果连续位于图片消息之前；两次读图按输入顺序进入同一多模态消息，持久 log 重建与运行中缓存一致。任务完成且 PDF 和 read_image 工具实际成功。
+
+##### `human-read-image-no-vision`
+
+- 测试类型：`backend / mock-llm`
+- What：免费目录明确无视觉能力时，读图返回可理解的工具错误，human 继续完成文字交付。
+- Why：免费文字模型不能因读图把整个运行变成 provider 图片输入失败，模型必须获得准确能力反馈。
+- How：在隔离 userData 准备有效免费目录缓存和真实本地图片；通过生产目录解析与运行模型选择创建上下文，沿用既有脚本化 LLM 决策，真实执行 human graph 和 read_image 工具；观测后续 brain 请求及持久 log，不替换工具或 store。
+- Oracle：read_image 返回能力限制且无图片引用；下一次 brain 请求包含完整限制说明、没有图片块；运行正常完成且没有 run_failed；有效历史不含图片，原文件保持不变，对齐 `WB-COMPOSER-013-AC6` 的 backend 边界。支持视觉、目录未命中和非免费模型的工具行为由 unit `read-image-multimodal` 覆盖；本 case 不证明真实模型的自然语言表达。
 
 ##### `kb-answer-with-real-kb`
 

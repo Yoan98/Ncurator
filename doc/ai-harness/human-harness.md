@@ -509,7 +509,7 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 
 1. 工具执行成功 → `buildModelToolResultDelivery` 得文本 → 写 log `tool`（`content` + 可选 `images[]`）。
 2. runtime cache：log `tool` 可跨 hand、learning、plan 等节点分段 append；按同一 assistant 的全部 tool call ID 等待结果齐全，再按读图顺序追加一条多模态 HumanMessage。运行中、历史重建与压缩尾部共用投影。中断重建保留已返回图片，并先补齐缺失的工具结果。
-3. read_image 缓存本地源图，log 只存路径 ref；文件布局见 [存储设计](../storage/design.md#4-文件资源与目录布局)。图片直接交给主模型，不调用第二模型、不预判 vision 支持，由 provider 处理。
+3. read_image 缓存本地源图，log 只存路径 ref；
 
 #### 读路径（发给主模型）
 

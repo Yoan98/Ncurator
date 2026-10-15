@@ -465,6 +465,7 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
   learn_skill: [{ path: 'args.skillIds', description: '加载的技能 ID' }],
   update_plan: [{ path: '—', description: '固定文案，不读 data' }],
   read_image: [
+    { path: 'error?', description: '失败原因；免费目录明确无视觉能力时说明模型限制' },
     { path: 'images[].path', description: '图片路径' },
     { path: 'images[].width / height', description: '尺寸' },
     { path: 'images[].mimeType', description: 'MIME' }
@@ -1422,7 +1423,15 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
         ]
       }
     },
-    { label: '无图片', ok: true, data: { images: [] } }
+    { label: '无图片', ok: true, data: { images: [] } },
+    {
+      label: '当前免费模型不支持图片',
+      ok: false,
+      data: {
+        error:
+          'The current model does not support image input. No image content was loaded. Do not retry read_image with this model or infer image contents. Explain this limitation to the user and continue with available text. If image contents are needed, suggest switching to a model with vision support.'
+      }
+    }
   ]
 }
 

@@ -3,13 +3,18 @@ import { createServer } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { createCanvas } from '@napi-rs/canvas'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   createImageReferenceMessage,
   estimateMessagesForContext,
   projectMessagesForMainModel
 } from '../../../../src/main/services/ai/human/memory/multimodal'
 import { prepareImagesForMainModel } from '../../../../src/main/services/ai/human/tools/agentControl/readImage'
+import { agentControlToolFamily } from '../../../../src/main/services/ai/human/tools/agentControl'
+import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
+import type { AiRunContext } from '../../../../src/main/services/ai/types'
+import { FreeModelCatalogService } from '../../../../src/main/services/llm/FreeModelCatalogService'
+import type { FreeModelPublicEntry } from '../../../../src/shared/freeModels'
 import type { ChatMessageImageRef } from '../../../../src/shared/types'
 
 const ONE_PIXEL_PNG = Buffer.from(
@@ -36,6 +41,57 @@ const retainedUrls = (content: unknown): string[] =>
     : []
 
 describe('ai unit read_image multimodal projection', () => {
+  it.each([
+    { label: 'a free model with vision', configId: 'free:unit-vision' },
+    { label: 'a free model missing from the catalog', configId: 'free:unit-missing' },
+    { label: 'a non-free model', configId: 'unit-custom' }
+  ])('still loads images for $label', async ({ configId }) => {
+    const visionEntry: FreeModelPublicEntry = {
+      id: 'unit-vision',
+      configId: 'free:unit-vision',
+      providerKind: 'openai-compatible',
+      modelName: 'unit-model',
+      label: 'Unit vision',
+      description: '',
+      capabilities: ['text', 'vision'],
+      iconUrl: ''
+    }
+    const catalog = vi
+      .spyOn(FreeModelCatalogService.getInstance(), 'listPublicModels')
+      .mockReturnValue([visionEntry])
+    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-image-capability-'))
+    try {
+      const imagePath = path.join(workspace, 'source.png')
+      await fs.writeFile(imagePath, ONE_PIXEL_PNG)
+      const ctx = {
+        partnerId: 'unit-image-capability',
+        getLlmConfig: async () => ({
+          id: configId,
+          name: 'Unit image capability',
+          providerKind: 'openai-compatible',
+          model_name: 'unit-model',
+          base_url: 'https://example.test/v1',
+          api_key: 'not-used'
+        })
+      } as AiRunContext
+      const tools = agentControlToolFamily.buildTools({
+        ctx,
+        cache: createHumanRuntimeCache(),
+        runId: 'unit-image-capability',
+        partnerId: ctx.partnerId,
+        taskId: 'unit-image-capability'
+      })
+      const readImage = tools.find((tool) => tool.name === 'read_image')
+      if (!readImage) throw new Error('read_image tool is missing')
+      const result = await readImage.invoke({ paths: [imagePath] })
+      expect(result).toMatchObject({ images: [{ width: 1, height: 1, mimeType: 'image/webp' }] })
+      expect(result).not.toHaveProperty('error')
+    } finally {
+      catalog.mockRestore()
+      await fs.rm(workspace, { recursive: true, force: true })
+    }
+  })
+
   it('changes the cache path when source bytes change and repairs a corrupt cache entry', async () => {
     const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-read-image-change-'))
     const sourcePath = path.join(workspace, 'source.png')

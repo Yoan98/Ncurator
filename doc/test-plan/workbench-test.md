@@ -227,8 +227,8 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示；无已配置预设且无免费目录时显示空态，有免费目录则在统一列表展示免费行；推荐配置默认选中预设稳定调用名；预设统一列表（付费在上、免费在下、无分区标题）；列表右上角有统一目录刷新（不单独占顶栏行）；悬浮/聚焦预设或免费行时右侧显示信息侧栏；预设/免费行含接口 `iconUrl`；不可用预设禁用；自定义入口可选中 remote id 且不被强制改回预设，并正确展示 provider 错误反馈。
 - Why：主模型配置是智能任务能否启动的直接前提，预设区是用户首选的模型入口。
-- How：通过真实设置页配置 live 自定义模型（非预设服务商模式）；回到 Workbench 展开选择器，等待目录结束 loading；检查无「免费模型」分区标题、右上角刷新按钮可见；若有免费行则悬停并断言右侧信息侧栏出现；预设 option 数为 0；若官网免费目录可用则可见免费 option 与「免费」文案及图标，否则可见「暂无已配置的预设模型」空态；进入自定义模型视图后侧栏消失，按名称搜索并选中后 pill 保持该模型名，随后完成一次真实请求并触发受控 provider 错误。
-- Oracle：未配置预设服务商时不展示付费预设行，对齐 `WB-COMPOSER-007-AC2`；悬浮信息侧栏对齐 `WB-COMPOSER-007-AC3`；统一列表 / 右上角刷新入口 / 免费行（若目录非空）与侧栏「免费」+ 稳定性提示对齐 `WB-COMPOSER-007-AC14` 的 UI 部分；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且不另加视觉图标，对齐 `WB-COMPOSER-013-AC1`；伙伴保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次，气泡短标题为「模型请求失败」，「查看详情」可见 HTTP 状态码和错误原文，对齐 `WB-COMPOSER-007`、`WB-CORE-006`、`WB-SESSION-007-AC8`。
+- How：通过真实设置页配置 live 自定义模型（非预设服务商模式）；回到 Workbench 展开选择器，等待目录结束 loading；检查无「免费模型」分区标题、右上角刷新按钮可见；若有免费行则悬停并断言右侧信息侧栏出现；预设 option 数为 0；若官网免费目录可用则可见免费 option 与「免费」文案及图标，否则可见「暂无已配置的预设模型」空态；进入自定义模型视图后侧栏消失，按名称搜索并选中后 pill 保持该模型名。完成一次真实请求，再让真实模型执行只读 `pwd`，后续长文字请求开始时点击停止；第三次再次执行 `pwd` 后，既有转发代理只将工具结果后的模型请求改为不存在的模型名，取得真实 provider 错误。三次终态均 hover 上下文用量环，使用只读上下文查询核对 tooltip，不切换伙伴。
+- Oracle：未配置预设服务商时不展示付费预设行，对齐 `WB-COMPOSER-007-AC2`；悬浮信息侧栏对齐 `WB-COMPOSER-007-AC3`；统一列表 / 右上角刷新入口 / 免费行（若目录非空）与侧栏「免费」+ 稳定性提示对齐 `WB-COMPOSER-007-AC14` 的 UI 部分；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且不另加视觉图标，对齐 `WB-COMPOSER-013-AC1`；伙伴保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败请求仅一次，气泡短标题为「模型请求失败」，「查看详情」可见 HTTP 状态码和错误原文，对齐 `WB-COMPOSER-007`、`WB-CORE-006`、`WB-SESSION-007-AC8`。成功、取消、失败后三次上下文用量均与日志投影一致，取消及失败后用量包含新增工具上下文，对齐 `WB-COMPOSER-013-AC5` 的终态刷新边界；不证明含图片历史下的发送拦截。
 
 #### `live-preset-provider-smoke`
 
@@ -776,7 +776,8 @@ pnpm test:update:e2e
 | `WB-COMPOSER-014-AC3` | 部分覆盖：重试行见 `llm-retry-process-row`；输出截断、半截回答与网络中断上下文的完整 UI 断言待补。 |
 | `WB-COMPOSER-014-AC4` | 待补：计划进度环、hover 浮层、完成隐藏与中断保留没有专门 E2E。 |
 | `WB-SESSION-001-AC6`、`WB-SESSION-012-AC3` | 部分覆盖：已有创建 / 编辑用例走正常路径，UI 重名拦截与历史重名记录只改形象分支待补。 |
-| `WB-COMPOSER-013-AC5` | 部分覆盖：`tests/case/unit/model/message-log-vision-context.test.ts` 检验有效图片判断和免费无 vision gate；真实 UI 禁用与发送拦截待补。 |
+| `WB-COMPOSER-013-AC5` | 部分覆盖：unit `message-log-vision-context` 检验有效图片判断和免费无 vision gate；`model-selector-and-provider-error` 验证成功、失败、取消后无需切换伙伴即刷新上下文用量。含图片历史下的真实 UI 禁用、提示与发送拦截，以及跨伙伴查询不串状态仍需人工验收。 |
+| `WB-COMPOSER-013-AC6` | AI backend `human-read-image-no-vision` 覆盖工具能力反馈、无图片请求与 graph 继续交付；unit `read-image-multimodal` 覆盖支持视觉、目录未命中和非免费模型。真实免费模型的解释及文字续聊列入人工验收。 |
 | `ST-RUN-003-AC1/AC2` | 部分覆盖：`tests/case/unit/scheduled-task-service.test.ts` 以依赖时钟检验启动错过 / 容忍窗口后顺延且不补跑；真实应用关闭 / 系统休眠恢复需桌面人工验收。 |
 | `ST-RUN-001-AC3` | 部分覆盖：`scheduled-task-busy-cancel-and-run-now` 实测 waiting_human 到点不提交并顺延；Unit 验证占用策略和空闲后不补跑。running / waiting_approval 的独立 UI 场景未验证。 |
 | `ST-RUN-005-AC1` | `scheduled-task-busy-cancel-and-run-now` 验证问答卡片收起、Composer 恢复后的提示；waiting_approval 的独立 UI 场景未验证。 |

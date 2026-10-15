@@ -11,6 +11,8 @@ import {
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { prepareImagesForMainModel } from './readImage'
+import { FreeModelCatalogService } from '../../../../llm/FreeModelCatalogService'
+import { isFreeModelWithoutVision } from '../../../../../../shared/messageLogVisionContext'
 
 // 学习、计划和提问由各自节点处理；图片读取和子任务派发在公共 hand 工具链执行。
 export const agentControlToolFamily: ToolFamilyDefinition = {
@@ -30,6 +32,18 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
 
     const readImage = tool(
       async (args) => {
+        const config = await ctx.getLlmConfig()
+        if (
+          isFreeModelWithoutVision({
+            mainModel: { configId: config.id, modelName: config.model_name },
+            freeModels: FreeModelCatalogService.getInstance().listPublicModels()
+          })
+        ) {
+          return {
+            error:
+              'The current model does not support image input. No image content was loaded. Do not retry read_image with this model or infer image contents. Explain this limitation to the user and continue with available text. If image contents are needed, suggest switching to a model with vision support.'
+          }
+        }
         const images = await prepareImagesForMainModel({
           partnerId: ctx.partnerId,
           paths: args.paths

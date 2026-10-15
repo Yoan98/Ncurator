@@ -206,7 +206,7 @@ export const createRealAiDepsFactory = async (input: {
         executionPermission: contextInput.executionPermission,
         selectedReferences: contextInput.selectedReferences,
         contentNodes: contextInput.contentNodes,
-        mainModel: {
+        mainModel: contextInput.mainModel || {
           configId: resolveRuntimeConfigId(input.mode),
           modelName:
             resolveRuntimeModelName({
