@@ -380,7 +380,7 @@ describe('workbench conversation e2e', () => {
               !result.confirmationText.includes('伙伴和工作目录') &&
               !result.confirmationText.includes('无法恢复') &&
               !result.confirmationText.includes('（无法回退）') &&
-              result.historyHelpText.includes('每次 AI 任务修改前的源文件备份') &&
+              result.historyHelpText.includes('AI 修改的源文件都会进行备份') &&
               result.historyHelpText.includes('无法回退到对应的修改前版本') &&
               result.helpShowsOnFocus &&
               result.helpPreservesSelection &&

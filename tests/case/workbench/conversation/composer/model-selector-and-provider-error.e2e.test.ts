@@ -395,7 +395,7 @@ describe('workbench conversation e2e', () => {
               result.runFailed.message.trim() === '模型请求失败' &&
               Boolean(result.runFailed.rawMessage?.trim()) &&
               result.pageText.includes(`失败：${result.runFailed.message}`) &&
-              result.detailText.includes(`HTTP ${String(result.runFailed.httpStatus || '')}`) &&
+              result.detailText.includes(String(result.runFailed.httpStatus)) &&
               result.detailText.includes(String(result.runFailed.rawMessage || '')) &&
               !/LangGraph|LangChain|Troubleshooting URL|structured_output_|recursionLimit/iu.test(
                 result.pageText

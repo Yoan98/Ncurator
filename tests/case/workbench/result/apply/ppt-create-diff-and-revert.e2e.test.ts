@@ -24,14 +24,19 @@ const OWNER = '王海涛（供应链总监）'
 
 // Observe the SVG already published by the product with the browser's own font engine.
 const inspectDisplayedTable = async (page: Page, testId: string) => {
-  const image = page.getByTestId(testId).locator('img').first()
-  await image.waitFor({ state: 'visible' })
-  const source = await image.getAttribute('src')
-  if (!source) throw new Error('PPT 预览缺少 SVG')
+  const rendered = page.getByTestId(testId).locator('img, svg').first()
+  await rendered.waitFor({ state: 'visible' })
+  const svgText = await rendered.evaluate(async (element) => {
+    if (element instanceof SVGSVGElement) return new XMLSerializer().serializeToString(element)
+    if (!(element instanceof HTMLImageElement) || !element.src) {
+      throw new Error('PPT 预览缺少 SVG')
+    }
+    return await (await fetch(element.src)).text()
+  })
   return page.evaluate(
-    async ({ source, owner }) => {
+    async ({ svgText, owner }) => {
       const svg = new DOMParser().parseFromString(
-        await (await fetch(source)).text(),
+        svgText,
         'image/svg+xml'
       )
       const probe = document.createElement('div')
@@ -71,7 +76,7 @@ const inspectDisplayedTable = async (page: Page, testId: string) => {
         probe.remove()
       }
     },
-    { source, owner: OWNER }
+    { svgText, owner: OWNER }
   )
 }
 

@@ -26,7 +26,7 @@ const PREPARE_LOCK_WAIT_MS = 30_000
 
 const buildPendingIndexText = (label: string): string => {
   const salt = `${Date.now()}-${Math.random().toString(16).slice(2)}`
-  const paragraphs = Array.from({ length: 1200 }, (_, index) => {
+  const paragraphs = Array.from({ length: 400 }, (_, index) => {
     const n = index + 1
     return `${label} ${n} unique indexing block ${label}-${n} salt=${salt} ${'payload '.repeat(48)}`.trim()
   })

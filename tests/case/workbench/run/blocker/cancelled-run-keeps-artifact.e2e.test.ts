@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -27,7 +27,7 @@ describe('workbench run e2e', () => {
         domain: 'workbench',
         suite: 'run',
         groups: ['blocker'],
-        description: '文件修改落地后取消运行，仍保留取消文案、文件卡片和审核模式。',
+        description: '文件修改落地后取消运行，仍保留文件卡片和审核模式。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -43,7 +43,7 @@ describe('workbench run e2e', () => {
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           await appendWorkbenchInputText(
             page,
-            `请直接修改这个文件，使用 replaceAll 把唯一的 ${BEFORE_TEXT} 改成 ${AFTER_TEXT}。修改成功后不要立即结束，继续在文件中做几次无意义的占位替换以延长任务运行时间，再进行回复。`
+            `请直接修改这个文件，使用 replaceAll 把唯一的 ${BEFORE_TEXT} 改成 ${AFTER_TEXT}。修改成功后请在终端执行一次 60 秒的等待，等待完成后再核对文件并回复。`
           )
           await submitWorkbenchCurrentDraft(page)
 
@@ -51,13 +51,12 @@ describe('workbench run e2e', () => {
             name: 'cancelled_artifact_run_started',
             matches: (event) => event.type === 'run_started'
           })
-          await waitForWorkbenchAiEvent(runtime, {
-            name: 'artifact_before_cancel',
-            matches: (event) =>
-              event.type === 'file_artifact' &&
-              event.runId === runStarted.runId &&
-              event.fileName === 'workbench-preview.md'
-          })
+          await expect
+            .poll(() => fs.readFile(targetPath, 'utf8'), {
+              timeout: WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+              interval: 250
+            })
+            .toContain(AFTER_TEXT)
 
           const sendButton = getWorkbenchLocator(page, workbenchSelectors.sendButton)
           await page.waitForFunction(

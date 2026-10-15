@@ -120,10 +120,15 @@ async function textPoint(locator: Locator, end = false) {
 async function dragText(page: Page, start: Locator, end: Locator) {
   await start.scrollIntoViewIfNeeded()
   const a = await textPoint(start)
-  const b = await textPoint(end, true)
   await page.mouse.move(a.x, a.y)
   await page.mouse.down()
-  await page.mouse.move(b.x, b.y, { steps: 16 })
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const b = await textPoint(end, true)
+    await page.mouse.move(b.x, b.y, { steps: 16 })
+    await page.evaluate(
+      () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+    )
+  }
   await page.mouse.up()
 }
 

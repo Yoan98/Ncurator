@@ -23,7 +23,7 @@ const PARTNER_NAME = '定时任务引用伙伴'
 const TASK_NAME = '引用资料任务'
 const DESCRIPTION_PREFIX = '请阅读资料并总结**要点**，'
 const DESCRIPTION_SUFFIX = '并附上来源。'
-const DESCRIPTION = `${DESCRIPTION_PREFIX} ${DESCRIPTION_SUFFIX}`
+const DESCRIPTION = `${DESCRIPTION_PREFIX}@sample-edit.docx ${DESCRIPTION_SUFFIX}`
 
 const listTasks = async (page: import('playwright').Page): Promise<ScheduledTask[]> =>
   (await page.evaluate(async () => await window.api.scheduledTaskList())) as ScheduledTask[]

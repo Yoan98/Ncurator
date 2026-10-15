@@ -23,6 +23,7 @@ const CASE_ID = 'timeline-month-day-pick'
 const TIMELINE_SEED_PARTNER_NAME = '时间轴 · 预览'
 const LATER_DAY_TEXT = '[timeline-seed] 约一个半月前次日'
 const EARLIEST_DAY_TEXT = '[timeline-seed] 约一个半月前'
+const TWENTY_DAYS_TEXT = '[timeline-seed] 二十天前'
 const RECENT_DAY_TEXT = '[timeline-seed] 四天前（近一周内）'
 const TODAY_TEXT = '[timeline-seed] 今天刚刚说的话'
 
@@ -55,9 +56,9 @@ const localDayOfMonth = (dayStart: number): number => new Date(dayStart).getDate
 
 const waitForTopUserMatching = async (
   page: import('playwright').Page,
-  match: 'later' | 'earliest' | 'recent' | 'today'
+  expectedText: string
 ): Promise<void> => {
-  await page.waitForFunction((kind) => {
+  await page.waitForFunction(({ expectedText, excludedText }) => {
     const scroller = document.querySelector('.nc-document-scroll')
     if (!(scroller instanceof HTMLElement)) return false
     const scrollerRect = scroller.getBoundingClientRect()
@@ -67,11 +68,8 @@ const waitForTopUserMatching = async (
       return rect.top >= scrollerRect.top - 2 && rect.top <= scrollerRect.top + 80
     })
     const text = ((atTop instanceof HTMLElement ? atTop.innerText : '') || '').replace(/\s+/g, ' ')
-    if (kind === 'later') return text.includes('[timeline-seed] 约一个半月前次日')
-    if (kind === 'recent') return text.includes('[timeline-seed] 四天前（近一周内）')
-    if (kind === 'today') return text.includes('[timeline-seed] 今天刚刚说的话')
-    return text.includes('[timeline-seed] 约一个半月前') && !text.includes('次日')
-  }, match)
+    return text.includes(expectedText) && (!excludedText || !text.includes(excludedText))
+  }, { expectedText, excludedText: expectedText === EARLIEST_DAY_TEXT ? LATER_DAY_TEXT : '' })
 }
 
 const waitForActiveTimelineItem = async (
@@ -144,7 +142,7 @@ describe('workbench conversation e2e', () => {
 
           const todayStart = startOfLocalDay(Date.now())
           const expectedTodayActiveId = `${workbenchSelectors.timelineItemPrefix}-day-${todayStart}`
-          await waitForTopUserMatching(page, 'today')
+          await waitForTopUserMatching(page, TODAY_TEXT)
           await waitForActiveTimelineItem(page, expectedTodayActiveId)
           const afterOpen = await readTopUserMessage(page)
           const afterOpenActiveId = await readActiveTimelineItemTestId(page)
@@ -156,7 +154,7 @@ describe('workbench conversation e2e', () => {
           )
           await recentDayNode.waitFor({ state: 'visible' })
           await recentDayNode.click()
-          await waitForTopUserMatching(page, 'recent')
+          await waitForTopUserMatching(page, RECENT_DAY_TEXT)
           await waitForActiveTimelineItem(
             page,
             `${workbenchSelectors.timelineItemPrefix}-day-${recentDayStart}`
@@ -171,7 +169,13 @@ describe('workbench conversation e2e', () => {
             message: '近端日节点第一次点击后目标日贴顶，高亮不闪回月节点。'
           })
 
-          const laterDayStart = startOfLocalDay(Date.now()) - 44 * DAY_MS
+          const firstSeedDay = todayStart - 45 * DAY_MS
+          const secondSeedDay = todayStart - 44 * DAY_MS
+          const adjacentSeedsShareMonth =
+            startOfLocalMonth(firstSeedDay) === startOfLocalMonth(secondSeedDay)
+          const laterDayStart = adjacentSeedsShareMonth ? secondSeedDay : todayStart - 20 * DAY_MS
+          const pickedDayText = adjacentSeedsShareMonth ? LATER_DAY_TEXT : TWENTY_DAYS_TEXT
+          const earliestDayText = adjacentSeedsShareMonth ? EARLIEST_DAY_TEXT : LATER_DAY_TEXT
           const monthStart = startOfLocalMonth(laterDayStart)
           const monthSearch = getWorkbenchLocator(
             page,
@@ -189,7 +193,7 @@ describe('workbench conversation e2e', () => {
           const disabledCount = await popup
             .locator('.ant-picker-cell-in-view.ant-picker-cell-disabled')
             .count()
-          // 同月可能有多天有消息；按种子「约一个半月前次日」的日号选格，不能用 .last()（会落到更近的同月日）。
+          // 选择同月两条种子中的较晚日，覆盖选天与月节点跳到最早日的区别。
           const laterDayOfMonth = localDayOfMonth(laterDayStart)
           const pickedCell = enabledDays.filter({
             has: page.locator('.ant-picker-cell-inner', {
@@ -199,7 +203,7 @@ describe('workbench conversation e2e', () => {
           await pickedCell.waitFor({ state: 'visible' })
           await pickedCell.click()
           await popup.waitFor({ state: 'hidden' })
-          await waitForTopUserMatching(page, 'later')
+          await waitForTopUserMatching(page, pickedDayText)
 
           const afterPick = await readTopUserMessage(page)
           const sizesAfterPick = await readActiveDotSizes(page)
@@ -216,7 +220,7 @@ describe('workbench conversation e2e', () => {
             const scroller = document.querySelector('.nc-document-scroll')
             if (scroller instanceof HTMLElement) scroller.scrollTop = scroller.scrollHeight
           })
-          await waitForTopUserMatching(page, 'today')
+          await waitForTopUserMatching(page, TODAY_TEXT)
           await waitForActiveTimelineItem(page, expectedTodayActiveId)
           const afterScrollBottom = await readTopUserMessage(page)
           const afterScrollBottomActiveId = await readActiveTimelineItemTestId(page)
@@ -237,7 +241,7 @@ describe('workbench conversation e2e', () => {
             })
           await sameDayCell.click()
           await popupAgain.waitFor({ state: 'hidden' })
-          await waitForTopUserMatching(page, 'later')
+          await waitForTopUserMatching(page, pickedDayText)
           const afterRepick = await readTopUserMessage(page)
 
           await getWorkbenchLocator(
@@ -246,7 +250,7 @@ describe('workbench conversation e2e', () => {
           ).evaluate((element) => {
             if (element instanceof HTMLElement) element.click()
           })
-          await waitForTopUserMatching(page, 'earliest')
+          await waitForTopUserMatching(page, earliestDayText)
           const afterMonthClick = await readTopUserMessage(page)
           await page.waitForTimeout(250)
           const afterMonthClickSettled = await readTopUserMessage(page)
@@ -256,6 +260,8 @@ describe('workbench conversation e2e', () => {
           })
 
           return {
+            pickedDayText,
+            earliestDayText,
             enabledCount,
             disabledCount,
             laterDayOfMonth,
@@ -296,13 +302,13 @@ describe('workbench conversation e2e', () => {
               result.afterRecentActiveId === result.expectedRecentActiveId &&
               result.afterRecentSettledActiveId === result.expectedRecentActiveId &&
               result.afterPickInView &&
-              result.afterPickText.includes(LATER_DAY_TEXT) &&
+              result.afterPickText.includes(result.pickedDayText) &&
               result.afterScrollBottomInView &&
               result.afterScrollBottomText.includes(TODAY_TEXT) &&
               result.afterScrollBottomActiveId === result.expectedTodayActiveId &&
-              result.afterRepickText.includes(LATER_DAY_TEXT) &&
-              result.afterMonthClickText.includes(EARLIEST_DAY_TEXT) &&
-              !result.afterMonthClickText.includes('次日') &&
+              result.afterRepickText.includes(result.pickedDayText) &&
+              result.afterMonthClickText.includes(result.earliestDayText) &&
+              !result.afterMonthClickText.includes(result.pickedDayText) &&
               result.afterMonthClickSettledText === result.afterMonthClickText &&
               result.activeDotWidth > result.inactiveDotWidth,
             {

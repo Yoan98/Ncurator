@@ -166,9 +166,24 @@ export const ensureWorkbenchContentPanelExpanded = async (page: Page): Promise<v
 
   const toggle = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
   await toggle.waitFor({ state: 'visible', timeout: 10_000 })
-  if ((await toggle.getAttribute('aria-label')) === '展开右侧栏') {
-    await toggle.click()
-  }
+  await page.waitForFunction(
+    ({ shellId, toggleId }) => {
+      const shell = document.querySelector(`[data-testid="${shellId}"]`)
+      const ready =
+        shell instanceof HTMLElement &&
+        shell.dataset.panelVisible === 'true' &&
+        shell.getBoundingClientRect().width > 100
+      const button = document.querySelector(`[data-testid="${toggleId}"]`)
+      return ready || button?.getAttribute('aria-label') === '展开右侧栏'
+    },
+    {
+      shellId: workbenchSelectors.contentPanelShell,
+      toggleId: workbenchSelectors.contentPanelToggle
+    },
+    { timeout: 10_000 }
+  )
+  if (await panelReady()) return
+  await toggle.click()
   await page.waitForFunction(
     (testId) => {
       const shell = document.querySelector(`[data-testid="${testId}"]`)

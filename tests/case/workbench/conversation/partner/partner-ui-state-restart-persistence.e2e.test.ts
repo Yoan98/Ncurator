@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
@@ -37,6 +37,22 @@ describe('workbench conversation e2e', () => {
             phase: 'after-app-close',
             dispose: server.close
           })
+          const inspectBrowserHistory = async () =>
+            runtime.electronApp.evaluate(
+              ({ webContents }, url) =>
+                webContents
+                  .getAllWebContents()
+                  .filter((contents) => contents.getURL().startsWith(url))
+                  .map((contents) => ({
+                    url: contents.getURL(),
+                    isLoading: contents.isLoadingMainFrame(),
+                    activeIndex: contents.navigationHistory.getActiveIndex(),
+                    entries: contents.navigationHistory
+                      .getAllEntries()
+                      .map(({ url, title }) => ({ url, title }))
+                  })),
+              server.url
+            )
           let { page } = runtime
           await navigateToWorkbench(page, { waitForSessionListText: false })
           await createPartnerThroughWorkbenchUi(page, '重启恢复伙伴')
@@ -68,6 +84,20 @@ describe('workbench conversation e2e', () => {
               },
               { tabId: id, url }
             )
+            await expect
+              .poll(
+                async () => {
+                  const history = await inspectBrowserHistory()
+                  return history.some(
+                    (item) =>
+                      item.url === url &&
+                      !item.isLoading &&
+                      item.entries.some((entry) => entry.url === `${server.url}?step=1`)
+                  )
+                },
+                { timeout: 15_000 }
+              )
+              .toBe(true)
           }
           const menuPromise = runtime.electronApp.waitForEvent('window', {
             predicate: async (candidate) =>
@@ -97,6 +127,7 @@ describe('workbench conversation e2e', () => {
             )
           }, partner.id)
 
+          const browserHistoryBeforeRestart = await inspectBrowserHistory()
           const restarted = await runtime.restartApp()
           page = restarted.page
           await navigateToWorkbench(page)
@@ -122,6 +153,21 @@ describe('workbench conversation e2e', () => {
             { tabId: browser.id, expectedUrl: `${server.url}?step=2` },
             { timeout: 15_000 }
           )
+          await expect
+            .poll(
+              async () => {
+                const history = await inspectBrowserHistory()
+                return history.some(
+                  (item) =>
+                    item.url === `${server.url}?step=2` &&
+                    !item.isLoading &&
+                    item.activeIndex > 0 &&
+                    item.entries.some((entry) => entry.url === `${server.url}?step=1`)
+                )
+              },
+              { timeout: 15_000 }
+            )
+            .toBe(true)
           const restoredBrowser = await page.evaluate(
             async ({ tabId, ownerId }) => {
               const tabs = await window.api.browserTabList({ ownerId })
@@ -130,6 +176,7 @@ describe('workbench conversation e2e', () => {
             },
             { tabId: browser.id, ownerId: partner.id }
           )
+          const browserHistoryAfterRestart = await inspectBrowserHistory()
           const input = (
             (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
           ).trim()
@@ -148,6 +195,8 @@ describe('workbench conversation e2e', () => {
             partnerVisible,
             executionPermission,
             restoredBrowser,
+            browserHistoryBeforeRestart,
+            browserHistoryAfterRestart,
             expectedUrl: `${server.url}?step=2`
           }
         },

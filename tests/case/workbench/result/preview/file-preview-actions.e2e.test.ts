@@ -402,6 +402,8 @@ describe('workbench result e2e', () => {
             await workspaceFileFilter.fill(fileName)
             await page.getByTitle(fileName, { exact: true }).click()
             excelPreviewResults.push(await waitForExcelPreview(page, fileName))
+            await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+            await workspaceFileFilter.waitFor({ state: 'hidden' })
             if (extension === 'xlsx') {
               for (const address of ['C1', 'C2', 'C3', 'C4'])
                 calculatedValues.push(await copyExcelCell(runtime, address))

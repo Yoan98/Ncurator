@@ -314,6 +314,8 @@ describe('workbench result e2e', () => {
           const renameInput = page.getByRole('textbox', { name: '重命名文件名', exact: true })
           await renameInput.fill('同级重命名.txt')
           await renameInput.press('Enter')
+          await renameInput.waitFor({ state: 'hidden' })
+          await page.getByPlaceholder('筛选文件…').fill('')
           await page
             .getByTitle('子目录/同级重命名.txt', { exact: true })
             .waitFor({ state: 'visible' })

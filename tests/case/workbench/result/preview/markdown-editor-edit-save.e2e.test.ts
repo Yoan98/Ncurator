@@ -27,6 +27,8 @@ const openWorkspaceFile = async (
   }
   await fileFilter.fill(fileName)
   await page.getByTitle(fileName, { exact: true }).click()
+  await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+  await fileFilter.waitFor({ state: 'hidden' })
 }
 
 const waitForDiskIncludes = async (

@@ -21,7 +21,7 @@ export type LivePresetProviderId = (typeof LIVE_PRESET_PROVIDER_IDS)[number]
 export const LIVE_PROVIDER_DEFAULT_MODEL: Record<LivePresetProviderId, string> = {
   dashscope: 'qwen3.8-flash',
   deepseek: 'deepseek-flash',
-  mimo: 'mimo-v2.5',
+  mimo: 'mimo-v2.6-flash',
   zhipu: 'glm-5.3-flash'
 }
 
