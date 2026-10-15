@@ -28,6 +28,7 @@ describe('workbench conversation e2e', () => {
           '验证空会话输入区、右侧动态 Tab 拖拽区、横向滚动、原生窗口层分离和浏览器缩放菜单。',
         fixtures: [],
         serviceMode: 'real',
+        execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
@@ -365,7 +366,11 @@ describe('workbench conversation e2e', () => {
             activeBrowserTabId
           )
           const menuClosed = browserMenuPage.waitForEvent('close')
-          await browserMenuPage.keyboard.press('Escape')
+          const browserMenuWindow = await runtime.electronApp.browserWindow(browserMenuPage)
+          await browserMenuWindow.evaluate((window) => {
+            window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'ESCAPE' })
+          })
+          await browserMenuWindow.dispose()
           await menuClosed
           await page.waitForFunction(
             (testId) =>

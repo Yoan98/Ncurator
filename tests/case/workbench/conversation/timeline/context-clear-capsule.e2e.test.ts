@@ -6,7 +6,8 @@ import { resolveRunArtifactsDir } from '../../../../harness/core/write-run-log'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   openNativeConfirmation,
-  dismissNativeConfirmation
+  dismissNativeConfirmation,
+  nativeConfirmationCoversOwner
 } from '../../../../harness/e2e/nativeConfirm'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -47,7 +48,7 @@ describe('workbench conversation e2e', () => {
           '清空消息默认保留修改历史，选项可整行切换，取消后重置，主动勾选后删除备份及审核。',
         fixtures: [],
         serviceMode: 'real',
-        execution: 'live',
+        execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
@@ -138,13 +139,11 @@ describe('workbench conversation e2e', () => {
                   browserBounds: browser?.getBounds() || null,
                   ownerBounds: owner?.getContentBounds() || null,
                   popups:
-                    owner
-                      ?.getChildWindows()
-                      .map((popup) => ({
-                        parentId: popup.getParentWindow()?.id,
-                        visible: popup.isVisible(),
-                        bounds: popup.getBounds()
-                      })) || []
+                    owner?.getChildWindows().map((popup) => ({
+                      parentId: popup.getParentWindow()?.id,
+                      visible: popup.isVisible(),
+                      bounds: popup.getBounds()
+                    })) || []
                 }
               },
               { mainWindowId, url: server.url }
@@ -231,7 +230,7 @@ describe('workbench conversation e2e', () => {
             during.popups.length === 1 &&
             during.popups[0].visible &&
             during.popups[0].parentId === mainWindowId &&
-            JSON.stringify(during.popups[0].bounds) === JSON.stringify(during.ownerBounds)
+            nativeConfirmationCoversOwner(during.popups[0].bounds, during.ownerBounds)
           const browserPreservedDuringDialog =
             during.browserId === browserBefore.browserId &&
             during.browserVisible &&
@@ -350,6 +349,8 @@ describe('workbench conversation e2e', () => {
             helpShowsOnFocus,
             helpPreservesSelection,
             popupCoversBrowser,
+            popupBounds: during.popups[0]?.bounds,
+            ownerBounds: during.ownerBounds,
             browserPreservedDuringDialog,
             heartbeatContinues,
             cancellations,

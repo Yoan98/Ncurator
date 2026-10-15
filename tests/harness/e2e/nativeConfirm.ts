@@ -1,6 +1,21 @@
 import type { Locator, Page } from 'playwright'
 import type { E2ETestRuntime } from './run-e2e-case'
 
+export const nativeConfirmationCoversOwner = (
+  popup: Electron.Rectangle,
+  owner: Electron.Rectangle | null
+): boolean => {
+  if (!owner) return false
+  const outwardEdges = [
+    owner.x - popup.x,
+    owner.y - popup.y,
+    popup.x + popup.width - owner.x - owner.width,
+    popup.y + popup.height - owner.y - owner.height
+  ]
+  // Windows rounds native bounds at fractional DPI; the popup must still cover every edge.
+  return outwardEdges.every((edge) => edge >= 0 && edge <= 2)
+}
+
 export const openNativeConfirmation = async (
   runtime: E2ETestRuntime,
   trigger: Locator,

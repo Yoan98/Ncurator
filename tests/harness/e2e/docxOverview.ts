@@ -8,7 +8,7 @@ export async function assertEmptyDocxOverview(runtime: E2ETestRuntime): Promise<
     return (
       rail?.getAttribute('data-mode') === 'references' &&
       !rail.querySelector('button') &&
-      rail.getBoundingClientRect().width === 16
+      Math.abs(rail.getBoundingClientRect().width - 16) <= 0.05
     )
   }, workbenchSelectors)
   const evidence = await runtime.page
@@ -19,7 +19,9 @@ export async function assertEmptyDocxOverview(runtime: E2ETestRuntime): Promise<
       markerCount: rail.querySelectorAll('button').length
     }))
   await runtime.assertThat(
-    evidence.mode === 'references' && evidence.width === 16 && evidence.markerCount === 0,
+    evidence.mode === 'references' &&
+      Math.abs(evidence.width - 16) <= 0.05 &&
+      evidence.markerCount === 0,
     {
       name: 'docx-overview-empty-preview',
       message: '预览无引用时保留 16px 空条，没有审核残留。',
@@ -243,7 +245,7 @@ export async function assertDocxSharedScrollTrack(runtime: E2ETestRuntime): Prom
   const draggedFromMarker = await read()
   await runtime.assertThat(
     initial.max > 50 &&
-      initial.rail.width === 16 &&
+      Math.abs(initial.rail.width - 16) <= 0.05 &&
       initial.thumb.width === 14 &&
       initial.nativeWidth === '0px' &&
       clicked.scrollTop > 50 &&

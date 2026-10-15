@@ -1053,7 +1053,8 @@ describe('workbench conversation e2e', () => {
               return (
                 style.color === 'rgb(55, 53, 47)' &&
                 style.backgroundColor === 'rgba(0, 0, 0, 0)' &&
-                icon?.getBoundingClientRect().width === 18
+                !!icon &&
+                Math.abs(icon.getBoundingClientRect().width - 18) <= 0.05
               )
             }),
             {

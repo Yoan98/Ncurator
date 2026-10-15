@@ -110,7 +110,7 @@ const startFileCreation = async (
     width: Number.parseFloat(getComputedStyle(icon).width),
     height: Number.parseFloat(getComputedStyle(icon).height)
   }))
-  if (iconSize.width !== 16 || iconSize.height !== 16)
+  if (Math.abs(iconSize.width - 16) > 0.05 || Math.abs(iconSize.height - 16) > 0.05)
     throw new Error(`Menu icon must be 16px: ${JSON.stringify(iconSize)}`)
   await typeItem.hover()
   await typeItem.click()
