@@ -5,7 +5,10 @@ import {
   isPresetModelAvailableInRemoteList
 } from '../../../../src/shared/workbenchModelSelection'
 import type { LLMConfig, LlmRemoteModel } from '../../../../src/shared/types'
-import { toFreeModelPublicEntry, type FreeModelCatalogEntry } from '../../../../src/shared/freeModels'
+import {
+  toFreeModelPublicEntry,
+  type FreeModelCatalogEntry
+} from '../../../../src/shared/freeModels'
 import type { LlmPresetProvider } from '../../../../src/shared/llmPresets'
 
 const presetConfig = (id: string): LLMConfig => ({
@@ -24,8 +27,7 @@ const customConfig = (id: string): LLMConfig => ({
   providerKind: 'openai-compatible'
 })
 
-const remote = (...ids: string[]): LlmRemoteModel[] =>
-  ids.map((id) => ({ id, label: id }))
+const remote = (...ids: string[]): LlmRemoteModel[] => ids.map((id) => ({ id, label: id }))
 
 const dashscopeCatalog: LlmPresetProvider[] = [
   {
@@ -55,9 +57,9 @@ const dashscopeCatalog: LlmPresetProvider[] = [
 describe('workbench model selection', () => {
   it('requires exact remote id for preset availability when list is non-empty', () => {
     expect(isPresetModelAvailableInRemoteList('qwen3.8-max', remote('qwen3.8-max'))).toBe(true)
-    expect(
-      isPresetModelAvailableInRemoteList('qwen3.8-max', remote('qwen3.8-max-0902'))
-    ).toBe(false)
+    expect(isPresetModelAvailableInRemoteList('qwen3.8-max', remote('qwen3.8-max-0902'))).toBe(
+      false
+    )
     expect(isPresetModelAvailableInRemoteList('qwen3.8-max', [])).toBe(true)
   })
 
@@ -203,5 +205,34 @@ describe('workbench model selection', () => {
       configId: freeModels[0].configId,
       modelName: freeModels[0].modelName
     })
+  })
+  it('clears removed free models and rejects a mismatched model name', () => {
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs: [],
+        modelListsByConfigId: {},
+        freeModels: [],
+        selected: { configId: 'free:removed', modelName: 'removed' }
+      })
+    ).toBeNull()
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs: [],
+        modelListsByConfigId: {},
+        freeModels: [
+          {
+            id: 'entry',
+            configId: 'free:entry',
+            modelName: 'new-model',
+            providerKind: 'openai-compatible',
+            label: 'New',
+            description: '',
+            capabilities: ['text'],
+            iconUrl: ''
+          }
+        ],
+        selected: { configId: 'free:entry', modelName: 'old-model' }
+      })
+    ).toBeNull()
   })
 })

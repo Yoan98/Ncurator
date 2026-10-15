@@ -60,8 +60,10 @@ export const resolveSelectedWorkbenchModel = (input: {
   const selected = input.selected
   if (!selected?.configId || !selected.modelName) return null
   if (isFreeModelConfigId(selected.configId)) {
-    // Free catalog is unstable; keep the snapshot while the config id is free-scoped.
-    return { configId: selected.configId, modelName: selected.modelName }
+    const entry = input.freeModels?.find(
+      (model) => model.configId === selected.configId && model.modelName === selected.modelName
+    )
+    return entry ? { configId: entry.configId, modelName: entry.modelName } : null
   }
   const config = input.configs.find((item) => item.id === selected.configId)
   if (!config) return null

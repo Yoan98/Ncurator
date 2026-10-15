@@ -3,7 +3,8 @@ import path from 'path'
 import { FREE_MODELS_CATALOG_URL } from '../../../shared/constants'
 import {
   FREE_MODEL_CATALOG_TTL_MS,
-  isMysteryFreeModelEntry,
+  FREE_MODEL_CATALOG_CACHE_VERSION,
+  isFreeModelApiUrl,
   parseCatalogContextWindowTokens,
   type FreeModelCatalogEntry,
   type FreeModelsCatalogResponse,
@@ -17,19 +18,20 @@ import type { LlmRuntimeConfig } from '../../../shared/types'
 import { cacheModelIcons, resolveCachedIconUrls } from './modelIconCache'
 import { getUserDataPath } from '../../utils/paths'
 import { buildDesktopAppGatewayHeaders } from '../officialApi/appClient'
-import { ensureMysteryToken } from '../officialApi/mysteryToken'
+import { ensureFreeModelToken, readJwtExpiryMs } from '../officialApi/freeModelToken'
 
 const FREE_MODELS_ENDPOINT = FREE_MODELS_CATALOG_URL
 const CACHE_FILE_NAME = 'free-models-catalog.json'
 const FETCH_TIMEOUT_MS = 15_000
 
 type CachePayload = {
+  schemaVersion: number
   fetchedAt: number
   updatedAt: string | null
   models: FreeModelCatalogEntry[]
 }
 
-const PROVIDER_KINDS = new Set(['openai', 'deepseek', 'openai-compatible'])
+const PROVIDER_KINDS = new Set(['openai-compatible'])
 const CAPABILITIES = new Set(['text', 'vision'])
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -65,8 +67,8 @@ const parseEntry = (value: unknown): FreeModelCatalogEntry | null => {
     !modelName ||
     !label ||
     !iconUrl ||
-    !baseUrl ||
-    !apiKey ||
+    !isFreeModelApiUrl(baseUrl) ||
+    readJwtExpiryMs(apiKey) === null ||
     !capabilities
   ) {
     return null
@@ -153,25 +155,26 @@ export class FreeModelCatalogService {
         const raw = await fs.readFile(this.cachePath(), 'utf8')
         const parsed = JSON.parse(raw) as Partial<CachePayload>
         if (
+          parsed.schemaVersion !== FREE_MODEL_CATALOG_CACHE_VERSION ||
           typeof parsed.fetchedAt !== 'number' ||
-          !Array.isArray(parsed.models) ||
-          parsed.models.length === 0
+          !Array.isArray(parsed.models)
         ) {
-          return
+          throw new Error('免费模型缓存版本无效')
         }
         const models: FreeModelCatalogEntry[] = []
         for (const item of parsed.models) {
           const entry = parseEntry(item)
-          if (!entry) return
+          if (!entry) throw new Error('免费模型缓存无效')
           models.push(entry)
         }
         this.cache = {
+          schemaVersion: FREE_MODEL_CATALOG_CACHE_VERSION,
           fetchedAt: parsed.fetchedAt,
           updatedAt: isNonEmptyString(parsed.updatedAt) ? parsed.updatedAt : null,
           models
         }
       } catch {
-        // no cache yet
+        await fs.rm(this.cachePath(), { force: true }).catch(() => undefined)
       }
     })()
     try {
@@ -211,6 +214,7 @@ export class FreeModelCatalogService {
         throw new Error('免费模型目录数据无效')
       }
       return {
+        schemaVersion: FREE_MODEL_CATALOG_CACHE_VERSION,
         fetchedAt: Date.now(),
         updatedAt: parsed.updatedAt,
         models: parsed.models
@@ -267,13 +271,9 @@ export class FreeModelCatalogService {
     if (!entryId) return null
     const entry = this.cache?.models.find((item) => item.id === entryId)
     if (!entry) return null
-    const requestedName = String(modelName || '').trim()
-    const runtime =
-      requestedName && requestedName !== entry.modelName
-        ? toFreeModelRuntimeConfig(entry, requestedName)
-        : toFreeModelRuntimeConfig(entry)
-    if (!isMysteryFreeModelEntry(entry)) return runtime
-    const token = await ensureMysteryToken(entry.apiKey)
+    if (modelName.trim() !== entry.modelName) return null
+    const runtime = toFreeModelRuntimeConfig(entry)
+    const token = await ensureFreeModelToken(entry.apiKey)
     return { ...runtime, api_key: token }
   }
 }

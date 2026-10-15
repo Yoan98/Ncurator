@@ -2,7 +2,10 @@ import { describe, it } from 'vitest'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { AIMessage, type BaseMessage } from '@langchain/core/messages'
-import type { FreeModelCatalogEntry } from '../../../../../src/shared/freeModels'
+import {
+  FREE_MODEL_CATALOG_CACHE_VERSION,
+  type FreeModelCatalogEntry
+} from '../../../../../src/shared/freeModels'
 import { hasEffectiveImageContextInMessageLog } from '../../../../../src/shared/messageLogVisionContext'
 import { messagesFromLogEntries } from '../../../../../src/main/services/ai/human/memory/conversationLogMessages'
 import { projectMessagesForMainModel } from '../../../../../src/main/services/ai/human/memory/multimodal'
@@ -46,14 +49,19 @@ describe('ai human mock-llm backend', () => {
           description: '',
           capabilities: ['text'],
           iconUrl: 'https://example.test/icon.png',
-          baseUrl: 'https://scripted.local/v1',
-          apiKey: 'scripted'
+          baseUrl: 'https://www.guanzhangai.cn/api/v1/free',
+          apiKey: `test.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 5400 })).toString('base64url')}.signature`
         }
         await fs.mkdir(userDataPath, { recursive: true })
         await fs.writeFile(imagePath, imageBytes)
         await fs.writeFile(
           path.join(userDataPath, 'free-models-catalog.json'),
-          JSON.stringify({ fetchedAt: Date.now(), updatedAt: null, models: [entry] })
+          JSON.stringify({
+            schemaVersion: FREE_MODEL_CATALOG_CACHE_VERSION,
+            fetchedAt: Date.now(),
+            updatedAt: null,
+            models: [entry]
+          })
         )
         process.env.NCURATOR_USER_DATA_PATH = userDataPath
         try {

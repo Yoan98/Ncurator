@@ -879,7 +879,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：免费目录明确无视觉能力时，读图返回可理解的工具错误，human 继续完成文字交付。
 - Why：免费文字模型不能因读图把整个运行变成 provider 图片输入失败，模型必须获得准确能力反馈。
-- How：在隔离 userData 准备有效免费目录缓存和真实本地图片；通过生产目录解析与运行模型选择创建上下文，沿用既有脚本化 LLM 决策，真实执行 human graph 和 read_image 工具；观测后续 brain 请求及持久 log，不替换工具或 store。
+- How：在隔离 userData 准备当前协议版本的免费代理目录缓存、有效短时凭证和真实本地图片；通过生产目录解析与运行模型选择创建上下文，沿用既有脚本化 LLM 决策，真实执行 human graph 和 read_image 工具；观测后续 brain 请求及持久 log，不替换工具或 store。
 - Oracle：read_image 返回能力限制且无图片引用；下一次 brain 请求包含完整限制说明、没有图片块；运行正常完成且没有 run_failed；有效历史不含图片，原文件保持不变，对齐 `WB-COMPOSER-013-AC6` 的 backend 边界。支持视觉、目录未命中和非免费模型的工具行为由 unit `read-image-multimodal` 覆盖；本 case 不证明真实模型的自然语言表达。
 
 ##### `kb-answer-with-real-kb`

@@ -1,3 +1,4 @@
+import { isFreeModelApiUrl } from '../../../shared/freeModels'
 import { createHmac, createHash, randomUUID } from 'node:crypto'
 
 export const APP_CLIENT_HEADER = 'x-ncurator-client'
@@ -8,7 +9,8 @@ export const APP_SIGNATURE_HEADER = 'x-ncurator-signature'
 export const getDesktopAppSecret = (): string =>
   String(process.env.NCURATOR_APP_SECRET_DESKTOP || '').trim()
 
-const sha256Hex = (value: string): string => createHash('sha256').update(value, 'utf8').digest('hex')
+const sha256Hex = (value: string): string =>
+  createHash('sha256').update(value, 'utf8').digest('hex')
 
 export const buildAppGatewaySignaturePayload = (input: {
   method: string
@@ -17,9 +19,13 @@ export const buildAppGatewaySignaturePayload = (input: {
   nonce: string
   body: string
 }): string =>
-  [input.method.toUpperCase(), input.path, input.timestamp, input.nonce, sha256Hex(input.body)].join(
-    '\n'
-  )
+  [
+    input.method.toUpperCase(),
+    input.path,
+    input.timestamp,
+    input.nonce,
+    sha256Hex(input.body)
+  ].join('\n')
 
 export const buildDesktopAppGatewayHeaders = (input: {
   method: string
@@ -53,14 +59,6 @@ export const buildDesktopAppGatewayHeaders = (input: {
   }
 }
 
-export const isMysteryProxyUrl = (value: string): boolean => {
-  try {
-    return new URL(value).pathname.includes('/api/v1/mystery-proxy/')
-  } catch {
-    return value.includes('/api/v1/mystery-proxy/')
-  }
-}
-
 const readRequestBody = async (request: Request): Promise<string> => {
   if (request.method === 'GET' || request.method === 'HEAD') return ''
   const buffer = await request.clone().arrayBuffer()
@@ -68,21 +66,19 @@ const readRequestBody = async (request: Request): Promise<string> => {
   return Buffer.from(buffer).toString('utf8')
 }
 
-export const createOfficialApiFetch = (): typeof fetch => {
+export const createFreeModelFetch = (): typeof fetch => {
   const signedFetch: typeof fetch = async (input, init) => {
-    const request = input instanceof Request ? input.clone() : new Request(input, init)
+    const request = new Request(input, init)
     const url = request.url
+    if (!isFreeModelApiUrl(url)) throw new Error('免费模型调用地址无效')
     const method = request.method
     const body = await readRequestBody(request)
     const headers = new Headers(request.headers)
     headers.delete('content-length')
     headers.delete('host')
 
-    if (isMysteryProxyUrl(url)) {
-      const { ensureMysteryToken } = await import('./mysteryToken')
-      const token = await ensureMysteryToken()
-      headers.set('Authorization', `Bearer ${token}`)
-    }
+    const { ensureFreeModelToken } = await import('./freeModelToken')
+    headers.set('Authorization', `Bearer ${await ensureFreeModelToken()}`)
 
     const signedHeaders = buildDesktopAppGatewayHeaders({ method, url, body })
     for (const [key, value] of Object.entries(signedHeaders)) {
@@ -98,9 +94,10 @@ export const createOfficialApiFetch = (): typeof fetch => {
       })
 
     let response = await execute()
-    if (response.status === 401 && isMysteryProxyUrl(url)) {
-      const { refreshMysteryToken } = await import('./mysteryToken')
-      const token = await refreshMysteryToken()
+    if (response.status === 401) {
+      await response.body?.cancel()
+      const { refreshFreeModelToken } = await import('./freeModelToken')
+      const token = await refreshFreeModelToken()
       headers.set('Authorization', `Bearer ${token}`)
       const retryHeaders = buildDesktopAppGatewayHeaders({ method, url, body })
       for (const [key, value] of Object.entries(retryHeaders)) {

@@ -53,7 +53,7 @@ import {
   pickFallbackWorkbenchModel,
   resolveSelectedWorkbenchModel
 } from '../../../shared/workbenchModelSelection'
-import type { FreeModelPublicEntry } from '../../../shared/freeModels'
+import { isFreeModelConfigId, type FreeModelPublicEntry } from '../../../shared/freeModels'
 import {
   FREE_MODEL_NO_VISION_WITH_IMAGE_HISTORY_REASON,
   shouldBlockFreeModelWithoutVision
@@ -2318,7 +2318,11 @@ const ChatPage: React.FC = () => {
           presetProviders: nextPresetProviders
         })
         const nextSelection: WorkbenchModelSelection = {
-          mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel
+          mainModel:
+            resolveModel(modelSelectionRef.current.mainModel) ||
+            (isFreeModelConfigId(modelSelectionRef.current.mainModel?.configId || '')
+              ? null
+              : firstModel)
         }
         modelSelectionRef.current = nextSelection
         setModelSelection(nextSelection)
@@ -2356,7 +2360,11 @@ const ChatPage: React.FC = () => {
         presetProviders: nextPresetProviders
       })
       const nextSelection: WorkbenchModelSelection = {
-        mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel
+        mainModel:
+          resolveModel(modelSelectionRef.current.mainModel) ||
+          (isFreeModelConfigId(modelSelectionRef.current.mainModel?.configId || '')
+            ? null
+            : firstModel)
       }
       modelSelectionRef.current = nextSelection
       setModelSelection(nextSelection)
@@ -2391,7 +2399,8 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     const key = currentPartnerIdRef.current || ''
-    if (!modelCatalogLoaded || uiStateReadyKeyRef.current !== key) return
+    if (!modelCatalogLoaded || uiStateReadyKeyRef.current !== key || !modelSelection.mainModel)
+      return
     const resolveModel = (
       selected: WorkbenchModelSelection['mainModel']
     ): WorkbenchModelSelection['mainModel'] =>
@@ -2399,15 +2408,20 @@ const ChatPage: React.FC = () => {
         configs: modelConfigs,
         modelListsByConfigId,
         selected,
+        freeModels,
         presetProviders
       })
-    const fallback = pickFallbackWorkbenchModel({
-      configs: modelConfigs,
-      modelListsByConfigId,
-      presetProviders
-    })
     const nextSelection: WorkbenchModelSelection = {
-      mainModel: resolveModel(modelSelection.mainModel) || fallback
+      mainModel:
+        resolveModel(modelSelection.mainModel) ||
+        (isFreeModelConfigId(modelSelection.mainModel.configId)
+          ? null
+          : pickFallbackWorkbenchModel({
+              configs: modelConfigs,
+              modelListsByConfigId,
+              freeModels,
+              presetProviders
+            }))
     }
     if (JSON.stringify(nextSelection) === JSON.stringify(modelSelection)) return
     modelSelectionRef.current = nextSelection
@@ -2419,6 +2433,7 @@ const ChatPage: React.FC = () => {
   }, [
     buildUiStateForKey,
     modelCatalogLoaded,
+    freeModels,
     modelConfigs,
     modelListsByConfigId,
     modelSelection,

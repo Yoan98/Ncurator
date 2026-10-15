@@ -1,6 +1,9 @@
+import { FREE_MODEL_API_BASE_URL } from './constants'
 import type { LLMConfig, LlmProviderKind, LlmRuntimeConfig } from './types'
 
 export const FREE_MODEL_CONFIG_ID_PREFIX = 'free:'
+
+export const FREE_MODEL_CATALOG_CACHE_VERSION = 2
 
 export const FREE_MODEL_CATALOG_TTL_MS = 6 * 60 * 60 * 1000
 
@@ -93,7 +96,15 @@ export const toFreeModelRuntimeConfig = (
   model_name: String(modelName || entry.modelName).trim() || entry.modelName
 })
 
-export const MYSTERY_FREE_MODEL_ID = 'free-mystery'
-
-export const isMysteryFreeModelEntry = (entry: Pick<FreeModelCatalogEntry, 'id' | 'baseUrl'>): boolean =>
-  entry.id === MYSTERY_FREE_MODEL_ID || entry.baseUrl.includes('/api/v1/mystery-proxy/')
+export const isFreeModelApiUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value)
+    const base = new URL(FREE_MODEL_API_BASE_URL)
+    return (
+      url.origin === base.origin &&
+      (url.pathname === base.pathname || url.pathname.startsWith(`${base.pathname}/`))
+    )
+  } catch {
+    return false
+  }
+}
