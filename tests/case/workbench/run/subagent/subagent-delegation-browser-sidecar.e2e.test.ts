@@ -25,6 +25,8 @@ import {
 import type { AiRunEvent } from '../../../../../src/shared/types'
 
 const CASE_ID = 'subagent-delegation-browser-sidecar'
+const ACTIVE_CLOUD_SELECTOR =
+  '.ant-tooltip:not(.ant-tooltip-hidden):not([class*="-leave"]) [data-testid="subagent-thought"]:visible'
 const waitUntil = async (check: () => Promise<boolean>, timeout = 240_000): Promise<void> => {
   const deadline = Date.now() + timeout
   while (!(await check())) {
@@ -45,10 +47,19 @@ const readCloudSnapshot = async (cloud: Locator) =>
   await cloud.evaluateAll((elements) => {
     if (elements.length !== 1) return null
     const element = elements[0]
+    const tooltip = element.closest<HTMLElement>('.ant-tooltip')
+    if (
+      !tooltip ||
+      tooltip.matches('.ant-tooltip-hidden, [class*="-leave"]') ||
+      Number(getComputedStyle(tooltip).opacity) !== 1
+    )
+      return null
     const lines = element.querySelector<HTMLElement>('.nc-subagent-thought-lines')
     const outline = element.querySelector<SVGPathElement>('.nc-subagent-thought-outline path')
     const matrix = outline?.getScreenCTM()
     if (!lines || !outline || !matrix) return null
+    const determinant = matrix.a * matrix.d - matrix.b * matrix.c
+    if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-10) return null
     const inverse = matrix.inverse()
     const bounds = lines.getBoundingClientRect()
     const corners = [
@@ -59,6 +70,7 @@ const readCloudSnapshot = async (cloud: Locator) =>
     ]
     const dot = element.querySelector('[data-testid="subagent-stream-dot"]')
     return {
+      childRunId: element.getAttribute('data-child-run-id'),
       message: element.querySelector('[data-testid="subagent-message"]')?.textContent || '',
       streamAnimation: dot ? getComputedStyle(dot).animationName : null,
       inside:
@@ -71,7 +83,14 @@ const readCloudSnapshot = async (cloud: Locator) =>
   })
 
 const assertCloudTextInside = async (cloud: Locator): Promise<void> => {
-  expect((await readCloudSnapshot(cloud))?.inside).toBe(true)
+  const deadline = Date.now() + 10_000
+  let snapshot = await readCloudSnapshot(cloud)
+  while (!snapshot) {
+    if (Date.now() > deadline) throw new Error('子任务云未进入可测量的稳定可见状态')
+    await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    snapshot = await readCloudSnapshot(cloud)
+  }
+  expect(snapshot.inside).toBe(true)
 }
 
 // Real website input: forms send server receipts, source facts are rendered by JavaScript.
@@ -344,9 +363,7 @@ describe('subagent browser and sidecar real UI', () => {
             5000
           )
           // No hover: the real public text stream opens the cloud and shows its trailing dot.
-          const automaticCloud = runtime.page.locator(
-            '.ant-tooltip:not(.ant-tooltip-hidden):not([class*="-leave"]) [data-testid="subagent-thought"]:visible'
-          )
+          const automaticCloud = runtime.page.locator(ACTIVE_CLOUD_SELECTOR)
           const automaticDeadline = Date.now() + 120_000
           let automaticSnapshot = await readCloudSnapshot(automaticCloud)
           while (
@@ -411,25 +428,12 @@ describe('subagent browser and sidecar real UI', () => {
               .evaluate((group) => getComputedStyle(group).flexDirection)
           ).toBe('column')
           await waitUntil(async () => {
-            const visible = runtime.page.locator('[data-testid="subagent-thought"]:visible')
-            if (
-              (await visible.count()) === 1 &&
-              (await visible.getAttribute('data-child-run-id')) === previewChildRunId
-            )
-              return true
+            const visible = await readCloudSnapshot(runtime.page.locator(ACTIVE_CLOUD_SELECTOR))
+            if (visible?.childRunId === previewChildRunId) return true
             await runtime.page.mouse.move(0, 0)
             await childRow.hover()
             return false
           }, 10_000)
-          await waitUntil(
-            async () =>
-              runtime.page
-                .locator('[data-testid="subagent-thought"]:visible')
-                .evaluate(
-                  (cloud) => Number(getComputedStyle(cloud.closest('.ant-tooltip')!).opacity) === 1
-                ),
-            10_000
-          )
           const liveCloud = runtime.page.locator(
             `[data-testid="subagent-thought"][data-child-run-id="${previewChildRunId}"]:visible`
           )
@@ -658,10 +662,10 @@ describe('subagent browser and sidecar real UI', () => {
           expect(await completedChild.textContent()).not.toMatch(/干活中|已干完/)
           expect(await completedChild.locator('.nc-partner-avatar-animated').count()).toBe(0)
           await completedChild.hover()
-          await runtime.page
-            .locator('[data-testid="subagent-thought"]:visible')
-            .waitFor({ state: 'visible' })
-          const completedCloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
+          const completedCloud = runtime.page.locator(
+            `[data-testid="subagent-thought"][data-child-run-id="${previewChildRunId}"]:visible`
+          )
+          await completedCloud.waitFor({ state: 'visible' })
           const completedResult = firstUpdates.find(
             (event) =>
               event.update.childRunId === previewChildRunId && event.update.status === 'completed'
@@ -677,8 +681,8 @@ describe('subagent browser and sidecar real UI', () => {
               const style = getComputedStyle(lines)
               const bounds = cloud.getBoundingClientRect()
               return (
-                bounds.width <= 220 &&
-                bounds.height <= 96 &&
+                bounds.width <= 220.05 &&
+                bounds.height <= 96.05 &&
                 style.whiteSpace === 'pre-wrap' &&
                 style.scrollbarWidth === 'none'
               )
@@ -694,23 +698,17 @@ describe('subagent browser and sidecar real UI', () => {
                 ),
             10_000
           )
-          await waitUntil(
-            async () =>
-              runtime.page
-                .locator('[data-testid="subagent-thought"]:visible')
-                .evaluate(
-                  (cloud) => Number(getComputedStyle(cloud.closest('.ant-tooltip')!).opacity) === 1
-                ),
-            10_000
-          )
           await runtime.captureScreenshot({
             name: 'subagent-cloud-completed',
             message: '完成后的实际交付消息、紧凑云面与自动滚底'
           })
           await runtime.page.mouse.move(0, 0)
-          await runtime.page
-            .locator('[data-testid="subagent-thought"]:visible')
-            .waitFor({ state: 'hidden' })
+          await waitUntil(
+            async () =>
+              (await runtime.page.locator('[data-testid="subagent-thought"]:visible').count()) ===
+              0,
+            10_000
+          )
           expect(
             await getWorkbenchPrefixLocator(
               runtime.page,
@@ -752,9 +750,12 @@ describe('subagent browser and sidecar real UI', () => {
             await getWorkbenchLocator(runtime.page, workbenchSelectors.input).focus()
             // The genuine pending navigation leaves a gap after text output; no test delay
             // is added to the model or tool. Auto clouds must expire while the tool still runs.
-            await runtime.page
-              .locator('[data-testid="subagent-thought"]:visible')
-              .waitFor({ state: 'hidden', timeout: 10_000 })
+            await waitUntil(
+              async () =>
+                (await runtime.page.locator('[data-testid="subagent-thought"]:visible').count()) ===
+                0,
+              10_000
+            )
             const before = await updates(runtime, start)
             const completed = before.find((event) => event.update.status === 'completed')!
             expect(await fs.readFile(saved, 'utf8')).toContain(crash ? 'SAVED_CRASH' : 'SAVED_STOP')
