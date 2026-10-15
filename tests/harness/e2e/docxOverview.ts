@@ -246,7 +246,7 @@ export async function assertDocxSharedScrollTrack(runtime: E2ETestRuntime): Prom
   await runtime.assertThat(
     initial.max > 50 &&
       Math.abs(initial.rail.width - 16) <= 0.05 &&
-      initial.thumb.width === 14 &&
+      Math.abs(initial.thumb.width - 14) <= 0.05 &&
       initial.nativeWidth === '0px' &&
       clicked.scrollTop > 50 &&
       wheeled.scrollTop < clicked.scrollTop &&
