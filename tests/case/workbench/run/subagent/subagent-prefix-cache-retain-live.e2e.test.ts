@@ -274,12 +274,13 @@ describe('workbench subagent prefix cache e2e', () => {
                 item.update.action.status === 'completed'
             )
             expect(reads.length).toBeGreaterThanOrEqual(2)
-            const toolMessages = JSON.stringify(
-              calls.flatMap(
+            const toolMessages = calls
+              .flatMap(
                 (call) =>
                   call.requestWire?.messages.filter((message) => message.role === 'tool') || []
               )
-            )
+              .map((message) => message.content)
+              .join('\n')
             const files = result.taskFiles.find(
               (sources) =>
                 toolMessages.includes(sources[0]) ||
