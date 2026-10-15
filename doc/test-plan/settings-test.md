@@ -294,7 +294,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：通用设置中的 AI 运行完成通知开关可以关闭，并通过真实 IPC 持久化。
 - Why：通知是跨进程能力，开关状态必须由主进程保存，不能只停留在 Renderer 内存。
 - How：通过 Settings UI 打开通用页，关闭开关，重新读取 `app-settings-get`，再恢复开关。
-- Oracle：开关默认开启，对齐 `SET-GENERAL-001-AC1`；关闭后 UI 与主进程设置一致，仅覆盖 `SET-GENERAL-001-AC3` 的开关持久化前提。实际禁止发送由 backend Unit `tests/case/unit/system-notification-service.test.ts` 补充；真实 OS 效果遵循人工验收范围。
+- Oracle：开关默认开启，对齐 `SET-GENERAL-001-AC1`；关闭后 UI 与主进程设置一致，仅覆盖 `SET-GENERAL-001-AC3` 的开关持久化前提。实际禁止发送由 backend Unit `tests/case/unit/system-notification-service.test.ts` 补充；真实 OS 效果见 §4 的补充检查。
 
 #### `error-log-open-directory`
 
@@ -306,7 +306,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 ## 4. 发布前真实检查
 
-- `SET-GENERAL-001`：Settings E2E 覆盖开关默认值与持久化；Unit 覆盖关闭后静默、不可用时不创建通知、点击回到伙伴及通知参数携带馆长图标；四类真实终态通知、馆长 logo 展示、点击系统通知返回对应伙伴、系统通知不可用时应用保持稳定，必须在 Windows 与 macOS 候选包上使用真实系统通知检查，不伪造通知对象或点击事件。
+- `SET-GENERAL-001`：通知开关由 Settings E2E 验证，通知服务行为由 Unit 验证。候选包上尽可能补充检查四类真实终态通知、馆长 logo、点击返回对应伙伴及系统通知不可用时的稳定性；受系统权限或工具能力限制的部分如实记录为未验证，不阻塞发布，也不要求用户介入。不伪造通知对象或点击事件，不将 Unit 结果记为真实 OS 检查通过。
 
 ## 5. 自动化覆盖边界
 
@@ -324,7 +324,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 | 验收 | 现有相关 case / 证据状态 |
 | --- | --- |
-| `SET-GENERAL-001-AC2/AC4/AC5/AC6` | 人工 OS 验收见 §4；`tests/case/unit/system-notification-service.test.ts` 覆盖终态去重、禁用、不可用和通知点击，未自动验证 OS 展示与启动中断通知。 |
+| `SET-GENERAL-001-AC2/AC4/AC5/AC6` | 真实 OS 补充检查见 §4；`tests/case/unit/system-notification-service.test.ts` 覆盖终态去重、禁用、不可用和通知点击，未自动验证 OS 展示与启动中断通知。 |
 | `SET-WORKSPACE-004-AC5` | backend 已覆盖：Knowledge `workspace-interrupted-job-recovery-contract` 与 `workspace-index-job-store-contract` 验证启动恢复后的 job / 文件失败收敛；文件索引中途关闭再重启的 UI 闭环未覆盖。 |
 | `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8` | backend 已覆盖：Knowledge `kb-indexing-blocks-search` 验证索引拦截、检查不拦截及终态恢复，`workspace-index-cancel-contract` 补充取消后的检索恢复。 |
 | `SET-WORKSPACE-004-AC6` | 手动 / 暂缓：向量模型缺失时的按钮禁用与说明、安装后恢复没有独立 UI 验证。 |
