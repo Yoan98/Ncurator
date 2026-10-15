@@ -21,7 +21,7 @@ import {
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
-  waitForApplyEntry,
+  waitForApplyEntryByFileName,
   waitForWorkbenchApplyRecordStatus,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
@@ -194,7 +194,7 @@ describe('workbench result e2e', () => {
               )
             }
           })
-          const applyEntry = await waitForApplyEntry(page)
+          const applyEntry = await waitForApplyEntryByFileName(page, 'sample-edit.docx')
           const applyEntryText = ((await applyEntry.textContent()) || '').trim()
           const modificationCountsVisibleBeforeClick = /[+-][1-9]\d*/u.test(applyEntryText)
           const applyEntryLines = await applyEntry.evaluate((element) =>
