@@ -69,7 +69,7 @@ describe('workbench conversation e2e', () => {
 
           const readOptionalText = async (testId: string) => {
             const locator = getWorkbenchLocator(page, testId)
-            return (await locator.count()) > 0 ? ((await locator.textContent()) || '').trim() : ''
+            return locator.evaluateAll((nodes) => (nodes[0]?.textContent || '').trim())
           }
           const readVisibleState = async () => ({
             input: (
@@ -88,24 +88,35 @@ describe('workbench conversation e2e', () => {
               workbenchSelectors.contentPanelShell
             )
           })
-          const selectPartner = async (id: string, draft: string) => {
+          const selectPartner = async (id: string, draft: string, panelVisible: boolean) => {
             await getWorkbenchLocator(page, `${workbenchSelectors.partnerItemPrefix}-${id}`).click()
             await page.waitForFunction(
-              ({ testId, draft }) =>
-                document.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim() === draft,
-              { testId: workbenchSelectors.input, draft }
+              ({ testId, draft, panelTestId, panelVisible }) =>
+                document.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim() ===
+                  draft &&
+                (document
+                  .querySelector(`[data-testid="${panelTestId}"]`)
+                  ?.getAttribute('data-panel-visible') ===
+                  'true') ===
+                  panelVisible,
+              {
+                testId: workbenchSelectors.input,
+                draft,
+                panelTestId: workbenchSelectors.contentPanelShell,
+                panelVisible
+              }
             )
           }
 
-          await selectPartner(partnerA.id, 'A 独立草稿')
+          await selectPartner(partnerA.id, 'A 独立草稿', true)
           const firstA = await readVisibleState()
-          await selectPartner(partnerB.id, 'B 独立草稿')
+          await selectPartner(partnerB.id, 'B 独立草稿', false)
           const collapsedB = await readVisibleState()
           await ensureWorkbenchContentPanelExpanded(page)
           const expandedB = await readVisibleState()
-          await selectPartner(partnerA.id, 'A 独立草稿')
+          await selectPartner(partnerA.id, 'A 独立草稿', true)
           const secondA = await readVisibleState()
-          await selectPartner(partnerB.id, 'B 独立草稿')
+          await selectPartner(partnerB.id, 'B 独立草稿', true)
           const secondB = await readVisibleState()
           const persisted = await page.evaluate(
             async ({ partnerAId, partnerBId }) => {
@@ -143,9 +154,22 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-partner-ui-state-isolation',
               message: 'A/B 伙伴必须恢复各自的输入、执行权限和右侧面板状态。',
-              data: { firstA: result.firstA, collapsedB: result.collapsedB, expandedB: result.expandedB, secondA: result.secondA, secondB: result.secondB,
-                savedA: { preference: result.persisted.stateA?.composer.aiPreference ?? null, permission: result.persisted.stateA?.composer.executionPermission ?? null, activeTabId: result.persisted.stateA?.panel.activeTabId ?? null, collapsed: result.persisted.stateA?.panel.collapsed ?? null },
-                savedB: { permission: result.persisted.stateB?.composer.executionPermission ?? null, collapsed: result.persisted.stateB?.panel.collapsed ?? null }
+              data: {
+                firstA: result.firstA,
+                collapsedB: result.collapsedB,
+                expandedB: result.expandedB,
+                secondA: result.secondA,
+                secondB: result.secondB,
+                savedA: {
+                  preference: result.persisted.stateA?.composer.aiPreference ?? null,
+                  permission: result.persisted.stateA?.composer.executionPermission ?? null,
+                  activeTabId: result.persisted.stateA?.panel.activeTabId ?? null,
+                  collapsed: result.persisted.stateA?.panel.collapsed ?? null
+                },
+                savedB: {
+                  permission: result.persisted.stateB?.composer.executionPermission ?? null,
+                  collapsed: result.persisted.stateB?.panel.collapsed ?? null
+                }
               }
             }
           )

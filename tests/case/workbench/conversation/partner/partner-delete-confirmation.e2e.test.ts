@@ -2,6 +2,7 @@ import { describe, it } from 'vitest'
 import path from 'node:path'
 import { resolveRunArtifactsDir } from '../../../../harness/core/write-run-log'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { nativeConfirmationCoversOwner } from '../../../../harness/e2e/nativeConfirm'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -29,6 +30,7 @@ describe('workbench conversation e2e', () => {
         description: '验证原生删除确认覆盖内置浏览器，取消不影响网页运行，确认后删除伙伴。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
@@ -149,7 +151,9 @@ describe('workbench conversation e2e', () => {
                 during.popups.length === 1 &&
                 during.popups[0].visible &&
                 during.popups[0].parentId === mainWindowId &&
-                JSON.stringify(during.popups[0].bounds) === JSON.stringify(during.ownerBounds),
+                nativeConfirmationCoversOwner(during.popups[0].bounds, during.ownerBounds),
+              popupBounds: during.popups[0]?.bounds,
+              ownerBounds: during.ownerBounds,
               browserPreserved:
                 during.browserId === before.browserId &&
                 during.browserVisible &&

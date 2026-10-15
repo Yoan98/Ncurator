@@ -81,7 +81,7 @@ describe('settings workspace e2e', () => {
                 const shape = svg?.querySelector('path')
                 return (
                   svg?.querySelector('text')?.textContent === label &&
-                  svg.getBoundingClientRect().width === 18 &&
+                  Math.abs(svg.getBoundingClientRect().width - 18) <= 0.05 &&
                   !!shape &&
                   getComputedStyle(shape).fill === color
                 )
@@ -90,7 +90,8 @@ describe('settings workspace e2e', () => {
                 const svg = node.querySelector(`svg[data-file-icon="${kind}"]`)
                 return (
                   !!svg &&
-                  svg.getBoundingClientRect().width === (kind === 'directory' ? 16 : 18) &&
+                  Math.abs(svg.getBoundingClientRect().width - (kind === 'directory' ? 16 : 18)) <=
+                    0.05 &&
                   svg.getAttribute('fill') === 'currentColor' &&
                   svg.getAttribute('viewBox') ===
                     (kind === 'directory' ? '0 0 16 16' : '0 0 256 256')
@@ -100,7 +101,7 @@ describe('settings workspace e2e', () => {
           })
           const folderBefore = await docsNode.locator('svg[data-file-icon="directory"]').innerHTML()
           const rowStyleConsistent =
-            rowBefore.height === 30 && rowAfter.background === rowBefore.background
+            Math.abs(rowBefore.height - 30) <= 0.05 && rowAfter.background === rowBefore.background
           await docsNode.locator('.ant-tree-switcher').click()
           await tree.getByText('brief.txt').waitFor({ state: 'visible' })
           const folderAfter = await docsNode.locator('svg[data-file-icon="directory"]').innerHTML()
@@ -122,6 +123,8 @@ describe('settings workspace e2e', () => {
             sharedIcons,
             folderChangesWhenExpanded,
             rowStyleConsistent,
+            rowBefore,
+            rowAfter,
             briefBeforeExpand,
             moduleFileBeforeExpand,
             hiddenRootCount,

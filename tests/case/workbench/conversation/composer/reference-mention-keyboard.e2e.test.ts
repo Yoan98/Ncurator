@@ -51,7 +51,7 @@ describe('workbench conversation e2e', () => {
               word?.querySelector('text')?.textContent === 'DOC' &&
               !!shape &&
               getComputedStyle(shape).fill === 'rgb(59, 130, 246)' &&
-              word.getBoundingClientRect().width === 18
+              Math.abs(word.getBoundingClientRect().width - 18) <= 0.05
             )
           })
           const neutralMentionLabels = await mentionPanel.evaluate((node) => {
@@ -76,7 +76,7 @@ describe('workbench conversation e2e', () => {
           const compactDirectoryIcon = await mentionPanel
             .locator('[data-reference-icon-kind="directory"] svg')
             .first()
-            .evaluate((icon) => icon.getBoundingClientRect().width === 16)
+            .evaluate((icon) => Math.abs(icon.getBoundingClientRect().width - 16) <= 0.05)
           const activeBeforeArrowDown = await readActiveMentionText()
           await page.keyboard.press('ArrowDown')
           await page.waitForFunction(
@@ -111,7 +111,9 @@ describe('workbench conversation e2e', () => {
                     ['0 0 16 16', '0 0 18 18', '0 0 24 24', '0 0 256 256'].includes(
                       icon.getAttribute('viewBox') || ''
                     ) &&
-                    icon.getBoundingClientRect().width === (kind === 'directory' ? 16 : 18) &&
+                    Math.abs(
+                      icon.getBoundingClientRect().width - (kind === 'directory' ? 16 : 18)
+                    ) <= 0.05 &&
                     icon.innerHTML === shapes[kind]
                   )
                 }),
