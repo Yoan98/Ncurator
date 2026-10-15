@@ -447,9 +447,9 @@
         }
       }
       adapter.open(targetPath)
+      closePlaceholder()
       var restored = view ? adapter.restoreView(view) : {}
       var excerpt = adapter.excerpt ? adapter.excerpt() : ''
-      closePlaceholder()
       suppressEvents = false
       return {
         ok: true,
