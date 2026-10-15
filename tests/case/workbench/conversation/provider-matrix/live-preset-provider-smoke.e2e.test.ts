@@ -7,6 +7,7 @@ import {
   configureLiveModelThroughSettingsUi,
   getWorkbenchLocator,
   navigateToWorkbench,
+  recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
@@ -50,7 +51,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['provider-matrix'],
         description:
-          'opt-in：对已配置 Key 的每个内置服务商，经 Settings 推荐配置 + Composer 预设选模，真实发送「你好」。',
+          '对已配置 Key 的内置服务商及目录中的免费型号，经 Composer 选模真实发送「你好」。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -102,9 +103,50 @@ describe('workbench conversation e2e', () => {
             })
           }
 
+          const freeModel = await page.evaluate(async () => {
+            const snapshot = await window.api.freeModelsGet()
+            return snapshot.models[0] ?? null
+          })
+          let freeResult: {
+            modelName: string
+            selectedLabel: string
+            completed: boolean
+            finalAnswerText: string
+          } | null = null
+          if (freeModel) {
+            const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
+            await modelSelect.click()
+            await page
+              .getByTestId(`${workbenchSelectors.modelSelectFreeOptionPrefix}-${freeModel.id}`)
+              .click()
+            const selectedLabel = (await modelSelect.innerText()).trim()
+            const startedAt = Date.now()
+            await sendWorkbenchMessage(page, '你好')
+            const evidence = await waitForWorkbenchAiRunCompletion(
+              runtime,
+              startedAt,
+              freeModel.modelName,
+              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+              { page }
+            )
+            recordWorkbenchAiEvidence(runtime, evidence, 1)
+            freeResult = {
+              modelName: freeModel.modelName,
+              selectedLabel,
+              completed: evidence.events.some((event) => event.type === 'run_completed'),
+              finalAnswerText: evidence.finalAnswerText
+            }
+            await runtime.captureScreenshot({
+              name: 'free-model-gateway-smoke',
+              message: `免费型号 ${freeModel.modelName} 真实调用完成；选中：${selectedLabel}`
+            })
+          }
+
           return {
             expectedProviderIds: targets.map((item) => item.providerId),
-            results
+            results,
+            freeModelId: freeModel?.id ?? null,
+            freeResult
           }
         },
         assert: async (result, runtime) => {
@@ -121,6 +163,18 @@ describe('workbench conversation e2e', () => {
               message:
                 '必须经真实 Settings 推荐配置与 Composer 预设 option 选模；每个已配置 Key 的内置服务商都应完成一次「你好」live 回答。',
               data: result
+            }
+          )
+          await runtime.assertThat(
+            result.freeModelId === null ||
+              (result.freeResult?.completed === true &&
+                result.freeResult.finalAnswerText.trim().length > 0 &&
+                result.freeResult.selectedLabel.trim().length > 0),
+            {
+              name: 'live-free-model-gateway-smoke-ok',
+              message:
+                '免费目录非空时，必须经真实免费选项完成一次模型调用；目录为空时明确记录覆盖缺口。',
+              data: { freeModelId: result.freeModelId, freeResult: result.freeResult }
             }
           )
         }

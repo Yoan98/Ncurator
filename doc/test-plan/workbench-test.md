@@ -235,10 +235,10 @@ pnpm test:update:e2e
 #### `live-preset-provider-smoke`
 
 - 测试类型：`e2e / live`（路径 `conversation/provider-matrix/`，可单独执行）
-- What：对 `.env` 中已填写 `AI_LIVE_KEY_*` 的每个内置服务商，经真实 Settings「推荐」配置 + Composer 预设 option（稳定调用名 testid）选模，各发一句「你好」确认可跑通。
-- Why：日常全量 live 只跑 `AI_LIVE_PROVIDER`/`AI_LIVE_MODEL` 选定目标；需要单独 smoke 覆盖「有 Key 的全部内置服务商」连通性。
-- How：读取 `listConfiguredLiveLlmTargets()`，默认测试模型须在当前推荐目录中；为每个目标走 Settings UI 创建推荐服务商；创建伙伴后依次点预设 option（不得走自定义搜索兜底）并发送「你好」，等待 run 完成。
-- Oracle：每个已配置 Key 的服务商都有非空最终回答；未配置 Key 的服务商不参与、不失败。
+- What：对 `.env` 中已填写 `AI_LIVE_KEY_*` 的每个内置服务商，经真实 Settings「推荐」配置 + Composer 预设 option（稳定调用名 testid）选模，各发一句「你好」；免费目录非空时，再选择一个免费型号完成真实调用。
+- Why：日常全量 live 只跑 `AI_LIVE_PROVIDER`/`AI_LIVE_MODEL` 选定目标；需要 smoke 覆盖已配置服务商，以及正式包中的免费模型官网调用与鉴权链路。
+- How：读取 `listConfiguredLiveLlmTargets()`，默认测试模型须在当前推荐目录中；为每个目标走 Settings UI 创建推荐服务商；创建伙伴后依次点预设 option（不得走自定义搜索兜底）并发送「你好」，等待 run 完成。随后通过只读 `freeModelsGet` 取得公开目录；目录非空时点击对应免费 option 并发送「你好」，观测真实完成事件与回答，记录型号、标签与截图；目录为空时明确记录该覆盖缺口。
+- Oracle：每个已配置 Key 的服务商都有非空最终回答；未配置 Key 的服务商不参与、不失败。免费目录非空时，所选免费型号必须真实完成且回答非空，不能因免费通道失败而跳过，对齐 `WB-COMPOSER-007-AC4/AC14` 的调用边界；目录为空只证明已配置服务商连通性。
 
 #### `prefix-cache-retain-live`
 
