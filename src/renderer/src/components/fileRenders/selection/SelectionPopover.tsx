@@ -62,7 +62,7 @@ export default function SelectionPopover({
           <ComposerInputEditor
             value={{
               contentNodes: popup.node.children,
-              input: chatContentText(popup.node.children).trim(),
+              input: chatContentText(popup.node.children),
               selectedReferences: chatReferences(popup.node.children)
             }}
             variant="inline"

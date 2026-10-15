@@ -3333,6 +3333,7 @@ export function registerHandlers(services: {
           chatRunService.openPartner(payload),
           workbenchUiStore.getPartnerState(payload.partnerId)
         ])
+        browserEmbedService?.listTabs(payload.partnerId)
         return { ...opened, ...(uiState ? { uiState } : {}) }
       } catch (e: unknown) {
         console.error('[CHAT-SESSION-OPEN] Error:', e)

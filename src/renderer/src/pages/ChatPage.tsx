@@ -5009,11 +5009,13 @@ const ChatPage: React.FC = () => {
               const partner = partners.find((item) => item.id === partnerId)
               if (!partner) return
               await openExistingPartner(partner)
+              const initialInput =
+                '我们一起来设置一个定时任务吧。询问我需要安排什么，以及应该在什么时候运行。'
               applyComposerDraft(
                 {
                   ...createEmptyComposerDraft(),
-                  input:
-                    '我们一起来设置一个定时任务吧。询问我需要安排什么，以及应该在什么时候运行。'
+                  input: initialInput,
+                  contentNodes: [{ kind: 'text', text: initialInput }]
                 },
                 'scheduled-task-ai-create'
               )
