@@ -63,7 +63,7 @@ describe('all free models use the official proxy', () => {
     const requests: Array<{ url: string; headers: Headers; body: BodyInit | null | undefined }> = []
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
       requests.push({ url: String(input), headers: new Headers(init?.headers), body: init?.body })
-      if (String(input).endsWith('/mystery-token')) return Response.json({ token: refreshed })
+      if (String(input).endsWith('/free/token')) return Response.json({ token: refreshed })
       return requests.length === 1
         ? new Response('', { status: 401 })
         : Response.json({ choices: [] })
@@ -79,7 +79,7 @@ describe('all free models use the official proxy', () => {
       ).status
     ).toBe(200)
     expect(requests).toHaveLength(3)
-    expect(requests[1].url).toBe('https://www.guanzhangai.cn/api/v1/mystery-token')
+    expect(requests[1].url).toBe('https://www.guanzhangai.cn/api/v1/free/token')
     expect(requests[2].headers.get('Authorization')).toBe(`Bearer ${refreshed}`)
     expect(requests[2].headers.get(APP_NONCE_HEADER)).not.toBe(
       requests[0].headers.get(APP_NONCE_HEADER)
@@ -120,7 +120,7 @@ describe('desktop app gateway headers', () => {
     process.env.NCURATOR_APP_SECRET_DESKTOP = 'unit-test-secret'
     const headers = buildDesktopAppGatewayHeaders({
       method: 'POST',
-      url: 'https://www.guanzhangai.cn/api/v1/mystery-token',
+      url: 'https://www.guanzhangai.cn/api/v1/free/token',
       body: ''
     })
     expect(headers[APP_CLIENT_HEADER]).toBe('desktop')
@@ -130,7 +130,7 @@ describe('desktop app gateway headers', () => {
     )
     const payload = buildAppGatewaySignaturePayload({
       method: 'POST',
-      path: '/api/v1/mystery-token',
+      path: '/api/v1/free/token',
       timestamp: headers[APP_TIMESTAMP_HEADER],
       nonce: headers[APP_NONCE_HEADER],
       body: ''
