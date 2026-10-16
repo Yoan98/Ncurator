@@ -370,7 +370,6 @@ pnpm test:update:e2e
 - How：真实 UI 配置模型、派发两项任务，复制现有排期/口径/备注/财务跟进 fixture 到临时资料目录，待续接任务依次核对排期、主负责人和财务执行动作。一个完成，另一个读完后进入真实待加载网页；通过 UI 停止并要求查询、续接原子会话。相同模型/工作区短间隔续接，不填充提示或伪造输出/usage。真实本地页面只作输入，observer/只读 IPC 只取证。
 - Oracle：对齐 `WB-SUBAGENT-001-AC10`。同 agentId、不同 childRunId；原任务/历史事实保留，最终交付正确且输入不变，完成清理子日志。每个完成的子任务及续接主任务至少有一对连续请求，逐对核对已有消息与工具前缀，并确认实际缓存复用；允许一轮调用多个读取工具。 每份资料从模型请求的工具消息正文取证，不再次 JSON 序列化，避免 Windows 路径转义影响匹配；证据须含完整或工作目录相对路径及真实正文锚点，允许通过文本工具或终端读取；交付仍须包含全部来源路径。比较中断前末次带完整 usage 请求与续接首次请求的工具及已有消息前缀，实际 cachedInputTokens 超过该子会话首次请求的 inputTokens，证明复用包含新增历史；前缀变化、usage 缺失或仅公共前缀命中失败。复用率为续接 cachedInputTokens / 中断前 inputTokens，85%为评估参考，记录首轮/末轮输入规模区分公共前缀和历史复用，不要求所有短请求达 85%。保留请求差异、主子关联、截图、usage 和人工评估。重启持久性由恢复 E2E 验证。
 
-
 #### `subagent-approval-flow`
 
 - 测试类型：e2e / live；suite `run`，group `subagent`；serviceMode `real`。
@@ -379,7 +378,6 @@ pnpm test:update:e2e
 - How：真实 UI 配置审核权限；各阶段建立独立伙伴和临时文件范围。用户给出两项 `agents` / `instruction` 参数，要求一次调用 `delegate_to_subagent` 原样传递具体命令、绝对路径及授权条件；第一项先用文本工具保存已授权文件，两项再各自调用 `terminal_run` 请求执行具体清理命令。每项只检查自己的目标目录及本任务保存文件，不读取其他任务文件；主伙伴只汇总结果和审批决定，不接管或重试清理。任务明确工具放行后命令会递归删除整个目标目录及其内容，当前尚未授权删除且可删除范围尚未确认，必须先由用户在人工审批卡确认，仅返回命令说明不算完成。不附带与操作冲突的保留要求。先确认实际派发、工具调用及真实审核进入两项等待，再通过 UI 允许/拒绝、指导/拒绝、切伙伴及刷新；另覆盖等待时停止和异常退出，续聊查询并继续原未完成子会话，创建新的执行实例来写文本报告。harness 保留刷新前真实事件/I/O，只读 IPC 取当前批次；模型、审核和审批结果均不注入。未进入人工审批时依据真实任务、调用和审核 reason 记录失败；等待两项审批期间发现目录已删除则立即失败，不计为审批交互通过。自动审核、规则直通、完全访问及异常转人工分支由 AI 回归覆盖。
 - 补充验收：指导 placeholder 与可见来源均使用当前子伙伴名；下一批来源和草稿不串，单次选择不提交，最后明确提交整批。
 - Oracle：对齐 `WB-SUBAGENT-001-AC8`、`WB-SUBAGENT-001-AC9`，以及 `WB-SUBAGENT-001-AC2` 的审批等待态。真实审核输入保留各子任务及命令 ID，不含工具的命令说明；人工卡片仍显示原操作说明。仅一个可操作批次，来源及指导 placeholder 准确；两项等待时主状态保持 waiting_approval（读取伙伴快照的 `run.status`），头像静止、云为「等待你审核操作」且无黑球。决定前目录未删除；允许后原 childRunId 继续、命令只执行一次，拒绝/指导不执行原命令；下一批不串来源并清空草稿。切换/刷新保留当前批次；停止清除等待、未执行命令且保留先前文件；重启旧审批失效、子任务中断，续聊相同未完成 agentId 的新执行实例。同步回归主审批 `approval-batch-flow` 和 `stop-running-or-approval-run`。
-
 
 #### `ai-process-stream-and-final-answer`
 
@@ -450,7 +448,6 @@ pnpm test:update:e2e
 - Oracle：只读轮至少有一个 `terminal_step_started`，没有 `human.terminal_review` 调用、审批事件或审批卡，且 workspace 文件树和文件内容前后相同。创建轮的真实审核输出必须对实际 terminal command 返回 `auto_approve` 与非空 reason；允许命令附加只读核验，仍须实际执行指定创建命令、退出成功且仅新增命名目录；无审批事件/卡片。三个删除轮都必须有完成态 `human.terminal_review` 输出，decision 为 `needs_human_review`、reason 非空；decision 的 `commandId` 与审批项 `itemId` 对应，审批项命令与该轮要求执行的命令一致（Windows 可由 `powershell -NoProfile -Command` 透明包装，但命令体须逐字一致），并真实出现审批卡。卡片等待态及布局对齐 `WB-BLOCKER-001-AC1`、`WB-BLOCKER-001-AC2`、`WB-BLOCKER-001-AC3`、`WB-BLOCKER-001-AC4`、`WB-BLOCKER-001-AC6`。同意轮记录 `approve` 并执行待审命令，目标临时目录被删除且其余 workspace 文件树不变；拒绝轮记录 `reject`，待审删除命令未启动或执行（允许审批前只读核验），两份文件及内容保持原样；指导轮记录 `guide`、run 正常完成、没有执行删除命令，两份文件及内容保持原样，刷新后 Activity 中仍显示指导结果，对齐 `WB-BLOCKER-001-AC7`。审批决定文字须与实际 UI 动作相符。只读查询对齐 `WB-BLOCKER-001-AC13`；自动通过、人工决策后的影响范围和完全访问边界共同覆盖 `WB-BLOCKER-001-AC5`、`WB-BLOCKER-001-AC14`。AI backend case `hand-terminal-approval-batch`、`hand-terminal-ai-review-auto-approve`、`hand-terminal-ai-review-failure`、`hand-terminal-ai-review-incomplete` 继续覆盖稳定分类与失败回退契约。完全访问轮真实创建目标文件且没有审核调用、审批事件或审批卡片。记录模型、耗时、完成度评分和失败归因。
 - Oracle：在发送前安装只读 DOM 观察记录 `正在审核终端命令` 是否出现；审核期间尚无 `terminal_step_started`；从审核到执行 / 人工等待 / 拒绝，同一命令只对应一个 Activity 工具项且只计一次，对齐 `WB-BLOCKER-001-AC15`。AI 自动通过和转人工结果、人工同意/拒绝/指导结果均显示在命令项下带内嵌竖线的审核结果区域；审核区域只对 AI / 人工审核产生，不展示内部 reason。审核期间流光动效只在 Activity header，展开后的命令行没有流光动效。刷新后过程与审核结论从持久化日志恢复，拒绝或指导显示「命令未执行」，不显示为工具执行失败。Activity header 在成功、失败和部分失败状态下均保持中性灰色层级（流光期间可使用正文色），展开后的失败工具行保留红色提示，对齐 `WB-COMPOSER-009-AC16`。
 
-
 #### `stop-running-or-approval-run`
 
 - 测试类型：`e2e`
@@ -458,7 +455,6 @@ pnpm test:update:e2e
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
 - How：E2E 发送真实长任务；随后在隔离 workspace 中准备 `cache.tmp` 和 `keep.txt`，要求通过 terminal 工具提交删除整个目录的命令，并明确当前尚未授权删除，需先在人工审批卡决定。使用真实模型和 UI，不注入审核结果；发送前安装只读 DOM 观察审核期间 header 与命令项的流光状态。任务要求一致；模型未提交操作而另走提问时保留证据并失败。只有收到当前 run 的 `approval_batch_required` 且审批卡可见后才点击停止；命令未进入审批等待或 run 已结束时立即以事件证据失败，不继续等待一个永远不会出现的审批卡。
 - Oracle：运行中停止入口和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中唯一主按钮转圈且禁用，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`；取消后用时停止递增、过程默认收起且仍可展开，对齐 `WB-COMPOSER-016-AC2`；审批等待时普通输入框和 Composer 主按钮均不存在，且不显示「需要你的协助」，对齐 `WB-COMPOSER-017-AC4`、`WB-SESSION-014-AC1`。真实审核期间 Activity header 有流光，展开命令项没有流光；取消审批 run 后清除等待卡和运行态，待审删除命令没有 `terminal_step_started`，`cache.tmp` 与 `keep.txt` 均原样保留，对齐 `WB-BLOCKER-001-AC10`。 已核对的具体验收：`WB-COMPOSER-006-AC2`、`WB-COMPOSER-006-AC3`。
-
 
 #### `interrupted-task-resume-flow`
 
@@ -484,7 +480,6 @@ pnpm test:update:e2e
 - How：先打开真实 Markdown 文件，再让 AI 使用 `browser_use` 操作本地测试页（在操作备注输入框输入内容 + 诱饵角色切换 + hover 消息图标才出现「退出登录」）；AI Run 仍在进行时，用户通过 `+` 新建另一个浏览器标签并折叠右栏，验证后续 observe / act / extract 在后台继续操作原目标；任务完成后展开右栏并切回 AI 浏览器标签，再切换文件和浏览器检查状态保持。observe/act 必须走按 Tab 挂上的本机 CDP 桥，而不是应用自己打开的进程级调试口。
 - 补充验收：追加真实网页人工协作场景：模型打开既有本地页面后发起无选项提问；等待期间通过原生鼠标事件点击页面真实“用户确认”按钮，再在卡片回复；页面正文以“协作确认结果”明确标注反馈，模型重新提取该实际结果后继续。使用真实 UI、真实页面和真实模型，不依赖外部验证码、不增加模拟路径。
 - Oracle：`navigate` 结果含 `tabId`；后续 observe/act 必带该 `tabId`；成功 `navigate` 给模型拆成 Title / URL 而不是一行 Page；`act` 使用 `actionId`，支持输入类动作注入 `text` 参数；observe actions 含 `actionId/method/description/arguments/selector`；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成输入、hover 与退出，展开后同一个 `webContents.id` 直接显示最新包含退出口令与备注内容的 `LOGOUT_OK_*` 结果；操作期间光标常驻且仅在 AI Run 结束时释放隐藏；对齐 `WB-PANEL-004`、`WB-PANEL-004-AC10`、`WB-PANEL-004-AC13`、`WB-PANEL-004-AC18`。Playwright 驱动 Electron 窗口自带的调试口不作为本 case 失败条件；应用启动不得 `appendSwitch('remote-debugging-port')` 由 unit `cdp-endpoint-service` 守住。
-
 
 #### `browser-view-lifecycle`
 
@@ -552,6 +547,8 @@ pnpm test:update:e2e
 - How：创建伙伴并添加文件地址后，从文件列表连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；展开打开方式菜单，确认触发系统关联应用查询、存在默认应用标记和至少一个系统返回的 Handler；docx / xlsx 在打开方式含 WPS 时工具栏问号可见，pdf / md / txt / xlsm 不可见；确认产生四个文件 Tab，再切回 Markdown Tab；从文件列表打开 `xlsx/xlsm/xltx/xltm`，关闭保持展开的悬浮文件列表后，对 `xlsx` 尝试进入单元格编辑并输入，用原生复制核对内容仍保持原值，再切 Sheet 和拖列宽。在隔离工作簿加入无缓存及过期缓存公式，通过组件只读权限保留选区与复制，使用真实网格选中与复制读取显示结果，包含零值和跨 Sheet 引用。工作簿同时包含足够的行，通过真实鼠标拖选 C17:C20，检查 AI 引用浮层可见且位于预览内，输入想法后添加到 Composer，核对工作表、范围和四行快照；滚动后从 Composer 回跳编辑并删除引用，再切 Sheet 验证单格引用入口。只读读取 DOM 区分表格主画布与内嵌文字编辑器画布，不用任意第一个 canvas 作为网格。
 - Oracle：加号文件标签、目录懒加载、PDF 命中定位、Markdown / UTF-8 文本预览、Excel 只读且可浏览、选中态、面包屑、系统打开方式与工具栏行为整体对齐 `WB-PANEL-003`、`WB-EXCEL-002-AC1`；WPS 问号提示对齐 `WB-PANEL-003-AC22`；各文件分别保留且旧 Tab 可恢复；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换、不残留，对齐 `WB-PANEL-001-AC1`。目录打开刷新由 `workspace-file-explorer-open-refresh` 覆盖。普通预览 FORCED 计算无缓存与过期缓存公式，结果显示准确，打开预览不写回源文件。多行区域和跨 Sheet 单格都能显示 AI 引用入口，确认后范围与快照准确，滚动后 Composer 回跳、编辑和删除可用；对齐 `WB-DOCUMENT-REFERENCE-002-AC1`。
 
+- 默认应用补充验收：通过真实菜单设置默认、一次性打开、恢复跟随系统默认，跨 Tab／伙伴及重启恢复，覆盖 WB-PANEL-003 的馆长偏好规则；应用失效与查询失败按真实环境人工补验，不注入系统关联。
+
 #### `workspace-file-explorer-open-refresh`
 
 - 测试类型：`e2e`
@@ -598,8 +595,10 @@ pnpm test:update:e2e
 - 模式入口补充：在审核切到真实预览后，重复点击对话中的同一修改入口，必须重新打开当前批次审核且不新增 Tab；从悬浮列表选择当前修改文件进入审核后保持列表展开，对齐 `WB-PANEL-003-AC13/AC14`。
 - What：同一个 Markdown 文件打开即进入编辑态并展示最新内容，AI 运行完成后无需点击修改项即可出现预览/审核切换且保持阅读位置，同时显示非零修改数量，切换伙伴再切回后不点击仍保持真实数量，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：编辑态和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容；伙伴切换后的数量恢复不能依赖用户点击触发补算。
-- How：先打开 Markdown（进入编辑态）；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件，等待 run 完成但不点击修改项，确认 assistant 修改列表已经显示非零 `+/-` 数量；检查编辑态静默刷新为最新内容、原 Tab 和文档视图保留，新增切换入口但仍在预览；从“全部”重新打开该文件确认带切换入口，再切审核检查 Diff；保持审核并发送不修改文件的后续提问，确认该历史批次不会被新运行清空；切换伙伴再切回，不点击修改项确认数量仍为非零；再点击 assistant 修改入口检查 `TextFileDiffViewer`、工具栏没有独立定位按钮且系统应用下拉包含“打开所在文件夹”；通过 E2E no-op 外部启动成功分支检查重新打开提醒，最后执行回退。 测试进程在审核打开后真实写入 C，切到预览检查 C、切回审核检查 B，并展开完整未变行；回退验证后续修改确认。
-- Oracle：AI 写入后编辑态显示最新内容且不误报外部修改；不点击修改项即出现模式切换、默认仍为预览且不重挂文档视图；从“全部”打开已修改文件仍可切审核，伙伴恢复后关联记录保持；编辑态与审核模式共用一个文件 Tab；Run 终态后修改入口在未点击时已显示真实非零数量；切换伙伴再切回后未点击时数量仍为真实非零，不重置为 0，对齐 `WB-APPLY-005-AC4`；审核模式展示差异数量、修改状态和回退，预览模式全部隐藏；预览模式对 Markdown/UTF-8 文本进入应用内编辑态（与普通打开一致），对齐 `WB-EDIT-001-AC7`、`WB-PANEL-003-AC14`；已应用记录打开外部应用后显示重新打开提醒；文件夹入口打开的文件列表从工具栏底部贴右悬浮，不改变预览宽度，可通过外部点击、Escape 或选择文件关闭；当前已经是最新记录且处于预览模式时，再次点击文件总分类仍会重置到最新审核模式；历史批次、结构化 Diff、不可变展开和回退刷新整体对齐 `WB-PANEL-003`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`；确认回退后 bytes 与原始输入一致且有效改动标记消失。
+- How：先打开 Markdown（进入编辑态）；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件，等待 run 完成但不点击修改项，确认 assistant 修改列表已经显示非零 `+/-` 数量；检查编辑态静默刷新为最新内容、原 Tab 和文档视图保留，新增切换入口但仍在预览；从“全部”重新打开该文件确认带切换入口，再切审核检查 Diff；保持审核并发送不修改文件的后续提问，确认该历史批次不会被新运行清空；切换伙伴再切回，不点击修改项确认数量仍为非零；再点击 assistant 修改入口检查 `TextFileDiffViewer`、工具栏没有独立定位按钮且系统应用下拉包含“打开所在文件夹”；通过 E2E no-op 外部启动成功分支检查重新打开提醒，最后执行回退。 测试进程在审核打开后真实写入 C，切到预览检查 C、切回审核检查当前 C、左侧仍为 A，并展开完整未变行；回退验证后续修改确认。
+- Oracle：覆盖 `WB-EDIT-001-AC15/AC16/AC18`，双栏当前文件编辑保存和撤销、原始 AI 记录保持不变；AI 写入后编辑态显示最新内容且不误报外部修改；不点击修改项即出现模式切换、默认仍为预览且不重挂文档视图；从“全部”打开已修改文件仍可切审核，伙伴恢复后关联记录保持；编辑态与审核模式共用一个文件 Tab；Run 终态后修改入口在未点击时已显示真实非零数量；切换伙伴再切回后未点击时数量仍为真实非零，不重置为 0，对齐 `WB-APPLY-005-AC4`；审核模式展示差异数量、修改状态和回退，预览模式全部隐藏；预览模式对 Markdown/UTF-8 文本进入应用内编辑态（与普通打开一致），对齐 `WB-EDIT-001-AC7`、`WB-PANEL-003-AC14`；已应用记录打开外部应用后显示重新打开提醒；文件夹入口打开的文件列表从工具栏底部贴右悬浮，不改变预览宽度，可通过外部点击、Escape 或选择文件关闭；当前已经是最新记录且处于预览模式时，再次点击文件总分类仍会重置到最新审核模式；历史批次、结构化 Diff、不可变展开和回退刷新整体对齐 `WB-PANEL-003`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`；确认回退后 bytes 与原始输入一致且有效改动标记消失。
+
+- 双栏补充验收：真实 Monaco 左侧 A 只读、右侧 C 可编辑，输入／撤销／单块恢复／同步滚动／折叠／换行；保存后磁盘含完整内容，保留 BOM 和 CRLF，切换模式／记录前 flush；原始 AI 计数不变，对齐 WB-EDIT-001-AC7/AC15/AC16/AC18。大文件超时、文件缺失及保存失败列入真实人工验收，对齐 AC17。
 
 #### `ppt-create-diff-and-revert`
 
@@ -661,13 +660,25 @@ pnpm test:update:e2e
 - How：通过真实 Workbench UI 依次选择 `sample-edit.docx`、`经营周报.xlsx`、`品牌策略提案.pptx` 并发送真实编辑请求。不连接 `/events`、不打开 WPS。每种格式写回后轮询 `127.0.0.1` 的 `/status`，确认 `lastDispatches` 含该路径；再确认回退后再增加一次。
 - Oracle：磁盘写回含标记、回退恢复原文；每种格式写回后该路径至少 1 次 dispatch，回退后次数继续增加，对齐 `WB-WPS-001-AC2`、`WB-WPS-001-AC3`。无客户端时仍记录 dispatch；未连接时不发 close，对齐 `WB-WPS-001-AC4`。
 
+#### `wps-office-review-navigation`
+
+- 测试类型：`e2e / exclusive`（`result/wps-office/`，真实已授权组件）。
+- What：Office 审核点击打开 WPS 并定位当前文件，覆盖未打开与已打开两次点击。
+- Why：仅验证启动或写回刷新不能证明差异区域定位成功。
+- How：隔离伙伴通过真实 UI 选择完全访问，在工作区注册与索引前给三类临时输入添加本轮唯一文件名，避免表格恢复窗口的同名冲突；WPS 关闭时由真实 AI 修改三类文件；设置馆长默认 WPS，通过审核区域点击启动并读取真实加载项选择回报，再次点击验证已打开路径。每个组件分别记录授权与失败原因，未授权明确跳过；不会通过内部 IPC 触发被测导航，读取索引和状态仅收集证据。Excel 按真实审核工作簿的行高列宽计算点击位置，并通过拖动分隔条保证目标可见；PPT 点击审核 SVG 中与索引对应的实际元素身份。macOS 演示通过实际 SlideID 校验，表格打开时重算造成的未保存状态不得阻止可唯一确认的单元格定位。
+- Oracle：`WB-WPS-001-AC6/AC7`：已授权组件必须给出当前文件与实际选区的 located/container 回报，两次导航不得写入文件，也不得触发 close/reload；未授权组件不伪造覆盖。未保存编辑、多实例及位置失效由协议 Unit 补证与真机人工验收。
+
 #### `wps-office-reload-on-write-and-revert`
 
 - 测试类型：`e2e / exclusive`（路径 `result/wps-office/`；可单独执行，发版按影响范围选择或随全量测试）
 - What：本机已授权的 WPS 打开目标 docx、xlsx、pptx 后，真实 AI 写回/回退让对应组件加载项先 close 放锁再写盘再 open，窗口摘录分别含标记和恢复原文。
 - Why：只证明馆长 dispatch 不能证明用户看到的 WPS 窗口已换新稿。Windows 上 WPS 独占锁必须先 close 才能写盘。文字、表格、演示是独立客户端，只测 docx 不能证明 Excel / PPT 窗口会刷新。授权弹窗可能卡住无人值守自动化，因此提供单独命令；发版时按影响范围选择，发版全量测试包含该 case。
-- How：执行 `pnpm test:workbench:wps-office` 或 `--case wps-office-reload-on-write-and-revert`。不覆盖拷加载项、不点授权、不用辅助功能点 UI。进用例前先做 WPS 环境归零（不带 `/F` 请求关闭 wps / et / wpp，超时再强杀，然后清 `ncurator-workbench-wps-*` 临时工作区），否则上一轮残留实例会冒充本轮客户端。馆长回环先起来；`publish.xml` 与授权 path 保持 `http://127.0.0.1:18723/addon/`。若回环不在优先端口 `18723`（说明本机另有馆长占用），跳过整案，因为已打开的 WPS 仍从优先端口拉加载项。独占 `18723` 时，对 `sample-edit.docx`、`经营周报.xlsx`、`品牌策略提案.pptx` 分别用本机 WPS 打开临时工作区文件：macOS 走 `open -a`；Windows 按注册表 `InstallRoot` 与默认安装目录解析启动器 / 对应组件 exe（`wps.exe` / `et.exe` / `wpp.exe`），进程拉起后立即返回、不等待 WPS 退出。等待 `/status` 出现对应组件客户端（`wps` / `et` / `wpp`）且该文档已登记。再通过真实 Workbench UI 发送编辑；写盘前加载项 close 并上报 `remaining`，馆长等到文件锁释放再写盘；写回后读该路径 `reload-result` 摘录含标记，回退后摘录不含标记。标记落点必须在加载项摘录采样范围内（xlsx 指定写 `H1`，不能让模型自选任意空白单元格，否则摘录读不到），摘录采样为表格 200 行 × 50 列、演示前 10 页、单次上限 20000 字符。`remaining` 为 0 时由占位文档撑住组件进程后继续走加载项 open；占位建不起来才用对应组件 exe 拉起（不得 `cmd start` 把表格/演示塞进已打开的文字窗口），再经 list 轮询取摘录、不再二次 Open；被指派实例报 open 失败或超时则降级一次系统打开。每种格式跑完立即归零 WPS，下一种格式从空环境开始；单种格式失败只记该格式失败并继续跑后面的格式，不得让 docx 或 xlsx 的问题把 pptx 挡在门外。本机未装 WPS、或该组件 `authaddin` 未授权则跳过该格式；该组件已授权但约 90 秒内加载项未连接则该格式失败。三种格式都未授权才跳过整案。
-- Oracle：磁盘写回含标记、回退恢复原文；已授权的每种格式都必须给出结论，加载项 `reload-result` 写回后摘录含标记、回退后不含标记，对齐 `WB-WPS-001-AC1`、`WB-WPS-001-AC2`、`WB-WPS-001-AC3`。断言数据按格式列出 covered / failed 及失败原因，任一已授权格式未 covered 即失败。未连接时不发 close；刷新失败不回滚已成功写盘，对齐 `WB-WPS-001-AC4`。超时报错必须带上 `clientId`、已登记文档和被拒的 close / open 回报原因，便于区分「投错实例」和「组件真的打不开」。用例结束后在删除临时工作区前先归零 WPS，清理目录遇到占用不作为失败。
+- How：在隔离伙伴内通过真实 UI 选择完全访问并确认，再执行 WPS 刷新和导航闭环。执行 `pnpm test:workbench:wps-office` 或 `--case wps-office-reload-on-write-and-revert`；可用测试专属 `WPS_E2E_HOSTS=et`（逗号分隔 `wps/et/wpp`）单独诊断组件，未选组件明确记为本轮未执行，子集通过不代表三格式通过。不覆盖拷加载项、不点授权、不用辅助功能点 UI。进用例前先做 WPS 环境归零（Windows 不带 `/F` 请求关闭 wps / et / wpp；macOS 先只向主进程发送 TERM，保留加载项子进程完成退出，超时再清理全部残留进程；临时工作区仅由各 case 的资源作用域回收，不按前缀批量删除其他轮次的目录，超时残留由 runner 按通用过期规则清理），否则上一轮残留实例会冒充本轮客户端。馆长回环先起来；`publish.xml` 与授权 path 保持 `http://127.0.0.1:18723/addon/`。若回环不在优先端口 `18723`（说明本机另有馆长占用），跳过整案，因为已打开的 WPS 仍从优先端口拉加载项。独占 `18723` 时，先在注册工作区与索引前为 `sample-edit.docx`、`经营周报.xlsx`、`品牌策略提案.pptx` 的临时副本添加本轮唯一文件名；真实引用、AI 指令、修改入口和 WPS 校验均使用该名称，避免表格恢复窗口中的旧同名文件阻塞。再分别用本机 WPS 打开临时工作区文件：macOS 走 `open -a`，归零后仅对 Launch Services 尚未注销旧进程导致的 `-600` 在 5 秒内重试准备打开，其他错误直接失败；Windows 按注册表 `InstallRoot` 与默认安装目录解析启动器 / 对应组件 exe（`wps.exe` / `et.exe` / `wpp.exe`），进程拉起后立即返回、不等待 WPS 退出。等待 `/status` 出现对应组件客户端（`wps` / `et` / `wpp`）且该文档已登记。再通过真实 Workbench UI 发送编辑；写盘前加载项 close 并上报 `remaining`，馆长等到文件锁释放再写盘；写回后读该路径 `reload-result` 摘录含标记，回退后摘录不含标记。标记落点必须在加载项摘录采样范围内（xlsx 指定写 `H1`，pptx 指定第一页包含“2026 秋季品牌升级方案”的文本框；不能让模型自选任意空白单元格或含糊选择正文，否则会产生采样遗漏或阻塞提问），摘录采样为表格 200 行 × 50 列、演示前 10 页、单次上限 20000 字符。macOS 原子写回后通过 Launch Services 指定 WPS 重开目标，以重新交付新文件的访问权限，并从实际持有文档的客户端取摘录；Windows 的 `remaining` 为 0 时由占位文档撑住组件进程后继续走加载项 open，占位建不起来才用对应组件 exe 拉起（不得 `cmd start` 把表格/演示塞进已打开的文字窗口），再经 list 轮询取摘录、不再二次 Open；被指派实例报 open 失败或超时则降级一次系统打开。格式之间保留已打开的 WPS 组件和窗口，按实际文档 clientId 投递，验证多组件连续使用；仅整案开始与结束时归零，避免逐格式强退造成加载项初始化竞态。单种格式失败记录原因并归零 WPS 后继续跑后面的格式，不得让 docx 或 xlsx 的问题把 pptx 挡在门外。本机未装 WPS、或该组件 `authaddin` 未授权则跳过该格式；该组件已授权但约 90 秒内加载项未连接则该格式失败。三种格式都未授权才跳过整案。
+- 初始文档准备：macOS 连续切换格式时，第一次系统打开可能只创建后台标签，尚未启动该组件加载项。若 2 秒内目标仍未登记，仅再发送一次相同文件的系统打开请求以激活标签；不发送内部导航、不改授权、不把发出打开请求当作已就绪。最终仍须实际组件与目标路径登记后才执行被测编辑流程。
+- macOS 真机前置：上轮被强退后，先从 WPS 正常退出并处理临时文档的保存提示，再执行独立 case。进程归零不等于清除了 WPS 自身的恢复状态；恢复标签导致已授权加载项未启动时，保留该轮失败及未连接证据，正常退出后另行复验，不能将其记为定位成功。首次启动及异常恢复后的加载项生命周期列入人工检查边界。
+- Oracle：磁盘写回含标记、回退恢复原文；已授权的每种格式都必须给出结论，同一路径的回退只产生一次重开 dispatch，加载项 `reload-result` 写回后摘录含标记、回退后摘录不含标记，对齐 `WB-WPS-001-AC1`、`WB-WPS-001-AC2`、`WB-WPS-001-AC3`。断言数据按格式列出 covered / failed 及失败原因，本轮选中的任一已授权格式未 covered 即失败。未连接时不发 close；刷新失败不回滚已成功写盘，对齐 `WB-WPS-001-AC4`。超时报错必须带上 `clientId`、已登记文档和被拒的 close / open 回报原因，便于区分「投错实例」和「组件真的打不开」。用例结束后在删除临时工作区前先归零 WPS，清理目录遇到占用不作为失败。
+
+- 导航补充验收：通过审核区域点击并收集实际 WPS navigate-result（活动文档及实际选区），覆盖三组件、未打开／已打开、多实例、未保存编辑、后续结构变化和删除目标，默认非 WPS 不导航。WB-WPS-001-AC6/AC7 的 macOS、Windows 真机覆盖单独列明，不以 mock 或启动成功替代定位；未授权环境明确跳过。
 
 #### `docx-attachment-apply-status-and-cell-diff`
 
@@ -708,7 +719,6 @@ pnpm test:update:e2e
 - Why：无选项协作、选择补充与批次隔离必须由真实 UI 和产品链路验证。
 - How：真实模型通过一次提问询问仅一个候选项的单选、2 至 4 项多选和无选项纯输入三题，真实 UI 点选、取消、填写、翻页与提交；选项行获得焦点后 Enter 下一步，回复框 Enter 下一步和最终发送，空回答 Enter 不前进，Shift+Enter 换行；检查输入采用 Ant Design 默认间距与标准单行高度、无尾部勾叉与选项键盘焦点无整行蓝色外描边；切伙伴和刷新后恢复待处理卡并清空草稿，后续交互继续回答。通过日志检查提交前后运行和工具状态，不注入 UI / IPC 状态。
 - Oracle：对应 `WB-BLOCKER-001-AC9`、`WB-BLOCKER-001-AC11`、`WB-BLOCKER-001-AC12`、`WB-SESSION-014-AC2`；无普通 Composer，单项无分页、多项显示数量与箭头；推荐为文字、多选有轻提示；输入为 Ant Design TextArea，默认间距紧凑、单行不额外撑高，多行按内容增长；有选项时输入默认和悬停无边框及阴影，点击聚焦后显示，失焦后隐藏，纯输入题保留完整细描边；选择行无尾部勾叉和蓝色焦点外描边；每题选项不超过 4 项，单个候选项可选择并提交；纯输入无需选项，空白不能发送；选择后仍停留当前题，翻页保留草稿，最后统一提交，选项焦点与回复框 Enter 执行对应主动作，Shift+Enter 换行，空回答按 Enter 不前进，问答在 Activity 回显。协助标签正确出现和清除，新交互不继承草稿。
-
 
 ### 5.4 `scheduled-task`
 
@@ -772,58 +782,61 @@ pnpm test:update:e2e
 
 ## 6. 自动化覆盖边界
 
-| 验收 | 当前证据与缺口 |
-| --- | --- |
-| `WB-DOCUMENT-REFERENCE-001-AC7` | 部分覆盖：`docx-selection-reference` 已验证 16px 共用轨道、隐藏原生竖向条、滑块同步、拖动/滚轮/空白点击、覆盖色块定位与拖动不误触，以及紫色标记、正文排序的重叠循环、鼠标/键盘定位与强调、临时选区无标记和发送清理。删除逐项更新、伙伴/文件隔离、窗口变化后标记位置、外部原文变化、更多密集引用及长区域保留人工验收边界。 |
-| `WB-PANEL-003-AC29` | 部分覆盖：`docx-review-position-and-inline-diff` 与 `docx-apply-panel-preview-and-revert` 已验证同轨叠层、红删绿增、格式语义、点击定位、预览与回退无残留；轨道滚动交互由 `docx-selection-reference` 验证共用组件。密集循环、重复文字、图片/表格、延迟加载、首尾长区域和历史批次切换保留人工验收边界。 |
-| `WB-CORE-004-AC2/AC3`、`WB-CORE-007-AC3` | 待补：默认 / 宽松补充和严谨资料边界没有专门真实模型场景。偏好选择、持久化或 prompt 格式检查不能代替行为验证。 |
-| `WB-COMPOSER-014-AC3` | 部分覆盖：重试行见 `llm-retry-process-row`；输出截断、半截回答与网络中断上下文的完整 UI 断言待补。 |
-| `WB-COMPOSER-014-AC4` | 待补：计划进度环、hover 浮层、完成隐藏与中断保留没有专门 E2E。 |
-| `WB-SESSION-001-AC6`、`WB-SESSION-012-AC3` | 部分覆盖：已有创建 / 编辑用例走正常路径，UI 重名拦截与历史重名记录只改形象分支待补。 |
-| `WB-COMPOSER-013-AC5` | 部分覆盖：unit `message-log-vision-context` 检验有效图片判断和免费无 vision gate；`model-selector-and-provider-error` 验证成功、失败、取消后无需切换伙伴即刷新上下文用量。含图片历史下的真实 UI 禁用、提示与发送拦截，以及跨伙伴查询不串状态仍需人工验收。 |
-| `WB-COMPOSER-013-AC6` | AI backend `human-read-image-no-vision` 覆盖工具能力反馈、无图片请求与 graph 继续交付；unit `read-image-multimodal` 覆盖支持视觉、目录未命中和非免费模型。真实免费模型的解释及文字续聊列入人工验收。 |
-| `ST-RUN-003-AC1/AC2` | 部分覆盖：`tests/case/unit/scheduled-task-service.test.ts` 以依赖时钟检验启动错过 / 容忍窗口后顺延且不补跑；真实应用关闭 / 系统休眠恢复需桌面人工验收。 |
-| `ST-RUN-001-AC3` | 部分覆盖：`scheduled-task-busy-cancel-and-run-now` 实测 waiting_human 到点不提交并顺延；Unit 验证占用策略和空闲后不补跑。running / waiting_approval 的独立 UI 场景未验证。 |
-| `ST-RUN-005-AC1` | `scheduled-task-busy-cancel-and-run-now` 验证问答卡片收起、Composer 恢复后的提示；waiting_approval 的独立 UI 场景未验证。 |
+- `WB-WPS-001-AC6/AC7`：真实 WPS 导航、多个实例和未保存内容保护需要已授权的 macOS／Windows 逐机验收；协议 Unit 不能替代真实选区证据。Excel 文件已变或有未保存编辑时应仅打开并说明，不使用旧坐标。
+- `WB-EDIT-001-AC17`：大文件超时、超长行、保存失败和文件删除使用真实输入人工验收，不增加生产故障开关。
+
+| 验收                                       | 当前证据与缺口                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WB-DOCUMENT-REFERENCE-001-AC7`            | 部分覆盖：`docx-selection-reference` 已验证 16px 共用轨道、隐藏原生竖向条、滑块同步、拖动/滚轮/空白点击、覆盖色块定位与拖动不误触，以及紫色标记、正文排序的重叠循环、鼠标/键盘定位与强调、临时选区无标记和发送清理。删除逐项更新、伙伴/文件隔离、窗口变化后标记位置、外部原文变化、更多密集引用及长区域保留人工验收边界。 |
+| `WB-PANEL-003-AC29`                        | 部分覆盖：`docx-review-position-and-inline-diff` 与 `docx-apply-panel-preview-and-revert` 已验证同轨叠层、红删绿增、格式语义、点击定位、预览与回退无残留；轨道滚动交互由 `docx-selection-reference` 验证共用组件。密集循环、重复文字、图片/表格、延迟加载、首尾长区域和历史批次切换保留人工验收边界。                     |
+| `WB-CORE-004-AC2/AC3`、`WB-CORE-007-AC3`   | 待补：默认 / 宽松补充和严谨资料边界没有专门真实模型场景。偏好选择、持久化或 prompt 格式检查不能代替行为验证。                                                                                                                                                                                                             |
+| `WB-COMPOSER-014-AC3`                      | 部分覆盖：重试行见 `llm-retry-process-row`；输出截断、半截回答与网络中断上下文的完整 UI 断言待补。                                                                                                                                                                                                                        |
+| `WB-COMPOSER-014-AC4`                      | 待补：计划进度环、hover 浮层、完成隐藏与中断保留没有专门 E2E。                                                                                                                                                                                                                                                            |
+| `WB-SESSION-001-AC6`、`WB-SESSION-012-AC3` | 部分覆盖：已有创建 / 编辑用例走正常路径，UI 重名拦截与历史重名记录只改形象分支待补。                                                                                                                                                                                                                                      |
+| `WB-COMPOSER-013-AC5`                      | 部分覆盖：unit `message-log-vision-context` 检验有效图片判断和免费无 vision gate；`model-selector-and-provider-error` 验证成功、失败、取消后无需切换伙伴即刷新上下文用量。含图片历史下的真实 UI 禁用、提示与发送拦截，以及跨伙伴查询不串状态仍需人工验收。                                                                |
+| `WB-COMPOSER-013-AC6`                      | AI backend `human-read-image-no-vision` 覆盖工具能力反馈、无图片请求与 graph 继续交付；unit `read-image-multimodal` 覆盖支持视觉、目录未命中和非免费模型。真实免费模型的解释及文字续聊列入人工验收。                                                                                                                      |
+| `ST-RUN-003-AC1/AC2`                       | 部分覆盖：`tests/case/unit/scheduled-task-service.test.ts` 以依赖时钟检验启动错过 / 容忍窗口后顺延且不补跑；真实应用关闭 / 系统休眠恢复需桌面人工验收。                                                                                                                                                                   |
+| `ST-RUN-001-AC3`                           | 部分覆盖：`scheduled-task-busy-cancel-and-run-now` 实测 waiting_human 到点不提交并顺延；Unit 验证占用策略和空闲后不补跑。running / waiting_approval 的独立 UI 场景未验证。                                                                                                                                                |
+| `ST-RUN-005-AC1`                           | `scheduled-task-busy-cancel-and-run-now` 验证问答卡片收起、Composer 恢复后的提示；waiting_approval 的独立 UI 场景未验证。                                                                                                                                                                                                 |
 
 ### 需求级用例的逐项覆盖边界
 
 以下说明需求级用例的实际证据及未验证子项；需求编号引用只表示主题归属，不代表全部验收已测。未核实的项目按未证实覆盖处理，补齐证据后移入具体 Oracle。
 
-| 验收 | 现有相关 case / 证据状态 |
-| --- | --- |
-| `WB-CORE-002-AC2` | 部分覆盖：`reference-token-lifecycle` 验证引用 token 与发送参数，`prefix-cache-retain-live` 验证实际读取；已选范围优先但非唯一搜索范围的行为未专门断言。 |
-| `WB-CORE-005-AC1/AC2/AC3` | 部分覆盖：`ai-process-stream-and-final-answer` 核对 Alice/Bob 事实、成功/失败读取与不泄露推理；资料不足时解释缺口及结论组织需人工质量验收。 |
-| `WB-CORE-006-AC2/AC3/AC4` | 部分覆盖：`model-selector-and-provider-error` 检查 provider 错误与详情；一般失败解释、简单/复杂任务的 plan 使用边界待补。 |
-| `WB-CORE-007-AC2/AC5/AC6` | 部分覆盖：`web-read-from-search-result` 走成功路径；失败不伪造、无独立窗框及不可挂起的失败场景待补。 |
-| `WB-SESSION-002-AC1/AC2/AC4` | 部分覆盖：`partner-ui-state-isolation` 检查草稿、权限和面板隔离；加载不闪空、历史消息切换与审批恢复没有覆盖全部分支的对应断言。 |
-| `WB-SESSION-003-AC3` | 部分覆盖：`partner-create-and-name` 检查侧栏名称；顶栏与 name 一致未单独断言。 |
-| `WB-SESSION-004-AC2/AC3` | 部分覆盖：`partner-delete-confirmation` 检查列表删除与浏览器销毁；回落可继续操作和伙伴磁盘目录清理未逐项断言。 |
-| `WB-SESSION-006-AC1/AC2/AC3/AC4` | 部分覆盖：`user-message-actions` 检查入口、运行中无编辑、撤回消息和附件；复制反馈、取消确认、完整草稿恢复及失败恢复待补。 |
-| `WB-SESSION-008-AC5/AC6` | 部分覆盖：现有偏好/面板用例未对删除 UI 快照及失效模型、引用、附件修复逐项断言。 |
-| `WB-SESSION-009-AC1/AC3/AC4` | 部分覆盖：`partner-pin-toggle` 验证取消后图钉不常驻；图标样式、取消后区域排序及重启持久化待补。 |
-| `WB-SESSION-012-AC1/AC2` | 部分覆盖：`partner-edit` 验证名称回填、伙伴数量、新形象和侧栏；形象初始回填、顶栏及消息保留缺少独立断言。 |
-| `WB-COMPOSER-001-AC2/AC3/AC4` | 部分覆盖：`send-guard-and-preferences` 检查无伙伴空态与无模型提示，`queue-message-during-run` 验证运行中追加；空白发送和占位见 `multi-format-selection-reference`、`reference-mention-keyboard`。提交去重、全部禁用原因及改名后占位 / 自称待补。 |
-| `WB-COMPOSER-007-AC6/AC7/AC11/AC15` | 部分覆盖：`model-selector-and-provider-error` 走自定义与免费目录；失效快照回退、付费目录、入口图标及偏好实际影响资料边界待补。 |
-| `WB-COMPOSER-017-AC1/AC2/AC3/AC5/AC6/AC7` | 部分覆盖：`queue-message-during-run` 检查单一按钮、两条浅灰追加消息、续接输入和固定用时；最终回答期追加、异常保留、悬空工具修复与校验竞态未完整验证。 |
-| `WB-COMPOSER-010-AC1/AC3/AC4/AC5/AC6` | 部分覆盖：`composer-attachments-context` 核对多格式附件、路径与无预解析、图标、预览及横滑证据；无伙伴添加、任意数量/大小边界和系统目录原生拖放未全部自动化，原生目录拖放需人工验收。 |
-| `WB-COMPOSER-011-AC1/AC2` | 部分覆盖：`workbench-help-entry` 检查可访问名称、官方 URL 和路由；说明文案及草稿保留未逐项断言。 |
-| `WB-SCOPE-001-AC1/AC2/AC4` | 部分覆盖：`reference-token-lifecycle` 检查文件/网页分组与目录插入；无伙伴入口、两级边界及分页/滚动未覆盖全部分支。 |
-| `WB-SCOPE-002-AC3/AC4/AC5` | 部分覆盖：`reference-token-lifecycle` 检查键盘删除、部分图标和发送 token；删除后发送范围、历史回显及所有格式图标矩阵待补。 |
-| `WB-BLOCKER-003-AC1/AC2` | 人工验收：真实上下文压缩过程提示；现有测试边界明确不强制 live 触发压缩。 |
-| `WB-PANEL-001-AC2/AC3/AC4/AC6/AC7/AC8/AC9` | 部分覆盖：`right-panel-layout-and-tabs` 检查菜单、标签、原生浏览器菜单和分隔条；`text-file-apply-preview-and-revert` 检查同路径只保留一个 Tab。关闭活动/非活动/最后标签的完整矩阵和全部几何约束未逐项验证。 |
-| `WB-PANEL-003-AC1/AC2/AC3/AC4/AC5/AC6/AC7/AC8/AC9/AC10/AC11/AC12/AC15/AC16` | 部分覆盖：`file-preview-actions` 检查 PDF/DOCX/Markdown/TXT/Excel 预览、系统打开菜单及文件选择器；`text-file-apply-preview-and-revert` 检查预览/审核切换和文件列表。所列验收包含的其他细分交互不能仅凭需求级引用视作已测。 |
-| `WB-APPLY-002-AC1/AC2/AC3/AC4/AC5/AC6/AC8` | 已有 UI 写回链路；累计基线和单一记录由 AI `file-change-immutable-review`、`ppt-create-read-edit-commit`、`excel-create-read-edit` 补充，文本原子校验由 `text-file-atomic-guards-and-format-preservation` 补充。WPS 证据按 `wps-office-reload-on-write-and-revert` 的实际组件授权状态判断，不能把跳过算通过。 |
-| `WB-WPS-001-AC5` | 人工验收：首次组件授权提示与授权后不重复弹窗、已运行 WPS 的加载项更新。`wps-office-reload-on-write-and-revert` 使用已授权组件，不能证明此项首次安装体验。 |
-| `WB-PANEL-004-AC1/AC2/AC3/AC4/AC5/AC6/AC7/AC11` | 部分覆盖：`browser-use-task-panel` 验证后台操作与恢复后内容；原生菜单/缩放见 `right-panel-layout-and-tabs`。动画全程、同 URL target 隔离、所有存储类型与全部生命周期组合尚缺逐项 UI 证据。 |
-| `WB-APPLY-001-AC1/AC2/AC3` | 部分覆盖：文本、DOCX 和 PPT 审核 E2E 验证默认审核及模式切换，多文件选择见 `multi-file-apply-tabs`；每种格式的面包屑、预览隐藏回退等组合未逐项断言。 |
-| `WB-APPLY-003-AC1/AC2/AC3/AC5/AC6/AC10/AC14/AC15/AC16` | 部分覆盖：文本/PPT/Excel E2E 核对正式 C 与审核 B、回退及新建删除；AI `file-change-immutable-review` 补充临时版本清理与原始 bytes。保存失败恢复、跨 run、缺失/损坏审核和全部视觉结构的 UI 组合未全部验证；WPS 需按组件授权结果单独核对。 |
-| `WB-TERMINAL-001-AC3/AC4/AC7/AC8` | 部分覆盖：E2E `terminal-unicode-file-list` 只验中文列目录；AI `terminal-execution-contract` 验证 maxWaitSeconds 后仍运行，`terminal-risk-and-boundary-guard` 验证拒绝审批不执行；进程退出清理、跨伙伴隔离与真实计算需分别以相关 backend / live case 结果核对，不能合称本 E2E 全覆盖。 |
-| `WB-APPLY-005-AC1/AC2/AC3` | 部分覆盖：`multi-file-apply-tabs` 检查四个文件、逐项点击后的对应内容和列表保留；全部格式/历史记录组合没有逐项 UI 证据。 |
-| `WB-PPT-001-AC1/AC2/AC3/AC4/AC5/AC9/AC10` | 部分覆盖：`ppt-create-diff-and-revert` 和 `ppt-update-diff-interactions` 验证真实创建/编辑；AI `ppt-create-read-edit-commit`、`ppt-professional-element-edit`、`ppt-visual-runtime-contract` 补充结构、元素和保存前失败。公式内部只读与所有非法输入的 UI 证据未全覆盖。 |
-| `WB-PPT-002-AC1/AC2/AC3/AC4/AC5/AC6/AC7/AC8/AC9/AC10/AC11` | 部分覆盖：`ppt-update-diff-interactions` 验证前后页、变化/全部缩略图、红绿标记、缩放平移和回退；AI `ppt-diff-slide-and-element-net-semantics` 补充净变化统计。逐页滚动同步等 UI 子项待补。 |
-| `WB-EXCEL-001-AC3/AC4/AC6/AC7` | backend 补充：AI `excel-create-read-edit` 检查无默认 Sheet1；`excel-edit-operations-and-atomicity` 检查最后 Sheet、冲突和落盘边界；`excel-read-search-and-format-boundaries` 检查读取格式。宏/模板拒绝写入的用户提示与结构冲突的完整矩阵不能由现有 UI 成功链路代替。 |
-| `WB-EXCEL-002-AC2/AC3/AC5/AC6/AC7/AC8` | backend 补充：AI `excel-create-read-edit` 覆盖 AC2/AC3，`excel-edit-operations-and-atomicity` 与 `excel-blank-layout-and-sheet-identity` 覆盖 Sheet 审核结构，`excel-diff-row-structure-semantics`、`excel-diff-cumulative-net-semantics` 覆盖行对齐和净变化；这些是文件内容证据，非全量 UI 渲染验证。Sheet 移动不支持的边界未单列 case。 |
-| `ST-VIEW-001-AC5` | 部分覆盖：`scheduled-task-partner-deletion` 没有定时视图下删除弹窗可见与可操作的独立 Oracle。 |
-| `ST-LIST-001-AC1/AC3` | 部分覆盖：`scheduled-task-config-lifecycle` 检查创建后列表、摘要与入口；重开初始化及无任务空态没有明确断言。 |
-| `ST-SWITCH-001-AC2` | 部分覆盖：`scheduled-task-config-lifecycle` 检查开关值；关闭后等待到点不触发尚无 E2E。 |
+| 验收                                                                        | 现有相关 case / 证据状态                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WB-CORE-002-AC2`                                                           | 部分覆盖：`reference-token-lifecycle` 验证引用 token 与发送参数，`prefix-cache-retain-live` 验证实际读取；已选范围优先但非唯一搜索范围的行为未专门断言。                                                                                                                                                                                  |
+| `WB-CORE-005-AC1/AC2/AC3`                                                   | 部分覆盖：`ai-process-stream-and-final-answer` 核对 Alice/Bob 事实、成功/失败读取与不泄露推理；资料不足时解释缺口及结论组织需人工质量验收。                                                                                                                                                                                               |
+| `WB-CORE-006-AC2/AC3/AC4`                                                   | 部分覆盖：`model-selector-and-provider-error` 检查 provider 错误与详情；一般失败解释、简单/复杂任务的 plan 使用边界待补。                                                                                                                                                                                                                 |
+| `WB-CORE-007-AC2/AC5/AC6`                                                   | 部分覆盖：`web-read-from-search-result` 走成功路径；失败不伪造、无独立窗框及不可挂起的失败场景待补。                                                                                                                                                                                                                                      |
+| `WB-SESSION-002-AC1/AC2/AC4`                                                | 部分覆盖：`partner-ui-state-isolation` 检查草稿、权限和面板隔离；加载不闪空、历史消息切换与审批恢复没有覆盖全部分支的对应断言。                                                                                                                                                                                                           |
+| `WB-SESSION-003-AC3`                                                        | 部分覆盖：`partner-create-and-name` 检查侧栏名称；顶栏与 name 一致未单独断言。                                                                                                                                                                                                                                                            |
+| `WB-SESSION-004-AC2/AC3`                                                    | 部分覆盖：`partner-delete-confirmation` 检查列表删除与浏览器销毁；回落可继续操作和伙伴磁盘目录清理未逐项断言。                                                                                                                                                                                                                            |
+| `WB-SESSION-006-AC1/AC2/AC3/AC4`                                            | 部分覆盖：`user-message-actions` 检查入口、运行中无编辑、撤回消息和附件；复制反馈、取消确认、完整草稿恢复及失败恢复待补。                                                                                                                                                                                                                 |
+| `WB-SESSION-008-AC5/AC6`                                                    | 部分覆盖：现有偏好/面板用例未对删除 UI 快照及失效模型、引用、附件修复逐项断言。                                                                                                                                                                                                                                                           |
+| `WB-SESSION-009-AC1/AC3/AC4`                                                | 部分覆盖：`partner-pin-toggle` 验证取消后图钉不常驻；图标样式、取消后区域排序及重启持久化待补。                                                                                                                                                                                                                                           |
+| `WB-SESSION-012-AC1/AC2`                                                    | 部分覆盖：`partner-edit` 验证名称回填、伙伴数量、新形象和侧栏；形象初始回填、顶栏及消息保留缺少独立断言。                                                                                                                                                                                                                                 |
+| `WB-COMPOSER-001-AC2/AC3/AC4`                                               | 部分覆盖：`send-guard-and-preferences` 检查无伙伴空态与无模型提示，`queue-message-during-run` 验证运行中追加；空白发送和占位见 `multi-format-selection-reference`、`reference-mention-keyboard`。提交去重、全部禁用原因及改名后占位 / 自称待补。                                                                                          |
+| `WB-COMPOSER-007-AC6/AC7/AC11/AC15`                                         | 部分覆盖：`model-selector-and-provider-error` 走自定义与免费目录；失效快照回退、付费目录、入口图标及偏好实际影响资料边界待补。                                                                                                                                                                                                            |
+| `WB-COMPOSER-017-AC1/AC2/AC3/AC5/AC6/AC7`                                   | 部分覆盖：`queue-message-during-run` 检查单一按钮、两条浅灰追加消息、续接输入和固定用时；最终回答期追加、异常保留、悬空工具修复与校验竞态未完整验证。                                                                                                                                                                                     |
+| `WB-COMPOSER-010-AC1/AC3/AC4/AC5/AC6`                                       | 部分覆盖：`composer-attachments-context` 核对多格式附件、路径与无预解析、图标、预览及横滑证据；无伙伴添加、任意数量/大小边界和系统目录原生拖放未全部自动化，原生目录拖放需人工验收。                                                                                                                                                      |
+| `WB-COMPOSER-011-AC1/AC2`                                                   | 部分覆盖：`workbench-help-entry` 检查可访问名称、官方 URL 和路由；说明文案及草稿保留未逐项断言。                                                                                                                                                                                                                                          |
+| `WB-SCOPE-001-AC1/AC2/AC4`                                                  | 部分覆盖：`reference-token-lifecycle` 检查文件/网页分组与目录插入；无伙伴入口、两级边界及分页/滚动未覆盖全部分支。                                                                                                                                                                                                                        |
+| `WB-SCOPE-002-AC3/AC4/AC5`                                                  | 部分覆盖：`reference-token-lifecycle` 检查键盘删除、部分图标和发送 token；删除后发送范围、历史回显及所有格式图标矩阵待补。                                                                                                                                                                                                                |
+| `WB-BLOCKER-003-AC1/AC2`                                                    | 人工验收：真实上下文压缩过程提示；现有测试边界明确不强制 live 触发压缩。                                                                                                                                                                                                                                                                  |
+| `WB-PANEL-001-AC2/AC3/AC4/AC6/AC7/AC8/AC9`                                  | 部分覆盖：`right-panel-layout-and-tabs` 检查菜单、标签、原生浏览器菜单和分隔条；`text-file-apply-preview-and-revert` 检查同路径只保留一个 Tab。关闭活动/非活动/最后标签的完整矩阵和全部几何约束未逐项验证。                                                                                                                               |
+| `WB-PANEL-003-AC1/AC2/AC3/AC4/AC5/AC6/AC7/AC8/AC9/AC10/AC11/AC12/AC15/AC16` | 部分覆盖：`file-preview-actions` 检查 PDF/DOCX/Markdown/TXT/Excel 预览、系统打开菜单及文件选择器；`text-file-apply-preview-and-revert` 检查预览/审核切换和文件列表。所列验收包含的其他细分交互不能仅凭需求级引用视作已测。                                                                                                                |
+| `WB-APPLY-002-AC1/AC2/AC3/AC4/AC5/AC6/AC8`                                  | 已有 UI 写回链路；累计基线和单一记录由 AI `file-change-immutable-review`、`ppt-create-read-edit-commit`、`excel-create-read-edit` 补充，文本原子校验由 `text-file-atomic-guards-and-format-preservation` 补充。WPS 证据按 `wps-office-reload-on-write-and-revert` 的实际组件授权状态判断，不能把跳过算通过。                              |
+| `WB-WPS-001-AC5`                                                            | 人工验收：首次组件授权提示与授权后不重复弹窗、已运行 WPS 的加载项更新。`wps-office-reload-on-write-and-revert` 使用已授权组件，不能证明此项首次安装体验。                                                                                                                                                                                 |
+| `WB-PANEL-004-AC1/AC2/AC3/AC4/AC5/AC6/AC7/AC11`                             | 部分覆盖：`browser-use-task-panel` 验证后台操作与恢复后内容；原生菜单/缩放见 `right-panel-layout-and-tabs`。动画全程、同 URL target 隔离、所有存储类型与全部生命周期组合尚缺逐项 UI 证据。                                                                                                                                                |
+| `WB-APPLY-001-AC1/AC2/AC3`                                                  | 部分覆盖：文本、DOCX 和 PPT 审核 E2E 验证默认审核及模式切换，多文件选择见 `multi-file-apply-tabs`；每种格式的面包屑、预览隐藏回退等组合未逐项断言。                                                                                                                                                                                       |
+| `WB-APPLY-003-AC1/AC2/AC3/AC5/AC6/AC10/AC14/AC15/AC16`                      | 部分覆盖：文本/PPT/Excel E2E 核对正式 C 与审核 B、回退及新建删除；AI `file-change-immutable-review` 补充临时版本清理与原始 bytes。保存失败恢复、跨 run、缺失/损坏审核和全部视觉结构的 UI 组合未全部验证；WPS 需按组件授权结果单独核对。                                                                                                   |
+| `WB-TERMINAL-001-AC3/AC4/AC7/AC8`                                           | 部分覆盖：E2E `terminal-unicode-file-list` 只验中文列目录；AI `terminal-execution-contract` 验证 maxWaitSeconds 后仍运行，`terminal-risk-and-boundary-guard` 验证拒绝审批不执行；进程退出清理、跨伙伴隔离与真实计算需分别以相关 backend / live case 结果核对，不能合称本 E2E 全覆盖。                                                     |
+| `WB-APPLY-005-AC1/AC2/AC3`                                                  | 部分覆盖：`multi-file-apply-tabs` 检查四个文件、逐项点击后的对应内容和列表保留；全部格式/历史记录组合没有逐项 UI 证据。                                                                                                                                                                                                                   |
+| `WB-PPT-001-AC1/AC2/AC3/AC4/AC5/AC9/AC10`                                   | 部分覆盖：`ppt-create-diff-and-revert` 和 `ppt-update-diff-interactions` 验证真实创建/编辑；AI `ppt-create-read-edit-commit`、`ppt-professional-element-edit`、`ppt-visual-runtime-contract` 补充结构、元素和保存前失败。公式内部只读与所有非法输入的 UI 证据未全覆盖。                                                                   |
+| `WB-PPT-002-AC1/AC2/AC3/AC4/AC5/AC6/AC7/AC8/AC9/AC10/AC11`                  | 部分覆盖：`ppt-update-diff-interactions` 验证前后页、变化/全部缩略图、红绿标记、缩放平移和回退；AI `ppt-diff-slide-and-element-net-semantics` 补充净变化统计。逐页滚动同步等 UI 子项待补。                                                                                                                                                |
+| `WB-EXCEL-001-AC3/AC4/AC6/AC7`                                              | backend 补充：AI `excel-create-read-edit` 检查无默认 Sheet1；`excel-edit-operations-and-atomicity` 检查最后 Sheet、冲突和落盘边界；`excel-read-search-and-format-boundaries` 检查读取格式。宏/模板拒绝写入的用户提示与结构冲突的完整矩阵不能由现有 UI 成功链路代替。                                                                      |
+| `WB-EXCEL-002-AC2/AC3/AC5/AC6/AC7/AC8`                                      | backend 补充：AI `excel-create-read-edit` 覆盖 AC2/AC3，`excel-edit-operations-and-atomicity` 与 `excel-blank-layout-and-sheet-identity` 覆盖 Sheet 审核结构，`excel-diff-row-structure-semantics`、`excel-diff-cumulative-net-semantics` 覆盖行对齐和净变化；这些是文件内容证据，非全量 UI 渲染验证。Sheet 移动不支持的边界未单列 case。 |
+| `ST-VIEW-001-AC5`                                                           | 部分覆盖：`scheduled-task-partner-deletion` 没有定时视图下删除弹窗可见与可操作的独立 Oracle。                                                                                                                                                                                                                                             |
+| `ST-LIST-001-AC1/AC3`                                                       | 部分覆盖：`scheduled-task-config-lifecycle` 检查创建后列表、摘要与入口；重开初始化及无任务空态没有明确断言。                                                                                                                                                                                                                              |
+| `ST-SWITCH-001-AC2`                                                         | 部分覆盖：`scheduled-task-config-lifecycle` 检查开关值；关闭后等待到点不触发尚无 E2E。                                                                                                                                                                                                                                                    |

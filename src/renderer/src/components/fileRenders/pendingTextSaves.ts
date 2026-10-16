@@ -5,38 +5,60 @@ type TextSaveControl = {
   discard: (reason: 'deleted' | 'renamed') => void
 }
 
-const saves = new Map<string, TextSaveControl>()
+// Keep failed, detached editors until their content can be flushed successfully.
+const detached = new WeakSet<TextSaveControl>()
+const saves = new Map<string, Set<TextSaveControl>>()
 export function registerTextSave(filePath: string, control: TextSaveControl): () => void {
-  saves.set(filePath, control)
+  let controls = saves.get(filePath)
+  if (!controls) {
+    controls = new Set()
+    saves.set(filePath, controls)
+  }
+  controls.add(control)
   return () => {
-    // A failed save remains retryable after its tab closes.
+    detached.add(control)
     void control
       .save()
       .then(() => {
-        if (saves.get(filePath) === control) saves.delete(filePath)
+        controls.delete(control)
+        if (!controls.size && saves.get(filePath) === controls) saves.delete(filePath)
       })
       .catch(() => undefined)
   }
 }
 export async function flushReferencedTextFiles(filePaths: string[]): Promise<void> {
-  await Promise.all([...new Set(filePaths)].map((filePath) => saves.get(filePath)?.save()))
+  await Promise.all(
+    [...new Set(filePaths)].map(async (filePath) => {
+      const controls = saves.get(filePath)
+      for (const control of controls || []) {
+        await control.save()
+        if (detached.has(control)) {
+          controls?.delete(control)
+          detached.delete(control)
+        }
+      }
+      if (controls && !controls.size && saves.get(filePath) === controls) saves.delete(filePath)
+    })
+  )
 }
-
+export async function flushAllTextFiles(): Promise<void> {
+  await flushReferencedTextFiles([...saves.keys()])
+}
 export async function withTextFileMutation<T>(
   filePath: string,
   reason: 'deleted' | 'renamed',
   mutateFile: () => Promise<T>
 ): Promise<T> {
-  const control = saves.get(filePath)
-  control?.pause()
+  const controls = saves.get(filePath)
+  controls?.forEach((control) => control.pause())
   try {
-    await control?.save()
+    await flushReferencedTextFiles([filePath])
     const result = await mutateFile()
-    control?.discard(reason)
-    if (saves.get(filePath) === control) saves.delete(filePath)
+    controls?.forEach((control) => control.discard(reason))
+    if (saves.get(filePath) === controls) saves.delete(filePath)
     return result
   } catch (error) {
-    control?.resume()
+    controls?.forEach((control) => control.resume())
     throw error
   }
 }

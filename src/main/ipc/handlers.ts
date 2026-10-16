@@ -1,3 +1,5 @@
+import { FileReviewService } from '../services/ai/fileChanges/FileReviewService'
+import type { OpenFileReviewLocationRequest } from '../../shared/fileReview'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { SystemNotificationService } from '../services/SystemNotificationService'
 import type { TelemetryService } from '../services/telemetry/TelemetryService'
@@ -263,13 +265,14 @@ export function registerHandlers(services: {
 }) {
   const useE2ENoopOpenWith =
     process.env.NCURATOR_E2E_OBSERVER === '1' && process.env.NCURATOR_E2E_OPEN_WITH_NOOP === '1'
-  const openWithService = new OpenWithService(
-    useE2ENoopOpenWith
-      ? {
-          runNativeOpen: async () => ({ success: true })
-        }
-      : undefined
-  )
+  const openWithService = new OpenWithService({
+    ...(useE2ENoopOpenWith ? { runNativeOpen: async () => ({ success: true }) } : {}),
+    preferences: services.storageService.openWithPreferences,
+    onPreferenceChanged: (extension) =>
+      BrowserWindow.getAllWindows().forEach((window) =>
+        window.webContents.send('open-with-preference-changed', extension)
+      )
+  })
   const fileWatchService = new FileWatchService()
   const confirmDialogService = new ConfirmDialogWindowService()
   ipcMain.handle(
@@ -317,6 +320,18 @@ export function registerHandlers(services: {
     webSourceStore
   })
   const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
+  const fileReviewService = new FileReviewService(aiFileChangeService, openWithService)
+  ipcMain.handle('file-review-get', (_event, request: { changeRecordId: string }) =>
+    fileReviewService.read(request.changeRecordId)
+  )
+  ipcMain.handle('file-review-open-location', (_event, request: OpenFileReviewLocationRequest) =>
+    fileReviewService.openLocation(request)
+  )
+  ipcMain.handle(
+    'open-with-set-preferred',
+    (_event, request: { filePath: string; applicationId: string | null }) =>
+      openWithService.setPreferred(request.filePath, request.applicationId)
+  )
   const docxApplyService = new DocxApplyService(aiFileChangeService)
   const attachmentService = new AttachmentService()
   const runResourceManager = new AiRunResourceManager([

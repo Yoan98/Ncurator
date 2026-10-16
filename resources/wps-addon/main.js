@@ -5,6 +5,7 @@
   var EXCERPT_MAX_ROWS = 200
   var EXCERPT_MAX_COLUMNS = 50
   var EXCERPT_MAX_SLIDES = 10
+  var EXCERPT_MAX_PARAGRAPHS = 2000
   var suppressEvents = false
   var eventSource = null
   var reconnectTimer = null
@@ -129,9 +130,9 @@
         app.ActiveWindow.View.GotoSlide(view.slideIndex)
         return { slide: true }
       },
-      excerpt: function () {
+      excerpt: function (document) {
         try {
-          var slides = app.ActivePresentation.Slides
+          var slides = (document || app.ActivePresentation).Slides
           var parts = []
           var slideLimit = Math.min(slides.Count, EXCERPT_MAX_SLIDES)
           for (var slideIndex = 1; slideIndex <= slideLimit; slideIndex += 1) {
@@ -196,9 +197,10 @@
         }
         return restored
       },
-      excerpt: function () {
+      excerpt: function (document) {
+        var sheet = document ? document.ActiveSheet : app.ActiveSheet
         try {
-          var range = app.ActiveSheet.UsedRange
+          var range = sheet.UsedRange
           var parts = []
           var used = 0
           var rowCount = Math.min(range.Rows.Count, EXCERPT_MAX_ROWS)
@@ -225,7 +227,7 @@
           // 回落到 A1。
         }
         try {
-          return String(app.ActiveSheet.Cells.Item(1, 1).Text || '').slice(0, EXCERPT_MAX_CHARS)
+          return String(sheet.Cells.Item(1, 1).Text || '').slice(0, EXCERPT_MAX_CHARS)
         } catch {
           return ''
         }
@@ -279,9 +281,25 @@
         }
         return restored
       },
-      excerpt: function () {
+      excerpt: function (document) {
         try {
-          return String(app.ActiveDocument.Content.Text || '').slice(0, EXCERPT_MAX_CHARS)
+          var content = (document || app.ActiveDocument).Content
+          try {
+            var text = String(content.Text || '')
+            if (text) return text.slice(0, EXCERPT_MAX_CHARS)
+          } catch {
+            /* Some Writer builds expose text through paragraph ranges only. */
+          }
+          var paragraphs = content.Paragraphs,
+            count = Math.min(paragraphs.Count, EXCERPT_MAX_PARAGRAPHS),
+            parts = [],
+            length = 0
+          for (var i = 1; i <= count && length < EXCERPT_MAX_CHARS; i += 1) {
+            var value = String(paragraphs.Item(i).Range.Text || '')
+            parts.push(value)
+            length += value.length
+          }
+          return parts.join('').slice(0, EXCERPT_MAX_CHARS)
         } catch {
           return ''
         }
@@ -446,10 +464,22 @@
           elapsedMs: Date.now() - startedAt
         }
       }
-      adapter.open(targetPath)
+      var reopened = adapter.open(targetPath)
       closePlaceholder()
+      if (!reopened || !reopened.FullName) reopened = findItem(targetPath)
+      if (!reopened || normalizePath(reopened.FullName) !== viewKey)
+        throw new Error('WPS 未确认重新打开的目标文档')
+      try {
+        reopened.Activate()
+      } catch {
+        try {
+          reopened.Windows.Item(1).Activate()
+        } catch {
+          /* The document may already be active. */
+        }
+      }
       var restored = view ? adapter.restoreView(view) : {}
-      var excerpt = adapter.excerpt ? adapter.excerpt() : ''
+      var excerpt = adapter.excerpt ? adapter.excerpt(reopened) : ''
       suppressEvents = false
       return {
         ok: true,
@@ -470,8 +500,331 @@
     }
   }
 
+  function normalizedText(value) {
+    return (
+      String(value || '')
+        // WPS paragraph/cell text includes end-of-cell and layout control characters.
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\r\n\t\u0007\u000b\u000c]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    )
+  }
+
+  function navigateDocx(item, target, app) {
+    var ranges = []
+    if (target.part === 'word/document.xml') ranges.push(item.Content)
+    else {
+      var types = /header/.test(target.part)
+        ? [6, 7, 10]
+        : /footer/.test(target.part)
+          ? [8, 9, 11]
+          : /footnote/.test(target.part)
+            ? [2]
+            : /endnote/.test(target.part)
+              ? [3]
+              : [5]
+      for (var t = 0; t < types.length; t += 1) {
+        try {
+          var story = item.StoryRanges.Item(types[t]),
+            seen = 0
+          while (story && seen++ < 64) {
+            ranges.push(story)
+            story = story.NextStoryRange
+          }
+        } catch {
+          /* This document does not have this story. */
+        }
+      }
+    }
+    var matches = []
+    for (var r = 0; r < ranges.length; r += 1) {
+      var paragraphs = ranges[r].Paragraphs,
+        count = paragraphs.Count
+      if (!count) throw new Error('文档尚未加载完成')
+      var center = Math.min(count, target.paragraph),
+        indices = [center]
+      // Validate the stored paragraph and nearby context; never walk an entire large document through the host API.
+      for (var distance = 1; distance <= 32; distance += 1) {
+        if (center - distance >= 1) indices.push(center - distance)
+        if (center + distance <= count) indices.push(center + distance)
+      }
+      for (var n = 0; n < indices.length; n += 1) {
+        var i = indices[n],
+          paragraph = paragraphs.Item(i).Range
+        if (normalizedText(paragraph.Text) !== normalizedText(target.text)) continue
+        var previous = i > 1 ? normalizedText(paragraphs.Item(i - 1).Range.Text) : ''
+        var next = i < count ? normalizedText(paragraphs.Item(i + 1).Range.Text) : ''
+        matches.push({
+          range: paragraph,
+          context:
+            previous === normalizedText(target.previous) && next === normalizedText(target.next)
+        })
+      }
+    }
+    // Nearby uniqueness alone cannot prove identity after a large move elsewhere in the document.
+    matches = matches.filter(function (m) {
+      return m.context
+    })
+    if (matches.length !== 1)
+      throw new Error(
+        matches.length ? '文字重复，无法唯一定位修改位置' : '当前文档内容已变化，无法确认原修改位置'
+      )
+    var range = matches[0].range.Duplicate
+    var quote = target.quote || '',
+      raw = String(range.Text || ''),
+      offset = quote ? raw.indexOf(quote) : -1
+    var exact = !target.container && offset >= 0 && raw.indexOf(quote, offset + 1) < 0
+    if (exact) {
+      range.SetRange(range.Start + offset, range.Start + offset + quote.length)
+      if (normalizedText(range.Text) !== normalizedText(quote)) {
+        exact = false
+        range = matches[0].range.Duplicate
+      }
+    }
+    range.Select()
+    try {
+      app.ActiveWindow.ScrollIntoView(range, true)
+    } catch {
+      /* Selection also reveals its range. */
+    }
+    var selected = app.Selection
+    if (selected.Start !== range.Start || selected.End !== range.End)
+      throw new Error('WPS 未确认目标文字选区')
+    return {
+      selection: { kind: 'docx', start: selected.Start, end: selected.End },
+      status: exact ? 'located' : 'container',
+      reason: exact ? undefined : '已定位到对应段落或内容范围'
+    }
+  }
+
+  function navigatePpt(item, target, app) {
+    var slides = item.Slides,
+      slide = null
+    try {
+      slide = slides.FindBySlideID(target.slideId)
+    } catch {
+      /* Some macOS WPS versions expose the method without implementing it. */
+    }
+    if (!slide || Number(slide.SlideID) !== target.slideId) {
+      slide = null
+      for (var index = 1; index <= slides.Count; index += 1) {
+        var candidateSlide = slides.Item(index)
+        if (Number(candidateSlide.SlideID) === target.slideId) {
+          slide = candidateSlide
+          break
+        }
+      }
+    }
+    if (!slide) throw new Error('当前文件中对应幻灯片已不存在')
+    var shape = null
+    if (target.shapeId) {
+      for (var i = 1; i <= slide.Shapes.Count; i += 1) {
+        var candidate = slide.Shapes.Item(i)
+        if (Number(candidate.Id) === target.shapeId) {
+          shape = candidate
+          break
+        }
+      }
+      if (shape && target.text) {
+        var text = ''
+        try {
+          text = shape.TextFrame.TextRange.Text
+        } catch {
+          /* visual object */
+        }
+        if (normalizedText(text) !== normalizedText(target.text)) shape = null
+      }
+    }
+    app.ActiveWindow.View.GotoSlide(slide.SlideIndex)
+    if (Number(app.ActiveWindow.View.Slide.SlideID) !== target.slideId)
+      throw new Error('WPS 未确认目标幻灯片')
+    if (shape) {
+      shape.Select()
+      var chosen = app.ActiveWindow.Selection.ShapeRange.Item(1)
+      if (Number(chosen.Id) !== target.shapeId) throw new Error('WPS 未确认目标元素')
+      return {
+        status: 'located',
+        selection: { kind: 'ppt', slideId: target.slideId, shapeId: Number(chosen.Id) }
+      }
+    }
+    return {
+      selection: { kind: 'ppt', slideId: Number(app.ActiveWindow.View.Slide.SlideID) },
+      status: 'container',
+      reason: target.shapeId ? '目标元素已变化，已定位到对应幻灯片' : '已定位到对应幻灯片'
+    }
+  }
+
+  function navigateExcel(item, target, app) {
+    var sheet = item.Worksheets.Item(target.sheet)
+    if (!sheet) throw new Error('当前文件中对应工作表已不存在')
+    var range = sheet.Range(target.address)
+    var first = range.Cells.Item(1, 1),
+      values = []
+    try {
+      values.push(first.Formula)
+    } catch {
+      /* Formula may be unavailable for an error value. */
+    }
+    try {
+      values.push(first.Value2)
+    } catch {
+      /* Use the displayed value when needed. */
+    }
+    try {
+      values.push(first.Text)
+    } catch {
+      /* The raw value is sufficient when available. */
+    }
+    var expected = normalizedText(target.value).replace(/^=/, '')
+    if (
+      !values.some(function (value) {
+        return normalizedText(value).replace(/^=/, '') === expected
+      })
+    )
+      throw new Error('单元格内容或位置已变化，未使用旧坐标定位')
+    if (item.Saved === false) {
+      // 打开时重新计算也会令 Saved=false。只有原值在当前工作表中唯一且仍位于
+      // 目标地址时，才允许定位；重复值、空值和区域不能证明未保存结构的身份。
+      var confirmed = false
+      try {
+        var expectedAddress = String(target.address).replace(/\$/g, '').toUpperCase(),
+          what = String(target.value || '').replace(/[~*?]/g, '~$&'),
+          used = sheet.UsedRange
+        if (what && /^[A-Z]+[1-9]\d*$/.test(expectedAddress)) {
+          var found = used.Find(what, undefined, -4123, 1, 1, 1, true, false, false)
+          if (found && String(found.Address(false, false)).toUpperCase() === expectedAddress) {
+            var next = used.Find(what, found, -4123, 1, 1, 1, true, false, false)
+            confirmed = Boolean(
+              next && String(next.Address(false, false)).toUpperCase() === expectedAddress
+            )
+          }
+        }
+      } catch {
+        /* An unavailable search API cannot establish identity. */
+      }
+      if (!confirmed)
+        throw new Error('工作簿有未保存变化，无法唯一确认原单元格位置；已保留编辑并打开文件')
+    }
+    sheet.Activate()
+    range.Select()
+    try {
+      app.Goto(range, true)
+    } catch {
+      try {
+        app.ActiveWindow.ScrollRow = range.Row
+        app.ActiveWindow.ScrollColumn = range.Column
+      } catch {
+        /* Frozen panes may limit scrolling. */
+      }
+    }
+    if (String(app.ActiveSheet.Name) !== target.sheet) throw new Error('WPS 未确认目标工作表')
+    var address = String(app.Selection.Address(false, false))
+    if (address.replace(/\$/g, '') !== target.address.replace(/\$/g, ''))
+      throw new Error('WPS 未确认目标单元格选区')
+    return {
+      selection: { kind: 'excel', sheet: String(app.ActiveSheet.Name), address: address },
+      status: target.container ? 'container' : 'located',
+      reason: target.container ? '已定位到删除位置附近的有效单元格' : undefined
+    }
+  }
+
+  function navigateForReview(payload) {
+    var result = {
+      requestId: payload.requestId,
+      fullName: payload.path,
+      status: 'opened',
+      location: payload.target
+    }
+    try {
+      bindAdapter()
+      if (!adapter || !isOwnPath(payload.path)) throw new Error('WPS 组件不匹配')
+      var item = findItem(payload.path)
+      if (!item) throw new Error('目标文件未在此 WPS 实例中打开')
+      var activeApp = getApp()
+      try {
+        activeApp.Activate()
+      } catch {
+        /* Some WPS hosts activate via their document window. */
+      }
+      try {
+        activeApp.ActiveWindow.Activate()
+      } catch {
+        /* Document.Activate is used below. */
+      }
+      try {
+        item.Activate()
+      } catch {
+        try {
+          item.Windows.Item(1).Activate()
+        } catch {
+          /* Component activation differs. */
+        }
+      }
+      var app = getApp()
+      var activeItem =
+        adapter.kind === 'wps'
+          ? app.ActiveDocument
+          : adapter.kind === 'wpp'
+            ? app.ActivePresentation
+            : app.ActiveWorkbook
+      if (!activeItem || normalizePath(activeItem.FullName) !== normalizePath(payload.path))
+        throw new Error('WPS 未激活目标文件，未完成定位')
+      result.fullName = activeItem.FullName
+      if (!payload.target) {
+        result.reason = '该修改在当前文件中没有可定位的位置'
+        return result
+      }
+      var target = payload.target,
+        located
+      if (target.kind === 'docx' && adapter.kind === 'wps')
+        located = navigateDocx(item, target, app)
+      else if (target.kind === 'ppt' && adapter.kind === 'wpp')
+        located = navigatePpt(item, target, app)
+      else if (target.kind === 'excel' && adapter.kind === 'et')
+        located = navigateExcel(item, target, app)
+      else throw new Error('修改区域与 WPS 组件不匹配')
+      result.status = located.status
+      result.selection = located.selection
+      result.reason = located.reason
+      activeItem =
+        adapter.kind === 'wps'
+          ? app.ActiveDocument
+          : adapter.kind === 'wpp'
+            ? app.ActivePresentation
+            : app.ActiveWorkbook
+      if (!activeItem || normalizePath(activeItem.FullName) !== normalizePath(payload.path)) {
+        result.status = 'opened'
+        delete result.selection
+        throw new Error('WPS 活动文件已变化，未确认定位')
+      }
+      result.fullName = activeItem.FullName
+    } catch (error) {
+      result.reason = describeError(error)
+    }
+    return result
+  }
+
+  var pendingNavigation = {}
   function handlePayload(payload) {
     if (!payload || payload.type === 'ping') return
+    if (payload.type === 'navigate') {
+      var navigationKey = normalizePath(payload.path)
+      pendingNavigation[navigationKey] = payload.requestId
+      var attempt = 0
+      function locateWhenReady() {
+        if (pendingNavigation[navigationKey] !== payload.requestId) return
+        var result = navigateForReview(payload)
+        if (result.reason === '文档尚未加载完成' && attempt++ < 30) {
+          setTimeout(locateWhenReady, 100)
+          return
+        }
+        delete pendingNavigation[navigationKey]
+        report('navigate-result', result)
+      }
+      locateWhenReady()
+      return
+    }
     if (payload.type === 'close') {
       try {
         bindAdapter()
@@ -524,10 +877,20 @@
           })
           return
         }
+        closePlaceholder()
+        try {
+          existing.Activate()
+        } catch {
+          /* The target may already be active. */
+        }
+        var viewKey = normalizePath(payload.path),
+          view = pendingViews[viewKey]
+        delete pendingViews[viewKey]
+        if (view) adapter.restoreView(view)
         report('reload-result', {
           ok: true,
           fullName: existing.FullName,
-          excerpt: adapter.excerpt ? adapter.excerpt() : '',
+          excerpt: adapter.excerpt ? adapter.excerpt(existing) : '',
           alreadyOpen: true,
           items: listItems().items
         })

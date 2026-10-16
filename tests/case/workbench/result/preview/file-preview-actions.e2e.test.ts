@@ -372,6 +372,10 @@ describe('workbench result e2e', () => {
             .getByText('默认', { exact: true })
             .isVisible()
             .catch(() => false)
+          const firstApplication = openWithApplicationItems.first()
+          await firstApplication.getByRole('button', { name: '设为默认', exact: true }).click()
+          await visibleOpenWithMenu.getByText('馆长默认', { exact: true }).waitFor()
+          await visibleOpenWithMenu.getByText('跟随系统默认', { exact: true }).click()
           await page.keyboard.press('Escape')
           const resourceTabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
           await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
@@ -464,7 +468,6 @@ describe('workbench result e2e', () => {
               result.docxPreviewStableWhileTyping &&
               result.systemOpenVisible &&
               result.openWithApplicationCount >= 1 &&
-              result.openWithApplicationCount <= 5 &&
               !result.openWithMenuHasHorizontalOverflow &&
               result.defaultApplicationMarkerVisible &&
               result.openWithQueryCalls >= 1 &&

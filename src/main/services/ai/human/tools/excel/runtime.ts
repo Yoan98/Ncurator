@@ -1,3 +1,5 @@
+import { writeReviewIndex } from '../../../fileChanges/reviewNavigationIndex'
+import type { ReviewRegion } from '../../../../../../shared/fileReview'
 import type { ExcelSheetAxes, FileChangeIdentity } from '../../../fileChanges/FileChangeSession'
 import ExcelJS from 'exceljs'
 import fs from 'node:fs/promises'
@@ -88,8 +90,20 @@ const loadWorkbook = async (bytes: Uint8Array): Promise<ExcelJS.Workbook> => {
 
 const readBytes = async (sourcePath: string): Promise<Buffer> => await fs.readFile(sourcePath)
 
-type CellChange = { sheetName: string; address: string; kind: 'added' | 'modified' | 'deleted' }
+type CellChange = {
+  sheetName: string
+  address: string
+  kind: 'added' | 'modified' | 'deleted'
+  target: ReviewRegion['target']
+}
 
+const reviewCellValue = (cell: ExcelJS.Cell, date1904: boolean): string => {
+  const source = cell.master
+  if (source.formula) return source.formula
+  if (source.value instanceof Date)
+    return String(25569 + source.value.getTime() / 86400000 - (date1904 ? 1462 : 0))
+  return source.text || ''
+}
 const cloneModel = <T>(value: T): T => structuredClone(value)
 const cellFingerprint = (cell: ExcelJS.Cell): string =>
   JSON.stringify({
@@ -206,8 +220,40 @@ const buildDiffWorkbook = async (input: {
         !changes.some(
           (change) => change.sheetName === sheet.name && change.address === cell.address
         )
-      )
-        changes.push({ sheetName: sheet.name, address: cell.address, kind })
+      ) {
+        const rr =
+          rows[row - 1]?.after ||
+          rows.slice(row).find((p) => p.after)?.after ||
+          [...rows.slice(0, row)].reverse().find((p) => p.after)?.after
+        const cc =
+          columns[col - 1]?.after ||
+          columns.slice(col).find((p) => p.after)?.after ||
+          [...columns.slice(0, col)].reverse().find((p) => p.after)?.after
+        const destination = after && rr && cc ? after.getCell(rr, cc) : undefined
+        changes.push({
+          sheetName: sheet.name,
+          address: cell.address,
+          kind,
+          target: destination
+            ? {
+                kind: 'excel',
+                sheet: after!.name,
+                address:
+                  after!.model.merges.find((merge) => {
+                    const bounds = parseRange(merge)
+                    return (
+                      rr! >= bounds.top &&
+                      rr! <= bounds.bottom &&
+                      cc! >= bounds.left &&
+                      cc! <= bounds.right
+                    )
+                  }) || destination.address,
+                value: reviewCellValue(destination, Boolean(input.after.properties.date1904)),
+                container: !rows[row - 1]?.after || !columns[col - 1]?.after
+              }
+            : null
+        })
+      }
     }
     columns.forEach((pair, col) => {
       const sourceColumn = pair.after
@@ -786,6 +832,16 @@ export const materializeExcelReview = async (input: {
   })
   const previewPath = path.join(input.reviewDir, 'review.xlsx')
   await fs.writeFile(previewPath, result.bytes)
+  await writeReviewIndex(
+    input.reviewDir,
+    input.after,
+    result.changes.map((c, i) => ({
+      id: `excel-${i + 1}`,
+      surface: c.sheetName,
+      key: c.address,
+      target: c.target
+    }))
+  )
   return {
     changed: result.changes.length > 0,
     previewPath,

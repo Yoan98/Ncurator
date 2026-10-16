@@ -1,3 +1,5 @@
+import { pptSlideIdentities, writeReviewIndex } from '../../../fileChanges/reviewNavigationIndex'
+import type { ReviewRegion } from '../../../../../../shared/fileReview'
 import type { FileChangeIdentity } from '../../../fileChanges/FileChangeSession'
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -671,7 +673,7 @@ const renderPresentationSlides = async (input: {
   for (const slideId of input.slideIds) {
     const index = slides.findIndex((slide) => slideIdOf(slide) === slideId)
     if (index < 0) continue
-    const svg = await renderPptSlideSvg(input.presentation, slides[index]!)
+    const svg = await renderPptSlideSvg(input.presentation, slides[index]!, true)
     const hash = hashBytes(svg)
     const svgPath = path.join(input.previewDir, `${input.prefix}-${hash.slice(0, 20)}.svg`)
     await fs.writeFile(svgPath, svg, 'utf8')
@@ -1442,6 +1444,78 @@ export const materializePptReview = async (input: {
     movedElementCandidates: new Set(identity?.movedElements),
     elementLineage: new Map(identity?.elementLineage)
   })
+  const identities = await pptSlideIdentities(input.after)
+  const regions: ReviewRegion[] = []
+  for (const slide of manifest.slides.filter((s) => s.changed)) {
+    const slideId = identities.get(slide.slideId.replace(/^\//, ''))
+    const currentSlide = getSlides(after).find((item) => slideIdOf(item) === slide.slideId)
+    const target = slideId
+      ? {
+          kind: 'ppt' as const,
+          slideId,
+          text: currentSlide ? getSlideText(currentSlide) : '',
+          container: false
+        }
+      : null
+    const oldPage = beforeSlides.find((item) => item.slideId === slide.slideId)
+    const newPage = afterSlides.find((item) => item.slideId === slide.slideId)
+    if (
+      !slide.elementChanges.length ||
+      slide.changes.some((kind) => kind !== 'modified') ||
+      oldPage?.pageFingerprint !== newPage?.pageFingerprint
+    )
+      regions.push({
+        id: `ppt-${regions.length + 1}`,
+        surface: slide.slideId,
+        key: 'slide',
+        target
+      })
+    for (const change of slide.elementChanges) {
+      const shape = change.afterElementId?.split('#').at(-1)
+      regions.push({
+        id: `ppt-${regions.length + 1}`,
+        surface: slide.slideId,
+        key: (change.afterElementId || change.beforeElementId || '').split('#').at(-1) || '',
+        target: target
+          ? {
+              ...target,
+              shapeId: shape ? Number(shape) : undefined,
+              text:
+                shape && currentSlide
+                  ? getShapeText(
+                      getSlideShapes(currentSlide).find(
+                        (item) => String(getShapeId(item)) === shape
+                      )!
+                    ) || ''
+                  : target.text,
+              container: !shape
+            }
+          : null
+      })
+    }
+  }
+  for (const slide of manifest.slides) {
+    for (const change of slide.elementChanges) {
+      if (
+        !change.beforeElementId ||
+        !change.afterElementId ||
+        change.beforeElementId === change.afterElementId
+      )
+        continue
+      const source = regions.find(
+        (region) =>
+          region.surface === slide.slideId &&
+          region.key === change.afterElementId!.split('#').at(-1)
+      )
+      if (source)
+        regions.push({
+          ...source,
+          id: `ppt-${regions.length + 1}`,
+          key: change.beforeElementId.split('#').at(-1)!
+        })
+    }
+  }
+  await writeReviewIndex(input.reviewDir, input.after, regions)
   const previewPath = path.join(input.reviewDir, 'manifest.json')
   await fs.writeFile(previewPath, JSON.stringify(manifest))
   return {

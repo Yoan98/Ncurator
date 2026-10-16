@@ -4,7 +4,6 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { resolveE2ETempRoot } from './workspaceFixture'
 import {
   WPS_ADDON_DIR_NAME,
   WPS_ADDON_LEGACY_NAMES,
@@ -12,8 +11,14 @@ import {
   WPS_ADDON_PORT_FILE,
   WPS_PREFERRED_SYNC_PORT
 } from '../../../src/main/services/wps/constants'
-import { normalizeOfficePath, officeWriteHostForPath } from '../../../src/main/services/wps/officeFileWriteNotify'
-import { resolveWpsComponentExe, resolveWpsOfficeAppPath } from '../../../src/main/services/wps/wpsOfficeLaunch'
+import {
+  normalizeOfficePath,
+  officeWriteHostForPath
+} from '../../../src/main/services/wps/officeFileWriteNotify'
+import {
+  resolveWpsComponentExe,
+  resolveWpsOfficeAppPath
+} from '../../../src/main/services/wps/wpsOfficeLaunch'
 import { resolveWpsJsAddonsDir } from '../../../src/main/services/wps/WpsAddonInstaller'
 import type {
   WpsReloadDispatch,
@@ -27,7 +32,7 @@ export type WpsOfficeCoverageTarget = {
   kind: 'docx' | 'xlsx' | 'pptx'
   fileName: string
   component: WpsAddonHost
-  prompt: (marker: string) => string
+  prompt: (marker: string, fileName: string) => string
 }
 
 export const WPS_OFFICE_COVERAGE_TARGETS: WpsOfficeCoverageTarget[] = [
@@ -35,24 +40,38 @@ export const WPS_OFFICE_COVERAGE_TARGETS: WpsOfficeCoverageTarget[] = [
     kind: 'docx',
     fileName: 'sample-edit.docx',
     component: 'wps',
-    prompt: (marker) =>
-      `请直接修改我刚选中的 sample-edit.docx，在文末新增一段：“${marker}”。完成后告诉我已写回。`
+    prompt: (marker, fileName) =>
+      `请直接修改我刚选中的 ${fileName}，在文末新增一段：“${marker}”。完成后告诉我已写回。`
   },
   {
     kind: 'xlsx',
     fileName: '经营周报.xlsx',
     component: 'et',
-    prompt: (marker) =>
-      `请直接修改我刚选中的 经营周报.xlsx，在第一个工作表的 H1 单元格写入纯文本“${marker}”，不要改现有数字、公式或其他单元格。完成后告诉我已写回。`
+    prompt: (marker, fileName) =>
+      `请直接修改我刚选中的 ${fileName}，在第一个工作表的 H1 单元格写入纯文本“${marker}”，不要改现有数字、公式或其他单元格。完成后告诉我已写回。`
   },
   {
     kind: 'pptx',
     fileName: '品牌策略提案.pptx',
     component: 'wpp',
-    prompt: (marker) =>
-      `请直接修改我刚选中的 品牌策略提案.pptx，在第一页已有正文末尾追加“${marker}”，不要删除原有内容。完成后告诉我已写回。`
+    prompt: (marker, fileName) =>
+      `请直接修改我刚选中的 ${fileName}，在第一页包含“2026 秋季品牌升级方案”的文本框内的文字末尾追加“${marker}”，保留该文本框原有内容，其他对象不变。完成后告诉我已写回。`
   }
 ]
+
+export const prepareWpsOfficeFixtures = async (
+  rootPath: string
+): Promise<WpsOfficeCoverageTarget[]> => {
+  const suffix = path.basename(rootPath).slice(-6)
+  return await Promise.all(
+    WPS_OFFICE_COVERAGE_TARGETS.map(async (target) => {
+      const parsed = path.parse(target.fileName)
+      const fileName = `${parsed.name}-${suffix}${parsed.ext}`
+      await fsp.rename(path.join(rootPath, target.fileName), path.join(rootPath, fileName))
+      return { ...target, fileName }
+    })
+  )
+}
 
 export const isWpsAddonHostEnabled = (host: WpsAddonHost): boolean => {
   const jsAddonsDir = resolveWpsJsAddonsDir({
@@ -62,10 +81,9 @@ export const isWpsAddonHostEnabled = (host: WpsAddonHost): boolean => {
   })
   if (!jsAddonsDir) return false
   try {
-    const parsed = JSON.parse(fs.readFileSync(path.join(jsAddonsDir, 'authaddin.json'), 'utf8')) as Record<
-      string,
-      unknown
-    >
+    const parsed = JSON.parse(
+      fs.readFileSync(path.join(jsAddonsDir, 'authaddin.json'), 'utf8')
+    ) as Record<string, unknown>
     const section = parsed[host]
     if (!section || typeof section !== 'object' || Array.isArray(section)) return false
     const names = new Set<string>([WPS_ADDON_NAME, ...WPS_ADDON_LEGACY_NAMES])
@@ -107,14 +125,11 @@ export { resolveWpsOfficeAppPath }
 
 const WPS_COMPONENT_IMAGES = ['wps.exe', 'et.exe', 'wpp.exe'] as const
 const WPS_DARWIN_PROCESS_PATTERN = 'wpsoffice'
-// 用例专属的临时工作区前缀，只清自己造的，不碰别的 e2e 目录。
-const WPS_STALE_WORKSPACE_PREFIX = 'ncurator-workbench-wps-'
 const WPS_EXIT_POLL_MS = 250
 
 export type WpsEnvironmentReset = {
   running: boolean
   forced: boolean
-  removedWorkspaces: string[]
 }
 
 const runQuietly = async (file: string, args: readonly string[]): Promise<string> => {
@@ -133,7 +148,13 @@ const runQuietly = async (file: string, args: readonly string[]): Promise<string
 const isWpsRunning = async (): Promise<boolean> => {
   if (process.platform === 'win32') {
     for (const image of WPS_COMPONENT_IMAGES) {
-      const stdout = await runQuietly('tasklist', ['/FI', `IMAGENAME eq ${image}`, '/NH', '/FO', 'CSV'])
+      const stdout = await runQuietly('tasklist', [
+        '/FI',
+        `IMAGENAME eq ${image}`,
+        '/NH',
+        '/FO',
+        'CSV'
+      ])
       if (stdout.toLowerCase().includes(image)) return true
     }
     return false
@@ -153,7 +174,12 @@ const requestWpsShutdown = async (force: boolean): Promise<void> => {
     return
   }
   if (process.platform === 'darwin') {
-    await runQuietly('pkill', [force ? '-KILL' : '-TERM', '-f', WPS_DARWIN_PROCESS_PATTERN])
+    await runQuietly('pkill', [
+      force ? '-KILL' : '-TERM',
+      '-f',
+      // 先让主进程自行清理加载项；同时 TERM CEF 会制造崩溃恢复和下轮初始化失败。
+      force ? WPS_DARWIN_PROCESS_PATTERN : '/Contents/MacOS/wpsoffice$'
+    ])
   }
 }
 
@@ -166,34 +192,11 @@ const waitForWpsExit = async (timeoutMs: number): Promise<boolean> => {
   return !(await isWpsRunning())
 }
 
-const removeStaleWpsWorkspaces = async (): Promise<string[]> => {
-  const tempRoot = resolveE2ETempRoot()
-  let entries: Awaited<ReturnType<typeof fsp.readdir>>
-  try {
-    entries = await fsp.readdir(tempRoot)
-  } catch {
-    return []
-  }
-  const removed: string[] = []
-  for (const name of entries) {
-    if (!name.startsWith(WPS_STALE_WORKSPACE_PREFIX)) continue
-    const target = path.join(tempRoot, name)
-    try {
-      await fsp.rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
-      removed.push(target)
-    } catch {
-      // 仍被别的进程占着就留给下一轮，不该因为清理失败让用例挂掉。
-    }
-  }
-  return removed
-}
-
 // WPS 打开的文档会一直锁着临时工作区，不归零就会把残留实例带进下一轮，
 // 让 registry、dispatch 和断言全部对不上。先温和关，超时再强杀。
-// removeWorkspaces 必须显式打开：用例进行中调用时本轮工作区还在用，不能一起删。
+// 工作区仅由创建它的资源作用域回收，不能按前缀删除其他轮次仍在使用的目录。
 export const resetWpsEnvironment = async (options?: {
   gracefulTimeoutMs?: number
-  removeWorkspaces?: boolean
 }): Promise<WpsEnvironmentReset> => {
   const gracefulTimeoutMs = options?.gracefulTimeoutMs ?? 6_000
   const running = await isWpsRunning()
@@ -208,8 +211,7 @@ export const resetWpsEnvironment = async (options?: {
   }
   return {
     running,
-    forced,
-    removedWorkspaces: options?.removeWorkspaces === true ? await removeStaleWpsWorkspaces() : []
+    forced
   }
 }
 
@@ -293,7 +295,11 @@ export const waitForWpsDispatch = async (options: {
     try {
       const port = await resolveInstalledWpsSyncPort()
       const status = await fetchWpsSyncStatus(port)
-      const count = countWpsDispatchesForPath(status.lastDispatches, options.filePath, options.afterAt)
+      const count = countWpsDispatchesForPath(
+        status.lastDispatches,
+        options.filePath,
+        options.afterAt
+      )
       if (count >= minCount) return { port, count, status }
       lastError = new Error(`dispatch count ${count} < ${minCount}`)
     } catch (error) {
@@ -314,8 +320,22 @@ export const openDocumentInWpsBackground = async (filePath: string): Promise<voi
     throw new Error('本机未找到 WPS Office')
   }
   if (process.platform === 'darwin') {
-    await execFileAsync('open', ['-a', appPath, filePath], { timeout: 20_000 })
-    return
+    const deadline = Date.now() + 5_000
+    for (;;) {
+      try {
+        await execFileAsync('open', ['-a', appPath, '--', filePath], { timeout: 20_000 })
+        return
+      } catch (error) {
+        // TERM 已退出但 Launch Services 仍可能短暂指向旧 PID；仅重试该启动竞态。
+        if (
+          !(error instanceof Error) ||
+          !/error -600\b/.test(error.message) ||
+          Date.now() >= deadline
+        )
+          throw error
+        await sleep(500)
+      }
+    }
   }
   if (process.platform === 'win32') {
     const exePath = resolveWindowsOpenExe(filePath)
@@ -335,6 +355,8 @@ export const waitForWpsAddonReady = async (options: {
 }): Promise<{ port: number; status: WpsSyncStatus }> => {
   const timeoutMs = options.timeoutMs ?? 45_000
   const deadline = Date.now() + timeoutMs
+  const activateAfter = Date.now() + 2_000
+  let activationRetried = false
   let lastError: unknown
   while (Date.now() < deadline) {
     try {
@@ -346,9 +368,16 @@ export const waitForWpsAddonReady = async (options: {
           (!options.component || item.component === options.component)
       )
       const componentReady =
-        !options.component || status.clients.some((client) => client.component === options.component)
+        !options.component ||
+        status.clients.some((client) => client.component === options.component)
       if (status.clientCount >= 1 && documentOpen && componentReady) {
         return { port, status }
+      }
+      // 连续跨格式打开时，macOS WPS 可能只创建后台标签；同一文件再打开一次才激活组件。
+      // 仅用于准备初始文档，后面的审核导航与写回仍完全走产品入口和真实回报。
+      if (process.platform === 'darwin' && !activationRetried && Date.now() >= activateAfter) {
+        activationRetried = true
+        await openDocumentInWpsBackground(options.filePath)
       }
       lastError = new Error(
         `clients=${
@@ -402,8 +431,10 @@ export const waitForWpsReloadResult = async (options: {
         if (result.at < options.afterAt) return false
         if (!result.ok) return false
         if (!matchesPath(result.fullName, options.filePath)) return false
-        if (options.excerptIncludes && !result.excerpt.includes(options.excerptIncludes)) return false
-        if (options.excerptExcludes && result.excerpt.includes(options.excerptExcludes)) return false
+        if (options.excerptIncludes && !result.excerpt.includes(options.excerptIncludes))
+          return false
+        if (options.excerptExcludes && result.excerpt.includes(options.excerptExcludes))
+          return false
         return true
       })
       if (matched) return matched

@@ -6,7 +6,7 @@ index 1aaa6860d8cfa6e41d377afbabf4e01f1740c12c..727be1ed47861ef70e50d277e3fe80c1
          r,
          n = {
            type: Ui.Paragraph,
-+        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"),
++        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"), reviewRegion: e.getAttributeNS("urn:ncurator:docx-review", "region"),
            children: []
          };
        var _iterator26 = _createForOfIteratorHelper(xi.elements(e)),
@@ -14,7 +14,7 @@ index 1aaa6860d8cfa6e41d377afbabf4e01f1740c12c..727be1ed47861ef70e50d277e3fe80c1
        var _this30 = this;
        var r = {
          type: Ui.Run,
-+        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"),
++        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"), reviewRegion: e.getAttributeNS("urn:ncurator:docx-review", "region"),
          parent: t,
          children: []
        };
@@ -22,7 +22,7 @@ index 1aaa6860d8cfa6e41d377afbabf4e01f1740c12c..727be1ed47861ef70e50d277e3fe80c1
        var _this31 = this;
        var t = {
          type: Ui.Table,
-+        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"),
++        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"), reviewRegion: e.getAttributeNS("urn:ncurator:docx-review", "region"),
          children: []
        };
        return Xs.foreach(e, function (e) {
@@ -30,7 +30,7 @@ index 1aaa6860d8cfa6e41d377afbabf4e01f1740c12c..727be1ed47861ef70e50d277e3fe80c1
        var _this33 = this;
        var t = {
          type: Ui.Row,
-+        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"),
++        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"), reviewRegion: e.getAttributeNS("urn:ncurator:docx-review", "region"),
          children: []
        };
        return Xs.foreach(e, function (e) {
@@ -38,7 +38,7 @@ index 1aaa6860d8cfa6e41d377afbabf4e01f1740c12c..727be1ed47861ef70e50d277e3fe80c1
        var _this34 = this;
        var t = {
          type: Ui.Cell,
-+        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"),
++        reviewChange: e.getAttributeNS("urn:ncurator:docx-review", "change"), reviewRegion: e.getAttributeNS("urn:ncurator:docx-review", "region"),
          children: []
        };
        return Xs.foreach(e, function (e) {
@@ -46,7 +46,7 @@ index 1aaa6860d8cfa6e41d377afbabf4e01f1740c12c..727be1ed47861ef70e50d277e3fe80c1
    }, {
      key: "renderClass",
      value: function renderClass(e, t) {
-+      if (["inserted", "deleted", "formatted"].includes(e.reviewChange)) t.setAttribute("data-docx-change", e.reviewChange);
++      if (["inserted", "deleted", "formatted"].includes(e.reviewChange)) { t.setAttribute("data-docx-change", e.reviewChange); if (e.reviewRegion) t.setAttribute("data-review-region", e.reviewRegion); }
        e.className && (t.className = e.className), e.styleName && t.classList.add(this.processStyleName(e.styleName));
      }
    }, {

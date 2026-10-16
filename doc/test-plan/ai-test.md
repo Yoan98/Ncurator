@@ -82,7 +82,7 @@ LLM 错误分类与退避按 [Human Harness](../ai-harness/human-harness.md#84-�
 - What：四类文件统一版本与审核闭环。
 - Why：防止可变正式文件污染历史 B。
 - How：真实公开工具写入，外部写 C，再显式 owner 收尾并解析审核。
-- Oracle：四类真实工具正式 A→B，运行中无审核，外部 C 后收尾固定 B；删除临时版本、重复收尾与原始字节回退。
+- Oracle：四类真实工具正式 A→B，运行中无审核，外部 C 后收尾固定 B；文本新产物完整保存 A/B，三类 Office 索引包含 B 校验和有效语义目标，PPT 审核 SVG 的元素身份必须与定位索引对应；删除临时版本、重复收尾与原始字节回退。
 
 #### docx 类别
 
@@ -605,7 +605,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：真正 owner run 的文件审核收尾及失败分支。
 - Why：yield 和续接不能切断首次 A，也不能提前发布审核；模型失败不能丢失已保存修改。
 - How：生产 `AiRunService.run`、真实文本工具、正式文件与 Store；只脚本化模型决策，沿用追加消息测试的调度回调，在真实工具结果后通知待处理消息。续接使用同一 ownerRunId；另一轮在保存后由脚本模型返回不可重试错误。
-- Oracle：yield 后正式 B 已保存但无审核；续接最终 B2 的审核仍相对 A且仅一条 owner 记录；主 run 失败后审核包含成功保存的 B，临时输入清理、正式文件保留。
+- Oracle：yield 后正式 B 已保存但无审核；续接最终 B2 的审核以 v4 完整文本保存 A/B2，且仅一条 owner 记录，不保留中间 B；主 run 失败后审核完整保存首次 A 与成功保存的 B，临时输入清理、正式文件保留。
 
 ##### `human-subagent-isolation`
 

@@ -71,3 +71,11 @@
   color: #b3261e !important;
   text-decoration: line-through !important;
 }
+
+.office-review-navigable [data-review-region] {
+  cursor: pointer;
+}
+.office-review-navigable [data-review-region]:hover {
+  outline: 1px solid #91b6d6;
+  outline-offset: 2px;
+}

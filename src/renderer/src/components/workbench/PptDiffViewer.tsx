@@ -97,6 +97,7 @@ const PptDiffViewer: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => 
       .then((entries) => {
         entries.forEach(([, url]) => created.push(url))
         if (!cancelled) setImageUrls(Object.fromEntries(entries))
+        else created.splice(0).forEach((url) => URL.revokeObjectURL(url))
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))

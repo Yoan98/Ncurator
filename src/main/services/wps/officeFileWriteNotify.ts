@@ -1,3 +1,4 @@
+import type { ReviewLocation, ReviewNavigationResult } from '../../../shared/fileReview'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -22,6 +23,11 @@ export const normalizeOfficePath = (filePath: string): string =>
   path.resolve(filePath).replace(/\\/g, '/').toLowerCase()
 
 export type OfficeFileWriteListener = {
+  navigate?: (
+    filePath: string,
+    target: ReviewLocation | null,
+    open: () => Promise<void>
+  ) => Promise<ReviewNavigationResult>
   prepareClose?: (filePath: string) => Promise<boolean>
   notifyWritten: (filePath: string) => void
 }
@@ -91,4 +97,14 @@ export const withOfficeFileWrite = async <T>(
     if (released) notifyOfficeFileWritten(resolved)
     throw error
   }
+}
+
+export const navigateOfficeReview = async (
+  filePath: string,
+  target: ReviewLocation | null,
+  open: () => Promise<void>
+): Promise<ReviewNavigationResult> => {
+  if (listener?.navigate) return listener.navigate(filePath, target, open)
+  await open()
+  return { status: 'opened', reason: '已请求打开文件，WPS 加载项尚未连接，未完成定位' }
 }

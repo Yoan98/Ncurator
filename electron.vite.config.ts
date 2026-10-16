@@ -46,7 +46,8 @@ export default defineConfig(({ mode }) => {
       },
       resolve: {
         alias: {
-          '@renderer': resolve('src/renderer/src')
+          '@renderer': resolve('src/renderer/src'),
+          'monaco-local': resolve('node_modules/monaco-editor/esm/vs')
         }
       },
       plugins: [react(), tailwindcss()],

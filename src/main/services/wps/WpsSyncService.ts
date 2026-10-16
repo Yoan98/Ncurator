@@ -1,3 +1,9 @@
+import { randomUUID } from 'node:crypto'
+import type {
+  ReviewLocation,
+  ReviewNavigationResult,
+  OfficeReviewSelection
+} from '../../../shared/fileReview'
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
@@ -6,7 +12,7 @@ import { app, shell } from 'electron'
 import { WPS_ADDON_FILES, WPS_PREFERRED_SYNC_PORT } from './constants'
 import { WpsAddonInstaller, type WpsAddonInstallerLike } from './WpsAddonInstaller'
 import { normalizeOfficePath, officeWriteHostForPath } from './officeFileWriteNotify'
-import { resolveWpsComponentExe } from './wpsOfficeLaunch'
+import { resolveWpsComponentExe, resolveWpsOfficeAppPath } from './wpsOfficeLaunch'
 
 export type WpsOpenDocument = {
   name?: string
@@ -146,6 +152,15 @@ export type WpsSyncStatus = {
   clientCount: number
   clients: Array<{ component: string; clientId: string }>
   openDocuments: Array<{ clientId: string; component: string; fullName: string }>
+  lastNavigationResults: Array<{
+    requestId: string
+    clientId: string
+    fullName: string
+    status: string
+    location?: ReviewLocation
+    selection?: OfficeReviewSelection
+    reason?: string
+  }>
   lastDispatches: WpsReloadDispatch[]
   lastReloadResults: WpsReloadResult[]
   lastCloseResults: WpsCloseResult[]
@@ -158,6 +173,10 @@ type WpsAddonReport = {
   clientId?: string
   at?: number
   data?: {
+    selection?: OfficeReviewSelection
+    requestId?: string
+    status?: ReviewNavigationResult['status']
+    location?: ReviewLocation
     items?: WpsOpenDocument[]
     ok?: boolean
     fullName?: string
@@ -308,6 +327,74 @@ const writeSse = (response: ServerResponse, payload: unknown): void => {
 }
 
 export class WpsSyncService {
+  private readonly navigationOpens = new Map<string, Promise<void>>()
+  private readonly latestNavigation = new Map<string, string>()
+  private readonly navigationResults = new Map<
+    string,
+    { clientId: string; path: string; finish: (value: ReviewNavigationResult) => void }
+  >()
+  private readonly lastNavigationResults: Array<{
+    requestId: string
+    clientId: string
+    fullName: string
+    status: string
+    location?: ReviewLocation
+    selection?: OfficeReviewSelection
+    reason?: string
+  }> = []
+
+  public async navigate(
+    filePath: string,
+    target: ReviewLocation | null,
+    open: () => Promise<void>
+  ): Promise<ReviewNavigationResult> {
+    const resolved = path.resolve(filePath),
+      key = normalizeOfficePath(resolved),
+      requestId = randomUUID()
+    this.latestNavigation.set(key, requestId)
+    try {
+      if (!this.registry.clientFor(resolved)) {
+        let pending = this.navigationOpens.get(key)
+        if (!pending) {
+          pending = (async () => {
+            await open()
+            if (!this.server) return
+            const deadline = Date.now() + SHELL_LIST_TIMEOUT_MS
+            while (!this.stopped && Date.now() < deadline && !this.registry.clientFor(resolved)) {
+              this.broadcast({ type: 'list' }, { component: officeWriteHostForPath(resolved) })
+              await new Promise((resolve) => setTimeout(resolve, SHELL_LIST_POLL_MS))
+            }
+          })().finally(() => this.navigationOpens.delete(key))
+          this.navigationOpens.set(key, pending)
+        }
+        await pending
+      }
+      if (this.latestNavigation.get(key) !== requestId)
+        return { status: 'opened', reason: '已切换到其他定位请求' }
+      const clientId = this.registry.clientFor(resolved)
+      if (!clientId || !this.hasClient(clientId))
+        return {
+          status: 'opened',
+          reason: '已请求用 WPS 打开文件，但未收到目标文档确认；请检查 WPS 提示或启用馆长加载项'
+        }
+      return await new Promise<ReviewNavigationResult>((resolve) => {
+        const timer = setTimeout(
+          () => finish({ status: 'opened', reason: 'WPS 定位响应超时，未确认目标位置' }),
+          5000
+        )
+        const finish = (result: ReviewNavigationResult): void => {
+          clearTimeout(timer)
+          this.navigationResults.delete(requestId)
+          resolve(result)
+        }
+        this.navigationResults.set(requestId, { clientId, path: resolved, finish })
+        this.broadcast({ type: 'navigate', requestId, path: resolved, target }, { clientId })
+      })
+    } finally {
+      if (this.latestNavigation.get(key) === requestId) this.latestNavigation.delete(key)
+    }
+  }
+
   private readonly installer: WpsAddonInstallerLike
   private readonly preferredPort: number
   private readonly skipInstall: boolean
@@ -356,7 +443,11 @@ export class WpsSyncService {
       if (!result.installed) return
     }
 
-    if (!this.skipInstall && this.preferredPort > 0 && (await probeWpsSyncPort(this.preferredPort))) {
+    if (
+      !this.skipInstall &&
+      this.preferredPort > 0 &&
+      (await probeWpsSyncPort(this.preferredPort))
+    ) {
       await this.rewriteRegistration(this.preferredPort, { whenSkipInstall: false })
       return
     }
@@ -450,6 +541,12 @@ export class WpsSyncService {
       reopen: 'addin',
       shellUsed: false
     })
+    // 原子替换会更换文件身份。macOS 通过 Launch Services 重开，重新交付文件访问权，
+    // 避免沙盒中的 Workbooks.Open 对新文件弹出无法打开的模态错误。
+    if (released && process.platform === 'darwin') {
+      this.startShellReopen(resolvedPath)
+      return
+    }
     // 关掉最后一个文档组件就会退出，只有加载项建起了占位文档才还有人能执行 Open。
     if (released && released.remaining <= 0 && !released.placeholder) {
       this.startShellReopen(resolvedPath)
@@ -472,6 +569,8 @@ export class WpsSyncService {
         // 关闭时忽略已断开的客户端。
       }
     }
+    for (const pending of this.navigationResults.values())
+      pending.finish({ status: 'failed', reason: '馆长已停止 WPS 通信' })
     this.clients.clear()
     this.registry.clear()
     this.lastDispatches.length = 0
@@ -491,11 +590,7 @@ export class WpsSyncService {
         server.close(() => resolve())
       })
     }
-    if (
-      ownedPort === undefined ||
-      this.preferredPort <= 0 ||
-      ownedPort === this.preferredPort
-    ) {
+    if (ownedPort === undefined || this.preferredPort <= 0 || ownedPort === this.preferredPort) {
       return
     }
     if (await probeWpsSyncPort(this.preferredPort)) {
@@ -575,6 +670,18 @@ export class WpsSyncService {
   }
 
   private reopenReleasedPath(resolvedPath: string, component: string): void {
+    if (process.platform === 'darwin') {
+      const wpsApp = resolveWpsOfficeAppPath()
+      if (wpsApp) {
+        const child = spawn('/usr/bin/open', ['-g', '-a', wpsApp, '--', resolvedPath], {
+          detached: true,
+          stdio: 'ignore'
+        })
+        child.once('error', () => undefined)
+        child.unref()
+        return
+      }
+    }
     if (process.platform === 'win32') {
       const exe = resolveWpsComponentExe(component, resolvedPath)
       if (exe) {
@@ -758,6 +865,29 @@ export class WpsSyncService {
           this.registry.setDocuments(clientId, component, body.data.items)
           this.completeShellOpens()
         }
+        if (body.kind === 'navigate-result') {
+          const requestId = body.data?.requestId || ''
+          const pending = this.navigationResults.get(requestId)
+          if (pending?.clientId === clientId) {
+            const matches = this.matchesOfficePath(body.data?.fullName, pending.path)
+            const result: ReviewNavigationResult = {
+              status:
+                matches && (body.data?.status === 'located' || body.data?.status === 'container')
+                  ? body.data.status
+                  : 'opened',
+              reason: matches ? body.data?.reason : 'WPS 未确认目标文件，未完成定位'
+            }
+            this.pushCapped(this.lastNavigationResults, {
+              requestId,
+              clientId,
+              fullName: body.data?.fullName || '',
+              ...result,
+              location: body.data?.location,
+              selection: body.data?.selection
+            })
+            pending.finish(result)
+          }
+        }
         if (body.kind === 'close-result') {
           const fullName = String(body.data?.fullName || '')
           const targetPath = body.data?.targetPath ? String(body.data.targetPath) : undefined
@@ -838,6 +968,7 @@ export class WpsSyncService {
         clientId: client.clientId
       })),
       openDocuments: this.registry.listOpenDocuments(),
+      lastNavigationResults: [...this.lastNavigationResults],
       lastDispatches: [...this.lastDispatches],
       lastReloadResults: [...this.lastReloadResults],
       lastCloseResults: [...this.lastCloseResults],

@@ -1,3 +1,8 @@
+import type {
+  GetFileReviewResponse,
+  OpenFileReviewLocationRequest,
+  ReviewNavigationResult
+} from '../shared/fileReview'
 import type { ModelSource } from '../shared/modelSources'
 import type {
   PartnerCacheRequest,
@@ -349,6 +354,15 @@ export type DesktopApi = {
   onAppUpdateStatus: (cb: (snapshot: AppUpdateSnapshot) => void) => () => void
   appStartupGetStatus: () => Promise<AppStartupStatus>
   appQuit: () => Promise<void>
+  getFileReview: (request: { changeRecordId: string }) => Promise<GetFileReviewResponse>
+  openFileReviewLocation: (
+    request: OpenFileReviewLocationRequest
+  ) => Promise<ReviewNavigationResult>
+  setPreferredOpenApplication: (request: {
+    filePath: string
+    applicationId: string | null
+  }) => Promise<ListOpenWithApplicationsResponse>
+  onOpenWithPreferenceChanged: (cb: (extension: string) => void) => () => void
   listOpenWithApplications: (
     payload: ListOpenWithApplicationsRequest
   ) => Promise<ListOpenWithApplicationsResponse>

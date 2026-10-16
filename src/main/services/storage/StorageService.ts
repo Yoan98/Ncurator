@@ -1,3 +1,4 @@
+import { OpenWithPreferenceStore } from './domains/OpenWithPreferenceStore'
 import path from 'node:path'
 import { AiFileChangeStore } from './domains/AiFileChangeStore'
 import { AiRunStore } from './domains/AiRunStore'
@@ -30,6 +31,7 @@ export class StorageService {
   public readonly aiRun: AiRunStore
   public readonly docxApply: DocxApplyStore
   public readonly llm: LlmConfigStore
+  public readonly openWithPreferences: OpenWithPreferenceStore
   public readonly appSettings: AppSettingsStore
   public readonly workspace: WorkspaceStore
   public readonly workspaceIndexJob: WorkspaceIndexJobStore
@@ -59,6 +61,7 @@ export class StorageService {
     this.aiRun = new AiRunStore(this.sqlite)
     this.docxApply = new DocxApplyStore(this.sqlite)
     this.llm = new LlmConfigStore(this.sqlite)
+    this.openWithPreferences = new OpenWithPreferenceStore(this.sqlite)
     this.appSettings = new AppSettingsStore(this.sqlite)
     this.workspace = new WorkspaceStore(this.sqlite)
     this.workspaceIndexJob = new WorkspaceIndexJobStore(this.sqlite)

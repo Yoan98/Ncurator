@@ -941,16 +941,10 @@ export type AiFileChangeSource =
   | 'excel_tool'
   | 'image_tool'
 
-export type TextFileDiffLine =
-  | { type: 'context'; oldLine: number; newLine: number; text: string }
-  | { type: 'remove'; oldLine: number; text: string }
-  | { type: 'add'; newLine: number; text: string }
-
 export interface TextFileDiffArtifact {
-  version: 3
-  oldLineCount: number
-  newLineCount: number
-  lines: TextFileDiffLine[]
+  version: 4
+  before: string
+  after: string
 }
 
 export interface AiFileChangeRecord {
@@ -1110,12 +1104,14 @@ export interface ListOpenWithApplicationsResponse {
   success: boolean
   applications: OpenWithApplication[]
   defaultApplicationId?: string
+  preferredApplicationId?: string
+  preferenceReset?: boolean
   error?: string
 }
 
 export interface OpenFileWithApplicationRequest {
   filePath: string
-  applicationId: string
+  applicationId?: string
 }
 
 export interface OpenFileWithApplicationResponse {

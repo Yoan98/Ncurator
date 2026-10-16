@@ -1,4 +1,5 @@
-import { app, nativeImage } from 'electron'
+import { openWithExtension } from '../../../shared/fileReview'
+import { app, nativeImage, shell } from 'electron'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -12,7 +13,6 @@ import type {
 
 const execFileAsync = promisify(execFile)
 const OPEN_WITH_CACHE_TTL_MS = 5 * 60 * 1_000
-const MAX_OPEN_WITH_APPLICATIONS = 5
 const NATIVE_QUERY_MAX_BUFFER = 10 * 1024 * 1024
 
 export type NativeOpenWithApplication = {
@@ -38,6 +38,11 @@ export type OpenWithServiceOptions = {
     application: NativeOpenWithApplication
   ) => Promise<NativeOpenWithResponse>
   getIconDataUrl?: (applicationPath: string, iconPath?: string) => Promise<string | undefined>
+  preferences?: {
+    get: (extension: string) => string | undefined
+    set: (extension: string, id: string | null) => void
+  }
+  onPreferenceChanged?: (extension: string) => void
   now?: () => number
 }
 
@@ -115,7 +120,21 @@ export class OpenWithService {
           (item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index
         )
         .sort((left, right) => Number(right.isDefault) - Number(left.isDefault))
-        .slice(0, MAX_OPEN_WITH_APPLICATIONS)
+
+      const extension = openWithExtension(resolvedPath)
+      let preferred = this.options.preferences?.get(extension)
+      const preferenceReset = Boolean(
+        preferred && !nativeApplications.some((item) => item.id === preferred)
+      )
+      if (preferenceReset) {
+        this.options.preferences?.set(extension, null)
+        this.options.onPreferenceChanged?.(extension)
+        preferred = undefined
+      }
+      const defaultId =
+        preferred ||
+        nativeApplications.find((item) => item.isDefault)?.id ||
+        native.defaultApplicationId
       const applications = await Promise.all(
         nativeApplications.map(
           async (item): Promise<OpenWithApplication> => ({
@@ -125,10 +144,11 @@ export class OpenWithService {
               ? await (this.options.getIconDataUrl?.(item.path, item.iconPath) ??
                   this.getIconDataUrl(item.path, item.iconPath))
               : undefined,
-            isDefault: Boolean(item.isDefault)
+            isDefault: item.id === defaultId
           })
         )
       )
+      applications.sort((left, right) => Number(right.isDefault) - Number(left.isDefault))
       this.handlerCache.set(resolvedPath, {
         applications: nativeApplications,
         expiresAt: (this.options.now?.() ?? Date.now()) + OPEN_WITH_CACHE_TTL_MS
@@ -136,9 +156,9 @@ export class OpenWithService {
       return {
         success: true,
         applications,
-        defaultApplicationId:
-          nativeApplications.find((application) => application.isDefault)?.id ||
-          native.defaultApplicationId
+        defaultApplicationId: defaultId,
+        preferredApplicationId: preferred,
+        preferenceReset
       }
     } catch (error) {
       return {
@@ -149,14 +169,23 @@ export class OpenWithService {
     }
   }
 
-  async open(filePath: string, applicationId: string): Promise<OpenFileWithApplicationResponse> {
+  async open(filePath: string, applicationId?: string): Promise<OpenFileWithApplicationResponse> {
     const rawPath = String(filePath || '').trim()
-    const id = String(applicationId || '').trim()
-    if (!rawPath || !id) return { success: false, error: 'filePath and applicationId are required' }
+    let id = String(applicationId || '').trim()
+    if (!rawPath) return { success: false, error: 'filePath and applicationId are required' }
     const resolvedPath = path.resolve(rawPath)
     try {
       const stat = await fs.stat(resolvedPath)
       if (!stat.isFile()) return { success: false, error: 'path is not a file' }
+      if (!id) {
+        const listed = await this.list(resolvedPath)
+        if (!listed.success) return { success: false, error: listed.error }
+        id = listed.defaultApplicationId || ''
+        if (!id) {
+          const error = await shell.openPath(resolvedPath)
+          return { success: !error, error: error || undefined }
+        }
+      }
       const cached = this.handlerCache.get(resolvedPath)
       const applications =
         cached && cached.expiresAt > (this.options.now?.() ?? Date.now())
@@ -171,6 +200,20 @@ export class OpenWithService {
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
+  }
+
+  async setPreferred(
+    filePath: string,
+    applicationId: string | null
+  ): Promise<ListOpenWithApplicationsResponse> {
+    const listed = await this.list(filePath)
+    if (!listed.success) return listed
+    if (applicationId !== null && !listed.applications.some((item) => item.id === applicationId))
+      return { success: false, applications: [], error: '应用不可用于此文件类型' }
+    const extension = openWithExtension(filePath)
+    this.options.preferences?.set(extension, applicationId)
+    this.options.onPreferenceChanged?.(extension)
+    return this.list(filePath)
   }
 
   private async getIconDataUrl(

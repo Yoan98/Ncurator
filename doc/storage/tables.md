@@ -25,6 +25,15 @@
 | `status`       | TEXT       | `pending` / `done`  |
 | `completed_at` | INTEGER    | 完成时间，可空      |
 
+### `open_with_preferences`
+
+馆长内按扩展名保存的默认打开应用，跨伙伴及工作空间生效，不修改操作系统关联。
+
+| 字段             | 类型          | 含义                                 |
+| ---------------- | ------------- | ------------------------------------ |
+| `extension`      | TEXT PK       | 小写扩展名，包含点；无扩展名使用空串 |
+| `application_id` | TEXT NOT NULL | 操作系统关联应用 ID                  |
+
 ### `app_settings`
 
 全局偏好单例（`id = singleton`）。
@@ -55,11 +64,11 @@ Workbench 伙伴。
 
 伙伴 UI 快照。
 
-| 字段         | 类型    | 说明              |
-| ------------ | ------- | ----------------- |
-| `partner_id` | TEXT PK | 伙伴 id，级联删除 |
+| 字段         | 类型    | 说明                                           |
+| ------------ | ------- | ---------------------------------------------- |
+| `partner_id` | TEXT PK | 伙伴 id，级联删除                              |
 | `state_json` | TEXT    | 版本化 UI 状态；不含未发送的文档选区及关联想法 |
-| `updated_at` | INTEGER | 更新时间          |
+| `updated_at` | INTEGER | 更新时间                                       |
 
 ### `workbench_ui_state`
 
@@ -105,80 +114,80 @@ Workbench 单例 UI。
 
 主子会话使用相同格式的不可变消息转录。
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | TEXT PK | 条目 id |
-| `partner_id` | TEXT | 伙伴 id，级联删除 |
-| `run_id` | TEXT | 所属 run |
+| 字段          | 类型      | 说明                                            |
+| ------------- | --------- | ----------------------------------------------- |
+| `id`          | TEXT PK   | 条目 id                                         |
+| `partner_id`  | TEXT      | 伙伴 id，级联删除                               |
+| `run_id`      | TEXT      | 所属 run                                        |
 | `subagent_id` | TEXT NULL | 空为主会话；子会话外键，子会话删除级联清理      |
 | `seq`         | INTEGER   | 各自会话内顺序，跨 run 连续                     |
-| `entry_json` | TEXT | 消息正文、引用与附件快照，工具消息及 annotation |
-| `created_at` | INTEGER | 创建时间 |
+| `entry_json`  | TEXT      | 消息正文、引用与附件快照，工具消息及 annotation |
+| `created_at`  | INTEGER   | 创建时间                                        |
 
 ### `ai_run`
 
 一次 AI 运行。
 
-| 字段                       | 类型    | 说明                                                         |
-| -------------------------- | ------- | ------------------------------------------------------------ |
-| `id`                       | TEXT PK | run id                                                       |
-| `partner_id`               | TEXT    | 伙伴 id，级联删除                                            |
-| `user_message_id`          | TEXT    | 用户消息 id                                                  |
-| `assistant_message_id`     | TEXT    | 助手消息 id                                                  |
-| `status`                   | TEXT    | 运行状态                                                     |
-| `input`                    | TEXT    | 用户输入                                                     |
-| `selected_references_json` | TEXT    | 选中资料                                                     |
-| `attachments_json`         | TEXT    | 附件                                                         |
-| `model_name`               | TEXT    | 模型名                                                       |
-| `main_model_json`          | TEXT    | 主模型选择                                                   |
-| `execution_permission`     | TEXT    | 执行权限，默认 `review`                                      |
-| `partial_answer`           | TEXT    | 流式草稿                                                     |
-| `partial_answer_role`      | TEXT    | 草稿角色                                                     |
-| `final_answer`             | TEXT    | 最终回答                                                     |
-| `error`                    | TEXT    | 短错误标题                                                   |
-| `failure_code`             | TEXT    | 失败码                                                       |
-| `failure_raw_message`      | TEXT    | 失败原文                                                     |
-| `pending_approval_json`    | TEXT    | 当前可操作审批批次，含可选子来源 `source` |
-| `pending_interaction_json` | TEXT    | 当前提问或审批；审批包含批次及可选子来源 |
+| 字段                       | 类型    | 说明                                                                           |
+| -------------------------- | ------- | ------------------------------------------------------------------------------ |
+| `id`                       | TEXT PK | run id                                                                         |
+| `partner_id`               | TEXT    | 伙伴 id，级联删除                                                              |
+| `user_message_id`          | TEXT    | 用户消息 id                                                                    |
+| `assistant_message_id`     | TEXT    | 助手消息 id                                                                    |
+| `status`                   | TEXT    | 运行状态                                                                       |
+| `input`                    | TEXT    | 用户输入                                                                       |
+| `selected_references_json` | TEXT    | 选中资料                                                                       |
+| `attachments_json`         | TEXT    | 附件                                                                           |
+| `model_name`               | TEXT    | 模型名                                                                         |
+| `main_model_json`          | TEXT    | 主模型选择                                                                     |
+| `execution_permission`     | TEXT    | 执行权限，默认 `review`                                                        |
+| `partial_answer`           | TEXT    | 流式草稿                                                                       |
+| `partial_answer_role`      | TEXT    | 草稿角色                                                                       |
+| `final_answer`             | TEXT    | 最终回答                                                                       |
+| `error`                    | TEXT    | 短错误标题                                                                     |
+| `failure_code`             | TEXT    | 失败码                                                                         |
+| `failure_raw_message`      | TEXT    | 失败原文                                                                       |
+| `pending_approval_json`    | TEXT    | 当前可操作审批批次，含可选子来源 `source`                                      |
+| `pending_interaction_json` | TEXT    | 当前提问或审批；审批包含批次及可选子来源                                       |
 | `pending_messages_json`    | TEXT    | 按 FIFO 暂存的追加用户消息快照，含结构化正文与引用、附件；续接或终态归档后清空 |
-| `artifacts_json`           | TEXT    | 产物                                                         |
-| `created_at`               | INTEGER | 创建时间                                                     |
-| `updated_at`               | INTEGER | 更新时间                                                     |
-| `finished_at`              | INTEGER | 结束时间                                                     |
+| `artifacts_json`           | TEXT    | 产物                                                                           |
+| `created_at`               | INTEGER | 创建时间                                                                       |
+| `updated_at`               | INTEGER | 更新时间                                                                       |
+| `finished_at`              | INTEGER | 结束时间                                                                       |
 
 ### `ai_file_change`
 
 工作地址内文件修改记录。
 
-| 字段                    | 类型    | 说明              |
-| ----------------------- | ------- | ----------------- |
-| `id`                    | TEXT PK | 记录 id           |
-| `partner_id`            | TEXT    | 伙伴 id，级联删除 |
+| 字段                    | 类型    | 说明                     |
+| ----------------------- | ------- | ------------------------ |
+| `id`                    | TEXT PK | 记录 id                  |
+| `partner_id`            | TEXT    | 伙伴 id，级联删除        |
 | `run_id`                | TEXT    | 归属主 run，含子任务修改 |
-| `status`                | TEXT    | 状态              |
-| `capability`            | TEXT    | 能力类型          |
-| `path`                  | TEXT    | 文件路径          |
-| `file_name`             | TEXT    | 文件名            |
-| `operation`             | TEXT    | 操作              |
-| `source`                | TEXT    | 来源              |
-| `before_path`           | TEXT    | 改前路径          |
-| `after_path`            | TEXT    | 改后路径          |
-| `change_count`          | INTEGER | 改动计数          |
-| `insert_count`          | INTEGER | 插入计数          |
-| `delete_count`          | INTEGER | 删除计数          |
-| `before_snapshot_path`  | TEXT    | 改前快照          |
-| `after_snapshot_path`   | TEXT    | 改后快照          |
-| `before_object_hash`    | TEXT    | 改前对象哈希      |
-| `after_object_hash`     | TEXT    | 改后对象哈希      |
-| `preview_artifact_hash` | TEXT    | 预览产物哈希      |
-| `before_checksum`       | TEXT    | 改前校验          |
-| `after_checksum`        | TEXT    | 改后校验          |
-| `preview_path`          | TEXT    | 预览路径          |
-| `run_summary`           | TEXT    | 摘要              |
-| `created_at`            | INTEGER | 创建时间          |
-| `updated_at`            | INTEGER | 更新时间          |
-| `reverted_at`           | INTEGER | 回退时间          |
-| `last_error`            | TEXT    | 最近错误          |
+| `status`                | TEXT    | 状态                     |
+| `capability`            | TEXT    | 能力类型                 |
+| `path`                  | TEXT    | 文件路径                 |
+| `file_name`             | TEXT    | 文件名                   |
+| `operation`             | TEXT    | 操作                     |
+| `source`                | TEXT    | 来源                     |
+| `before_path`           | TEXT    | 改前路径                 |
+| `after_path`            | TEXT    | 改后路径                 |
+| `change_count`          | INTEGER | 改动计数                 |
+| `insert_count`          | INTEGER | 插入计数                 |
+| `delete_count`          | INTEGER | 删除计数                 |
+| `before_snapshot_path`  | TEXT    | 改前快照                 |
+| `after_snapshot_path`   | TEXT    | 改后快照                 |
+| `before_object_hash`    | TEXT    | 改前对象哈希             |
+| `after_object_hash`     | TEXT    | 改后对象哈希             |
+| `preview_artifact_hash` | TEXT    | 预览产物哈希             |
+| `before_checksum`       | TEXT    | 改前校验                 |
+| `after_checksum`        | TEXT    | 改后校验                 |
+| `preview_path`          | TEXT    | 预览路径                 |
+| `run_summary`           | TEXT    | 摘要                     |
+| `created_at`            | INTEGER | 创建时间                 |
+| `updated_at`            | INTEGER | 更新时间                 |
+| `reverted_at`           | INTEGER | 回退时间                 |
+| `last_error`            | TEXT    | 最近错误                 |
 
 ### `docx_apply`
 

@@ -176,6 +176,14 @@ const api: DesktopApi = {
     return response
   },
   pickFile: (defaultPath?: string) => ipcRenderer.invoke('pick-file', defaultPath),
+  getFileReview: (payload) => ipcRenderer.invoke('file-review-get', payload),
+  openFileReviewLocation: (payload) => ipcRenderer.invoke('file-review-open-location', payload),
+  setPreferredOpenApplication: (payload) => ipcRenderer.invoke('open-with-set-preferred', payload),
+  onOpenWithPreferenceChanged: (cb) => {
+    const listener = (_event: Electron.IpcRendererEvent, extension: string): void => cb(extension)
+    ipcRenderer.on('open-with-preference-changed', listener)
+    return () => ipcRenderer.removeListener('open-with-preference-changed', listener)
+  },
   listOpenWithApplications: (payload) => {
     emitE2EIpcCall('listOpenWithApplications', {
       filePath: String(payload.filePath || '').trim()

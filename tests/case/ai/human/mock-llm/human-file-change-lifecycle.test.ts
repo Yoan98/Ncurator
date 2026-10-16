@@ -68,9 +68,11 @@ describe('owner run file review lifecycle', () => {
         const review = JSON.parse(
           await fs.readFile(records[0].previewPath!, 'utf8')
         ) as TextFileDiffArtifact
-        expect(review.lines.some((line) => line.type === 'remove' && line.text === 'A')).toBe(true)
-        expect(review.lines.some((line) => line.type === 'add' && line.text === 'B2')).toBe(true)
-        expect(review.lines.some((line) => line.text === 'B')).toBe(false)
+        expect(review).toEqual({
+          version: 4,
+          before: 'A\nprotected\n',
+          after: 'B2\nprotected\n'
+        })
         await expect(fs.access(pending!.workingPath!)).rejects.toThrow()
 
         const failedSource = path.join(runtime.workspaceRoot, 'failed.txt')
@@ -94,9 +96,7 @@ describe('owner run file review lifecycle', () => {
         const failedReview = JSON.parse(
           await fs.readFile(failedRecord.previewPath!, 'utf8')
         ) as TextFileDiffArtifact
-        expect(failedReview.lines.some((line) => line.type === 'add' && line.text === 'B')).toBe(
-          true
-        )
+        expect(failedReview).toEqual({ version: 4, before: 'A', after: 'B' })
         expect(
           await runtime.docxApplyService.fileChanges.sessions.read(
             failed.payload.partnerId,

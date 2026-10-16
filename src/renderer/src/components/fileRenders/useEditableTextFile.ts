@@ -1,4 +1,4 @@
-import { registerTextSave } from './pendingTextSaves'
+import { registerTextSave, flushReferencedTextFiles } from './pendingTextSaves'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import { sha256Hex } from '../../utils/fileHash'
@@ -15,6 +15,7 @@ type LoadState = {
 export type EditableTextFile = {
   loading: boolean
   loadError: string | null
+  saveError: string | null
   initialText: string | null
   readOnly: boolean
   /** 注册一次内容变更并安排防抖自动保存（纯覆盖）。 */
@@ -54,6 +55,7 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     error: null
   })
   const [readOnly, setReadOnly] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const pausedRef = useRef(false)
   const deletedRef = useRef(false)
 
@@ -85,6 +87,8 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     const save = async (): Promise<void> => {
       while (pendingContentRef.current !== null) {
         const content = pendingContentRef.current
+        if (!(await window.api.fileExists(filePathRef.current)))
+          throw new Error('当前文件已不存在，未重新创建文件')
         const response = await window.api.writeTextFile({
           filePath: filePathRef.current,
           content: applyOriginalFormat(content, eolRef.current, hadBomRef.current)
@@ -100,6 +104,10 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     savingRef.current = promise
     try {
       await promise
+      setSaveError(null)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
+      throw error
     } finally {
       if (savingRef.current === promise) savingRef.current = null
     }
@@ -156,6 +164,7 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
   const load = useCallback(async (): Promise<void> => {
     setState((current) => ({ ...current, loading: true, error: null }))
     try {
+      await flushReferencedTextFiles([filePathRef.current])
       if (!(await window.api.fileExists(filePathRef.current))) {
         discardDeletedFile()
         return
@@ -256,6 +265,7 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
   return {
     loading: state.loading,
     loadError: state.error,
+    saveError,
     initialText: state.text,
     readOnly,
     autoSave,

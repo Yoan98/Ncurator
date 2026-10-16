@@ -1,7 +1,8 @@
+import { useOfficeReviewNavigation } from '../workbench/OfficeReviewContext'
 import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
-import { pptAdapter } from './selection/pptAdapter'
+import { pptAdapter, interactivePptSvg } from './selection/pptAdapter'
 import { POINTER_CLICK_THRESHOLD, type SelectionAdapter } from './selection/types'
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Empty, Spin } from 'antd'
 import { HiHandRaised, HiMinus, HiPlus } from 'react-icons/hi2'
 
@@ -64,6 +65,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
   contentRevision = '',
   emptyText = 'PPT 暂时无法预览'
 }) => {
+  const reviewNavigation = useOfficeReviewNavigation()
   const [selectionContainer, setSelectionContainer] = useState<HTMLDivElement | null>(null)
   const spaceRef = useRef(false)
   const [spacePressed, setSpacePressed] = useState(false)
@@ -89,7 +91,35 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
     visibleSlides.findIndex((slide) => slide.id === activeId)
   )
   const activeSlide = visibleSlides[activeIndex] || visibleSlides[0]
+  const activeReviewRegions = useMemo(
+    () =>
+      new Map(
+        reviewNavigation?.index.regions
+          .filter((region) => region.surface === activeSlide?.id)
+          .map((region) => [region.key, region])
+      ),
+    [reviewNavigation?.index, activeSlide?.id]
+  )
   // Viewport and cursor updates must preserve SVG nodes used by the current pointer gesture.
+  const isReview = reviewNavigation !== null
+  const [reviewMarkup, setReviewMarkup] = useState<{ before?: string; after?: string }>({})
+  useEffect(() => {
+    if (!isReview) return
+    let cancelled = false
+    setReviewMarkup({})
+    const load = async (url?: string) =>
+      url ? interactivePptSvg(await (await fetch(url)).text()) : undefined
+    void Promise.all([load(activeSlide?.primaryUrl), load(activeSlide?.secondaryUrl)])
+      .then(([before, after]) => {
+        if (!cancelled) setReviewMarkup({ before, after })
+      })
+      .catch(() => {
+        if (!cancelled) setReviewMarkup({})
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isReview, activeSlide?.primaryUrl, activeSlide?.secondaryUrl])
   const interactiveMarkup = useMemo(() => ({ __html: activeSlide?.svg || '' }), [activeSlide?.svg])
 
   React.useEffect(() => {
@@ -201,11 +231,17 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
       surface: event.currentTarget
     }
   }
+  const reviewRegionAt = (element: Element | null) => {
+    const key = element?.closest('[data-nc-shape-id]')?.getAttribute('data-nc-shape-id') || 'slide'
+    return activeReviewRegions.get(key) || activeReviewRegions.get('slide')
+  }
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
+    const element = event.target instanceof Element ? event.target : null
     setHoveringElement(
-      !!selectionFilePath &&
-        event.target instanceof Element &&
-        !!event.target.closest('[data-nc-shape-id]')
+      Boolean(
+        (selectionFilePath && element?.closest('[data-nc-shape-id]')) ||
+        (reviewNavigation?.enabled && reviewRegionAt(element))
+      )
     )
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
@@ -226,6 +262,11 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
     if (dragRef.current?.pointerId !== event.pointerId) return
     if (event.type === 'pointercancel' || event.type === 'lostpointercapture')
       panGesture.current = true
+    const click = !panGesture.current && event.button === 0
+    if (click && reviewNavigation?.enabled && activeSlide) {
+      const region = reviewRegionAt(document.elementFromPoint(event.clientX, event.clientY))
+      if (region) reviewNavigation.navigate(region.id)
+    }
     finishPan()
     setHoveringElement(
       !!selectionFilePath &&
@@ -278,7 +319,18 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
             willChange: 'transform'
           }}
         >
-          {selectionFilePath && activeSlide?.svg ? (
+          {reviewNavigation &&
+          (label === '修改前' ? reviewMarkup.before : reviewMarkup.after || reviewMarkup.before) ? (
+            <div
+              className="h-full w-full [&>svg]:h-full [&>svg]:w-full"
+              dangerouslySetInnerHTML={{
+                __html:
+                  (label === '修改前'
+                    ? reviewMarkup.before
+                    : reviewMarkup.after || reviewMarkup.before) || ''
+              }}
+            />
+          ) : selectionFilePath && activeSlide?.svg ? (
             <div
               data-ppt-interactive
               className="h-full w-full [&>svg]:h-full [&>svg]:w-full [&>svg]:select-none"

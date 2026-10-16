@@ -31,8 +31,12 @@ import type {
 import { workbenchSelectors } from '../../testing/selectors'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
-import { TextFileDiffViewer } from './TextFileDiffViewer'
-import PptDiffViewer from './PptDiffViewer'
+const TextFileDiffViewer = React.lazy(() =>
+  import('./TextFileDiffViewer').then((m) => ({ default: m.TextFileDiffViewer }))
+)
+import { OfficeFileReview } from './OfficeReviewNavigation'
+import { openWithExtension } from '../../../../shared/fileReview'
+import { flushReferencedTextFiles } from '../fileRenders/pendingTextSaves'
 import WorkbenchTabBar from './WorkbenchTabBar'
 import WorkspaceFileExplorer, { type WorkspaceFileExplorerMode } from './WorkspaceFileExplorer'
 import WorkspaceFilesEmptyState from './WorkspaceFilesEmptyState'
@@ -60,7 +64,6 @@ type WorkbenchContentPanelProps = {
   isAiRunActive: boolean
   onSuccessMessage: (content: string) => void
   onInfoMessage: (content: string) => void
-  onOpenPath: (filePath: string) => Promise<boolean>
   onRevealPath: (filePath: string) => Promise<void>
   onActivateTab: (tabId: string) => void
   onCloseTab: (tabId: string) => void
@@ -199,7 +202,6 @@ type WorkbenchDocumentPreviewPanelProps = {
   fallbackWorkspaceName?: string | null
   backTarget?: WorkbenchContentPanelState
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
-  onOpenPath: (filePath: string) => Promise<boolean>
   onRevealPath: (filePath: string) => Promise<void>
   onRevert?: () => void
   explorerOpen?: boolean
@@ -230,7 +232,6 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   fallbackWorkspaceName,
   backTarget,
   onBackToPanelState,
-  onOpenPath,
   onRevealPath,
   onRevert,
   explorerOpen = false,
@@ -241,6 +242,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   onInfoMessage
 }) => {
   const [openWithApplications, setOpenWithApplications] = useState<OpenWithApplication[]>([])
+  const [preferredApplicationId, setPreferredApplicationId] = useState<string | undefined>()
   const [openWithLoading, setOpenWithLoading] = useState(false)
   const [openWithError, setOpenWithError] = useState<string | null>(null)
   const isDeletedCreatedFile = mode === 'edit' && status === 'reverted' && operation === 'created'
@@ -281,7 +283,9 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
         setOpenWithError(response.error || '无法获取可用应用')
         return
       }
-      setOpenWithApplications(response.applications.slice(0, 5))
+      setOpenWithApplications(response.applications)
+      setPreferredApplicationId(response.preferredApplicationId)
+      if (response.preferenceReset) message.info('原默认应用已不可用，已恢复跟随系统默认')
     } catch (error) {
       setOpenWithApplications([])
       setOpenWithError(error instanceof Error ? error.message : '无法获取可用应用')
@@ -298,11 +302,38 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, canOpen, isDeletedCreatedFile])
 
-  const openWithApplication = async (application: OpenWithApplication): Promise<void> => {
+  useEffect(() => {
+    const refresh = () => {
+      void loadOpenWithApplications()
+    }
+    const unsubscribe = window.api.onOpenWithPreferenceChanged((extension) => {
+      if (extension === openWithExtension(filePath)) refresh()
+    })
+    window.addEventListener('focus', refresh)
+    return () => {
+      unsubscribe()
+      window.removeEventListener('focus', refresh)
+    }
+    // The native association query is keyed by the active path.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filePath, canOpen, isDeletedCreatedFile])
+  const setPreferred = async (applicationId: string | null): Promise<void> => {
     try {
+      const result = await window.api.setPreferredOpenApplication({ filePath, applicationId })
+      if (!result.success) throw new Error(result.error)
+      setOpenWithApplications(result.applications)
+      setPreferredApplicationId(result.preferredApplicationId)
+    } catch (reason) {
+      message.error(String(reason))
+    }
+  }
+
+  const openWithApplication = async (application?: OpenWithApplication): Promise<void> => {
+    try {
+      await flushReferencedTextFiles([filePath])
       const response = await window.api.openFileWithApplication({
         filePath,
-        applicationId: application.id
+        applicationId: application?.id
       })
       if (!response.success) {
         setOpenWithError(response.error || '打开应用失败')
@@ -332,7 +363,18 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
               data-testid={`${workbenchSelectors.openWithApplicationPrefix}-${application.id}`}
             >
               <span className="min-w-0 flex-1 truncate">{application.name}</span>
-              {application.isDefault ? (
+              <button
+                type="button"
+                className="shrink-0 text-[11px] text-[#787774] hover:text-[#0B6BCB]"
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void setPreferred(application.id)
+                }}
+              >
+                {preferredApplicationId === application.id ? '馆长默认' : '设为默认'}
+              </button>
+              {application.isDefault && !preferredApplicationId ? (
                 <span className="shrink-0 text-[11px] text-[#9B9A97]">默认</span>
               ) : null}
             </span>
@@ -348,6 +390,13 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   const openWithItems: MenuProps['items'] = [
     ...(openWithApplicationItems || []),
     { type: 'divider' },
+    {
+      key: 'follow-system-default',
+      label: '跟随系统默认',
+      onClick: () => {
+        void setPreferred(null)
+      }
+    },
     {
       key: 'reveal-containing-folder',
       label: '打开所在文件夹'
@@ -442,6 +491,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
             overlayClassName="workbench-open-with-menu"
             menu={{
               items: openWithItems,
+              style: { maxHeight: 360, overflowY: 'auto' },
               onClick: ({ key }) => {
                 if (key === 'reveal-containing-folder') {
                   void onRevealPath(revealPath)
@@ -482,13 +532,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 onClick={(event) => {
                   event.stopPropagation()
                   if (!canOpen || isDeletedCreatedFile) return
-                  if (defaultApplication) {
-                    void openWithApplication(defaultApplication)
-                  } else {
-                    void onOpenPath(filePath).then((opened) => {
-                      if (opened) showExternalApplicationHint()
-                    })
-                  }
+                  void openWithApplication()
                 }}
               >
                 <span className="max-w-[104px] truncate text-[12px]">{openWithLabel}</span>
@@ -615,7 +659,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   partnerFileChangeRecords,
   onRevertApply,
   onBackToPanelState,
-  onOpenPath,
   onRevealPath,
   onActivateTab,
   onCloseTab,
@@ -652,6 +695,24 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       ...current,
       [activeApplyRecord.id]: { mode, status: activeApplyRecord.status }
     }))
+  }
+  const [textReviewCounts, setTextReviewCounts] = useState<{
+    id: string
+    insertCount: number
+    deleteCount: number
+  } | null>(null)
+  const activeReviewId = activeApplyRecord?.id
+  const updateTextReviewCounts = React.useCallback(
+    (counts: { insertCount: number; deleteCount: number }) => {
+      if (activeReviewId) setTextReviewCounts({ id: activeReviewId, ...counts })
+    },
+    [activeReviewId]
+  )
+  const afterSave = (action: () => void): void => {
+    const filePath = state.kind === 'file_preview' ? state.file.path : activeApplyRecord?.path
+    void flushReferencedTextFiles(filePath ? [filePath] : [])
+      .then(action)
+      .catch((reason) => message.error(`保存失败：${String(reason)}`))
   }
   const [previewRevision, setPreviewRevision] = useState(0)
   const [editableKind, setEditableKind] = useState<EditableTextKind>(null)
@@ -896,16 +957,20 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         <div className="flex h-full items-center justify-center text-sm text-[#B3261E]">
           审核产物缺失或格式不支持
         </div>
-      ) : activeApplyRecord?.capability === 'ppt' &&
-        activeApplyRecord.previewPath &&
+      ) : activeApplyRecord &&
+        ['docx', 'ppt', 'excel'].includes(activeApplyRecord.capability) &&
         documentDisplayMode === 'review' ? (
-        <PptDiffViewer record={activeApplyRecord} />
-      ) : activeApplyRecord?.capability === 'text_file' &&
-        activeApplyRecord.previewPath &&
-        documentDisplayMode === 'review' ? (
-        <TextFileDiffViewer previewPath={activeApplyRecord.previewPath} />
+        <OfficeFileReview key={activeApplyRecord.id} record={activeApplyRecord} />
+      ) : activeApplyRecord?.capability === 'text_file' && documentDisplayMode === 'review' ? (
+        <React.Suspense fallback={<Spin />}>
+          <TextFileDiffViewer
+            key={activeApplyRecord.id}
+            record={activeApplyRecord}
+            onCountsChange={updateTextReviewCounts}
+          />
+        </React.Suspense>
       ) : undefined,
-    [activeApplyRecord, documentDisplayMode]
+    [activeApplyRecord, documentDisplayMode, updateTextReviewCounts]
   )
   const applyEmptyText =
     activeApplyRecord?.operation === 'created'
@@ -947,11 +1012,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       <WorkbenchTabBar
         tabs={tabs}
         activeTabId={activeTabId}
-        onActivateTab={onActivateTab}
-        onCloseTab={onCloseTab}
+        onActivateTab={(id) => afterSave(() => onActivateTab(id))}
+        onCloseTab={(id) => afterSave(() => onCloseTab(id))}
         onAddFileTab={onAddFileTab}
         onAddBrowserTab={onAddBrowserTab}
-        onCollapse={onCollapse}
+        onCollapse={() => afterSave(onCollapse)}
       />
       <div className="min-h-0 flex-1 overflow-hidden">
         <div className="relative flex h-full min-h-0">
@@ -995,7 +1060,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                 fallbackWorkspaceName={fallbackWorkspaceName}
                 backTarget={state.backTarget}
                 onBackToPanelState={onBackToPanelState}
-                onOpenPath={onOpenPath}
                 onRevealPath={onRevealPath}
                 onInfoMessage={onInfoMessage}
                 explorerOpen={explorerOpen}
@@ -1011,8 +1075,18 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   mode="edit"
                   status={activeApplyRecord.status}
                   operation={activeApplyRecord.operation}
-                  insertCount={activeApplyRecord.insertCount}
-                  deleteCount={activeApplyRecord.deleteCount}
+                  insertCount={
+                    activeApplyRecord.capability === 'text_file' &&
+                    textReviewCounts?.id === activeApplyRecord.id
+                      ? textReviewCounts.insertCount
+                      : activeApplyRecord.insertCount
+                  }
+                  deleteCount={
+                    activeApplyRecord.capability === 'text_file' &&
+                    textReviewCounts?.id === activeApplyRecord.id
+                      ? textReviewCounts.deleteCount
+                      : activeApplyRecord.deleteCount
+                  }
                   testId={workbenchSelectors.applyPanel}
                   loading={applyLoading}
                   reverting={applyReverting}
@@ -1024,16 +1098,17 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   workspaces={workspaces}
                   fallbackWorkspaceName={fallbackWorkspaceName}
                   onBackToPanelState={onBackToPanelState}
-                  onOpenPath={onOpenPath}
                   onRevealPath={onRevealPath}
                   onInfoMessage={onInfoMessage}
-                  onRevert={onRevertApply}
+                  onRevert={() => afterSave(onRevertApply)}
                   displayMode={documentDisplayMode}
                   onSwitchDisplayMode={
                     canSwitchDocumentDisplayMode(activeApplyRecord)
                       ? () =>
-                          setDocumentDisplayMode(
-                            documentDisplayMode === 'review' ? 'preview' : 'review'
+                          afterSave(() =>
+                            setDocumentDisplayMode(
+                              documentDisplayMode === 'review' ? 'preview' : 'review'
+                            )
                           )
                       : undefined
                   }

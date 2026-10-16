@@ -79,7 +79,7 @@ describe('OpenWithService', () => {
     expect(result.applications[0]?.iconDataUrl).toBe('icon:/Applications/Editor.app')
   })
 
-  it('returns at most five system-recommended handlers', async () => {
+  it('does not drop applications beyond the first five handlers', async () => {
     const filePath = await createFile()
     const service = new OpenWithService({
       runNativeList: vi.fn().mockResolvedValue({
@@ -93,7 +93,7 @@ describe('OpenWithService', () => {
 
     const result = await service.list(filePath)
 
-    expect(result.applications).toHaveLength(5)
+    expect(result.applications).toHaveLength(7)
     expect(result.applications[0]).toMatchObject({ id: 'application-6', isDefault: true })
   })
 
@@ -186,4 +186,59 @@ describe('OpenWithService', () => {
       expect(result.defaultApplicationId).toBeTruthy()
     }
   )
+})
+
+describe('application preferences', () => {
+  it('keeps one-time opens separate from per-extension preferences and recovers missing applications', async () => {
+    const filePath = await createFile(),
+      preferences = new Map<string, string>()
+    let available = true,
+      queryFailed = false
+    const open = vi.fn<
+      (filePath: string, application: { id: string }) => Promise<{ success: boolean }>
+    >(async () => ({ success: true }))
+    const changed = vi.fn()
+    const service = new OpenWithService({
+      preferences: {
+        get: (key) => preferences.get(key),
+        set: (key, id) => {
+          if (id === null) preferences.delete(key)
+          else preferences.set(key, id)
+        }
+      },
+      onPreferenceChanged: changed,
+      runNativeList: async () =>
+        queryFailed
+          ? { error: 'query failed' }
+          : {
+              applications: [
+                { id: 'system', name: 'System', isDefault: true },
+                ...(available ? [{ id: 'wps', name: 'WPS', isDefault: false }] : [])
+              ]
+            },
+      runNativeOpen: open
+    })
+    expect((await service.setPreferred(filePath, 'wps')).defaultApplicationId).toBe('wps')
+    expect(open).not.toHaveBeenCalled()
+    expect((await service.list(filePath)).preferredApplicationId).toBe('wps')
+    await service.open(filePath, 'system')
+    expect(preferences.get('.md')).toBe('wps')
+    await service.open(filePath)
+    expect(open.mock.calls.at(-1)?.[1]).toMatchObject({ id: 'wps' })
+    queryFailed = true
+    expect((await service.list(filePath)).success).toBe(false)
+    expect(preferences.get('.md')).toBe('wps')
+    queryFailed = false
+    available = false
+    expect(await service.list(filePath)).toMatchObject({
+      success: true,
+      defaultApplicationId: 'system',
+      preferenceReset: true
+    })
+    expect(preferences.has('.md')).toBe(false)
+    expect(changed).toHaveBeenCalledWith('.md')
+    available = true
+    await service.setPreferred(filePath, 'wps')
+    expect((await service.setPreferred(filePath, null)).defaultApplicationId).toBe('system')
+  })
 })

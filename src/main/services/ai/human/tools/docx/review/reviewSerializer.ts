@@ -1,3 +1,8 @@
+import {
+  prepareDocxLocations,
+  collectDocxRegions,
+  writeReviewIndex
+} from '../../../../fileChanges/reviewNavigationIndex'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { XMLSerializer } from '@xmldom/xmldom'
@@ -16,8 +21,10 @@ export const materializeDocxReview = async (input: {
 }): Promise<DocxNetReview> => {
   const source = await loadDocxBundle(input.sourceBuffer),
     working = await loadDocxBundle(input.workingBuffer)
+  const locations = prepareDocxLocations(working)
   const result = await buildDocxNetReview(source, working, input.created),
     serializer = new XMLSerializer()
+  const regions = collectDocxRegions(working, locations)
   const parts = new Map(working.stories.map((part) => [part.partName, part.dom]))
   for (const [name, document] of parts) {
     // Word requires drawing ids to be unique even when an old/new object is shown twice.
@@ -57,5 +64,6 @@ export const materializeDocxReview = async (input: {
     )
   await fs.mkdir(path.dirname(input.outPath), { recursive: true })
   await fs.writeFile(input.outPath, buffer)
+  await writeReviewIndex(path.dirname(input.outPath), input.workingBuffer, regions)
   return result
 }

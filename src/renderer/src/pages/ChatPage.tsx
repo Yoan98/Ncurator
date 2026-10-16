@@ -1,5 +1,8 @@
 import FileIcon from '../components/FileIcon'
-import { flushReferencedTextFiles } from '../components/fileRenders/pendingTextSaves'
+import {
+  flushAllTextFiles,
+  flushReferencedTextFiles
+} from '../components/fileRenders/pendingTextSaves'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Input, Modal, Tooltip } from 'antd'
 import {
@@ -1188,6 +1191,7 @@ const ChatPage: React.FC = () => {
   )
 
   const flushCurrentUiState = useCallback(async (): Promise<void> => {
+    await flushAllTextFiles()
     await persistCurrentUiStateNow({ requireReady: true })
   }, [persistCurrentUiStateNow])
 
@@ -3252,6 +3256,7 @@ const ChatPage: React.FC = () => {
 
   const openFile = useCallback(
     async (file: WorkbenchFileRef, backTarget?: WorkbenchContentPanelState): Promise<void> => {
+      await flushAllTextFiles()
       const state: Extract<WorkbenchContentPanelState, { kind: 'file_preview' }> = {
         kind: 'file_preview',
         title: '文档查看',
@@ -3342,29 +3347,35 @@ const ChatPage: React.FC = () => {
     [openMarkdownReference]
   )
 
-  const openFileChange = useCallback((changeId: string): void => {
-    const sequence = ++reviewOpenSequence.current
-    void window.api.aiFileChangeGet({ changeId }).then((response) => {
-      if (sequence !== reviewOpenSequence.current) return
-      if (response.record && response.record.partnerId !== currentPartnerIdRef.current) return
-      setReviewOpenRequest({ changeId })
-      if (response.record) {
-        void loadFileChangesForPartnerRef.current(
-          response.record.partnerId,
-          response.record.runId,
-          {
-            preferredApplyId: changeId,
-            forceOpenWorkspace: true
+  const openFileChange = useCallback(
+    (changeId: string): void => {
+      const sequence = ++reviewOpenSequence.current
+      void flushAllTextFiles()
+        .then(() => window.api.aiFileChangeGet({ changeId }))
+        .then((response) => {
+          if (sequence !== reviewOpenSequence.current) return
+          if (response.record && response.record.partnerId !== currentPartnerIdRef.current) return
+          setReviewOpenRequest({ changeId })
+          if (response.record) {
+            void loadFileChangesForPartnerRef.current(
+              response.record.partnerId,
+              response.record.runId,
+              {
+                preferredApplyId: changeId,
+                forceOpenWorkspace: true
+              }
+            )
+            return
           }
-        )
-        return
-      }
-      void loadApplyRecordRef.current({
-        applyId: changeId,
-        openWorkspace: true
-      })
-    })
-  }, [])
+          void loadApplyRecordRef.current({
+            applyId: changeId,
+            openWorkspace: true
+          })
+        })
+        .catch((reason) => message.error(`保存或读取审核失败：${String(reason)}`))
+    },
+    [message]
+  )
 
   const activateResourceTab = useCallback(
     (tabId: string): void => {
@@ -4288,6 +4299,7 @@ const ChatPage: React.FC = () => {
     if (!applyRevertConfirm || !currentPartnerId || applyReverting) return
     setApplyReverting(true)
     try {
+      await flushAllTextFiles()
       const response = await window.api.aiFileChangeRevert({
         changeId: applyRevertConfirm.changeId,
         force: applyRevertConfirm.stage === 'force'
@@ -5403,7 +5415,6 @@ const ChatPage: React.FC = () => {
                         partnerFileChangeRecords={partnerFileChangeRecords}
                         onRevertApply={() => void handleApplyRevert()}
                         onBackToPanelState={showContentPanel}
-                        onOpenPath={openPathOrNotify}
                         onRevealPath={revealPathOrNotify}
                         onActivateTab={activateResourceTab}
                         onCloseTab={closeResourceTab}

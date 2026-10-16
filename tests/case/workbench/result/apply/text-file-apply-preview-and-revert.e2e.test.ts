@@ -46,6 +46,10 @@ describe('workbench result e2e', () => {
             caseId: CASE_ID
           })
           const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
+          await fs.appendFile(
+            targetPath,
+            '\n' + Array.from({ length: 40 }, (_, i) => `Unchanged context ${i}`).join('\n') + '\n'
+          )
           const beforeBytes = await fs.readFile(targetPath)
 
           await createWorkbenchNewSession(page)
@@ -251,8 +255,8 @@ describe('workbench result e2e', () => {
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
           const restoredToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const restoredModeTag = (await documentModeTag.textContent())?.trim()
-          const removedLines = diffViewer.locator('[data-diff-line-type="remove"]')
-          const addedLines = diffViewer.locator('[data-diff-line-type="add"]')
+          const removedLines = diffViewer.locator('.editor.original .view-line')
+          const addedLines = diffViewer.locator('.editor.modified .view-line')
           await removedLines.first().waitFor({ state: 'visible' })
           await addedLines.first().waitFor({ state: 'visible' })
           const diffText = ((await diffViewer.textContent()) || '').trim()
@@ -260,15 +264,31 @@ describe('workbench result e2e', () => {
             page,
             workbenchSelectors.documentModeTag
           ).count()
-          const hasOldLineNumber = await removedLines
-            .first()
-            .getAttribute('data-old-line')
-            .then((value) => Boolean(value))
-          const hasNewLineNumber = await addedLines
-            .first()
-            .getAttribute('data-new-line')
-            .then((value) => Boolean(value))
-          const addedRowColumnCount = await addedLines.first().locator(':scope > span').count()
+          const hasOldLineNumber =
+            (await diffViewer.locator('.editor.original .line-numbers').count()) > 0
+          const hasNewLineNumber =
+            (await diffViewer.locator('.editor.modified .line-numbers').count()) > 0
+          const addedRowColumnCount = await diffViewer.locator('.monaco-diff-editor').count()
+          await addedLines.last().click()
+          await page.keyboard.press(process.platform === 'darwin' ? 'Meta+End' : 'Control+End')
+          await page.keyboard.insertText('\nREVIEW_MANUAL_C')
+          let reviewEditSaved = false
+          for (let i = 0; i < 100; i++) {
+            if ((await fs.readFile(targetPath, 'utf8')).includes('REVIEW_MANUAL_C')) {
+              reviewEditSaved = true
+              break
+            }
+            await page.waitForTimeout(100)
+          }
+          await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
+          let reviewUndoSaved = false
+          for (let i = 0; i < 100; i++) {
+            if (!(await fs.readFile(targetPath, 'utf8')).includes('REVIEW_MANUAL_C')) {
+              reviewUndoSaved = true
+              break
+            }
+            await page.waitForTimeout(100)
+          }
           const resourceTabCount = await getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.resourceTabPrefix
@@ -278,19 +298,15 @@ describe('workbench result e2e', () => {
             workbenchSelectors.assistantTurnArtifactPrefix
           ).count()
           const omittedLineLabels = await diffViewer
-            .locator('[data-diff-omitted-count]')
+            .locator('.diff-hidden-lines-widget')
             .allTextContents()
           const omittedCountBeforeExpand = omittedLineLabels.length
-          if (omittedCountBeforeExpand > 0) {
-            await diffViewer.locator('[data-diff-omitted-count]').first().click()
-            await page.waitForFunction(
-              (beforeCount) =>
-                document.querySelectorAll('[data-diff-omitted-count]').length < beforeCount,
-              omittedCountBeforeExpand
-            )
-          }
+          await diffViewer.getByRole('button', { name: '展开未修改内容', exact: true }).click()
+          await page.waitForFunction(
+            () => document.querySelectorAll('.diff-hidden-lines-widget').length === 0
+          )
           const omittedCountAfterExpand = await diffViewer
-            .locator('[data-diff-omitted-count]')
+            .locator('.diff-hidden-lines-widget')
             .count()
           const workspaceExplorerToggle = getWorkbenchLocator(
             page,
@@ -477,6 +493,8 @@ describe('workbench result e2e', () => {
             omittedLineLabels,
             applyEntryCountDuringRun,
             modificationCountsVisibleBeforeClick,
+            reviewEditSaved,
+            reviewUndoSaved,
             modificationCountsVisibleAfterSessionSwitch,
             assistantApplyTextBeforeClick,
             aiWritePreviewRefreshedSilently,
@@ -509,7 +527,9 @@ describe('workbench result e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.previewContainsExternalC &&
-              !result.diffText.includes('EXTERNAL_TEXT_C') &&
+              result.diffText.includes('EXTERNAL_TEXT_C') &&
+              result.reviewEditSaved &&
+              result.reviewUndoSaved &&
               result.normalPreviewModeTagCount === 0 &&
               result.associatedPreviewMode === '预览' &&
               result.documentViewPreserved &&
@@ -529,14 +549,14 @@ describe('workbench result e2e', () => {
               result.diffText.includes('DiffPreview') &&
               result.hasOldLineNumber &&
               result.hasNewLineNumber &&
-              result.addedRowColumnCount === 3 &&
+              result.addedRowColumnCount === 1 &&
               result.resourceTabCount === 1 &&
               result.standaloneArtifactCount === 0 &&
               result.applyEntryCountDuringRun === 0 &&
               result.modificationCountsVisibleBeforeClick &&
               result.modificationCountsVisibleAfterSessionSwitch &&
               result.externalApplicationHintVisible &&
-              result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
+              result.omittedLineLabels.length > 0 &&
               result.omittedCountAfterExpand < result.omittedCountBeforeExpand &&
               result.workspaceExplorerToggleLabelBeforeOpen === '展开文件列表' &&
               result.workspaceExplorerToggleIcon === 'folder' &&

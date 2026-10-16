@@ -1,3 +1,4 @@
+import { useOfficeReviewNavigation } from '../workbench/OfficeReviewContext'
 import { useCallback, useEffect, useState } from 'react'
 import type { DocRendererProps } from 'react-doc-viewer'
 import '@js-preview/docx/lib/index.css'
@@ -89,6 +90,7 @@ export const DocxPreview = ({
 }: {
   document?: LoadedFileRenderDocument
 }) => {
+  const reviewNavigation = useOfficeReviewNavigation()
   const [container, setContainer] = useState<HTMLDivElement | null>(null)
   const [renderedKey, setRenderedKey] = useState<string | null>(null)
   const [renderRevision, setRenderRevision] = useState(0)
@@ -209,6 +211,36 @@ export const DocxPreview = ({
     renderKey,
     renderedKey
   ])
+
+  useEffect(() => {
+    if (!container || !reviewNavigation?.enabled) return
+    let down: { x: number; y: number; id: number } | null = null
+    const start = (event: PointerEvent) => {
+      down = event.button === 0 ? { x: event.clientX, y: event.clientY, id: event.pointerId } : null
+    }
+    const end = (event: PointerEvent) => {
+      const origin = down
+      down = null
+      if (
+        !origin ||
+        origin.id !== event.pointerId ||
+        Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 5 ||
+        !window.getSelection()?.isCollapsed
+      )
+        return
+      const element =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>('[data-review-region]')
+          : null
+      if (element?.dataset.reviewRegion) reviewNavigation.navigate(element.dataset.reviewRegion)
+    }
+    container.addEventListener('pointerdown', start)
+    container.addEventListener('pointerup', end)
+    return () => {
+      container.removeEventListener('pointerdown', start)
+      container.removeEventListener('pointerup', end)
+    }
+  }, [container, reviewNavigation])
 
   if (!currentDocument) return null
   const ready = renderRevision > 0 && renderedKey === renderKey && !renderError

@@ -1098,10 +1098,12 @@ export const setupWorkbenchWithTempWorkspace = async (
     configureModel?: boolean
     createSession?: boolean
     createPartner?: boolean
+    prepareWorkspace?: (rootPath: string) => Promise<void>
   }
 ): Promise<WorkbenchSetupResult> => {
   const env = loadWorkbenchLiveModelEnv()
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId, input.workspaceContents)
+  await input.prepareWorkspace?.(workspace.rootPath)
   // Default name doubles as partner title; keep it within the partner Input maxLength.
   const workspaceName = clampWorkbenchPartnerName(
     input.workspaceName || `Workbench ${input.caseId}`

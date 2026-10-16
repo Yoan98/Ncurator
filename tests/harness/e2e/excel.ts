@@ -5,7 +5,8 @@ import {
   DEFAULT_WORKSHEET_COLUMN_TITLE_HEIGHT,
   DEFAULT_WORKSHEET_COLUMN_WIDTH,
   DEFAULT_WORKSHEET_ROW_HEIGHT,
-  DEFAULT_WORKSHEET_ROW_TITLE_WIDTH
+  DEFAULT_WORKSHEET_ROW_TITLE_WIDTH,
+  type IWorksheetData
 } from '@univerjs/core'
 
 export const getExcelGridCanvas = (page: Page) =>
@@ -13,12 +14,30 @@ export const getExcelGridCanvas = (page: Page) =>
     'canvas[id^="univer-sheet-main-canvas_"]'
   )
 
-/** Copy a visible cell from fixtures with default row/column sizes through the real grid. */
-export const copyExcelCell = async (runtime: E2ETestRuntime, address: string): Promise<string> => {
+export const clickExcelCell = async (
+  page: Page,
+  address: string,
+  layout?: Pick<IWorksheetData, 'columnData' | 'rowData'>
+): Promise<void> => {
   const match = address.match(/^([A-Z]+)(\d+)$/)
   if (!match) throw new Error(`Invalid Excel address: ${address}`)
   const column = [...match[1]].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0)
   const row = Number(match[2])
+  let x = DEFAULT_WORKSHEET_ROW_TITLE_WIDTH,
+    y = DEFAULT_WORKSHEET_COLUMN_TITLE_HEIGHT
+  for (let col = 0; col < column; col++) {
+    const width = layout?.columnData?.[col]?.w ?? DEFAULT_WORKSHEET_COLUMN_WIDTH
+    x += col === column - 1 ? width / 2 : width
+  }
+  for (let index = 0; index < row; index++) {
+    const height = layout?.rowData?.[index]?.h ?? DEFAULT_WORKSHEET_ROW_HEIGHT
+    y += index === row - 1 ? height / 2 : height
+  }
+  await getExcelGridCanvas(page).click({ position: { x, y } })
+}
+
+/** Copy a visible cell from fixtures with default row/column sizes through the real grid. */
+export const copyExcelCell = async (runtime: E2ETestRuntime, address: string): Promise<string> => {
   const { page } = runtime
   await page.bringToFront()
   for (let attempt = 0; attempt < 20; attempt++) {
@@ -26,12 +45,7 @@ export const copyExcelCell = async (runtime: E2ETestRuntime, address: string): P
     if (await page.getByTestId('excel-selection-popup').count())
       await getWorkbenchLocator(page, workbenchSelectors.input).click({ position: { x: 3, y: 3 } })
     // A mounted canvas can precede its first grid paint; retry the actual UI action too.
-    await getExcelGridCanvas(page).click({
-      position: {
-        x: DEFAULT_WORKSHEET_ROW_TITLE_WIDTH + (column - 0.5) * DEFAULT_WORKSHEET_COLUMN_WIDTH,
-        y: DEFAULT_WORKSHEET_COLUMN_TITLE_HEIGHT + (row - 0.5) * DEFAULT_WORKSHEET_ROW_HEIGHT
-      }
-    })
+    await clickExcelCell(page, address)
     await runtime.electronApp.evaluate(({ clipboard }) => clipboard.clear())
     await page.keyboard.press('ControlOrMeta+c')
     await page.waitForTimeout(100)

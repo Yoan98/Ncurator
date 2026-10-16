@@ -1,8 +1,9 @@
+import { useOfficeReviewNavigation } from '../workbench/OfficeReviewContext'
 import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
 import { excelAdapter } from './selection/excelAdapter'
 import type { SelectionAdapter } from './selection/types'
 import type { LoadedFileRenderDocument } from './types'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DocRendererProps } from 'react-doc-viewer'
 import ExcelJS from 'exceljs'
 import { LocaleType, type IWorkbookData } from '@univerjs/core'
@@ -111,6 +112,18 @@ const waitForRenderedCanvas = async (
 
 const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const document = mainState.currentDocument as XlsxDocument | undefined
+  const navigation = useOfficeReviewNavigation()
+  const navigationRef = useRef(navigation)
+  navigationRef.current = navigation
+  const regionIds = useMemo(
+    () =>
+      new Map(
+        navigation?.index.regions.map((region) => [`${region.surface}\0${region.key}`, region.id])
+      ),
+    [navigation?.index]
+  )
+  const regionIdsRef = useRef(regionIds)
+  regionIdsRef.current = regionIds
   const containerRef = useRef<HTMLDivElement>(null)
   const selectionContainerRef = useRef<HTMLDivElement>(null)
   const [selectionAdapter, setSelectionAdapter] = useState<SelectionAdapter | null>(null)
@@ -124,6 +137,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
     const container = containerRef.current
     let cancelled = false
     let dispose: (() => void) | undefined
+    let detachNavigation: (() => void) | undefined
     setReady(false)
     setSelectionAdapter(null)
     setError(null)
@@ -181,6 +195,62 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
           const univerAPI = FUniver.newAPI(univer)
           // Keep Univer's navigation and copy behavior while blocking workbook edits.
           const workbook = univerAPI.createWorkbook(preview.data)
+          let down: { x: number; y: number } | null = null
+          const startNavigation = (event: PointerEvent) => {
+            down =
+              event.button === 0 && event.target instanceof HTMLCanvasElement
+                ? { x: event.clientX, y: event.clientY }
+                : null
+          }
+          const endNavigation = (event: PointerEvent) => {
+            const origin = down
+            down = null
+            if (
+              !origin ||
+              !navigationRef.current?.enabled ||
+              Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 5
+            )
+              return
+            const sheet = workbook.getActiveSheet(),
+              ranges = sheet?.getSelection()?.getActiveRangeList() || []
+            if (!sheet || ranges.length !== 1) return
+            const range = ranges[0].getRange()
+            let column = range.startColumn + 1,
+              letters = ''
+            while (column > 0) {
+              letters = String.fromCharCode(65 + ((column - 1) % 26)) + letters
+              column = Math.floor((column - 1) / 26)
+            }
+            const key = `${letters}${range.startRow + 1}`
+            const regionId = regionIdsRef.current.get(`${sheet.getSheetName()}\0${key}`)
+            if (regionId) navigationRef.current.navigate(regionId)
+          }
+          const hover = univerAPI.addEvent(
+            univerAPI.Event.CellPointerMove,
+            ({ worksheet, row, column }) => {
+              let value = column + 1,
+                letters = ''
+              while (value > 0) {
+                letters = String.fromCharCode(65 + ((value - 1) % 26)) + letters
+                value = Math.floor((value - 1) / 26)
+              }
+              const region =
+                navigationRef.current?.enabled &&
+                regionIdsRef.current.has(`${worksheet.getSheetName()}\0${letters}${row + 1}`)
+              const canvas = container.querySelector<HTMLCanvasElement>(
+                'canvas[id^="univer-sheet-main-canvas_"]'
+              )
+              if (canvas) canvas.style.cursor = region ? 'pointer' : ''
+            }
+          )
+          container.addEventListener('pointerdown', startNavigation)
+          container.addEventListener('pointerup', endNavigation)
+          detachNavigation = () => {
+            hover.dispose()
+            container.removeEventListener('pointerdown', startNavigation)
+            container.removeEventListener('pointerup', endNavigation)
+          }
+
           if (cancelled) {
             dispose()
             return
@@ -208,6 +278,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
       .catch((reason) => {
         if (!cancelled) {
           console.error('Excel 预览失败', reason)
+          detachNavigation?.()
           dispose?.()
           dispose = undefined
           setReady(false)
@@ -218,6 +289,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
       })
     return () => {
       cancelled = true
+      detachNavigation?.()
       dispose?.()
     }
   }, [document])

@@ -428,6 +428,7 @@ if (!singleInstanceLock) {
     })
     const wpsSyncService = new WpsSyncService()
     setOfficeFileWriteListener({
+      navigate: (filePath, target, open) => wpsSyncService.navigate(filePath, target, open),
       prepareClose: (filePath) => wpsSyncService.prepareClose(filePath),
       notifyWritten: (filePath) => wpsSyncService.notifyWritten(filePath)
     })

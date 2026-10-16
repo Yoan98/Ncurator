@@ -1,3 +1,4 @@
+import { officeReviewIndexSchema } from '../../../../../src/shared/fileReview'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
@@ -149,12 +150,58 @@ describe('owner file review', () => {
         const textReview = JSON.parse(
           await fs.readFile(textRecord.previewPath!, 'utf8')
         ) as TextFileDiffArtifact
-        expect(textReview.lines.filter((line) => line.type === 'context').length).toBeGreaterThan(
-          20
-        )
-        expect(textReview.lines.some((line) => line.type === 'add' && line.text === 'Text B')).toBe(
-          true
-        )
+        expect(textReview.version).toBe(4)
+        expect(textReview.before).toContain('Text A')
+        expect(textReview.after).toContain('Text B')
+        expect(textReview.before.split('\n').length).toBeGreaterThan(20)
+        expect(textReview.after).not.toContain('external C')
+        for (const record of records.filter((r) => r.capability !== 'text_file')) {
+          const index = officeReviewIndexSchema.parse(
+            JSON.parse(
+              await fs.readFile(
+                path.join(path.dirname(record.previewPath!), 'navigation.json'),
+                'utf8'
+              )
+            )
+          )
+          expect(index.afterChecksum).toBe(record.afterChecksum)
+          expect(index.regions.length).toBeGreaterThan(0)
+          expect(
+            index.regions.some(
+              (r) =>
+                r.target?.kind ===
+                (record.capability === 'ppt'
+                  ? 'ppt'
+                  : record.capability === 'excel'
+                    ? 'excel'
+                    : 'docx')
+            )
+          ).toBe(true)
+          if (record.capability === 'docx') {
+            expect(wordXml).toContain('ncr:region=')
+            expect(
+              index.regions.some((r) => r.target?.kind === 'docx' && r.target.text === 'Word B')
+            ).toBe(true)
+          }
+          if (record.capability === 'excel')
+            expect(index.regions[0].target).toMatchObject({
+              sheet: 'Data',
+              address: 'A1',
+              value: 'Excel B'
+            })
+          if (record.capability === 'ppt') {
+            const svg = await fs.readFile(manifest.slides[0].after!.svg, 'utf8')
+            const shapeRegions = index.regions.filter(
+              (region) =>
+                region.target?.kind === 'ppt' &&
+                region.target.shapeId &&
+                region.key === String(region.target.shapeId)
+            )
+            expect(shapeRegions.length).toBeGreaterThan(0)
+            for (const region of shapeRegions)
+              expect(svg).toContain(`data-nc-shape-id="${region.key}"`)
+          }
+        }
         const repeated = await word.ctx.finalizeRunFileChanges()
         expect(repeated.map((record) => record.previewPath)).toEqual(
           records.map((record) => record.previewPath)

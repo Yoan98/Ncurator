@@ -10,6 +10,7 @@ import type {
   TextFileDiffArtifact
 } from '../../../../src/shared/types'
 import { AiFileChangeService } from '../../../../src/main/services/ai/fileChanges/AiFileChangeService'
+import { setOfficeFileWriteListener } from '../../../../src/main/services/wps/officeFileWriteNotify'
 
 class MemoryStore {
   public records = new Map<string, AiFileChangeRecord>()
@@ -41,6 +42,7 @@ describe('confirmed file sessions', () => {
     service = new AiFileChangeService(store)
   })
   afterEach(async () => {
+    setOfficeFileWriteListener(undefined)
     vi.restoreAllMocks()
     vi.unstubAllEnvs()
     await fs.rm(root, { recursive: true, force: true })
@@ -76,11 +78,7 @@ describe('confirmed file sessions', () => {
     const review = JSON.parse(
       await fs.readFile(record.previewPath!, 'utf8')
     ) as TextFileDiffArtifact
-    expect(review.version).toBe(3)
-    expect(review.lines.some((line) => line.text === 'B2' && line.type === 'add')).toBe(true)
-    expect(review.lines.some((line) => line.text === 'unchanged' && line.type === 'context')).toBe(
-      true
-    )
+    expect(review).toEqual({ version: 4, before: 'A\nunchanged\n', after: 'B2\nunchanged\n' })
     expect(record.afterSnapshotPath).toBeUndefined()
     expect(await service.sessions.read('partner', 'owner', source)).toBeUndefined()
     expect((await service.sessions.finalize('partner', 'owner'))[0].previewPath).toBe(
@@ -219,11 +217,11 @@ describe('confirmed file sessions', () => {
     expect(reviewed.status).toBe('reverted')
     expect(reviewed.revertedAt).toBeTruthy()
     expect(await fs.readFile(source, 'utf8')).toBe('A')
-    expect(
-      JSON.parse(await fs.readFile(reviewed.previewPath!, 'utf8')).lines.some(
-        (line: { text: string; type: string }) => line.type === 'add' && line.text === 'B'
-      )
-    ).toBe(true)
+    expect(JSON.parse(await fs.readFile(reviewed.previewPath!, 'utf8'))).toEqual({
+      version: 4,
+      before: 'A',
+      after: 'B'
+    })
   })
 
   it('keeps a completed review on cleanup failure and finishes cleanup without regenerating', async () => {
@@ -261,4 +259,40 @@ describe('confirmed file sessions', () => {
     expect((await service.revertRecord({ changeId: b.record.id })).success).toBe(true)
     expect(await fs.readFile(source)).toEqual(A)
   })
+
+  it.each([false, true])(
+    'notifies each reverted Office path once (renamed=%s)',
+    async (renamed) => {
+      const original = path.join(root, 'before.xlsx'),
+        current = renamed ? path.join(root, 'after.xlsx') : original,
+        snapshot = path.join(root, 'snapshot.bin'),
+        notifyWritten = vi.fn<(filePath: string) => void>()
+      await fs.writeFile(current, 'B')
+      await fs.writeFile(snapshot, 'A')
+      const record: AiFileChangeRecord = {
+        id: 'office-revert',
+        partnerId: 'partner',
+        runId: 'run',
+        status: 'applied',
+        capability: 'excel',
+        path: original,
+        fileName: path.basename(original),
+        operation: renamed ? 'renamed' : 'updated',
+        source: 'excel_tool',
+        beforePath: original,
+        afterPath: current,
+        beforeSnapshotPath: snapshot,
+        afterChecksum: hash(Buffer.from('B')),
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }
+      await service.saveRecord(record)
+      setOfficeFileWriteListener({ notifyWritten })
+      expect((await service.revertRecord({ changeId: record.id })).success).toBe(true)
+      expect(await fs.readFile(original, 'utf8')).toBe('A')
+      expect(notifyWritten.mock.calls.map(([filePath]) => filePath)).toEqual(
+        renamed ? [current, original] : [original]
+      )
+    }
+  )
 })

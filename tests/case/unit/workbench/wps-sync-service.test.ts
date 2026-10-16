@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { OfficeReviewSelection } from '../../../../src/shared/fileReview'
 
 vi.mock('electron', () => ({
   app: {
@@ -27,7 +28,12 @@ import { spawn } from 'node:child_process'
 import { shell } from 'electron'
 
 import { authAddinNeedsRewrite, mergeAuthAddin } from '../../../../src/main/services/wps/authAddin'
-import { WPS_ADDON_DIR_NAME, WPS_ADDON_NAME, WPS_ADDON_PORT_FILE, WPS_PREFERRED_SYNC_PORT } from '../../../../src/main/services/wps/constants'
+import {
+  WPS_ADDON_DIR_NAME,
+  WPS_ADDON_NAME,
+  WPS_ADDON_PORT_FILE,
+  WPS_PREFERRED_SYNC_PORT
+} from '../../../../src/main/services/wps/constants'
 import {
   notifyOfficeFileWritten,
   setOfficeFileWriteListener,
@@ -43,7 +49,10 @@ import {
   resolveWpsJsAddonsDir,
   WpsAddonInstaller
 } from '../../../../src/main/services/wps/WpsAddonInstaller'
-import { resolveWpsComponentExe } from '../../../../src/main/services/wps/wpsOfficeLaunch'
+import {
+  resolveWpsComponentExe,
+  resolveWpsOfficeAppPath
+} from '../../../../src/main/services/wps/wpsOfficeLaunch'
 import {
   WpsOpenDocumentRegistry,
   WpsSyncService
@@ -72,10 +81,20 @@ const waitFor = async (
 const expectShellReopen = async (filePath: string, component: string): Promise<void> => {
   const resolved = path.resolve(filePath)
   const exe = resolveWpsComponentExe(component, resolved)
+  const macApp = process.platform === 'darwin' ? resolveWpsOfficeAppPath() : undefined
   await waitFor(() => {
+    if (macApp) return vi.mocked(spawn).mock.calls.length > 0
     if (process.platform === 'win32' && exe) return vi.mocked(spawn).mock.calls.length > 0
     return vi.mocked(shell.openPath).mock.calls.length > 0
   })
+  if (macApp) {
+    expect(spawn).toHaveBeenCalledWith(
+      '/usr/bin/open',
+      ['-g', '-a', macApp, '--', resolved],
+      expect.objectContaining({ detached: true, stdio: 'ignore' })
+    )
+    return
+  }
   if (process.platform === 'win32' && exe) {
     expect(vi.mocked(spawn)).toHaveBeenCalledWith(
       exe,
@@ -94,10 +113,10 @@ const readSseEvents = (
   clientId = `client-${component}-${Math.random().toString(36).slice(2, 8)}`
 ): {
   clientId: string
-  events: Array<{ type?: string; path?: string }>
+  events: Array<{ type?: string; path?: string; requestId?: string }>
   close: () => void
 } => {
-  const events: Array<{ type?: string; path?: string }> = []
+  const events: Array<{ type?: string; path?: string; requestId?: string }> = []
   const controller = new AbortController()
   void fetch(`http://127.0.0.1:${port}/events?component=${component}&clientId=${clientId}`, {
     signal: controller.signal
@@ -317,8 +336,16 @@ describe('WpsAddonInstaller', () => {
   it('registers the loopback addon and removes leftover offline directories', async () => {
     const jsAddonsDir = await createTempDir('ncurator-wps-jsaddons-')
     await fs.mkdir(path.join(jsAddonsDir, WPS_ADDON_DIR_NAME), { recursive: true })
-    await fs.writeFile(path.join(jsAddonsDir, WPS_ADDON_DIR_NAME, 'ribbon.xml'), '<offline/>', 'utf8')
-    await fs.writeFile(path.join(jsAddonsDir, 'jsaddinblockhost.ini'), '[Mainhost]\nblocked=1\n', 'utf8')
+    await fs.writeFile(
+      path.join(jsAddonsDir, WPS_ADDON_DIR_NAME, 'ribbon.xml'),
+      '<offline/>',
+      'utf8'
+    )
+    await fs.writeFile(
+      path.join(jsAddonsDir, 'jsaddinblockhost.ini'),
+      '[Mainhost]\nblocked=1\n',
+      'utf8'
+    )
     await fs.writeFile(
       path.join(jsAddonsDir, 'authaddin.json'),
       JSON.stringify({
@@ -352,10 +379,14 @@ describe('WpsAddonInstaller', () => {
     expect(publish).toContain('<jspluginonline ')
     expect(publish).toContain('name="ncurator-sync"')
     expect(publish).toContain('enable="enable_dev"')
-    expect(JSON.parse(await fs.readFile(path.join(jsAddonsDir, WPS_ADDON_PORT_FILE), 'utf8'))).toEqual({
+    expect(
+      JSON.parse(await fs.readFile(path.join(jsAddonsDir, WPS_ADDON_PORT_FILE), 'utf8'))
+    ).toEqual({
       port: WPS_PREFERRED_SYNC_PORT
     })
-    expect(JSON.parse(await fs.readFile(path.join(jsAddonsDir, 'authaddin.json'), 'utf8'))).toMatchObject({
+    expect(
+      JSON.parse(await fs.readFile(path.join(jsAddonsDir, 'authaddin.json'), 'utf8'))
+    ).toMatchObject({
       wps: {
         abc: {
           enable: true,
@@ -368,14 +399,22 @@ describe('WpsAddonInstaller', () => {
 
     const authAfterInstall = await fs.readFile(path.join(jsAddonsDir, 'authaddin.json'), 'utf8')
     await installer.writePort(58129)
-    expect(JSON.parse(await fs.readFile(path.join(jsAddonsDir, WPS_ADDON_PORT_FILE), 'utf8'))).toEqual({
+    expect(
+      JSON.parse(await fs.readFile(path.join(jsAddonsDir, WPS_ADDON_PORT_FILE), 'utf8'))
+    ).toEqual({
       port: 58129
     })
     const publishAfterFallback = await fs.readFile(path.join(jsAddonsDir, 'publish.xml'), 'utf8')
-    expect(publishAfterFallback).toContain(`url="http://127.0.0.1:${WPS_PREFERRED_SYNC_PORT}/addon/"`)
+    expect(publishAfterFallback).toContain(
+      `url="http://127.0.0.1:${WPS_PREFERRED_SYNC_PORT}/addon/"`
+    )
     expect(publishAfterFallback).not.toContain('58129')
-    expect(publishXmlHasAddonUrl(publishAfterFallback, toAddonLoopbackUrl(WPS_PREFERRED_SYNC_PORT))).toBe(true)
-    expect(await fs.readFile(path.join(jsAddonsDir, 'authaddin.json'), 'utf8')).toBe(authAfterInstall)
+    expect(
+      publishXmlHasAddonUrl(publishAfterFallback, toAddonLoopbackUrl(WPS_PREFERRED_SYNC_PORT))
+    ).toBe(true)
+    expect(await fs.readFile(path.join(jsAddonsDir, 'authaddin.json'), 'utf8')).toBe(
+      authAfterInstall
+    )
   })
 
   it('writes the loopback port file without installing', async () => {
@@ -387,7 +426,9 @@ describe('WpsAddonInstaller', () => {
       jsAddonsDir
     })
     await installer.writePort(WPS_PREFERRED_SYNC_PORT)
-    expect(JSON.parse(await fs.readFile(path.join(jsAddonsDir, WPS_ADDON_PORT_FILE), 'utf8'))).toEqual({
+    expect(
+      JSON.parse(await fs.readFile(path.join(jsAddonsDir, WPS_ADDON_PORT_FILE), 'utf8'))
+    ).toEqual({
       port: WPS_PREFERRED_SYNC_PORT
     })
     await expect(fs.stat(leftoverDir)).rejects.toMatchObject({ code: 'ENOENT' })
@@ -442,7 +483,9 @@ describe('office file write notify', () => {
 describe('WpsOpenDocumentRegistry', () => {
   it('matches open documents across path separators and case', () => {
     const registry = new WpsOpenDocumentRegistry()
-    registry.setDocuments('client-a', 'wps', [{ name: 'a.docx', fullName: '/Users/Me/Docs/A.docx' }])
+    registry.setDocuments('client-a', 'wps', [
+      { name: 'a.docx', fullName: '/Users/Me/Docs/A.docx' }
+    ])
     expect(registry.isOpen('/Users/Me/Docs/A.docx')).toBe(true)
     expect(registry.isOpen('/users/me/docs/a.docx')).toBe(true)
     expect(registry.isOpen('/Users/Me/Docs/other.docx')).toBe(false)
@@ -475,6 +518,48 @@ describe('WpsOpenDocumentRegistry', () => {
 })
 
 describe('WpsSyncService', () => {
+  const platform = process.platform
+  beforeEach(() => {
+    // Exercise the add-in reopen protocol independently from macOS file handoff.
+    if (platform === 'darwin') Object.defineProperty(process, 'platform', { value: 'linux' })
+  })
+  afterEach(() => Object.defineProperty(process, 'platform', { value: platform }))
+
+  it('hands atomically replaced macOS documents to WPS without calling the native Open API', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
+    const service = new WpsSyncService({ skipInstall: true, preferredPort: 0 })
+    services.push(service)
+    await service.start()
+    const port = service.getPort()!
+    const stream = readSseEvents(port, 'et')
+    await waitFor(() => stream.events.some((event) => event.type === 'ping'))
+    await reportOpenItems(port, {
+      component: 'et',
+      clientId: stream.clientId,
+      fullNames: ['/tmp/mac.xlsx']
+    })
+    const closing = service.prepareClose('/tmp/mac.xlsx')
+    await waitFor(() => stream.events.some((event) => event.type === 'close'))
+    await postReport(port, {
+      kind: 'close-result',
+      component: 'et',
+      clientId: stream.clientId,
+      data: { ok: true, fullName: '/tmp/mac.xlsx', remaining: 0, placeholder: true }
+    })
+    expect(await closing).toBe(true)
+    service.notifyWritten('/tmp/mac.xlsx')
+    await expectShellReopen('/tmp/mac.xlsx', 'et')
+    expect(stream.events.some((event) => event.type === 'open')).toBe(false)
+    await reportOpenItems(port, {
+      component: 'et',
+      clientId: stream.clientId,
+      fullNames: ['/tmp/mac.xlsx']
+    })
+    await waitFor(() => stream.events.some((event) => event.type === 'excerpt'))
+    stream.close()
+    openPath.mockRestore()
+  })
   it('skips listening when WPS is not installed', async () => {
     const service = new WpsSyncService({
       skipInstall: false,
@@ -1170,5 +1255,453 @@ describe('WpsSyncService', () => {
     await second.start()
     expect(second.getPort()).toBeUndefined()
     expect(writePort).toHaveBeenCalledWith(livePort)
+  })
+})
+
+describe('WPS review navigation', () => {
+  it('routes a separate navigate command to the document owner and correlates the acknowledgement', async () => {
+    const service = new WpsSyncService({ skipInstall: true, preferredPort: 0 })
+    services.push(service)
+    await service.start()
+    const port = service.getPort()!
+    const owner = readSseEvents(port, 'wps', 'review-owner'),
+      other = readSseEvents(port, 'wps', 'review-other')
+    await waitFor(() => owner.events.length > 0 && other.events.length > 0)
+    await reportOpenItems(port, {
+      component: 'wps',
+      clientId: owner.clientId,
+      fullNames: ['/tmp/review.docx']
+    })
+    const open = vi.fn(async () => undefined)
+    const navigating = service.navigate(
+      '/tmp/review.docx',
+      {
+        kind: 'docx',
+        part: 'word/document.xml',
+        paragraph: 1,
+        text: 'changed',
+        previous: '',
+        next: '',
+        container: false
+      },
+      open
+    )
+    await waitFor(() => owner.events.some((e) => e.type === 'navigate'))
+    const command = owner.events.find((e) => e.type === 'navigate')!
+    expect(other.events.some((e) => e.type === 'navigate')).toBe(false)
+    expect(owner.events.some((e) => e.type === 'close' || e.type === 'open')).toBe(false)
+    expect(open).not.toHaveBeenCalled()
+    await postReport(port, {
+      kind: 'navigate-result',
+      component: 'wps',
+      clientId: owner.clientId,
+      data: { requestId: command.requestId, fullName: '/tmp/review.docx', status: 'located' }
+    })
+    expect(await navigating).toEqual({ status: 'located', reason: undefined })
+    const status = await (await fetch(`http://127.0.0.1:${port}/status`)).json()
+    expect(status.lastNavigationResults.at(-1)).toMatchObject({
+      status: 'located',
+      fullName: '/tmp/review.docx'
+    })
+    owner.close()
+    other.close()
+  })
+})
+
+const startReviewAddon = async (app: object, host: 'wps' | 'et' | 'wpp') => {
+  const { runInNewContext } = await import('node:vm')
+  const source = await fs.readFile(path.join(process.cwd(), 'resources/wps-addon/main.js'), 'utf8')
+  const reports: Array<{
+    kind: string
+    data: {
+      status?: string
+      selection?: OfficeReviewSelection
+      reason?: string
+      ok?: boolean
+      excerpt?: string
+      fullName?: string
+    }
+  }> = []
+  const stream: { onmessage?: (event: { data: string }) => void; close: () => void } = {
+    close: () => undefined
+  }
+  class Xhr {
+    status = 200
+    responseText = '{"port":18723}'
+    onload?: () => void
+    open() {}
+    setRequestHeader() {}
+    send() {
+      this.onload?.()
+    }
+  }
+  const window = {
+    Application: app,
+    location: { search: `?host=${host}`, hash: '' },
+    OnAddinLoad: () => true
+  }
+  runInNewContext(source, {
+    window,
+    XMLHttpRequest: Xhr,
+    EventSource: function () {
+      return stream
+    },
+    setTimeout: () => 0,
+    clearTimeout: () => undefined,
+    fetch: (_url: string, options: { body: string }) => {
+      reports.push(JSON.parse(options.body))
+      return Promise.resolve({})
+    }
+  })
+  window.OnAddinLoad()
+  return { reports, stream }
+}
+
+describe('WPS add-in review selection', () => {
+  it('reads the reopened Writer document through paragraph ranges when aggregate text is empty', async () => {
+    const target = {
+      Name: 'target.docx',
+      FullName: '/tmp/target.docx',
+      Saved: true,
+      Activate: vi.fn(),
+      Close: vi.fn<() => void>(),
+      Content: {
+        Text: '',
+        Paragraphs: {
+          Count: 2,
+          Item: (index: number) => ({ Range: { Text: ['before\r', 'fresh marker\r'][index - 1] } })
+        }
+      }
+    }
+    const other = {
+      ...target,
+      Name: 'other.docx',
+      FullName: '/tmp/other.docx',
+      Content: { ...target.Content, Text: 'unrelated document' }
+    }
+    const documents = [target, other]
+    target.Close.mockImplementation(() => {
+      documents.splice(documents.indexOf(target), 1)
+    })
+    const app = {
+      Name: 'WPS Writer',
+      ActiveDocument: other,
+      ActiveWindow: { ActivePane: { VerticalPercentScrolled: 0 } },
+      Selection: { Start: 0, SetRange: vi.fn() },
+      Documents: {
+        get Count() {
+          return documents.length
+        },
+        Item: (index: number) => documents[index - 1],
+        Open: vi.fn(() => {
+          documents.unshift(target)
+          return target
+        })
+      }
+    }
+    const { reports, stream } = await startReviewAddon(app, 'wps')
+    stream.onmessage?.({ data: JSON.stringify({ type: 'close', path: target.FullName }) })
+    stream.onmessage?.({ data: JSON.stringify({ type: 'open', path: target.FullName }) })
+    expect(reports.at(-1)).toMatchObject({
+      kind: 'reload-result',
+      data: { ok: true, fullName: target.FullName, excerpt: 'before\rfresh marker\r' }
+    })
+    expect(target.Activate).toHaveBeenCalledOnce()
+    stream.onmessage?.({ data: JSON.stringify({ type: 'excerpt', path: target.FullName }) })
+    expect(reports.at(-1)?.data.excerpt).toBe('before\rfresh marker\r')
+  })
+
+  it('uses the ET Address method and preserves a dirty workbook without selecting old coordinates', async () => {
+    let dirty = false
+    const range = {
+      Row: 2,
+      Column: 2,
+      Cells: { Item: () => ({ Formula: '', Value2: 'edited', Text: 'edited' }) },
+      Select: vi.fn()
+    }
+    const sheet = { Name: 'Data', Range: () => range, Activate: vi.fn() }
+    const found = { Address: () => 'B2' }
+    const find = vi.fn(() => found)
+    Object.assign(sheet, { UsedRange: { Find: find } })
+    const item = {
+      FullName: '/tmp/review.xlsx',
+      Name: 'review.xlsx',
+      get Saved() {
+        return !dirty
+      },
+      set Saved(_value: boolean) {
+        throw new Error('must not assign Saved')
+      },
+      Worksheets: { Item: () => sheet },
+      Activate: vi.fn(),
+      Close: vi.fn(),
+      Save: vi.fn()
+    }
+    const app = {
+      Name: 'WPS Spreadsheets',
+      Workbooks: { Count: 1, Item: () => item, Open: vi.fn() },
+      ActiveWorkbook: item,
+      ActiveSheet: sheet,
+      ActiveWindow: {},
+      Selection: { Address: vi.fn(() => '$B$2') },
+      Goto: vi.fn()
+    }
+    const { reports, stream } = await startReviewAddon(app, 'et')
+    const command = {
+      type: 'navigate',
+      requestId: 'et-selection',
+      path: item.FullName,
+      target: { kind: 'excel', sheet: 'Data', address: 'B2', value: 'edited', container: false }
+    }
+    stream.onmessage?.({ data: JSON.stringify(command) })
+    expect(reports.at(-1)).toMatchObject({
+      kind: 'navigate-result',
+      data: { status: 'located', selection: { kind: 'excel', sheet: 'Data', address: '$B$2' } }
+    })
+    expect(app.Selection.Address).toHaveBeenCalledWith(false, false)
+    dirty = true
+    range.Select.mockClear()
+    stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'et-dirty' }) })
+    expect(reports.at(-1)?.data).toMatchObject({ status: 'located' })
+    expect(find).toHaveBeenCalledTimes(2)
+    find.mockReturnValueOnce(found).mockImplementationOnce(() => ({ Address: () => 'C2' }))
+    range.Select.mockClear()
+    stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'et-dirty-duplicate' }) })
+    expect(reports.at(-1)?.data).toMatchObject({ status: 'opened' })
+    expect(reports.at(-1)?.data.reason).toContain('未保存变化')
+    expect(range.Select).not.toHaveBeenCalled()
+    expect(item.Saved).toBe(false)
+    expect(item.Close).not.toHaveBeenCalled()
+    expect(item.Save).not.toHaveBeenCalled()
+    expect(app.Workbooks.Open).not.toHaveBeenCalled()
+  })
+
+  it('resolves the current slide by native identity and confirms its selected shape', async () => {
+    const shape = { Id: 42, TextFrame: { TextRange: { Text: 'edited' } }, Select: vi.fn() }
+    const shapes = { Count: 1, Item: () => shape }
+    const slide = { SlideID: 512, SlideIndex: 5, Shapes: shapes }
+    const item = {
+      FullName: '/tmp/review.pptx',
+      Name: 'review.pptx',
+      Slides: {
+        Count: 1,
+        Item: () => slide,
+        FindBySlideID: vi.fn<() => typeof slide | null>(() => slide)
+      },
+      Activate: vi.fn(),
+      Close: vi.fn(),
+      Save: vi.fn()
+    }
+    const app = {
+      Name: 'WPS Presentation',
+      Presentations: { Count: 1, Item: () => item, Open: vi.fn() },
+      ActivePresentation: item,
+      ActiveWindow: {
+        View: { GotoSlide: vi.fn(), Slide: slide },
+        Selection: { ShapeRange: { Item: () => shape } }
+      }
+    }
+    const { reports, stream } = await startReviewAddon(app, 'wpp')
+    const command = {
+      type: 'navigate',
+      requestId: 'wpp-selection',
+      path: item.FullName,
+      target: { kind: 'ppt', slideId: 512, shapeId: 42, text: 'edited', container: false }
+    }
+    stream.onmessage?.({ data: JSON.stringify(command) })
+    expect(reports.at(-1)).toMatchObject({
+      kind: 'navigate-result',
+      data: { status: 'located', selection: { kind: 'ppt', slideId: 512, shapeId: 42 } }
+    })
+    expect(item.Slides.FindBySlideID).toHaveBeenCalledWith(512)
+    expect(app.ActiveWindow.View.GotoSlide).toHaveBeenCalledWith(5)
+    item.Slides.FindBySlideID.mockReturnValueOnce(null)
+    stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'wpp-mac-id' }) })
+    expect(reports.at(-1)?.data).toMatchObject({
+      status: 'located',
+      selection: { kind: 'ppt', slideId: 512, shapeId: 42 }
+    })
+    shapes.Count = 0
+    stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'wpp-deleted-shape' }) })
+    expect(reports.at(-1)?.data).toMatchObject({
+      status: 'container',
+      selection: { kind: 'ppt', slideId: 512 }
+    })
+    expect(item.Close).not.toHaveBeenCalled()
+    expect(item.Save).not.toHaveBeenCalled()
+    expect(app.Presentations.Open).not.toHaveBeenCalled()
+  })
+
+  it('selects a verified range without closing, saving, or changing a dirty document', async () => {
+    const text = 'context\rchanged paragraph\r'
+    const selection = { Start: 0, End: 0 }
+    const makeRange = (start: number, end: number) => ({
+      Start: start,
+      End: end,
+      get Text() {
+        return text.slice(this.Start, this.End)
+      },
+      get Duplicate(): ReturnType<typeof makeRange> {
+        return makeRange(this.Start, this.End)
+      },
+      SetRange(from: number, to: number) {
+        this.Start = from
+        this.End = to
+      },
+      Select() {
+        selection.Start = this.Start
+        selection.End = this.End
+      }
+    })
+    const paragraphs = [makeRange(0, 8), makeRange(8, text.length)]
+    const close = vi.fn(),
+      open = vi.fn(),
+      save = vi.fn()
+    const item = {
+      FullName: '/tmp/dirty.docx',
+      Name: 'dirty.docx',
+      get Saved() {
+        return false
+      },
+      set Saved(_value: boolean) {
+        throw new Error('must not assign Saved')
+      },
+      Close: close,
+      Save: save,
+      Activate: vi.fn(),
+      Content: {
+        Paragraphs: { Count: 2, Item: (index: number) => ({ Range: paragraphs[index - 1] }) }
+      }
+    }
+    const app = {
+      Name: 'WPS Writer',
+      Documents: { Count: 1, Item: () => item, Open: open },
+      ActiveDocument: item,
+      Selection: selection,
+      ActiveWindow: { ScrollIntoView: vi.fn() }
+    }
+    const { reports, stream } = await startReviewAddon(app, 'wps')
+    stream.onmessage?.({
+      data: JSON.stringify({
+        type: 'navigate',
+        requestId: 'dirty-test',
+        path: item.FullName,
+        target: {
+          kind: 'docx',
+          part: 'word/document.xml',
+          paragraph: 2,
+          text: 'changed paragraph',
+          previous: 'context',
+          next: '',
+          quote: 'changed',
+          container: false
+        }
+      })
+    })
+    expect(reports.at(-1)).toMatchObject({
+      kind: 'navigate-result',
+      data: { status: 'located', selection: { start: 8, end: 15 } }
+    })
+    expect(item.Saved).toBe(false)
+    expect(close).not.toHaveBeenCalled()
+    expect(open).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+    stream.onmessage?.({
+      data: JSON.stringify({
+        type: 'navigate',
+        requestId: 'stale',
+        path: item.FullName,
+        target: {
+          kind: 'docx',
+          part: 'word/document.xml',
+          paragraph: 2,
+          text: 'old text',
+          previous: 'context',
+          next: '',
+          container: false
+        }
+      })
+    })
+    expect(reports.at(-1)?.data.status).toBe('opened')
+    expect(reports.at(-1)?.data.reason).toContain('无法确认')
+    expect(selection).toEqual({ Start: 8, End: 15 })
+    stream.onmessage?.({
+      data: JSON.stringify({
+        type: 'navigate',
+        requestId: 'same-text-different-context',
+        path: item.FullName,
+        target: {
+          kind: 'docx',
+          part: 'word/document.xml',
+          paragraph: 2,
+          text: 'changed paragraph',
+          previous: 'different section',
+          next: '',
+          quote: 'changed',
+          container: false
+        }
+      })
+    })
+    expect(reports.at(-1)?.data.status).toBe('opened')
+    expect(reports.at(-1)?.data.reason).toContain('无法确认')
+    expect(selection).toEqual({ Start: 8, End: 15 })
+    app.ActiveDocument = { ...item, FullName: '/tmp/other.docx' }
+    stream.onmessage?.({
+      data: JSON.stringify({
+        type: 'navigate',
+        requestId: 'wrong-active-document',
+        path: item.FullName,
+        target: null
+      })
+    })
+    expect(reports.at(-1)?.data.status).toBe('opened')
+    expect(reports.at(-1)?.data.reason).toContain('未激活目标文件')
+    expect(selection).toEqual({ Start: 8, End: 15 })
+  })
+})
+
+describe('WPS review cold open', () => {
+  it('opens once and keeps only the latest location while the document registers', async () => {
+    const service = new WpsSyncService({ skipInstall: true, preferredPort: 0 })
+    services.push(service)
+    await service.start()
+    const port = service.getPort()!,
+      owner = readSseEvents(port, 'wps', 'cold-review-owner')
+    await waitFor(() => owner.events.length > 0)
+    const open = vi.fn(async () => undefined)
+    const target = {
+      kind: 'docx' as const,
+      part: 'word/document.xml',
+      paragraph: 1,
+      text: 'changed',
+      previous: '',
+      next: '',
+      container: false
+    }
+    const first = service.navigate('/tmp/cold-review.docx', target, open)
+    const second = service.navigate('/tmp/cold-review.docx', { ...target, paragraph: 2 }, open)
+    await reportOpenItems(port, {
+      component: 'wps',
+      clientId: owner.clientId,
+      fullNames: ['/tmp/cold-review.docx']
+    })
+    await waitFor(() => owner.events.some((event) => event.type === 'navigate'))
+    expect(open).toHaveBeenCalledTimes(1)
+    expect((await first).status).toBe('opened')
+    const commands = owner.events.filter((event) => event.type === 'navigate')
+    expect(commands).toHaveLength(1)
+    await postReport(port, {
+      kind: 'navigate-result',
+      component: 'wps',
+      clientId: owner.clientId,
+      data: {
+        requestId: commands[0].requestId,
+        fullName: '/tmp/cold-review.docx',
+        status: 'container',
+        reason: 'paragraph'
+      }
+    })
+    expect(await second).toEqual({ status: 'container', reason: 'paragraph' })
+    owner.close()
   })
 })

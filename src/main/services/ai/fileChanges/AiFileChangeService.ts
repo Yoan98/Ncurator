@@ -95,8 +95,8 @@ export class AiFileChangeService {
           await fs.rename(tempOutputPath, restorePath)
         }
         notifyOfficeFileWritten(currentPath)
-        if (record.operation !== 'created') {
-          notifyOfficeFileWritten(record.beforePath || record.path)
+        if (record.operation !== 'created' && restorePath !== currentPath) {
+          notifyOfficeFileWritten(restorePath)
         }
       }
       await withOfficeFileWrite(currentPath, async () => {

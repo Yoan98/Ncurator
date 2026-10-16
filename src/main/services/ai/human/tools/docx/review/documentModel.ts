@@ -58,6 +58,7 @@ export const canonical = (element: Element, context?: DocumentContext): string =
     .filter(
       (a) =>
         a.namespaceURI !== 'http://www.w3.org/2000/xmlns/' &&
+        a.namespaceURI !== REVIEW &&
         !a.name.startsWith('xmlns') &&
         !a.localName.startsWith('rsid') &&
         !['paraId', 'textId'].includes(a.localName) &&

@@ -1,3 +1,4 @@
+import { OpenWithPreferenceStore } from '../../../../src/main/services/storage/domains/OpenWithPreferenceStore'
 import { ChatMessageLogStore } from '../../../../src/main/services/storage/domains/ChatMessageLogStore'
 import { AiSubagentStore } from '../../../../src/main/services/storage/domains/AiSubagentStore'
 import fs from 'node:fs/promises'
@@ -245,6 +246,20 @@ describe('sqlite storage core and stores', () => {
     if (tempDir) await fs.rm(tempDir, { recursive: true, force: true })
   })
 
+  it('persists extension application preferences across reopening SQLite', () => {
+    const preferences = new OpenWithPreferenceStore(sqlite)
+    preferences.set('.docx', 'wps')
+    preferences.set('.md', 'editor')
+    sqlite.close()
+    sqlite.initialize()
+    const restored = new OpenWithPreferenceStore(sqlite)
+    expect(restored.get('.docx')).toBe('wps')
+    expect(restored.get('.md')).toBe('editor')
+    restored.set('.docx', null)
+    expect(restored.get('.docx')).toBeUndefined()
+    expect(restored.get('.md')).toBe('editor')
+  })
+
   it('runs migrations once and is safe to initialize again', () => {
     sqlite.close()
     sqlite.initialize()
@@ -271,7 +286,8 @@ describe('sqlite storage core and stores', () => {
       { version: 13, name: 'ai_run_pending_interaction' },
       { version: 14, name: 'scheduled_task_partner_binding' },
       { version: 15, name: 'ai_run_pending_messages' },
-      { version: 16, name: 'subagent_sessions' }
+      { version: 16, name: 'subagent_sessions' },
+      { version: 17, name: 'open_with_preferences' }
     ])
 
     const legacyTables = sqlite

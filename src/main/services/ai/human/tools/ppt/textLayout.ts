@@ -13,8 +13,9 @@ export const measurePptText = createPptTextMeasurer(context)
 
 export const renderPptSlideSvg = (
   presentation: PresentationData,
-  slide: SlideData
-): Promise<string> => renderPptSvg(presentation, slide, measurePptText)
+  slide: SlideData,
+  includeShapeIds = false
+): Promise<string> => renderPptSvg(presentation, slide, measurePptText, includeShapeIds)
 
 const children = (element: Element): Element[] =>
   Array.from(element.childNodes).filter((child): child is Element => child.nodeType === 1)

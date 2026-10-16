@@ -20,6 +20,8 @@ import { scheduledTaskPartnerBindingMigration } from './migrations/014_scheduled
 import { aiRunPendingMessagesMigration } from './migrations/015_ai_run_pending_messages'
 import { subagentSessionsMigration } from './migrations/016_subagent_sessions'
 
+import { openWithPreferencesMigration } from './migrations/017_open_with_preferences'
+
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
 
@@ -39,10 +41,11 @@ const MIGRATIONS: readonly Migration[] = [
   aiRunPendingInteractionMigration,
   scheduledTaskPartnerBindingMigration,
   aiRunPendingMessagesMigration,
-  subagentSessionsMigration
+  subagentSessionsMigration,
+  openWithPreferencesMigration
 ]
 
-export const CURRENT_SCHEMA_VERSION = 16
+export const CURRENT_SCHEMA_VERSION = 17
 
 const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
   [2, new Set(['workspace_change_sets'])]
