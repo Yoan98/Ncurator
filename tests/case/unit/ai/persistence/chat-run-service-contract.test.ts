@@ -500,11 +500,11 @@ describe('unit ai persistence backend', () => {
       expect(owner?.status).toBe('failed')
       expect(owner?.artifacts?.some((artifact) => artifact.applyId === saved.record.id)).toBe(true)
       const record = (await files.getRecord({ changeId: saved.record.id })).record!
-      expect(
-        JSON.parse(await readFile(record.previewPath!, 'utf8')).lines.some(
-          (line: { text: string; type: string }) => line.text === 'B' && line.type === 'add'
-        )
-      ).toBe(true)
+      expect(JSON.parse(await readFile(record.previewPath!, 'utf8'))).toEqual({
+        version: 4,
+        before: 'A',
+        after: 'B'
+      })
       expect(await readFile(source, 'utf8')).toBe('C')
       await expect(
         access(
