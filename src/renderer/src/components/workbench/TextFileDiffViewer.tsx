@@ -24,7 +24,6 @@ export function TextFileDiffViewer({
   const [paused, setPaused] = useState(false)
   const [fold, setFold] = useState(true)
   const container = useRef<HTMLDivElement>(null)
-  const original = useRef<monaco.editor.ITextModel | null>(null)
   const modified = useRef<monaco.editor.ITextModel | null>(null)
   const suppressChange = useRef(false)
   const modifiedEditor = useRef<monaco.editor.ICodeEditor | null>(null)
@@ -64,23 +63,10 @@ export function TextFileDiffViewer({
     const language = /\.(md|markdown)$/i.test(record.path) ? 'markdown' : 'plaintext'
     const left = monaco.editor.createModel(before, language)
     const right = monaco.editor.createModel(fileRef.current.getText(), language)
-    original.current = left
     modified.current = right
     const changed = right.onDidChangeContent(() => {
       if (!suppressChange.current) fileRef.current.autoSave(right.getValue())
     })
-    return () => {
-      changed.dispose()
-      left.dispose()
-      right.dispose()
-      original.current = null
-      modified.current = null
-    }
-  }, [ready, before, record.path])
-  useEffect(() => {
-    if (!ready || !container.current || !original.current || !modified.current) return
-    const left = original.current,
-      right = modified.current
     const host = container.current
     const controls: monaco.IDisposable[] = []
     const editors: monaco.editor.IStandaloneCodeEditor[] = []
@@ -161,6 +147,10 @@ export function TextFileDiffViewer({
       diff.current = null
       diffEditor?.dispose()
       editors.forEach((e) => e.dispose())
+      changed.dispose()
+      modified.current = null
+      left.dispose()
+      right.dispose()
       host.replaceChildren()
       host.style.display = ''
     }

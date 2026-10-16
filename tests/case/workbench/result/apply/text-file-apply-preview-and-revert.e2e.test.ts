@@ -13,7 +13,7 @@ import {
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
-  waitForApplyEntry,
+  waitForApplyEntryByFileName,
   waitForWorkbenchAiRunCompletion,
   waitForWorkbenchAiEvent,
   waitForWorkbenchApplyRecordStatus,
@@ -127,7 +127,7 @@ describe('workbench result e2e', () => {
           const documentViewPreserved = await originalDocumentView?.evaluate(
             (element) => element.isConnected
           )
-          const applyEntry = await waitForApplyEntry(page)
+          const applyEntry = await waitForApplyEntryByFileName(page, 'workbench-preview.md')
           const assistantApplyTextBeforeClick = ((await applyEntry.textContent()) || '').trim()
           const modificationCountsVisibleBeforeClick = /[+-][1-9]\d*/u.test(
             assistantApplyTextBeforeClick
@@ -215,7 +215,7 @@ describe('workbench result e2e', () => {
             page,
             `${workbenchSelectors.partnerItemPrefix}-${runStartedEvent.partnerId}`
           ).click()
-          const restoredApplyEntry = await waitForApplyEntry(page)
+          const restoredApplyEntry = await waitForApplyEntryByFileName(page, 'workbench-preview.md')
           const assistantApplyTextAfterSessionSwitch = (
             (await restoredApplyEntry.textContent()) || ''
           ).trim()
@@ -357,6 +357,11 @@ describe('workbench result e2e', () => {
           const standaloneRevealButtonCount = await documentToolbar
             .getByRole('button', { name: '定位文件' })
             .count()
+          await page.mouse.move(0, 0)
+          await page
+            .getByRole('tooltip')
+            .filter({ hasText: '折叠未修改内容' })
+            .waitFor({ state: 'hidden' })
           await getWorkbenchLocator(page, workbenchSelectors.openWithMenu)
             .getByRole('button', { name: '选择打开应用' })
             .click()
@@ -458,7 +463,7 @@ describe('workbench result e2e', () => {
           const currentSessionChanges = getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.workspaceFileChangePrefix
-          )
+          ).filter({ hasText: 'workbench-preview.md' })
           await currentSessionChanges.first().waitFor({ state: 'visible', timeout: 10_000 })
           const currentSessionChangeMarkerCount = await currentSessionChanges.count()
           await documentModeToggle.click()
@@ -556,6 +561,16 @@ describe('workbench result e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          const modelDisposalErrors = (await runtime.collectSignals()).consoleEntries
+            .filter((entry) =>
+              entry.text.includes('TextModel got disposed before DiffEditorWidget model got reset')
+            )
+            .map((entry) => entry.text.split('\n')[0])
+          await runtime.assertThat(modelDisposalErrors.length === 0, {
+            name: 'workbench-text-review-model-lifecycle',
+            message: '审核切换、伙伴恢复和回退期间不应出现 Monaco 模型提前释放异常。',
+            data: modelDisposalErrors
+          })
           await runtime.assertThat(
             result.previewContainsExternalC &&
               result.diffText.includes('EXTERNAL_TEXT_C') &&
