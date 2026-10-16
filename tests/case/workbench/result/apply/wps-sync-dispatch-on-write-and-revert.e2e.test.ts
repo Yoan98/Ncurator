@@ -57,7 +57,7 @@ describe('workbench result e2e', () => {
             const beforeText = await readOfficePlainText(targetPath)
             await insertWorkbenchReferenceToken(page, target.fileName)
             const startedAtMs = Date.now()
-            await sendWorkbenchMessage(page, target.prompt(marker))
+            await sendWorkbenchMessage(page, target.prompt(marker, target.fileName))
             const evidence = await waitForWorkbenchAiRunCompletion(
               runtime,
               startedAtMs,
