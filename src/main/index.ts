@@ -426,10 +426,17 @@ if (!singleInstanceLock) {
             }
           : undefined
     })
-    const wpsSyncService = new WpsSyncService()
+    const wpsSyncService = new WpsSyncService({
+      onNotice: (notice) =>
+        BrowserWindow.getAllWindows().forEach((window) => {
+          if (!window.webContents.isDestroyed())
+            window.webContents.send('wps-integration-notice', notice)
+        })
+    })
     setOfficeFileWriteListener({
       navigate: (filePath, target, open) => wpsSyncService.navigate(filePath, target, open),
       prepareClose: (filePath) => wpsSyncService.prepareClose(filePath),
+      notifyOpened: (filePath) => wpsSyncService.notifyOpened(filePath),
       notifyWritten: (filePath) => wpsSyncService.notifyWritten(filePath)
     })
     await wpsSyncService.start().catch((error) => {

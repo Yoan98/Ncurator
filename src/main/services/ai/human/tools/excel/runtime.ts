@@ -249,6 +249,27 @@ const buildDiffWorkbook = async (input: {
                     )
                   }) || destination.address,
                 value: reviewCellValue(destination, Boolean(input.after.properties.date1904)),
+                anchors: [
+                  ...[1, 2, 3, cc! - 1, cc! + 1].map((column) => ({ row: rr!, column })),
+                  ...[1, 2, 3, rr! - 1, rr! + 1].map((row) => ({ row, column: cc! }))
+                ]
+                  .filter(
+                    (p, index, all) =>
+                      p.row > 0 &&
+                      p.column > 0 &&
+                      (p.row !== rr || p.column !== cc) &&
+                      all.findIndex((other) => other.row === p.row && other.column === p.column) ===
+                        index
+                  )
+                  .map((p) => ({
+                    row: p.row - rr!,
+                    column: p.column - cc!,
+                    value: reviewCellValue(
+                      after!.getCell(p.row, p.column),
+                      Boolean(input.after.properties.date1904)
+                    )
+                  }))
+                  .filter((p) => Boolean(p.value)),
                 container: !rows[row - 1]?.after || !columns[col - 1]?.after
               }
             : null

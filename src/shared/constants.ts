@@ -3,6 +3,7 @@ export const APP_ID = 'com.yoan.ncurator'
 export const PRODUCT_NAME_ZH = '馆长'
 export const OFFICIAL_WEBSITE_URL = 'https://www.guanzhangai.cn'
 export const USER_MANUAL_URL = `${OFFICIAL_WEBSITE_URL}/zh/manual`
+export const WPS_INTEGRATION_MANUAL_URL = `${USER_MANUAL_URL}#wps-integration`
 export const OFFICIAL_DOWNLOAD_PAGE_URL = `${OFFICIAL_WEBSITE_URL}/zh`
 export const FREE_MODEL_API_BASE_URL = `${OFFICIAL_WEBSITE_URL}/api/v1/free`
 export const FREE_MODELS_CATALOG_URL = `${OFFICIAL_WEBSITE_URL}/api/v1/free-models`

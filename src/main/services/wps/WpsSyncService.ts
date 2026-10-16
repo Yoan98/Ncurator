@@ -10,7 +10,17 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { app, shell } from 'electron'
 import { WPS_ADDON_FILES, WPS_PREFERRED_SYNC_PORT } from './constants'
-import { WpsAddonInstaller, type WpsAddonInstallerLike } from './WpsAddonInstaller'
+import {
+  WpsAddonInstaller,
+  getWpsAddonAvailability,
+  type WpsAddonInstallerLike
+} from './WpsAddonInstaller'
+import type {
+  WpsAddonAvailability,
+  WpsHost,
+  WpsIntegrationIssue,
+  WpsIntegrationNotice
+} from '../../../shared/wpsIntegration'
 import { normalizeOfficePath, officeWriteHostForPath } from './officeFileWriteNotify'
 import { resolveWpsComponentExe, resolveWpsOfficeAppPath } from './wpsOfficeLaunch'
 
@@ -189,6 +199,8 @@ type WpsAddonReport = {
 }
 
 export type WpsSyncServiceOptions = {
+  readAvailability?: (host: WpsHost) => Promise<WpsAddonAvailability>
+  onNotice?: (notice: WpsIntegrationNotice) => void
   installer?: WpsAddonInstallerLike
   addonSourceDir?: string
   preferredPort?: number
@@ -353,6 +365,15 @@ export class WpsSyncService {
       requestId = randomUUID()
     this.latestNavigation.set(key, requestId)
     try {
+      const host = officeWriteHostForPath(resolved)
+      if (host && (await this.readAvailability(host)) === 'disabled') {
+        await open()
+        return {
+          status: 'opened',
+          issue: { host, state: 'not-enabled' },
+          reason: 'WPS 加载项未启用，未完成定位'
+        }
+      }
       if (!this.registry.clientFor(resolved)) {
         let pending = this.navigationOpens.get(key)
         if (!pending) {
@@ -375,7 +396,8 @@ export class WpsSyncService {
       if (!clientId || !this.hasClient(clientId))
         return {
           status: 'opened',
-          reason: '已请求用 WPS 打开文件，但未收到目标文档确认；请检查 WPS 提示或启用馆长加载项'
+          issue: host ? await this.integrationIssue(host) : undefined,
+          reason: '已请求用 WPS 打开文件，但未收到目标文档确认，请检查 WPS 中的文件访问或加载提示'
         }
       return await new Promise<ReviewNavigationResult>((resolve) => {
         const timer = setTimeout(
@@ -410,8 +432,13 @@ export class WpsSyncService {
   private server: Server | undefined
   private port: number | undefined
   private stopped = false
+  private readonly readAvailability: (host: WpsHost) => Promise<WpsAddonAvailability>
+  private readonly onNotice?: (notice: WpsIntegrationNotice) => void
+  private readonly disconnectedDocuments = new Map<string, number>()
 
   public constructor(options: WpsSyncServiceOptions = {}) {
+    this.readAvailability = options.readAvailability ?? getWpsAddonAvailability
+    this.onNotice = options.onNotice
     this.installer =
       options.installer ??
       new WpsAddonInstaller({
@@ -420,6 +447,26 @@ export class WpsSyncService {
     this.preferredPort = options.preferredPort ?? WPS_PREFERRED_SYNC_PORT
     this.skipInstall = options.skipInstall ?? shouldSkipWpsInstall()
     this.addonSourceDir = resolveAddonSourceDir(options.addonSourceDir)
+  }
+
+  private async integrationIssue(host: WpsHost): Promise<WpsIntegrationIssue | undefined> {
+    const availability = await this.readAvailability(host).catch(() => 'unconfirmed' as const)
+    if (availability === 'disabled') return { host, state: 'not-enabled' }
+    if (this.hasComponentClient(host)) return undefined
+    return { host, state: availability === 'enabled' ? 'not-connected' : 'unconfirmed' }
+  }
+
+  public async notifyOpened(filePath: string): Promise<void> {
+    const host = officeWriteHostForPath(filePath)
+    if (!host) return
+    const availability = await this.readAvailability(host).catch(() => 'unconfirmed' as const)
+    if (availability !== 'disabled') {
+      const deadline = Date.now() + 8000
+      while (!this.stopped && !this.hasComponentClient(host) && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, SHELL_LIST_POLL_MS))
+    }
+    const issue = await this.integrationIssue(host)
+    if (issue) this.onNotice?.({ kind: 'integration', issue })
   }
 
   public getPort(): number | undefined {
@@ -477,9 +524,18 @@ export class WpsSyncService {
   }
 
   public async prepareClose(filePath: string): Promise<boolean> {
-    if (!this.server || this.clients.size === 0) return false
     const resolvedPath = path.resolve(filePath)
     const clientId = this.registry.clientFor(resolvedPath)
+    const host = officeWriteHostForPath(resolvedPath)
+    const disconnectedAt = this.disconnectedDocuments.get(normalizeOfficePath(resolvedPath))
+    if (host && (clientId || (disconnectedAt && Date.now() - disconnectedAt < 60_000))) {
+      const issue = await this.integrationIssue(host)
+      if (issue) {
+        this.onNotice?.({ kind: 'integration', issue })
+        return false
+      }
+    }
+    if (!this.server || this.clients.size === 0) return false
     if (!clientId) return false
     const component = this.registry.componentFor(resolvedPath) || 'unknown'
     const startedAt = Date.now()
@@ -516,7 +572,7 @@ export class WpsSyncService {
     return false
   }
 
-  public notifyWritten(filePath: string): void {
+  public async notifyWritten(filePath: string): Promise<void> {
     if (!this.server) return
     const resolvedPath = path.resolve(filePath)
     const key = normalizeOfficePath(resolvedPath)
@@ -527,11 +583,20 @@ export class WpsSyncService {
       at: Date.now(),
       clientCount: this.clients.size
     })
-    if (!released && this.clients.size === 0) return
+    // A file that was never known open in WPS needs no refresh and no prompt.
+    if (!released && !this.registry.isOpen(resolvedPath)) return
     const component =
       released && released.component !== 'unknown'
         ? released.component
         : officeWriteHostForPath(resolvedPath) || 'unknown'
+    const host = officeWriteHostForPath(resolvedPath)
+    if (host) {
+      const issue = await this.integrationIssue(host)
+      if (issue?.state === 'not-enabled' || (!released && issue)) {
+        this.onNotice?.({ kind: 'integration', issue })
+        return
+      }
+    }
     this.clearPendingOpen(resolvedPath)
     this.pendingOpens.set(key, {
       path: resolvedPath,
@@ -724,7 +789,11 @@ export class WpsSyncService {
       if (!this.server || pending.excerptSent) return
       if (!this.pendingOpens.has(normalizeOfficePath(pending.path))) return
       this.completeShellOpens()
-      if (pending.excerptSent || Date.now() >= deadline) return
+      if (pending.excerptSent) return
+      if (Date.now() >= deadline) {
+        this.reportRefreshFailure(pending)
+        return
+      }
       // 系统重开会换一个新实例，此时还不知道新 clientId，只能问整个组件。
       this.broadcast(
         { type: 'list' },
@@ -760,7 +829,24 @@ export class WpsSyncService {
       pending.clientId = ownerClientId
       pending.excerptSent = true
       this.broadcast({ type: 'excerpt', path: pending.path }, { clientId: ownerClientId })
+      this.setPendingTimer(pending, 5000, () => this.reportRefreshFailure(pending))
     }
+  }
+
+  private reportRefreshFailure(pending: PendingOpen): void {
+    this.clearPendingOpen(pending.path)
+    const host = officeWriteHostForPath(pending.path)
+    if (!host) return
+    void this.integrationIssue(host).then((issue) => {
+      this.onNotice?.(
+        issue
+          ? { kind: 'integration', issue }
+          : {
+              kind: 'refresh',
+              reason: `未确认 WPS 已刷新“${path.basename(pending.path)}”，请在 WPS 中检查文件；磁盘写入结果不受影响`
+            }
+      )
+    })
   }
 
   private broadcast(payload: unknown, target: BroadcastTarget = {}): void {
@@ -994,6 +1080,13 @@ export class WpsSyncService {
     writeSse(response, { type: 'list' })
     this.flushPendingOpens(client)
     request.on('close', () => {
+      for (const document of this.registry.listOpenDocuments()) {
+        if (document.clientId === clientId)
+          this.disconnectedDocuments.set(normalizeOfficePath(document.fullName), Date.now())
+      }
+      for (const [key, at] of this.disconnectedDocuments) {
+        if (Date.now() - at > 60_000) this.disconnectedDocuments.delete(key)
+      }
       this.clients.delete(client)
       if (!this.hasClient(clientId)) this.registry.dropClient(clientId)
     })

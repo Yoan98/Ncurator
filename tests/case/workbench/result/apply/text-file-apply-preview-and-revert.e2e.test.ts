@@ -298,6 +298,9 @@ describe('workbench result e2e', () => {
             workbenchSelectors.assistantTurnArtifactPrefix
           ).count()
           const reviewToolbar = diffViewer.getByRole('toolbar', { name: '文本审核' })
+          const editableTitleVisible = await reviewToolbar
+            .getByText('当前文件（可编辑）', { exact: true })
+            .isVisible()
           const compactReviewToolbar = await reviewToolbar.evaluate(
             (element) =>
               element.getBoundingClientRect().height <= 36 &&
@@ -516,6 +519,7 @@ describe('workbench result e2e', () => {
             standaloneArtifactCount,
             omittedLineLabels,
             compactReviewToolbar,
+            editableTitleVisible,
             foldedLabelsLocalized,
             oneRegionExpanded,
             applyEntryCountDuringRun,
@@ -585,6 +589,7 @@ describe('workbench result e2e', () => {
               result.externalApplicationHintVisible &&
               result.omittedLineLabels.length > 0 &&
               result.compactReviewToolbar &&
+              result.editableTitleVisible &&
               result.foldedLabelsLocalized &&
               result.oneRegionExpanded &&
               result.omittedCountAfterExpand < result.omittedCountBeforeExpand &&

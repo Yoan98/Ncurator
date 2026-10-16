@@ -31,6 +31,8 @@ import {
 } from '../../../../harness/e2e/workbench'
 import { isWpsOpenWithApplication } from '../../../../../src/renderer/src/components/workbench/wpsOpenWithHint'
 
+import { WPS_INTEGRATION_MANUAL_URL } from '../../../../../src/shared/constants'
+
 const CASE_ID = 'file-preview-actions'
 
 const setupPreviewWorkspace = async (
@@ -349,6 +351,8 @@ describe('workbench result e2e', () => {
             .catch(() => false)
           const docxOpenWithHasWps = await readOpenWithHasWps(page)
           const docxWpsHintVisible = await readWpsHintVisible(page)
+          if (docxWpsHintVisible)
+            await getWorkbenchLocator(page, workbenchSelectors.wpsOpenWithHint).click()
           await openWorkbenchWorkspaceFile(runtime, 'workbench-preview.md')
           const markdownPreviewVisible = await waitForMarkdownPreview(page)
           const markdownWpsHintVisible = await readWpsHintVisible(page)
@@ -393,6 +397,13 @@ describe('workbench result e2e', () => {
             })
           const applicationRowsHaveNoButtons =
             (await openWithApplicationItems.getByRole('button').count()) === 0
+          await page.waitForFunction(() =>
+            [...document.querySelectorAll('.workbench-open-with-menu')].every((popup) =>
+              popup
+                .getAnimations({ subtree: true })
+                .every((animation) => animation.playState !== 'running')
+            )
+          )
           const footerEntriesVisible = await visibleOpenWithMenu.evaluate((menu) => {
             const bounds = menu.getBoundingClientRect()
             return ['默认打开应用…', '打开所在文件夹'].every((label) => {
@@ -404,13 +415,6 @@ describe('workbench result e2e', () => {
               return rect.top >= bounds.top && rect.bottom <= bounds.bottom
             })
           })
-          await page.waitForFunction(() =>
-            [...document.querySelectorAll('.workbench-open-with-menu')].every((popup) =>
-              popup
-                .getAnimations({ subtree: true })
-                .every((animation) => animation.playState !== 'running')
-            )
-          )
           await runtime.captureScreenshot({
             name: 'open-with-application-list',
             message: '应用列表只显示生效默认，不显示逐行设置按钮'
@@ -508,6 +512,10 @@ describe('workbench result e2e', () => {
             docxViewerVisible,
             docxModeTagCount,
             docxPreviewStableWhileTyping,
+            wpsManualOpened: signals.ipcInvokeEntries.some(
+              (entry) =>
+                entry.name === 'openExternal' && entry.payload === WPS_INTEGRATION_MANUAL_URL
+            ),
             systemOpenVisible,
             openWithApplicationCount,
             openWithMenuHasHorizontalOverflow,
@@ -570,6 +578,7 @@ describe('workbench result e2e', () => {
               result.revealPathCalls >= 1 &&
               !result.pdfWpsHintVisible &&
               result.docxWpsHintVisible === result.docxOpenWithHasWps &&
+              (!result.docxWpsHintVisible || result.wpsManualOpened) &&
               !result.markdownWpsHintVisible &&
               !result.txtWpsHintVisible &&
               result.xlsxWpsHintVisible === result.xlsxOpenWithHasWps &&

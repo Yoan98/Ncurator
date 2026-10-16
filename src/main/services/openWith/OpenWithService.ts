@@ -169,7 +169,11 @@ export class OpenWithService {
     }
   }
 
-  async open(filePath: string, applicationId?: string): Promise<OpenFileWithApplicationResponse> {
+  async open(
+    filePath: string,
+    applicationId?: string,
+    onOpened?: (application: NativeOpenWithApplication) => void
+  ): Promise<OpenFileWithApplicationResponse> {
     const rawPath = String(filePath || '').trim()
     let id = String(applicationId || '').trim()
     if (!rawPath) return { success: false, error: 'filePath and applicationId are required' }
@@ -195,8 +199,10 @@ export class OpenWithService {
       const application = applications.find((item) => item.id === id)
       if (!application)
         return { success: false, error: 'application is not available for this file' }
-      return await (this.options.runNativeOpen?.(resolvedPath, application) ??
+      const result = await (this.options.runNativeOpen?.(resolvedPath, application) ??
         this.runNativeOpen(resolvedPath, application))
+      if (result.success) onOpened?.(application)
+      return result
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

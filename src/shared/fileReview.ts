@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { WpsIntegrationIssue } from './wpsIntegration'
 
 export const reviewLocationSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -23,6 +24,9 @@ export const reviewLocationSchema = z.discriminatedUnion('kind', [
     sheet: z.string(),
     address: z.string().regex(/^\$?[A-Z]+\$?\d+(?::\$?[A-Z]+\$?\d+)?$/),
     value: z.string(),
+    anchors: z
+      .array(z.object({ row: z.number().int(), column: z.number().int(), value: z.string() }))
+      .optional(),
     container: z.boolean()
   })
 ])
@@ -54,6 +58,7 @@ export type GetFileReviewResponse =
 export type ReviewNavigationResult = {
   status: 'located' | 'container' | 'opened' | 'failed'
   reason?: string
+  issue?: WpsIntegrationIssue
 }
 export type OpenFileReviewLocationRequest = { changeRecordId: string; regionId: string }
 

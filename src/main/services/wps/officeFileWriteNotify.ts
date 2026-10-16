@@ -29,7 +29,8 @@ export type OfficeFileWriteListener = {
     open: () => Promise<void>
   ) => Promise<ReviewNavigationResult>
   prepareClose?: (filePath: string) => Promise<boolean>
-  notifyWritten: (filePath: string) => void
+  notifyWritten: (filePath: string) => void | Promise<void>
+  notifyOpened?: (filePath: string) => Promise<void>
 }
 
 let listener: OfficeFileWriteListener | undefined
@@ -72,10 +73,15 @@ export const notifyOfficeFileWritten = (filePath: string): void => {
   const resolved = resolveOfficeWritePath(filePath)
   if (!resolved) return
   try {
-    listener?.notifyWritten(resolved)
+    void Promise.resolve(listener?.notifyWritten(resolved)).catch(() => undefined)
   } catch {
     // 刷新失败不得影响写盘。
   }
+}
+
+export const notifyWpsFileOpened = (filePath: string): void => {
+  const resolved = resolveOfficeWritePath(filePath)
+  if (resolved) void listener?.notifyOpened?.(resolved).catch(() => undefined)
 }
 
 export const withOfficeFileWrite = async <T>(

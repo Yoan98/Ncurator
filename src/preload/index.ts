@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { WpsIntegrationNotice } from '../shared/wpsIntegration'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AiLlmIoRecord,
@@ -179,6 +180,12 @@ const api: DesktopApi = {
   getFileReview: (payload) => ipcRenderer.invoke('file-review-get', payload),
   openFileReviewLocation: (payload) => ipcRenderer.invoke('file-review-open-location', payload),
   setPreferredOpenApplication: (payload) => ipcRenderer.invoke('open-with-set-preferred', payload),
+  onWpsIntegrationNotice: (cb) => {
+    const listener = (_event: Electron.IpcRendererEvent, notice: WpsIntegrationNotice): void =>
+      cb(notice)
+    ipcRenderer.on('wps-integration-notice', listener)
+    return () => ipcRenderer.removeListener('wps-integration-notice', listener)
+  },
   onOpenWithPreferenceChanged: (cb) => {
     const listener = (_event: Electron.IpcRendererEvent, extension: string): void => cb(extension)
     ipcRenderer.on('open-with-preference-changed', listener)

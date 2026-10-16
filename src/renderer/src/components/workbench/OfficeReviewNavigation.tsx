@@ -9,8 +9,10 @@ import {
 } from '../../../../shared/fileReview'
 import { FileRenderViewer } from '../fileRenders'
 import PptDiffViewer from './PptDiffViewer'
+import { useWpsIntegrationFeedback } from './wpsIntegrationFeedback'
 
 export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
+  const showIntegrationIssue = useWpsIntegrationFeedback()
   const [content, setContent] = useState<{ previewPath: string; index: OfficeReviewIndex } | null>(
     null
   )
@@ -82,7 +84,8 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
         .openFileReviewLocation({ changeRecordId: record.id, regionId })
         .then((result) => {
           if (requestSequence !== sequence.current) return
-          if (result.status === 'failed') message.error(result.reason || '定位失败')
+          if (result.issue) showIntegrationIssue(result.issue, true)
+          else if (result.status === 'failed') message.error(result.reason || '定位失败')
           else if (result.status !== 'located') message.info(result.reason || '已打开文件')
         })
         .catch((reason) => {
@@ -92,7 +95,7 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
           if (requestSequence === sequence.current) setNavigating(false)
         })
     },
-    [enabled, record.id]
+    [enabled, record.id, showIntegrationIssue]
   )
   if (error) return <div className="p-6 text-sm text-[#B3261E]">{error}</div>
   if (!content)

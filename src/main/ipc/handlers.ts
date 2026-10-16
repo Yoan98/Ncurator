@@ -1,5 +1,6 @@
 import { FileReviewService } from '../services/ai/fileChanges/FileReviewService'
-import type { OpenFileReviewLocationRequest } from '../../shared/fileReview'
+import { isWpsApplication, type OpenFileReviewLocationRequest } from '../../shared/fileReview'
+import { notifyWpsFileOpened } from '../services/wps/officeFileWriteNotify'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { SystemNotificationService } from '../services/SystemNotificationService'
 import type { TelemetryService } from '../services/telemetry/TelemetryService'
@@ -1853,8 +1854,12 @@ export function registerHandlers(services: {
     async (
       _event,
       payload: OpenFileWithApplicationRequest
-    ): Promise<OpenFileWithApplicationResponse> =>
-      openWithService.open(payload?.filePath || '', payload?.applicationId || '')
+    ): Promise<OpenFileWithApplicationResponse> => {
+      const filePath = payload?.filePath || ''
+      return openWithService.open(filePath, payload?.applicationId || '', (application) => {
+        if (isWpsApplication(application)) notifyWpsFileOpened(filePath)
+      })
+    }
   )
 
   ipcMain.handle('reveal-path', async (_event, rawPath: string) => {

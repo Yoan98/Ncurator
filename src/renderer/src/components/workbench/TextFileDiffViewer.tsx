@@ -212,7 +212,7 @@ export function TextFileDiffViewer({
         </span>
         <div className="flex min-w-0 items-center justify-between gap-2 pl-3 pr-2">
           <span className="truncate" title={file.readOnly ? '只读' : '可编辑'}>
-            当前文件
+            {file.readOnly ? '当前文件（只读）' : '当前文件（可编辑）'}
           </span>
           <div className="flex shrink-0 items-center gap-0.5">
             <Tooltip title="上一处差异">

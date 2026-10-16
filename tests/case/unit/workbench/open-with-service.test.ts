@@ -110,19 +110,26 @@ describe('OpenWithService', () => {
       ]
     })
     const runNativeOpen = vi.fn().mockResolvedValue({ success: true })
+    const onOpened = vi.fn()
     const service = new OpenWithService({ runNativeList, runNativeOpen })
 
     await service.list(filePath)
-    expect(await service.open(filePath, 'untrusted-path')).toEqual({
+    expect(await service.open(filePath, 'untrusted-path', onOpened)).toEqual({
       success: false,
       error: 'application is not available for this file'
     })
-    expect(await service.open(filePath, 'system-handler')).toEqual({ success: true })
+    expect(onOpened).not.toHaveBeenCalled()
+    expect(await service.open(filePath, 'system-handler', onOpened)).toEqual({ success: true })
+    expect(onOpened).toHaveBeenCalledOnce()
+    expect(onOpened).toHaveBeenCalledWith(expect.objectContaining({ id: 'system-handler' }))
     expect(runNativeList).toHaveBeenCalledTimes(1)
     expect(runNativeOpen).toHaveBeenCalledWith(
       filePath,
       expect.objectContaining({ id: 'system-handler' })
     )
+    runNativeOpen.mockResolvedValueOnce({ success: false })
+    await service.open(filePath, 'system-handler', onOpened)
+    expect(onOpened).toHaveBeenCalledOnce()
   })
 
   it('uses public macOS workspace association APIs', () => {

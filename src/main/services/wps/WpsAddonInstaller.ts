@@ -2,7 +2,8 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { authAddinNeedsRewrite, mergeAuthAddin } from './authAddin'
+import { authAddinNeedsRewrite, mergeAuthAddin, readAddonAvailability } from './authAddin'
+import type { WpsAddonAvailability, WpsHost } from '../../../shared/wpsIntegration'
 import {
   WPS_ADDON_DIR_NAME,
   WPS_ADDON_NAME,
@@ -104,7 +105,9 @@ export class WpsAddonInstaller implements WpsAddonInstallerLike {
     const existingPublish = await fsp.readFile(publishPath, 'utf8').catch(() => '')
     if (!publishXmlHasAddonUrl(existingPublish, addonUrl)) {
       if (existingPublish) {
-        await fsp.writeFile(`${publishPath}.ncurator-backup`, existingPublish, 'utf8').catch(() => undefined)
+        await fsp
+          .writeFile(`${publishPath}.ncurator-backup`, existingPublish, 'utf8')
+          .catch(() => undefined)
       }
       await fsp.writeFile(publishPath, mergePublishXml(existingPublish, addonUrl), 'utf8')
     }
@@ -112,7 +115,9 @@ export class WpsAddonInstaller implements WpsAddonInstallerLike {
     const authPath = path.join(jsAddonsDir, 'authaddin.json')
     const existingAuth = await fsp.readFile(authPath, 'utf8').catch(() => '')
     if (existingAuth && authAddinNeedsRewrite(existingAuth, addonUrl)) {
-      await fsp.writeFile(`${authPath}.ncurator-backup`, existingAuth, 'utf8').catch(() => undefined)
+      await fsp
+        .writeFile(`${authPath}.ncurator-backup`, existingAuth, 'utf8')
+        .catch(() => undefined)
       await fsp.writeFile(authPath, mergeAuthAddin(existingAuth, addonUrl), 'utf8')
     }
 
@@ -130,5 +135,18 @@ export class WpsAddonInstaller implements WpsAddonInstallerLike {
         fsp.rm(path.join(jsAddonsDir, dirName), { recursive: true, force: true })
       )
     )
+  }
+}
+
+export const getWpsAddonAvailability = async (host: WpsHost): Promise<WpsAddonAvailability> => {
+  const directory = resolveWpsJsAddonsDir({})
+  if (!directory) return 'unconfirmed'
+  try {
+    return readAddonAvailability(
+      await fsp.readFile(path.join(directory, 'authaddin.json'), 'utf8'),
+      host
+    )
+  } catch {
+    return 'unconfirmed'
   }
 }

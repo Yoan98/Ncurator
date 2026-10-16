@@ -4,6 +4,7 @@ import type {
   ReviewNavigationResult
 } from '../shared/fileReview'
 import type { ModelSource } from '../shared/modelSources'
+import type { WpsIntegrationNotice } from '../shared/wpsIntegration'
 import type {
   PartnerCacheRequest,
   PartnerCachePreview,
@@ -363,6 +364,7 @@ export type DesktopApi = {
     applicationId: string | null
   }) => Promise<ListOpenWithApplicationsResponse>
   onOpenWithPreferenceChanged: (cb: (extension: string) => void) => () => void
+  onWpsIntegrationNotice: (cb: (notice: WpsIntegrationNotice) => void) => () => void
   listOpenWithApplications: (
     payload: ListOpenWithApplicationsRequest
   ) => Promise<ListOpenWithApplicationsResponse>

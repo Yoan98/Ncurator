@@ -43,6 +43,7 @@ import WorkspaceFileExplorer, { type WorkspaceFileExplorerMode } from './Workspa
 import WorkspaceFilesEmptyState from './WorkspaceFilesEmptyState'
 import { findLatestFileChangeForPath } from './fileChangeGroups'
 import { shouldShowWpsOpenWithHint, WPS_OPEN_WITH_HINT } from './wpsOpenWithHint'
+import { WPS_INTEGRATION_MANUAL_URL } from '../../../../shared/constants'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
@@ -431,7 +432,10 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
             <Tooltip title={WPS_OPEN_WITH_HINT} placement="bottom">
               <button
                 type="button"
-                className="flex h-8 w-7 shrink-0 cursor-help items-center justify-center text-[#91918E] transition-colors hover:text-[#37352F]"
+                className="flex h-8 w-7 shrink-0 cursor-pointer items-center justify-center text-[#91918E] transition-colors hover:text-[#37352F]"
+                onClick={() => {
+                  void window.api.openExternal(WPS_INTEGRATION_MANUAL_URL)
+                }}
                 aria-label={WPS_OPEN_WITH_HINT}
                 data-testid={workbenchSelectors.wpsOpenWithHint}
               >

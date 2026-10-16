@@ -9,7 +9,7 @@ const extensionOf = (filePath: string): string => {
   return dot >= 0 ? baseName.slice(dot).toLowerCase() : ''
 }
 
-export const WPS_OPEN_WITH_HINT = `首次用 WPS 打开时，如弹出加载项授权，允许后 WPS 将会自动刷新显示${PRODUCT_NAME_ZH}更改后的内容。`
+export const WPS_OPEN_WITH_HINT = `WPS 联动使用说明：启用${PRODUCT_NAME_ZH}加载项后，可刷新写回内容并从审核定位。`
 
 export const isWpsRefreshableFilePath = (filePath: string): boolean =>
   WPS_REFRESHABLE_EXTENSIONS.has(extensionOf(filePath))

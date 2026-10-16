@@ -1,5 +1,3 @@
-import { createReadStream } from 'node:fs'
-import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -73,26 +71,15 @@ export class FileReviewService {
       const application = listed.applications.find((a) => a.id === listed.defaultApplicationId)
       if (!application || !isWpsApplication(application))
         throw new Error('请先将 WPS 设为此类型文件在馆长内的默认应用')
-      let target = region.target
-      let staleReason: string | undefined
-      if (target?.kind === 'excel') {
-        const hash = createHash('sha256')
-        for await (const chunk of createReadStream(filePath)) {
-          if (!Buffer.isBuffer(chunk)) throw new Error('无法校验当前文件版本')
-          hash.update(chunk)
-        }
-        if (hash.digest('hex') !== review.content.index.afterChecksum) {
-          target = null
-          staleReason = '文件已被后续修改，无法确认原单元格坐标；已打开当前文件'
-        }
-      }
+      // Resolve against the live WPS document, including unsaved edits. A whole-file
+      // checksum cannot establish whether this particular cell or object moved.
+      await fs.access(filePath)
       if (this.latestRequests.get(request.changeRecordId) !== token)
         return { status: 'opened', reason: '已切换到其他定位请求' }
-      const result = await navigateOfficeReview(filePath, target, async () => {
+      return await navigateOfficeReview(filePath, region.target, async () => {
         const opened = await this.applications.open(filePath, application.id)
         if (!opened.success) throw new Error(opened.error || '无法打开 WPS')
       })
-      return staleReason && result.status === 'opened' ? { ...result, reason: staleReason } : result
     } catch (error) {
       return { status: 'failed', reason: error instanceof Error ? error.message : String(error) }
     } finally {

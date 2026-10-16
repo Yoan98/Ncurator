@@ -1,4 +1,24 @@
 import { WPS_ADDON_HOSTS, WPS_ADDON_LEGACY_NAMES, WPS_ADDON_NAME } from './constants'
+import type { WpsAddonAvailability, WpsHost } from '../../../shared/wpsIntegration'
+
+export const readAddonAvailability = (raw: string, host: WpsHost): WpsAddonAvailability => {
+  try {
+    const section = JSON.parse(raw)?.[host] as Record<string, AuthEntry> | undefined
+    if (!section || typeof section !== 'object') return 'unconfirmed'
+    const entries = Object.values(section).filter(
+      (entry) => entry && typeof entry === 'object' && entry.name === WPS_ADDON_NAME
+    )
+    // Conflicting or absent records do not prove authorization or its denial.
+    if (entries.length !== 1) return 'unconfirmed'
+    return entries[0].enable === false
+      ? 'disabled'
+      : entries[0].enable === true
+        ? 'enabled'
+        : 'unconfirmed'
+  } catch {
+    return 'unconfirmed'
+  }
+}
 
 type AuthEntry = {
   enable?: boolean
@@ -18,10 +38,7 @@ const normalizeAddonLoopbackUrl = (addonUrl: string): string =>
 export const addonUrlsEquivalent = (left: string, right: string): boolean =>
   left.trim().replace(/\/+$/, '').toLowerCase() === right.trim().replace(/\/+$/, '').toLowerCase()
 
-const eachAddonAuthEntry = (
-  raw: string,
-  visit: (entry: AuthEntry) => void
-): boolean => {
+const eachAddonAuthEntry = (raw: string, visit: (entry: AuthEntry) => void): boolean => {
   let parsed: Record<string, unknown>
   try {
     parsed = JSON.parse(raw) as Record<string, unknown>
@@ -36,7 +53,8 @@ const eachAddonAuthEntry = (
     if (!section || typeof section !== 'object' || Array.isArray(section)) continue
     const record = section as Record<string, unknown>
     for (const [key, value] of Object.entries(record)) {
-      if (key === NAMELIST_KEY || !value || typeof value !== 'object' || Array.isArray(value)) continue
+      if (key === NAMELIST_KEY || !value || typeof value !== 'object' || Array.isArray(value))
+        continue
       const entry = value as AuthEntry
       if (!entry.name || !names.has(entry.name)) continue
       visit(entry)
@@ -72,7 +90,8 @@ export const mergeAuthAddin = (raw: string, addonUrl: string): string => {
     if (!section || typeof section !== 'object' || Array.isArray(section)) continue
     const record = section as Record<string, unknown>
     for (const [key, value] of Object.entries(record)) {
-      if (key === NAMELIST_KEY || !value || typeof value !== 'object' || Array.isArray(value)) continue
+      if (key === NAMELIST_KEY || !value || typeof value !== 'object' || Array.isArray(value))
+        continue
       const entry = value as AuthEntry
       if (!entry.name || !names.has(entry.name)) continue
       entry.mode = 2

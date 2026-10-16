@@ -502,7 +502,7 @@
 
   function normalizedText(value) {
     return (
-      String(value || '')
+      String(value == null ? '' : value)
         // WPS paragraph/cell text includes end-of-cell and layout control characters.
         // eslint-disable-next-line no-control-regex
         .replace(/[\r\n\t\u0007\u000b\u000c]/g, ' ')
@@ -537,38 +537,125 @@
         }
       }
     }
-    var matches = []
+    var matches = [],
+      deadline = Date.now() + 1200,
+      exhausted = false
+    var original = normalizedText(target.text),
+      quoteText = normalizedText(target.quote)
+    var quoteAt = quoteText ? original.indexOf(quoteText) : -1
+    var left = quoteAt >= 0 ? original.slice(Math.max(0, quoteAt - 48), quoteAt) : ''
+    var right =
+      quoteAt >= 0
+        ? original.slice(quoteAt + quoteText.length, quoteAt + quoteText.length + 48)
+        : ''
+    function consider(paragraph, previous, next) {
+      var text = normalizedText(paragraph.Text)
+      var retained = Boolean(original && text.indexOf(original) >= 0)
+      var quoteRetained = Boolean(
+        quoteText &&
+        text.indexOf(quoteText) >= 0 &&
+        ((left.length >= 8 && text.indexOf(left + quoteText) >= 0) ||
+          (right.length >= 8 && text.indexOf(quoteText + right) >= 0))
+      )
+      var neighbors =
+        Number(Boolean(target.previous && previous === normalizedText(target.previous))) +
+        Number(Boolean(target.next && next === normalizedText(target.next)))
+      var framed =
+        neighbors === 2 &&
+        Boolean(
+          left.length >= 8 &&
+          right.length >= 8 &&
+          text.indexOf(left) >= 0 &&
+          text.indexOf(right) > text.indexOf(left)
+        )
+      // An image-only paragraph has no searchable text; both real neighboring
+      // paragraphs must establish its container before selecting it.
+      var emptyContainer = !original && !text && neighbors === 2
+      if (!retained && !quoteRetained && !framed && !emptyContainer) return
+      var key = String(paragraph.Start) + ':' + String(paragraph.End)
+      if (
+        matches.some(function (m) {
+          return m.key === key && m.story === r
+        })
+      )
+        return
+      matches.push({
+        range: paragraph,
+        key: key,
+        story: r,
+        context: neighbors
+      })
+    }
     for (var r = 0; r < ranges.length; r += 1) {
       var paragraphs = ranges[r].Paragraphs,
         count = paragraphs.Count
       if (!count) throw new Error('文档尚未加载完成')
       var center = Math.min(count, target.paragraph),
         indices = [center]
-      // Validate the stored paragraph and nearby context; never walk an entire large document through the host API.
       for (var distance = 1; distance <= 32; distance += 1) {
         if (center - distance >= 1) indices.push(center - distance)
         if (center + distance <= count) indices.push(center + distance)
       }
       for (var n = 0; n < indices.length; n += 1) {
-        var i = indices[n],
-          paragraph = paragraphs.Item(i).Range
-        if (normalizedText(paragraph.Text) !== normalizedText(target.text)) continue
-        var previous = i > 1 ? normalizedText(paragraphs.Item(i - 1).Range.Text) : ''
-        var next = i < count ? normalizedText(paragraphs.Item(i + 1).Range.Text) : ''
-        matches.push({
-          range: paragraph,
-          context:
-            previous === normalizedText(target.previous) && next === normalizedText(target.next)
-        })
+        if (Date.now() > deadline) {
+          exhausted = true
+          break
+        }
+        var i = indices[n]
+        consider(
+          paragraphs.Item(i).Range,
+          i > 1 ? normalizedText(paragraphs.Item(i - 1).Range.Text) : '',
+          i < count ? normalizedText(paragraphs.Item(i + 1).Range.Text) : ''
+        )
+      }
+      // Native range search handles large moves without enumerating the whole document
+      // through the host API. It never changes Selection or document bytes.
+      var queries = [original.slice(0, 200)]
+      if (left.length >= 8) queries.push(left.slice(-200))
+      if (right.length >= 8) queries.push(right.slice(0, 200))
+      var hits = 0
+      try {
+        for (var q = 0; q < queries.length; q += 1) {
+          if (!queries[q]) continue
+          var search = ranges[r].Duplicate,
+            end = search.End
+          while (search.Start < end) {
+            if (Date.now() > deadline || hits++ >= 64) {
+              exhausted = true
+              break
+            }
+            var find = search.Find
+            find.ClearFormatting()
+            find.Execute(queries[q], true, false, false, false, false, true, 0, false)
+            if (!find.Found) break
+            consider(search.Paragraphs.Item(1).Range, '', '')
+            var from = search.End
+            if (from <= search.Start) break
+            search.SetRange(from, end)
+          }
+        }
+      } catch {
+        // Without native search, accept only locally verified context, or a
+        // unique retained paragraph when the complete story was examined.
+        if (indices.length < count) {
+          matches = matches.filter(function (m) {
+            return m.story !== r || m.context > 0
+          })
+        }
       }
     }
-    // Nearby uniqueness alone cannot prove identity after a large move elsewhere in the document.
-    matches = matches.filter(function (m) {
-      return m.context
-    })
+    if (exhausted) throw new Error('定位查找超时，无法确认唯一位置，请在 WPS 中查找原文')
+    if (matches.length > 1) {
+      var contextual = matches.filter(function (m) {
+        return m.context > 0
+      })
+      if (contextual.length === 1) matches = contextual
+    }
     if (matches.length !== 1)
       throw new Error(
-        matches.length ? '文字重复，无法唯一定位修改位置' : '当前文档内容已变化，无法确认原修改位置'
+        matches.length
+          ? '存在多处相同内容，无法唯一定位修改位置'
+          : '当前文档内容已变化，无法确认原修改位置'
       )
     var range = matches[0].range.Duplicate
     var quote = target.quote || '',
@@ -594,11 +681,12 @@
     return {
       selection: { kind: 'docx', start: selected.Start, end: selected.End },
       status: exact ? 'located' : 'container',
-      reason: exact ? undefined : '已定位到对应段落或内容范围'
+      reason: exact ? undefined : '已定位到相关段落，原修改内容可能已有后续变化'
     }
   }
 
   function navigatePpt(item, target, app) {
+    var deadline = Date.now() + 1200
     var slides = item.Slides,
       slide = null
     try {
@@ -609,6 +697,7 @@
     if (!slide || Number(slide.SlideID) !== target.slideId) {
       slide = null
       for (var index = 1; index <= slides.Count; index += 1) {
+        if (Date.now() > deadline) throw new Error('幻灯片查找超时，无法确认原修改位置')
         var candidateSlide = slides.Item(index)
         if (Number(candidateSlide.SlideID) === target.slideId) {
           slide = candidateSlide
@@ -620,21 +709,14 @@
     var shape = null
     if (target.shapeId) {
       for (var i = 1; i <= slide.Shapes.Count; i += 1) {
+        if (Date.now() > deadline) throw new Error('幻灯片元素查找超时，无法确认原修改位置')
         var candidate = slide.Shapes.Item(i)
         if (Number(candidate.Id) === target.shapeId) {
           shape = candidate
           break
         }
       }
-      if (shape && target.text) {
-        var text = ''
-        try {
-          text = shape.TextFrame.TextRange.Text
-        } catch {
-          /* visual object */
-        }
-        if (normalizedText(text) !== normalizedText(target.text)) shape = null
-      }
+      // SlideID and ShapeId establish identity even when text was edited later.
     }
     app.ActiveWindow.View.GotoSlide(slide.SlideIndex)
     if (Number(app.ActiveWindow.View.Slide.SlideID) !== target.slideId)
@@ -658,53 +740,165 @@
   function navigateExcel(item, target, app) {
     var sheet = item.Worksheets.Item(target.sheet)
     if (!sheet) throw new Error('当前文件中对应工作表已不存在')
-    var range = sheet.Range(target.address)
-    var first = range.Cells.Item(1, 1),
-      values = []
-    try {
-      values.push(first.Formula)
-    } catch {
-      /* Formula may be unavailable for an error value. */
-    }
-    try {
-      values.push(first.Value2)
-    } catch {
-      /* Use the displayed value when needed. */
-    }
-    try {
-      values.push(first.Text)
-    } catch {
-      /* The raw value is sufficient when available. */
-    }
-    var expected = normalizedText(target.value).replace(/^=/, '')
-    if (
-      !values.some(function (value) {
-        return normalizedText(value).replace(/^=/, '') === expected
-      })
-    )
-      throw new Error('单元格内容或位置已变化，未使用旧坐标定位')
-    if (item.Saved === false) {
-      // 打开时重新计算也会令 Saved=false。只有原值在当前工作表中唯一且仍位于
-      // 目标地址时，才允许定位；重复值、空值和区域不能证明未保存结构的身份。
-      var confirmed = false
+    var deadline = Date.now() + 1200
+    function cellMatches(cell, expected) {
+      var values = []
       try {
-        var expectedAddress = String(target.address).replace(/\$/g, '').toUpperCase(),
-          what = String(target.value || '').replace(/[~*?]/g, '~$&'),
-          used = sheet.UsedRange
-        if (what && /^[A-Z]+[1-9]\d*$/.test(expectedAddress)) {
-          var found = used.Find(what, undefined, -4123, 1, 1, 1, true, false, false)
-          if (found && String(found.Address(false, false)).toUpperCase() === expectedAddress) {
-            var next = used.Find(what, found, -4123, 1, 1, 1, true, false, false)
-            confirmed = Boolean(
-              next && String(next.Address(false, false)).toUpperCase() === expectedAddress
-            )
+        if (cell.Formula) values.push(cell.Formula)
+      } catch {
+        /* error value */
+      }
+      try {
+        values.push(cell.Value2)
+      } catch {
+        /* use display value */
+      }
+      try {
+        values.push(cell.Text)
+      } catch {
+        /* raw value is sufficient */
+      }
+      return values.some(function (value) {
+        return (
+          normalizedText(value).replace(/^=/, '') === normalizedText(expected).replace(/^=/, '')
+        )
+      })
+    }
+    var anchors = target.anchors || [],
+      candidates = [],
+      complete = true
+    var requiresContext =
+      anchors.some(function (a) {
+        return a.row === 0 && a.column !== 0
+      }) &&
+      anchors.some(function (a) {
+        return a.column === 0 && a.row !== 0
+      })
+    function consider(cell) {
+      var row = Number(cell.Row),
+        column = Number(cell.Column)
+      if (!row || !column) return
+      var matching = anchors.filter(function (anchor) {
+        if (row + anchor.row < 1 || column + anchor.column < 1) return false
+        return cellMatches(sheet.Cells.Item(row + anchor.row, column + anchor.column), anchor.value)
+      })
+      var valueMatches = cellMatches(cell, target.value)
+      // Two independent axes prevent repeated numbers in a table from appearing
+      // to prove identity. A changed value may still identify its row/column.
+      var rowAnchor = matching.some(function (a) {
+        return a.row === 0 && a.column !== 0
+      })
+      var columnAnchor = matching.some(function (a) {
+        return a.column === 0 && a.row !== 0
+      })
+      if (!(valueMatches || (rowAnchor && columnAnchor))) return
+      if (requiresContext && !(rowAnchor && columnAnchor)) return
+      var key = row + ':' + column
+      if (
+        !candidates.some(function (c) {
+          return c.key === key
+        })
+      )
+        candidates.push({
+          cell: cell,
+          key: key,
+          changed: !valueMatches,
+          anchored: rowAnchor && columnAnchor
+        })
+    }
+    // Search exact values with explicit options; never rely on WPS's last Find settings.
+    var seed = String(target.value || '') ? { row: 0, column: 0, value: target.value } : anchors[0]
+    if (seed && String(seed.value)) {
+      var used = sheet.UsedRange,
+        found = null,
+        firstAddress = '',
+        hits = 0
+      var what = String(seed.value).replace(/[~*?]/g, '~$&')
+      try {
+        while (true) {
+          if (Date.now() > deadline || hits++ >= 64) {
+            complete = false
+            break
           }
+          found = used.Find(what, found || undefined, -4123, 1, 1, 1, true, false, false)
+          if (!found) break
+          var address = String(found.Address(false, false))
+          if (address === firstAddress) break
+          if (!firstAddress) firstAddress = address
+          var row = Number(found.Row) - seed.row,
+            column = Number(found.Column) - seed.column
+          if (row > 0 && column > 0) consider(sheet.Cells.Item(row, column))
         }
       } catch {
-        /* An unavailable search API cannot establish identity. */
+        complete = false
       }
-      if (!confirmed)
-        throw new Error('工作簿有未保存变化，无法唯一确认原单元格位置；已保留编辑并打开文件')
+    } else complete = false
+    // If the target value itself changed, search one retained contextual anchor.
+    if (complete && !candidates.length && anchors.length) {
+      seed = anchors[0]
+      try {
+        var anchorHit = sheet.UsedRange.Find(
+          String(seed.value).replace(/[~*?]/g, '~$&'),
+          undefined,
+          -4123,
+          1,
+          1,
+          1,
+          true,
+          false,
+          false
+        )
+        var startAddress = anchorHit && String(anchorHit.Address(false, false)),
+          attempts = 0
+        while (anchorHit) {
+          if (Date.now() > deadline || attempts++ >= 64) {
+            complete = false
+            break
+          }
+          var rr = Number(anchorHit.Row) - seed.row,
+            cc = Number(anchorHit.Column) - seed.column
+          if (rr > 0 && cc > 0) consider(sheet.Cells.Item(rr, cc))
+          anchorHit = sheet.UsedRange.Find(
+            String(seed.value).replace(/[~*?]/g, '~$&'),
+            anchorHit,
+            -4123,
+            1,
+            1,
+            1,
+            true,
+            false,
+            false
+          )
+          if (anchorHit && String(anchorHit.Address(false, false)) === startAddress) break
+        }
+      } catch {
+        complete = false
+      }
+    }
+    if (candidates.length > 1) {
+      var anchored = candidates.filter(function (c) {
+        return c.anchored
+      })
+      if (anchored.length === 1) candidates = anchored
+    }
+    if (!complete || candidates.length !== 1)
+      throw new Error(
+        !complete
+          ? '单元格查找未完成，无法确认唯一位置'
+          : candidates.length
+            ? '存在多处相同数据，无法唯一确认原单元格位置'
+            : '单元格内容或表格结构已变化，无法确认原修改位置'
+      )
+    var candidate = candidates[0],
+      range = candidate.cell
+    // A merged area's dimensions may have changed. Resolve its current container,
+    // rather than extending stale coordinates into unrelated cells.
+    if (target.address.indexOf(':') >= 0) {
+      try {
+        range = candidate.cell.MergeArea
+      } catch {
+        throw new Error('无法确认当前合并区域')
+      }
     }
     sheet.Activate()
     range.Select()
@@ -719,13 +913,20 @@
       }
     }
     if (String(app.ActiveSheet.Name) !== target.sheet) throw new Error('WPS 未确认目标工作表')
-    var address = String(app.Selection.Address(false, false))
-    if (address.replace(/\$/g, '') !== target.address.replace(/\$/g, ''))
+    var selectedAddress = String(app.Selection.Address(false, false))
+    if (
+      selectedAddress.replace(/\$/g, '').toUpperCase() !==
+      String(range.Address(false, false)).replace(/\$/g, '').toUpperCase()
+    )
       throw new Error('WPS 未确认目标单元格选区')
     return {
-      selection: { kind: 'excel', sheet: String(app.ActiveSheet.Name), address: address },
-      status: target.container ? 'container' : 'located',
-      reason: target.container ? '已定位到删除位置附近的有效单元格' : undefined
+      selection: { kind: 'excel', sheet: String(app.ActiveSheet.Name), address: selectedAddress },
+      status: target.container || candidate.changed ? 'container' : 'located',
+      reason: candidate.changed
+        ? '已定位到相关单元格，内容已有后续修改'
+        : target.container
+          ? '已定位到删除位置附近的有效单元格'
+          : undefined
     }
   }
 
@@ -800,6 +1001,8 @@
       }
       result.fullName = activeItem.FullName
     } catch (error) {
+      result.status = 'opened'
+      delete result.selection
       result.reason = describeError(error)
     }
     return result

@@ -27,7 +27,11 @@ vi.mock('node:child_process', async (importOriginal) => {
 import { spawn } from 'node:child_process'
 import { shell } from 'electron'
 
-import { authAddinNeedsRewrite, mergeAuthAddin } from '../../../../src/main/services/wps/authAddin'
+import {
+  authAddinNeedsRewrite,
+  mergeAuthAddin,
+  readAddonAvailability
+} from '../../../../src/main/services/wps/authAddin'
 import {
   WPS_ADDON_DIR_NAME,
   WPS_ADDON_NAME,
@@ -231,6 +235,18 @@ describe('WPS publish.xml merge', () => {
 })
 
 describe('WPS authaddin merge', () => {
+  it('distinguishes a disabled record from absence, ambiguity and malformed configuration', () => {
+    const record = (enable: boolean) => ({ name: 'ncurator-sync', enable })
+    const raw = JSON.stringify({ wps: { a: record(false) }, et: { a: record(true) } })
+    expect(readAddonAvailability(raw, 'wps')).toBe('disabled')
+    expect(readAddonAvailability(raw, 'et')).toBe('enabled')
+    expect(readAddonAvailability(raw, 'wpp')).toBe('unconfirmed')
+    expect(readAddonAvailability('{', 'wps')).toBe('unconfirmed')
+    expect(
+      readAddonAvailability(JSON.stringify({ wps: { a: record(true), b: record(false) } }), 'wps')
+    ).toBe('unconfirmed')
+  })
+
   it('rewrites our entries to HTTP mode without changing enable', () => {
     const merged = mergeAuthAddin(
       JSON.stringify({
@@ -528,7 +544,11 @@ describe('WpsSyncService', () => {
   it('hands atomically replaced macOS documents to WPS without calling the native Open API', async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
-    const service = new WpsSyncService({ skipInstall: true, preferredPort: 0 })
+    const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
+      skipInstall: true,
+      preferredPort: 0
+    })
     services.push(service)
     await service.start()
     const port = service.getPort()!
@@ -562,6 +582,7 @@ describe('WpsSyncService', () => {
   })
   it('skips listening when WPS is not installed', async () => {
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       installer: {
         install: async () => ({ installed: false, reason: 'wps-jsaddons-missing' }),
@@ -576,6 +597,7 @@ describe('WpsSyncService', () => {
   it('closes an open document then opens it after write', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -630,6 +652,7 @@ describe('WpsSyncService', () => {
   it('treats add-in disconnect during close as released', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -659,6 +682,7 @@ describe('WpsSyncService', () => {
   it('refuses to write when the add-in reports the close failed', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -701,6 +725,7 @@ describe('WpsSyncService', () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -765,6 +790,7 @@ describe('WpsSyncService', () => {
   it('drops an instance documents when its stream disconnects', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -794,6 +820,7 @@ describe('WpsSyncService', () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -854,6 +881,7 @@ describe('WpsSyncService', () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -909,6 +937,7 @@ describe('WpsSyncService', () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -954,6 +983,7 @@ describe('WpsSyncService', () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -1007,6 +1037,7 @@ describe('WpsSyncService', () => {
   it('registers a successful reload-result so the next close can find the document', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -1039,6 +1070,7 @@ describe('WpsSyncService', () => {
   it('sends open only to the matching office component', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -1055,7 +1087,11 @@ describe('WpsSyncService', () => {
     const excel = readSseEvents(port as number, 'et')
     await waitFor(() => word.events.some((event) => event.type === 'ping'))
     await waitFor(() => excel.events.some((event) => event.type === 'ping'))
-
+    await reportOpenItems(port as number, {
+      component: 'wps',
+      clientId: word.clientId,
+      fullNames: ['/tmp/opened.docx']
+    })
     service.notifyWritten('/tmp/opened.docx')
     await waitFor(() =>
       word.events.some(
@@ -1071,6 +1107,7 @@ describe('WpsSyncService', () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     let writtenPort: number | undefined
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -1109,6 +1146,7 @@ describe('WpsSyncService', () => {
   it('records dispatches on GET /status even without connected add-ins', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
       installer: {
@@ -1165,6 +1203,7 @@ describe('WpsSyncService', () => {
     const install = vi.fn(async () => ({ installed: false as const }))
     const writePort = vi.fn(async () => undefined)
     const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: 0,
       installer: { install, writePort }
@@ -1193,6 +1232,7 @@ describe('WpsSyncService', () => {
 
   it('starts a fallback observer server and restores the live preferred port on stop', async () => {
     const first = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: 0,
       installer: {
@@ -1207,6 +1247,7 @@ describe('WpsSyncService', () => {
 
     const writePort = vi.fn(async () => undefined)
     const second = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: livePort,
       installer: {
@@ -1230,6 +1271,7 @@ describe('WpsSyncService', () => {
 
   it('does not bind a fallback when a production instance finds the preferred port already serving', async () => {
     const first = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: 0,
       installer: {
@@ -1244,6 +1286,7 @@ describe('WpsSyncService', () => {
 
     const writePort = vi.fn(async () => undefined)
     const second = new WpsSyncService({
+      readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: livePort,
       installer: {
@@ -1260,7 +1303,11 @@ describe('WpsSyncService', () => {
 
 describe('WPS review navigation', () => {
   it('routes a separate navigate command to the document owner and correlates the acknowledgement', async () => {
-    const service = new WpsSyncService({ skipInstall: true, preferredPort: 0 })
+    const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
+      skipInstall: true,
+      preferredPort: 0
+    })
     services.push(service)
     await service.start()
     const port = service.getPort()!
@@ -1416,11 +1463,25 @@ describe('WPS add-in review selection', () => {
     const range = {
       Row: 2,
       Column: 2,
-      Cells: { Item: () => ({ Formula: '', Value2: 'edited', Text: 'edited' }) },
+      Formula: '',
+      Value2: 'edited',
+      Text: 'edited',
+      Address: () => 'B2',
       Select: vi.fn()
     }
-    const sheet = { Name: 'Data', Range: () => range, Activate: vi.fn() }
-    const found = { Address: () => 'B2' }
+    const sheet = {
+      Name: 'Data',
+      Range: () => range,
+      Cells: {
+        Item: (_row: number, column: number) => ({
+          ...range,
+          Column: column,
+          Address: () => (column === 2 ? 'B2' : 'C2')
+        })
+      },
+      Activate: vi.fn()
+    }
+    const found = { Row: 2, Column: 2, Address: () => 'B2' }
     const find = vi.fn(() => found)
     Object.assign(sheet, { UsedRange: { Find: find } })
     const item = {
@@ -1463,17 +1524,118 @@ describe('WPS add-in review selection', () => {
     range.Select.mockClear()
     stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'et-dirty' }) })
     expect(reports.at(-1)?.data).toMatchObject({ status: 'located' })
-    expect(find).toHaveBeenCalledTimes(2)
-    find.mockReturnValueOnce(found).mockImplementationOnce(() => ({ Address: () => 'C2' }))
+    expect(find).toHaveBeenCalledTimes(4)
+    find
+      .mockReturnValueOnce(found)
+      .mockImplementationOnce(() => ({ Row: 2, Column: 3, Address: () => 'C2' }))
     range.Select.mockClear()
     stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'et-dirty-duplicate' }) })
     expect(reports.at(-1)?.data).toMatchObject({ status: 'opened' })
-    expect(reports.at(-1)?.data.reason).toContain('未保存变化')
+    expect(reports.at(-1)?.data.reason).toContain('多处相同')
     expect(range.Select).not.toHaveBeenCalled()
     expect(item.Saved).toBe(false)
     expect(item.Close).not.toHaveBeenCalled()
     expect(item.Save).not.toHaveBeenCalled()
     expect(app.Workbooks.Open).not.toHaveBeenCalled()
+  })
+
+  it('recovers moved Excel cells using row and column anchors, including zero and changed values', async () => {
+    const values = new Map<string, string | number>([
+      ['4:3', 0],
+      ['4:2', 'account-a'],
+      ['3:3', 'revenue'],
+      ['9:3', 0]
+    ])
+    let selected = ''
+    const makeCell = (row: number, column: number) => ({
+      Row: row,
+      Column: column,
+      get Value2() {
+        return values.get(`${row}:${column}`) ?? ''
+      },
+      Formula: '',
+      get Text() {
+        return String(this.Value2)
+      },
+      Address: () => `${String.fromCharCode(64 + column)}${row}`,
+      Select() {
+        selected = this.Address()
+      }
+    })
+    const sheet = {
+      Name: 'Data',
+      Cells: { Item: makeCell },
+      Activate: vi.fn(),
+      Range: () => makeCell(2, 2),
+      UsedRange: {
+        Find: (what: string, after?: ReturnType<typeof makeCell>) => {
+          const matching = [...values.entries()]
+            .filter(([, value]) => String(value) === what)
+            .map(([key]) => {
+              const [row, column] = key.split(':').map(Number)
+              return makeCell(row, column)
+            })
+          if (!matching.length) return null
+          const previous = matching.findIndex((cell) => cell.Address() === after?.Address())
+          return matching[(previous + 1) % matching.length]
+        }
+      }
+    }
+    const item = {
+      FullName: '/tmp/moved.xlsx',
+      Name: 'moved.xlsx',
+      Saved: false,
+      Worksheets: { Item: () => sheet },
+      Activate: vi.fn(),
+      Close: vi.fn(),
+      Save: vi.fn()
+    }
+    const app = {
+      Name: 'WPS Spreadsheets',
+      Workbooks: { Count: 1, Item: () => item, Open: vi.fn() },
+      ActiveWorkbook: item,
+      ActiveSheet: sheet,
+      ActiveWindow: {},
+      Selection: { Address: () => selected },
+      Goto: vi.fn()
+    }
+    const { reports, stream } = await startReviewAddon(app, 'et')
+    const command = {
+      type: 'navigate',
+      requestId: 'moved-zero',
+      path: item.FullName,
+      target: {
+        kind: 'excel',
+        sheet: 'Data',
+        address: 'B2',
+        value: '0',
+        container: false,
+        anchors: [
+          { row: 0, column: -1, value: 'account-a' },
+          { row: -1, column: 0, value: 'revenue' }
+        ]
+      }
+    }
+    stream.onmessage?.({ data: JSON.stringify(command) })
+    expect(reports.at(-1)?.data).toMatchObject({
+      status: 'located',
+      selection: { kind: 'excel', sheet: 'Data', address: 'C4' }
+    })
+    values.set('4:3', 7)
+    stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'changed-value' }) })
+    expect(reports.at(-1)?.data).toMatchObject({
+      status: 'container',
+      selection: { address: 'C4' }
+    })
+    values.set('9:2', 'account-a')
+    values.set('8:3', 'revenue')
+    values.set('4:3', 0)
+    stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'ambiguous' }) })
+    expect(reports.at(-1)?.data).toMatchObject({ status: 'opened' })
+    expect(reports.at(-1)?.data.reason).toContain('多处相同')
+    expect(item.Close).not.toHaveBeenCalled()
+    expect(item.Save).not.toHaveBeenCalled()
+    expect(item.Saved).toBe(false)
   })
 
   it('resolves the current slide by native identity and confirms its selected shape', async () => {
@@ -1521,6 +1683,12 @@ describe('WPS add-in review selection', () => {
       status: 'located',
       selection: { kind: 'ppt', slideId: 512, shapeId: 42 }
     })
+    shape.TextFrame.TextRange.Text = 'edited plus later manual text'
+    stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'wpp-text-edited' }) })
+    expect(reports.at(-1)?.data).toMatchObject({
+      status: 'located',
+      selection: { kind: 'ppt', slideId: 512, shapeId: 42 }
+    })
     shapes.Count = 0
     stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'wpp-deleted-shape' }) })
     expect(reports.at(-1)?.data).toMatchObject({
@@ -1533,7 +1701,7 @@ describe('WPS add-in review selection', () => {
   })
 
   it('selects a verified range without closing, saving, or changing a dirty document', async () => {
-    const text = 'context\rchanged paragraph\r'
+    let text = 'context\rchanged paragraph\r'
     const selection = { Start: 0, End: 0 }
     const makeRange = (start: number, end: number) => ({
       Start: start,
@@ -1642,9 +1810,31 @@ describe('WPS add-in review selection', () => {
         }
       })
     })
-    expect(reports.at(-1)?.data.status).toBe('opened')
-    expect(reports.at(-1)?.data.reason).toContain('无法确认')
+    expect(reports.at(-1)?.data.status).toBe('located')
     expect(selection).toEqual({ Start: 8, End: 15 })
+    text = 'context\rchanged paragraph appended later\r'
+    paragraphs[1] = makeRange(8, text.length)
+    stream.onmessage?.({
+      data: JSON.stringify({
+        type: 'navigate',
+        requestId: 'appended',
+        path: item.FullName,
+        target: {
+          kind: 'docx',
+          part: 'word/document.xml',
+          paragraph: 2,
+          text: 'changed paragraph',
+          previous: 'context before editing',
+          next: '',
+          quote: 'changed',
+          container: false
+        }
+      })
+    })
+    expect(reports.at(-1)?.data).toMatchObject({
+      status: 'located',
+      selection: { start: 8, end: 15 }
+    })
     app.ActiveDocument = { ...item, FullName: '/tmp/other.docx' }
     stream.onmessage?.({
       data: JSON.stringify({
@@ -1660,9 +1850,250 @@ describe('WPS add-in review selection', () => {
   })
 })
 
+describe('WPS bounded native paragraph search', () => {
+  it('finds a large move, rejects distant duplicates and caps repeated hits', async () => {
+    const paragraphs = Array.from({ length: 10_000 }, () => 'unrelated\r')
+    paragraphs[8000] = 'UNIQUE_MOVED_MARKER\r'
+    let text = '',
+      starts: number[] = [],
+      paragraphReads = 0
+    const rebuild = () => {
+      text = ''
+      starts = []
+      for (const paragraph of paragraphs) {
+        starts.push(text.length)
+        text += paragraph
+      }
+    }
+    rebuild()
+    const selection = { Start: 0, End: 0 }
+    const makeRange = (from: number, to: number) => ({
+      Start: from,
+      End: to,
+      get Text() {
+        return text.slice(this.Start, this.End)
+      },
+      get Duplicate(): ReturnType<typeof makeRange> {
+        return makeRange(this.Start, this.End)
+      },
+      get Paragraphs() {
+        const rangeStart = this.Start
+        return {
+          Count: paragraphs.length,
+          Item: (index: number) => {
+            paragraphReads++
+            const actual =
+              rangeStart === 0
+                ? index - 1
+                : starts.findIndex(
+                    (start, i) =>
+                      start <= rangeStart && (i + 1 === starts.length || starts[i + 1] > rangeStart)
+                  )
+            return { Range: makeRange(starts[actual], starts[actual] + paragraphs[actual].length) }
+          }
+        }
+      },
+      get Find() {
+        const result = {
+          Found: false,
+          ClearFormatting() {},
+          Execute: (query: string) => {
+            const found = text.indexOf(query, this.Start)
+            result.Found = found >= 0 && found + query.length <= this.End
+            if (result.Found) {
+              this.Start = found
+              this.End = found + query.length
+            }
+          }
+        }
+        return result
+      },
+      SetRange(start: number, end: number) {
+        this.Start = start
+        this.End = end
+      },
+      Select() {
+        selection.Start = this.Start
+        selection.End = this.End
+      }
+    })
+    const item = {
+      FullName: '/tmp/large.docx',
+      Name: 'large.docx',
+      Saved: false,
+      get Content() {
+        return makeRange(0, text.length)
+      },
+      Activate: vi.fn(),
+      Close: vi.fn(),
+      Save: vi.fn()
+    }
+    const app = {
+      Name: 'WPS Writer',
+      Documents: { Count: 1, Item: () => item },
+      ActiveDocument: item,
+      Selection: selection,
+      ActiveWindow: { ScrollIntoView: vi.fn() }
+    }
+    const { reports, stream } = await startReviewAddon(app, 'wps')
+    const command = {
+      type: 'navigate',
+      requestId: 'large-moved',
+      path: item.FullName,
+      target: {
+        kind: 'docx',
+        part: 'word/document.xml',
+        paragraph: 2,
+        text: 'UNIQUE_MOVED_MARKER',
+        previous: '',
+        next: '',
+        quote: 'UNIQUE_MOVED_MARKER',
+        container: false
+      }
+    }
+    stream.onmessage?.({ data: JSON.stringify(command) })
+    expect(reports.at(-1)?.data).toMatchObject({
+      status: 'located',
+      selection: { start: starts[8000], end: starts[8000] + 19 }
+    })
+    expect(paragraphReads).toBeLessThan(220)
+    paragraphs[9000] = 'UNIQUE_MOVED_MARKER\r'
+    rebuild()
+    stream.onmessage?.({ data: JSON.stringify({ ...command, requestId: 'distant-duplicate' }) })
+    expect(reports.at(-1)?.data.status).toBe('opened')
+    expect(reports.at(-1)?.data.reason).toContain('多处相同')
+    stream.onmessage?.({
+      data: JSON.stringify({
+        ...command,
+        requestId: 'hit-limit',
+        target: { ...command.target, text: 'unrelated', quote: 'unrelated' }
+      })
+    })
+    expect(reports.at(-1)?.data.status).toBe('opened')
+    expect(reports.at(-1)?.data.reason).toContain('超时')
+    expect(item.Close).not.toHaveBeenCalled()
+    expect(item.Save).not.toHaveBeenCalled()
+  })
+})
+
+describe('WPS integration feedback', () => {
+  it('respects explicit disable even when an old client is still connected', async () => {
+    const notices: object[] = []
+    const service = new WpsSyncService({
+      skipInstall: true,
+      preferredPort: 0,
+      readAvailability: async () => 'disabled',
+      onNotice: (notice) => notices.push(notice)
+    })
+    services.push(service)
+    await service.start()
+    const port = service.getPort()!,
+      owner = readSseEvents(port, 'wps', 'disabled-owner')
+    await waitFor(() => owner.events.length > 0)
+    await reportOpenItems(port, {
+      component: 'wps',
+      clientId: owner.clientId,
+      fullNames: ['/tmp/disabled.docx']
+    })
+    const open = vi.fn(async () => undefined)
+    expect(await service.navigate('/tmp/disabled.docx', null, open)).toMatchObject({
+      status: 'opened',
+      issue: { host: 'wps', state: 'not-enabled' }
+    })
+    expect(await service.prepareClose('/tmp/disabled.docx')).toBe(false)
+    await service.notifyWritten('/tmp/disabled.docx')
+    await service.notifyOpened('/tmp/disabled.docx')
+    expect(owner.events.some((e) => ['navigate', 'close', 'open'].includes(e.type || ''))).toBe(
+      false
+    )
+    expect(notices).toContainEqual({
+      kind: 'integration',
+      issue: { host: 'wps', state: 'not-enabled' }
+    })
+    expect(open).toHaveBeenCalledOnce()
+    notices.length = 0
+    await service.notifyWritten('/tmp/never-opened.docx')
+    expect(notices).toHaveLength(0)
+    owner.close()
+  })
+
+  it.each(['enabled', 'unconfirmed'] as const)(
+    'does not mistake a different connected component for %s Word availability',
+    async (availability) => {
+      const notices: object[] = []
+      const service = new WpsSyncService({
+        skipInstall: true,
+        preferredPort: 0,
+        readAvailability: async () => availability,
+        onNotice: (notice) => notices.push(notice)
+      })
+      services.push(service)
+      await service.start()
+      const port = service.getPort()!,
+        excel = readSseEvents(port, 'et', 'only-excel')
+      await waitFor(() => excel.events.length > 0)
+      vi.useFakeTimers()
+      try {
+        const checking = service.notifyOpened('/tmp/unconnected.docx')
+        await vi.advanceTimersByTimeAsync(8500)
+        await checking
+        expect(notices).toEqual([
+          {
+            kind: 'integration',
+            issue: {
+              host: 'wps',
+              state: availability === 'enabled' ? 'not-connected' : 'unconfirmed'
+            }
+          }
+        ])
+      } finally {
+        vi.useRealTimers()
+        excel.close()
+      }
+    }
+  )
+})
+
+describe('WPS refresh failure reporting', () => {
+  it('reports a known-open document whose reload cannot be confirmed, without blaming authorization', async () => {
+    const notices: object[] = []
+    const service = new WpsSyncService({
+      skipInstall: true,
+      preferredPort: 0,
+      readAvailability: async () => 'enabled',
+      onNotice: (notice) => notices.push(notice)
+    })
+    services.push(service)
+    await service.start()
+    const port = service.getPort()!,
+      owner = readSseEvents(port, 'wps', 'reload-timeout')
+    await waitFor(() => owner.events.length > 0)
+    await reportOpenItems(port, {
+      component: 'wps',
+      clientId: owner.clientId,
+      fullNames: ['/tmp/timeout.docx']
+    })
+    vi.useFakeTimers()
+    try {
+      await service.notifyWritten('/tmp/timeout.docx')
+      await vi.advanceTimersByTimeAsync(46_000)
+      expect(notices).toEqual([
+        { kind: 'refresh', reason: expect.stringContaining('未确认 WPS 已刷新') }
+      ])
+    } finally {
+      vi.useRealTimers()
+      owner.close()
+    }
+  })
+})
+
 describe('WPS review cold open', () => {
   it('opens once and keeps only the latest location while the document registers', async () => {
-    const service = new WpsSyncService({ skipInstall: true, preferredPort: 0 })
+    const service = new WpsSyncService({
+      readAvailability: async () => 'enabled',
+      skipInstall: true,
+      preferredPort: 0
+    })
     services.push(service)
     await service.start()
     const port = service.getPort()!,
