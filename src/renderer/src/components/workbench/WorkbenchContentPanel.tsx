@@ -1,6 +1,6 @@
 import FileIcon from '../FileIcon'
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Dropdown, Empty, Spin, Tooltip, message, type MenuProps } from 'antd'
+import { Button, Empty, Spin, Tooltip, message } from 'antd'
 import {
   HiArrowLeft,
   HiArrowTopRightOnSquare,
@@ -30,6 +30,7 @@ import type {
 } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import ChangeCountBadges from './ChangeCountBadges'
+import FileOpenWithMenu from './FileOpenWithMenu'
 import WorkspacePathLabel from './WorkspacePathLabel'
 const TextFileDiffViewer = React.lazy(() =>
   import('./TextFileDiffViewer').then((m) => ({ default: m.TextFileDiffViewer }))
@@ -285,7 +286,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
       }
       setOpenWithApplications(response.applications)
       setPreferredApplicationId(response.preferredApplicationId)
-      if (response.preferenceReset) message.info('原默认应用已不可用，已恢复跟随系统默认')
+      if (response.preferenceReset) message.info('原默认应用已不可用，已恢复使用系统设置')
     } catch (error) {
       setOpenWithApplications([])
       setOpenWithError(error instanceof Error ? error.message : '无法获取可用应用')
@@ -317,14 +318,22 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
     // The native association query is keyed by the active path.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, canOpen, isDeletedCreatedFile])
-  const setPreferred = async (applicationId: string | null): Promise<void> => {
+  const setPreferred = async (applicationId: string | null): Promise<boolean> => {
     try {
       const result = await window.api.setPreferredOpenApplication({ filePath, applicationId })
       if (!result.success) throw new Error(result.error)
       setOpenWithApplications(result.applications)
       setPreferredApplicationId(result.preferredApplicationId)
+      const name = result.applications.find((item) => item.id === applicationId)?.name
+      message.success(
+        name
+          ? `已将 ${name} 设为 ${openWithExtension(filePath)} 的默认打开应用`
+          : '已恢复使用系统设置'
+      )
+      return true
     } catch (reason) {
       message.error(String(reason))
+      return false
     }
   }
 
@@ -347,61 +356,6 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
       message.error(errorMessage)
     }
   }
-
-  const openWithApplicationItems: MenuProps['items'] =
-    openWithApplications.length > 0
-      ? openWithApplications.map((application) => ({
-          key: application.id,
-          icon: application.iconDataUrl ? (
-            <img src={application.iconDataUrl} alt="" className="h-5 w-5 shrink-0 object-contain" />
-          ) : (
-            <HiArrowTopRightOnSquare className="h-4 w-4 text-[#91918E]" />
-          ),
-          label: (
-            <span
-              className="flex min-w-0 flex-1 items-center gap-3"
-              data-testid={`${workbenchSelectors.openWithApplicationPrefix}-${application.id}`}
-            >
-              <span className="min-w-0 flex-1 truncate">{application.name}</span>
-              <button
-                type="button"
-                className="shrink-0 text-[11px] text-[#787774] hover:text-[#0B6BCB]"
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  void setPreferred(application.id)
-                }}
-              >
-                {preferredApplicationId === application.id ? '馆长默认' : '设为默认'}
-              </button>
-              {application.isDefault && !preferredApplicationId ? (
-                <span className="shrink-0 text-[11px] text-[#9B9A97]">默认</span>
-              ) : null}
-            </span>
-          )
-        }))
-      : [
-          {
-            key: 'empty',
-            disabled: true,
-            label: openWithLoading ? '正在获取可用应用…' : openWithError || '没有可用的应用'
-          }
-        ]
-  const openWithItems: MenuProps['items'] = [
-    ...(openWithApplicationItems || []),
-    { type: 'divider' },
-    {
-      key: 'follow-system-default',
-      label: '跟随系统默认',
-      onClick: () => {
-        void setPreferred(null)
-      }
-    },
-    {
-      key: 'reveal-containing-folder',
-      label: '打开所在文件夹'
-    }
-  ]
 
   return (
     <div
@@ -485,26 +439,21 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
               </button>
             </Tooltip>
           ) : null}
-          <Dropdown
-            trigger={['click']}
-            placement="bottomRight"
-            overlayClassName="workbench-open-with-menu"
-            menu={{
-              items: openWithItems,
-              style: { maxHeight: 360, overflowY: 'auto' },
-              onClick: ({ key }) => {
-                if (key === 'reveal-containing-folder') {
-                  void onRevealPath(revealPath)
-                  return
-                }
-                const application = openWithApplications.find((item) => item.id === key)
-                if (application) void openWithApplication(application)
-              }
+          <FileOpenWithMenu
+            key={filePath}
+            applications={openWithApplications}
+            preferredApplicationId={preferredApplicationId}
+            loading={openWithLoading}
+            error={openWithError}
+            onLoad={() => {
+              void loadOpenWithApplications()
             }}
-            onOpenChange={(open) => {
-              if (open && openWithApplications.length === 0 && !openWithLoading) {
-                void loadOpenWithApplications()
-              }
+            onOpen={(application) => {
+              void openWithApplication(application)
+            }}
+            onSetPreferred={setPreferred}
+            onReveal={() => {
+              void onRevealPath(revealPath)
             }}
           >
             <div
@@ -546,7 +495,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 data-testid={workbenchSelectors.applyOpenSystemButton}
               />
             </div>
-          </Dropdown>
+          </FileOpenWithMenu>
           {showReviewActions ? (
             <Tooltip title={revertTitle}>
               <Button

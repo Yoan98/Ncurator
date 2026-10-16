@@ -1,0 +1,16 @@
+diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
+index c7e609cf08f2c95b6be749b9474dd0b2bcee33ee..62228ce6301d0f09840b60ab68f1ab6eaad9b183 100644
+--- a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
++++ b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
+@@ -443,9 +443,9 @@ let CollapsedCodeOverlayWidget = class CollapsedCodeOverlayWidget extends ViewZo
+                 const isFullyRevealed = this._isFullyRevealed(reader);
+                 const lineCount = _unchangedRegion.getHiddenModifiedRange(reader).length;
+                 const linesHiddenText = localize(146, '{0} hidden lines', lineCount);
+-                const span = $('span', this._compactControl ? undefined : { title: localize(147, 'Double click to unfold') }, this._compactControl && isFullyRevealed ? localize(148, 'Collapse unchanged lines') : linesHiddenText);
++                const span = $(this._compactControl ? 'span' : 'button', this._compactControl ? undefined : { type: 'button', class: 'unchanged-lines-label', title: localize(147, 'Click to unfold') }, this._compactControl && isFullyRevealed ? localize(148, 'Collapse unchanged lines') : linesHiddenText);
+                 if (!this._compactControl) {
+-                    reader.store.add(addDisposableListener(span, EventType.DBLCLICK, e => {
++                    reader.store.add(addDisposableListener(span, EventType.CLICK, e => {
+                         if (e.button !== 0) {
+                             return;
+                         }

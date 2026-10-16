@@ -372,10 +372,80 @@ describe('workbench result e2e', () => {
             .getByText('默认', { exact: true })
             .isVisible()
             .catch(() => false)
-          const firstApplication = openWithApplicationItems.first()
-          await firstApplication.getByRole('button', { name: '设为默认', exact: true }).click()
-          await visibleOpenWithMenu.getByText('馆长默认', { exact: true }).waitFor()
-          await visibleOpenWithMenu.getByText('跟随系统默认', { exact: true }).click()
+          const applicationLabelVisible = await openWithApplicationItems
+            .first()
+            .evaluate((element) => {
+              const name = element.querySelector('span')
+              const row = element.closest('[role="menuitem"]')
+              if (!name || !row) return false
+              const range = document.createRange()
+              range.selectNodeContents(name)
+              const text = range.getBoundingClientRect()
+              const bounds = row.getBoundingClientRect()
+              return (
+                text.width > 15 &&
+                text.height > 0 &&
+                text.left >= bounds.left &&
+                text.left < bounds.right - 15 &&
+                text.top >= bounds.top &&
+                text.bottom <= bounds.bottom
+              )
+            })
+          const applicationRowsHaveNoButtons =
+            (await openWithApplicationItems.getByRole('button').count()) === 0
+          const footerEntriesVisible = await visibleOpenWithMenu.evaluate((menu) => {
+            const bounds = menu.getBoundingClientRect()
+            return ['默认打开应用…', '打开所在文件夹'].every((label) => {
+              const row = [...menu.querySelectorAll('[role="menuitem"]')].find(
+                (item) => item.textContent?.trim() === label
+              )
+              if (!row) return false
+              const rect = row.getBoundingClientRect()
+              return rect.top >= bounds.top && rect.bottom <= bounds.bottom
+            })
+          })
+          await page.waitForFunction(() =>
+            [...document.querySelectorAll('.workbench-open-with-menu')].every((popup) =>
+              popup
+                .getAnimations({ subtree: true })
+                .every((animation) => animation.playState !== 'running')
+            )
+          )
+          await runtime.captureScreenshot({
+            name: 'open-with-application-list',
+            message: '应用列表只显示生效默认，不显示逐行设置按钮'
+          })
+          await visibleOpenWithMenu.getByText('默认打开应用…', { exact: true }).click()
+          const backToApplications = page.getByRole('button', { name: '返回打开应用列表' })
+          await backToApplications.waitFor({ state: 'visible' })
+          const settingsHaveNoScopeCaption = !(
+            await page.locator('.open-with-popup').innerText()
+          ).includes('仅在馆长内生效')
+          await runtime.captureScreenshot({
+            name: 'open-with-default-settings',
+            message: '默认应用选择与打开操作分开，设置页可返回'
+          })
+          await backToApplications.click()
+          await visibleOpenWithMenu.getByText('默认打开应用…', { exact: true }).click()
+          await openWithApplicationItems.first().click()
+          await backToApplications.waitFor({ state: 'hidden' })
+          const preferredAfterSelection = await page.evaluate(
+            async (filePath) => {
+              const result = await window.api.listOpenWithApplications({ filePath })
+              return result.success ? result.preferredApplicationId : undefined
+            },
+            path.join(workspace.rootPath, 'human-input.txt')
+          )
+          await visibleOpenWithMenu.getByText('默认打开应用…', { exact: true }).click()
+          await visibleOpenWithMenu.getByText('使用系统设置', { exact: true }).click()
+          await backToApplications.waitFor({ state: 'hidden' })
+          const preferenceCleared = await page.evaluate(
+            async (filePath) => {
+              const result = await window.api.listOpenWithApplications({ filePath })
+              return result.success && !result.preferredApplicationId
+            },
+            path.join(workspace.rootPath, 'human-input.txt')
+          )
           await page.keyboard.press('Escape')
           const resourceTabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
           await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
@@ -442,6 +512,15 @@ describe('workbench result e2e', () => {
             openWithApplicationCount,
             openWithMenuHasHorizontalOverflow,
             defaultApplicationMarkerVisible,
+            applicationRowsHaveNoButtons,
+            applicationLabelVisible,
+            footerEntriesVisible,
+            settingsHaveNoScopeCaption,
+            preferredAfterSelection,
+            preferenceCleared,
+            defaultSettingsOpenedFiles: signals.ipcInvokeEntries.filter(
+              (entry) => entry.name === 'openFileWithApplication'
+            ).length,
             markdownPreviewVisible,
             plainTextPreviewVisible,
             excelPreviewResults,
@@ -470,6 +549,13 @@ describe('workbench result e2e', () => {
               result.openWithApplicationCount >= 1 &&
               !result.openWithMenuHasHorizontalOverflow &&
               result.defaultApplicationMarkerVisible &&
+              result.applicationRowsHaveNoButtons &&
+              result.applicationLabelVisible &&
+              result.footerEntriesVisible &&
+              result.settingsHaveNoScopeCaption &&
+              Boolean(result.preferredAfterSelection) &&
+              result.preferenceCleared &&
+              result.defaultSettingsOpenedFiles === 0 &&
               result.openWithQueryCalls >= 1 &&
               result.markdownPreviewVisible &&
               result.plainTextPreviewVisible &&

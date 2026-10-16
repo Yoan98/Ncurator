@@ -1,11 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Button, Spin } from 'antd'
+import { Button, Spin, Tooltip } from 'antd'
+import { HiArrowDown, HiArrowUp } from 'react-icons/hi2'
+import { LuFoldVertical, LuUnfoldVertical } from 'react-icons/lu'
 import type { AiFileChangeRecord } from '../../../../shared/types'
 import { useEditableTextFile } from '../fileRenders/useEditableTextFile'
 import { workbenchSelectors } from '../../testing/selectors'
 import { monaco } from './monacoReview'
 
 type Counts = { insertCount: number; deleteCount: number }
+const reviewActionClass =
+  '!h-7 !w-7 !min-w-7 !rounded-[6px] !p-0 !text-[#91918E] hover:!bg-[#F4F4F2] hover:!text-[#37352F] focus-visible:!outline-2 focus-visible:!outline-[#0B6BCB] focus-visible:!outline-offset-[-2px]'
 export function TextFileDiffViewer({
   record,
   onCountsChange
@@ -194,30 +198,67 @@ export function TextFileDiffViewer({
       </div>
     )
   return (
-    <div className="flex h-full min-h-0 flex-col" data-testid={workbenchSelectors.textDiffViewer}>
-      <div className="grid shrink-0 grid-cols-2 border-b border-[#EEEEEC] py-1 text-xs text-[#787774]">
-        <span className="px-3">本次运行前 · 只读</span>
-        <span className="px-3">当前文件 · 可编辑</span>
-      </div>
-      <div className="flex shrink-0 items-center justify-end gap-1 border-b border-[#EEEEEC] px-2 py-1 text-xs text-[#787774]">
-        <Button size="small" disabled={paused} onClick={() => diff.current?.goToDiff('previous')}>
-          上一处
-        </Button>
-        <Button size="small" disabled={paused} onClick={() => diff.current?.goToDiff('next')}>
-          下一处
-        </Button>
-        <Button
-          size="small"
-          disabled={paused}
-          onClick={() => {
-            setFold(!fold)
-            diff.current?.updateOptions({
-              hideUnchangedRegions: { enabled: !fold, contextLineCount: 3 }
-            })
-          }}
-        >
-          {fold ? '展开未修改内容' : '折叠未修改内容'}
-        </Button>
+    <div
+      className="text-file-review flex h-full min-h-0 flex-col"
+      data-testid={workbenchSelectors.textDiffViewer}
+    >
+      <div
+        role="toolbar"
+        aria-label="文本审核"
+        className="grid h-9 shrink-0 grid-cols-2 items-center border-b border-[#EEEEEC] text-xs text-[#787774]"
+      >
+        <span className="px-3" title="只读">
+          本次运行前
+        </span>
+        <div className="flex min-w-0 items-center justify-between gap-2 pl-3 pr-2">
+          <span className="truncate" title={file.readOnly ? '只读' : '可编辑'}>
+            当前文件
+          </span>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <Tooltip title="上一处差异">
+              <Button
+                type="text"
+                aria-label="上一处差异"
+                className={reviewActionClass}
+                disabled={paused}
+                icon={<HiArrowUp className="h-4 w-4" />}
+                onClick={() => diff.current?.goToDiff('previous')}
+              />
+            </Tooltip>
+            <Tooltip title="下一处差异">
+              <Button
+                type="text"
+                aria-label="下一处差异"
+                className={reviewActionClass}
+                disabled={paused}
+                icon={<HiArrowDown className="h-4 w-4" />}
+                onClick={() => diff.current?.goToDiff('next')}
+              />
+            </Tooltip>
+            <Tooltip title={fold ? '展开未修改内容' : '折叠未修改内容'}>
+              <Button
+                type="text"
+                aria-label={fold ? '展开未修改内容' : '折叠未修改内容'}
+                aria-pressed={fold}
+                className={reviewActionClass}
+                disabled={paused}
+                icon={
+                  fold ? (
+                    <LuUnfoldVertical className="h-4 w-4" />
+                  ) : (
+                    <LuFoldVertical className="h-4 w-4" />
+                  )
+                }
+                onClick={() => {
+                  setFold(!fold)
+                  diff.current?.updateOptions({
+                    hideUnchangedRegions: { enabled: !fold, contextLineCount: 3 }
+                  })
+                }}
+              />
+            </Tooltip>
+          </div>
+        </div>
       </div>
       {file.saveError && (
         <div role="alert" className="bg-[#F8EBE9] px-3 py-1 text-xs text-[#B3261E]">

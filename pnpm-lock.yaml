@@ -8,6 +8,9 @@ patchedDependencies:
   '@js-preview/docx@1.6.4':
     hash: ct5vr5jhsv3bucursjwzv64g4a
     path: patches/@js-preview__docx@1.6.4.patch
+  monaco-editor@0.57.0:
+    hash: picefr2elbd4zt7g46w7bc7rrq
+    path: patches/monaco-editor@0.57.0.patch
   pptx-kit-preview@0.6.2:
     hash: lwzt4hp3vfourxarnxhjleevzi
     path: patches/pptx-kit-preview@0.6.2.patch
@@ -162,7 +165,7 @@ importers:
         version: 2.0.1
       monaco-editor:
         specifier: 0.57.0
-        version: 0.57.0
+        version: 0.57.0(patch_hash=picefr2elbd4zt7g46w7bc7rrq)
       node-pty:
         specifier: 1.2.0-beta.15
         version: 1.2.0-beta.15
@@ -14932,7 +14935,7 @@ snapshots:
 
   mkdirp@1.0.4: {}
 
-  monaco-editor@0.57.0:
+  monaco-editor@0.57.0(patch_hash=picefr2elbd4zt7g46w7bc7rrq):
     dependencies:
       dompurify: 3.4.15
       marked: 14.0.0

@@ -297,9 +297,33 @@ describe('workbench result e2e', () => {
             page,
             workbenchSelectors.assistantTurnArtifactPrefix
           ).count()
+          const reviewToolbar = diffViewer.getByRole('toolbar', { name: '文本审核' })
+          const compactReviewToolbar = await reviewToolbar.evaluate(
+            (element) =>
+              element.getBoundingClientRect().height <= 36 &&
+              element.querySelectorAll('button').length === 3
+          )
+          const previousDiff = reviewToolbar.getByRole('button', {
+            name: '上一处差异',
+            exact: true
+          })
+          const nextDiff = reviewToolbar.getByRole('button', { name: '下一处差异', exact: true })
+          await previousDiff.click()
+          await nextDiff.click()
           const omittedLineLabels = await diffViewer
-            .locator('.diff-hidden-lines-widget')
+            .locator('.unchanged-lines-label')
             .allTextContents()
+          const foldedLabelsLocalized =
+            omittedLineLabels.length > 0 &&
+            omittedLineLabels.every((label) => /^已折叠 \d+ 行$/.test(label.trim()))
+          const foldedLabels = diffViewer.getByRole('button', { name: /^已折叠 \d+ 行$/ })
+          await runtime.captureScreenshot({
+            name: 'compact-text-review',
+            message: '单行审核工具栏与中文折叠条'
+          })
+          await foldedLabels.last().click()
+          const oneRegionExpanded =
+            (await diffViewer.locator('.unchanged-lines-label').count()) < omittedLineLabels.length
           const omittedCountBeforeExpand = omittedLineLabels.length
           await diffViewer.getByRole('button', { name: '展开未修改内容', exact: true }).click()
           await page.waitForFunction(
@@ -491,6 +515,9 @@ describe('workbench result e2e', () => {
             resourceTabCount,
             standaloneArtifactCount,
             omittedLineLabels,
+            compactReviewToolbar,
+            foldedLabelsLocalized,
+            oneRegionExpanded,
             applyEntryCountDuringRun,
             modificationCountsVisibleBeforeClick,
             reviewEditSaved,
@@ -557,6 +584,9 @@ describe('workbench result e2e', () => {
               result.modificationCountsVisibleAfterSessionSwitch &&
               result.externalApplicationHintVisible &&
               result.omittedLineLabels.length > 0 &&
+              result.compactReviewToolbar &&
+              result.foldedLabelsLocalized &&
+              result.oneRegionExpanded &&
               result.omittedCountAfterExpand < result.omittedCountBeforeExpand &&
               result.workspaceExplorerToggleLabelBeforeOpen === '展开文件列表' &&
               result.workspaceExplorerToggleIcon === 'folder' &&

@@ -76,6 +76,7 @@ async function navigateReviewRegion(
   const { page } = runtime
   await page.bringToFront()
   await page.getByRole('button', { name: '选择打开应用' }).last().click()
+  await page.getByRole('menuitem', { name: '默认打开应用…' }).click()
   const menuApplications = page.locator(
     `[data-testid^="${workbenchSelectors.openWithApplicationPrefix}-"]`
   )
@@ -88,7 +89,8 @@ async function navigateReviewRegion(
         name: await item.innerText()
       })
     ) {
-      await item.getByRole('button', { name: /设为默认|馆长默认/ }).click()
+      await item.click()
+      await page.getByRole('button', { name: '返回打开应用列表' }).waitFor({ state: 'hidden' })
       selectedWps = true
       break
     }

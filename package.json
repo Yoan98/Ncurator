@@ -168,7 +168,8 @@
   "pnpm": {
     "patchedDependencies": {
       "pptx-kit-preview@0.6.2": "patches/pptx-kit-preview@0.6.2.patch",
-      "@js-preview/docx@1.6.4": "patches/@js-preview__docx@1.6.4.patch"
+      "@js-preview/docx@1.6.4": "patches/@js-preview__docx@1.6.4.patch",
+      "monaco-editor@0.57.0": "patches/monaco-editor@0.57.0.patch"
     }
   }
 }
