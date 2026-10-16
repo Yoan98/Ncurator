@@ -9,6 +9,7 @@ import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
 import SettingsPage from './pages/SettingsPage'
 import ModelDownloadPage from './pages/ModelDownloadPage'
 import NotificationCenter from './components/NotificationCenter'
+import { useWpsIntegrationNotices } from './components/workbench/wpsIntegrationFeedback'
 import { AppUpdateProvider } from './contexts/AppUpdateProvider'
 import AppWindowFrame from './components/app/AppWindowFrame'
 import UpdateRequiredPage from './pages/UpdateRequiredPage'
@@ -18,6 +19,11 @@ dayjs.locale('zh-cn')
 
 const { Content } = Layout
 const PENDING_NOTIFICATION_PARTNER_KEY = 'ncurator.pending-notification-partner'
+
+const WpsIntegrationNoticeBridge: React.FC = () => {
+  useWpsIntegrationNotices()
+  return null
+}
 
 const SystemNotificationNavigationBridge: React.FC = () => {
   const navigate = useNavigate()
@@ -136,6 +142,7 @@ function App(): React.JSX.Element {
           ) : (
             <HashRouter>
               <SystemNotificationNavigationBridge />
+              <WpsIntegrationNoticeBridge />
               <AppWindowFrame>
                 <MainLayout />
                 <NotificationCenter />

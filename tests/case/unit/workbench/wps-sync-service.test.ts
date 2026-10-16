@@ -3,6 +3,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OfficeReviewSelection } from '../../../../src/shared/fileReview'
+import type {
+  WpsAddonAvailability,
+  WpsHost,
+  WpsIntegrationNotice
+} from '../../../../src/shared/wpsIntegration'
 
 vi.mock('electron', () => ({
   app: {
@@ -1977,6 +1982,126 @@ describe('WPS bounded native paragraph search', () => {
 })
 
 describe('WPS integration feedback', () => {
+  it('resets feedback after confirmed recovery and watches a subsequent failure again', async () => {
+    let availability: WpsAddonAvailability = 'disabled'
+    const notices: WpsIntegrationNotice[] = []
+    const readAvailability = vi.fn(async () => availability)
+    const service = new WpsSyncService({
+      skipInstall: true,
+      preferredPort: 0,
+      readAvailability,
+      onNotice: (notice) => notices.push(notice)
+    })
+    services.push(service)
+    await service.start()
+    const owner = readSseEvents(service.getPort()!, 'wps', 'recovery-owner')
+    await waitFor(() => owner.events.length > 0)
+    const open = async () => undefined
+    vi.useFakeTimers()
+    try {
+      expect(await service.navigate('/tmp/recovery.docx', null, open)).toMatchObject({
+        issue: { host: 'wps', state: 'not-enabled' }
+      })
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(notices).toEqual([]) // An old connected runtime does not override disable.
+      availability = 'unconfirmed'
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(notices).toEqual([]) // A failed config read does not prove re-enablement.
+      availability = 'enabled'
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(notices).toEqual([{ kind: 'ready', host: 'wps' }])
+      const readsAfterRecovery = readAvailability.mock.calls.length
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(readAvailability).toHaveBeenCalledTimes(readsAfterRecovery)
+      availability = 'disabled'
+      expect(await service.navigate('/tmp/recovery.docx', null, open)).toMatchObject({
+        issue: { host: 'wps', state: 'not-enabled' }
+      })
+      availability = 'enabled'
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(notices).toEqual([
+        { kind: 'ready', host: 'wps' },
+        { kind: 'ready', host: 'wps' }
+      ])
+    } finally {
+      vi.useRealTimers()
+      owner.close()
+    }
+  })
+
+  it('requires the matching component connection before announcing recovery', async () => {
+    let availability: WpsAddonAvailability = 'disabled'
+    const notices: WpsIntegrationNotice[] = []
+    const service = new WpsSyncService({
+      skipInstall: true,
+      preferredPort: 0,
+      readAvailability: async () => availability,
+      onNotice: (notice) => notices.push(notice)
+    })
+    services.push(service)
+    await service.start()
+    vi.useFakeTimers()
+    try {
+      await service.navigate('/tmp/recovery.docx', null, async () => undefined)
+      availability = 'enabled'
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(notices).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+    const excel = readSseEvents(service.getPort()!, 'et', 'unrelated-excel')
+    await waitFor(() => excel.events.length > 0)
+    expect(notices).toEqual([])
+    const word = readSseEvents(service.getPort()!, 'wps', 'new-word-client')
+    try {
+      await waitFor(() => notices.some((notice) => notice.kind === 'ready'))
+      expect(notices).toEqual([{ kind: 'ready', host: 'wps' }])
+    } finally {
+      word.close()
+      excel.close()
+    }
+  })
+
+  it('keeps recovery notifications isolated across Word and Excel', async () => {
+    const availability: Record<WpsHost, WpsAddonAvailability> = {
+      wps: 'disabled',
+      et: 'disabled',
+      wpp: 'disabled'
+    }
+    const notices: WpsIntegrationNotice[] = []
+    const service = new WpsSyncService({
+      skipInstall: true,
+      preferredPort: 0,
+      readAvailability: async (host) => availability[host],
+      onNotice: (notice) => notices.push(notice)
+    })
+    services.push(service)
+    await service.start()
+    const word = readSseEvents(service.getPort()!, 'wps', 'word-isolation')
+    const excel = readSseEvents(service.getPort()!, 'et', 'excel-isolation')
+    await waitFor(() => word.events.length > 0 && excel.events.length > 0)
+    vi.useFakeTimers()
+    try {
+      await service.navigate('/tmp/recovery.docx', null, async () => undefined)
+      await service.navigate('/tmp/recovery.xlsx', null, async () => undefined)
+      availability.wps = 'enabled'
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(notices).toEqual([{ kind: 'ready', host: 'wps' }])
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(notices).toHaveLength(1)
+      availability.et = 'enabled'
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(notices).toEqual([
+        { kind: 'ready', host: 'wps' },
+        { kind: 'ready', host: 'et' }
+      ])
+    } finally {
+      vi.useRealTimers()
+      word.close()
+      excel.close()
+    }
+  })
+
   it('respects explicit disable even when an old client is still connected', async () => {
     const notices: object[] = []
     const service = new WpsSyncService({

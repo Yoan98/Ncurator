@@ -6,6 +6,7 @@ export type WpsIntegrationIssue = {
 }
 export type WpsIntegrationNotice =
   | { kind: 'integration'; issue: WpsIntegrationIssue }
+  | { kind: 'ready'; host: WpsHost }
   | { kind: 'refresh'; reason: string }
 
 export const WPS_HOST_LABELS: Record<WpsHost, string> = {

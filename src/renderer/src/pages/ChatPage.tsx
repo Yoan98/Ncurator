@@ -1,5 +1,4 @@
 import FileIcon from '../components/FileIcon'
-import { useWpsIntegrationNotices } from '../components/workbench/wpsIntegrationFeedback'
 import {
   flushAllTextFiles,
   flushReferencedTextFiles
@@ -891,7 +890,6 @@ const getUserAttachmentPaths = (messages: readonly ChatMessage[]): string[] =>
 
 const ChatPage: React.FC = () => {
   const { message, modal } = AntdApp.useApp()
-  useWpsIntegrationNotices()
   const navigate = useNavigate()
   const [partners, setPartners] = useState<PartnerListItem[]>([])
   const [partnersListHydrated, setPartnersListHydrated] = useState(false)

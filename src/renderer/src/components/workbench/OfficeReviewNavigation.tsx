@@ -9,7 +9,7 @@ import {
 } from '../../../../shared/fileReview'
 import { FileRenderViewer } from '../fileRenders'
 import PptDiffViewer from './PptDiffViewer'
-import { useWpsIntegrationFeedback } from './wpsIntegrationFeedback'
+import { resetWpsIntegrationFeedback, useWpsIntegrationFeedback } from './wpsIntegrationFeedback'
 
 export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
   const showIntegrationIssue = useWpsIntegrationFeedback()
@@ -85,8 +85,13 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
         .then((result) => {
           if (requestSequence !== sequence.current) return
           if (result.issue) showIntegrationIssue(result.issue, true)
-          else if (result.status === 'failed') message.error(result.reason || '定位失败')
-          else if (result.status !== 'located') message.info(result.reason || '已打开文件')
+          else if (result.status === 'located' || result.status === 'container') {
+            resetWpsIntegrationFeedback(
+              record.capability === 'docx' ? 'wps' : record.capability === 'ppt' ? 'wpp' : 'et'
+            )
+            if (result.status === 'container') message.info(result.reason || '已定位到相关内容范围')
+          } else if (result.status === 'failed') message.error(result.reason || '定位失败')
+          else message.info(result.reason || '已打开文件')
         })
         .catch((reason) => {
           if (requestSequence === sequence.current) message.error(String(reason))
@@ -95,7 +100,7 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
           if (requestSequence === sequence.current) setNavigating(false)
         })
     },
-    [enabled, record.id, showIntegrationIssue]
+    [enabled, record.id, record.capability, showIntegrationIssue]
   )
   if (error) return <div className="p-6 text-sm text-[#B3261E]">{error}</div>
   if (!content)

@@ -366,7 +366,9 @@ export class WpsSyncService {
     this.latestNavigation.set(key, requestId)
     try {
       const host = officeWriteHostForPath(resolved)
-      if (host && (await this.readAvailability(host)) === 'disabled') {
+      const availability = host ? await this.readAvailability(host) : undefined
+      if (host && availability === 'disabled') {
+        this.watchRecovery(host)
         await open()
         return {
           status: 'opened',
@@ -374,6 +376,7 @@ export class WpsSyncService {
           reason: 'WPS 加载项未启用，未完成定位'
         }
       }
+      if (host && availability === 'enabled' && this.hasComponentClient(host)) this.markReady(host)
       if (!this.registry.clientFor(resolved)) {
         let pending = this.navigationOpens.get(key)
         if (!pending) {
@@ -435,6 +438,9 @@ export class WpsSyncService {
   private readonly readAvailability: (host: WpsHost) => Promise<WpsAddonAvailability>
   private readonly onNotice?: (notice: WpsIntegrationNotice) => void
   private readonly disconnectedDocuments = new Map<string, number>()
+  private readonly unavailableHosts = new Set<WpsHost>()
+  private recoveryTimer?: ReturnType<typeof setInterval>
+  private checkingRecovery = false
 
   public constructor(options: WpsSyncServiceOptions = {}) {
     this.readAvailability = options.readAvailability ?? getWpsAddonAvailability
@@ -451,9 +457,50 @@ export class WpsSyncService {
 
   private async integrationIssue(host: WpsHost): Promise<WpsIntegrationIssue | undefined> {
     const availability = await this.readAvailability(host).catch(() => 'unconfirmed' as const)
-    if (availability === 'disabled') return { host, state: 'not-enabled' }
-    if (this.hasComponentClient(host)) return undefined
+    if (availability === 'disabled') {
+      this.watchRecovery(host)
+      return { host, state: 'not-enabled' }
+    }
+    if (this.hasComponentClient(host)) {
+      if (availability === 'enabled') this.markReady(host)
+      return undefined
+    }
+    this.watchRecovery(host)
     return { host, state: availability === 'enabled' ? 'not-connected' : 'unconfirmed' }
+  }
+
+  private watchRecovery(host: WpsHost): void {
+    if (this.stopped) return
+    this.unavailableHosts.add(host)
+    if (this.recoveryTimer) return
+    // Only watch components that have reported an issue. Stop once they recover;
+    // an old stream alone must not override an explicitly disabled add-in.
+    this.recoveryTimer = setInterval(() => void this.checkRecovery(), 1000)
+    this.recoveryTimer.unref?.()
+  }
+
+  private async checkRecovery(): Promise<void> {
+    if (this.checkingRecovery || this.stopped) return
+    this.checkingRecovery = true
+    try {
+      for (const host of this.unavailableHosts) {
+        if (!this.hasComponentClient(host)) continue
+        const availability = await this.readAvailability(host).catch(() => 'unconfirmed' as const)
+        if (!this.stopped && availability === 'enabled' && this.hasComponentClient(host))
+          this.markReady(host)
+      }
+    } finally {
+      this.checkingRecovery = false
+    }
+  }
+
+  private markReady(host: WpsHost): void {
+    if (!this.unavailableHosts.delete(host)) return
+    if (this.unavailableHosts.size === 0 && this.recoveryTimer) {
+      clearInterval(this.recoveryTimer)
+      this.recoveryTimer = undefined
+    }
+    this.onNotice?.({ kind: 'ready', host })
   }
 
   public async notifyOpened(filePath: string): Promise<void> {
@@ -626,6 +673,9 @@ export class WpsSyncService {
 
   public async stop(): Promise<void> {
     this.stopped = true
+    if (this.recoveryTimer) clearInterval(this.recoveryTimer)
+    this.recoveryTimer = undefined
+    this.unavailableHosts.clear()
     const ownedPort = this.port
     for (const client of this.clients) {
       try {
@@ -1076,6 +1126,7 @@ export class WpsSyncService {
     })
     const client: SseClient = { response, component, clientId }
     this.clients.add(client)
+    void this.checkRecovery()
     writeSse(response, { type: 'ping' })
     writeSse(response, { type: 'list' })
     this.flushPendingOpens(client)
