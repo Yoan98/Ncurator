@@ -41,6 +41,9 @@
 
 ```text
 .
+├── README.md / README.en.md          # 中英文开源项目首页与 Roadmap
+├── LICENSE                           # 标准 AGPL v3 许可证正文
+├── CONTRIBUTING.md / CONTRIBUTING.en.md # 中英文贡献指南
 ├── AGENTS.md                         # 根规则、文档入口、目录结构和协作规范
 ├── doc/                              # 项目文档
 │   ├── architecture.md               # 项目总架构
@@ -114,8 +117,8 @@
 │   │   └── shared/                   # 发布流程共享能力
 │   └── test/                         # 源码/正式包 E2E 编排和真实更新测试
 ├── build/                            # 构建相关资源
-├── logo/                             # logo 资源
-│   └── png/                          # png 格式 logo
+├── assets/                           # 项目展示与品牌素材
+│   └── brand/                        # logo 源文件及各平台格式；png/ 放 PNG 尺寸变体
 ├── .vscode/                          # VS Code 配置
 ├── .codex-tmp/                       # Codex 临时产物，不承载长期代码和文档
 ├── .pip-cache/                       # Python 依赖缓存，不承载长期代码和文档

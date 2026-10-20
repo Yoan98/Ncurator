@@ -16,7 +16,7 @@ import {
 } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/types'
 import { createDocxFile } from '../../../../src/main/services/ai/human/tools/docx/utils/createDocxFile'
 
-const fixturePath = path.resolve('tests/fixtures/workspace/灵感测试.docx')
+const fixturePath = path.resolve('tests/fixtures/workspace/济南市房屋建筑工程工法网上申报手册.docx')
 
 describe('docx recursive edit executor', () => {
   it('keeps shared media until its final visual reference is deleted', async () => {
@@ -88,7 +88,9 @@ describe('docx recursive edit executor', () => {
         buffer: oneDeleted.buffer,
         ops: [{ type: 'delete_node', nodeId: remaining!.nodeId }]
       })
-      expect((await JSZip.loadAsync(allDeleted.buffer)).file('word/media/ncurator-1.png')).toBeNull()
+      expect(
+        (await JSZip.loadAsync(allDeleted.buffer)).file('word/media/ncurator-1.png')
+      ).toBeNull()
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true })
     }
@@ -382,11 +384,7 @@ describe('docx recursive edit executor', () => {
   it('keeps visuals for text replacement and allows explicit owner-node replacement', async () => {
     const source = await fs.readFile(fixturePath)
     const beforeBundle = await loadDocxBundle(source)
-    const before = buildNodeIndex(
-      beforeBundle.documentDom,
-      beforeBundle.relationshipTargets,
-      beforeBundle.relationshipTypes
-    )
+    const before = buildDocumentNodeIndex(beforeBundle)
     const visual = collectVisualNodeEntries(before)[0]?.[1]
     expect(visual).toBeDefined()
     const ownerReplaced = await applyDocxOps({
@@ -426,11 +424,7 @@ describe('docx recursive edit executor', () => {
       ops: [{ type: 'replace_text', nodeId: paragraph.nodeId, oldText: query, newText: '测试替换' }]
     })
     const afterBundle = await loadDocxBundle(replaced.buffer)
-    const after = buildNodeIndex(
-      afterBundle.documentDom,
-      afterBundle.relationshipTargets,
-      afterBundle.relationshipTypes
-    )
+    const after = buildDocumentNodeIndex(afterBundle)
     expect(collectVisualNodeEntries(after)).toHaveLength(collectVisualNodeEntries(before).length)
     expect(after.outline.some((node) => node.text.includes('测试替换'))).toBe(true)
   })

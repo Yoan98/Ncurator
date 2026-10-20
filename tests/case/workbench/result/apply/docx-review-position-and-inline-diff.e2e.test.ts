@@ -32,16 +32,16 @@ const MARKER = 'cedar-apply-731'
 const EXTERNAL_APPLICATION_NOTICE = '如果外部应用仍显示旧内容，请关闭该文档后重新打开。'
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const INTRO_PARTS = [
-  { text: '本产品是一套面向中小学与青少年科创教育场景的 ', bold: false },
-  { text: '人工智能探究课堂系统', bold: true },
-  { text: '，以「AI 作为认知引导者与学习调度中枢」为核心理念，支持 ', bold: false },
-  { text: '讲授式、交互探究式、小组协作式', bold: true },
+  { text: '本产品是一套面向社区公开资料整理与分享场景的 ', bold: false },
+  { text: '公开资料整理工作台', bold: true },
+  { text: '，围绕文件归档、资料检索和修改审阅组织工作，支持 ', bold: false },
+  { text: '文件归档式、主题检索式、协作校对式', bold: true },
   {
-    text: ' 三种课堂学习模式，帮助教师低成本设计高质量探究课堂，帮助学生在真实问题情境中完成知识建构、能力发展与学习成果外化。',
+    text: ' 三种工作模式，帮助志愿者按主题维护公开资料，帮助参与者找到可复用内容、核对来源并共同完善文档。',
     bold: false
   }
 ]
-const CORE_NAMES = ['人工智能探究课堂系统', '讲授式', '交互探究式', '小组协作式']
+const CORE_NAMES = ['公开资料整理工作台', '文件归档式', '主题检索式', '协作校对式']
 
 const readPositioningParagraph = async (buffer: Buffer) => {
   const doc = await readReviewPart(buffer)
@@ -169,7 +169,7 @@ describe('workbench result e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请直接修改我刚选中的 sample-edit.docx。精简“本产品”开头的产品定位段落，保留产品名称、三种课堂模式名称、核心概念和原有格式。将完整的“风险段落：客户验收延期。”移到“日期”之后、“本周结论”之前；将本周结论中的126改为128；将“重点跟进”加粗；另将“其他内容”四个字加粗，保留该段已有字体颜色和黄色底色；其余文字与格式保留。在文末新增一段：“Workbench apply marker ${MARKER}”。完成后告诉我已写回。`
+            `请直接修改我刚选中的 sample-edit.docx。精简“本产品”开头的产品定位段落，保留产品名称、三种工作模式名称、核心概念和原有格式。将完整的“风险段落：客户验收延期。”移到“日期”之后、“本周结论”之前；将本周结论中的126改为128；将“重点跟进”加粗；另将“其他内容”四个字加粗，保留该段已有字体颜色和黄色底色；其余文字与格式保留。在文末新增一段：“Workbench apply marker ${MARKER}”。完成后告诉我已写回。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,

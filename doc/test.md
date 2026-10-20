@@ -51,7 +51,7 @@ tests/
 - `tests/case/{ai,knowledge,settings,unit,workbench,showcase}/**` 只允许放已在 `doc/test-plan/**` 登记的正式测试 case（`unit`、`showcase` 例外，不进入测试计划）。
 - `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，以及 backend/unit 直接引用的固定文件输入，统一复用该目录。
 - `tests/fixtures/sqlite/` 放数据库迁移 fixture。
-- `tests/fixtures/**` 全部是只读测试输入：测试禁止对其中任何文件原地写入、覆盖或修改；需要写入时，必须通过 `fixtures: []` 声明由 runner/harness 复制到隔离临时 workspace（或按 E2E 规则复制到临时目录），测完删除。fixture 需要更新时直接提交新二进制，禁止引入任何 fixture 生成器脚本（生成器不得以 `.test.ts` 形态进入 `tests/case/**` 自动发现）。
+- `tests/fixtures/**` 全部是只读测试输入：测试禁止对其中任何文件原地写入、覆盖或修改；需要写入时，必须通过 `fixtures: []` 声明由 runner/harness 复制到隔离临时 workspace（或按 E2E 规则复制到临时目录），测完删除。公开真实文档保留发布方原始字节；异常格式仅在隔离副本注入，不改写检入原件。fixture 需要更新时直接提交新二进制，禁止引入任何 fixture 生成器脚本（生成器不得以 `.test.ts` 形态进入 `tests/case/**` 自动发现）。
 - 当 case 直接传入 `tests/fixtures/workspace` 目录时，runner 应把该目录下的子内容原样复制到临时 workspace 根目录，而不是保留 `tests/fixtures/**` 中间层路径。
 
 ### 1.3 稳定映射模型
@@ -72,7 +72,7 @@ tests/
 测试 case 在 `doc/test-plan/**` 中统一使用以下字段：
 
 - `测试类型`
-  - `backend` 或 `e2e`；需要时以 ` / ` 追加执行方式，如 `backend / live`、`e2e / live`、`e2e / exclusive`。
+  - `backend` 或 `e2e`；需要时以 `/` 追加执行方式，如 `backend / live`、`e2e / live`、`e2e / exclusive`。
 - `What`
   - 这条 case 到底要验证什么。
 - `Why`

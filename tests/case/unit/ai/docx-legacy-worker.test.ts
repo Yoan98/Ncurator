@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/tools/docx/worker/docxWorker'
 
 const fixturePath = path.resolve(
-  'tests/fixtures/workspace/风险等级判断标准-图案设计【2026.2.10更新】.doc'
+  'tests/fixtures/workspace/长江干线（江苏段）大型船舶通航安全风险分级管控办法（初稿）.doc'
 )
 
 describe('docx legacy worker', () => {
@@ -32,9 +32,9 @@ describe('docx legacy worker', () => {
     expect(outline.ok).toBe(true)
     if (!outline.ok || outline.payload.action !== 'outline') return
     expect(outline.payload.nodes.length).toBeGreaterThan(0)
-    expect(outline.payload.nodes[0]?.text).toContain('风险等级的判断标准')
+    expect(outline.payload.nodes.some((node) => node.text.includes('通航安全风险'))).toBe(true)
 
-    const nodeId = outline.payload.nodes[0]!.nodeId
+    const nodeId = outline.payload.nodes.find((node) => node.text.includes('通航安全风险'))!.nodeId
     const nodes = await handleDocxWorkerRequest({
       requestId: 'nodes',
       runId,
@@ -47,7 +47,7 @@ describe('docx legacy worker', () => {
     expect(nodes.ok).toBe(true)
     if (nodes.ok && nodes.payload.action === 'get_nodes_by_ids') {
       expect(nodes.payload.nodes[0]?.type).toBe('paragraph')
-      expect(nodes.payload.nodes[0]?.text).toContain('风险等级的判断标准')
+      expect(nodes.payload.nodes[0]?.text).toContain('通航安全风险')
     }
 
     const search = await handleDocxWorkerRequest({
@@ -56,7 +56,7 @@ describe('docx legacy worker', () => {
       action: 'search',
       payload: {
         docId: opened.payload.docId,
-        query: '区别率',
+        query: '通航安全风险',
         mode: 'literal',
         scopeNodeIds: []
       }
@@ -75,8 +75,8 @@ describe('docx legacy worker', () => {
         operations: [
           {
             type: 'replace_text',
-            nodeId: outline.payload.nodes[0]!.nodeId,
-            oldText: '风险等级的判断标准',
+            nodeId,
+            oldText: '通航安全风险',
             newText: 'changed'
           }
         ]

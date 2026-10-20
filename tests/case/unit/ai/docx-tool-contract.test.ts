@@ -271,7 +271,7 @@ describe('tool result data fidelity', () => {
     const rendered = renderToolResultDataText({
       toolName: 'docx_read_nodes',
       data: {
-        sourcePath: '/workspace/灵感测试.docx',
+        sourcePath: '/workspace/申请公租房“高效办成一件事”操作指引.docx',
         nodes: [
           {
             type: 'paragraph',

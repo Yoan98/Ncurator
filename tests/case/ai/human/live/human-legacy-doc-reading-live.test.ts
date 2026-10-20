@@ -14,8 +14,9 @@ import {
 } from '../testUtils'
 import type { SelectedReference } from '../../../../../src/shared/types'
 
+// 原件来源：https://js.msa.gov.cn/art/2025/4/14/art_11434_1552287.html
 const LEGACY_DOC_FIXTURE_PATH =
-  `${SHARED_WORKSPACE_FIXTURE_PATH}/风险等级判断标准-图案设计【2026.2.10更新】.doc` as const
+  `${SHARED_WORKSPACE_FIXTURE_PATH}/长江干线（江苏段）大型船舶通航安全风险分级管控办法（初稿）.doc` as const
 
 const fileHash = async (filePath: string): Promise<string> =>
   createHash('sha256')
@@ -65,8 +66,7 @@ describe('ai human live backend', () => {
           })
           const output = await runner.run({
             taskId: runtime.taskId,
-            userInput:
-              '请只根据我选中的旧版 Word 文档回答：风险等级一共分成哪五级，各自对应的区别率是多少？请简洁列出。'
+            userInput: '请只根据我选中的旧版 Word 文档，读出标题和正文开头二十个字，简洁列出即可。'
           })
 
           return {
@@ -109,7 +109,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-reads-selected-legacy-doc-with-docx-read-tools',
               message:
-                'live human 应通过 docx-read 工具成功读取选中的 .doc，准确回答风险等级，并保持源文件不变。',
+                'live human 应通过 docx-read 工具成功读取选中的公开 .doc，回答标题与开篇文字，并保持源文件不变。',
               data: {
                 startedToolNames,
                 successfulReadToolNames,
@@ -146,7 +146,7 @@ describe('ai human live backend', () => {
           const output = await runner.run({
             taskId: runtime.taskId,
             userInput:
-              '请把我选中的旧版 Word 文档第一行标题改成“图案设计风险等级判断标准”，修改原文件，不要另建文件。'
+              '请把我选中的旧版 Word 文档第一行标题改成“公开样例阅读说明”，修改原文件，不要另建文件。如果工具不支持编辑旧版 .doc，就说明只读限制并结束，不要尝试转换格式，也不用询问其他方案。'
           })
 
           return {

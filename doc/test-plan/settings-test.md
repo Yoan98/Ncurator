@@ -109,7 +109,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
 - Why：“索引已经可用”的核心用户反馈链路。全仓唯一的向量 warmup，预热共享 fixture 的 split/vector 缓存。
-- How：复制共享 workspace 输入的隔离副本，通过 Settings UI 添加为文件地址并点击更新索引，读取刷新后的文件树和全部支持文件状态。共享 fixture 含 `.doc`、`docx`、`pdf`、`md`、`txt`、`xlsx`、`xlsm` 等全部受支持类型，其中 excel 只以元数据方式索引进库。不切换、不断言索引速度。点击后等待进度块出现，再等到目标总数算出后读取进度文案。
+- How：复制共享 workspace 输入的隔离副本，通过 Settings UI 添加为文件地址并点击更新索引，读取刷新后的文件树和全部支持文件状态。共享 fixture 含 `.doc`、`docx`、`pdf`、`md`、`txt`、`xlsx`、`xlsm` 等全部受支持类型，其中旧版 DOC 使用政府网站发布的中文原件 `长江干线（江苏段）大型船舶通航安全风险分级管控办法（初稿）.doc`，excel 只以元数据方式索引进库。不切换、不断言索引速度。点击后等待进度块出现，再等到目标总数算出后读取进度文案。
 - Oracle：更新索引过程中出现持久化进度条和进度条下方的当前处理文件文案，「检查更新」可用，「更新索引」文案变为「取消」且可点，对齐 `SET-WORKSPACE-004-AC3`、`SET-WORKSPACE-004-AC12`；未知总数时进度条保持活动状态，目标数确定后按已处理目标数 / 目标总数计算比例，每个目标（包括失败目标）只计一次，进度块标题右侧不显示百分比或 `已处理/总数`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 
 #### `workspace-index-speed`
@@ -312,25 +312,25 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 以下是当前证据边界，引用 AC 仅完成验收登记，不代表 UI 已自动验证。
 
-| 验收 | 当前证据与缺口 |
-| --- | --- |
-| `SET-VECTOR-001-AC2`、`SET-VECTOR-004-AC2/AC7` | 待补：目录加载失败、删除失败、删除后再次完整下载没有对应 E2E。 |
-| `SET-VECTOR-002-AC1` | 部分覆盖：`tests/case/unit/knowledge/vector/vector-download-service-contract.test.ts` 检验下载互斥；其他模型按钮禁用缺少 UI 断言。 |
-| `SET-VECTOR-002-AC4` | 部分覆盖：同一 Unit 文件检验启动续传与非默认源保留；重启后的进度恢复 UI 待补。 |
+| 验收                                           | 当前证据与缺口                                                                                                                     |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `SET-VECTOR-001-AC2`、`SET-VECTOR-004-AC2/AC7` | 待补：目录加载失败、删除失败、删除后再次完整下载没有对应 E2E。                                                                     |
+| `SET-VECTOR-002-AC1`                           | 部分覆盖：`tests/case/unit/knowledge/vector/vector-download-service-contract.test.ts` 检验下载互斥；其他模型按钮禁用缺少 UI 断言。 |
+| `SET-VECTOR-002-AC4`                           | 部分覆盖：同一 Unit 文件检验启动续传与非默认源保留；重启后的进度恢复 UI 待补。                                                     |
 
 ### 底层证据与 UI 边界
 
 以下区分已存在的底层断言、未验证的 UI 子项及手动 / 不测 / 暂缓范围；不能把底层证据算作完整 UI 验收。
 
-| 验收 | 现有相关 case / 证据状态 |
-| --- | --- |
-| `SET-GENERAL-001-AC2/AC4/AC5/AC6` | 真实 OS 补充检查见 §4；`tests/case/unit/system-notification-service.test.ts` 覆盖终态去重、禁用、不可用和通知点击，未自动验证 OS 展示与启动中断通知。 |
-| `SET-WORKSPACE-004-AC5` | backend 已覆盖：Knowledge `workspace-interrupted-job-recovery-contract` 与 `workspace-index-job-store-contract` 验证启动恢复后的 job / 文件失败收敛；文件索引中途关闭再重启的 UI 闭环未覆盖。 |
-| `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8` | backend 已覆盖：Knowledge `kb-indexing-blocks-search` 验证索引拦截、检查不拦截及终态恢复，`workspace-index-cancel-contract` 补充取消后的检索恢复。 |
-| `SET-WORKSPACE-004-AC6` | 手动 / 暂缓：向量模型缺失时的按钮禁用与说明、安装后恢复没有独立 UI 验证。 |
-| `SET-WORKSPACE-004-AC10` | 不测：无地址 / 无可索引文件的低价值 UI 门禁，不单独建立自动化 case。 |
-| `SET-WORKSPACE-009-AC2/AC3` | UI 待补：索引速度问号文案、文件与网页 tab 共用全局档位没有逐项断言。 |
-| `SET-WEB-003-AC5` | 不测：网页空列表及可索引为 0 时的检查按钮门禁，不单独建立自动化 case。 |
-| `SET-WEB-004-AC7` | 手动 / 暂缓：向量模型缺失时的网页索引按钮禁用与说明、安装后恢复没有独立 UI 验证。 |
-| `SET-WEB-004-AC9` | 不测：可索引为 0 时的网页索引按钮门禁，不单独建立自动化 case。 |
-| `SET-WEB-004-AC14` | 暂缓独立 UI 自动化；文件侧的自然完成 UI 与取消终态判断 Unit 仅作相关证据，不能代替网页成功 / 失败终态的确认竞态。 |
+| 验收                                       | 现有相关 case / 证据状态                                                                                                                                                                      |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SET-GENERAL-001-AC2/AC4/AC5/AC6`          | 真实 OS 补充检查见 §4；`tests/case/unit/system-notification-service.test.ts` 覆盖终态去重、禁用、不可用和通知点击，未自动验证 OS 展示与启动中断通知。                                         |
+| `SET-WORKSPACE-004-AC5`                    | backend 已覆盖：Knowledge `workspace-interrupted-job-recovery-contract` 与 `workspace-index-job-store-contract` 验证启动恢复后的 job / 文件失败收敛；文件索引中途关闭再重启的 UI 闭环未覆盖。 |
+| `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8` | backend 已覆盖：Knowledge `kb-indexing-blocks-search` 验证索引拦截、检查不拦截及终态恢复，`workspace-index-cancel-contract` 补充取消后的检索恢复。                                            |
+| `SET-WORKSPACE-004-AC6`                    | 手动 / 暂缓：向量模型缺失时的按钮禁用与说明、安装后恢复没有独立 UI 验证。                                                                                                                     |
+| `SET-WORKSPACE-004-AC10`                   | 不测：无地址 / 无可索引文件的低价值 UI 门禁，不单独建立自动化 case。                                                                                                                          |
+| `SET-WORKSPACE-009-AC2/AC3`                | UI 待补：索引速度问号文案、文件与网页 tab 共用全局档位没有逐项断言。                                                                                                                          |
+| `SET-WEB-003-AC5`                          | 不测：网页空列表及可索引为 0 时的检查按钮门禁，不单独建立自动化 case。                                                                                                                        |
+| `SET-WEB-004-AC7`                          | 手动 / 暂缓：向量模型缺失时的网页索引按钮禁用与说明、安装后恢复没有独立 UI 验证。                                                                                                             |
+| `SET-WEB-004-AC9`                          | 不测：可索引为 0 时的网页索引按钮门禁，不单独建立自动化 case。                                                                                                                                |
+| `SET-WEB-004-AC14`                         | 暂缓独立 UI 自动化；文件侧的自然完成 UI 与取消终态判断 Unit 仅作相关证据，不能代替网页成功 / 失败终态的确认竞态。                                                                             |

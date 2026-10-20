@@ -639,7 +639,7 @@ describe('workbench conversation e2e', () => {
             .click()
           await composer.locator('[data-role="document-selection-token"]').waitFor()
           const memoryRestored = (await composer.textContent())?.includes('风险控制建议') || false
-          await openDocxFile('人工智能探究课堂PRD.docx')
+          await openDocxFile('航空航天模型课程标准（试行版）.docx')
           await page
             .locator('.docx-content article td p')
             .first()
@@ -655,8 +655,8 @@ describe('workbench conversation e2e', () => {
           await page.keyboard.press('Backspace')
           const atomicDeleted =
             (await composer.locator('[data-role="document-selection-token"]').count()) === 1
-          await selectText(page, 0, 0, 1, 4, { selector: 'article td p' })
-          await page.getByTestId('docx-selection-thought').fill('解释这两个表头。')
+          await selectText(page, 0, 0, 1, 2, { selector: 'article td p' })
+          await page.getByTestId('docx-selection-thought').fill('解释这两个课程等级字段。')
           await page.getByTestId('docx-selection-save').click()
           const crossCellQuote = (await readDraftSelections()).at(-1)?.quote
           await clickSavedText(page, 1, 1, 'article td p')
@@ -917,20 +917,20 @@ describe('workbench conversation e2e', () => {
             .count()
 
           const selectedParagraph =
-            '产品定位：我们希望通过人工智能技术为教师和学生提供一个能够支持课堂探究、协作学习和即时反馈的综合性学习平台，让教师能够更加高效地组织课堂，让学生能够更加主动地参与学习并深入理解知识。'
+            '产品定位：我们希望为社区志愿者提供一个能够整理公开资料、核对来源和共同校对文档的工作台，让参与者能够按主题维护文件，找到可以复用的内容，并在修改前查看差异和确认结果。'
           const scopePath = await writeTestDocxFile(
             setup.workspace.rootPath,
             'selection-scope.docx',
             [
-              { type: 'paragraph', text: '一、课堂产品定位' },
+              { type: 'paragraph', text: '一、资料工作台定位' },
               { type: 'paragraph', text: selectedParagraph },
               {
                 type: 'paragraph',
-                text: '自主探究：学生能够自主提出问题、反复尝试解决方案并记录探索过程，通过持续的问题发现和思考来提升学习能力。'
+                text: '资料整理：志愿者可以创建主题目录、登记公开来源并添加简短说明，后续参与者能据此找到原始文件。'
               },
               {
                 type: 'paragraph',
-                text: '小组共创：学生在小组协作中共同讨论问题、分享自己的观点并参与成果设计，教师及时观察并指导每一个小组的合作过程。'
+                text: '协作校对：参与者可以查看待审阅的文字改动、补充准确引用并记录确认结果，维护者按实际内容决定是否接受。'
               }
             ]
           )
@@ -1050,10 +1050,10 @@ describe('workbench conversation e2e', () => {
               result.overlappingReferenceCount === 1 &&
               result.otherPartnerEmpty &&
               result.memoryRestored &&
-              result.cellQuote === '模式' &&
+              result.cellQuote === '阶段' &&
               result.atomicDeleted &&
-              result.crossCellQuote === '模式\t核心驱动' &&
-              result.resetLabel === '人工智能探究课堂PRD.docx · 1' &&
+              result.crossCellQuote === '阶段\t等级' &&
+              result.resetLabel === '航空航天模型课程标准（试行版）.docx · 1' &&
               result.nextDraftLabel === '客户周会纪要.docx · 1' &&
               result.frozenHistoryLabel === result.historyLabel &&
               result.historyRestored &&

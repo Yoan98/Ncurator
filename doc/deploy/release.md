@@ -1,6 +1,6 @@
 # 桌面端发布流程
 
-当前正式发布只发腾讯云 COS，一次发布完成后不再把同一 Tag 上传到 Cloudflare R2。R2 仅供未来海外版显式使用 `RELEASE_STORAGE_TARGET=r2`。当前发布平台为 Windows x64 和 macOS arm64，平台 Tag 分别使用 `windows-vX.Y.Z` 与 `mac-vX.Y.Z`，版本号独立递增。
+官网和应用内自动更新正式发布使用腾讯云 COS，一次发布完成后不再把同一 Tag 上传到 Cloudflare R2。GitHub Releases 可额外提供同一正式安装包的手动下载镜像，按 3.1 节单独上传；现有 `release:win` / `release:mac` 不会自动创建 GitHub Release。R2 仅供未来海外版显式使用 `RELEASE_STORAGE_TARGET=r2`。当前发布平台为 Windows x64 和 macOS arm64，平台 Tag 分别使用 `windows-vX.Y.Z` 与 `mac-vX.Y.Z`，版本号独立递增。
 
 ## 1. 发布流程
 
@@ -111,6 +111,31 @@ export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production
 未设置时，`--publish-only`、上传和 finalize 必须在网络写入前失败。普通构建和候选包测试不需要该变量。
 
 国内 COS 发布完成后，不要再对同一 Tag 设置 `RELEASE_STORAGE_TARGET=r2` 执行第二次上传或 finalize。
+
+### 3.1 GitHub Releases 镜像
+
+前置条件：桌面端源码已发布至 `Yoan98/Ncurator`，该版本的公开 Tag 与实际构建代码对应；同一安装包已经过正式包回归并在 COS 上线验证。首次公开或补发历史版本时，核对并记录原构建源码与公开快照的对应关系，不直接推送含凭证的私有历史，不把旧安装包挂在无关源码 Tag 下。
+
+1. 在发版机使用 `verifyReleaseBundle` 复验原候选 bundle、文件大小与哈希，取 `role: installer` 的 EXE 或 DMG，保持原公开文件名和字节内容。
+2. 准备 `SHA256SUMS`：使用 bundle 中该安装包的 `sha256`，每行格式为 `<sha256>  <公开安装包文件名>`。准备版本说明文件，写明平台、版本、更新内容、安装方式及对应源码 Tag；有源码快照映射时说明其对应关系。
+3. 在 GitHub 的 Releases 页面新建草稿，选择已核对的 Tag，上传安装包和 `SHA256SUMS`。只上传对应平台的安装包，不上传候选目录、日志、`.env` 或签名材料。
+4. 核对草稿中的平台、Tag、文件名和版本说明后发布。GitHub 自动生成的 Source code 下载项是源码压缩包，普通用户安装应选择 EXE / DMG。
+5. 从公开 Release 下载安装包，核对大小与 SHA-256 和原 bundle 一致，再确认 README 的 Releases 入口可访问该版本。GitHub 失败不改动已上线的 COS 下载和自动更新通道。
+
+也可使用已安装并登录、具备目标仓库发布权限的 GitHub CLI 准备草稿。以下命令中的 Tag 和文件路径应替换为核对过的本地文件；`--verify-tag` 防止从默认分支误建 Tag：
+
+```bash
+release_tag="mac-vX.Y.Z"
+release_installer="/absolute/path/馆长-X.Y.Z-macos-arm64.dmg"
+gh release create "$release_tag" "$release_installer" "/absolute/path/SHA256SUMS" \
+  --repo Yoan98/Ncurator --verify-tag --draft \
+  --title "馆长 X.Y.Z · macOS arm64" \
+  --notes-file "/absolute/path/release-notes.md"
+```
+
+Windows 版本使用 `windows-vX.Y.Z`、对应 EXE 及平台标题。上传中断时检查已有草稿，通过 Releases 页面或 `gh release upload` 补齐缺失附件；不使用 `--clobber` 覆盖已公开安装包。公开版本内容有问题时发布更高版本。
+
+操作依据：[GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)、[gh release create](https://cli.github.com/manual/gh_release_create)、[gh release upload](https://cli.github.com/manual/gh_release_upload)。
 
 ## 4. 中断与恢复
 

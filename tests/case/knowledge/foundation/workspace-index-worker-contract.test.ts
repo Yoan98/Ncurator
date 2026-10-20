@@ -81,7 +81,7 @@ describe('knowledge workspace backend', () => {
         })
         const legacyDocPath = path.join(
           runtime.workspaceRoot,
-          '风险等级判断标准-图案设计【2026.2.10更新】.doc'
+          '长江干线（江苏段）大型船舶通航安全风险分级管控办法（初稿）.doc'
         )
         const legacyDocContentHash = await computeWorkspaceFileContentHash(legacyDocPath)
         const legacyDocSplitSnapshot = await buildWorkspaceKnowledgeSplitSnapshot({
@@ -170,9 +170,7 @@ describe('knowledge workspace backend', () => {
         )
 
         runtime.assertThat(
-          result.legacyDocSplitSnapshot.chunks.some((chunk) =>
-            chunk.text.includes('风险等级的判断标准')
-          ),
+          result.legacyDocSplitSnapshot.chunks.some((chunk) => chunk.text.includes('通航安全风险')),
           {
             name: 'legacy-doc-file-produces-searchable-split-chunks',
             message:
@@ -257,7 +255,7 @@ describe('knowledge workspace backend', () => {
           result.legacyDocWorkerSuccess.ok &&
             result.legacyDocWorkerSuccess.payload?.fileExt === '.doc' &&
             result.legacyDocWorkerSuccess.payload.splitSnapshot.chunks.some((chunk) =>
-              chunk.text.includes('风险等级的判断标准')
+              chunk.text.includes('通航安全风险')
             ),
           {
             name: 'worker-legacy-doc-success-uses-text-loader',
@@ -297,7 +295,8 @@ describe('knowledge workspace backend', () => {
         )
 
         runtime.assertThat(
-          !result.workerFailure.ok && result.workerFailure.error?.includes('Unsupported file type') === true,
+          !result.workerFailure.ok &&
+            result.workerFailure.error?.includes('Unsupported file type') === true,
           {
             name: 'worker-js-error-becomes-file-level-failure-response',
             message:

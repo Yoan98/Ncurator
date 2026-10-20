@@ -39,7 +39,15 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 当前正式发布只写 COS：环境变量 `SecretId` / `SecretKey`（或 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`）。桶与区域默认使用 `ncurator-1324873382` / `ap-guangzhou`，可通过 `COS_BUCKET` / `COS_REGION` 覆盖；公开地址必须为 `https://download.guanzhangai.cn`。使用默认配置时无需将这些值写入 `.env`。CDN、DNS、资费与采购见 [`tencent-cdn-billing.md`](./tencent-cdn-billing.md)。发布子用户权限模板：[`scripts/release/cos/cam-policy.json`](../../scripts/release/cos/cam-policy.json)。
 
-国内官网 / 下载：`https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`。海外官网 `www.ncurator.com` 存在，但当前桌面端发行包与自动更新只走国内通道。国内 COS 发布完成后不要再同步同一 Tag 到 R2。
+国内官网 / 下载：`https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`。海外官网 `www.ncurator.com` 存在；官网与应用内自动更新继续走国内通道。国内 COS 发布完成后不要再同步同一 Tag 到 R2。
+
+### GitHub Releases 手动下载
+
+公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包手动下载镜像，上传与 COS 上线版本相同、已完成正式包回归的文件，不重新构建。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和版本说明；自动更新文件继续由 COS 通道提供。
+
+Release Tag 必须对应实际构建源码。首次公开或补发旧版本时，先核对公开源码快照与原构建代码的对应关系，不把含凭证的私有历史整体推入公开仓库。GitHub 自动附带的 Source code 压缩包不替代安装包，也不替代核对完整对应源码的义务。
+
+Windows 和 macOS 独立发布，GitHub 的 Latest 标记不能代表两个平台都已更新。README 使用仓库 Releases 列表作为 GitHub 下载入口，不依赖跨平台共用的 `releases/latest/download` 地址。具体上传与恢复操作见[发布流程](./release.md#31-github-releases-镜像)。
 
 仅当有意发布未来海外版时才切 R2（非当前常规循环）：`RELEASE_STORAGE_TARGET=r2`，并设置 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_ACCOUNT_ID`、`R2_BUCKET_NAME`、`R2_PUBLIC_BASE_URL=https://download.ncurator.com`。
 

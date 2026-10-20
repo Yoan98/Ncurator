@@ -195,7 +195,8 @@ describe('docx recursive content tree visuals', () => {
   })
 
   it('keeps image visuals distinct from real empty paragraphs', async () => {
-    const fixture = path.resolve('tests/fixtures/workspace/灵感测试.docx')
+    // 原件来源：https://jncc.jinan.gov.cn/col40602/art/2026/art_40602_4791891.html
+    const fixture = path.resolve('tests/fixtures/workspace/济南市房屋建筑工程工法网上申报手册.docx')
     const bundle = await loadDocxBundle(await fs.readFile(fixture))
     const index = buildNodeIndex(
       bundle.documentDom,
@@ -208,9 +209,9 @@ describe('docx recursive content tree visuals', () => {
     const realEmptyParagraphs = index.outline.filter(
       (node) => node.type === 'paragraph' && node.text === '' && !node.visuals
     )
-    expect(images).toHaveLength(18)
-    expect(realEmptyParagraphs).toHaveLength(22)
-    expect(new Set(images.map((visual) => visual.nodeId)).size).toBe(18)
+    expect(images).toHaveLength(13)
+    expect(realEmptyParagraphs).toHaveLength(3)
+    expect(new Set(images.map((visual) => visual.nodeId)).size).toBe(13)
   })
 
   it.each([
@@ -234,7 +235,9 @@ describe('docx recursive content tree visuals', () => {
 
   it('resolves a public visual nodeId to its package image bytes', async () => {
     const runId = `visual-unit-${String(Date.now())}`
-    const sourcePath = path.resolve('tests/fixtures/workspace/灵感测试.docx')
+    const sourcePath = path.resolve(
+      'tests/fixtures/workspace/济南市房屋建筑工程工法网上申报手册.docx'
+    )
     const open = await handleDocxWorkerRequest({
       requestId: 'open',
       runId,

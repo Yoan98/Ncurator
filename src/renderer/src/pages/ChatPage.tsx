@@ -179,7 +179,7 @@ import {
 } from '../../../shared/aiFileChangeScope'
 import { workbenchSelectors } from '../testing/selectors'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
-import brandIcon from '../../../../logo/png/ncurator-logo-24.png'
+import brandIcon from '../../../../assets/brand/png/ncurator-logo-24.png'
 import PartnerAvatar, { PARTNER_AVATAR_COLOR_HEX } from '../components/workbench/PartnerAvatar'
 import SidebarUpdateControl from '../components/update/SidebarUpdateControl'
 

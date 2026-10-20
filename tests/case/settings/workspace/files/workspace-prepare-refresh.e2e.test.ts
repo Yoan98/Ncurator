@@ -10,7 +10,7 @@ import {
 } from '../../../../harness/e2e/settings'
 import { copySharedWorkspaceFixture, toSupportedFileStatuses } from './realWorkspaceHelpers'
 
-const LEGACY_DOC_NAME = '风险等级判断标准-图案设计【2026.2.10更新】.doc'
+const LEGACY_DOC_NAME = '长江干线（江苏段）大型船舶通航安全风险分级管控办法（初稿）.doc'
 
 describe('settings workspace e2e', () => {
   it(

@@ -4,6 +4,7 @@
   "description": "Local-first AI workspace for documents, research, and task execution",
   "main": "./out/main/index.js",
   "author": "NCurator",
+  "license": "AGPL-3.0-only",
   "homepage": "https://www.guanzhangai.cn",
   "scripts": {
     "format": "prettier --write .",

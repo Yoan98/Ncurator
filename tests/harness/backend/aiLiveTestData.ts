@@ -23,9 +23,12 @@ export const PDF_READING_FIXTURE_PATH = `${WORKSPACE_LEARNING_FIXTURE_DIR}/深�
 export const HUMAN_PDF_VISUAL_READING_USER_INPUT =
   '请只根据我选中的《深度学习.pdf》回答两个问题：1. 用通俗的话说明第1页流程图里 inputs、parameters、architecture、predictions、labels、loss 和 update 是怎么形成训练闭环的；2. 结合第9页 Proper fit 和 Overfit 对比图，说明两条曲线有什么直观区别，以及为什么右边属于过度拟合。'
 
+// 中文公开原件：体育总局课程标准、潼南区教委发布的数学教师培训标准。
+// https://www.sport.gov.cn/hgzx/n15154/c25322907/content.html
+// https://www.cqtn.gov.cn/bm/qjw/zwgk_25192/zfxxgkml_bm/jczwgk/ywjyly/jsgl/jszyfz/202111/t20211128_10042970.html
 export const DOCX_MULTI_EDIT_FIXTURE_PATHS = [
-  `${SHARED_WORKSPACE_FIXTURE_PATH}/人工智能探究课堂PRD.docx`,
-  `${SHARED_WORKSPACE_FIXTURE_PATH}/交互式探究学习案例：产业转移.docx`
+  `${SHARED_WORKSPACE_FIXTURE_PATH}/航空航天模型课程标准（试行版）.docx`,
+  `${SHARED_WORKSPACE_FIXTURE_PATH}/中小学幼儿园教师培训课程指导标准(数学).docx`
 ] as const
 
 export const DOCX_ALL_FIXTURE_PATHS = [
@@ -38,7 +41,7 @@ export const HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT =
   '请处理我选中的两份 Word 文档：先尝试把《图形学.docx》里“反走样”这一节补得更容易记一些，在该节后添加一段通俗说明；如果该区域因复杂定位排版而无法安全自动编辑，必须保留原文并在最终答复中说明需要手动处理。然后继续修改 `sample-edit.docx`，把其中的“Hello from fixture”替换为“Hello from safe edit”。'
 
 export const HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT =
-  '我工作区里课件和教学材料有点多，我忘了哪两份课件专门讲过反走样和过拟合。你先在工作区知识库里搜索并缩小资料范围，只能依据工作区里实际写到的内容，再把适合老师讲“概念区分”的备课备注追加到工作区根目录两份目标文档的末尾：过拟合补到“人工智能探究课堂PRD.docx”，反走样补到“交互式探究学习案例：产业转移.docx”。两个目标文件不需要从知识库查找，写法尽量像备课备注和课堂引导语，不要像教材摘抄。'
+  '我工作区里课件和教学材料有点多，我忘了哪两份课件专门讲过反走样和过拟合。你先在工作区知识库里搜索并缩小资料范围，只能依据工作区里实际写到的内容，再把适合老师讲“概念区分”的备课备注追加到工作区根目录两份目标文档的末尾：过拟合补到“航空航天模型课程标准（试行版）.docx”，反走样补到“中小学幼儿园教师培训课程指导标准(数学).docx”。两个目标文件不需要从知识库查找，写法尽量像备课备注和课堂引导语，不要像教材摘抄。'
 
 export const buildHumanWebCrawlMultiHopCrossDomainUserInput = (entryUrl: string): string =>
   `帮我基于这个网站整理杭州灵活就业补贴的申请说明：${entryUrl}。我需要知道谁可以申请、需要哪些材料、截止时间和线上办理方式。`
