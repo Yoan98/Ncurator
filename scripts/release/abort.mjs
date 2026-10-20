@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { resolveCandidateDirectory } from './candidate.mjs'
 import { findLiveChannelsForTag } from './shared/live-tag.mjs'
 import { parseReleaseTag } from './tag.mjs'
+import { createGitHubReleasePublisher } from './github.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -97,6 +98,8 @@ const localExists = await execFileAsync('git', ['rev-parse', '--verify', '--quie
 if (!remoteExists && !localExists) {
   throw new Error(`tag not found locally or on origin: ${releaseTag}`)
 }
+
+await createGitHubReleasePublisher({ root: ROOT }).deleteDraft(releaseTag)
 
 if (remoteExists) {
   await execFileAsync('git', ['push', 'origin', `:refs/tags/${releaseTag}`], { cwd: ROOT })

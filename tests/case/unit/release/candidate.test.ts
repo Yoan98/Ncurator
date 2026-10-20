@@ -8,6 +8,7 @@ import {
   assertCandidatePublishable,
   cleanupSupersededReleaseCandidates,
   materializeReleaseCandidate,
+  markCandidatePublished,
   readReleaseCandidate,
   recordCandidateE2E,
   resolveCandidateDirectory
@@ -133,6 +134,21 @@ describe('retained release candidate', () => {
     })
     expect(rejected.state.status).toBe('rejected')
     expect(rejected.bundlePath).toBe(prepared.bundlePath)
+  })
+
+  it('permits verified published candidates only for an explicit publish retry', async () => {
+    await materializeReleaseCandidate({ bundlePath: await createBundle() })
+    await recordCandidateE2E({ tag: 'windows-v0.1.21', platform: 'windows-x64', status: 'passed' })
+    await markCandidatePublished({ tag: 'windows-v0.1.21', platform: 'windows-x64' })
+    const request = {
+      tag: 'windows-v0.1.21',
+      platform: 'windows-x64',
+      commit: '0123456789012345678901234567890123456789'
+    }
+    await expect(assertCandidatePublishable(request)).rejects.toThrow('is published')
+    await expect(
+      assertCandidatePublishable({ ...request, allowPublished: true })
+    ).resolves.toBeDefined()
   })
 
   it('allows an explicitly justified E2E skip to become publishable', async () => {

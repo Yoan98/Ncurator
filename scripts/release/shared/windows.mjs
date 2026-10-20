@@ -5,14 +5,9 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './environment.mjs'
-import { assertReleaseFragment } from '../r2/fragment-contract.mjs'
-import { fetchWithRetry } from './http.mjs'
-import { artifactKey, fragmentKey } from '../r2/storage-layout.mjs'
-import { DOMESTIC_DOWNLOAD_BASE_URL, resolveReleaseStorageConfig } from '../storage/config.mjs'
+import { resolveReleaseStorageConfig } from '../storage/config.mjs'
 
 const execFileAsync = promisify(execFile)
-const WINDOWS_PLATFORM = 'windows-x64'
-const PUBLIC_RELEASE_BASE_URL = DOMESTIC_DOWNLOAD_BASE_URL
 
 const commandResult = async (command, args, options = {}) => {
   try {
@@ -131,6 +126,11 @@ export const inspectLocalWindowsRelease = async (root, { requirePublish = true }
 
   const awsExecutable = requirePublish ? await resolveAwsExecutable() : ''
   if (requirePublish && !awsExecutable) issues.push('AWS CLI is not available')
+  if (requirePublish && !(await commandResult('gh', ['--version'])).ok) {
+    issues.push(
+      'GitHub CLI is not available; install gh and run gh auth login --hostname github.com'
+    )
+  }
 
   for (const [command, label] of [
     ['git', 'Git'],
@@ -155,75 +155,3 @@ export const inspectLocalWindowsRelease = async (root, { requirePublish = true }
     python
   }
 }
-
-export const readPublicReleaseFragment = async (
-  releaseTag,
-  platform,
-  publicBaseUrl = PUBLIC_RELEASE_BASE_URL
-) => {
-  const response = await fetch(
-    `${publicBaseUrl}/${fragmentKey(releaseTag, platform)}?check=${Date.now()}`,
-    { cache: 'no-store' }
-  )
-  if (response.status === 404) return undefined
-  if (!response.ok) {
-    throw new Error(`release status lookup failed for ${platform}: HTTP ${response.status}`)
-  }
-  const fragment = await response.json()
-  assertReleaseFragment(fragment, {
-    tag: releaseTag,
-    platform,
-    label: `remote release fragment ${platform}`
-  })
-  return fragment
-}
-
-export const verifyPublicReleaseFragment = async (
-  fragment,
-  publicBaseUrl = PUBLIC_RELEASE_BASE_URL
-) => {
-  for (const file of fragment.files) {
-    const response = await fetchWithRetry(
-      `${publicBaseUrl}/${artifactKey(fragment, file.name)}`,
-      {
-        method: 'HEAD',
-        cache: 'no-store'
-      }
-    )
-    if (!response.ok || Number(response.headers.get('content-length')) !== file.size) {
-      throw new Error(`remote release asset verification failed: ${file.name}`)
-    }
-  }
-}
-
-export const verifyReleaseStorageFragment = async (fragment, awsExecutable) => {
-  const config = resolveReleaseStorageConfig()
-  if (!awsExecutable) throw new Error(`${config.label} verification configuration is incomplete`)
-  const { createAwsCliRuntime } = await import('../storage/client.mjs')
-  const runtime = await createAwsCliRuntime(config)
-  for (const file of fragment.files) {
-    const key = artifactKey(fragment, file.name)
-    const result = await commandResult(
-      awsExecutable,
-      [
-        's3api',
-        'head-object',
-        '--bucket',
-        config.bucket,
-        '--key',
-        key,
-        '--output',
-        'json',
-        ...runtime.extraArgs
-      ],
-      { env: runtime.env }
-    )
-    if (!result.ok) throw new Error(`${config.label} release asset lookup failed: ${key}`)
-    const remote = JSON.parse(result.stdout)
-    if (Number(remote.ContentLength) !== file.size || remote.Metadata?.sha512 !== file.sha512) {
-      throw new Error(`${config.label} release asset does not match fragment: ${key}`)
-    }
-  }
-}
-
-export { PUBLIC_RELEASE_BASE_URL, WINDOWS_PLATFORM }

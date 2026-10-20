@@ -2,6 +2,7 @@ node_modules
 dist
 out
 .env
+.env.*
 .DS_Store
 .eslintcache
 *.tsbuildinfo

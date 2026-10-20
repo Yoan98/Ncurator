@@ -4,11 +4,11 @@
 
 ### Windows
 
-本地 Windows x64：Node.js 22 x64、项目指定 pnpm、Python 3.12 x64、Git、tar；发 COS 时还需 AWS CLI 与 COS 存储配置。仅未来海外版才需要 R2 配置。`pnpm release:doctor` 检查本机条件。prepare / test / publish 只消费本机候选包。
+本地 Windows x64：Node.js 22 x64、项目指定 pnpm、Python 3.12 x64、Git、tar；发布时还需 AWS CLI、COS 存储配置，以及已登录且具备公开仓库写权限的 GitHub CLI。仅未来海外版才需要 R2 配置。`pnpm release:doctor` 检查本机条件。prepare / test / publish 只消费本机候选包。
 
 ### macOS
 
-prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` P12（自建更新签名，`timestamp: none`、`notarize: false`，非 Apple Developer ID 公证）。候选包须完成正式包 E2E。不构建、测试或发布 Intel Mac。
+prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` P12（自建更新签名，`timestamp: none`、`notarize: false`，非 Apple Developer ID 公证）。候选包须完成正式包 E2E；发布时需 AWS CLI、COS 存储配置及已登录的 GitHub CLI。不构建、测试或发布 Intel Mac。
 
 ### 构建与审计硬约束
 
@@ -43,15 +43,15 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 ### GitHub Releases 手动下载
 
-公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包手动下载镜像，上传与 COS 上线版本相同、已完成正式包回归的文件，不重新构建。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和版本说明；自动更新文件继续由 COS 通道提供。
+公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 COS 上线版本相同、已完成正式包回归的文件，不重新构建。GitHub 登录凭证由 CLI 管理，不新增项目密钥配置。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和版本说明；自动更新文件继续由 COS 通道提供。
 
-Release Tag 必须对应实际构建源码。首次公开或补发旧版本时，先核对公开源码快照与原构建代码的对应关系，不把含凭证的私有历史整体推入公开仓库。GitHub 自动附带的 Source code 压缩包不替代安装包，也不替代核对完整对应源码的义务。
+Release 的公开 annotated Tag 必须与候选 bundle 的构建 commit 完全一致；公开源码后从该源码创建新的 Tag 和候选包。自动流程不代建 Tag，不把含凭证的私有历史推入公开仓库，也不处理历史包与公开快照的 commit 映射。GitHub 自动附带的 Source code 压缩包不替代安装包，也不替代核对完整对应源码的义务。
 
 Windows 和 macOS 独立发布，GitHub 的 Latest 标记不能代表两个平台都已更新。README 使用仓库 Releases 列表作为 GitHub 下载入口，不依赖跨平台共用的 `releases/latest/download` 地址。具体上传与恢复操作见[发布流程](./release.md#31-github-releases-镜像)。
 
 仅当有意发布未来海外版时才切 R2（非当前常规循环）：`RELEASE_STORAGE_TARGET=r2`，并设置 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_ACCOUNT_ID`、`R2_BUCKET_NAME`、`R2_PUBLIC_BASE_URL=https://download.ncurator.com`。
 
-publish 上传候选与 fragment，更新该平台自动更新 metadata 与官网 manifest，验证公开 yml / 清单 / artifacts 的大小、sha512 与 manifest URL（安装包 URL 须以用户可见文件名结尾）。验证成功后标记 `published`，清理本地 `tests/logs/**`，并清理该平台更早 artifacts（含旧 `release-status/`）。失败、prepare-only、test-only 不清理 logs。
+publish 先校验 GitHub 源码身份并准备草稿及附件，再上传 COS 候选与 fragment，更新该平台自动更新 metadata 与官网 manifest，验证公开 yml / 清单 / artifacts 的大小、sha512 与 manifest URL（安装包 URL 须以用户可见文件名结尾）；随后公开 GitHub Release，并通过匿名下载核对大小与 SHA-256。两边成功后才标记 `published`，清理本地 `tests/logs/**`，并清理该平台更早 artifacts（含旧 `release-status/`）。失败、prepare-only、test-only 不清理 logs。跨服务发布不具备原子性；中断保留同一候选包，重跑 publish 时检查实际官网与更新通道状态、补齐 GitHub 草稿附件并继续，不重建、不覆盖已有附件，也不把较新通道降级。
 
 ### 本地保留与清理
 

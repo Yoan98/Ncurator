@@ -6,8 +6,6 @@
 
 <p align="center"><strong>Building the most user-friendly AI assistant for local office documents</strong></p>
 
-<p align="center">Read your files. Edit your documents. Review the changes. Get work done.</p>
-
 <p align="center">
   <a href="./README.md">简体中文</a> · <strong>English</strong>
 </p>
@@ -49,18 +47,17 @@ See the [website](https://www.guanzhangai.cn/zh) for demos and real task example
 2. Choose an available model or configure your own endpoint and API key.
 3. Create a partner, add a working folder, and give it a task. To use the knowledge base, download an embedding model and build an index first.
 
-The app is free; model costs depend on the service you choose. Files and indexes are stored locally. Calls to external models or network services send relevant content as needed for the task.
-
 ## Roadmap
 
 Join the discussion and help shape these plans:
 
-| Direction                    | Planned work                                                               |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| 🌍 Chinese and English       | Chinese and English UI, plus evaluation of English system and tool prompts |
-| 🧩 Skill integration         | Connect and manage custom and third-party Skills                           |
-| 🧭 Browser data import       | Import data from your browser, starting with bookmarks and history         |
-| 🖼️ Multimodal knowledge base | Parse, index, and retrieve images and audio with source references         |
+| Direction                    | Planned work                                                       |
+| ---------------------------- | ------------------------------------------------------------------ |
+| 🌍 English support           | An English user interface                                          |
+| 🔤 English knowledge base    | English embedding models and indexing                              |
+| 🧩 Skill integration         | Connect and manage custom and third-party Skills                   |
+| 🧭 Browser data import       | Import data from your browser, starting with bookmarks and history |
+| 🖼️ Multimodal knowledge base | Parse, index, and retrieve images and audio with source references |
 
 ## Get involved
 
@@ -83,7 +80,7 @@ See the [contribution guide](./CONTRIBUTING.en.md#development-and-validation) fo
 
 ## Browser extension
 
-A separately maintained bookmark viewer and URL copying tool: [Chrome](https://chromewebstore.google.com/detail/ncurator-knowledge-base-a/jdlfflbeekclkgcckcfombmfojmcdeio?hl=zh-CN) · [Microsoft Edge](https://microsoftedge.microsoft.com/addons/detail/hkdfdbpkmkpooopbkdghecbaipeoijpj).
+A separately maintained bookmark viewer and URL copying tool: [Source repository](https://github.com/Yoan98/Ncurator-Extension) · [Chrome](https://chromewebstore.google.com/detail/ncurator-knowledge-base-a/jdlfflbeekclkgcckcfombmfojmcdeio?hl=zh-CN) · [Microsoft Edge](https://microsoftedge.microsoft.com/addons/detail/hkdfdbpkmkpooopbkdghecbaipeoijpj).
 
 ## License
 

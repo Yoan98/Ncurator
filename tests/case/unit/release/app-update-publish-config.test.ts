@@ -140,7 +140,6 @@ describe('app update publish config', () => {
       macFinalize,
       tagContract,
       storageConfig,
-      windowsShared,
       uploadFragment
     ] = await Promise.all([
       readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
@@ -149,7 +148,6 @@ describe('app update publish config', () => {
       readFile(path.resolve('scripts/release/r2/finalize-macos.mjs'), 'utf8'),
       readFile(path.resolve('scripts/release/tag.mjs'), 'utf8'),
       readFile(path.resolve('scripts/release/storage/config.mjs'), 'utf8'),
-      readFile(path.resolve('scripts/release/shared/windows.mjs'), 'utf8'),
       readFile(path.resolve('scripts/release/r2/upload-fragment.mjs'), 'utf8')
     ])
 
@@ -177,9 +175,6 @@ describe('app update publish config', () => {
     expect(macFinalize).not.toContain('release-status/macos/')
     expect(uploadFragment).toContain('fragmentKey')
     expect(uploadFragment).toContain("'no-store'")
-    expect(windowsShared).toContain('fragmentKey')
-    expect(windowsShared).toContain('artifactKey(fragment, file.name)')
-    expect(windowsShared).not.toContain('file.storageName')
     expect(tagContract).toContain('/^(mac|windows)-v')
     expect(windowsRelease).toContain('assertLivePublishAllowed')
     expect(macRelease).toContain('assertLivePublishAllowed')

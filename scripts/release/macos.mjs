@@ -23,6 +23,12 @@ import {
   validateReleaseArgs
 } from './regression.mjs'
 import { assertLivePublishAllowed, resolveReleaseStorageConfig } from './storage/config.mjs'
+import { createGitHubReleasePublisher } from './github.mjs'
+import {
+  isReleaseChannelCurrent,
+  verifyPublicReleaseFragment,
+  verifyReleaseStorageFragment
+} from './shared/live-tag.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -320,18 +326,37 @@ if (mode === 'test') {
 const candidate = await assertCandidatePublishable({
   tag: releaseTag,
   platform: MACOS_PLATFORM,
-  commit: taggedCommit
+  commit: taggedCommit,
+  allowPublished: true
 })
-await run(process.execPath, [
-  path.join(ROOT, 'scripts', 'release', 'r2', 'upload-fragment.mjs'),
-  candidate.verified.directory,
-  candidate.verified.fragmentPath
-])
-await run(process.execPath, [
-  path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-macos.mjs'),
-  '--tag',
-  releaseTag
-])
+const storage = resolveReleaseStorageConfig()
+const github = createGitHubReleasePublisher({ root: ROOT })
+const channelCurrent = await isReleaseChannelCurrent(
+  candidate.verified.fragment,
+  storage.publicBaseUrl
+)
+if (!channelCurrent && candidate.state.status === 'published') {
+  throw new Error(`published ${releaseTag} is missing from ${storage.label}; refuse to republish`)
+}
+const githubRelease = await github.prepare(candidate)
+if (!channelCurrent) {
+  await run(process.execPath, [
+    path.join(ROOT, 'scripts', 'release', 'r2', 'upload-fragment.mjs'),
+    candidate.verified.directory,
+    candidate.verified.fragmentPath
+  ])
+  await run(process.execPath, [
+    path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-macos.mjs'),
+    '--tag',
+    releaseTag
+  ])
+}
+await verifyPublicReleaseFragment(candidate.verified.fragment, storage.publicBaseUrl)
+await verifyReleaseStorageFragment(candidate.verified.fragment, process.env.NCURATOR_AWS_CLI)
+if (!(await isReleaseChannelCurrent(candidate.verified.fragment, storage.publicBaseUrl))) {
+  throw new Error('public macOS release channel does not match the candidate')
+}
+await github.publish(githubRelease)
 await markCandidatePublished({ tag: releaseTag, platform: MACOS_PLATFORM })
 try {
   await cleanupLocalTestLogs(ROOT)
@@ -351,4 +376,4 @@ try {
   const message = error instanceof Error ? error.message : String(error)
   process.stderr.write(`[release] local candidate cleanup warning: ${message}\n`)
 }
-process.stdout.write(`[release] macOS ${releaseTag} published from retained candidates\n`)
+process.stdout.write(`[release] macOS ${releaseTag} published to ${storage.label} and GitHub\n`)

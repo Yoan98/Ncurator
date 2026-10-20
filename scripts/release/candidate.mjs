@@ -152,14 +152,22 @@ export const recordCandidateE2E = async ({
   return { ...candidate, state }
 }
 
-export const assertCandidatePublishable = async ({ tag, platform, commit }) => {
+export const assertCandidatePublishable = async ({
+  tag,
+  platform,
+  commit,
+  allowPublished = false
+}) => {
   const candidate = await readReleaseCandidate({ tag, platform })
   if (candidate.state.commit !== commit) {
     throw new Error(
       `candidate commit ${candidate.state.commit} does not match ${tag} commit ${commit}`
     )
   }
-  if (candidate.state.status !== 'ready') {
+  if (
+    candidate.state.status !== 'ready' &&
+    !(allowPublished && candidate.state.status === 'published')
+  ) {
     throw new Error(
       `candidate ${tag} ${platform} is ${candidate.state.status}; prepare or test it before publishing`
     )

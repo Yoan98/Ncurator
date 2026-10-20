@@ -1,6 +1,6 @@
 # 桌面端发布流程
 
-官网和应用内自动更新正式发布使用腾讯云 COS，一次发布完成后不再把同一 Tag 上传到 Cloudflare R2。GitHub Releases 可额外提供同一正式安装包的手动下载镜像，按 3.1 节单独上传；现有 `release:win` / `release:mac` 不会自动创建 GitHub Release。R2 仅供未来海外版显式使用 `RELEASE_STORAGE_TARGET=r2`。当前发布平台为 Windows x64 和 macOS arm64，平台 Tag 分别使用 `windows-vX.Y.Z` 与 `mac-vX.Y.Z`，版本号独立递增。
+官网和应用内自动更新正式发布使用腾讯云 COS，一次发布完成后不再把同一 Tag 上传到 Cloudflare R2。GitHub Releases 同时提供同一正式安装包的下载镜像；`release:win` / `release:mac` 的 `--publish-only` 自动完成两边发布，详见 3.1 节。R2 仅供未来海外版显式使用 `RELEASE_STORAGE_TARGET=r2`。当前发布平台为 Windows x64 和 macOS arm64，平台 Tag 分别使用 `windows-vX.Y.Z` 与 `mac-vX.Y.Z`，版本号独立递增。
 
 ## 1. 发布流程
 
@@ -12,14 +12,16 @@
 4. 对比当前 Tag 与上一已发布同平台版本，评估改动影响并确定正式包回归范围。
 5. 在实际安装的候选包上完成确定范围内的正式包 E2E。
 6. 记录构建信息、回归结果和剩余风险。
-7. 发布测试通过的同一份候选包到 COS，验证公开下载和更新通道。
-8. 清理本地临时工作区和过期候选包。
+7. 校验 GitHub 登录、公开仓库权限及 Tag 对应的构建 commit，创建或恢复草稿，上传同一安装包和校验文件。
+8. 将同一候选包发布到 COS，验证官网下载和自动更新通道。
+9. 公开 GitHub Release，匿名下载安装包并校验大小与 SHA-256。
+10. 两边全部验证成功后，标记发布完成并清理本地临时工作区和过期候选包。
 
 候选包测试或公开验证失败时，不得放宽构建、审计、哈希和公开通道校验。
 
 ### 1.1 发布准备与 Tag
 
-必须在干净且与 `origin/main` 完全一致的 `main` 上开始。新版本必须高于该平台当前仍存在的最高 Tag。发版机须具备 live `.env`，包括 `AI_LIVE_KEY_*`；默认 provider 为 `dashscope`。
+必须在干净且与 `origin/main` 完全一致的 `main` 上开始。公开发布前应已完成桌面端仓库迁移，`origin` 指向 `Yoan98/Ncurator`，后续 Tag 与构建均基于公开源码。新版本必须高于该平台当前仍存在的最高 Tag。发版机须具备 live `.env`，包括 `AI_LIVE_KEY_*`；默认 provider 为 `dashscope`。
 
 `release:start` 会依次完成：
 
@@ -50,7 +52,7 @@ pnpm release:abort --tag windows-vX.Y.Z
 # 或 mac-vX.Y.Z
 ```
 
-`release:abort` 拒绝删除已 live 或本地状态为 `published` 的 Tag，同时删除远端和本地 annotated Tag 及该 Tag 的本地候选目录。`main` 上已经产生的 prepare 提交会保留。已上线版本有问题时必须发布更高版本，不能 abort live Tag。
+`release:abort` 拒绝删除已 live 或本地状态为 `published` 的 Tag，同时删除该 Tag 的 GitHub 草稿、远端和本地 annotated Tag 及本地候选目录；若 GitHub Release 已公开则拒绝中止。`main` 上已经产生的 prepare 提交会保留。已上线版本有问题时必须发布更高版本，不能 abort live Tag。
 
 ## 2. 候选包与正式包回归
 
@@ -65,7 +67,7 @@ prepared → ready → published
              └→ rejected
 ```
 
-正式包 E2E 通过后候选包变为 `ready`；测试失败变为 `rejected`；公开发布并验证成功后变为 `published`。候选包、bundle 和对象存储布局见 [`design.md`](./design.md)。
+正式包 E2E 通过后候选包变为 `ready`；测试失败变为 `rejected`；COS 和 GitHub 均公开发布并验证成功后变为 `published`。候选包、bundle 和对象存储布局见 [`design.md`](./design.md)。
 
 ### 2.2 影响评估
 
@@ -100,7 +102,7 @@ git diff <previous-platform-tag>..<current-platform-tag>
 
 ## 3. 发布与公开验证
 
-publish 只读取已经测试通过的候选包，不重新构建。默认发布到 COS，验证国内公开下载、更新 metadata、公开 manifest、文件大小、sha512 和 URL 成功后才算完成。对象键、CDN Cache-Control 和公开 URL 见 [`design.md`](./design.md)。
+publish 只读取已经测试通过的候选包，不重新构建。先准备 GitHub 草稿与附件，再发布 COS 并验证国内下载、更新 metadata、公开 manifest、文件大小、sha512 和 URL，最后公开并验证 GitHub Release；两边全部通过才算完成。对象键、CDN Cache-Control 和公开 URL 见 [`design.md`](./design.md)。
 
 真实发布默认锁定。用户已批准本次上线后，在当前终端设置：
 
@@ -114,34 +116,34 @@ export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production
 
 ### 3.1 GitHub Releases 镜像
 
-前置条件：桌面端源码已发布至 `Yoan98/Ncurator`，该版本的公开 Tag 与实际构建代码对应；同一安装包已经过正式包回归并在 COS 上线验证。首次公开或补发历史版本时，核对并记录原构建源码与公开快照的对应关系，不直接推送含凭证的私有历史，不把旧安装包挂在无关源码 Tag 下。
-
-1. 在发版机使用 `verifyReleaseBundle` 复验原候选 bundle、文件大小与哈希，取 `role: installer` 的 EXE 或 DMG，保持原公开文件名和字节内容。
-2. 准备 `SHA256SUMS`：使用 bundle 中该安装包的 `sha256`，每行格式为 `<sha256>  <公开安装包文件名>`。准备版本说明文件，写明平台、版本、更新内容、安装方式及对应源码 Tag；有源码快照映射时说明其对应关系。
-3. 在 GitHub 的 Releases 页面新建草稿，选择已核对的 Tag，上传安装包和 `SHA256SUMS`。只上传对应平台的安装包，不上传候选目录、日志、`.env` 或签名材料。
-4. 核对草稿中的平台、Tag、文件名和版本说明后发布。GitHub 自动生成的 Source code 下载项是源码压缩包，普通用户安装应选择 EXE / DMG。
-5. 从公开 Release 下载安装包，核对大小与 SHA-256 和原 bundle 一致，再确认 README 的 Releases 入口可访问该版本。GitHub 失败不改动已上线的 COS 下载和自动更新通道。
-
-也可使用已安装并登录、具备目标仓库发布权限的 GitHub CLI 准备草稿。以下命令中的 Tag 和文件路径应替换为核对过的本地文件；`--verify-tag` 防止从默认分支误建 Tag：
+发版机安装 [GitHub CLI](https://cli.github.com/)，并使用具有 `Yoan98/Ncurator` 写权限的账号完成一次浏览器授权。macOS 可用 `brew install gh`；Windows 在实际发版机安装 CLI 并单独登录。
 
 ```bash
-release_tag="mac-vX.Y.Z"
-release_installer="/absolute/path/馆长-X.Y.Z-macos-arm64.dmg"
-gh release create "$release_tag" "$release_installer" "/absolute/path/SHA256SUMS" \
-  --repo Yoan98/Ncurator --verify-tag --draft \
-  --title "馆长 X.Y.Z · macOS arm64" \
-  --notes-file "/absolute/path/release-notes.md"
+gh auth login --hostname github.com --web --git-protocol ssh --skip-ssh-key
+gh auth status --hostname github.com
 ```
 
-Windows 版本使用 `windows-vX.Y.Z`、对应 EXE 及平台标题。上传中断时检查已有草稿，通过 Releases 页面或 `gh release upload` 补齐缺失附件；不使用 `--clobber` 覆盖已公开安装包。公开版本内容有问题时发布更高版本。
+登录凭证由 CLI 管理，不写入项目 `.env`，无需新增 GitHub Token 配置。每个平台继续使用原有发布命令，GitHub 不另设发布开关或上传步骤。
 
-操作依据：[GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)、[gh release create](https://cli.github.com/manual/gh_release_create)、[gh release upload](https://cli.github.com/manual/gh_release_upload)。
+`--publish-only` 按以下规则执行：
+
+1. 复验已测试的候选 bundle，并核对公开仓库的 annotated Tag 指向同一构建 commit。Tag 不存在、源码不一致、登录或权限不足时，在写入 COS 前失败；脚本不会代建或推送 Tag。
+2. 创建 GitHub 草稿，或继续使用同 Tag 的已有草稿。只上传对应平台的 EXE / DMG 和 `SHA256SUMS`；版本说明取 Tag 注释并附源码和官网更新日志入口。保留安装包公开文件名，不上传更新文件、bundle、日志或签名材料。
+3. 校验已有附件的大小和 SHA-256；缺少服务端 digest 的旧附件下载复验。中断后只补齐缺失附件，可清除草稿内上传失败留下的 `starter` 附件；内容不同则失败，不覆盖已有安装包。
+4. 发布并验证 COS。若官网下载与更新通道已经指向该候选包，复验后直接继续 GitHub；若只是上传了文件但尚未切换通道，则继续完成 COS 发布。拒绝把公开通道降级到较旧版本。
+5. 将草稿公开，再通过匿名下载复验附件大小与 SHA-256；已公开且内容相同的 Release 只验证。全部成功后候选包才标记 `published`。
+
+Windows 与 macOS 保持独立 Tag 和 Release，不设置跨平台共用的 Latest 标记。GitHub 的 Source code 下载项是源码压缩包，用户安装应选择 EXE / DMG。
+
+首次公开应从清理后的公开源码创建 Tag 和候选包，不推送含凭证、内部资料的私有历史。自动发布要求公开 Tag 与候选 commit 完全一致，不处理历史安装包与公开快照的 commit 映射；补发旧版本需另行核对源码对应关系。
+
+操作依据：[CLI 登录](https://cli.github.com/manual/gh_auth_login)、[创建 Release](https://cli.github.com/manual/gh_release_create)、[上传附件](https://cli.github.com/manual/gh_release_upload)。
 
 ## 4. 中断与恢复
 
 - Tag 已创建但 prepare 中断：同 Tag 重跑 `--prepare-only`；如果源码已改变且版本尚未上线，先 abort 再用同版本重打。
 - 候选包已生成但测试中断：对同一候选包重跑 `--test-only`。
-- 上传或 finalize 中断：对同一候选包恢复 publish，或执行 `release:storage:finalize`。
+- 上传、COS finalize、GitHub 公开或下载验证中断：修复原因后，对同一候选包重跑原平台的 `--publish-only`；按已有附件和公开通道继续，不重新构建、不覆盖已公开附件。COS 已上线但 GitHub 失败时保留候选包和测试证据，不能宣称整次发布完成；`release:storage:finalize` 只恢复 COS，不完成 GitHub。
 - 未上线整轮作废：abort 后用同一版本重打，不要另起版本号。
 - 已发布版本有问题：发布更高版本；回退下载通道不会让已安装客户端自动降级。
 - 同一 Tag 的对象已存在但哈希不同：禁止覆盖；未上线时执行 abort 后用同一版本重打。
