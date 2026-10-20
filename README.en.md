@@ -29,6 +29,12 @@
   <a href="https://www.guanzhangai.cn/api/download/mac-arm64"><strong>Download for macOS (Apple silicon)</strong></a>
 </p>
 
+## Architecture Design
+
+<p align="center">
+  <img src="./assets/readme/architecture.en.png" alt="A task goes to a language model, which chooses file, web, and terminal tools, then delivers the result for human review" width="1100" />
+</p>
+
 ## Capabilities
 
 | Capability              | What it does                                                               |
