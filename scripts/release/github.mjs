@@ -24,7 +24,7 @@ export const createGitHubReleasePublisher = ({
     try {
       return await execute('gh', args, {
         cwd: root,
-        timeout: 20 * 60_000,
+        timeout: args[0] === 'release' && args[1] === 'upload' ? 60 * 60_000 : 20 * 60_000,
         maxBuffer: 10 * 1024 * 1024,
         env: { ...process.env, GH_PROMPT_DISABLED: '1' }
       })
@@ -118,19 +118,20 @@ export const createGitHubReleasePublisher = ({
       const { bundle, directory } = candidate.verified
       const annotation = await verifySource(bundle)
       const installer = bundle.files.find((file) => file.role === 'installer')
+      const githubInstaller = { ...installer, name: installer.name.replace(/^馆长-/u, 'NCurator-') }
       const staging = path.join(candidate.directory, 'github')
       await mkdir(staging, { recursive: true })
       const installerPath = await resolveReleaseAssetPath(directory, installer)
       const uploadPath =
-        path.basename(installerPath) === installer.name
+        path.basename(installerPath) === githubInstaller.name
           ? installerPath
-          : path.join(staging, installer.name)
+          : path.join(staging, githubInstaller.name)
       if (uploadPath !== installerPath) await copyFile(installerPath, uploadPath)
-      const sums = `${installer.sha256}  ${installer.name}\n`
+      const sums = `${installer.sha256}  ${githubInstaller.name}\n`
       const sumsPath = path.join(staging, 'SHA256SUMS')
       await writeFile(sumsPath, sums, 'utf8')
       const files = [
-        { ...installer, path: uploadPath },
+        { ...githubInstaller, path: uploadPath },
         { name: 'SHA256SUMS', path: sumsPath, size: Buffer.byteLength(sums), sha256: sha256(sums) }
       ]
       const { family, version } = parseReleaseTag(bundle.tag)

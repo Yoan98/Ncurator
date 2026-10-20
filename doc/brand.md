@@ -23,13 +23,14 @@
 ```text
 用户下载看到的：  馆长-{version}-Windows-x64.exe / 馆长-{version}-macos-arm64.dmg
 浏览器保存名：     同上（公开 URL 末段）
+GitHub 下载看到的：NCurator-{version}-Windows-x64.exe / NCurator-{version}-macos-arm64.dmg
 本地构建 / 磁盘：  馆长-{version}-Windows-x64.exe、Ncurator-mac-*.dmg（storageName，ASCII）
 安装后应用名：     馆长.app / 馆长.exe
 运行时数据目录：   …/ncurator（或 ncurator-dev）
 更新缓存目录：     ncurator-updater
 ```
 
-Windows / macOS **公开**安装包名与对象键均为「馆长-…」，与用户可见名一致。mac 本地 `electron-builder` 产物仍可为 `Ncurator-mac-*.dmg`，发布时映射到公开键；自动更新 zip / blockmap 继续走 ASCII storageName。
+Windows / macOS **官网与 COS** 安装包名与对象键均为「馆长-…」，与用户可见名一致。GitHub Releases 附件使用英文品牌 `NCurator-…` 的 ASCII 文件名，避免 GitHub 自动裁剪中文前缀；文件内容不变，`SHA256SUMS` 对应该镜像文件名。mac 本地 `electron-builder` 产物仍可为 `Ncurator-mac-*.dmg`，发布时映射到公开键；自动更新 zip / blockmap 继续走 ASCII storageName。
 
 **不要**把 userData / updater 缓存改成「馆长」：已有用户目录，且中文路径更脆。
 

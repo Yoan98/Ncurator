@@ -43,7 +43,7 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 ### GitHub Releases 手动下载
 
-公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 COS 上线版本相同、已完成正式包回归的文件，不重新构建。GitHub 登录凭证由 CLI 管理，不新增项目密钥配置。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和版本说明；自动更新文件继续由 COS 通道提供。
+公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 COS 上线版本相同、已完成正式包回归的文件，不重新构建。GitHub 登录凭证由 CLI 管理，不新增项目密钥配置。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和版本说明；GitHub 安装包附件使用英文品牌 ASCII 文件名，命名见[品牌规范](../brand.md#下载名-vs-缓存名)，自动更新文件继续由 COS 通道提供。
 
 Release 的公开 annotated Tag 必须与候选 bundle 的构建 commit 完全一致；公开源码后从该源码创建新的 Tag 和候选包。自动流程不代建 Tag，不把含凭证的私有历史推入公开仓库，也不处理历史包与公开快照的 commit 映射。GitHub 自动附带的 Source code 压缩包不替代安装包，也不替代核对完整对应源码的义务。
 

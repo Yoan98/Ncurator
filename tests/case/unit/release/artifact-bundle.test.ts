@@ -222,12 +222,18 @@ describe('GitHub release publication', () => {
 
   it('uploads only the tested installer and checksum, then publishes verified public bytes', async () => {
     const { state, publisher } = githubHarness()
-    const prepared = await publisher.prepare(await githubCandidate())
+    const candidate = await githubCandidate()
+    const prepared = await publisher.prepare(candidate)
     expect(state.release?.draft).toBe(true)
     expect(state.release?.assets.map((asset) => asset.name)).toEqual([
-      '馆长-0.1.21-Windows-x64.exe',
+      'NCurator-0.1.21-Windows-x64.exe',
       'SHA256SUMS'
     ])
+    expect(candidate.verified.bundle.files[0].name).toBe('馆长-0.1.21-Windows-x64.exe')
+    const checksum = state.release!.assets.find((asset) => asset.name === 'SHA256SUMS')!
+    expect(state.bytes.get(checksum.browser_download_url)?.toString('utf8')).toBe(
+      `${candidate.verified.bundle.files[0].sha256}  NCurator-0.1.21-Windows-x64.exe\n`
+    )
     await publisher.publish(prepared)
     expect(state.release?.draft).toBe(false)
     const writes = [...state.writes]
