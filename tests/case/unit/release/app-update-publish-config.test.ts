@@ -151,8 +151,16 @@ describe('app update publish config', () => {
       readFile(path.resolve('scripts/release/r2/upload-fragment.mjs'), 'utf8')
     ])
 
-    expect(windowsRelease).toContain("'r2', 'finalize-windows.mjs'")
-    expect(macRelease).toContain("'r2', 'finalize-macos.mjs'")
+    for (const release of [windowsRelease, macRelease]) {
+      expect(release).toContain('prepareReleaseStoragePublication(candidate.verified.fragment)')
+      expect(release).toContain('await publishReleaseStorage(candidate.verified, channels,')
+      expect(release.indexOf('await publishReleaseStorage')).toBeLessThan(
+        release.indexOf('await github.publish(githubRelease)')
+      )
+      expect(release.indexOf('await github.publish(githubRelease)')).toBeLessThan(
+        release.indexOf('await markCandidatePublished(')
+      )
+    }
     expect(windowsRelease).not.toContain('e2e-default-excludes.mjs')
     expect(macRelease).not.toContain('e2e-default-excludes.mjs')
     expect(windowsRelease).not.toContain('--execution-profile')

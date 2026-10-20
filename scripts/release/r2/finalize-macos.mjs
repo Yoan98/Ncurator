@@ -9,6 +9,7 @@ import { fetchWithRetry } from '../shared/http.mjs'
 import { createReleaseStorageClient } from '../storage/client.mjs'
 import { artifactKey, artifactPrefix, fragmentKey, legacyStatusPrefix } from './storage-layout.mjs'
 import { parseReleaseTag } from '../tag.mjs'
+import { isReleaseChannelCurrent } from '../shared/live-tag.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -52,6 +53,8 @@ const downloadAndVerifyFragment = async (platform) => {
 
 try {
   const arm64 = await downloadAndVerifyFragment('macos-arm64')
+
+  await isReleaseChannelCurrent(arm64, publicBaseUrl)
 
   const metadataInput = path.join(workDirectory, 'metadata-input')
   const metadataOutput = path.join(workDirectory, 'metadata-output')
@@ -145,7 +148,10 @@ try {
   if (!response.ok || Number(response.headers.get('content-length')) !== installer.size) {
     throw new Error(`public macOS artifact download verification failed: ${installerKey}`)
   }
-  if (!installerUrl.endsWith(`/${encodeURI(downloadName)}`) && !installerUrl.endsWith(`/${downloadName}`)) {
+  if (
+    !installerUrl.endsWith(`/${encodeURI(downloadName)}`) &&
+    !installerUrl.endsWith(`/${downloadName}`)
+  ) {
     throw new Error(`macOS installer URL must end with the user-visible name: ${installerUrl}`)
   }
 
@@ -153,9 +159,7 @@ try {
     `${publicBaseUrl}/releases/latest/macos.json?check=${Date.now()}`,
     { cache: 'no-store' }
   )
-  const publicManifest = publicManifestResponse.ok
-    ? await publicManifestResponse.json()
-    : undefined
+  const publicManifest = publicManifestResponse.ok ? await publicManifestResponse.json() : undefined
   if (
     publicManifest?.version !== arm64.version ||
     publicManifest?.downloads?.arm64?.name !== downloadName ||

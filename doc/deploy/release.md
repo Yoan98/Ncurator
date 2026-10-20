@@ -1,6 +1,6 @@
 # 桌面端发布流程
 
-官网和应用内自动更新正式发布使用腾讯云 COS，一次发布完成后不再把同一 Tag 上传到 Cloudflare R2。GitHub Releases 同时提供同一正式安装包的下载镜像；`release:win` / `release:mac` 的 `--publish-only` 自动完成两边发布，详见 3.1 节。R2 仅供未来海外版显式使用 `RELEASE_STORAGE_TARGET=r2`。当前发布平台为 Windows x64 和 macOS arm64，平台 Tag 分别使用 `windows-vX.Y.Z` 与 `mac-vX.Y.Z`，版本号独立递增。
+每次正式发布将同一候选包同步发布到腾讯云 COS、Cloudflare R2 和 GitHub Releases。`release:win` / `release:mac` 的 `--publish-only` 自动完成三个渠道；COS、R2 分别更新本平台的安装包、自动更新 metadata 和官网 manifest，GitHub 提供安装包镜像。桌面端内置官网与自动更新地址继续使用国内 COS 通道。当前发布平台为 Windows x64 和 macOS arm64，平台 Tag 分别使用 `windows-vX.Y.Z` 与 `mac-vX.Y.Z`，版本号独立递增。
 
 ## 1. 发布流程
 
@@ -13,15 +13,15 @@
 5. 在实际安装的候选包上完成确定范围内的正式包 E2E。
 6. 记录构建信息、回归结果和剩余风险。
 7. 校验 GitHub 登录、公开仓库权限及 Tag 对应的构建 commit，创建或恢复草稿，上传同一安装包和校验文件。
-8. 将同一候选包发布到 COS，验证官网下载和自动更新通道。
+8. 将同一候选包依次发布到 COS、R2，分别验证公开下载和自动更新通道。
 9. 公开 GitHub Release，匿名下载安装包并校验大小与 SHA-256。
-10. 两边全部验证成功后，标记发布完成并清理本地临时工作区和过期候选包。
+10. 三个渠道全部验证成功后，标记发布完成并清理本地临时工作区和过期候选包。
 
 候选包测试或公开验证失败时，不得放宽构建、审计、哈希和公开通道校验。
 
 ### 1.1 发布准备与 Tag
 
-必须在干净且与 `origin/main` 完全一致的 `main` 上开始。公开发布前应已完成桌面端仓库迁移，`origin` 指向 `Yoan98/Ncurator`，后续 Tag 与构建均基于公开源码。新版本必须高于该平台当前仍存在的最高 Tag。发版机须具备 live `.env`，包括 `AI_LIVE_KEY_*`；默认 provider 为 `dashscope`。
+必须在干净且与 `origin/main` 完全一致的 `main` 上开始。公开发布前应已完成桌面端仓库迁移，`origin` 指向 `Yoan98/Ncurator`，后续 Tag 与构建均基于公开源码。新版本必须高于该平台当前仍存在的最高 Tag。发版机须具备 live `.env`，包括 `AI_LIVE_KEY_*`、COS 和 R2 的发布配置；默认 provider 为 `dashscope`。
 
 `release:start` 会依次完成：
 
@@ -67,7 +67,7 @@ prepared → ready → published
              └→ rejected
 ```
 
-正式包 E2E 通过后候选包变为 `ready`；测试失败变为 `rejected`；COS 和 GitHub 均公开发布并验证成功后变为 `published`。候选包、bundle 和对象存储布局见 [`design.md`](./design.md)。
+正式包 E2E 通过后候选包变为 `ready`；测试失败变为 `rejected`；COS、R2 和 GitHub 均公开发布并验证成功后变为 `published`。候选包、bundle 和对象存储布局见 [`design.md`](./design.md)。
 
 ### 2.2 影响评估
 
@@ -102,7 +102,7 @@ git diff <previous-platform-tag>..<current-platform-tag>
 
 ## 3. 发布与公开验证
 
-publish 只读取已经测试通过的候选包，不重新构建。先准备 GitHub 草稿与附件，再发布 COS 并验证国内下载、更新 metadata、公开 manifest、文件大小、sha512 和 URL，最后公开并验证 GitHub Release；两边全部通过才算完成。对象键、CDN Cache-Control 和公开 URL 见 [`design.md`](./design.md)。
+publish 只读取已经测试通过的候选包，不重新构建。先校验 COS、R2 配置及两个渠道的当前版本，准备 GitHub 草稿与附件，再依次发布 COS、R2 并分别验证公开下载、更新 metadata、manifest、文件大小、sha512 和 URL，最后公开并验证 GitHub Release；三个渠道全部通过才算完成。对象键、CDN Cache-Control 和公开 URL 见 [`design.md`](./design.md)。
 
 真实发布默认锁定。用户已批准本次上线后，在当前终端设置：
 
@@ -112,7 +112,7 @@ export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production
 
 未设置时，`--publish-only`、上传和 finalize 必须在网络写入前失败。普通构建和候选包测试不需要该变量。
 
-国内 COS 发布完成后，不要再对同一 Tag 设置 `RELEASE_STORAGE_TARGET=r2` 执行第二次上传或 finalize。
+平台发布命令固定处理 COS 和 R2，不受 `RELEASE_STORAGE_TARGET` 的单目标选择影响；该变量仅用于底层上传 / finalize 的定向恢复。两套存储配置缺失或任一公开渠道已有更高版本时，在写入 GitHub 或存储前失败。
 
 ### 3.1 GitHub Releases 镜像
 
@@ -123,15 +123,15 @@ gh auth login --hostname github.com --web --git-protocol ssh --skip-ssh-key
 gh auth status --hostname github.com
 ```
 
-登录凭证由 CLI 管理，不写入项目 `.env`，无需新增 GitHub Token 配置。每个平台继续使用原有发布命令，GitHub 不另设发布开关或上传步骤。
+登录凭证由 CLI 管理，不写入项目 `.env`，无需新增 GitHub Token 配置。每个平台继续使用原有发布命令，COS、R2、GitHub 不另设正常发布开关或上传步骤。
 
 `--publish-only` 按以下规则执行：
 
-1. 复验已测试的候选 bundle，并核对公开仓库的 annotated Tag 指向同一构建 commit。Tag 不存在、源码不一致、登录或权限不足时，在写入 COS 前失败；脚本不会代建或推送 Tag。
+1. 复验已测试的候选 bundle，并核对公开仓库的 annotated Tag 指向同一构建 commit。Tag 不存在、源码不一致、登录或权限不足时，在写入 COS / R2 前失败；脚本不会代建或推送 Tag。
 2. 创建 GitHub 草稿，或继续使用同 Tag 的已有草稿。只上传对应平台的 EXE / DMG 和 `SHA256SUMS`；版本说明取 Tag 注释并附源码和官网更新日志入口。GitHub 附件使用 `NCurator-…` 英文文件名（见[品牌命名](../brand.md#下载名-vs-缓存名)），安装包字节保持一致；不上传更新文件、bundle、日志或签名材料。
 3. 校验已有附件的大小和 SHA-256；缺少服务端 digest 的旧附件下载复验。中断后只补齐缺失附件，可清除草稿内上传失败留下的 `starter` 附件；内容不同则失败，不覆盖已有安装包。
-4. 发布并验证 COS。若官网下载与更新通道已经指向该候选包，复验后直接继续 GitHub；若只是上传了文件但尚未切换通道，则继续完成 COS 发布。拒绝把公开通道降级到较旧版本。
-5. 将草稿公开，再通过匿名下载复验附件大小与 SHA-256；已公开且内容相同的 Release 只验证。全部成功后候选包才标记 `published`。
+4. 依次发布并验证 COS、R2。每个渠道已经指向该候选包时只复验；渠道尚未上线或尚未切换时继续该渠道上传 / finalize。支持对已标记 `published` 的同一候选包补齐缺失渠道，拒绝覆盖内容不同的文件或降级公开通道。
+5. 将草稿公开，再通过匿名下载复验附件大小与 SHA-256；已公开且内容相同的 Release 只验证。三个渠道全部成功后候选包才标记 `published`。
 
 Windows 与 macOS 保持独立 Tag 和 Release，不设置跨平台共用的 Latest 标记。GitHub 的 Source code 下载项是源码压缩包，用户安装应选择 EXE / DMG。
 
@@ -143,7 +143,7 @@ Windows 与 macOS 保持独立 Tag 和 Release，不设置跨平台共用的 Lat
 
 - Tag 已创建但 prepare 中断：同 Tag 重跑 `--prepare-only`；如果源码已改变且版本尚未上线，先 abort 再用同版本重打。
 - 候选包已生成但测试中断：对同一候选包重跑 `--test-only`。
-- 上传、COS finalize、GitHub 公开或下载验证中断：修复原因后，对同一候选包重跑原平台的 `--publish-only`；按已有附件和公开通道继续，不重新构建、不覆盖已公开附件。COS 已上线但 GitHub 失败时保留候选包和测试证据，不能宣称整次发布完成；`release:storage:finalize` 只恢复 COS，不完成 GitHub。
+- 上传、COS / R2 finalize、GitHub 公开或下载验证中断：修复原因后，对同一候选包重跑原平台的 `--publish-only`；复验已完成的渠道，补齐未完成渠道，不重新构建、不覆盖已公开附件。任一渠道失败时保留候选包、测试证据和 logs，不能宣称整次发布完成；`release:storage:finalize` 仅恢复选定存储，不完成其他渠道。
 - 未上线整轮作废：abort 后用同一版本重打，不要另起版本号。
 - 已发布版本有问题：发布更高版本；回退下载通道不会让已安装客户端自动降级。
 - 同一 Tag 的对象已存在但哈希不同：禁止覆盖；未上线时执行 abort 后用同一版本重打。
@@ -178,7 +178,8 @@ pnpm test:e2e:package --bundle <release-bundle.json> --case <caseId>
 上传已经完成但 finalize 中断时，确认当前 Tag 尚未被其他发布流程处理，再执行：
 
 ```bash
+# 默认恢复 COS；恢复 R2 时先设置 RELEASE_STORAGE_TARGET=r2
 pnpm release:storage:finalize --tag <windows-vX.Y.Z|mac-vX.Y.Z>
 ```
 
-该命令会校验 COS 上的 fragment 和安装包，写入公开更新 metadata / manifest，并清理旧对象。它不是正常发布入口，也不能用于已经发布完成的 Tag。
+该命令会校验选定存储上的 fragment 和安装包，拒绝降级公开通道，写入该渠道的更新 metadata / manifest，并清理该平台旧对象。它不是正常发布入口；整次发布的恢复仍应使用平台 `--publish-only`，让三个渠道全部复验。

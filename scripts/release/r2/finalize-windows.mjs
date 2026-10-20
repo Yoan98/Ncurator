@@ -7,6 +7,7 @@ import { artifactKey, artifactPrefix, fragmentKey, legacyStatusPrefix } from './
 import { createReleaseStorageClient } from '../storage/client.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { parseReleaseTag } from '../tag.mjs'
+import { isReleaseChannelCurrent } from '../shared/live-tag.mjs'
 
 const ROOT = process.cwd()
 const args = process.argv.slice(2)
@@ -43,6 +44,8 @@ try {
       throw new Error(`${label} object does not match release fragment: ${key}`)
     }
   }
+
+  await isReleaseChannelCurrent(fragment, publicBaseUrl)
 
   const metadataInput = path.join(workDirectory, 'metadata-input')
   const metadataOutput = path.join(workDirectory, 'metadata-output')
@@ -151,9 +154,7 @@ try {
   )
   removable.push(...(await listKeys(legacyStatusPrefix('windows'))))
   await deleteKeys(removable)
-  process.stdout.write(
-    `[release] Windows ${releaseTag} is live at ${installerUrl}\n`
-  )
+  process.stdout.write(`[release] Windows ${releaseTag} is live at ${installerUrl}\n`)
 } finally {
   await rm(workDirectory, { recursive: true, force: true })
 }

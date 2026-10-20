@@ -13,7 +13,7 @@ import {
   recordCandidateE2E
 } from './candidate.mjs'
 import { inspectLocalWindowsRelease } from './shared/windows.mjs'
-import { assertLivePublishAllowed, resolveReleaseStorageConfig } from './storage/config.mjs'
+import { assertLivePublishAllowed } from './storage/config.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
 import {
@@ -25,11 +25,7 @@ import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
 import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
 import { createGitHubReleasePublisher } from './github.mjs'
-import {
-  isReleaseChannelCurrent,
-  verifyPublicReleaseFragment,
-  verifyReleaseStorageFragment
-} from './shared/live-tag.mjs'
+import { prepareReleaseStoragePublication, publishReleaseStorage } from './storage/publish.mjs'
 import { cpSync, existsSync } from 'node:fs'
 
 const execFileAsync = promisify(execFile)
@@ -306,43 +302,24 @@ if (mode === 'test') {
   process.exit(0)
 }
 
-const storage = resolveReleaseStorageConfig()
-const publicBaseUrl = storage.publicBaseUrl
 const candidate = await assertCandidatePublishable({
   tag: releaseTag,
   platform: 'windows-x64',
   commit: taggedCommit,
   allowPublished: true
 })
+const channels = await prepareReleaseStoragePublication(candidate.verified.fragment)
 const github = createGitHubReleasePublisher({ root: ROOT })
-const channelCurrent = await isReleaseChannelCurrent(candidate.verified.fragment, publicBaseUrl)
-if (!channelCurrent && candidate.state.status === 'published') {
-  throw new Error(`published ${releaseTag} is missing from ${storage.label}; refuse to republish`)
-}
 const githubRelease = await github.prepare(candidate)
-if (!channelCurrent) {
-  await run(
-    process.execPath,
-    [
-      path.join(ROOT, 'scripts', 'release', 'r2', 'upload-fragment.mjs'),
-      candidate.verified.directory,
-      candidate.verified.fragmentPath
-    ],
-    { cwd: ROOT, env: process.env }
-  )
-  await run(
-    process.execPath,
-    [path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-windows.mjs'), '--tag', releaseTag],
-    { cwd: ROOT, env: process.env }
-  )
-}
-await verifyPublicReleaseFragment(candidate.verified.fragment, publicBaseUrl)
-await verifyReleaseStorageFragment(candidate.verified.fragment, inspection.awsExecutable)
-if (!(await isReleaseChannelCurrent(candidate.verified.fragment, publicBaseUrl))) {
-  throw new Error('public Windows release channel does not match the candidate')
-}
+await publishReleaseStorage(candidate.verified, channels, {
+  root: ROOT,
+  run,
+  awsExecutable: inspection.awsExecutable
+})
 await github.publish(githubRelease)
 await markCandidatePublished({ tag: releaseTag, platform: 'windows-x64' })
 await cleanupLocalTestLogsSafely()
 await cleanupLocalCandidates()
-process.stdout.write(`[release] Windows ${releaseTag} published to ${storage.label} and GitHub\n`)
+process.stdout.write(
+  `[release] Windows ${releaseTag} published to Tencent COS, Cloudflare R2 and GitHub\n`
+)

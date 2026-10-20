@@ -111,7 +111,7 @@
 │   │   ├── runtime/                  # bundle 边界、递归依赖追踪和暂存验证
 │   │   └── sidecar/                  # 网页抓取 sidecar 构建
 │   ├── release/                      # 本地发布、对象存储和发布共享能力
-│   │   ├── storage/                  # 发布存储抽象（默认 COS，可切 R2）
+│   │   ├── storage/                  # 发布存储抽象与 COS / R2 同步发布
 │   │   ├── cos/                      # 腾讯云 COS 上传与策略
 │   │   ├── r2/                       # Cloudflare R2 上传
 │   │   └── shared/                   # 发布流程共享能力

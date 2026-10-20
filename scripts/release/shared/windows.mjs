@@ -5,7 +5,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './environment.mjs'
-import { resolveReleaseStorageConfig } from '../storage/config.mjs'
+import { resolveReleaseStorageConfigs } from '../storage/config.mjs'
 
 const execFileAsync = promisify(execFile)
 
@@ -141,7 +141,7 @@ export const inspectLocalWindowsRelease = async (root, { requirePublish = true }
 
   if (requirePublish) {
     try {
-      resolveReleaseStorageConfig()
+      resolveReleaseStorageConfigs()
     } catch (error) {
       issues.push(error instanceof Error ? error.message : String(error))
     }

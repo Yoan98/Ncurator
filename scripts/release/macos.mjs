@@ -22,13 +22,9 @@ import {
   readRegressionSelection,
   validateReleaseArgs
 } from './regression.mjs'
-import { assertLivePublishAllowed, resolveReleaseStorageConfig } from './storage/config.mjs'
+import { assertLivePublishAllowed, resolveReleaseStorageConfigs } from './storage/config.mjs'
 import { createGitHubReleasePublisher } from './github.mjs'
-import {
-  isReleaseChannelCurrent,
-  verifyPublicReleaseFragment,
-  verifyReleaseStorageFragment
-} from './shared/live-tag.mjs'
+import { prepareReleaseStoragePublication, publishReleaseStorage } from './storage/publish.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -111,7 +107,7 @@ const validateEnvironment = async () => {
   }
 
   if (mode === 'publish') {
-    resolveReleaseStorageConfig()
+    resolveReleaseStorageConfigs()
     const awsExecutable =
       String(process.env.NCURATOR_AWS_CLI || '').trim() ||
       path.join(defaultToolRoot, 'awscli', 'bin', 'aws')
@@ -329,33 +325,14 @@ const candidate = await assertCandidatePublishable({
   commit: taggedCommit,
   allowPublished: true
 })
-const storage = resolveReleaseStorageConfig()
+const channels = await prepareReleaseStoragePublication(candidate.verified.fragment)
 const github = createGitHubReleasePublisher({ root: ROOT })
-const channelCurrent = await isReleaseChannelCurrent(
-  candidate.verified.fragment,
-  storage.publicBaseUrl
-)
-if (!channelCurrent && candidate.state.status === 'published') {
-  throw new Error(`published ${releaseTag} is missing from ${storage.label}; refuse to republish`)
-}
 const githubRelease = await github.prepare(candidate)
-if (!channelCurrent) {
-  await run(process.execPath, [
-    path.join(ROOT, 'scripts', 'release', 'r2', 'upload-fragment.mjs'),
-    candidate.verified.directory,
-    candidate.verified.fragmentPath
-  ])
-  await run(process.execPath, [
-    path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-macos.mjs'),
-    '--tag',
-    releaseTag
-  ])
-}
-await verifyPublicReleaseFragment(candidate.verified.fragment, storage.publicBaseUrl)
-await verifyReleaseStorageFragment(candidate.verified.fragment, process.env.NCURATOR_AWS_CLI)
-if (!(await isReleaseChannelCurrent(candidate.verified.fragment, storage.publicBaseUrl))) {
-  throw new Error('public macOS release channel does not match the candidate')
-}
+await publishReleaseStorage(candidate.verified, channels, {
+  root: ROOT,
+  run,
+  awsExecutable: process.env.NCURATOR_AWS_CLI
+})
 await github.publish(githubRelease)
 await markCandidatePublished({ tag: releaseTag, platform: MACOS_PLATFORM })
 try {
@@ -376,4 +353,6 @@ try {
   const message = error instanceof Error ? error.message : String(error)
   process.stderr.write(`[release] local candidate cleanup warning: ${message}\n`)
 }
-process.stdout.write(`[release] macOS ${releaseTag} published to ${storage.label} and GitHub\n`)
+process.stdout.write(
+  `[release] macOS ${releaseTag} published to Tencent COS, Cloudflare R2 and GitHub\n`
+)

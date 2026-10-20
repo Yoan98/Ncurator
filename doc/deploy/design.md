@@ -4,11 +4,11 @@
 
 ### Windows
 
-本地 Windows x64：Node.js 22 x64、项目指定 pnpm、Python 3.12 x64、Git、tar；发布时还需 AWS CLI、COS 存储配置，以及已登录且具备公开仓库写权限的 GitHub CLI。仅未来海外版才需要 R2 配置。`pnpm release:doctor` 检查本机条件。prepare / test / publish 只消费本机候选包。
+本地 Windows x64：Node.js 22 x64、项目指定 pnpm、Python 3.12 x64、Git、tar；发布时还需 AWS CLI、COS 和 R2 存储配置，以及已登录且具备公开仓库写权限的 GitHub CLI。`pnpm release:doctor` 检查本机条件。prepare / test / publish 只消费本机候选包。
 
 ### macOS
 
-prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` P12（自建更新签名，`timestamp: none`、`notarize: false`，非 Apple Developer ID 公证）。候选包须完成正式包 E2E；发布时需 AWS CLI、COS 存储配置及已登录的 GitHub CLI。不构建、测试或发布 Intel Mac。
+prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` P12（自建更新签名，`timestamp: none`、`notarize: false`，非 Apple Developer ID 公证）。候选包须完成正式包 E2E；发布时需 AWS CLI、COS 和 R2 存储配置及已登录的 GitHub CLI。不构建、测试或发布 Intel Mac。
 
 ### 构建与审计硬约束
 
@@ -37,21 +37,21 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 公开对象键使用用户可见文件名（如 `馆长-X.Y.Z-macos-arm64.dmg` / `馆长-X.Y.Z-Windows-x64.exe`），官网 `/api/download/*` 仍 307 到该直链；浏览器保存名取自 URL 末段。本地构建产物与 fragment 的 `storageName` 可仍为 ASCII（如 `Ncurator-mac-arm64.dmg`），仅用于解析磁盘文件。
 
-当前正式发布只写 COS：环境变量 `SecretId` / `SecretKey`（或 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`）。桶与区域默认使用 `ncurator-1324873382` / `ap-guangzhou`，可通过 `COS_BUCKET` / `COS_REGION` 覆盖；公开地址必须为 `https://download.guanzhangai.cn`。使用默认配置时无需将这些值写入 `.env`。CDN、DNS、资费与采购见 [`tencent-cdn-billing.md`](./tencent-cdn-billing.md)。发布子用户权限模板：[`scripts/release/cos/cam-policy.json`](../../scripts/release/cos/cam-policy.json)。
+每次正式发布固定同步写入 COS 和 R2，同一候选包使用相同文件与哈希；存储对象布局与缓存策略一致，公开 manifest 使用各自域名。COS 配置：环境变量 `SecretId` / `SecretKey`（或 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`）。桶与区域默认使用 `ncurator-1324873382` / `ap-guangzhou`，可通过 `COS_BUCKET` / `COS_REGION` 覆盖；公开地址必须为 `https://download.guanzhangai.cn`。使用默认配置时无需将这些值写入 `.env`。CDN、DNS、资费与采购见 [`tencent-cdn-billing.md`](./tencent-cdn-billing.md)。发布子用户权限模板：[`scripts/release/cos/cam-policy.json`](../../scripts/release/cos/cam-policy.json)。
 
-国内官网 / 下载：`https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`。海外官网 `www.ncurator.com` 存在；官网与应用内自动更新继续走国内通道。国内 COS 发布完成后不要再同步同一 Tag 到 R2。
+国内官网 / 下载：`https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`。海外官网 `www.ncurator.com` 存在；官网与应用内自动更新继续走国内通道。海外下载域名 `https://download.ncurator.com` 由 R2 提供，每次发布同步更新安装包、更新 metadata 与 manifest。
 
 ### GitHub Releases 手动下载
 
-公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 COS 上线版本相同、已完成正式包回归的文件，不重新构建。GitHub 登录凭证由 CLI 管理，不新增项目密钥配置。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和版本说明；GitHub 安装包附件使用英文品牌 ASCII 文件名，命名见[品牌规范](../brand.md#下载名-vs-缓存名)，自动更新文件继续由 COS 通道提供。
+公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 COS / R2 上线版本相同、已完成正式包回归的文件，不重新构建。GitHub 登录凭证由 CLI 管理，不新增项目密钥配置。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和版本说明；GitHub 安装包附件使用英文品牌 ASCII 文件名，命名见[品牌规范](../brand.md#下载名-vs-缓存名)，自动更新文件继续由 COS 通道提供。
 
 Release 的公开 annotated Tag 必须与候选 bundle 的构建 commit 完全一致；公开源码后从该源码创建新的 Tag 和候选包。自动流程不代建 Tag，不把含凭证的私有历史推入公开仓库，也不处理历史包与公开快照的 commit 映射。GitHub 自动附带的 Source code 压缩包不替代安装包，也不替代核对完整对应源码的义务。
 
 Windows 和 macOS 独立发布，GitHub 的 Latest 标记不能代表两个平台都已更新。README 使用仓库 Releases 列表作为 GitHub 下载入口，不依赖跨平台共用的 `releases/latest/download` 地址。具体上传与恢复操作见[发布流程](./release.md#31-github-releases-镜像)。
 
-仅当有意发布未来海外版时才切 R2（非当前常规循环）：`RELEASE_STORAGE_TARGET=r2`，并设置 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_ACCOUNT_ID`、`R2_BUCKET_NAME`、`R2_PUBLIC_BASE_URL=https://download.ncurator.com`。
+R2 发布配置为每次正式发布必需：设置 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_ACCOUNT_ID`、`R2_BUCKET_NAME`、`R2_PUBLIC_BASE_URL=https://download.ncurator.com`。平台发布入口固定处理两个存储；`RELEASE_STORAGE_TARGET=cos|r2` 仅选择底层上传 / finalize 恢复目标，默认 COS。
 
-publish 先校验 GitHub 源码身份并准备草稿及附件，再上传 COS 候选与 fragment，更新该平台自动更新 metadata 与官网 manifest，验证公开 yml / 清单 / artifacts 的大小、sha512 与 manifest URL（安装包 URL 须以用户可见文件名结尾）；随后公开 GitHub Release，并通过匿名下载核对大小与 SHA-256。两边成功后才标记 `published`，清理本地 `tests/logs/**`，并清理该平台更早 artifacts（含旧 `release-status/`）。失败、prepare-only、test-only 不清理 logs。跨服务发布不具备原子性；中断保留同一候选包，重跑 publish 时检查实际官网与更新通道状态、补齐 GitHub 草稿附件并继续，不重建、不覆盖已有附件，也不把较新通道降级。
+publish 在写入前校验 COS / R2 配置与两个公开渠道的版本，再校验 GitHub 源码身份并准备草稿及附件；随后依次上传 COS、R2 候选与 fragment，分别更新该平台自动更新 metadata 与官网 manifest，验证公开 yml / 清单 / artifacts 的大小、sha512 与 manifest URL（安装包 URL 须以用户可见文件名结尾）；最后公开 GitHub Release，并通过匿名下载核对大小与 SHA-256。三个渠道成功后才标记 `published` 并清理本地 `tests/logs/**`；每个存储在自身公开验证完成后清理该平台更早 artifacts（含旧 `release-status/`）。失败、prepare-only、test-only 不清理 logs。跨服务发布不具备原子性；中断保留同一候选包，重跑 publish 时分别检查 COS / R2 官网与更新通道状态、复验已完成渠道、补齐未完成渠道与 GitHub 草稿附件。已标记 `published` 的候选包也可补齐缺失存储；不重建、不覆盖已有附件，不把较新通道降级。
 
 ### 本地保留与清理
 

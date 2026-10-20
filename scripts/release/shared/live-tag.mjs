@@ -17,11 +17,7 @@ const LATEST_MANIFEST = {
   windows: 'releases/latest/windows.json'
 }
 
-export const RELEASE_PUBLIC_BASE_URLS = [
-  DOMESTIC_DOWNLOAD_BASE_URL,
-  GLOBAL_DOWNLOAD_BASE_URL,
-  resolveReleaseStorageConfig
-]
+export const RELEASE_PUBLIC_BASE_URLS = [DOMESTIC_DOWNLOAD_BASE_URL, GLOBAL_DOWNLOAD_BASE_URL]
 
 export const isReleaseChannelCurrent = async (fragment, base, fetchImpl = fetchWithRetry) => {
   const { family, version } = parseReleaseTag(fragment.tag, fragment.platform)
@@ -96,10 +92,11 @@ export const findLiveChannelsForTag = async (releaseTag, fetchImpl = fetchWithRe
 
 export const verifyPublicReleaseFragment = async (
   fragment,
-  publicBaseUrl = DOMESTIC_DOWNLOAD_BASE_URL
+  publicBaseUrl = DOMESTIC_DOWNLOAD_BASE_URL,
+  fetchImpl = fetchWithRetry
 ) => {
   for (const file of fragment.files) {
-    const response = await fetchWithRetry(`${publicBaseUrl}/${artifactKey(fragment, file.name)}`, {
+    const response = await fetchImpl(`${publicBaseUrl}/${artifactKey(fragment, file.name)}`, {
       method: 'HEAD',
       cache: 'no-store'
     })
@@ -109,8 +106,11 @@ export const verifyPublicReleaseFragment = async (
   }
 }
 
-export const verifyReleaseStorageFragment = async (fragment, awsExecutable) => {
-  const config = resolveReleaseStorageConfig()
+export const verifyReleaseStorageFragment = async (
+  fragment,
+  awsExecutable,
+  config = resolveReleaseStorageConfig()
+) => {
   if (!awsExecutable) throw new Error(`${config.label} verification configuration is incomplete`)
   const { createAwsCliRuntime } = await import('../storage/client.mjs')
   const runtime = await createAwsCliRuntime(config)

@@ -71,6 +71,13 @@ export const resolveReleaseStorageConfig = (environment = process.env) => {
   throw new Error('RELEASE_STORAGE_TARGET must be cos or r2')
 }
 
+// Platform releases always publish to both channels. The single-target selector
+// is reserved for the upload/finalize recovery commands.
+export const resolveReleaseStorageConfigs = (environment = process.env) =>
+  ['cos', 'r2'].map((target) =>
+    resolveReleaseStorageConfig({ ...environment, RELEASE_STORAGE_TARGET: target })
+  )
+
 export const assertLivePublishAllowed = (environment = process.env) => {
   if (String(environment.NCURATOR_ALLOW_LIVE_PUBLISH || '').trim() !== LIVE_PUBLISH_CONFIRMATION) {
     throw new Error(
