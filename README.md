@@ -4,7 +4,7 @@
 
 <h1 align="center">馆长</h1>
 
-<p align="center"><strong>打造最好用的本地办公文件的 AI 助手</strong></p>
+<p align="center"><strong>打造最好用的处理本地办公文件的 AI 助手</strong></p>
 
 <p align="center">
   <strong>简体中文</strong> · <a href="./README.en.md">English</a>

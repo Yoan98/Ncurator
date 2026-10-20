@@ -4,7 +4,7 @@
 
 <h1 align="center">NCurator</h1>
 
-<p align="center"><strong>Building the most user-friendly AI assistant for local office documents</strong></p>
+<p align="center"><strong>Building the most user-friendly AI assistant for working with local office documents</strong></p>
 
 <p align="center">
   <a href="./README.md">简体中文</a> · <strong>English</strong>
