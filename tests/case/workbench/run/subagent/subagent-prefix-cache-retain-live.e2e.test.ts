@@ -121,7 +121,7 @@ describe('workbench subagent prefix cache e2e', () => {
           const startedAt = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
-            `请通过 delegate_to_subagent 一次派发两位帮手，分别独立执行任务A：${tasks[0]} 核对三份资料后，再使用 browser_use 打开 ${url}，页面加载完成后才能交付。任务B：${tasks[1]} 两位帮手只读自己的资料，不修改文件。你只简短汇总，不接管核对。`
+            `你只负责派发和简短汇总，不读取资料、不探测网址或网络状态，也不接管核对。请通过 delegate_to_subagent 一次派发两位帮手，并完整转达各自指令。任务A：${tasks[0]} 核对三份资料后，必须使用 browser_use 打开 ${url}，等待页面加载完成后才能交付；这一步属于任务A，不得省略或改成禁止访问网页。任务B：${tasks[1]} 两位帮手只读自己的资料，不修改文件。`
           )
           await waitForWorkbenchAiEvent(runtime, {
             name: 'other-child-completed',
@@ -131,20 +131,23 @@ describe('workbench subagent prefix cache e2e', () => {
               event.update.status === 'completed'
           })
           const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
-          while (!requested) {
+          let pending: ReturnType<typeof childUpdates>[number] | undefined
+          while (!pending || !requested) {
             if (Date.now() > deadline) throw new Error('子任务没有读取资料并打开待加载页')
+            const events = (await collectWorkbenchAiRunEvents(runtime)).filter(
+              (event) => event.createdAt >= startedAt
+            )
+            pending = childUpdates(events)
+              .filter(
+                (event) =>
+                  event.update.status === 'running' &&
+                  event.update.action?.toolName === 'browser_use'
+              )
+              .at(-1)
+            if (events.some((event) => event.type === 'run_completed'))
+              throw new Error('主任务已结束，但未进入子任务网页待加载场景')
             await runtime.page.waitForTimeout(250)
           }
-          const beforeEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
-            (event) => event.createdAt >= startedAt
-          )
-          const pending = childUpdates(beforeEvents)
-            .filter(
-              (event) =>
-                event.update.status === 'running' && event.update.action?.toolName === 'browser_use'
-            )
-            .at(-1)
-          if (!pending) throw new Error('缺少待加载子任务执行证据')
           await runtime.page.getByRole('button', { name: '停止本次运行', exact: true }).click()
           await waitForWorkbenchAiEvent(runtime, {
             name: 'root-stopped',
