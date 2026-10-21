@@ -480,6 +480,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       // Programmatic insertion needs an explicit scroll, including after a trailing newline.
       const caretMarker = document.createElement('span')
       caretMarker.textContent = '\u200b'
+      caretMarker.style.cssText = 'display:inline-block;height:1lh;vertical-align:top'
       const caretRange = nextSelection.getRangeAt(0)
       caretRange.insertNode(caretMarker)
       caretMarker.scrollIntoView({ block: 'nearest' })

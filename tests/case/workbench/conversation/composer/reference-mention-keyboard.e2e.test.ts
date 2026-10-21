@@ -6,6 +6,7 @@ import {
   assertNoWorkbenchFakeSignals,
   createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
+  pasteWorkbenchText,
   setupWorkbenchWorkspaceOnly,
   waitForWorkbenchMentionPanelText,
   workbenchSelectors
@@ -214,6 +215,52 @@ describe('workbench conversation e2e', () => {
           })
           await appendWorkbenchInputText(page, '已恢复')
           const typingAfterEmpty = (await input.textContent()) === '已恢复'
+          await input.press('ControlOrMeta+a')
+          await input.press('Backspace')
+          const longText = Array.from({ length: 70 }, (_, index) => `第 ${index} 行输入验收`).join(
+            '\n'
+          )
+          const readLongInput = async () =>
+            input.evaluate((element, sendTestId) => {
+              const rect = element.getBoundingClientRect()
+              const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+              let tail: Text | undefined
+              while (walker.nextNode())
+                if (walker.currentNode.textContent) tail = walker.currentNode as Text
+              const range = document.createRange()
+              if (tail) {
+                range.setStart(tail, tail.length - 1)
+                range.setEnd(tail, tail.length)
+              }
+              const last = range.getBoundingClientRect()
+              const send = document
+                .querySelector(`[data-testid="${sendTestId}"]`)
+                ?.getBoundingClientRect()
+              return {
+                height: rect.height,
+                cap: Math.min(240, innerHeight * 0.3),
+                scrollable: element.scrollHeight > element.clientHeight,
+                tailVisible:
+                  last.height > 0 && last.top >= rect.top && last.bottom <= rect.bottom + 1,
+                toolbarVisible: !!send && send.top >= 0 && send.bottom <= innerHeight
+              }
+            }, workbenchSelectors.sendButton)
+          await pasteWorkbenchText(page, longText)
+          const longInput = [await readLongInput()]
+          for (let index = 0; index < 20; index++) await input.press('Shift+Enter')
+          await input.pressSequentially('尾部输入')
+          longInput.push(await readLongInput())
+          const longInputPreserved =
+            (await input.textContent()) === `${longText}${'\n'.repeat(20)}尾部输入`
+          await runtime.captureScreenshot({
+            name: 'composer-long-input',
+            message: '长正文粘贴、连续换行和继续输入后末行完整可见，底部工具栏保持可见。'
+          })
+          await input.press('ControlOrMeta+a')
+          await input.press('Backspace')
+          const restoredHeight = await input.evaluate(
+            (element) => element.getBoundingClientRect().height
+          )
           return {
             originalMentionIcons,
             originalTokenIcon,
@@ -229,6 +276,9 @@ describe('workbench conversation e2e', () => {
             manualNewlinePreserved,
             undoPreservedText,
             typingAfterEmpty,
+            longInput,
+            longInputPreserved,
+            restoredHeight,
             activeBeforeArrowDown,
             activeAfterArrowDown,
             activeAfterSettled
@@ -267,6 +317,26 @@ describe('workbench conversation e2e', () => {
               message:
                 '空格/换行保留输入并隐藏占位，删除到空后占位恢复；引用前后删除、原生撤销与继续输入正常。',
               data: result
+            }
+          )
+          await runtime.assertThat(
+            result.longInputPreserved &&
+              result.restoredHeight <= result.emptyHeight + 1 &&
+              result.longInput.every(
+                (input) =>
+                  input.height <= input.cap + 1 &&
+                  input.scrollable &&
+                  input.tailVisible &&
+                  input.toolbarVisible
+              ),
+            {
+              name: 'composer-long-input-caret-visible',
+              message: '长文本和连续换行保持内容、末行与工具栏可见，清空后恢复紧凑高度。',
+              data: {
+                observations: result.longInput,
+                preserved: result.longInputPreserved,
+                restoredHeight: result.restoredHeight
+              }
             }
           )
           await assertNoWorkbenchFakeSignals(runtime)
