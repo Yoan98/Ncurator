@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { useCallback, useEffect, useRef, useState, type WheelEvent } from 'react'
 import { Tooltip, message } from 'antd'
 import { HiOutlineDocument, HiOutlineGlobeAlt, HiPlus, HiXMark } from 'react-icons/hi2'
@@ -91,9 +92,10 @@ const WorkbenchTabBar = ({
         x: Math.max(0, rect.right - 158),
         y: rect.bottom + 4
       })
-      if (!response.success) void message.error(response.error || '无法打开新增标签页菜单')
+      if (!response.success)
+        void message.error(response.error || t(($) => $.workbench.couldNotOpenTheNewTabMenu))
     } catch {
-      void message.error('无法打开新增标签页菜单')
+      void message.error(t(($) => $.workbench.couldNotOpenTheNewTabMenu))
     } finally {
       setAddMenuOpen(false)
     }
@@ -139,7 +141,7 @@ const WorkbenchTabBar = ({
                   </button>
                   <button
                     type="button"
-                    aria-label={`关闭 ${tab.title}`}
+                    aria-label={t(($) => $.workbench.close2, { value1: tab.title })}
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] hover:bg-[#E6E6E3] ${
                       active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                     }`}
@@ -183,7 +185,7 @@ const WorkbenchTabBar = ({
       <button
         type="button"
         className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
-        aria-label="新增标签页"
+        aria-label={t(($) => $.workbench.newTab)}
         aria-expanded={addMenuOpen}
         data-testid={workbenchSelectors.resourceTabAddButton}
         onClick={(event) => void openAddMenu(event.currentTarget)}
@@ -193,8 +195,8 @@ const WorkbenchTabBar = ({
       <button
         type="button"
         className="ml-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
-        aria-label="收起右侧栏"
-        title="收起右侧栏"
+        aria-label={t(($) => $.workbench.collapseRightSidebar)}
+        title={t(($) => $.workbench.collapseRightSidebar)}
         data-testid={workbenchSelectors.contentPanelToggle}
         onClick={onCollapse}
       >

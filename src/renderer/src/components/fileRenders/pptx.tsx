@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import type { LoadedFileRenderDocument } from './types'
 import { interactivePptSvg } from './selection/pptAdapter'
 import { sha256Hex } from '../../utils/fileHash'
@@ -21,10 +22,11 @@ const readDocumentBytes = async (document: PptDocument): Promise<Uint8Array> => 
   if (document.fileData instanceof Uint8Array) return document.fileData
   if (document.uri) {
     const response = await fetch(document.uri)
-    if (!response.ok) throw new Error(`读取 PPTX 失败（${response.status}）`)
+    if (!response.ok)
+      throw new Error(t(($) => $.editors.couldNotReadPptx, { value1: response.status }))
     return new Uint8Array(await response.arrayBuffer())
   }
-  throw new Error('缺少 PPTX 预览数据')
+  throw new Error(t(($) => $.editors.pptxPreviewDataIsMissing))
 }
 
 const svgUrl = (svg: string, urls: string[]): string => {
@@ -57,7 +59,8 @@ const CustomPptxRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
         if (cancelled) return
         await window.document.fonts.ready
         const context = window.document.createElement('canvas').getContext('2d')
-        if (!context) throw new Error('无法初始化 PPT 文字测量')
+        if (!context)
+          throw new Error(t(($) => $.editors.couldNotInitializePresentationTextMeasurement))
         const measureText = createPptTextMeasurer(context)
         const sourceSlides = getSlides(presentation)
         const nextSlides: PptViewerSlide[] = []

@@ -1,11 +1,9 @@
+import { normalizeUserFacingError } from '../../utils/userFacingError'
+import { t } from '../../i18n'
 import React, { useCallback, useEffect, useState } from 'react'
 import { Button, List, Modal, Popconfirm, Progress, Radio, Tag, message } from 'antd'
 import { HiCheckCircle, HiExclamationCircle, HiTrash } from 'react-icons/hi2'
-import {
-  MODEL_SOURCES,
-  MODEL_SOURCE_LABELS,
-  type ModelSource
-} from '../../../../shared/modelSources'
+import { MODEL_SOURCES, type ModelSource } from '../../../../shared/modelSources'
 import type {
   ModelInfo,
   DownloadProgressPayload,
@@ -14,38 +12,46 @@ import type {
 } from './types'
 import { vectorSelectors } from '../../testing/selectors'
 
+const modelSourceLabel: Record<ModelSource, string> = {
+  modelscope: t(($) => $.preferences.modelScopeMirror),
+  'huggingface-mirror': t(($) => $.preferences.huggingFaceMirror),
+  huggingface: 'Hugging Face'
+}
+
 const TEXT = {
-  catalogError: '获取模型列表失败',
-  downloadCompleted: '模型下载完成',
-  activeTaskWarning: '已有任务正在下载中',
-  startDownloadFailed: '启动下载失败',
-  downloadFailed: '下载失败',
-  downloadFailedReason: '下载失败：',
-  unknownError: '未知错误',
-  switchSource: '更换源下载',
-  switchSourceTitle: '更换下载源',
-  switchSourceDescription: '选择新的下载源后，将从该源重新完整下载模型。',
-  failedSourceTag: '最近失败',
-  switchSourceStart: '开始下载',
-  switchSourceCancel: '取消',
-  deleteFailed: '删除模型失败',
-  deleteFailedPrefix: '删除失败',
-  deleteCompleted: '模型已删除',
-  deleteConfirmTitle: '确认删除此模型吗？',
-  deleteConfirmDescription: '删除后需重新下载才能再次使用。',
-  deleteDuringDownloadDescription: '删除将取消当前下载并移除已下载文件。',
-  confirmDelete: '确认删除',
-  cancelDelete: '取消',
-  installed: '已安装',
-  delete: '删除',
-  downloading: '下载中',
-  downloadingLabel: '正在下载...',
-  download: '下载',
-  fileUnit: '文件'
+  catalogError: t(($) => $.settings.couldNotLoadTheModelList),
+  downloadCompleted: t(($) => $.settings.modelDownloadCompleted),
+  activeTaskWarning: t(($) => $.settings.anotherDownloadIsAlreadyRunning),
+  startDownloadFailed: t(($) => $.settings.couldNotStartTheDownload),
+  downloadFailed: t(($) => $.settings.downloadFailed),
+  downloadFailedReason: t(($) => $.settings.downloadFailed2),
+  unknownError: t(($) => $.common.unknownError),
+  switchSource: t(($) => $.settings.downloadFromAnotherSource),
+  switchSourceTitle: t(($) => $.settings.changeDownloadSource),
+  switchSourceDescription: t(($) => $.settings.theModelWillBeDownloadedAgainInFullFrom),
+  failedSourceTag: t(($) => $.settings.lastFailed),
+  switchSourceStart: t(($) => $.settings.startDownload),
+  switchSourceCancel: t(($) => $.common.cancel),
+  deleteFailed: t(($) => $.settings.couldNotDeleteTheModel),
+  deleteFailedPrefix: t(($) => $.common.couldNotDelete),
+  deleteCompleted: t(($) => $.settings.modelDeleted),
+  deleteConfirmTitle: t(($) => $.settings.deleteThisModel),
+  deleteConfirmDescription: t(($) => $.settings.youWillNeedToDownloadItAgainBeforeUse),
+  deleteDuringDownloadDescription: t(
+    ($) => $.settings.deletingWillCancelTheDownloadAndRemoveDownloadedFiles
+  ),
+  confirmDelete: t(($) => $.settings.confirmDeletion),
+  cancelDelete: t(($) => $.common.cancel),
+  installed: t(($) => $.settings.installed),
+  delete: t(($) => $.common.delete),
+  downloading: t(($) => $.settings.downloading),
+  downloadingLabel: t(($) => $.settings.downloading2),
+  download: t(($) => $.common.download),
+  fileUnit: t(($) => $.common.file)
 } as const
 
 const toErrorMessage = (error: Error | string): string =>
-  error instanceof Error ? error.message : String(error)
+  error instanceof Error ? normalizeUserFacingError(error.message) : String(error)
 
 const VectorModelSettingsPanel: React.FC = () => {
   const [models, setModels] = useState<ModelInfo[]>([])
@@ -119,7 +125,10 @@ const VectorModelSettingsPanel: React.FC = () => {
         return
       }
 
-      const nextError = 'error' in data ? data.error || TEXT.unknownError : TEXT.unknownError
+      const nextError =
+        'error' in data
+          ? normalizeUserFacingError(data.error, '') || TEXT.unknownError
+          : TEXT.unknownError
       setDownloadingId(null)
       setErrorRepoId(data.repoId)
       setFailedSource('failedSource' in data ? (data.failedSource ?? null) : null)
@@ -173,10 +182,10 @@ const VectorModelSettingsPanel: React.FC = () => {
     try {
       const response = await window.api.downloadModel(repoId, source)
       if (!response.success) {
-        const messageText = response.error || TEXT.startDownloadFailed
+        const messageText = normalizeUserFacingError(response.error, '') || TEXT.startDownloadFailed
         setDownloadingId(null)
         setErrorRepoId(repoId)
-        setFailedSource((previous) => previous ?? (source ?? null))
+        setFailedSource((previous) => previous ?? source ?? null)
         setErrorMsg(messageText)
         message.error(`${TEXT.downloadFailedReason}${messageText}`)
       }
@@ -184,7 +193,7 @@ const VectorModelSettingsPanel: React.FC = () => {
       const messageText = toErrorMessage(error instanceof Error ? error : String(error))
       setDownloadingId(null)
       setErrorRepoId(repoId)
-      setFailedSource((previous) => previous ?? (source ?? null))
+      setFailedSource((previous) => previous ?? source ?? null)
       setErrorMsg(messageText)
       message.error(`${TEXT.downloadFailedReason}${messageText}`)
     }
@@ -193,7 +202,7 @@ const VectorModelSettingsPanel: React.FC = () => {
   const handleOpenSwitchSource = (repoId: string): void => {
     const preferred =
       failedSource && MODEL_SOURCES.length > 1
-        ? MODEL_SOURCES.find((source) => source !== failedSource) ?? failedSource
+        ? (MODEL_SOURCES.find((source) => source !== failedSource) ?? failedSource)
         : (MODEL_SOURCES[0] ?? null)
     setSwitchSourceValue(preferred)
     setSwitchSourceRepoId(repoId)
@@ -212,7 +221,7 @@ const VectorModelSettingsPanel: React.FC = () => {
   const handleDelete = async (repoId: string): Promise<void> => {
     const response = await window.api.deleteModel(repoId)
     if (!response.success) {
-      const messageText = response.error || TEXT.deleteFailed
+      const messageText = normalizeUserFacingError(response.error, '') || TEXT.deleteFailed
       setErrorRepoId(repoId)
       setErrorMsg(messageText)
       message.error(`${TEXT.deleteFailedPrefix}: ${messageText}`)
@@ -417,31 +426,31 @@ const VectorModelSettingsPanel: React.FC = () => {
       >
         <div data-testid={vectorSelectors.sourceModal}>
           <p className="mb-3 text-[#787774]">{TEXT.switchSourceDescription}</p>
-        <Radio.Group
-          value={switchSourceValue}
-          onChange={(event) => setSwitchSourceValue(event.target.value as ModelSource)}
-          className="flex flex-col gap-2"
-        >
-          {MODEL_SOURCES.map((source) => (
-            <Radio
-              key={source}
-              value={source}
-              className="!flex items-center gap-1"
-              data-testid={`${vectorSelectors.sourceRadioPrefix}-${source}`}
-            >
-              <span>{MODEL_SOURCE_LABELS[source]}</span>
-              {failedSource === source ? (
-                <Tag
-                  color="orange"
-                  className="ml-1 !text-xs"
-                  data-testid={`${vectorSelectors.failedSourceTagPrefix}-${source}`}
-                >
-                  {TEXT.failedSourceTag}
-                </Tag>
-              ) : null}
-            </Radio>
-          ))}
-        </Radio.Group>
+          <Radio.Group
+            value={switchSourceValue}
+            onChange={(event) => setSwitchSourceValue(event.target.value as ModelSource)}
+            className="flex flex-col gap-2"
+          >
+            {MODEL_SOURCES.map((source) => (
+              <Radio
+                key={source}
+                value={source}
+                className="!flex items-center gap-1"
+                data-testid={`${vectorSelectors.sourceRadioPrefix}-${source}`}
+              >
+                <span>{modelSourceLabel[source]}</span>
+                {failedSource === source ? (
+                  <Tag
+                    color="orange"
+                    className="ml-1 !text-xs"
+                    data-testid={`${vectorSelectors.failedSourceTagPrefix}-${source}`}
+                  >
+                    {TEXT.failedSourceTag}
+                  </Tag>
+                ) : null}
+              </Radio>
+            ))}
+          </Radio.Group>
         </div>
       </Modal>
     </div>

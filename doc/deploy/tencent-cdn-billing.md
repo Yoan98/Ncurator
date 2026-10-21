@@ -127,5 +127,5 @@ HTTPS：账号每月约 **300 万次**免费，超出约 0.05 元/万次。
 ## 7. 与发版的关系
 
 - 正式包公开地址：`https://download.guanzhangai.cn`（清单 `releases/latest/*.json`，更新 `updates/latest/*`）。
-- 桌面端每次正式发布将同一候选包同步到 COS、R2 和 GitHub；本节资费与控费策略仅针对国内 COS/CDN 通道。发版流程见 [`release.md`](./release.md)。
+- 桌面端每次正式发布将国内候选包发布到 COS，国际候选包发布到 R2 和 GitHub；本节资费与控费策略仅针对国内 COS/CDN 通道。发版流程见 [`release.md`](./release.md)。
 - 子用户密钥只给 COS 对象权限；CDN 刷新权限不混入上传密钥。

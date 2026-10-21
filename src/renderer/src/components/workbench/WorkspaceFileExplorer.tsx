@@ -1,3 +1,4 @@
+import { t, getRendererRuntime } from '../../i18n'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { App, Dropdown, Modal, type MenuProps } from 'antd'
 import { HiChevronDown, HiChevronRight, HiOutlineMagnifyingGlass } from 'react-icons/hi2'
@@ -52,10 +53,10 @@ const getParentPath = (relativePath: string): string =>
   relativePath.split('/').slice(0, -1).join('/')
 
 const newFileTypes: { type: NewFileType; label: string; name: string }[] = [
-  { type: 'docx', label: 'Word', name: '新建文档' },
-  { type: 'xlsx', label: 'Excel', name: '新建工作簿' },
-  { type: 'pptx', label: 'PPT', name: '新建演示文稿' },
-  { type: 'other', label: '其他文件', name: '新建文件' }
+  { type: 'docx', label: 'Word', name: t(($) => $.workbench.newDocument) },
+  { type: 'xlsx', label: 'Excel', name: t(($) => $.workbench.newWorkbook) },
+  { type: 'pptx', label: 'PPT', name: t(($) => $.workbench.newPresentation) },
+  { type: 'other', label: t(($) => $.workbench.otherFiles), name: t(($) => $.workbench.newFile) }
 ]
 
 const getRelativePath = (workspace: WorkspaceSource | null, filePath: string): string => {
@@ -226,7 +227,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       kind: 'create',
       parentPath,
       suffix,
-      name: `${newFileTypes.find((item) => item.type === type)?.name || '新建文件'}${suffix}`,
+      name: `${newFileTypes.find((item) => item.type === type)?.name || t(($) => $.workbench.newFile)}${suffix}`,
       error: null
     })
   }
@@ -249,7 +250,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     const baseName = draft.suffix ? fileName.slice(0, -draft.suffix.length) : fileName
     const dot = fileName.lastIndexOf('.')
     if (!baseName.trim()) {
-      setDraft({ ...draft, error: '请输入文件名' })
+      setDraft({ ...draft, error: t(($) => $.workbench.enterAFileName) })
       return
     }
     if (
@@ -257,7 +258,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       !draft.suffix &&
       (dot <= 0 || !/^[\p{L}\p{N}_-]+$/u.test(fileName.slice(dot + 1)))
     ) {
-      setDraft({ ...draft, error: '请输入文件名和有效后缀，例如 笔记.md' })
+      setDraft({ ...draft, error: t(($) => $.workbench.enterAFileNameWithAValidExtensionSuch) })
       return
     }
     if (draft.kind === 'rename' && fileName === draft.entry.name) {
@@ -275,7 +276,8 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
             relativePath: draft.entry.relative_path,
             fileName
           })
-          if (!response.success || !response.entry) throw new Error(response.error || '重命名失败')
+          if (!response.success || !response.entry)
+            throw new Error(response.error || t(($) => $.workbench.couldNotRename))
           return response.entry
         })
         onFileRenamed(draft.entry.absolute_path, entry)
@@ -285,7 +287,8 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
           parentRelativePath: draft.parentPath,
           fileName
         })
-        if (!response.success || !response.entry) throw new Error(response.error || '新建文件失败')
+        if (!response.success || !response.entry)
+          throw new Error(response.error || t(($) => $.workbench.couldNotCreateTheFile))
         entry = response.entry
         onFileChanged(entry.absolute_path)
       }
@@ -297,7 +300,10 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       setSelectedKey(`file:${normalizePath(entry.absolute_path)}`)
     } catch (error) {
       if (workspaceIdRef.current === workspace.id)
-        setDraft({ ...draft, error: error instanceof Error ? error.message : '文件操作失败' })
+        setDraft({
+          ...draft,
+          error: error instanceof Error ? error.message : t(($) => $.workbench.fileOperationFailed)
+        })
     } finally {
       mutationInFlightRef.current = false
       setSavingFile(false)
@@ -314,16 +320,19 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
           workspaceId: workspace.id,
           relativePath: deleteTarget.relative_path
         })
-        if (!response.success) throw new Error(response.error || '移到回收站失败')
+        if (!response.success)
+          throw new Error(response.error || t(($) => $.workbench.couldNotMoveToTrash))
       })
       onFileChanged(deleteTarget.absolute_path)
       if (workspaceIdRef.current !== workspace.id) return
       setDeleteTarget(null)
       setSelectedKey(null)
       await loadDirectory(getParentPath(deleteTarget.relative_path))
-      void message.success('文件已移到回收站')
+      void message.success(t(($) => $.workbench.fileMovedToTrash))
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : '移到回收站失败')
+      void message.error(
+        error instanceof Error ? error.message : t(($) => $.workbench.couldNotMoveToTrash)
+      )
     } finally {
       mutationInFlightRef.current = false
       setDeleting(false)
@@ -335,7 +344,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     items: [
       {
         key: 'create',
-        label: '新建文件',
+        label: t(($) => $.workbench.newFile),
         icon: <LuFilePlus2 aria-hidden className="h-4 w-4" />,
         popupClassName: 'workspace-file-menu',
         children: newFileTypes.map(({ type, label }) => ({
@@ -352,10 +361,14 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       ...(contextTarget?.kind === 'file'
         ? [
             { type: 'divider' as const },
-            { key: 'rename', label: '重命名', icon: <LuPencil aria-hidden className="h-4 w-4" /> },
+            {
+              key: 'rename',
+              label: t(($) => $.workbench.rename),
+              icon: <LuPencil aria-hidden className="h-4 w-4" />
+            },
             {
               key: 'delete',
-              label: '删除',
+              label: t(($) => $.common.delete),
               danger: true,
               icon: <LuTrash2 aria-hidden className="h-4 w-4" />
             }
@@ -490,7 +503,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                   />
                   <span className="min-w-0 flex-1 truncate">{entry.name}</span>
                   {change ? (
-                    <span title="当前运行中已修改">
+                    <span title={t(($) => $.workbench.modifiedInTheCurrentRun)}>
                       {change.insertCount > 0 || change.deleteCount > 0 ? (
                         <ChangeCountBadges
                           insertCount={change.insertCount}
@@ -498,7 +511,9 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                           mode="compact"
                         />
                       ) : (
-                        <span className="text-[11px] font-medium text-[#787774]">已改</span>
+                        <span className="text-[11px] font-medium text-[#787774]">
+                          {t(($) => $.workbench.changed)}
+                        </span>
                       )}
                     </span>
                   ) : null}
@@ -547,14 +562,15 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
             className={`rounded-[5px] text-[12px] font-medium ${mode === 'all' ? 'bg-white text-[#37352F] shadow-sm' : 'text-[#787774] hover:text-[#37352F]'}`}
             onClick={() => onModeChange('all')}
           >
-            全部
+            {t(($) => $.common.all)}
           </button>
           <button
             type="button"
             className={`rounded-[5px] text-[12px] font-medium ${mode === 'changed' ? 'bg-white text-[#37352F] shadow-sm' : 'text-[#787774] hover:text-[#37352F]'}`}
             onClick={() => onModeChange('changed')}
           >
-            本次运行改动 {activeChanges.length}
+            {t(($) => $.workbench.changesInThisRun)}
+            {activeChanges.length}
           </button>
         </div>
       </div>
@@ -564,7 +580,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="筛选文件…"
+            placeholder={t(($) => $.workbench.filterFiles)}
             className="min-w-0 flex-1 bg-transparent text-[13px] text-[#37352F] outline-none placeholder:text-[#9B9A97]"
           />
         </label>
@@ -608,22 +624,24 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
             !childrenByPath[''] && !draft ? (
               directoryErrors.has('') && !loading.has('') ? (
                 <div className="px-3 py-2 text-xs text-[#91918E]">
-                  目录读取失败
+                  {t(($) => $.workbench.couldNotReadTheDirectory)}
                   <button
                     type="button"
                     className="ml-2 text-[#37352F] underline"
                     onClick={() => void loadDirectory('')}
                   >
-                    重试
+                    {t(($) => $.common.retry)}
                   </button>
                 </div>
               ) : (
                 <div role="status" className="px-3 py-2 text-xs text-[#91918E]">
-                  正在读取文件…
+                  {t(($) => $.workbench.loadingFiles)}
                 </div>
               )
             ) : childrenByPath['']?.length === 0 && !draft ? (
-              <div className="px-3 py-2 text-xs text-[#91918E]">目录中暂无文件</div>
+              <div className="px-3 py-2 text-xs text-[#91918E]">
+                {t(($) => $.workbench.thisDirectoryHasNoFiles)}
+              </div>
             ) : (
               renderEntries('', 0)
             )
@@ -652,7 +670,11 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                       <span
                         role="button"
                         tabIndex={0}
-                        aria-label={isExpanded ? '收起修改记录' : '展开修改记录'}
+                        aria-label={
+                          isExpanded
+                            ? t(($) => $.workbench.collapseChangeHistory)
+                            : t(($) => $.workbench.expandChangeHistory)
+                        }
                         className="flex h-6 w-4 shrink-0 items-center justify-center text-[#91918E]"
                         onClick={(event) => {
                           event.stopPropagation()
@@ -693,15 +715,16 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                     ) : (
                       <span className="shrink-0 text-[11px] text-[#787774]">
                         {latest.operation === 'deleted'
-                          ? '已删除'
+                          ? t(($) => $.common.deleted)
                           : latest.operation === 'renamed'
-                            ? '已重命名'
-                            : '已改'}
+                            ? t(($) => $.workbench.renamed)
+                            : t(($) => $.workbench.changed)}
                       </span>
                     )}
                     {records.length > 1 ? (
                       <span className="shrink-0 text-[11px] tabular-nums text-[#9B9A97]">
-                        {records.length} 次
+                        {records.length}
+                        {t(($) => $.workbench.times)}
                       </span>
                     ) : null}
                   </button>
@@ -720,16 +743,21 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                           }}
                         >
                           <span className="shrink-0">
-                            {index === 0 ? '最新' : `第 ${records.length - index} 次`}
+                            {index === 0
+                              ? t(($) => $.workbench.latest)
+                              : t(($) => $.workbench.change, { value1: records.length - index })}
                           </span>
                           <span className="min-w-0 flex-1 truncate">
-                            {record.runSummary || '文件修改'}
+                            {record.runSummary || t(($) => $.workbench.fileChanges)}
                           </span>
                           <span className="shrink-0 tabular-nums text-[#9B9A97]">
-                            {new Date(record.updatedAt).toLocaleTimeString('zh-CN', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
+                            {new Date(record.updatedAt).toLocaleTimeString(
+                              getRendererRuntime().locale,
+                              {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }
+                            )}
                           </span>
                         </button>
                       ))}
@@ -739,15 +767,17 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
               )
             })
           ) : (
-            <div className="px-3 py-8 text-center text-xs text-[#91918E]">本次运行暂无文件改动</div>
+            <div className="px-3 py-8 text-center text-xs text-[#91918E]">
+              {t(($) => $.workbench.noFileChangesInThisRun)}
+            </div>
           )}
         </div>
       </Dropdown>
       <Modal
         open={Boolean(deleteTarget)}
-        title="删除文件？"
-        okText="移到回收站"
-        cancelText="取消"
+        title={t(($) => $.workbench.deleteFile)}
+        okText={t(($) => $.workbench.moveToTrash)}
+        cancelText={t(($) => $.common.cancel)}
         okButtonProps={{ danger: true }}
         confirmLoading={deleting}
         cancelButtonProps={{ disabled: deleting }}
@@ -757,7 +787,11 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
         onCancel={() => setDeleteTarget(null)}
         onOk={() => void trashFile()}
       >
-        <p className="break-all">将「{deleteTarget?.name}」移到系统回收站，可在回收站中恢复。</p>
+        <p className="break-all">
+          {t(($) => $.workbench.move)}
+          {deleteTarget?.name}
+          {t(($) => $.workbench.toTheSystemTrashYouCanRestoreItFrom)}
+        </p>
       </Modal>
     </div>
   )

@@ -1,3 +1,4 @@
+import { t } from '../../../i18n'
 import type { FUniver } from '@univerjs/core/facade'
 import { RANGE_TYPE, type IRange } from '@univerjs/core'
 import type { DocumentSelectionNode } from '../../../../../shared/types'
@@ -54,10 +55,11 @@ export function excelAdapter(
       const sheet = workbook()?.getActiveSheet()
       const ranges = sheet?.getSelection()?.getActiveRangeList() || []
       if (!sheet || !ranges.length) return null
-      if (ranges.length !== 1) throw new Error('请每次引用一个连续单元格区域。')
+      if (ranges.length !== 1)
+        throw new Error(t(($) => $.editors.referenceOneContiguousCellRangeAtATime))
       const range = { ...ranges[0].getRange() }
       if (range.rangeType !== undefined && range.rangeType !== RANGE_TYPE.NORMAL)
-        throw new Error('请选择有限的单元格区域，不支持整行或整列引用。')
+        throw new Error(t(($) => $.editors.selectABoundedCellRangeEntireRowsOrColumns))
       let changed = true
       while (changed) {
         changed = false
@@ -85,7 +87,7 @@ export function excelAdapter(
         (range.endRow - range.startRow + 1) * (range.endColumn - range.startColumn + 1) >
         MAX_EXCEL_SELECTION_CELLS
       )
-        throw new Error('引用最多包含 10,000 个单元格，请缩小范围。')
+        throw new Error(t(($) => $.editors.aReferenceCanContainUpTo10000Cells))
       const first = address(range.startRow, range.startColumn),
         last = address(range.endRow, range.endColumn)
       const anchor: ExcelAnchor = {

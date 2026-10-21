@@ -99,82 +99,71 @@ describe('release storage config', () => {
     )
   })
 
-  it('plans recovery independently for the current COS channel and an older R2 channel', async () => {
-    const requests: string[] = []
-    const channels = await prepareReleaseStoragePublication(fragment, environment, async (url) => {
-      requests.push(url)
-      return channelResponse(
-        url,
-        url.startsWith('https://download.guanzhangai.cn') ? '1.0.10' : '1.0.1'
+  it('prepares exactly the storage belonging to each distribution', async () => {
+    for (const [distribution, target, base] of [
+      ['domestic', 'cos', 'https://download.guanzhangai.cn'],
+      ['international', 'r2', 'https://download.ncurator.com']
+    ]) {
+      const requests: string[] = []
+      const channels = await prepareReleaseStoragePublication(
+        { ...fragment, distribution },
+        environment,
+        async (url: string) => {
+          requests.push(url)
+          return channelResponse(url, '1.0.10')
+        }
       )
-    })
-    expect(channels.map(({ config, current }) => [config.target, current])).toEqual([
-      ['cos', true],
-      ['r2', false]
-    ])
-    expect(requests).toHaveLength(4)
+      expect(channels.map(({ config, current }) => [config.target, current])).toEqual([
+        [target, true]
+      ])
+      expect(requests).toHaveLength(2)
+      expect(requests.every((url) => url.startsWith(base))).toBe(true)
+    }
   })
 
-  it('recognizes both completed channels and a completely missing R2 channel', async () => {
-    const complete = await prepareReleaseStoragePublication(fragment, environment, async (url) =>
-      channelResponse(url, '1.0.10')
-    )
-    expect(complete.every((channel) => channel.current)).toBe(true)
-    const missing = await prepareReleaseStoragePublication(fragment, environment, async (url) =>
-      url.startsWith('https://download.ncurator.com')
-        ? new Response('', { status: 404 })
-        : channelResponse(url, '1.0.10')
-    )
-    expect(missing.map((channel) => channel.current)).toEqual([true, false])
-  })
-
-  it('rejects incomplete credentials before looking up either public channel', async () => {
+  it('rejects incomplete credentials before any public lookup', async () => {
     let requests = 0
     await expect(
       prepareReleaseStoragePublication(fragment, {}, async () => {
-        requests += 1
+        requests++
         return new Response('', { status: 404 })
       })
     ).rejects.toThrow('missing environment variable')
     expect(requests).toBe(0)
   })
 
-  it('rejects a newer version on either store, including a newer update feed alone', async () => {
-    for (const base of RELEASE_PUBLIC_BASE_URLS) {
+  it('rejects newer versions on the corresponding manifest or update feed', async () => {
+    for (const distribution of ['domestic', 'international']) {
       for (const endpoint of ['/releases/', '/updates/']) {
         await expect(
-          prepareReleaseStoragePublication(fragment, environment, async (url) =>
-            channelResponse(
-              url,
-              url.startsWith(base) && url.includes(endpoint) ? '1.0.11' : '1.0.10'
-            )
+          prepareReleaseStoragePublication(
+            { ...fragment, distribution },
+            environment,
+            async (url: string) =>
+              channelResponse(url, url.includes(endpoint) ? '1.0.11' : '1.0.10')
           )
         ).rejects.toThrow('refuse to downgrade')
       }
     }
   })
 
-  it('fails closed when the R2 channel cannot be read', async () => {
+  it('fails closed when the selected international channel cannot be read', async () => {
     await expect(
-      prepareReleaseStoragePublication(fragment, environment, async (url) =>
-        url.startsWith('https://download.ncurator.com')
-          ? new Response('', { status: 503 })
-          : channelResponse(url, '1.0.10')
+      prepareReleaseStoragePublication(
+        { ...fragment, distribution: 'international' },
+        environment,
+        async () => new Response('', { status: 503 })
       )
     ).rejects.toThrow('HTTP 503')
   })
 
-  it('resumes only the missing store and verifies both stores again on a retry', async () => {
-    let r2Version = '1.0.1'
-    vi.stubGlobal('fetch', async (url: string, options?: RequestInit) => {
-      if (options?.method === 'HEAD') {
-        return new Response(null, { headers: { 'content-length': '123' } })
-      }
-      return channelResponse(
-        url,
-        url.startsWith('https://download.guanzhangai.cn') ? '1.0.10' : r2Version
-      )
-    })
+  it('resumes the missing international publication and verifies its own storage', async () => {
+    let version = '1.0.1'
+    vi.stubGlobal('fetch', async (url: string, options?: RequestInit) =>
+      options?.method === 'HEAD'
+        ? new Response(null, { headers: { 'content-length': '123' } })
+        : channelResponse(url, version)
+    )
     const verifyStorage = vi
       .spyOn(liveTag, 'verifyReleaseStorageFragment')
       .mockResolvedValue(undefined)
@@ -185,36 +174,49 @@ describe('release storage config', () => {
       run: async (_command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
         expect(options.env.RELEASE_STORAGE_TARGET).toBe('r2')
         writes.push(args[0])
-        if (args[0].endsWith('finalize.mjs')) r2Version = '1.0.10'
+        if (args[0].endsWith('finalize.mjs')) version = '1.0.10'
       }
     }
-    const verified = { fragment, directory: '/candidate', fragmentPath: '/candidate/fragment.json' }
+    const international = { ...fragment, distribution: 'international' }
+    const verified = {
+      fragment: international,
+      directory: '/candidate',
+      fragmentPath: '/candidate/fragment.json'
+    }
     await publishReleaseStorage(
       verified,
-      await prepareReleaseStoragePublication(fragment, environment),
+      await prepareReleaseStoragePublication(international, environment),
       options
     )
     expect(writes).toHaveLength(2)
-    expect(writes[0]).toMatch(/upload-fragment\.mjs$/u)
-    expect(writes[1]).toMatch(/finalize\.mjs$/u)
-    expect(verifyStorage.mock.calls.map((call) => call[2]?.target)).toEqual(['cos', 'r2'])
+    await publishReleaseStorage(
+      verified,
+      await prepareReleaseStoragePublication(international, environment),
+      options
+    )
+    expect(writes).toHaveLength(2)
+    expect(verifyStorage.mock.calls.map((call) => call[2]?.target)).toEqual(['r2', 'r2'])
+  })
 
-    await publishReleaseStorage(
-      verified,
-      await prepareReleaseStoragePublication(fragment, environment),
-      options
+  it('rejects publishing a domestic artifact into international storage', async () => {
+    const international = await prepareReleaseStoragePublication(
+      { ...fragment, distribution: 'international' },
+      environment,
+      async (url: string) => channelResponse(url, '1.0.10')
     )
-    expect(writes).toHaveLength(2)
-    expect(verifyStorage.mock.calls.map((call) => call[2]?.target)).toEqual([
-      'cos',
-      'r2',
-      'cos',
-      'r2'
-    ])
+    const run = vi.fn()
+    await expect(
+      publishReleaseStorage(
+        { fragment, directory: '/candidate', fragmentPath: '/candidate/fragment.json' },
+        international,
+        { root: process.cwd(), run }
+      )
+    ).rejects.toThrow('cannot be published to this storage')
+    expect(run).not.toHaveBeenCalled()
   })
 
   it.each(['public download', 'storage hash'])(
-    'stops before writing the second store when the first store fails %s verification',
+    'stops publication when its storage fails %s verification',
     async (failure) => {
       vi.stubGlobal('fetch', async (url: string, options?: RequestInit) =>
         options?.method === 'HEAD'

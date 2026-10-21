@@ -1,3 +1,5 @@
+import type { AppLanguage, AppRuntimeSnapshot, ServiceRoute } from './appPreferences'
+
 export type DocumentSourceType = 'file' | 'web'
 export type DocumentImportStatus = 1 | 2 | 3
 export type SearchSourceFilter = 'all' | DocumentSourceType
@@ -67,14 +69,16 @@ export interface AppUpdateActionResponse {
   error?: string
 }
 
-export type AppStartupStatus =
-  | { mode: 'normal' }
-  | {
-      mode: 'update_required'
-      databaseVersion: number
-      supportedDatabaseVersion: number
-      downloadPageUrl: string
-    }
+export type AppStartupStatus = AppRuntimeSnapshot &
+  (
+    | { mode: 'normal' }
+    | {
+        mode: 'update_required'
+        databaseVersion: number
+        supportedDatabaseVersion: number
+        downloadPageUrl: string
+      }
+  )
 
 export interface ConfirmDialogRequest {
   dialogId: string
@@ -1276,6 +1280,8 @@ export type HumanStepResultStatus = 'ok' | 'error'
 export type AppSettings = {
   systemNotificationsEnabled: boolean
   knowledgeIndexSpeed: KnowledgeIndexSpeed
+  language: AppLanguage
+  serviceRoute: ServiceRoute
 }
 
 export type AiFileArtifactCapability = 'docx' | 'ppt' | 'excel' | 'text_file' | 'image'

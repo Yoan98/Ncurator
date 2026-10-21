@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import React, { useState } from 'react'
 import { HiCommandLine } from 'react-icons/hi2'
 import type {
@@ -54,7 +55,7 @@ const ApprovalInteractionCard: React.FC<Props> = ({
   const hasRejection = decisions.some((decision) => decision.action === 'reject')
   const blocked = submitting || cancelling
   const disabled = next ? !guiding && !draft.action : missing > 0
-  const name = source?.name.trim() || partnerName?.trim() || '伙伴'
+  const name = source?.name.trim() || partnerName?.trim() || t(($) => $.common.partner)
   const update = (value: Draft): void =>
     setDrafts((previous) => ({ ...previous, [item.itemId]: value }))
   const advance = (): void => {
@@ -66,28 +67,28 @@ const ApprovalInteractionCard: React.FC<Props> = ({
     void submit(decisions)
   }
   const label = next
-    ? '下一步'
+    ? t(($) => $.workbench.next)
     : hasGuide
-      ? '发送指导'
+      ? t(($) => $.workbench.sendGuidance)
       : hasRejection
-        ? '确认拒绝'
+        ? t(($) => $.workbench.confirmRejection)
         : items.length > 1
-          ? `允许执行 ${items.length} 项`
-          : '允许执行'
+          ? t(($) => $.workbench.allowOperations, { value1: items.length })
+          : t(($) => $.workbench.allowExecution)
   const hint =
     !next && missing > 0
-      ? `还有 ${missing} 项未决定`
+      ? t(($) => $.preferences.operationsRemaining, { count: missing })
       : guiding
-        ? '发送指导后，本批操作不执行'
+        ? t(($) => $.workbench.sendingGuidanceWillPreventThisBatchFromRunning)
         : hasGuide || hasRejection
-          ? '本批含拒绝或指导，不会执行'
+          ? t(($) => $.workbench.thisBatchIncludesARejectionOrGuidanceAndWill)
           : items.length > 1
-            ? '全部确认后才执行'
+            ? t(($) => $.workbench.executionStartsAfterAllOperationsAreApproved)
             : undefined
   return (
     <WorkbenchInteractionCard
       title={item.commandExplanation}
-      itemLabel="操作确认"
+      itemLabel={t(($) => $.workbench.confirmOperation)}
       currentIndex={index}
       total={items.length}
       source={
@@ -133,18 +134,26 @@ const ApprovalInteractionCard: React.FC<Props> = ({
       <div className="mx-5 mb-4 rounded-[8px] border border-[#EEEEEC] bg-[#F4F4F2] px-3 py-2.5">
         <div className="mb-1 flex items-center gap-1.5 text-[11px] text-[#787774]">
           <HiCommandLine className="h-[13px] w-[13px]" />
-          终端命令
+          {t(($) => $.workbench.terminalCommand)}
         </div>
         <code className="block max-h-[min(25vh,240px)] overflow-auto font-mono text-[13px] leading-[22px] whitespace-pre-wrap [overflow-wrap:anywhere]">
           {item.command}
         </code>
       </div>
-      <div className="mx-2.5 space-y-1" role="group" aria-label="选择本次操作的处理方式">
+      <div
+        className="mx-2.5 space-y-1"
+        role="group"
+        aria-label={t(($) => $.workbench.chooseHowToHandleThisOperation)}
+      >
         {(['approve', 'reject'] as const).map((action, optionIndex) => (
           <WorkbenchInteractionChoice
             key={action}
             index={optionIndex}
-            label={action === 'approve' ? '允许本次操作' : '拒绝本次操作'}
+            label={
+              action === 'approve'
+                ? t(($) => $.workbench.allowThisOperation)
+                : t(($) => $.workbench.rejectThisOperation)
+            }
             selected={!guiding && draft.action === action}
             disabled={blocked || guiding}
             onClick={() =>

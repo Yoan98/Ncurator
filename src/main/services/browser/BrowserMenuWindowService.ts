@@ -1,3 +1,5 @@
+import { mainText } from '../app/i18n'
+import { getAppRuntime } from '../app/AppRuntime'
 import { BrowserWindow, screen } from 'electron'
 import type { BrowserTabState } from '../../../shared/types'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
@@ -35,7 +37,7 @@ type MenuWindowOptions = {
 }
 
 const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
-<html lang="zh-CN">
+<html lang="${getAppRuntime().locale}">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -78,16 +80,16 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
     </style>
   </head>
   <body>
-    <div class="menu" role="menu" aria-label="更多浏览器操作">
+    <div class="menu" role="menu" aria-label="${mainText('browserActions')}">
       <div class="zoom-row">
-        <span class="label">页面缩放</span>
+        <span class="label">${mainText('pageZoom')}</span>
         <div class="controls" data-testid="workbench-browser-zoom-controls">
           <a
             id="zoom-out"
             class="control"
             href="ncurator-browser-menu://zoom-out"
             target="_blank"
-            aria-label="缩小页面"
+            aria-label="${mainText('zoomOut')}"
             data-disabled="${state.zoomPercent <= MIN_ZOOM_PERCENT}"
           >−</a>
           <a
@@ -95,14 +97,14 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
             class="control percent"
             href="ncurator-browser-menu://zoom-reset"
             target="_blank"
-            aria-label="恢复页面缩放为 100%"
+            aria-label="${mainText('resetZoom')}"
           >${state.zoomPercent}%</a>
           <a
             id="zoom-in"
             class="control"
             href="ncurator-browser-menu://zoom-in"
             target="_blank"
-            aria-label="放大页面"
+            aria-label="${mainText('zoomIn')}"
             data-disabled="${state.zoomPercent >= MAX_ZOOM_PERCENT}"
           >+</a>
         </div>
@@ -112,7 +114,7 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
 </html>`
 
 const renderResourceMenuHtml = (): string => `<!doctype html>
-<html lang="zh-CN">
+<html lang="${getAppRuntime().locale}">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -130,20 +132,20 @@ const renderResourceMenuHtml = (): string => `<!doctype html>
     </style>
   </head>
   <body>
-    <div class="menu" role="menu" aria-label="新增标签页">
+    <div class="menu" role="menu" aria-label="${mainText('newTab')}">
       <a href="ncurator-resource-menu://file" target="_blank" role="menuitem">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <path d="M14 2v6h6" />
         </svg>
-        <span>文件</span>
+        <span>${mainText('file')}</span>
       </a>
       <a href="ncurator-resource-menu://browser" target="_blank" role="menuitem">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="9" />
           <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
         </svg>
-        <span>浏览器</span>
+        <span>${mainText('browser')}</span>
       </a>
     </div>
   </body>

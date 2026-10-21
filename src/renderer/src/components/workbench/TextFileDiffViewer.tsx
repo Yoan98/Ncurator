@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button, Spin, Tooltip } from 'antd'
 import { HiArrowDown, HiArrowUp } from 'react-icons/hi2'
@@ -177,7 +178,7 @@ export function TextFileDiffViewer({
             void file.reload()
           }}
         >
-          重新加载
+          {t(($) => $.workbench.reload)}
         </Button>
       </div>
     )
@@ -194,41 +195,56 @@ export function TextFileDiffViewer({
     >
       <div
         role="toolbar"
-        aria-label="文本审核"
+        aria-label={t(($) => $.workbench.textReview)}
         className="grid h-9 shrink-0 grid-cols-2 items-center border-b border-[#EEEEEC] text-xs text-[#787774]"
       >
-        <span className="px-3" title="只读">
-          本次运行前
+        <span className="px-3" title={t(($) => $.workbench.readOnly)}>
+          {t(($) => $.workbench.beforeThisRun)}
         </span>
         <div className="flex min-w-0 items-center justify-between gap-2 pl-3 pr-2">
-          <span className="truncate" title={file.readOnly ? '只读' : '可编辑'}>
-            {file.readOnly ? '当前文件（只读）' : '当前文件（可编辑）'}
+          <span
+            className="truncate"
+            title={file.readOnly ? t(($) => $.workbench.readOnly) : t(($) => $.workbench.editable)}
+          >
+            {file.readOnly
+              ? t(($) => $.workbench.currentFileReadOnly)
+              : t(($) => $.workbench.currentFileEditable)}
           </span>
           <div className="flex shrink-0 items-center gap-0.5">
-            <Tooltip title="上一处差异">
+            <Tooltip title={t(($) => $.workbench.previousDifference)}>
               <Button
                 type="text"
-                aria-label="上一处差异"
+                aria-label={t(($) => $.workbench.previousDifference)}
                 className={reviewActionClass}
                 disabled={paused}
                 icon={<HiArrowUp className="h-4 w-4" />}
                 onClick={() => diff.current?.goToDiff('previous')}
               />
             </Tooltip>
-            <Tooltip title="下一处差异">
+            <Tooltip title={t(($) => $.workbench.nextDifference)}>
               <Button
                 type="text"
-                aria-label="下一处差异"
+                aria-label={t(($) => $.workbench.nextDifference)}
                 className={reviewActionClass}
                 disabled={paused}
                 icon={<HiArrowDown className="h-4 w-4" />}
                 onClick={() => diff.current?.goToDiff('next')}
               />
             </Tooltip>
-            <Tooltip title={fold ? '展开未修改内容' : '折叠未修改内容'}>
+            <Tooltip
+              title={
+                fold
+                  ? t(($) => $.workbench.expandUnchangedContent)
+                  : t(($) => $.workbench.collapseUnchangedContent)
+              }
+            >
               <Button
                 type="text"
-                aria-label={fold ? '展开未修改内容' : '折叠未修改内容'}
+                aria-label={
+                  fold
+                    ? t(($) => $.workbench.expandUnchangedContent)
+                    : t(($) => $.workbench.collapseUnchangedContent)
+                }
                 aria-pressed={fold}
                 className={reviewActionClass}
                 disabled={paused}
@@ -259,15 +275,15 @@ export function TextFileDiffViewer({
               void file.flushSave().catch(() => undefined)
             }}
           >
-            重试保存
+            {t(($) => $.workbench.retrySaving)}
           </Button>
         </div>
       )}
       {paused && (
         <div role="status" className="bg-[#FBF3DB] px-3 py-1 text-xs">
-          差异计算超时，已暂停自动比较，仍可编辑和保存完整内容。
+          {t(($) => $.workbench.diffCalculationTimedOutAndAutomaticComparisonIsPaused)}
           <Button size="small" onClick={() => setPaused(false)}>
-            重新比较
+            {t(($) => $.workbench.compareAgain)}
           </Button>
         </div>
       )}

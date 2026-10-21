@@ -1,14 +1,8 @@
+import { createDistributionConfig } from '../../../../scripts/build/package/distribution-config.mjs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import {
-  FREE_MODELS_CATALOG_URL,
-  OFFICIAL_DOWNLOAD_PAGE_URL,
-  OFFICIAL_WEBSITE_URL,
-  PRESET_MODELS_CATALOG_URL,
-  USER_MANUAL_URL
-} from '../../../../src/shared/constants'
 
 type BuilderConfig = {
   productName?: string
@@ -23,20 +17,25 @@ const readBuilderConfig = async (): Promise<BuilderConfig> =>
   parse(await readFile(path.resolve('electron-builder.yml'), 'utf8')) as BuilderConfig
 
 describe('app update publish config', () => {
-  it('uses one domestic website base for every desktop website entry', async () => {
-    const [packageJsonText, telemetryService] = await Promise.all([
-      readFile(path.resolve('package.json'), 'utf8'),
-      readFile(path.resolve('src/main/services/telemetry/TelemetryService.ts'), 'utf8')
-    ])
-    const packageJson = JSON.parse(packageJsonText) as { homepage?: string }
-
-    expect(OFFICIAL_WEBSITE_URL).toBe('https://www.guanzhangai.cn')
-    expect(USER_MANUAL_URL).toBe(`${OFFICIAL_WEBSITE_URL}/zh/manual`)
-    expect(FREE_MODELS_CATALOG_URL).toBe(`${OFFICIAL_WEBSITE_URL}/api/v1/free-models`)
-    expect(PRESET_MODELS_CATALOG_URL).toBe(`${OFFICIAL_WEBSITE_URL}/api/v1/preset-models`)
-    expect(OFFICIAL_DOWNLOAD_PAGE_URL).toBe(`${OFFICIAL_WEBSITE_URL}/zh`)
-    expect(packageJson.homepage).toBe(OFFICIAL_WEBSITE_URL)
-    expect(telemetryService).toContain('`${OFFICIAL_WEBSITE_URL}/api/telemetry/events`')
+  it('binds names and fixed update sources to the distribution', async () => {
+    const base = await readBuilderConfig()
+    const domestic = createDistributionConfig(base, {
+      distribution: 'domestic',
+      output: '/domestic',
+      resourcesDirectory: '/resources/domestic'
+    })
+    const international = createDistributionConfig(base, {
+      distribution: 'international',
+      output: '/international',
+      resourcesDirectory: '/resources/international'
+    })
+    expect(domestic.productName).toBe('馆长')
+    expect(international.productName).toBe('NCurator')
+    expect(domestic.publish.url).toBe('https://download.guanzhangai.cn/updates/latest')
+    expect(international.publish.url).toBe('https://download.ncurator.com/updates/latest')
+    expect(international.win.executableName).toBe('NCurator')
+    expect(international.nsis.uninstallDisplayName).toBe('NCurator')
+    expect(international.appId).toBe(domestic.appId)
   })
 
   it('uses the direct update feed and updater-aware NSIS behavior', async () => {
@@ -92,7 +91,7 @@ describe('app update publish config', () => {
     expect(packageJson.scripts['test:ai:backend']).toContain('--domain ai')
     expect(packageJson.scripts['test:settings:e2e']).toContain('--domain settings')
     expect(packageJson.scripts['test:workbench:e2e']).toContain('--domain workbench')
-    expect(packageJson.scripts['build:mac:arm64']).toContain('--arm64')
+    expect(packageJson.scripts['build:mac:arm64']).toContain('distributions.mjs mac')
     expect(packageJson.scripts['native:prepare']).toContain('node-pty.mjs prepare')
     expect(packageJson.scripts['native:status']).toContain('node-pty.mjs status')
     expect(packageJson.scripts['native:clean']).toContain('node-pty.mjs clean')

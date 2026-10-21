@@ -1,8 +1,11 @@
-﻿import React from 'react'
+import { t } from './i18n'
+import React from 'react'
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { App as AntdApp, Layout, ConfigProvider, theme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
+import enUS from 'antd/locale/en_US'
+import { getRendererRuntime } from './i18n'
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
@@ -15,7 +18,7 @@ import AppWindowFrame from './components/app/AppWindowFrame'
 import UpdateRequiredPage from './pages/UpdateRequiredPage'
 import type { AppStartupStatus } from '../../shared/types'
 
-dayjs.locale('zh-cn')
+dayjs.locale(getRendererRuntime().locale === 'zh-CN' ? 'zh-cn' : 'en')
 
 const { Content } = Layout
 const PENDING_NOTIFICATION_PARTNER_KEY = 'ncurator.pending-notification-partner'
@@ -58,7 +61,7 @@ function App(): React.JSX.Element {
 
   return (
     <ConfigProvider
-      locale={zhCN}
+      locale={getRendererRuntime().locale === 'zh-CN' ? zhCN : enUS}
       theme={{
         algorithm: theme.defaultAlgorithm,
         token: {
@@ -133,7 +136,7 @@ function App(): React.JSX.Element {
         <AppUpdateProvider>
           {!startupStatus ? (
             <AppWindowFrame>
-              <div className="h-full bg-white" aria-label="正在启动" />
+              <div className="h-full bg-white" aria-label={t(($) => $.common.starting)} />
             </AppWindowFrame>
           ) : startupStatus.mode === 'update_required' ? (
             <AppWindowFrame>

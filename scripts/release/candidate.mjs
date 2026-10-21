@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { assertDistribution } from './shared/distribution.mjs'
 import {
   access,
   copyFile,
@@ -25,8 +27,8 @@ const candidateRoot = () =>
       path.join(os.homedir(), '.ncurator', 'release-candidates')
   )
 
-export const resolveCandidateDirectory = (tag, platform) =>
-  path.join(candidateRoot(), tag, platform)
+export const resolveCandidateDirectory = (tag, platform, distribution = 'domestic') =>
+  path.join(candidateRoot(), tag, platform, assertDistribution(distribution))
 
 const statePathFor = (directory) => path.join(directory, 'candidate-state.json')
 
@@ -75,7 +77,12 @@ const writeState = async (directory, state) => {
 
 export const materializeReleaseCandidate = async ({ bundlePath }) => {
   const verified = await verifyReleaseBundle(bundlePath)
-  const directory = resolveCandidateDirectory(verified.bundle.tag, verified.bundle.platform)
+  const distribution = verified.bundle.distribution || 'domestic'
+  const directory = resolveCandidateDirectory(
+    verified.bundle.tag,
+    verified.bundle.platform,
+    distribution
+  )
   await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
   await mkdir(directory, { recursive: true })
 
@@ -97,6 +104,7 @@ export const materializeReleaseCandidate = async ({ bundlePath }) => {
     tag: verified.bundle.tag,
     commit: verified.bundle.commit,
     platform: verified.bundle.platform,
+    distribution,
     bundle: bundleName,
     preparedAt: new Date().toISOString(),
     status: 'prepared',
@@ -105,14 +113,19 @@ export const materializeReleaseCandidate = async ({ bundlePath }) => {
   return { directory, bundlePath: candidateBundlePath, state }
 }
 
-export const readReleaseCandidate = async ({ tag, platform }) => {
-  const directory = resolveCandidateDirectory(tag, platform)
+export const readReleaseCandidate = async ({ tag, platform, distribution = 'domestic' }) => {
+  const directory = resolveCandidateDirectory(tag, platform, distribution)
   const state = assertCandidateState(JSON.parse(await readFile(statePathFor(directory), 'utf8')), {
     tag,
     platform
   })
   const bundlePath = path.join(directory, state.bundle)
   const verified = await verifyReleaseBundle(bundlePath, { tag, platform })
+  if (
+    (verified.bundle.distribution || 'domestic') !== distribution ||
+    (state.distribution || 'domestic') !== distribution
+  )
+    throw new Error('candidate distribution does not match bundle')
   if (verified.bundle.commit !== state.commit) {
     throw new Error('candidate state commit does not match release bundle')
   }
@@ -133,7 +146,7 @@ export const recordCandidateE2E = async ({
   if (status === 'skipped' && !String(reason).trim()) {
     throw new Error('skipped candidate E2E requires a reason')
   }
-  const candidate = await readReleaseCandidate({ tag, platform })
+  const candidate = await readReleaseCandidate({ tag, platform, distribution: 'domestic' })
   if (candidate.state.status === 'published') {
     throw new Error(`published candidate ${tag} ${platform} cannot be retested`)
   }
@@ -156,13 +169,51 @@ export const assertCandidatePublishable = async ({
   tag,
   platform,
   commit,
-  allowPublished = false
+  allowPublished = false,
+  distribution = 'domestic'
 }) => {
-  const candidate = await readReleaseCandidate({ tag, platform })
+  let candidate = await readReleaseCandidate({ tag, platform, distribution })
   if (candidate.state.commit !== commit) {
     throw new Error(
       `candidate commit ${candidate.state.commit} does not match ${tag} commit ${commit}`
     )
+  }
+  if (distribution === 'international') {
+    const domestic = await assertCandidatePublishable({
+      tag,
+      platform,
+      commit,
+      allowPublished,
+      distribution: 'domestic'
+    })
+    if (domestic.state.e2e.status !== 'passed')
+      throw new Error('international publication requires passed domestic E2E')
+    const resourceHash = domestic.verified.bundle.sharedAppHash
+    if (
+      !/^[a-f0-9]{64}$/u.test(resourceHash || '') ||
+      resourceHash !== candidate.verified.bundle.sharedAppHash
+    )
+      throw new Error('international resources do not match tested domestic resources')
+    const domesticBundleSha256 = createHash('sha256')
+      .update(await readFile(domestic.bundlePath))
+      .digest('hex')
+    if (candidate.state.status !== 'published') {
+      const state = {
+        ...candidate.state,
+        status: 'ready',
+        e2e: {
+          status: 'skipped',
+          reason: 'No independent international E2E; inherits domestic regression',
+          domesticBundleSha256,
+          sharedAppHash: resourceHash,
+          recordedAt: new Date().toISOString()
+        }
+      }
+      await writeState(candidate.directory, state)
+      candidate = { ...candidate, state }
+    } else if (candidate.state.e2e.domesticBundleSha256 !== domesticBundleSha256) {
+      throw new Error('published international candidate domestic evidence changed')
+    }
   }
   if (
     candidate.state.status !== 'ready' &&
@@ -175,8 +226,8 @@ export const assertCandidatePublishable = async ({
   return candidate
 }
 
-export const markCandidatePublished = async ({ tag, platform }) => {
-  const candidate = await readReleaseCandidate({ tag, platform })
+export const markCandidatePublished = async ({ tag, platform, distribution = 'domestic' }) => {
+  const candidate = await readReleaseCandidate({ tag, platform, distribution })
   const state = {
     ...candidate.state,
     status: 'published',
@@ -221,7 +272,7 @@ export const cleanupSupersededReleaseCandidates = async ({ tag, platforms }) => 
       continue
     }
     for (const platform of selectedPlatforms) {
-      const directory = resolveCandidateDirectory(entry.name, platform)
+      const directory = path.join(root, entry.name, platform)
       const exists = await access(directory)
         .then(() => true)
         .catch((error) => {

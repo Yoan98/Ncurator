@@ -287,7 +287,8 @@ describe('sqlite storage core and stores', () => {
       { version: 14, name: 'scheduled_task_partner_binding' },
       { version: 15, name: 'ai_run_pending_messages' },
       { version: 16, name: 'subagent_sessions' },
-      { version: 17, name: 'open_with_preferences' }
+      { version: 17, name: 'open_with_preferences' },
+      { version: 18, name: 'app_language_and_service_route' }
     ])
 
     const legacyTables = sqlite
@@ -308,17 +309,23 @@ describe('sqlite storage core and stores', () => {
     const settingsStore = new AppSettingsStore(sqlite)
     const saved = await settingsStore.save({
       systemNotificationsEnabled: false,
-      knowledgeIndexSpeed: 'fast'
+      knowledgeIndexSpeed: 'fast',
+      language: 'system',
+      serviceRoute: 'domestic'
     })
 
     expect(tables).toEqual([{ name: 'app_settings' }])
     expect(saved).toEqual({
       systemNotificationsEnabled: false,
-      knowledgeIndexSpeed: 'fast'
+      knowledgeIndexSpeed: 'fast',
+      language: 'system',
+      serviceRoute: 'domestic'
     })
     expect(await settingsStore.get()).toEqual({
       systemNotificationsEnabled: false,
-      knowledgeIndexSpeed: 'fast'
+      knowledgeIndexSpeed: 'fast',
+      language: 'system',
+      serviceRoute: 'domestic'
     })
   })
 

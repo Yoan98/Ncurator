@@ -1,11 +1,15 @@
+import { normalizeUserFacingError } from '../../utils/userFacingError'
 import React, { useEffect, useState } from 'react'
-import { Switch, message } from 'antd'
+import { Select, Switch, message } from 'antd'
+import { useTranslation } from 'react-i18next'
+import { updateRendererRoute, appSettingsErrorText } from '../../i18n'
 import FileIcon from '../FileIcon'
 import type { AppSettings } from '../../../../shared/types'
 import { settingsSelectors } from '../../testing/selectors'
 import PartnerCacheCleanupModal from './PartnerCacheCleanupModal'
 
 const GeneralSettingsPanel: React.FC = () => {
+  const { t } = useTranslation()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [saving, setSaving] = useState(false)
   const [openingLogDirectory, setOpeningLogDirectory] = useState(false)
@@ -15,8 +19,8 @@ const GeneralSettingsPanel: React.FC = () => {
     void window.api
       .appSettingsGet()
       .then(setSettings)
-      .catch(() => message.error('读取通知设置失败'))
-  }, [])
+      .catch(() => message.error(t(($) => $.settings.couldNotLoadNotificationSettings)))
+  }, [t])
 
   const updateNotifications = async (enabled: boolean): Promise<void> => {
     if (!settings || saving) return
@@ -25,12 +29,44 @@ const GeneralSettingsPanel: React.FC = () => {
     setSettings(next)
     setSaving(true)
     try {
-      const response = await window.api.appSettingsSave(next)
-      if (!response.success) throw new Error(response.error || '保存失败')
+      const response = await window.api.appSettingsSave({ systemNotificationsEnabled: enabled })
+      if (!response.success)
+        throw new Error(
+          normalizeUserFacingError(response.error, '') || t(($) => $.common.couldNotSave)
+        )
       setSettings(response.settings || next)
     } catch (error) {
       setSettings(previous)
-      message.error(error instanceof Error ? error.message : '保存通知设置失败')
+      message.error(
+        error instanceof Error
+          ? normalizeUserFacingError(error.message)
+          : t(($) => $.settings.couldNotSaveNotificationSettings)
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updatePreference = async (patch: Partial<AppSettings>): Promise<void> => {
+    if (!settings || saving) return
+    setSaving(true)
+    try {
+      const response = await window.api.appSettingsSave(patch)
+      if (!response.success || !response.settings)
+        throw new Error(
+          response.errorCode
+            ? appSettingsErrorText(response.errorCode)
+            : normalizeUserFacingError(response.error, '') || t(($) => $.preferences.saveFailed)
+        )
+      setSettings(response.settings)
+      updateRendererRoute(response.settings.serviceRoute)
+      if (patch.language) message.info(t(($) => $.preferences.restartRequired))
+    } catch (error) {
+      message.error(
+        error instanceof Error
+          ? normalizeUserFacingError(error.message)
+          : t(($) => $.preferences.saveFailed)
+      )
     } finally {
       setSaving(false)
     }
@@ -41,9 +77,17 @@ const GeneralSettingsPanel: React.FC = () => {
     setOpeningLogDirectory(true)
     try {
       const response = await window.api.errorLogOpenDirectory()
-      if (!response.success) throw new Error(response.error || '打开日志目录失败')
+      if (!response.success)
+        throw new Error(
+          normalizeUserFacingError(response.error, '') ||
+            t(($) => $.settings.couldNotOpenTheLogDirectory)
+        )
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '打开日志目录失败')
+      message.error(
+        error instanceof Error
+          ? normalizeUserFacingError(error.message)
+          : t(($) => $.settings.couldNotOpenTheLogDirectory)
+      )
     } finally {
       setOpeningLogDirectory(false)
     }
@@ -53,14 +97,63 @@ const GeneralSettingsPanel: React.FC = () => {
     <section
       className="h-full overflow-y-auto"
       data-testid={settingsSelectors.generalPanel}
-      aria-label="通用设置"
+      aria-label={t(($) => $.settings.generalSettings)}
     >
       <div className="w-full pt-2">
+        <div className="flex items-center justify-between gap-6 border-b border-[#EEEEEC] pb-5">
+          <div className="min-w-0">
+            <div className="text-[14px] font-medium text-[#37352F]">
+              {t(($) => $.preferences.language)}
+            </div>
+            <div className="mt-1 text-[12px] leading-5 text-[#787774]">
+              {t(($) => $.preferences.languageDescription)}
+            </div>
+          </div>
+          <Select
+            data-testid="settings-language"
+            aria-label={t(($) => $.preferences.language)}
+            className="min-w-[160px] shrink-0"
+            value={settings?.language ?? 'system'}
+            disabled={!settings || saving}
+            options={[
+              { value: 'system', label: t(($) => $.preferences.system) },
+              { value: 'zh-CN', label: t(($) => $.preferences.simplifiedChinese) },
+              { value: 'en', label: t(($) => $.preferences.english) }
+            ]}
+            onChange={(language: AppSettings['language']) => void updatePreference({ language })}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-6 border-b border-[#EEEEEC] py-5 mb-5">
+          <div className="min-w-0">
+            <div className="text-[14px] font-medium text-[#37352F]">
+              {t(($) => $.preferences.serviceRoute)}
+            </div>
+            <div className="mt-1 text-[12px] leading-5 text-[#787774]">
+              {t(($) => $.preferences.serviceRouteDescription)}
+            </div>
+          </div>
+          <Select
+            data-testid="settings-service-route"
+            aria-label={t(($) => $.preferences.serviceRoute)}
+            className="min-w-[160px] shrink-0"
+            value={settings?.serviceRoute ?? 'domestic'}
+            disabled={!settings || saving}
+            options={[
+              { value: 'domestic', label: t(($) => $.preferences.domestic) },
+              { value: 'international', label: t(($) => $.preferences.international) }
+            ]}
+            onChange={(serviceRoute: AppSettings['serviceRoute']) =>
+              void updatePreference({ serviceRoute })
+            }
+          />
+        </div>
         <div className="flex items-center justify-between gap-6">
           <div className="min-w-0">
-            <div className="text-[14px] font-medium text-[#37352F]">AI 运行完成通知</div>
+            <div className="text-[14px] font-medium text-[#37352F]">
+              {t(($) => $.settings.aiTaskNotifications)}
+            </div>
             <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-              AI 运行成功、失败或取消时发送电脑系统通知。
+              {t(($) => $.settings.sendDesktopNotificationsWhenAiTasksSucceedFailOr)}
             </div>
           </div>
           <Switch
@@ -68,14 +161,16 @@ const GeneralSettingsPanel: React.FC = () => {
             loading={!settings || saving}
             onChange={(enabled) => void updateNotifications(enabled)}
             data-testid={settingsSelectors.systemNotificationsSwitch}
-            aria-label="AI 运行完成通知"
+            aria-label={t(($) => $.settings.aiTaskNotifications)}
           />
         </div>
         <div className="mt-5 flex items-center justify-between gap-6 border-t border-[#EEEEEC] py-5">
           <div className="min-w-0">
-            <div className="text-[14px] font-medium text-[#37352F]">错误日志</div>
+            <div className="text-[14px] font-medium text-[#37352F]">
+              {t(($) => $.settings.errorLog)}
+            </div>
             <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-              遇到运行或索引错误时会记录到本地，请将 app.log 发给作者排查问题。
+              {t(($) => $.settings.runtimeAndIndexingErrorsAreLoggedLocallyShareApp)}
             </div>
           </div>
           <button
@@ -84,18 +179,20 @@ const GeneralSettingsPanel: React.FC = () => {
             onClick={() => void openErrorLogDirectory()}
             disabled={openingLogDirectory}
             data-testid={settingsSelectors.errorLogOpenDirectoryButton}
-            aria-label="打开错误日志目录"
-            title="打开错误日志目录"
+            aria-label={t(($) => $.settings.openErrorLogDirectory)}
+            title={t(($) => $.settings.openErrorLogDirectory)}
           >
             <FileIcon kind="directory" expanded className="h-4 w-4" />
-            <span>打开</span>
+            <span>{t(($) => $.settings.open)}</span>
           </button>
         </div>
         <div className="flex items-center justify-between gap-6 border-t border-[#EEEEEC] py-5">
           <div>
-            <div className="text-[14px] font-medium text-[#37352F]">清理伙伴的缓存数据</div>
+            <div className="text-[14px] font-medium text-[#37352F]">
+              {t(($) => $.settings.cleanUpPartnerCache)}
+            </div>
             <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-              按伙伴、内容和时间清理缓存，释放磁盘空间。
+              {t(($) => $.settings.freeDiskSpaceByPartnerContentTypeAndDate)}
             </div>
           </div>
           <button
@@ -104,7 +201,7 @@ const GeneralSettingsPanel: React.FC = () => {
             onClick={() => setCacheCleanupOpen(true)}
             className="nc-no-drag h-8 shrink-0 rounded border border-[#E6E6E3] px-3 text-[12px] font-medium text-[#5F5F5B] hover:bg-[#F6F6F4]"
           >
-            管理
+            {t(($) => $.settings.manage)}
           </button>
         </div>
       </div>

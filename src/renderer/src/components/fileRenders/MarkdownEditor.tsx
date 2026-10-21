@@ -1,3 +1,4 @@
+import { t, getRendererRuntime } from '../../i18n'
 import { useCallback, useContext, useMemo } from 'react'
 import { DocumentSelectionContext } from '../workbench/composer/DocumentSelectionContext'
 import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
@@ -57,7 +58,7 @@ const MarkdownEditor: React.FC<{ filePath: string; allowSelection?: boolean }> =
   useEffect(() => {
     previewHandlerRef.current = (img) => {
       if (!isImageLoaded(img)) {
-        message.warning('图片无法加载')
+        message.warning(t(($) => $.editors.couldNotLoadTheImage))
         return
       }
       setPreviewImage({
@@ -75,10 +76,10 @@ const MarkdownEditor: React.FC<{ filePath: string; allowSelection?: boolean }> =
       }).then((result) => {
         if (result.ok) return
         if (result.reason === 'missing') {
-          message.warning('链接无法访问')
+          message.warning(t(($) => $.common.linkUnavailable))
           return
         }
-        message.warning(result.detail || '无法打开链接')
+        message.warning(result.detail || t(($) => $.editors.couldNotOpenTheLink))
       })
     }
   }, [message])
@@ -123,13 +124,13 @@ const MarkdownEditor: React.FC<{ filePath: string; allowSelection?: boolean }> =
     rootRef.current.replaceChildren()
     const vditor = new Vditor(rootRef.current, {
       mode: 'ir',
-      lang: 'zh_CN',
+      lang: getRendererRuntime().locale === 'zh-CN' ? 'zh_CN' : 'en_US',
       i18n: vditorI18n,
       toolbar: [],
       cache: { enable: false },
       value: initialText,
       cdn: resolveVditorCdn(),
-      placeholder: '开始输入…',
+      placeholder: t(($) => $.editors.startTyping),
       link: {
         click: (element) => {
           linkHandlerRef.current(element)
@@ -173,7 +174,12 @@ const MarkdownEditor: React.FC<{ filePath: string; allowSelection?: boolean }> =
 
   useEffect(
     () => () => {
-      void flushSave().catch((error) => console.error('文件保存失败', error))
+      void flushSave().catch((error) =>
+        console.error(
+          t(($) => $.editors.couldNotSaveTheFile),
+          error
+        )
+      )
       if (hydrateTimerRef.current !== null) {
         window.clearTimeout(hydrateTimerRef.current)
         hydrateTimerRef.current = null
@@ -189,7 +195,7 @@ const MarkdownEditor: React.FC<{ filePath: string; allowSelection?: boolean }> =
       <div className="flex h-full w-full items-center justify-center bg-white">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={file.loadError || '文件加载失败'}
+          description={file.loadError || t(($) => $.editors.couldNotLoadTheFile)}
         />
       </div>
     )

@@ -1,6 +1,7 @@
+import { t, getProductName } from '../i18n'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { App as AntdApp, Modal } from 'antd'
-import { PRODUCT_NAME_ZH } from '../../../shared/constants'
+
 import type { AppUpdateSnapshot } from '../../../shared/types'
 import { workbenchSelectors } from '../testing/selectors'
 import { normalizeUserFacingError } from '../utils/userFacingError'
@@ -46,11 +47,16 @@ export const AppUpdateProvider: React.FC<React.PropsWithChildren> = ({ children 
       const response = await window.api.appUpdateDownload()
       setSnapshot(response.snapshot)
       if (!response.success) {
-        message.error(normalizeUserFacingError(response.error, '下载更新失败'))
+        message.error(
+          normalizeUserFacingError(
+            response.error,
+            t(($) => $.common.couldNotDownloadTheUpdate)
+          )
+        )
       }
     } catch (error) {
       console.error('Failed to download update', error)
-      message.error('下载更新失败')
+      message.error(t(($) => $.common.couldNotDownloadTheUpdate))
     } finally {
       setActionPending(false)
     }
@@ -66,11 +72,16 @@ export const AppUpdateProvider: React.FC<React.PropsWithChildren> = ({ children 
       const response = await window.api.appUpdateCheck()
       setSnapshot(response.snapshot)
       if (!response.success) {
-        message.error(normalizeUserFacingError(response.error, '检查更新失败'))
+        message.error(
+          normalizeUserFacingError(
+            response.error,
+            t(($) => $.common.couldNotCheckForUpdates)
+          )
+        )
       }
     } catch (error) {
       console.error('Failed to retry update check', error)
-      message.error('检查更新失败')
+      message.error(t(($) => $.common.couldNotCheckForUpdates))
     } finally {
       setActionPending(false)
     }
@@ -82,11 +93,16 @@ export const AppUpdateProvider: React.FC<React.PropsWithChildren> = ({ children 
       const response = await window.api.appUpdateInstall()
       setSnapshot(response.snapshot)
       if (!response.success) {
-        message.error(normalizeUserFacingError(response.error, '安装更新失败'))
+        message.error(
+          normalizeUserFacingError(
+            response.error,
+            t(($) => $.common.couldNotInstallTheUpdate)
+          )
+        )
       }
     } catch (error) {
       console.error('Failed to install update', error)
-      message.error('安装更新失败')
+      message.error(t(($) => $.common.couldNotInstallTheUpdate))
     } finally {
       setActionPending(false)
     }
@@ -102,9 +118,9 @@ export const AppUpdateProvider: React.FC<React.PropsWithChildren> = ({ children 
       {children}
       <Modal
         open={restartPromptOpen}
-        title="更新已准备好"
-        okText="立即重启"
-        cancelText="稍后"
+        title={t(($) => $.common.updateReady)}
+        okText={t(($) => $.common.restartNow)}
+        cancelText={t(($) => $.common.later)}
         centered
         closable={false}
         maskClosable={false}
@@ -116,7 +132,10 @@ export const AppUpdateProvider: React.FC<React.PropsWithChildren> = ({ children 
         data-testid={workbenchSelectors.updateRestartModal}
       >
         <p className="m-0 text-[13px] leading-6 text-[#5F5E5B]">
-          {`${PRODUCT_NAME_ZH} ${snapshot?.availableVersion || ''} 已下载完成，重启应用即可完成更新。`}
+          {t(($) => $.common.hasBeenDownloadedRestartTheAppToFinishUpdating, {
+            value1: getProductName(),
+            value2: snapshot?.availableVersion || ''
+          })}
         </p>
       </Modal>
     </AppUpdateContext.Provider>

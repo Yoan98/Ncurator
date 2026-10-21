@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import FileIcon from '../FileIcon'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Button, Empty, Modal, Popover, Tabs, Tooltip, message } from 'antd'
@@ -166,7 +167,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       })
     } catch (error) {
       console.error(error)
-      message.error('刷新失败')
+      message.error(t(($) => $.settings.couldNotRefresh))
     } finally {
       setWorkspaceLoading(false)
     }
@@ -192,7 +193,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setWorkspaceDirectoryReloadVersion((value) => value + 1)
     } catch (error) {
       console.error(error)
-      message.error('加载工作空间失败')
+      message.error(t(($) => $.settings.couldNotLoadTheWorkspace))
     } finally {
       setWorkspaceLoading(false)
     }
@@ -205,7 +206,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setWorkspaces(workspaceResponse.items)
     } catch (error) {
       console.error(error)
-      message.error('加载工作空间失败')
+      message.error(t(($) => $.settings.couldNotLoadTheWorkspace))
     } finally {
       setWorkspaceLoading(false)
     }
@@ -395,7 +396,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
           )
         })}
         {loading && entries.length === 0 ? (
-          <div className="px-3 py-2 text-[12px] text-[#91918E]">正在读取…</div>
+          <div className="px-3 py-2 text-[12px] text-[#91918E]">{t(($) => $.settings.loading)}</div>
         ) : null}
         {error ? (
           <button
@@ -403,7 +404,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
             className="px-3 py-2 text-[12px] text-[#B3261E]"
             onClick={() => void loadWorkspaceDirectory(workspaceId, parentPath)}
           >
-            读取失败，点击重试
+            {t(($) => $.settings.couldNotLoadClickToRetry)}
           </button>
         ) : null}
       </div>
@@ -423,7 +424,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       modal.warning({
         title: input.title,
         content: input.content,
-        okText: '知道了',
+        okText: t(($) => $.settings.gotIt),
         centered: true,
         okButtonProps: {
           'data-testid': input.testId
@@ -451,25 +452,32 @@ const WorkspaceSettingsPanel: React.FC = () => {
     const response = await window.api.workspaceCreate({ rootPath })
     if (response.conflict?.reason === 'exists') {
       showRootConflictModal({
-        title: '目录已添加',
-        content: '这个目录已经在文件地址里了，不用重复添加。',
+        title: t(($) => $.settings.directoryAlreadyAdded),
+        content: t(($) => $.settings.thisDirectoryIsAlreadyInYourFileLocations),
         testId: importSelectors.workspaceRootConflictExistsOk
       })
       return
     }
     if (response.conflict?.reason === 'nested') {
       showRootConflictModal({
-        title: '目录已包含',
-        content: `所选目录已经包含在 ${formatQuotedPaths(response.conflict.existingPaths)} 内，不用重复添加。`,
+        title: t(($) => $.settings.directoryAlreadyIncluded),
+        content: t(($) => $.settings.thisDirectoryIsAlreadyIncludedIn, {
+          value1: formatQuotedPaths(response.conflict.existingPaths)
+        }),
         testId: importSelectors.workspaceRootConflictNestedOk
       })
       return
     }
     if (!response.success || !response.workspace) {
-      message.error(normalizeUserFacingError(response.error, '添加地址失败'))
+      message.error(
+        normalizeUserFacingError(
+          response.error,
+          t(($) => $.settings.couldNotAddTheLocation)
+        )
+      )
       return
     }
-    message.success('目录已添加')
+    message.success(t(($) => $.settings.directoryAlreadyAdded))
     await loadWorkspaces({ focusRootId: response.workspace.id })
   }
 
@@ -480,18 +488,23 @@ const WorkspaceSettingsPanel: React.FC = () => {
       )
       const failed = results.find((response) => !response.success)
       if (failed) {
-        message.error(normalizeUserFacingError(failed.error, '检查更新失败'))
+        message.error(
+          normalizeUserFacingError(
+            failed.error,
+            t(($) => $.common.couldNotCheckForUpdates)
+          )
+        )
       }
     } catch (error) {
       console.error(error)
-      message.error('检查更新失败')
+      message.error(t(($) => $.common.couldNotCheckForUpdates))
     }
   }
 
   const handleWorkspacePrepareAll = async (): Promise<void> => {
     if (hasVectorModel !== true) {
       setFilePrepareHeld(false)
-      message.warning('请先安装向量模型后再更新索引')
+      message.warning(t(($) => $.settings.installAVectorModelBeforeUpdatingTheIndex))
       return
     }
     const heldAt = beginPrepareHeld(setFilePrepareHeld)
@@ -515,11 +528,16 @@ const WorkspaceSettingsPanel: React.FC = () => {
       )
       const failed = results.find((response) => !response.success)
       if (failed) {
-        message.error(normalizeUserFacingError(failed.error, '更新索引失败'))
+        message.error(
+          normalizeUserFacingError(
+            failed.error,
+            t(($) => $.settings.couldNotUpdateTheIndex)
+          )
+        )
       }
     } catch (error) {
       console.error(error)
-      message.error('更新索引失败')
+      message.error(t(($) => $.settings.couldNotUpdateTheIndex))
     } finally {
       await endPrepareHeld(setFilePrepareHeld, heldAt)
     }
@@ -532,7 +550,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       return
     }
     if (hasVectorModel !== true) {
-      message.warning('请先安装向量模型后再更新索引')
+      message.warning(t(($) => $.settings.installAVectorModelBeforeUpdatingTheIndex))
       return
     }
     beginPrepareHeld(setFilePrepareHeld)
@@ -547,12 +565,17 @@ const WorkspaceSettingsPanel: React.FC = () => {
       const response = await window.api.workspaceIndexCancel({ sourceKind: 'file' })
       if (!response.success) {
         setFilePrepareCancelling(false)
-        message.error(normalizeUserFacingError(response.error, '停止更新索引失败'))
+        message.error(
+          normalizeUserFacingError(
+            response.error,
+            t(($) => $.settings.couldNotStopTheIndexUpdate)
+          )
+        )
       }
     } catch (error) {
       setFilePrepareCancelling(false)
       console.error(error)
-      message.error('停止更新索引失败')
+      message.error(t(($) => $.settings.couldNotStopTheIndexUpdate))
     }
   }
 
@@ -561,15 +584,20 @@ const WorkspaceSettingsPanel: React.FC = () => {
     try {
       const response = await window.api.workspaceDelete(deleteWorkspaceId)
       if (!response.success) {
-        message.error(normalizeUserFacingError(response.error, '移除失败'))
+        message.error(
+          normalizeUserFacingError(
+            response.error,
+            t(($) => $.settings.couldNotRemove)
+          )
+        )
         return
       }
-      message.success('已移除')
+      message.success(t(($) => $.settings.removed))
       setDeleteWorkspaceId(null)
       await loadWorkspaces()
     } catch (error) {
       console.error(error)
-      message.error('移除失败')
+      message.error(t(($) => $.settings.couldNotRemove))
     }
   }
 
@@ -583,31 +611,35 @@ const WorkspaceSettingsPanel: React.FC = () => {
       ? false
       : hasVectorModel !== true || actionableIndexCount === 0
   const workspacePrepareLabel = filePrepareCancelling
-    ? '停止中'
+    ? t(($) => $.settings.stopping)
     : filePrepareRunning
-      ? '取消'
-      : '更新索引'
+      ? t(($) => $.common.cancel)
+      : t(($) => $.settings.updateIndex)
   const workspacePrepareTooltip =
     hasVectorModel === null
-      ? '正在检查向量模型状态'
+      ? t(($) => $.settings.checkingVectorModelStatus)
       : vectorModelMissing
         ? ''
         : actionableIndexCount === 0
-          ? '当前没有需要更新的索引'
+          ? t(($) => $.settings.noIndexesNeedUpdating)
           : filePrepareRunning
-            ? '停止本次更新索引，已完成的会保留。'
-            : '检查目录变化并更新可索引文件。'
+            ? t(($) => $.settings.stopThisIndexUpdateAndKeepCompletedItems)
+            : t(($) => $.settings.checkDirectoryChangesAndUpdateIndexesForSupportedFiles)
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
-      <div className="text-[13px] font-medium text-[#37352F]">先安装向量模型</div>
-      <div className="mt-1 text-[12px] leading-5 text-[#787774]">安装后才能更新索引。</div>
+      <div className="text-[13px] font-medium text-[#37352F]">
+        {t(($) => $.settings.installAVectorModelFirst)}
+      </div>
+      <div className="mt-1 text-[12px] leading-5 text-[#787774]">
+        {t(($) => $.settings.installAVectorModelBeforeUpdatingTheIndex2)}
+      </div>
       <Button
         type="link"
         size="small"
         className="mt-2 !h-auto !p-0 !text-[#2F3437]"
         onClick={() => navigate('/settings/vector')}
       >
-        去安装
+        {t(($) => $.settings.install)}
       </Button>
     </div>
   )
@@ -631,15 +663,17 @@ const WorkspaceSettingsPanel: React.FC = () => {
             items={[
               {
                 key: 'files',
-                label: `文件 ${summedSummary.file_count}`,
+                label: t(($) => $.settings.file2, { value1: summedSummary.file_count }),
                 children: (
                   <div className="flex h-full min-h-0 flex-col gap-4">
                     <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
                       <div className="space-y-5">
                         <section className="nc-settings-side-section pb-4">
-                          <div className="text-[14px] font-semibold text-[#37352F]">文件地址</div>
+                          <div className="text-[14px] font-semibold text-[#37352F]">
+                            {t(($) => $.settings.fileLocations)}
+                          </div>
                           <div className="mt-2 text-[12px] leading-5 text-[#787774]">
-                            添加你默认工作的目录。
+                            {t(($) => $.settings.addYourUsualWorkingDirectories)}
                           </div>
                           <div className="mt-4">
                             <Button
@@ -649,15 +683,21 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               onClick={() => void handleAddRoot()}
                               data-testid={importSelectors.createWorkspaceButton}
                             >
-                              添加目录
+                              {t(($) => $.settings.addDirectory)}
                             </Button>
                           </div>
                         </section>
 
                         <section className="nc-settings-side-section pb-4">
                           <div className="flex items-center gap-1.5">
-                            <div className="text-[14px] font-semibold text-[#37352F]">索引状态</div>
-                            <Tooltip title="索引后的文件会加速搜索，并在一定程度降低 token 消耗。">
+                            <div className="text-[14px] font-semibold text-[#37352F]">
+                              {t(($) => $.settings.indexStatus)}
+                            </div>
+                            <Tooltip
+                              title={t(
+                                ($) => $.settings.indexedFilesImproveSearchSpeedAndCanReduceToken
+                              )}
+                            >
                               <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#9B9A97] transition-colors hover:text-[#37352F]" />
                             </Tooltip>
                           </div>
@@ -665,7 +705,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             <div className="ui-inset px-3 py-3">
                               <div className="inline-flex items-center gap-1.5">
                                 <HiArrowPath className="h-4 w-4 text-[#787774]" />
-                                <span>可索引</span>
+                                <span>{t(($) => $.settings.indexable)}</span>
                               </div>
                               <div
                                 className="mt-1 text-[16px] font-semibold text-[#37352F]"
@@ -678,14 +718,20 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   className="mt-1 text-[11px] text-[#B3261E]"
                                   data-testid={importSelectors.workspaceActionableFailedHint}
                                 >
-                                  含失败 {summedSummary.failed_file_count} 个
+                                  {t(($) => $.settings.includesFailures)}
+                                  {summedSummary.failed_file_count}
+                                  {t(($) => $.common.items2)}
                                 </div>
                               ) : null}
                             </div>
                           </div>
                           <KnowledgeIndexSpeedControl prepareRunning={filePrepareRunning} />
                           <div className="mt-4 grid grid-cols-2 gap-2">
-                            <Tooltip title="检查当前目录里有哪些新增、变更或删除。">
+                            <Tooltip
+                              title={t(
+                                ($) => $.settings.checkThisDirectoryForAddedChangedOrDeletedFiles
+                              )}
+                            >
                               <Button
                                 icon={<HiArrowPath className="h-4 w-4" />}
                                 onClick={() => void handleWorkspaceScanAll()}
@@ -693,7 +739,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 disabled={workspaceScanDisabled}
                                 data-testid={importSelectors.workspaceQuickScanButton}
                               >
-                                检查更新
+                                {t(($) => $.common.checkForUpdates)}
                               </Button>
                             </Tooltip>
                             <div className="relative min-w-0">
@@ -718,7 +764,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   <button
                                     type="button"
                                     className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#9B9A97] transition hover:border-[#DAD8D2] hover:text-[#37352F]"
-                                    aria-label="为什么不能更新索引"
+                                    aria-label={t(($) => $.settings.whyIndexingIsUnavailable)}
                                   >
                                     <HiOutlineQuestionMarkCircle className="h-4 w-4" />
                                   </button>
@@ -735,11 +781,13 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
                       <div className="flex min-h-0 min-w-0 flex-col">
                         <div className="mb-3 flex items-center justify-between">
-                          <div className="text-[14px] font-semibold text-[#37352F]">目录树</div>
-                          <Tooltip title="刷新">
+                          <div className="text-[14px] font-semibold text-[#37352F]">
+                            {t(($) => $.settings.directoryTree)}
+                          </div>
+                          <Tooltip title={t(($) => $.common.refresh)}>
                             <Button
                               size="small"
-                              aria-label="刷新目录树"
+                              aria-label={t(($) => $.settings.refreshDirectoryTree)}
                               icon={
                                 <HiArrowPath
                                   className={
@@ -763,7 +811,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             >
                               <Empty
                                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                description={<span className="text-[#787774]">还没有文件地址</span>}
+                                description={
+                                  <span className="text-[#787774]">
+                                    {t(($) => $.settings.noFileLocationsYet)}
+                                  </span>
+                                }
                               />
                             </div>
                           ) : (
@@ -812,14 +864,16 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                           </div>
                                         </div>
                                       </button>
-                                      <Tooltip title="移除">
+                                      <Tooltip title={t(($) => $.settings.remove)}>
                                         <Button
                                           danger
                                           type="text"
                                           size="small"
                                           icon={<HiOutlineTrash className="h-4 w-4" />}
                                           className="!h-6 !w-6 !p-0 opacity-0 group-hover:opacity-100"
-                                          aria-label={`移除 ${getRootDisplayName(workspace)}`}
+                                          aria-label={t(($) => $.settings.remove2, {
+                                            value1: getRootDisplayName(workspace)
+                                          })}
                                           onClick={() => setDeleteWorkspaceId(workspace.id)}
                                           data-testid={importSelectors.workspaceRemoveButton}
                                         />
@@ -841,7 +895,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
               },
               {
                 key: 'web',
-                label: `网页 ${webCount}`,
+                label: t(($) => $.settings.webpage, { value1: webCount }),
                 children: (
                   <WebSourcesSettingsPanel
                     embedded
@@ -857,22 +911,22 @@ const WorkspaceSettingsPanel: React.FC = () => {
       </div>
 
       <Modal
-        title="移除文件地址"
+        title={t(($) => $.settings.removeFileLocation)}
         open={Boolean(deleteWorkspaceId)}
         maskClosable={false}
         onCancel={() => setDeleteWorkspaceId(null)}
         onOk={() => void handleDeleteWorkspace()}
-        okText="移除"
+        okText={t(($) => $.settings.remove)}
         okButtonProps={{
           danger: true,
           'data-testid': importSelectors.workspaceDeleteConfirmButton
         }}
-        cancelText="取消"
+        cancelText={t(($) => $.common.cancel)}
         cancelButtonProps={{ 'data-testid': importSelectors.workspaceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[8px]"
       >
         <p className="mb-0 text-[#787774]">
-          移除后，该路径将不再作为资料根。若仍需使用，请重新添加并重新建立索引。
+          {t(($) => $.settings.thisPathWillNoLongerBeASourceRoot)}
         </p>
       </Modal>
       <IndexPrepareCancelModal

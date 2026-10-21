@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useRef, useState } from 'react'
+import { t } from '../../i18n'
+import React, { useEffect, useRef, useState } from 'react'
 import { Empty, Modal, Spin } from 'antd'
 import DocViewer from 'react-doc-viewer'
 import CustomPDFRenderer from './pdf'
@@ -47,7 +48,11 @@ const getDocumentsSignature = (documents: FileRenderDocument[]): string =>
     .join('\u0001')
 
 const getPreviewErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : typeof error === 'string' ? error : '未知错误'
+  error instanceof Error
+    ? error.message
+    : typeof error === 'string'
+      ? error
+      : t(($) => $.common.unknownError)
 
 const usePreparedDocuments = (
   documents: FileRenderDocument[]
@@ -156,7 +161,7 @@ const renderers = [
 
 const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
   documents,
-  emptyText = '选择一个文件后在这里查看内容。',
+  emptyText = t(($) => $.editors.selectAFileToViewItsContentsHere),
   className,
   framed = true
 }) => {
@@ -212,12 +217,15 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
           description={
             <span className="max-w-[420px] whitespace-pre-wrap break-words text-[#787774]">
               {errorMessage
-                ? errorMessage === '文件已删除'
+                ? errorMessage === t(($) => $.editors.fileDeleted)
                   ? errorMessage
-                  : `文件暂时无法预览：${errorMessage}`
+                  : t(($) => $.editors.filePreviewUnavailable, { value1: errorMessage })
                 : unsupportedType
-                  ? `${unsupportedType} 文件暂不支持预览。\n${FILE_PREVIEW_SUPPORT_SUMMARY}`
-                  : '文件暂时无法预览'}
+                  ? t(($) => $.editors.previewIsNotSupportedForFiles, {
+                      value1: unsupportedType,
+                      value2: FILE_PREVIEW_SUPPORT_SUMMARY
+                    })
+                  : t(($) => $.editors.filePreviewUnavailable2)}
             </span>
           }
         />
@@ -272,7 +280,7 @@ const FileRender: React.FC<FileRenderProps> = ({
       styles={{ body: { height: '72vh', minHeight: 480, padding: 4, overflow: 'hidden' } }}
       destroyOnClose
       footer={null}
-      title={title || documents[0]?.fileName || '文件预览'}
+      title={title || documents[0]?.fileName || t(($) => $.editors.filePreview)}
       open={open}
       onCancel={onCancel}
       data-testid={modalTestId}

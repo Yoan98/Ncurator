@@ -1,4 +1,5 @@
-import 'monaco-editor/nls/lang/zh-cn.js'
+import { t } from '../../i18n'
+import { getRendererRuntime } from '../../i18n'
 import * as monaco from 'monaco-editor/editor/editor.api.js'
 import 'monaco-editor/editor/contrib/clipboard/browser/clipboard.js'
 import 'monaco-editor/editor/contrib/contextmenu/browser/contextmenu.js'
@@ -25,17 +26,17 @@ self.MonacoEnvironment = { getWorker: () => new EditorWorker() }
 // Message IDs belong to the pinned Monaco 0.57 locale. Keep review wording concise.
 const messages = (globalThis as typeof globalThis & { _VSCODE_NLS_MESSAGES?: (string | null)[] })
   ._VSCODE_NLS_MESSAGES
-if (messages)
+if (messages && getRendererRuntime().locale === 'zh-CN')
   Object.assign(messages, {
-    140: '已折叠 {0} 行',
-    142: '展开未修改内容',
-    144: '折叠未修改内容',
-    145: '展开 {0} 行未修改内容',
-    146: '已折叠 {0} 行',
-    147: '单击展开',
-    148: '折叠未修改内容',
-    154: '恢复选中的修改',
-    155: '恢复这处修改'
+    140: t(($) => $.workbench.message0LinesHidden),
+    142: t(($) => $.workbench.expandUnchangedContent),
+    144: t(($) => $.workbench.collapseUnchangedContent),
+    145: t(($) => $.workbench.expand0UnchangedLines),
+    146: t(($) => $.workbench.message0LinesHidden),
+    147: t(($) => $.workbench.clickToExpand),
+    148: t(($) => $.workbench.collapseUnchangedContent),
+    154: t(($) => $.workbench.revertSelectedChanges),
+    155: t(($) => $.workbench.revertThisChange2)
   })
 monaco.editor.defineTheme('curator-review', {
   base: 'vs',

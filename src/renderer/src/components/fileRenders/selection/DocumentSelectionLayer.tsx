@@ -1,3 +1,4 @@
+import { t } from '../../../i18n'
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { App } from 'antd'
 import { createPortal } from 'react-dom'
@@ -102,7 +103,10 @@ export default function DocumentSelectionLayer({
         setPopup(null)
         void message.warning({
           key: noticeKey,
-          content: error instanceof Error ? error.message : '无法引用当前选区。'
+          content:
+            error instanceof Error
+              ? error.message
+              : t(($) => $.editors.couldNotReferenceTheSelection)
         })
       }
     }
@@ -324,7 +328,10 @@ export default function DocumentSelectionLayer({
     handledNavigation.current = state.navigation.requestId
     const geometry = adapter.locate(node, state.locations.get(node.id))
     if (!geometry) {
-      void message.warning({ key: noticeKey, content: '原文已变化或位置不唯一，无法定位该选区。' })
+      void message.warning({
+        key: noticeKey,
+        content: t(($) => $.editors.theTextHasChangedOrIsNotUniqueCould)
+      })
       return
     }
     geometry.reveal()
@@ -380,7 +387,7 @@ export default function DocumentSelectionLayer({
     } catch (e) {
       void message.warning({
         key: noticeKey,
-        content: e instanceof Error ? e.message : '引用保存失败'
+        content: e instanceof Error ? e.message : t(($) => $.editors.couldNotSaveTheReference)
       })
     }
   }
@@ -392,7 +399,7 @@ export default function DocumentSelectionLayer({
           <button
             key={node.id}
             type="button"
-            aria-label={'编辑所选内容：' + node.selectedText}
+            aria-label={t(($) => $.preferences.selectionEdit) + node.selectedText}
             disabled={state.locked}
             className="sr-only focus:not-sr-only focus:absolute focus:bottom-3 focus:left-3 focus:z-10 focus:bg-white"
             onFocus={() => targets.current.find((t) => t.node.id === node.id)?.geometry.reveal()}
@@ -401,7 +408,7 @@ export default function DocumentSelectionLayer({
               if (t) open(t, 'editor')
             }}
           >
-            查看引用内容
+            {t(($) => $.editors.viewReferencedContent)}
           </button>
         ))}
       {createPortal(

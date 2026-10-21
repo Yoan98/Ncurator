@@ -43,7 +43,7 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
     streaming: opts?.streaming === true,
     configuration: {
       baseURL: runtimeOptions.baseURL,
-      ...(isFreeModelConfigId(cfg.id) ? { fetch: createFreeModelFetch() } : {})
+      ...(isFreeModelConfigId(cfg.id) ? { fetch: createFreeModelFetch(cfg.base_url) } : {})
     }
   })
 }

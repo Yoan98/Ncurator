@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react'
+import { t, providerDisplayName } from '../../i18n'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Form,
@@ -54,8 +55,8 @@ const ModelSettingsPanel: React.FC = () => {
       setActionError(null)
     } catch (error) {
       console.error('Failed to load configs', error)
-      setActionError('加载配置失败')
-      message.error('加载配置失败')
+      setActionError(t(($) => $.settings.couldNotLoadConfigurations))
+      message.error(t(($) => $.settings.couldNotLoadConfigurations))
     } finally {
       setLoading(false)
     }
@@ -124,25 +125,28 @@ const ModelSettingsPanel: React.FC = () => {
     try {
       const response = await window.api.llmConfigDelete(id)
       if (!response.success) {
-        const errorMessage = normalizeUserFacingError(response.error, '删除失败')
+        const errorMessage = normalizeUserFacingError(
+          response.error,
+          t(($) => $.common.couldNotDelete)
+        )
         setActionError(errorMessage)
         message.error(errorMessage)
         return
       }
       setActionError(null)
-      message.success('配置已删除')
+      message.success(t(($) => $.settings.configurationDeleted))
       await loadConfigs()
     } catch (error) {
       console.error(error)
-      setActionError('删除失败')
-      message.error('删除失败')
+      setActionError(t(($) => $.common.couldNotDelete))
+      message.error(t(($) => $.common.couldNotDelete))
     }
   }
 
   const handleSave = async (): Promise<void> => {
     try {
       if (mode === 'preset' && !selectedProviderId) {
-        message.warning('请选择服务商')
+        message.warning(t(($) => $.settings.selectAProvider))
         return
       }
       const values = await form.validateFields()
@@ -153,7 +157,7 @@ const ModelSettingsPanel: React.FC = () => {
         const preset = getPresetProvider(selectedProviderId!)
         const registry = getProviderRegistryEntry(selectedProviderId!)
         if (!preset || !registry) {
-          message.error('服务商配置不完整')
+          message.error(t(($) => $.settings.providerConfigurationIsIncomplete))
           return
         }
         nextConfig = {
@@ -177,14 +181,18 @@ const ModelSettingsPanel: React.FC = () => {
       if (!response.success) {
         const errorMessage = normalizeUserFacingError(
           response.error,
-          editingConfig ? '更新失败' : '添加失败'
+          editingConfig ? t(($) => $.settings.couldNotUpdate) : t(($) => $.settings.couldNotAdd)
         )
         setActionError(errorMessage)
         message.error(errorMessage)
         return
       }
       setActionError(null)
-      message.success(editingConfig ? '配置已更新' : '配置已添加')
+      message.success(
+        editingConfig
+          ? t(($) => $.settings.configurationUpdated)
+          : t(($) => $.settings.configurationAdded)
+      )
       setIsModalOpen(false)
       await loadConfigs()
     } catch (error) {
@@ -194,7 +202,7 @@ const ModelSettingsPanel: React.FC = () => {
 
   const columns: TableColumnsType<LLMConfig> = [
     {
-      title: '服务商',
+      title: t(($) => $.settings.provider),
       key: 'provider',
       width: 360,
       render: (_value, record) => {
@@ -206,13 +214,15 @@ const ModelSettingsPanel: React.FC = () => {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="truncate font-medium text-[#37352F]">{record.name}</span>
+                <span className="truncate font-medium text-[#37352F]">
+                  {preset ? providerDisplayName(preset.providerId, record.name) : record.name}
+                </span>
                 {!preset ? (
                   <Tag
                     className="!m-0 !border-[#EEEEEC] !bg-[#F4F4F2] !text-[11px] !text-[#787774]"
                     data-testid={settingsSelectors.modelCustomTag}
                   >
-                    自定义
+                    {t(($) => $.settings.custom)}
                   </Tag>
                 ) : null}
               </div>
@@ -234,7 +244,7 @@ const ModelSettingsPanel: React.FC = () => {
       )
     },
     {
-      title: '操作',
+      title: t(($) => $.settings.actions),
       key: 'action',
       width: 140,
       render: (_value, record) => (
@@ -248,10 +258,10 @@ const ModelSettingsPanel: React.FC = () => {
             data-testid={`${settingsSelectors.modelEditButtonPrefix}-${record.id}`}
           />
           <Popconfirm
-            title="确定要删除此配置吗？"
+            title={t(($) => $.settings.deleteThisConfiguration)}
             onConfirm={() => void handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
+            okText={t(($) => $.common.confirm)}
+            cancelText={t(($) => $.common.cancel)}
           >
             <Button
               type="text"
@@ -277,7 +287,9 @@ const ModelSettingsPanel: React.FC = () => {
             className="rounded-full border border-[#EEEEEC] bg-white px-3 py-1 text-[12px] text-[#787774]"
             data-testid={settingsSelectors.modelConfigCount}
           >
-            共 {configs.length} 个配置
+            {t(($) => $.settings.total)}
+            {configs.length}
+            {t(($) => $.settings.configurations)}
           </span>
           <Button
             type="primary"
@@ -286,7 +298,7 @@ const ModelSettingsPanel: React.FC = () => {
             className="border-none !bg-[#37352F] shadow-none hover:!bg-[#2F3437]"
             data-testid={settingsSelectors.modelAddButton}
           >
-            新增配置
+            {t(($) => $.settings.addConfiguration)}
           </Button>
         </div>
       </section>
@@ -309,7 +321,11 @@ const ModelSettingsPanel: React.FC = () => {
       </section>
 
       <Modal
-        title={editingConfig ? '编辑配置' : '新增配置'}
+        title={
+          editingConfig
+            ? t(($) => $.settings.editConfiguration)
+            : t(($) => $.settings.addConfiguration)
+        }
         open={isModalOpen}
         maskClosable={false}
         onOk={() => void handleSave()}
@@ -324,30 +340,30 @@ const ModelSettingsPanel: React.FC = () => {
           <Form.Item
             name="providerKind"
             hidden
-            rules={[{ required: true, message: '请选择服务商' }]}
+            rules={[{ required: true, message: t(($) => $.settings.selectAProvider) }]}
           >
             <Input data-testid={settingsSelectors.modelProviderInput} />
           </Form.Item>
 
-          <Form.Item label="类型:" className="!mb-0">
+          <Form.Item label={t(($) => $.settings.type)} className="!mb-0">
             <Radio.Group
               value={mode}
               onChange={(event) => handleModeChange(event.target.value)}
               data-testid={settingsSelectors.modelTypeRadio}
             >
               <Radio value="preset" data-testid={settingsSelectors.modelTypeRecommend}>
-                推荐
+                {t(($) => $.common.recommended)}
               </Radio>
               <Radio value="custom" data-testid={settingsSelectors.modelTypeCustom}>
-                自定义
+                {t(($) => $.settings.custom)}
               </Radio>
             </Radio.Group>
           </Form.Item>
 
           {mode === 'preset' ? (
-            <Form.Item label="选择服务商:" className="!mb-0 !mt-4">
+            <Form.Item label={t(($) => $.settings.selectProvider)} className="!mb-0 !mt-4">
               <Select
-                placeholder="选择服务商"
+                placeholder={t(($) => $.settings.selectProvider2)}
                 value={selectedProviderId || undefined}
                 onChange={(value: LlmProviderId) => handleSelectProvider(value)}
                 data-testid={settingsSelectors.modelPresetProviderSelect}
@@ -362,9 +378,11 @@ const ModelSettingsPanel: React.FC = () => {
                         <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                           {getProviderLogo(provider.providerId)}
                         </span>
-                        <span>{provider.label}</span>
+                        <span>{providerDisplayName(provider.providerId, provider.label)}</span>
                         {configured ? (
-                          <span className="text-[11px] text-[#9B9A97]">已配置</span>
+                          <span className="text-[11px] text-[#9B9A97]">
+                            {t(($) => $.settings.configured)}
+                          </span>
                         ) : null}
                       </span>
                     )
@@ -376,23 +394,23 @@ const ModelSettingsPanel: React.FC = () => {
             <>
               <Form.Item
                 name="name"
-                label="名称:"
-                rules={[{ required: true, message: '请输入名称' }]}
+                label={t(($) => $.settings.name)}
+                rules={[{ required: true, message: t(($) => $.settings.enterAName) }]}
                 className="!mb-0 !mt-4"
               >
                 <Input
-                  placeholder="例如：公司 OpenAI"
+                  placeholder={t(($) => $.settings.forExampleCompanyOpenai)}
                   data-testid={settingsSelectors.modelNameInput}
                 />
               </Form.Item>
               <Form.Item
                 name="base_url"
-                label="模型服务地址:"
-                rules={[{ required: true, message: '请输入模型服务地址' }]}
+                label={t(($) => $.settings.modelServiceUrl)}
+                rules={[{ required: true, message: t(($) => $.settings.enterAModelServiceUrl) }]}
                 className="!mb-0 !mt-4"
               >
                 <Input
-                  placeholder="填写模型服务提供的 API Base URL"
+                  placeholder={t(($) => $.settings.enterTheApiBaseUrlFromYourModelService)}
                   allowClear
                   data-testid={settingsSelectors.modelBaseUrlInput}
                   onBlur={() => {
@@ -407,7 +425,7 @@ const ModelSettingsPanel: React.FC = () => {
           <Form.Item
             name="api_key"
             label="API Key:"
-            rules={[{ required: true, message: '请输入 API Key' }]}
+            rules={[{ required: true, message: t(($) => $.settings.enterAnApiKey) }]}
             className="!mb-0 !mt-4"
           >
             <Input.Password placeholder="sk-..." data-testid={settingsSelectors.modelApiKeyInput} />

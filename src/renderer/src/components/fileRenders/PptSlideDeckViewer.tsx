@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { useOfficeReviewNavigation } from '../workbench/OfficeReviewContext'
 import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
 import { pptAdapter, interactivePptSvg } from './selection/pptAdapter'
@@ -63,7 +64,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
   hintTestId,
   selectionFilePath,
   contentRevision = '',
-  emptyText = 'PPT 暂时无法预览'
+  emptyText = t(($) => $.editors.presentationPreviewUnavailable)
 }) => {
   const reviewNavigation = useOfficeReviewNavigation()
   const [selectionContainer, setSelectionContainer] = useState<HTMLDivElement | null>(null)
@@ -320,12 +321,14 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
           }}
         >
           {reviewNavigation &&
-          (label === '修改前' ? reviewMarkup.before : reviewMarkup.after || reviewMarkup.before) ? (
+          (label === t(($) => $.editors.before)
+            ? reviewMarkup.before
+            : reviewMarkup.after || reviewMarkup.before) ? (
             <div
               className="h-full w-full [&>svg]:h-full [&>svg]:w-full"
               dangerouslySetInnerHTML={{
                 __html:
-                  (label === '修改前'
+                  (label === t(($) => $.editors.before)
                     ? reviewMarkup.before
                     : reviewMarkup.after || reviewMarkup.before) || ''
               }}
@@ -401,13 +404,13 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
               data-selection-trigger
               className="mr-auto rounded px-2 py-1 text-xs text-[#80649F] hover:bg-[#F3EDF9]"
             >
-              引用当前页
+              {t(($) => $.editors.referenceThisSlide)}
             </button>
           )}
           <button
             type="button"
-            title="缩小"
-            aria-label="缩小"
+            title={t(($) => $.common.zoomOut)}
+            aria-label={t(($) => $.common.zoomOut)}
             className="rounded p-1 text-[#787774] hover:bg-[#F4F4F2]"
             onClick={() => changeZoom(0.8)}
           >
@@ -415,8 +418,8 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
           </button>
           <button
             type="button"
-            title="适应窗口"
-            aria-label="适应窗口"
+            title={t(($) => $.editors.fitToWindow)}
+            aria-label={t(($) => $.editors.fitToWindow)}
             className="min-w-[48px] rounded px-1.5 py-0.5 text-[11px] text-[#787774] hover:bg-[#F4F4F2]"
             onClick={resetViewport}
           >
@@ -424,8 +427,8 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
           </button>
           <button
             type="button"
-            title="放大"
-            aria-label="放大"
+            title={t(($) => $.common.zoomIn)}
+            aria-label={t(($) => $.common.zoomIn)}
             className="rounded p-1 text-[#787774] hover:bg-[#F4F4F2]"
             onClick={() => changeZoom(1.25)}
           >
@@ -435,8 +438,16 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
         <div className="relative flex min-h-0 flex-1">
           {diff ? (
             <div className="flex min-w-0 flex-1 divide-x divide-[#E7E5E1]">
-              {surface(activeSlide?.primaryUrl, '修改前', beforeTestId)}
-              {surface(activeSlide?.secondaryUrl, '修改后', afterTestId)}
+              {surface(
+                activeSlide?.primaryUrl,
+                t(($) => $.editors.before),
+                beforeTestId
+              )}
+              {surface(
+                activeSlide?.secondaryUrl,
+                t(($) => $.editors.after),
+                afterTestId
+              )}
             </div>
           ) : (
             surface(activeSlide?.primaryUrl || activeSlide?.secondaryUrl, undefined, afterTestId)
@@ -445,16 +456,16 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
             className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex w-max -translate-x-1/2 whitespace-nowrap items-center gap-3 rounded-full border border-[#E7E5E1] bg-white/90 px-3 py-1.5 text-[11px] text-[#787774] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
             data-testid={hintTestId}
           >
-            {selectionFilePath && <span>点击元素引用</span>}
+            {selectionFilePath && <span>{t(($) => $.editors.clickAnElementToReferenceIt)}</span>}
             {selectionFilePath && <span className="h-3 w-px bg-[#E7E5E1]" />}
             <span className="flex items-center gap-1.5">
               <MouseScrollIcon />
-              <span>滚轮缩放</span>
+              <span>{t(($) => $.editors.scrollToZoom)}</span>
             </span>
             <span className="h-3 w-px bg-[#E7E5E1]" />
             <span className="flex items-center gap-1.5">
               <HiHandRaised className="h-4 w-4" />
-              <span>拖拽平移</span>
+              <span>{t(($) => $.editors.dragToPan)}</span>
             </span>
           </div>
         </div>
@@ -464,19 +475,19 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
           <div className="flex h-9 shrink-0 items-center justify-center gap-0.5 border-b border-[#E7E5E1] p-1">
             <button
               type="button"
-              aria-label="只看变更页"
+              aria-label={t(($) => $.editors.showChangedSlidesOnly)}
               className={`rounded px-2 py-1 text-[11px] ${filter.changedOnly ? 'bg-[#E9E7E3] font-medium text-[#37352F]' : 'text-[#9B9A97]'}`}
               onClick={() => filter.onChange(true)}
             >
-              变更
+              {t(($) => $.editors.changes)}
             </button>
             <button
               type="button"
-              aria-label="查看全部页"
+              aria-label={t(($) => $.editors.showAllSlides)}
               className={`rounded px-2 py-1 text-[11px] ${!filter.changedOnly ? 'bg-[#E9E7E3] font-medium text-[#37352F]' : 'text-[#9B9A97]'}`}
               onClick={() => filter.onChange(false)}
             >
-              全部
+              {t(($) => $.common.all)}
             </button>
           </div>
         ) : null}
@@ -486,7 +497,10 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
               <button
                 key={slide.id}
                 type="button"
-                aria-label={`第 ${slide.index} 页${slide.label ? `：${slide.label}` : ''}`}
+                aria-label={t(($) => $.editors.slide, {
+                  value1: slide.index,
+                  value2: slide.label ? `：${slide.label}` : ''
+                })}
                 className={`relative block box-border w-full overflow-hidden rounded border-2 bg-white ${slide.id === activeSlide?.id ? 'border-[#37352F]' : 'border-transparent'}`}
                 onClick={() => selectSlide(slide.id)}
               >

@@ -1,7 +1,8 @@
+import { t, getManualUrl } from '../i18n'
 import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, Navigate, useLocation, useParams } from 'react-router-dom'
 import { HiArrowLeft, HiOutlineQuestionMarkCircle } from 'react-icons/hi2'
-import { USER_MANUAL_URL } from '../../../shared/constants'
+
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
 import VectorModelSettingsPanel from '../components/settings/VectorModelSettingsPanel'
 import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPanel'
@@ -80,7 +81,11 @@ const SettingsPage: React.FC = () => {
             className="nc-sidebar-titlebar-toggle nc-sidebar-titlebar-toggle-chrome workbench-no-drag"
             onClick={() => setSidebarCollapsed((previous) => !previous)}
             data-testid={settingsSelectors.sidebarToggle}
-            aria-label={sidebarCollapsed ? '展开设置侧边栏' : '收起设置侧边栏'}
+            aria-label={
+              sidebarCollapsed
+                ? t(($) => $.settings.expandSettingsSidebar)
+                : t(($) => $.settings.collapseSettingsSidebar)
+            }
           >
             <SidebarPanelIcon
               className="h-4 w-4"
@@ -111,9 +116,13 @@ const SettingsPage: React.FC = () => {
             data-testid={settingsSelectors.backRow}
           >
             <HiArrowLeft className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
-            <span className="truncate text-[13px] font-medium text-[#37352F]">返回工作台</span>
+            <span className="truncate text-[13px] font-medium text-[#37352F]">
+              {t(($) => $.settings.backToWorkbench)}
+            </span>
           </NavLink>
-          <div className="px-2 pb-2 text-[12px] font-medium text-[#9B9A97]">设置</div>
+          <div className="px-2 pb-2 text-[12px] font-medium text-[#9B9A97]">
+            {t(($) => $.common.settings)}
+          </div>
           <div className="space-y-1">
             {SETTINGS_SECTION_ORDER.map((section) => {
               const item = SETTINGS_SECTION_META[section]
@@ -137,14 +146,16 @@ const SettingsPage: React.FC = () => {
             <button
               type="button"
               className="nc-sidebar-item flex items-center gap-2.5 px-2.5 py-2"
-              onClick={() => void window.api.openExternal(USER_MANUAL_URL)}
-              aria-label="查看使用帮助"
+              onClick={() => void window.api.openExternal(getManualUrl())}
+              aria-label={t(($) => $.common.viewHelp)}
               data-testid={settingsSelectors.helpButton}
             >
               <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#787774]">
                 <HiOutlineQuestionMarkCircle className="h-5 w-5" />
               </span>
-              <span className="truncate text-[13px] font-medium">使用帮助</span>
+              <span className="truncate text-[13px] font-medium">
+                {t(($) => $.settings.userHelp)}
+              </span>
             </button>
           </div>
         </div>

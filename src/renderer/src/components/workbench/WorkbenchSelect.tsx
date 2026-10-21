@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import React, {
   useCallback,
   useEffect,
@@ -135,7 +136,9 @@ const estimateMenuHeight = (input: {
   showDescriptions: boolean
 }): number => {
   const listItemCount = Math.max(1, input.optionCount)
-  const optionHeight = input.showDescriptions ? MENU_OPTION_WITH_DESCRIPTION_HEIGHT : MENU_OPTION_HEIGHT
+  const optionHeight = input.showDescriptions
+    ? MENU_OPTION_WITH_DESCRIPTION_HEIGHT
+    : MENU_OPTION_HEIGHT
   const estimatedListHeight = MENU_VERTICAL_PADDING + listItemCount * optionHeight
   const estimatedHeight = estimatedListHeight + (input.searchable ? SEARCH_MENU_HEADER_HEIGHT : 0)
   return Math.min(input.maxHeight, estimatedHeight)
@@ -165,7 +168,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   onChange,
   placeholder,
   triggerIcon,
-  searchPlaceholder = '搜索',
+  searchPlaceholder = t(($) => $.workbench.search),
   searchable = false,
   className,
   menuClassName,
@@ -198,10 +201,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   const [submenu, setSubmenu] = useState<SubmenuState | null>(null)
   const listboxId = useId()
 
-  const selectedOption = useMemo(
-    () => findSelectedOption(options, value),
-    [options, value]
-  )
+  const selectedOption = useMemo(() => findSelectedOption(options, value), [options, value])
 
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -551,7 +551,9 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                     </span>
                   </button>
                 ) : (
-                  <div className="px-4 py-6 text-center text-[12px] text-[#91918E]">暂无结果</div>
+                  <div className="px-4 py-6 text-center text-[12px] text-[#91918E]">
+                    {t(($) => $.workbench.noResults)}
+                  </div>
                 )}
               </div>
             </div>,
@@ -609,9 +611,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                               ) : null}
                             </span>
                             <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
-                              {selected ? (
-                                <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
-                              ) : null}
+                              {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
                             </span>
                           </>
                         )

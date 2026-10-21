@@ -1,3 +1,4 @@
+import type { AppSettingsErrorCode } from '../shared/appErrors'
 import type {
   GetFileReviewResponse,
   OpenFileReviewLocationRequest,
@@ -300,9 +301,12 @@ export type DesktopApi = {
   }>
   isE2EMode: () => boolean
   appSettingsGet: () => Promise<AppSettings>
-  appSettingsSave: (
-    settings: AppSettings
-  ) => Promise<{ success: boolean; settings?: AppSettings; error?: string }>
+  appSettingsSave: (settings: Partial<AppSettings>) => Promise<{
+    success: boolean
+    settings?: AppSettings
+    error?: string
+    errorCode?: AppSettingsErrorCode
+  }>
   errorLogOpenDirectory: () => Promise<{ success: boolean; error?: string }>
   aiRunCancel: (runId: string) => Promise<AiRunCancelResponse>
   aiRunApprovalBatchDecide: (

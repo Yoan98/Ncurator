@@ -1,3 +1,5 @@
+import { getAppRuntime } from '../app/AppRuntime'
+import { routeForOfficialUrl } from '../../../shared/appPreferences'
 import { isFreeModelApiUrl } from '../../../shared/freeModels'
 import { createHmac, createHash, randomUUID } from 'node:crypto'
 
@@ -52,6 +54,7 @@ export const buildDesktopAppGatewayHeaders = (input: {
   })
   const signature = createHmac('sha256', secret).update(payload, 'utf8').digest('hex')
   return {
+    'Accept-Language': getAppRuntime().locale,
     [APP_CLIENT_HEADER]: 'desktop',
     [APP_TIMESTAMP_HEADER]: timestamp,
     [APP_NONCE_HEADER]: nonce,
@@ -66,11 +69,14 @@ const readRequestBody = async (request: Request): Promise<string> => {
   return Buffer.from(buffer).toString('utf8')
 }
 
-export const createFreeModelFetch = (): typeof fetch => {
+export const createFreeModelFetch = (baseUrl?: string): typeof fetch => {
+  const route = baseUrl ? routeForOfficialUrl(baseUrl) : getAppRuntime().serviceRoute
+  if (!route) throw new Error('Invalid official model origin')
   const signedFetch: typeof fetch = async (input, init) => {
     const request = new Request(input, init)
     const url = request.url
-    if (!isFreeModelApiUrl(url)) throw new Error('免费模型调用地址无效')
+    if (!isFreeModelApiUrl(url) || routeForOfficialUrl(url) !== route)
+      throw new Error('免费模型调用地址无效')
     const method = request.method
     const body = await readRequestBody(request)
     const headers = new Headers(request.headers)
@@ -78,7 +84,7 @@ export const createFreeModelFetch = (): typeof fetch => {
     headers.delete('host')
 
     const { ensureFreeModelToken } = await import('./freeModelToken')
-    headers.set('Authorization', `Bearer ${await ensureFreeModelToken()}`)
+    headers.set('Authorization', `Bearer ${await ensureFreeModelToken(undefined, route)}`)
 
     const signedHeaders = buildDesktopAppGatewayHeaders({ method, url, body })
     for (const [key, value] of Object.entries(signedHeaders)) {
@@ -88,6 +94,7 @@ export const createFreeModelFetch = (): typeof fetch => {
     const execute = async (): Promise<Response> =>
       await fetch(url, {
         method,
+        redirect: 'error',
         headers,
         body: method === 'GET' || method === 'HEAD' ? undefined : body,
         signal: request.signal
@@ -97,7 +104,7 @@ export const createFreeModelFetch = (): typeof fetch => {
     if (response.status === 401) {
       await response.body?.cancel()
       const { refreshFreeModelToken } = await import('./freeModelToken')
-      const token = await refreshFreeModelToken()
+      const token = await refreshFreeModelToken(route)
       headers.set('Authorization', `Bearer ${token}`)
       const retryHeaders = buildDesktopAppGatewayHeaders({ method, url, body })
       for (const [key, value] of Object.entries(retryHeaders)) {

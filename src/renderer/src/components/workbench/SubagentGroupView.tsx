@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import React, {
   createContext,
   useContext,
@@ -21,23 +22,27 @@ const SubagentThought: React.FC<{
   const active = child.status === 'running'
   const text =
     child.status === 'failed' || child.status === 'blocked'
-      ? `我干失败了：${child.result?.trim() || '未知错误'}`
+      ? t(($) => $.workbench.taskFailed, {
+          value1: child.result?.trim() || t(($) => $.common.unknownError)
+        })
       : child.status === 'queued'
-        ? '我在排队'
+        ? t(($) => $.workbench.queued)
         : child.status === 'completed' && !showDelivery
-          ? '已完成'
+          ? t(($) => $.workbench.completed)
           : active
             ? child.message?.trim()
               ? child.message
-              : '我在思考中'
+              : t(($) => $.workbench.thinking2)
             : child.result ||
               {
-                waiting_approval: '等待你审核操作',
-                completed: '任务已完成',
-                failed: '执行失败',
-                cancelled: '已停止',
-                blocked: '需要主伙伴继续处理',
-                interrupted: '执行被中断，未收到完整结果'
+                waiting_approval: t(($) => $.workbench.waitingForOperationApproval),
+                completed: t(($) => $.workbench.taskCompleted),
+                failed: t(($) => $.workbench.executionFailed),
+                cancelled: t(($) => $.workbench.stopped),
+                blocked: t(($) => $.workbench.theMainPartnerNeedsToContinue),
+                interrupted: t(
+                  ($) => $.workbench.executionWasInterruptedBeforeACompleteResultWasReceived
+                )
               }[child.status]
   const streaming = active && child.streaming && Boolean(child.message?.trim())
   useLayoutEffect(() => {
@@ -77,7 +82,7 @@ const SubagentThought: React.FC<{
           <span
             data-testid="subagent-stream-dot"
             className="nc-subagent-stream-dot"
-            aria-label="正在输出文字"
+            aria-label={t(($) => $.workbench.writing)}
           />
         ) : null}
       </div>

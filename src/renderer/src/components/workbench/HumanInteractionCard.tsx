@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import React, { useState } from 'react'
 import type { PendingHumanInteraction, AskUserQuestionResult } from '../../../../shared/types'
 import {
@@ -51,7 +52,7 @@ const HumanInteractionCard: React.FC<Props> = ({ interaction, cancelling, onSubm
   return (
     <WorkbenchInteractionCard
       title={question.question}
-      itemLabel="问题"
+      itemLabel={t(($) => $.workbench.question)}
       currentIndex={index}
       total={questions.length}
       busy={submitting}
@@ -70,22 +71,26 @@ const HumanInteractionCard: React.FC<Props> = ({ interaction, cancelling, onSubm
           onChange={(userText) => updateDraft({ ...draft, userText })}
           placeholder={
             !options.length
-              ? '回复…'
+              ? t(($) => $.workbench.reply)
               : draft.selectedOptionIds.length
-                ? '补充说明（可选）…'
-                : '或直接输入回复…'
+                ? t(($) => $.workbench.additionalDetailsOptional)
+                : t(($) => $.workbench.orTypeAReply)
           }
           expanded={!options.length}
           submitting={submitting}
           inputDisabled={cancelling}
           disabled={disabled}
           next={next}
-          label={next ? '下一步' : '发送回复'}
+          label={next ? t(($) => $.workbench.next) : t(($) => $.workbench.sendReply)}
           hint={
             !next && missing > 0
-              ? `还有 ${missing} 个问题未回答`
+              ? t(($) => $.preferences.questionsRemaining, { count: missing })
               : options.length && question.multiSelect
-                ? `可多选${draft.selectedOptionIds.length ? ` · 已选 ${draft.selectedOptionIds.length} 项` : ''}`
+                ? t(($) => $.workbench.multipleChoicesAllowed, {
+                    value1: draft.selectedOptionIds.length
+                      ? t(($) => $.workbench.selected2, { value1: draft.selectedOptionIds.length })
+                      : ''
+                  })
                 : undefined
           }
           error={error}
@@ -99,7 +104,11 @@ const HumanInteractionCard: React.FC<Props> = ({ interaction, cancelling, onSubm
         <div
           className="mx-2.5 space-y-1"
           role="group"
-          aria-label={question.multiSelect ? '可以选择多个答案' : '选择一个答案'}
+          aria-label={
+            question.multiSelect
+              ? t(($) => $.workbench.youCanSelectMultipleAnswers)
+              : t(($) => $.workbench.selectOneAnswer)
+          }
         >
           {options.map((option, optionIndex) => (
             <WorkbenchInteractionChoice

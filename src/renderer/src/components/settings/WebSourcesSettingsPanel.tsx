@@ -1,4 +1,5 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { t } from '../../i18n'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Empty, Input, Modal, Popover, Tooltip, message } from 'antd'
 import type {
   WorkspaceIndexJobRecord,
@@ -79,7 +80,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       onSummaryChange?.(response.summary)
     } catch (error) {
       console.error(error)
-      message.error('加载网页资料失败')
+      message.error(t(($) => $.settings.couldNotLoadWebSources))
     } finally {
       setWebLoading(false)
     }
@@ -133,8 +134,8 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       .map((url) => url.trim())
       .filter(Boolean)
     if (urls.length === 0) {
-      setWebUrlsError('请至少输入一个 URL')
-      message.warning('请至少输入一个 URL')
+      setWebUrlsError(t(($) => $.settings.enterAtLeastOneUrl))
+      message.warning(t(($) => $.settings.enterAtLeastOneUrl))
       return
     }
 
@@ -143,16 +144,21 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     try {
       const response = await window.api.ingestWebs(urls.map((url) => ({ url })))
       if (!response.success) {
-        message.error(normalizeUserFacingError(response.error, '添加网页失败'))
+        message.error(
+          normalizeUserFacingError(
+            response.error,
+            t(($) => $.settings.couldNotAddTheWebpage)
+          )
+        )
         return
       }
-      message.success('网页已添加，等待索引')
+      message.success(t(($) => $.settings.webpageAddedWaitingForIndexing))
       setWebModalVisible(false)
       setWebUrlsText('')
       await loadWebSources()
     } catch (error) {
       console.error(error)
-      message.error('添加网页失败')
+      message.error(t(($) => $.settings.couldNotAddTheWebpage))
     } finally {
       setWebSubmitting(false)
     }
@@ -162,21 +168,26 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     try {
       const response = await window.api.webSourcesScan({})
       if (!response.success) {
-        message.error(normalizeUserFacingError(response.error, '检查网页更新失败'))
+        message.error(
+          normalizeUserFacingError(
+            response.error,
+            t(($) => $.settings.couldNotCheckWebpageUpdates)
+          )
+        )
         return
       }
       setWebIndexJob(response.job)
       await loadWebSources()
     } catch (error) {
       console.error(error)
-      message.error('检查网页更新失败')
+      message.error(t(($) => $.settings.couldNotCheckWebpageUpdates))
     }
   }
 
   const handlePrepareWebSources = async (): Promise<void> => {
     if (hasVectorModel !== true) {
       setWebPrepareHeld(false)
-      message.warning('请先安装向量模型后再更新索引')
+      message.warning(t(($) => $.settings.installAVectorModelBeforeUpdatingTheIndex))
       return
     }
 
@@ -184,14 +195,19 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     try {
       const response = await window.api.webSourcesPrepare({})
       if (!response.success) {
-        message.error(normalizeUserFacingError(response.error, '更新网页索引失败'))
+        message.error(
+          normalizeUserFacingError(
+            response.error,
+            t(($) => $.settings.couldNotUpdateTheWebpageIndex)
+          )
+        )
         return
       }
       if (response.job?.status === 'running') setWebIndexJob(response.job)
       await loadWebSources()
     } catch (error) {
       console.error(error)
-      message.error('更新网页索引失败')
+      message.error(t(($) => $.settings.couldNotUpdateTheWebpageIndex))
     } finally {
       await endPrepareHeld(setWebPrepareHeld, heldAt)
     }
@@ -204,7 +220,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       return
     }
     if (hasVectorModel !== true) {
-      message.warning('请先安装向量模型后再更新索引')
+      message.warning(t(($) => $.settings.installAVectorModelBeforeUpdatingTheIndex))
       return
     }
     beginPrepareHeld(setWebPrepareHeld)
@@ -219,12 +235,17 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       const response = await window.api.workspaceIndexCancel({ sourceKind: 'web' })
       if (!response.success) {
         setWebPrepareCancelling(false)
-        message.error(normalizeUserFacingError(response.error, '停止更新索引失败'))
+        message.error(
+          normalizeUserFacingError(
+            response.error,
+            t(($) => $.settings.couldNotStopTheIndexUpdate)
+          )
+        )
       }
     } catch (error) {
       setWebPrepareCancelling(false)
       console.error(error)
-      message.error('停止更新索引失败')
+      message.error(t(($) => $.settings.couldNotStopTheIndexUpdate))
     }
   }
 
@@ -235,15 +256,20 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
         webSourceId: deleteWebSource.id
       })
       if (!response.success) {
-        message.error(normalizeUserFacingError(response.error, '删除网页失败'))
+        message.error(
+          normalizeUserFacingError(
+            response.error,
+            t(($) => $.settings.couldNotDeleteTheWebpage)
+          )
+        )
         return
       }
-      message.success('网页已删除')
+      message.success(t(($) => $.settings.webpageDeleted))
       setDeleteWebSource(null)
       await loadWebSources()
     } catch (error) {
       console.error(error)
-      message.error('删除网页失败')
+      message.error(t(($) => $.settings.couldNotDeleteTheWebpage))
     }
   }
 
@@ -266,22 +292,28 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     : webPrepareRunning
       ? false
       : hasVectorModel !== true || actionableWebIndexCount === 0
-  const webPrepareLabel = webPrepareCancelling ? '停止中' : webPrepareRunning ? '取消' : '更新索引'
+  const webPrepareLabel = webPrepareCancelling
+    ? t(($) => $.settings.stopping)
+    : webPrepareRunning
+      ? t(($) => $.common.cancel)
+      : t(($) => $.settings.updateIndex)
   const webPrepareTooltip =
     hasVectorModel === null
-      ? '正在检查向量模型状态'
+      ? t(($) => $.settings.checkingVectorModelStatus)
       : vectorModelMissing
         ? ''
         : webPrepareRunning
-          ? '停止本次更新索引，已完成的会保留。'
+          ? t(($) => $.settings.stopThisIndexUpdateAndKeepCompletedItems)
           : actionableWebIndexCount === 0
-            ? '当前没有需要更新的索引'
-            : '检查网页变化并更新索引。'
+            ? t(($) => $.settings.noIndexesNeedUpdating)
+            : t(($) => $.settings.checkWebpageChangesAndUpdateTheIndex)
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
-      <div className="text-[13px] font-medium text-[#37352F]">先安装向量模型</div>
+      <div className="text-[13px] font-medium text-[#37352F]">
+        {t(($) => $.settings.installAVectorModelFirst)}
+      </div>
       <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-        安装后才能为工作空间更新索引。
+        {t(($) => $.settings.aVectorModelIsRequiredToIndexWorkspaceContent)}
       </div>
       <Button
         type="link"
@@ -289,7 +321,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
         className="mt-2 !h-auto !p-0 !text-[#2F3437]"
         onClick={onVectorModelSettingsOpen}
       >
-        去安装
+        {t(($) => $.settings.install)}
       </Button>
     </div>
   )
@@ -301,7 +333,9 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     >
       <div className="space-y-5">
         <section className="nc-settings-side-section pb-4">
-          <div className="text-[14px] font-semibold text-[#37352F]">网页来源</div>
+          <div className="text-[14px] font-semibold text-[#37352F]">
+            {t(($) => $.settings.webSources)}
+          </div>
           <Button
             type="primary"
             className="mt-4 w-full"
@@ -312,14 +346,16 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             }}
             data-testid={importSelectors.webSourceOpenModalButton}
           >
-            添加网页
+            {t(($) => $.settings.addWebpage)}
           </Button>
         </section>
 
         <section className="nc-settings-side-section pb-4">
           <div className="flex items-center gap-1.5">
-            <div className="text-[14px] font-semibold text-[#37352F]">索引状态</div>
-            <Tooltip title="网页索引会先爬取正文，再写入本地检索库。">
+            <div className="text-[14px] font-semibold text-[#37352F]">
+              {t(($) => $.settings.indexStatus)}
+            </div>
+            <Tooltip title={t(($) => $.settings.webpageIndexingFetchesTheMainContentAndAddsIt)}>
               <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#9B9A97] transition-colors hover:text-[#37352F]" />
             </Tooltip>
           </div>
@@ -328,7 +364,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             <div className="ui-inset px-3 py-3">
               <div className="inline-flex items-center gap-1.5">
                 <HiArrowPath className="h-4 w-4 text-[#787774]" />
-                <span>可索引</span>
+                <span>{t(($) => $.settings.indexable)}</span>
               </div>
               <div
                 className="mt-1 text-[16px] font-semibold text-[#37352F]"
@@ -341,7 +377,9 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                   className="mt-1 text-[11px] text-[#B3261E]"
                   data-testid={importSelectors.webSourceActionableFailedHint}
                 >
-                  含失败 {webSummary.failed_count} 个
+                  {t(($) => $.settings.includesFailures)}
+                  {webSummary.failed_count}
+                  {t(($) => $.common.items2)}
                 </div>
               ) : null}
             </div>
@@ -356,7 +394,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               disabled={webScanDisabled}
               className="border-[#EEEEEC] bg-white text-[#37352F]"
             >
-              检查更新
+              {t(($) => $.common.checkForUpdates)}
             </Button>
             <div className="relative min-w-0">
               <Tooltip title={webPrepareTooltip}>
@@ -379,7 +417,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                   <button
                     type="button"
                     className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#9B9A97] transition hover:border-[#DAD8D2] hover:text-[#37352F]"
-                    aria-label="为什么不能更新索引"
+                    aria-label={t(($) => $.settings.whyIndexingIsUnavailable)}
                   >
                     <HiOutlineQuestionMarkCircle className="h-4 w-4" />
                   </button>
@@ -395,7 +433,9 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       </div>
 
       <section className="flex min-h-0 min-w-0 flex-col">
-        <div className="mb-3 text-[14px] font-semibold text-[#37352F]">网页列表</div>
+        <div className="mb-3 text-[14px] font-semibold text-[#37352F]">
+          {t(($) => $.settings.webpageList)}
+        </div>
         <div
           className="nc-list-shell-borderless flex min-h-0 flex-1"
           data-testid={importSelectors.webSourceList}
@@ -405,7 +445,11 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  <span className="text-[#787774]">{webLoading ? '正在加载网页' : '暂无网页'}</span>
+                  <span className="text-[#787774]">
+                    {webLoading
+                      ? t(($) => $.settings.loadingWebpages)
+                      : t(($) => $.settings.noWebpagesYet)}
+                  </span>
                 }
               />
             </div>
@@ -436,7 +480,10 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                             icon={statusBadge.icon}
                           />
                           <span>
-                            最近更新时间: {lastUpdatedAt ? formatDateTime(lastUpdatedAt) : '无'}
+                            {t(($) => $.settings.lastUpdated)}
+                            {lastUpdatedAt
+                              ? formatDateTime(lastUpdatedAt)
+                              : t(($) => $.settings.none)}
                           </span>
                         </div>
                       </div>
@@ -448,13 +495,16 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                             const response = await window.api.openExternal(source.url)
                             if (!response.success) {
                               message.error(
-                                normalizeUserFacingError(response.error, '打开链接失败')
+                                normalizeUserFacingError(
+                                  response.error,
+                                  t(($) => $.common.couldNotOpenTheLink2)
+                                )
                               )
                             }
                           }}
                           data-testid={`${importSelectors.webSourceUrlLinkButtonPrefix}-${source.id}`}
                         >
-                          打开
+                          {t(($) => $.settings.open)}
                         </Button>
                         <Button
                           danger
@@ -463,7 +513,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                           onClick={() => setDeleteWebSource(source)}
                           data-testid={`${importSelectors.webSourceDeleteButtonPrefix}-${source.id}`}
                         >
-                          删除
+                          {t(($) => $.common.delete)}
                         </Button>
                       </div>
                     </div>
@@ -476,14 +526,14 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       </section>
 
       <Modal
-        title="添加网页"
+        title={t(($) => $.settings.addWebpage)}
         open={webModalVisible}
         maskClosable={false}
         confirmLoading={webSubmitting}
         onCancel={() => setWebModalVisible(false)}
         onOk={() => void handleWebImport()}
-        okText="添加"
-        cancelText="取消"
+        okText={t(($) => $.settings.add2)}
+        cancelText={t(($) => $.common.cancel)}
         okButtonProps={{ 'data-testid': importSelectors.webSourceConfirmButton }}
         cancelButtonProps={{ 'data-testid': importSelectors.webSourceCancelButton }}
         data-testid={importSelectors.webSourceModal}
@@ -498,7 +548,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                 setWebUrlsText(event.target.value)
                 if (webUrlsError) setWebUrlsError('')
               }}
-              placeholder="每行一个 URL"
+              placeholder={t(($) => $.settings.oneUrlPerLine)}
               autoSize={{ minRows: 4, maxRows: 8 }}
               data-testid={importSelectors.webSourceUrlInput}
             />
@@ -510,24 +560,26 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       </Modal>
 
       <Modal
-        title="删除网页"
+        title={t(($) => $.settings.deleteWebpage)}
         open={Boolean(deleteWebSource)}
         maskClosable={false}
         onCancel={() => setDeleteWebSource(null)}
         onOk={() => void handleDeleteWebSource()}
-        okText="删除"
+        okText={t(($) => $.common.delete)}
         okButtonProps={{
           danger: true,
           'data-testid': importSelectors.webSourceDeleteConfirmButton
         }}
-        cancelText="取消"
+        cancelText={t(($) => $.common.cancel)}
         cancelButtonProps={{ 'data-testid': importSelectors.webSourceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[8px]"
       >
         <p className="mb-0 text-[#787774]">
           {deleteWebSource?.title || deleteWebSource?.url
-            ? `将删除网页「${deleteWebSource?.title || deleteWebSource?.url}」。`
-            : '将删除该网页。'}
+            ? t(($) => $.settings.deleteTheWebpage, {
+                value1: deleteWebSource?.title || deleteWebSource?.url
+              })
+            : t(($) => $.settings.deleteThisWebpage)}
         </p>
       </Modal>
       <IndexPrepareCancelModal

@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import type { LlmProviderId } from '../../../../shared/types'
 import type { ReactNode } from 'react'
 import type { SettingsSectionMeta, SettingsSectionValue } from './types'
@@ -23,33 +24,33 @@ export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = [
 export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSectionMeta> = {
   general: {
     value: 'general',
-    label: '通用',
-    title: '通用',
-    description: '管理桌面通知等应用偏好。',
+    label: t(($) => $.settings.general),
+    title: t(($) => $.settings.general),
+    description: t(($) => $.settings.manageAppPreferencesIncludingDesktopNotifications),
     path: '/settings/general',
     icon: <HiOutlineAdjustmentsHorizontal className="h-5 w-5" />
   },
   model: {
     value: 'model',
-    label: '大模型',
-    title: '大模型',
-    description: '管理可用的大模型服务与 API Key。',
+    label: t(($) => $.settings.languageModels),
+    title: t(($) => $.settings.languageModels),
+    description: t(($) => $.settings.manageModelServicesAndApiKeys),
     path: '/settings/model',
     icon: <HiSparkles className="h-5 w-5" />
   },
   workspace: {
     value: 'workspace',
-    label: '工作空间',
-    title: '工作空间',
-    description: '管理本地项目路径、网页资料、目录变化和索引状态。',
+    label: t(($) => $.settings.workspace),
+    title: t(($) => $.settings.workspace),
+    description: t(($) => $.settings.manageLocalPathsWebSourcesDirectoryChangesAndIndexes),
     path: '/settings/workspace',
     icon: <HiOutlineRectangleStack className="h-5 w-5" />
   },
   vector: {
     value: 'vector',
-    label: '向量模型',
-    title: '向量模型',
-    description: '下载本地检索模型，为搜索和知识库能力提供向量基础。',
+    label: t(($) => $.settings.vectorModels),
+    title: t(($) => $.settings.vectorModels),
+    description: t(($) => $.settings.downloadLocalEmbeddingModelsForSearchAndKnowledgeRetrieval),
     path: '/settings/vector',
     icon: <HiCloudArrowDown className="h-5 w-5" />
   }

@@ -1,5 +1,7 @@
-export const FILE_PREVIEW_SUPPORT_SUMMARY =
-  '当前支持 PDF、DOCX、PPTX、Excel、Markdown、UTF-8 文本，以及 PNG、JPG、GIF、WebP、BMP、SVG 图片。'
+import { t } from '../../i18n'
+export const FILE_PREVIEW_SUPPORT_SUMMARY = t(
+  ($) => $.editors.supportedFormatsPdfDocxPptxExcelMarkdownUtf8
+)
 
 const TYPE_ALIASES: Record<string, string> = {
   pdf: 'pdf',
@@ -86,7 +88,12 @@ export const resolveRegisteredPreviewType = (
   mimeType?: string,
   filePath?: string
 ): string | null => {
-  const candidates = [declaredType, mimeType, getFileExtension(fileName), getFileExtension(filePath || '')]
+  const candidates = [
+    declaredType,
+    mimeType,
+    getFileExtension(fileName),
+    getFileExtension(filePath || '')
+  ]
   for (const candidate of candidates) {
     const normalized = candidate?.trim().toLowerCase()
     if (normalized && TYPE_ALIASES[normalized]) return TYPE_ALIASES[normalized]
@@ -114,6 +121,9 @@ export const isUtf8Text = (bytes: ArrayBuffer): boolean => {
 }
 
 export const getPreviewTypeLabel = (fileName: string, fileType?: string): string => {
-  const type = getFileExtension(fileName) || fileType?.trim().toLowerCase() || '未知格式'
-  return type === '未知格式' ? type : `.${type}`
+  const type =
+    getFileExtension(fileName) ||
+    fileType?.trim().toLowerCase() ||
+    t(($) => $.editors.unknownFormat)
+  return type === t(($) => $.editors.unknownFormat) ? type : `.${type}`
 }

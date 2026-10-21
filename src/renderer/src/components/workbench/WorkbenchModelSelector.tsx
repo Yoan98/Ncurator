@@ -1,3 +1,4 @@
+import { t, providerDisplayName } from '../../i18n'
 import React, {
   useCallback,
   useEffect,
@@ -33,11 +34,7 @@ import {
   type LlmPresetProvider,
   type LlmPriceTier
 } from '../../../../shared/llmPresets'
-import {
-  FREE_MODEL_NOTICE,
-  FREE_MODEL_PRICE_LABEL,
-  type FreeModelPublicEntry
-} from '../../../../shared/freeModels'
+import { type FreeModelPublicEntry } from '../../../../shared/freeModels'
 import { resolveLlmProvider } from '../../../../shared/llmProvider'
 import { isPresetModelAvailableInRemoteList } from '../../../../shared/workbenchModelSelection'
 import { resolveFloatingPlacement } from './floatingPlacement'
@@ -46,9 +43,9 @@ import { getProviderLogo } from '../settings/constants'
 import { workbenchSelectors } from '../../testing/selectors'
 
 const PRICE_TIER_LABELS: Record<LlmPriceTier, string> = {
-  low: '较低',
-  mid: '适中',
-  high: '较高'
+  low: t(($) => $.workbench.low),
+  mid: t(($) => $.workbench.medium),
+  high: t(($) => $.workbench.high)
 }
 
 const PRICE_TIER_COIN_COUNT: Record<LlmPriceTier, number> = {
@@ -126,8 +123,12 @@ const DEFAULT_POSITION: MenuPosition = {
 const joinClassNames = (...parts: Array<string | false | null | undefined>): string =>
   parts.filter(Boolean).join(' ')
 
-const getConfigLabel = (config: LLMConfig | null | undefined): string =>
-  config?.name?.trim() || config?.base_url?.trim() || '模型配置'
+const getConfigLabel = (config: LLMConfig | null | undefined): string => {
+  const preset = config ? resolvePresetModeProvider(config) : null
+  return preset
+    ? providerDisplayName(preset.providerId, preset.label)
+    : config?.name?.trim() || config?.base_url?.trim() || t(($) => $.workbench.modelConfiguration)
+}
 
 const modelMatchesQuery = (input: {
   query: string
@@ -162,7 +163,7 @@ const PriceTierCoins: React.FC<{ tier: LlmPriceTier }> = ({ tier }) => {
   const count = PRICE_TIER_COIN_COUNT[tier]
   return (
     <span
-      aria-label={`价格档位 ${PRICE_TIER_LABELS[tier]}`}
+      aria-label={t(($) => $.workbench.priceTier, { value1: PRICE_TIER_LABELS[tier] })}
       className="relative top-[2px] inline-block shrink-0 overflow-visible"
       style={{ width: PRICE_TIER_COIN_SIZE, height: PRICE_TIER_TEXT_LINE_PX }}
     >
@@ -380,7 +381,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, view])
 
-  const mainLabel = value.mainModel?.modelName || '选择模型'
+  const mainLabel = value.mainModel?.modelName || t(($) => $.workbench.chooseModel)
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current
@@ -441,10 +442,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     // shift the menu left so both stay in viewport.
     if (view === 'preset' && inspectedModel) {
       const pairWidth = nextWidth + INSPECTOR_GAP + INSPECTOR_WIDTH
-      const maxLeft = Math.max(
-        VIEWPORT_PADDING,
-        window.innerWidth - VIEWPORT_PADDING - pairWidth
-      )
+      const maxLeft = Math.max(VIEWPORT_PADDING, window.innerWidth - VIEWPORT_PADDING - pairWidth)
       nextLeft = Math.min(nextLeft, maxLeft)
     }
     if (
@@ -462,7 +460,17 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       width: nextWidth,
       maxHeight: placement.maxHeight
     })
-  }, [open, view, position, inspectedModel, query, configs, modelListsByConfigId, freeModels, presetProviders])
+  }, [
+    open,
+    view,
+    position,
+    inspectedModel,
+    query,
+    configs,
+    modelListsByConfigId,
+    freeModels,
+    presetProviders
+  ])
 
   useLayoutEffect(() => {
     if (!open || !inspectedModel) {
@@ -674,7 +682,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               {model.label}
             </span>
             <span className="relative top-[1px] text-[11px] font-medium leading-none text-[#9B9A97]">
-              {FREE_MODEL_PRICE_LABEL}
+              {t(($) => $.preferences.free)}
             </span>
           </span>
         </span>
@@ -692,7 +700,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     return (
       <button
         type="button"
-        aria-label="刷新模型目录"
+        aria-label={t(($) => $.workbench.refreshModelCatalogs)}
         data-testid={workbenchSelectors.modelSelectCatalogRefresh}
         disabled={busy}
         className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] hover:bg-[#F4F4F2] hover:text-[#37352F] disabled:pointer-events-none"
@@ -715,13 +723,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const renderPresetView = (): React.ReactNode => {
     const showLoading = catalogLoadStatus === 'loading'
     const showError =
-      catalogLoadStatus === 'error' &&
-      presetGroups.length === 0 &&
-      freeModels.length === 0
+      catalogLoadStatus === 'error' && presetGroups.length === 0 && freeModels.length === 0
     const showEmpty =
-      catalogLoadStatus === 'ready' &&
-      presetGroups.length === 0 &&
-      freeModels.length === 0
+      catalogLoadStatus === 'ready' && presetGroups.length === 0 && freeModels.length === 0
 
     return (
       <>
@@ -737,11 +741,13 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           >
             {showLoading ? (
               <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
-                正在加载模型目录…
+                {t(($) => $.workbench.loadingModelCatalogs)}
               </div>
             ) : showError ? (
               <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
-                <div className="text-[12px] text-[#91918E]">模型目录加载失败</div>
+                <div className="text-[12px] text-[#91918E]">
+                  {t(($) => $.workbench.couldNotLoadModelCatalogs)}
+                </div>
                 <button
                   type="button"
                   className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2]"
@@ -756,12 +762,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                       catalogRefreshStatus === 'loading' ? 'animate-spin' : ''
                     )}
                   />
-                  刷新
+                  {t(($) => $.common.refresh)}
                 </button>
               </div>
             ) : showEmpty ? (
               <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
-                暂无已配置的预设模型
+                {t(($) => $.workbench.noConfiguredPresetModels)}
               </div>
             ) : (
               <>
@@ -794,7 +800,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           >
             <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
               <HiAdjustmentsHorizontal className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
-              <span className="text-[13px] font-semibold text-[#37352F]">自定义模型</span>
+              <span className="text-[13px] font-semibold text-[#37352F]">
+                {t(($) => $.workbench.customModel)}
+              </span>
             </span>
             <span className="min-w-0 flex-1" />
             <HiChevronRight className="h-3.5 w-3.5 shrink-0 text-[#9B9A97]" />
@@ -817,7 +825,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         >
           <HiChevronLeft className="h-4 w-4" />
         </button>
-        <div className="min-w-0 flex-1 text-[13px] font-semibold text-[#37352F]">选择模型</div>
+        <div className="min-w-0 flex-1 text-[13px] font-semibold text-[#37352F]">
+          {t(($) => $.workbench.chooseModel)}
+        </div>
       </div>
       <div className="workbench-select-search">
         <HiMagnifyingGlass className="h-3.5 w-3.5 shrink-0 text-[#91918E]" />
@@ -825,7 +835,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           ref={searchInputRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="搜索模型"
+          placeholder={t(($) => $.workbench.searchModels)}
           className="workbench-select-search-input"
         />
       </div>
@@ -894,7 +904,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         })}
         {groupedModels.length === 0 ? (
           <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
-            <div>暂无匹配模型</div>
+            <div>{t(($) => $.workbench.noMatchingModels)}</div>
             {onRefreshModelLists ? (
               <button
                 type="button"
@@ -902,7 +912,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                 onClick={() => void onRefreshModelLists()}
               >
                 <HiArrowPath className="h-3.5 w-3.5" />
-                重新获取模型列表
+                {t(($) => $.workbench.fetchModelListAgain)}
               </button>
             ) : null}
           </div>
@@ -939,16 +949,20 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           <p className="mt-1.5 text-[12px] leading-[18px] text-[#5F5E5A]">
             {inspectedModel.model.description}
           </p>
-          <p className="mt-1.5 text-[12px] leading-[18px] text-[#9B9A97]">{FREE_MODEL_NOTICE}</p>
+          <p className="mt-1.5 text-[12px] leading-[18px] text-[#9B9A97]">
+            {t(($) => $.preferences.freeNotice)}
+          </p>
           <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
             <div className="flex items-center justify-between gap-3 py-0.5">
-              <span className="shrink-0 text-[#9B9A97]">价格档位</span>
-              <span className="font-medium text-[#37352F]">{FREE_MODEL_PRICE_LABEL}</span>
+              <span className="shrink-0 text-[#9B9A97]">{t(($) => $.workbench.priceTier2)}</span>
+              <span className="font-medium text-[#37352F]">{t(($) => $.preferences.free)}</span>
             </div>
             <div className="flex items-center justify-between gap-3 py-0.5">
-              <span className="shrink-0 text-[#9B9A97]">视觉理解</span>
+              <span className="shrink-0 text-[#9B9A97]">{t(($) => $.workbench.vision)}</span>
               <span className="font-medium text-[#37352F]">
-                {supportsVision ? '支持' : '不支持'}
+                {supportsVision
+                  ? t(($) => $.workbench.supported)
+                  : t(($) => $.workbench.notSupported)}
               </span>
             </div>
           </div>
@@ -983,24 +997,27 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             </p>
             <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
               <div className="flex items-center justify-between gap-3 py-0.5">
-                <span className="shrink-0 text-[#9B9A97]">价格档位</span>
+                <span className="shrink-0 text-[#9B9A97]">{t(($) => $.workbench.priceTier2)}</span>
                 <span className="font-medium text-[#37352F]">
                   {PRICE_TIER_LABELS[inspectedModel.model.priceTier]}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3 py-0.5">
-                <span className="shrink-0 text-[#9B9A97]">视觉理解</span>
+                <span className="shrink-0 text-[#9B9A97]">{t(($) => $.workbench.vision)}</span>
                 <span className="font-medium text-[#37352F]">
-                  {supportsVision ? '支持' : '不支持'}
+                  {supportsVision
+                    ? t(($) => $.workbench.supported)
+                    : t(($) => $.workbench.notSupported)}
                 </span>
               </div>
             </div>
           </>
         ) : (
           <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px] leading-[18px] text-[#5F5E5A]">
-            <div>该模型不存在</div>
+            <div>{t(($) => $.workbench.thisModelDoesNotExist)}</div>
             <div className="mt-1.5 break-all text-[#9B9A97]">
-              模型名：{inspectedModel.model.id}
+              {t(($) => $.workbench.modelName)}
+              {inspectedModel.model.id}
             </div>
           </div>
         )}
@@ -1046,7 +1063,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               <CatalogModelIcon src={selectedFree.iconUrl} alt={selectedFree.label} />
               <span className="truncate">{selectedFree.label}</span>
               <span className="shrink-0 text-[11px] font-medium text-[#9B9A97]">
-                {FREE_MODEL_PRICE_LABEL}
+                {t(($) => $.preferences.free)}
               </span>
             </>
           ) : (

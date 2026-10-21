@@ -1,3 +1,5 @@
+import { localizeSystemText } from '../../i18n/systemText'
+import { t } from '../../i18n'
 import { PARTNER_AVATAR_SHAPES, PARTNER_AVATAR_COLORS } from '../../../../shared/types'
 import type {
   AiRunEvent,
@@ -102,27 +104,32 @@ const getToolItemHeaderShort = (
   toolName: AssistantToolName,
   status: AssistantProcessStatus,
   input?: IpcJsonObject
-): string => getAssistantToolItemCopy(toolName, status, input).headerShort
+): string => localizeSystemText(getAssistantToolItemCopy(toolName, status, input).headerShort)
 
 const getDisplayGroupText = (
   display: AssistantProcessDisplay,
   status: AssistantProcessStatus
 ): AssistantRichTextSegment[] => {
   if (display.kind === 'thinking') {
-    if (status === 'running') return sentence(text('让俺想想'))
+    if (status === 'running') return sentence(text(t(($) => $.workbench.thinking)))
     return []
   }
   if (display.kind === 'retry') {
     const progress = `${display.attempt}/${display.maxAttempts}`
-    if (status === 'running') return sentence(text(`正在重试 ${progress}`))
-    if (status === 'partial_failed') return sentence(text(`部分重试失败 ${progress}`))
-    return sentence(text(`重试失败 ${progress}`))
+    if (status === 'running')
+      return sentence(text(t(($) => $.workbench.retrying, { value1: progress })))
+    if (status === 'partial_failed')
+      return sentence(text(t(($) => $.workbench.someRetriesFailed, { value1: progress })))
+    return sentence(text(t(($) => $.workbench.retryFailed, { value1: progress })))
   }
   if (display.kind === 'compaction') {
-    if (status === 'running') return sentence(text('东西太多了，让俺整理下'))
-    if (status === 'completed') return sentence(text('呼，终于整理好了，累死俺了'))
-    if (status === 'partial_failed') return sentence(text('上下文整理有部分失败'))
-    return sentence(text('上下文整理失败了'))
+    if (status === 'running')
+      return sentence(text(t(($) => $.workbench.organizingTheConversationContext)))
+    if (status === 'completed')
+      return sentence(text(t(($) => $.workbench.conversationContextOrganized)))
+    if (status === 'partial_failed')
+      return sentence(text(t(($) => $.workbench.someContextOrganizationStepsFailed)))
+    return sentence(text(t(($) => $.workbench.couldNotOrganizeTheContext)))
   }
   if (display.kind === 'tool') {
     return getToolItemText(normalizeToolName(display.toolName), status, display.input)
@@ -657,7 +664,8 @@ export const reduceAssistantProcessGroups = (
         : undefined
     const message = active
       ? (event.update.message ?? actionMessage ?? previous?.message)
-      : event.update.result || (event.update.status === 'failed' ? '未知错误' : undefined)
+      : event.update.result ||
+        (event.update.status === 'failed' ? t(($) => $.common.unknownError) : undefined)
     const messageId = active
       ? event.update.message !== undefined
         ? event.update.messageId
@@ -966,10 +974,10 @@ export const formatRelativeTime = (timestamp: number): string => {
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
 
   if (hours < 1) {
-    return '刚刚'
+    return t(($) => $.workbench.justNow)
   }
   if (hours < 24) {
-    return `${hours}小时`
+    return t(($) => $.workbench.h, { value1: hours })
   }
-  return `${days}天`
+  return t(($) => $.workbench.d, { value1: days })
 }

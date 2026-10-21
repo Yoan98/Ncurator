@@ -1,4 +1,6 @@
-﻿import React from 'react'
+import { localizeSystemText } from '../../i18n/systemText'
+import { t } from '../../i18n'
+import React from 'react'
 import { Progress } from 'antd'
 import type { WorkspaceIndexJobRecord } from '../../../../shared/types'
 import { getIndexJobProgressNumbers } from '../../../../shared/indexJobProgress'
@@ -10,22 +12,27 @@ type WorkspaceIndexJobProgressProps = {
 
 const getJobTitle = (job: WorkspaceIndexJobRecord): string => {
   if (job.source_kind === 'file' && job.action === 'scan') {
-    if (job.phase === 'scan') return '步骤 1/2 扫描工作目录'
-    if (job.phase === 'diff') return '步骤 2/2 比对文件索引'
+    if (job.phase === 'scan') return t(($) => $.settings.step12ScanWorkspaceDirectories)
+    if (job.phase === 'diff') return t(($) => $.settings.step22CompareFileIndexes)
   }
   if (job.source_kind === 'web' && job.action === 'prepare') {
-    if (job.phase === 'crawl') return '抓取网页'
-    if (job.phase === 'index') return '建立索引'
+    if (job.phase === 'crawl') return t(($) => $.settings.fetchWebpage)
+    if (job.phase === 'index') return t(($) => $.settings.buildIndex)
   }
-  if (job.action === 'scan') return job.source_kind === 'web' ? '检查网页更新' : '检查文件更新'
-  return job.source_kind === 'web' ? '更新网页索引' : '更新文件索引'
+  if (job.action === 'scan')
+    return job.source_kind === 'web'
+      ? t(($) => $.settings.checkWebpageUpdates)
+      : t(($) => $.settings.checkFileUpdates)
+  return job.source_kind === 'web'
+    ? t(($) => $.settings.updateWebpageIndex)
+    : t(($) => $.settings.updateFileIndex)
 }
 
 const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ job, testId }) => {
   if (!job || job.status !== 'running') return null
   const title = getJobTitle(job)
   const progress = getIndexJobProgressNumbers(job)
-  const message = job.message || '正在处理'
+  const message = localizeSystemText(job.message || t(($) => $.settings.processing))
   const shouldHideMessage = message === title
 
   return (

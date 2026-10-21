@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { OfficeReviewContext } from './OfficeReviewContext'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { message, Spin } from 'antd'
@@ -47,7 +48,10 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
         .then((result) => {
           if (!cancelled) {
             setNavigationError(
-              result.success ? '' : result.error || '暂时无法确认打开应用，不能定位修改位置'
+              result.success
+                ? ''
+                : result.error ||
+                    t(($) => $.workbench.couldNotConfirmTheDefaultApplicationChangeNavigationIs)
             )
             setEnabled(
               result.success &&
@@ -60,7 +64,9 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
         .catch(() => {
           if (!cancelled) {
             setEnabled(false)
-            setNavigationError('暂时无法确认打开应用，不能定位修改位置')
+            setNavigationError(
+              t(($) => $.workbench.couldNotConfirmTheDefaultApplicationChangeNavigationIs)
+            )
           }
         })
     }
@@ -89,9 +95,11 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
             resetWpsIntegrationFeedback(
               record.capability === 'docx' ? 'wps' : record.capability === 'ppt' ? 'wpp' : 'et'
             )
-            if (result.status === 'container') message.info(result.reason || '已定位到相关内容范围')
-          } else if (result.status === 'failed') message.error(result.reason || '定位失败')
-          else message.info(result.reason || '已打开文件')
+            if (result.status === 'container')
+              message.info(result.reason || t(($) => $.workbench.locatedTheRelevantContent))
+          } else if (result.status === 'failed')
+            message.error(result.reason || t(($) => $.workbench.couldNotLocateTheContent))
+          else message.info(result.reason || t(($) => $.workbench.fileOpened))
         })
         .catch((reason) => {
           if (requestSequence === sequence.current) message.error(String(reason))
@@ -125,7 +133,7 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
             role="status"
             className="pointer-events-none absolute right-4 top-2 z-20 rounded bg-white/95 px-3 py-1 text-xs text-[#787774] shadow"
           >
-            正在打开 WPS 并定位…
+            {t(($) => $.workbench.openingWpsAndLocatingContent)}
           </div>
         )}
         {record.capability === 'ppt' ? (

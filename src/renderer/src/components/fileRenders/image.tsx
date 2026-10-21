@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import type { DocRenderer, DocRendererProps } from 'react-doc-viewer'
 import { IMAGE_PREVIEW_FILE_TYPES } from './capabilities'
 import type { LoadedFileRenderDocument } from './types'
@@ -10,7 +11,7 @@ const CustomImageRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
     <div className="flex h-full w-full items-center justify-center overflow-auto bg-[#F4F4F2] p-6">
       <img
         src={document.uri}
-        alt={document.fileName || '图片预览'}
+        alt={document.fileName || t(($) => $.editors.imagePreview)}
         className="max-h-full max-w-full object-contain"
       />
     </div>

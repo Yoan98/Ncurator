@@ -1,3 +1,5 @@
+import { parse as parseYaml } from 'yaml'
+import { hashSharedEntries, distributionName } from '../../release/shared/distribution.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -127,6 +129,15 @@ for (const archivePath of archives) {
   assertMinimalPackageJson(packagedPackageJson, `${archivePath}:package.json`)
 
   const archiveFiles = listArchiveFiles(archivePath)
+  const sharedAppHash = hashSharedEntries(
+    archiveFiles
+      .filter((item) => item.relativePath.startsWith('out/'))
+      .map((item) => [item.relativePath, extractArchiveFile(archivePath, item.relativePath)])
+  )
+  const hashPath = path.join(inputDirectory, 'shared-app.sha256')
+  if (fs.existsSync(hashPath) && fs.readFileSync(hashPath, 'utf8').trim() !== sharedAppHash) {
+    throw new Error('Packaged shared application resources do not match the build')
+  }
   for (const item of archiveFiles) {
     if (!item.relativePath.startsWith('out/') || item.size > 25 * 1024 * 1024) continue
     if (!/\.(?:js|cjs|mjs|json|html|css)$/u.test(item.relativePath)) continue
@@ -138,6 +149,32 @@ for (const archivePath of archives) {
   }
 
   const appRoot = findApplicationRoot(archivePath)
+  const expectedMarkerPath = path.join(inputDirectory, 'app-distribution.json')
+  if (fs.existsSync(expectedMarkerPath)) {
+    const distribution = JSON.parse(fs.readFileSync(expectedMarkerPath, 'utf8')).distribution
+    const resourcesDirectory = path.dirname(archivePath)
+    const marker = JSON.parse(
+      fs.readFileSync(path.join(resourcesDirectory, 'app-distribution.json'), 'utf8')
+    )
+    const update = parseYaml(
+      fs.readFileSync(path.join(resourcesDirectory, 'app-update.yml'), 'utf8')
+    )
+    const origin =
+      distribution === 'international'
+        ? 'https://download.ncurator.com'
+        : 'https://download.guanzhangai.cn'
+    if (
+      marker.distribution !== distribution ||
+      update.url !== `${origin}/updates/latest` ||
+      update.updaterCacheDirName !== 'ncurator-updater'
+    )
+      throw new Error('Packaged distribution or fixed update configuration is incorrect')
+    const name = distributionName(distribution)
+    if (process.platform === 'darwin' && path.basename(appRoot) !== `${name}.app`)
+      throw new Error('Packaged application name is incorrect')
+    if (process.platform === 'win32' && !fs.existsSync(path.join(appRoot, `${name}.exe`)))
+      throw new Error('Packaged executable name is incorrect')
+  }
   assertPackagedNodePtyHelpersExecutable(appRoot)
   assertVcRuntimeDllsPackaged(appRoot)
   const directoryAudit = auditPackageDirectory(appRoot)
@@ -149,6 +186,7 @@ for (const archivePath of archives) {
     .map((item) => ({ path: item.relativePath, bytes: item.size }))
   applications.push({
     root: path.relative(inputDirectory, appRoot) || '.',
+    sharedAppHash,
     archive: path.relative(inputDirectory, archivePath),
     totalBytes,
     webCrawlerSidecarBytes,
@@ -184,6 +222,11 @@ const report = {
   platform: process.platform,
   arch: process.arch,
   applications,
+  distribution: fs.existsSync(path.join(inputDirectory, 'app-distribution.json'))
+    ? JSON.parse(fs.readFileSync(path.join(inputDirectory, 'app-distribution.json'), 'utf8'))
+        .distribution
+    : 'domestic',
+  sharedAppHash: applications[0]?.sharedAppHash,
   installers,
   runtimeTrace: runtimeTraceReport
     ? {

@@ -1,3 +1,4 @@
+import { t } from '../../../i18n'
 import { createTextAdapter } from './textAdapter'
 import { readPreviewText, captureSelection } from './textIndex'
 import type { SelectionAdapter } from './types'
@@ -8,7 +9,8 @@ export function pdfAdapter(container: HTMLElement, filePath: string): SelectionA
     decorate: (node, _location, range) => {
       const start = range.startContainer.parentElement?.closest<HTMLElement>('[data-pdf-page]')
       const end = range.endContainer.parentElement?.closest<HTMLElement>('[data-pdf-page]')
-      if (!start || !end) throw new Error('无法定位 PDF 文字所在页。')
+      if (!start || !end)
+        throw new Error(t(($) => $.editors.couldNotLocateThePdfPageContainingThisText))
       const offset = (page: HTMLElement, endpoint: Node, at: number) => {
         const prefix = window.document.createRange()
         prefix.selectNodeContents(page)
@@ -39,7 +41,7 @@ export function pdfAdapter(container: HTMLElement, filePath: string): SelectionA
       ) {
         const page = event.target.closest('[data-pdf-page]')
         if (page && !page.querySelector('.textLayer')?.textContent?.trim())
-          throw new Error('这一页没有可读取的文字，暂不支持扫描件和区域框选。')
+          throw new Error(t(($) => $.editors.thisPageHasNoReadableTextScannedPagesAnd))
       }
       return null
     },

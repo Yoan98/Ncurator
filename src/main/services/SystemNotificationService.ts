@@ -1,3 +1,4 @@
+import { mainText } from './app/i18n'
 import { BrowserWindow, Notification } from 'electron'
 import type { AiRunRecord, AiRunStatus } from '../../shared/types'
 import type { AppSettingsStore } from './storage/domains/AppSettingsStore'
@@ -18,11 +19,11 @@ type SystemNotificationServiceDeps = {
   notificationIcon?: string
 }
 
-const STATUS_COPY: Record<RunTerminalStatus, { title: string; body: string }> = {
-  completed: { title: 'AI 运行已完成', body: '点击查看对话结果' },
-  failed: { title: 'AI 运行失败', body: '点击查看失败详情' },
-  cancelled: { title: 'AI 运行已取消', body: '点击返回对话' }
-}
+const STATUS_KEYS = {
+  completed: ['runCompleted', 'runCompletedBody'],
+  failed: ['runFailed', 'runFailedBody'],
+  cancelled: ['runCancelled', 'runCancelledBody']
+} as const
 
 export class SystemNotificationService {
   public constructor(private readonly deps: SystemNotificationServiceDeps) {}
@@ -32,7 +33,8 @@ export class SystemNotificationService {
     if (!settings.systemNotificationsEnabled) return
     if (!(this.deps.isSupported || Notification.isSupported)()) return
 
-    const copy = STATUS_COPY[status]
+    const [titleKey, bodyKey] = STATUS_KEYS[status]
+    const copy = { title: mainText(titleKey), body: mainText(bodyKey) }
     const notification = (this.deps.createNotification || ((options) => new Notification(options)))(
       {
         title: copy.title,

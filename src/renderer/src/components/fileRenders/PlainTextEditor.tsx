@@ -1,3 +1,4 @@
+import { t, getRendererRuntime } from '../../i18n'
 import { useContext, useMemo } from 'react'
 import { DocumentSelectionContext } from '../workbench/composer/DocumentSelectionContext'
 import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
@@ -65,14 +66,24 @@ const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> 
     const editor = textareaRef.current
     if (!editor) return
     const onBlur = (): void =>
-      void flushSave().catch((error) => console.error('文件保存失败', error))
+      void flushSave().catch((error) =>
+        console.error(
+          t(($) => $.editors.couldNotSaveTheFile),
+          error
+        )
+      )
     editor.addEventListener('blur', onBlur)
     return () => editor.removeEventListener('blur', onBlur)
   }, [flushSave, file.loading])
 
   useEffect(
     () => () => {
-      void flushSave().catch((error) => console.error('文件保存失败', error))
+      void flushSave().catch((error) =>
+        console.error(
+          t(($) => $.editors.couldNotSaveTheFile),
+          error
+        )
+      )
     },
     [flushSave]
   )
@@ -90,7 +101,7 @@ const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> 
       <div className="flex h-full w-full items-center justify-center bg-white">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={file.loadError || '文件加载失败'}
+          description={file.loadError || t(($) => $.editors.couldNotLoadTheFile)}
         />
       </div>
     )
@@ -104,7 +115,9 @@ const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> 
     <div className="flex h-full w-full flex-col overflow-hidden bg-white">
       {truncated ? (
         <div className="shrink-0 border-b border-[#EEEEEC] bg-[#FFF8E5] px-6 py-2 text-xs text-[#7A4D00]">
-          文件较大，仅可编辑前 {TEXT_EDIT_MAX_CHARS.toLocaleString()} 个字符。
+          {t(($) => $.editors.thisFileIsLargeEditingIsLimitedToThe)}
+          {TEXT_EDIT_MAX_CHARS.toLocaleString(getRendererRuntime().locale)}
+          {t(($) => $.editors.characters)}
         </div>
       ) : null}
       <div ref={setContainer} className="relative min-h-0 flex-1">

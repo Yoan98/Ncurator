@@ -80,6 +80,7 @@ describe('release fragment', () => {
     expect(fragment.platform).toBe('windows-x64')
     expect(fragment.metadata).toContain('version: 0.1.3')
     expect(fragment.audit).toEqual({
+      distribution: 'domestic',
       schemaVersion: 1,
       generatedAt: '2026-07-15T00:00:00.000Z',
       platform: 'win32',
@@ -164,6 +165,12 @@ describe('release fragment', () => {
     }
 
     expect(() => assertReleaseFragment(validFragment)).not.toThrow()
+    expect(() =>
+      assertReleaseFragment({
+        ...validFragment,
+        audit: { ...validFragment.audit, distribution: 'international' }
+      })
+    ).toThrow(/distribution does not match audit/u)
     expect(() => assertReleaseFragment({ ...validFragment, tag: 'mac-v0.1.3' })).toThrow(
       /tag must match its platform/u
     )
@@ -320,7 +327,6 @@ describe('release fragment', () => {
   })
 
   it('requires all four macOS size metrics before publishing', () => {
-
     expect(() =>
       assertPackageAudit(
         {

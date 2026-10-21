@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { Menu, Popover, type MenuProps } from 'antd'
 import {
@@ -56,10 +57,15 @@ export default function FileOpenWithMenu({
         <span className="min-w-0 flex-1 truncate">{application.name}</span>
         {settings
           ? preferredApplicationId === application.id && (
-              <HiCheck aria-label="已选择" className="h-4 w-4 shrink-0 text-[#787774]" />
+              <HiCheck
+                aria-label={t(($) => $.workbench.selected)}
+                className="h-4 w-4 shrink-0 text-[#787774]"
+              />
             )
           : application.isDefault && (
-              <span className="shrink-0 text-[11px] text-[#91918E]">默认</span>
+              <span className="shrink-0 text-[11px] text-[#91918E]">
+                {t(($) => $.workbench.default)}
+              </span>
             )}
       </span>
     )
@@ -74,7 +80,9 @@ export default function FileOpenWithMenu({
             {
               key: 'empty',
               disabled: true,
-              label: loading ? '正在获取可用应用…' : error || '没有可用的应用'
+              label: loading
+                ? t(($) => $.workbench.loadingAvailableApps)
+                : error || t(($) => $.workbench.noAvailableApps)
             }
           ]
     }
@@ -87,9 +95,12 @@ export default function FileOpenWithMenu({
           icon: <HiComputerDesktop className="h-4 w-4" />,
           label: (
             <span className="flex items-center justify-between gap-3">
-              使用系统设置
+              {t(($) => $.workbench.useSystemDefault)}
               {!preferredApplicationId && (
-                <HiCheck aria-label="已选择" className="h-4 w-4 text-[#787774]" />
+                <HiCheck
+                  aria-label={t(($) => $.workbench.selected)}
+                  className="h-4 w-4 text-[#787774]"
+                />
               )}
             </span>
           )
@@ -105,12 +116,12 @@ export default function FileOpenWithMenu({
           disabled: !applications.length,
           label: (
             <span className="flex items-center justify-between gap-3">
-              默认打开应用…
+              {t(($) => $.workbench.defaultApp)}
               <HiChevronRight className="h-3.5 w-3.5 text-[#91918E]" />
             </span>
           )
         },
-        { key: 'reveal', label: '打开所在文件夹' }
+        { key: 'reveal', label: t(($) => $.workbench.showInFolder) }
       ]
   const choose: MenuProps['onClick'] = async ({ key }) => {
     if (saving) return
@@ -167,10 +178,10 @@ export default function FileOpenWithMenu({
               type="button"
               className="open-with-back"
               onClick={() => setSettings(false)}
-              aria-label="返回打开应用列表"
+              aria-label={t(($) => $.workbench.backToAppList)}
             >
               <HiArrowLeft className="h-4 w-4" />
-              默认打开应用
+              {t(($) => $.workbench.defaultApplication)}
             </button>
           )}
           <Menu

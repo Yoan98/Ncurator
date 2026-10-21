@@ -1,26 +1,39 @@
+import { assertDistribution, distributionName } from '../shared/distribution.mjs'
 import { createHash } from 'node:crypto'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { assertPackageAudit, assertReleaseFragment, resolveReleaseAssetPath } from './fragment-contract.mjs'
+import {
+  assertPackageAudit,
+  assertReleaseFragment,
+  resolveReleaseAssetPath
+} from './fragment-contract.mjs'
 import { parseReleaseTag } from '../tag.mjs'
 
-const [inputDirectory = '', outputPath = '', releaseTag = '', platform = ''] = process.argv.slice(2)
+const [
+  inputDirectory = '',
+  outputPath = '',
+  releaseTag = '',
+  platform = '',
+  distribution = 'domestic'
+] = process.argv.slice(2)
 
+assertDistribution(distribution)
+const name = distributionName(distribution)
 const definitions = {
   'windows-x64': {
     metadata: 'latest.yml',
     signature: undefined,
     assets: (version) => [
-      [`馆长-${version}-Windows-x64.exe`, 'Ncurator-windows-x64.exe', 'installer'],
-      [`馆长-${version}-Windows-x64.exe.blockmap`, 'Ncurator-windows-x64.exe.blockmap', 'update']
+      [`${name}-${version}-Windows-x64.exe`, 'Ncurator-windows-x64.exe', 'installer'],
+      [`${name}-${version}-Windows-x64.exe.blockmap`, 'Ncurator-windows-x64.exe.blockmap', 'update']
     ]
   },
   'macos-arm64': {
     metadata: 'latest-mac.yml',
     signature: 'mac-update-signature.txt',
     assets: (version) => [
-      [`馆长-${version}-macos-arm64.dmg`, 'Ncurator-mac-arm64.dmg', 'installer'],
+      [`${name}-${version}-macos-arm64.dmg`, 'Ncurator-mac-arm64.dmg', 'installer'],
       ['Ncurator-mac-arm64.dmg.blockmap', 'Ncurator-mac-arm64.dmg.blockmap', 'update'],
       ['Ncurator-mac-arm64.zip', 'Ncurator-mac-arm64.zip', 'update'],
       ['Ncurator-mac-arm64.zip.blockmap', 'Ncurator-mac-arm64.zip.blockmap', 'update']
@@ -41,6 +54,9 @@ const { version } = parseReleaseTag(releaseTag, platform)
 const auditPath = path.join(inputDirectory, 'package-audit.json')
 const audit = JSON.parse(await readFile(auditPath, 'utf8'))
 assertPackageAudit(audit, platform, `package security audit ${auditPath}`)
+if ((audit.distribution || 'domestic') !== distribution) {
+  throw new Error(`package audit distribution does not match ${distribution}: ${auditPath}`)
+}
 if (platform.startsWith('macos-') && !['passed', 'warning'].includes(audit.sizeBudget?.status)) {
   throw new Error(`macOS package size budget is missing or failed: ${auditPath}`)
 }
@@ -71,6 +87,8 @@ const fragment = {
   tag: releaseTag,
   version,
   platform,
+  distribution,
+  sharedAppHash: audit.sharedAppHash,
   createdAt: new Date().toISOString(),
   files,
   metadata,
@@ -78,6 +96,8 @@ const fragment = {
     schemaVersion: audit.schemaVersion,
     generatedAt: audit.generatedAt,
     platform: audit.platform,
+    distribution,
+    sharedAppHash: audit.sharedAppHash,
     arch: audit.arch,
     applications: audit.applications.map((application) => ({
       root: application.root,

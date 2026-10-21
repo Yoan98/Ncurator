@@ -1,6 +1,11 @@
+import { getAppRuntime } from '../app/AppRuntime'
+import {
+  officialUrl,
+  routeForOfficialUrl,
+  type AppRuntimeSnapshot
+} from '../../../shared/appPreferences'
 import fs from 'fs/promises'
 import path from 'path'
-import { PRESET_MODELS_CATALOG_URL } from '../../../shared/constants'
 import {
   PRESET_MODEL_CATALOG_TTL_MS,
   emptyPresetModelsSnapshot,
@@ -95,21 +100,38 @@ const parseResponse = (value: unknown): PresetModelsCatalogResponse | null => {
 }
 
 export class PresetModelCatalogService {
-  private static instance: PresetModelCatalogService | null = null
+  private static instances = new Map<string, PresetModelCatalogService>()
+
+  public constructor(
+    private readonly context: Readonly<AppRuntimeSnapshot> = { ...getAppRuntime() }
+  ) {}
 
   private cache: CachePayload | null = null
   private loadPromise: Promise<void> | null = null
   private refreshPromise: Promise<PresetModelsSnapshot> | null = null
 
   static getInstance(): PresetModelCatalogService {
-    if (!this.instance) {
-      this.instance = new PresetModelCatalogService()
+    const context = { ...getAppRuntime() }
+    const key = `${context.serviceRoute}-${context.locale}`
+    let instance = this.instances.get(key)
+    if (!instance) {
+      instance = new PresetModelCatalogService(context)
+      this.instances.set(key, instance)
     }
-    return this.instance
+    return instance
+  }
+
+  private resolveIconUrl(value: string): string {
+    if (!routeForOfficialUrl(value)) return value
+    const url = new URL(value)
+    return officialUrl(this.context.serviceRoute, `${url.pathname}${url.search}`)
   }
 
   private cachePath(): string {
-    return path.join(getUserDataPath(), CACHE_FILE_NAME)
+    return path.join(
+      getUserDataPath(),
+      `${this.context.serviceRoute}-${this.context.locale}-${CACHE_FILE_NAME}`
+    )
   }
 
   private collectIconUrls(providers: readonly LlmPresetProvider[]): string[] {
@@ -188,23 +210,36 @@ export class PresetModelCatalogService {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
-      const response = await fetch(PRESET_MODELS_CATALOG_URL, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          ...buildDesktopAppGatewayHeaders({
-            method: 'GET',
-            url: PRESET_MODELS_CATALOG_URL,
-            body: ''
-          })
-        },
-        signal: controller.signal
-      })
+      const response = await fetch(
+        officialUrl(this.context.serviceRoute, '/api/v1/preset-models'),
+        {
+          method: 'GET',
+          redirect: 'error',
+          headers: {
+            Accept: 'application/json',
+            'Accept-Language': this.context.locale,
+            ...buildDesktopAppGatewayHeaders({
+              method: 'GET',
+              url: officialUrl(this.context.serviceRoute, '/api/v1/preset-models'),
+              body: ''
+            })
+          },
+          signal: controller.signal
+        }
+      )
       if (!response.ok) {
         throw new Error(`预设模型目录请求失败（HTTP ${response.status}）`)
       }
       const body: unknown = await response.json()
       const parsed = parseResponse(body)
+      if (parsed)
+        parsed.providers = parsed.providers.map((provider) => ({
+          ...provider,
+          models: provider.models.map((model) => ({
+            ...model,
+            iconUrl: this.resolveIconUrl(model.iconUrl)
+          }))
+        }))
       if (!parsed) {
         throw new Error('预设模型目录数据无效')
       }

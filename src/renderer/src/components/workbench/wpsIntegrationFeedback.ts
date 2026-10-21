@@ -1,6 +1,7 @@
+import { t, getManualUrl, getRendererRuntime } from '../../i18n'
 import { createElement, useCallback, useEffect } from 'react'
 import { App } from 'antd'
-import { WPS_INTEGRATION_MANUAL_URL } from '../../../../shared/constants'
+
 import {
   WPS_HOST_LABELS,
   type WpsHost,
@@ -34,26 +35,31 @@ export function useWpsIntegrationFeedback() {
             key: reminderKey(issue.host),
             content:
               issue.state === 'not-enabled'
-                ? '馆长 WPS 加载项未启用，无法定位'
+                ? t(($) => $.workbench.theNcuratorWpsAddInIsDisabledNavigationIs)
                 : issue.state === 'not-connected'
-                  ? '馆长 WPS 加载项未连接，无法定位'
-                  : '暂时无法确认馆长 WPS 加载项状态，无法定位'
+                  ? t(($) => $.workbench.theNcuratorWpsAddInIsDisconnectedNavigationIs)
+                  : t(($) => $.workbench.couldNotConfirmTheNcuratorWpsAddInStatus)
           })
         return
       }
       shownIssues.add(key)
-      const label = WPS_HOST_LABELS[issue.host]
+      const label =
+        getRendererRuntime().locale === 'en'
+          ? ({ wps: 'Word', et: 'Excel', wpp: 'PowerPoint' } as const)[issue.host]
+          : WPS_HOST_LABELS[issue.host]
       const description =
         issue.state === 'not-enabled'
-          ? `${label}的馆长加载项未启用。请在 WPS 的加载项管理中启用馆长，并允许 WPS 显示的授权请求。`
+          ? t(($) => $.workbench.theNcuratorAddInForIsDisabledEnableIt, { value1: label })
           : issue.state === 'not-connected'
-            ? `${label}的馆长加载项已启用，但尚未连接。请检查 WPS 提示；如刚启用或更新，请保存文档后正常退出并重新打开 WPS。`
-            : `暂时无法确认${label}的加载项状态。请在 WPS 的加载项管理中检查馆长是否启用，并处理 WPS 显示的提示。`
+            ? t(($) => $.workbench.theNcuratorAddInForIsEnabledButNot, { value1: label })
+            : t(($) => $.workbench.couldNotConfirmTheAddInStatusForCheck, { value1: label })
       if (activeDialog) {
         activeDialog.append(issue, description)
         return
       }
-      const descriptions = new Map([[key, { host: issue.host, text: description }]])
+      const descriptions = new Map<string, { host: WpsHost; text: string }>([
+        [key, { host: issue.host, text: description }]
+      ])
       const content = () =>
         createElement(
           'div',
@@ -61,15 +67,16 @@ export function useWpsIntegrationFeedback() {
           ...Array.from(descriptions, ([id, value]) => createElement('p', { key: id }, value.text))
         )
       const dialog = modal.confirm({
-        title: 'WPS 联动暂不可用',
+        title: t(($) => $.workbench.wpsIntegrationUnavailable),
         content: content(),
         centered: true,
         icon: null,
-        okText: '查看使用手册',
-        cancelText: '稍后',
+        okText: t(($) => $.workbench.viewUserManual),
+        cancelText: t(($) => $.common.later),
         onOk: async () => {
-          const result = await window.api.openExternal(WPS_INTEGRATION_MANUAL_URL)
-          if (!result.success) message.error(result.error || '无法打开使用手册')
+          const result = await window.api.openExternal(getManualUrl('#wps-integration'))
+          if (!result.success)
+            message.error(result.error || t(($) => $.workbench.couldNotOpenTheUserManual))
         },
         afterClose: () => {
           if (activeDialog === currentDialog) activeDialog = undefined

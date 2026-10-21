@@ -1,3 +1,4 @@
+import { t } from '../../../i18n'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ReferenceIcon from './ReferenceIcon'
@@ -213,7 +214,11 @@ export const createScopeTokenElement = (scope: SelectedReference): HTMLElement =
   const suffix = document.createElement('span')
   suffix.className = 'sr-only'
   suffix.textContent =
-    scope.kind === 'web' ? '网页链接' : scope.kind === 'directory' ? '目录链接' : '文件链接'
+    scope.kind === 'web'
+      ? t(($) => $.workbench.webLink)
+      : scope.kind === 'directory'
+        ? t(($) => $.workbench.directoryLink)
+        : t(($) => $.workbench.fileLink)
   token.appendChild(suffix)
 
   return token

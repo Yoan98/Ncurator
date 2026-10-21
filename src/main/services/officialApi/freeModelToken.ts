@@ -1,4 +1,5 @@
-import { FREE_MODEL_TOKEN_URL } from '../../../shared/constants'
+import { officialUrl, type ServiceRoute } from '../../../shared/appPreferences'
+import { getAppRuntime } from '../app/AppRuntime'
 import { buildDesktopAppGatewayHeaders, getDesktopAppSecret } from './appClient'
 
 const REFRESH_SKEW_MS = 5 * 60_000
@@ -8,8 +9,8 @@ type CachedToken = {
   expiresAt: number
 }
 
-let cached: CachedToken | null = null
-let refreshPromise: Promise<string> | null = null
+const cached = new Map<ServiceRoute, CachedToken>()
+const refreshPromises = new Map<ServiceRoute, Promise<string>>()
 
 export const readJwtExpiryMs = (token: string): number | null => {
   const parts = String(token || '')
@@ -27,30 +28,37 @@ export const readJwtExpiryMs = (token: string): number | null => {
   }
 }
 
-const isFresh = (entry: CachedToken | null, now = Date.now()): entry is CachedToken => {
+const isFresh = (entry: CachedToken | null | undefined, now = Date.now()): entry is CachedToken => {
   if (!entry?.token) return false
   return entry.expiresAt - now > REFRESH_SKEW_MS
 }
 
-const remember = (token: string, expiresAt?: number): string => {
+const remember = (route: ServiceRoute, token: string, expiresAt?: number): string => {
   const expiry =
     expiresAt && expiresAt > 0 ? expiresAt : readJwtExpiryMs(token) || Date.now() + 60 * 60_000
-  cached = { token, expiresAt: expiry }
+  cached.set(route, { token, expiresAt: expiry })
   return token
 }
 
-export const seedFreeModelToken = (token: string): void => {
+export const seedFreeModelToken = (
+  token: string,
+  route: ServiceRoute = getAppRuntime().serviceRoute
+): void => {
   const value = String(token || '').trim()
   if (!value) return
-  if (isFresh(cached)) return
+  if (isFresh(cached.get(route))) return
   const expiresAt = readJwtExpiryMs(value)
   if (!expiresAt || expiresAt - Date.now() <= REFRESH_SKEW_MS) return
-  remember(value, expiresAt)
+  remember(route, value, expiresAt)
 }
 
-export const refreshFreeModelToken = async (): Promise<string> => {
-  if (refreshPromise) return await refreshPromise
-  refreshPromise = (async () => {
+export const refreshFreeModelToken = async (
+  route: ServiceRoute = getAppRuntime().serviceRoute
+): Promise<string> => {
+  const pending = refreshPromises.get(route)
+  if (pending) return await pending
+  const tokenUrl = officialUrl(route, '/api/v1/free/token')
+  const refreshPromise = (async () => {
     const secret = getDesktopAppSecret()
     if (!secret) {
       throw new Error('缺少桌面网关密钥，无法续期免费模型凭证')
@@ -60,12 +68,13 @@ export const refreshFreeModelToken = async (): Promise<string> => {
       Accept: 'application/json',
       ...buildDesktopAppGatewayHeaders({
         method: 'POST',
-        url: FREE_MODEL_TOKEN_URL,
+        url: tokenUrl,
         body
       })
     }
-    const response = await fetch(FREE_MODEL_TOKEN_URL, {
+    const response = await fetch(tokenUrl, {
       method: 'POST',
+      redirect: 'error',
       headers,
       body: body || undefined,
       signal: AbortSignal.timeout(15_000)
@@ -78,17 +87,22 @@ export const refreshFreeModelToken = async (): Promise<string> => {
     if (!token) throw new Error('免费模型取票失败：响应无效')
     const expiresAt =
       typeof payload.expiresAt === 'string' ? Date.parse(payload.expiresAt) : readJwtExpiryMs(token)
-    return remember(token, Number.isFinite(expiresAt) ? Number(expiresAt) : undefined)
+    return remember(route, token, Number.isFinite(expiresAt) ? Number(expiresAt) : undefined)
   })()
+  refreshPromises.set(route, refreshPromise)
   try {
     return await refreshPromise
   } finally {
-    refreshPromise = null
+    refreshPromises.delete(route)
   }
 }
 
-export const ensureFreeModelToken = async (seedToken?: string): Promise<string> => {
-  if (seedToken) seedFreeModelToken(seedToken)
-  if (isFresh(cached)) return cached.token
-  return await refreshFreeModelToken()
+export const ensureFreeModelToken = async (
+  seedToken?: string,
+  route: ServiceRoute = getAppRuntime().serviceRoute
+): Promise<string> => {
+  if (seedToken) seedFreeModelToken(seedToken, route)
+  const entry = cached.get(route)
+  if (isFresh(entry)) return entry.token
+  return await refreshFreeModelToken(route)
 }

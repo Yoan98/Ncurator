@@ -151,3 +151,57 @@ describe('free model token expiry', () => {
     expect(readJwtExpiryMs(`aaa.${payload}.bbb`)).toBe(1_800_000_000 * 1000)
   })
 })
+
+describe('explicit official service regions', () => {
+  it('keeps credentials and a running request bound to the selected origin', async () => {
+    vi.resetModules()
+    process.env.NCURATOR_APP_SECRET_DESKTOP = 'unit-test-secret'
+    const { seedFreeModelToken } =
+      await import('../../../../src/main/services/officialApi/freeModelToken')
+    seedFreeModelToken(jwt('domestic'), 'domestic')
+    seedFreeModelToken(jwt('international'), 'international')
+    const requests: Array<{ url: string; authorization: string | null }> = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+        requests.push({
+          url: String(input),
+          authorization: new Headers(init?.headers).get('authorization')
+        })
+        return Response.json({ choices: [] })
+      })
+    )
+    await createFreeModelFetch('https://www.ncurator.com/api/v1/free')(
+      'https://www.ncurator.com/api/v1/free/chat/completions',
+      { method: 'POST', body: '{}' }
+    )
+    await createFreeModelFetch('https://www.guanzhangai.cn/api/v1/free')(
+      'https://www.guanzhangai.cn/api/v1/free/chat/completions',
+      { method: 'POST', body: '{}' }
+    )
+    expect(requests.map((request) => request.authorization)).toEqual([
+      `Bearer ${jwt('international')}`,
+      `Bearer ${jwt('domestic')}`
+    ])
+    expect(requests[0].url).toContain('www.ncurator.com')
+  })
+
+  it('surfaces international network failures without retrying another region', async () => {
+    vi.resetModules()
+    const { seedFreeModelToken } =
+      await import('../../../../src/main/services/officialApi/freeModelToken')
+    seedFreeModelToken(jwt('international'), 'international')
+    const network = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('network unavailable'))
+    vi.stubGlobal('fetch', network)
+    const send = createFreeModelFetch('https://www.ncurator.com/api/v1/free')
+    await expect(send('https://www.ncurator.com/api/v1/free/chat/completions')).rejects.toThrow(
+      'network unavailable'
+    )
+    expect(network).toHaveBeenCalledTimes(1)
+    expect(String(network.mock.calls[0][0])).toContain('www.ncurator.com')
+    await expect(send('https://www.guanzhangai.cn/api/v1/free/chat/completions')).rejects.toThrow(
+      '免费模型调用地址无效'
+    )
+    expect(network).toHaveBeenCalledTimes(1)
+  })
+})

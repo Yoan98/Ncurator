@@ -8,7 +8,7 @@
     ${VersionCompare} "$R0" "${VERSION}" $R1
     ${if} $R1 == "1"
       ${ifNot} ${Silent}
-        MessageBox mb_IconStop|mb_TopMost|mb_SetForeground "已安装更新版本的馆长（$R0）。不能安装旧版本 ${VERSION}，请继续使用已安装版本或下载最新版。"
+        MessageBox mb_IconStop|mb_TopMost|mb_SetForeground "A newer version of ${PRODUCT_NAME} ($R0) is installed. Cannot install older version ${VERSION}. Please use the installed version or download the latest release."
       ${endIf}
       Quit
     ${endIf}

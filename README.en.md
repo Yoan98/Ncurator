@@ -17,16 +17,16 @@
 </p>
 
 <p align="center">
-  <a href="https://www.guanzhangai.cn/zh">Website & demos</a> ·
-  <a href="https://www.guanzhangai.cn/zh/manual">Manual</a> ·
+  <a href="https://www.ncurator.com/en">Website & demos</a> ·
+  <a href="https://www.ncurator.com/en/manual">Manual</a> ·
   <a href="https://github.com/Yoan98/Ncurator/releases">GitHub Releases</a> ·
   <a href="https://x.com/Yoan_Huang">Author on X</a> ·
   <a href="#get-involved">QQ group</a>
 </p>
 
 <p align="center">
-  <a href="https://www.guanzhangai.cn/api/download/windows-x64"><strong>Download for Windows</strong></a> ·
-  <a href="https://www.guanzhangai.cn/api/download/mac-arm64"><strong>Download for macOS (Apple silicon)</strong></a>
+  <a href="https://www.ncurator.com/api/download/windows-x64"><strong>Download for Windows</strong></a> ·
+  <a href="https://www.ncurator.com/api/download/mac-arm64"><strong>Download for macOS (Apple silicon)</strong></a>
 </p>
 
 ## Architecture Design
@@ -34,6 +34,8 @@
 <p align="center">
   <img src="./assets/readme/architecture.en.png" alt="A task goes to a language model, which chooses file, web, and terminal tools, then delivers the result for human review" width="1100" />
 </p>
+
+Both distributions include Simplified Chinese and English interfaces. Choose a language and official service region in General settings. The domestic installer is named 馆长 and updates from COS; the international installer is named NCurator and updates from R2. Changing the service region does not change the update channel.
 
 ## Capabilities
 
@@ -45,7 +47,7 @@
 | ✍️ Change review        | Preview results, inspect changes, and revert supported file edits          |
 | ⏰ Scheduled tasks      | Run tasks on a schedule using a partner's material and model configuration |
 
-See the [website](https://www.guanzhangai.cn/zh) for demos and real task examples.
+See the [website](https://www.ncurator.com/en) for demos and real task examples.
 
 ## Get started
 
@@ -59,7 +61,6 @@ Join the discussion and help shape these plans:
 
 | Direction                    | Planned work                                                       |
 | ---------------------------- | ------------------------------------------------------------------ |
-| 🌍 English support           | An English user interface                                          |
 | 🔤 English knowledge base    | English embedding models and indexing                              |
 | 🧩 Skill integration         | Connect and manage custom and third-party Skills                   |
 | 🧭 Browser data import       | Import data from your browser, starting with bookmarks and history |

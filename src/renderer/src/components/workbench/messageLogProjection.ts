@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import type {
   AssistantProcessDisplay,
   ChatMessageLogEntry,
@@ -282,7 +283,7 @@ export const projectProcessGroups = (input: {
               messageStartedAt: undefined,
               requesting: false,
               status: 'interrupted',
-              result: '执行被中断，未收到完整结果'
+              result: t(($) => $.workbench.executionWasInterruptedBeforeACompleteResultWasReceived)
             }
           : { ...child, messageStartedAt: undefined }
       )

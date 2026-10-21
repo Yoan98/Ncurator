@@ -103,7 +103,7 @@ const verifyPackagedAppLaunch = async () => {
   }
 }
 
-await verifyPackagedAppLaunch()
+if (!process.argv.includes('--signature-only')) await verifyPackagedAppLaunch()
 
 const identity = signatureDetails
   .split('\n')

@@ -1,4 +1,4 @@
-import { FREE_MODEL_API_BASE_URL } from './constants'
+import { routeForOfficialUrl } from './appPreferences'
 import type { LLMConfig, LlmProviderKind, LlmRuntimeConfig } from './types'
 
 export const FREE_MODEL_CONFIG_ID_PREFIX = 'free:'
@@ -99,10 +99,9 @@ export const toFreeModelRuntimeConfig = (
 export const isFreeModelApiUrl = (value: string): boolean => {
   try {
     const url = new URL(value)
-    const base = new URL(FREE_MODEL_API_BASE_URL)
     return (
-      url.origin === base.origin &&
-      (url.pathname === base.pathname || url.pathname.startsWith(`${base.pathname}/`))
+      routeForOfficialUrl(value) !== null &&
+      (url.pathname === '/api/v1/free' || url.pathname.startsWith('/api/v1/free/'))
     )
   } catch {
     return false

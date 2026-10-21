@@ -1,4 +1,4 @@
-import { PRODUCT_NAME_ZH } from '../../../../shared/constants'
+import { t, getProductName } from '../../i18n'
 
 const WPS_REFRESHABLE_EXTENSIONS = new Set(['.docx', '.pptx', '.xlsx'])
 
@@ -9,7 +9,9 @@ const extensionOf = (filePath: string): string => {
   return dot >= 0 ? baseName.slice(dot).toLowerCase() : ''
 }
 
-export const WPS_OPEN_WITH_HINT = `WPS 联动使用说明：启用${PRODUCT_NAME_ZH}加载项后，可刷新写回内容并从审核定位。`
+export const WPS_OPEN_WITH_HINT = t(($) => $.workbench.wpsIntegrationEnableTheAddInToRefreshSaved, {
+  value1: getProductName()
+})
 
 export const isWpsRefreshableFilePath = (filePath: string): boolean =>
   WPS_REFRESHABLE_EXTENSIONS.has(extensionOf(filePath))

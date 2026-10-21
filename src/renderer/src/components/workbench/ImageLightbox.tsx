@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { HiArrowDownTray, HiMinus, HiPlus, HiXMark } from 'react-icons/hi2'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -64,7 +65,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
       <button
         type="button"
         className="absolute inset-0 z-0 cursor-default"
-        aria-label="关闭图片预览背景"
+        aria-label={t(($) => $.workbench.closeImagePreviewBackground)}
         onClick={onClose}
       />
 
@@ -72,8 +73,8 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
         <button
           type="button"
           className={toolbarButtonClassName}
-          aria-label="下载图片"
-          title="下载"
+          aria-label={t(($) => $.workbench.downloadImage)}
+          title={t(($) => $.common.download)}
           onClick={() => {
             const link = document.createElement('a')
             link.href = image.src
@@ -89,8 +90,8 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
         <button
           type="button"
           className={toolbarButtonClassName}
-          aria-label="关闭图片预览"
-          title="关闭"
+          aria-label={t(($) => $.workbench.closeImagePreview)}
+          title={t(($) => $.common.close)}
           onClick={onClose}
         >
           <HiXMark className="h-6 w-6" />
@@ -149,7 +150,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
         <button
           type="button"
           className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[#F4F4F2]"
-          aria-label="缩小"
+          aria-label={t(($) => $.common.zoomOut)}
           onClick={() => updateScale(scale - 0.1)}
         >
           <HiMinus className="h-4 w-4" />
@@ -167,7 +168,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
         <button
           type="button"
           className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[#F4F4F2]"
-          aria-label="放大"
+          aria-label={t(($) => $.common.zoomIn)}
           onClick={() => updateScale(scale + 0.1)}
         >
           <HiPlus className="h-4 w-4" />

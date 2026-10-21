@@ -1,3 +1,6 @@
+import { AppSettingsError } from '../../shared/appErrors'
+import { mainText } from '../services/app/i18n'
+import { getAppRuntime, setServiceRoute } from '../services/app/AppRuntime'
 import { FileReviewService } from '../services/ai/fileChanges/FileReviewService'
 import { isWpsApplication, type OpenFileReviewLocationRequest } from '../../shared/fileReview'
 import { notifyWpsFileOpened } from '../services/wps/officeFileWriteNotify'
@@ -1880,8 +1883,8 @@ export function registerHandlers(services: {
       const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, 'directory')
       if (e2eSelectedPath) return { canceled: false, path: e2eSelectedPath }
       const dialogOptions: OpenDialogOptions = {
-        title: '选择工作空间目录',
-        buttonLabel: '选择此目录',
+        title: mainText('selectWorkspaceDirectory'),
+        buttonLabel: mainText('chooseDirectory'),
         properties: ['openDirectory', 'createDirectory', 'dontAddToRecent']
       }
       let result
@@ -1907,8 +1910,8 @@ export function registerHandlers(services: {
       const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, 'file')
       if (e2eSelectedPath) return { canceled: false, path: e2eSelectedPath }
       const dialogOptions: OpenDialogOptions = {
-        title: '打开文件',
-        buttonLabel: '打开',
+        title: mainText('openFile'),
+        buttonLabel: mainText('open'),
         defaultPath: String(defaultPath || '').trim() || undefined,
         properties: ['openFile', 'dontAddToRecent']
       }
@@ -1936,8 +1939,8 @@ export function registerHandlers(services: {
           return { canceled: true, items: [], error: '附件目录不存在，无法保存附件' }
         }
         const dialogOptions: OpenDialogOptions = {
-          title: '添加附件',
-          buttonLabel: '选择',
+          title: mainText('addAttachments'),
+          buttonLabel: mainText('choose'),
           properties: ['openFile', 'openDirectory', 'multiSelections', 'dontAddToRecent']
         }
         const ownerWindow = BrowserWindow.fromWebContents(event.sender)
@@ -3510,14 +3513,15 @@ export function registerHandlers(services: {
   })
 
   ipcMain.handle('free-models-refresh', async () => {
+    const catalog = FreeModelCatalogService.getInstance()
     try {
       return {
         success: true as const,
-        snapshot: await FreeModelCatalogService.getInstance().refresh()
+        snapshot: await catalog.refresh()
       }
     } catch (e: unknown) {
       console.error('[FREE-MODELS-REFRESH] Error:', e)
-      const snapshot = await FreeModelCatalogService.getInstance().getSnapshot()
+      const snapshot = await catalog.getSnapshot()
       return {
         success: false as const,
         snapshot,
@@ -3538,14 +3542,15 @@ export function registerHandlers(services: {
   })
 
   ipcMain.handle('preset-models-refresh', async () => {
+    const catalog = PresetModelCatalogService.getInstance()
     try {
       return {
         success: true as const,
-        snapshot: await PresetModelCatalogService.getInstance().refresh()
+        snapshot: await catalog.refresh()
       }
     } catch (e: unknown) {
       console.error('[PRESET-MODELS-REFRESH] Error:', e)
-      const snapshot = await PresetModelCatalogService.getInstance().getSnapshot()
+      const snapshot = await catalog.getSnapshot()
       return {
         success: false as const,
         snapshot,
@@ -3561,28 +3566,36 @@ export function registerHandlers(services: {
       console.error('[APP-SETTINGS-GET] Error:', e)
       return {
         systemNotificationsEnabled: true,
-        knowledgeIndexSpeed: 'slow'
+        knowledgeIndexSpeed: 'slow',
+        language: 'system',
+        serviceRoute: getAppRuntime().serviceRoute
       }
     }
   })
 
-  ipcMain.handle('app-settings-save', async (_event, settings: AppSettings) => {
+  ipcMain.handle('app-settings-save', async (_event, settings: Partial<AppSettings>) => {
     try {
       const previous = await appSettingsStore.get()
       if (
+        settings.knowledgeIndexSpeed !== undefined &&
         previous.knowledgeIndexSpeed !== settings.knowledgeIndexSpeed &&
         (await workspaceIndexJobStore.hasRunningPrepareJob())
       ) {
         return { success: false, error: '正在更新索引，请完成后再切换速度' }
       }
       const saved = await appSettingsStore.save(settings)
+      setServiceRoute(saved.serviceRoute)
       if (previous.knowledgeIndexSpeed !== saved.knowledgeIndexSpeed) {
         await embeddingService.applyIndexSpeed(saved.knowledgeIndexSpeed)
       }
       return { success: true, settings: saved }
     } catch (e: unknown) {
       console.error('[APP-SETTINGS-SAVE] Error:', e)
-      return { success: false, error: getErrorMessage(e) }
+      return {
+        success: false,
+        error: getErrorMessage(e),
+        ...(e instanceof AppSettingsError ? { errorCode: e.code } : {})
+      }
     }
   })
 

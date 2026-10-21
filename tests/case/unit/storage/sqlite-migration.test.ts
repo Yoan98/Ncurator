@@ -118,7 +118,7 @@ describe('SQLite migration contract', () => {
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
-    expect(migrationRows.at(-1)).toEqual({ version: 17, name: 'open_with_preferences' })
+    expect(migrationRows.at(-1)).toEqual({ version: 18, name: 'app_language_and_service_route' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()

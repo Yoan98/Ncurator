@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { registerTextSave, flushReferencedTextFiles } from './pendingTextSaves'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
@@ -88,13 +89,13 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
       while (pendingContentRef.current !== null) {
         const content = pendingContentRef.current
         if (!(await window.api.fileExists(filePathRef.current)))
-          throw new Error('当前文件已不存在，未重新创建文件')
+          throw new Error(t(($) => $.editors.theFileNoLongerExistsAndWasNotRecreated))
         const response = await window.api.writeTextFile({
           filePath: filePathRef.current,
           content: applyOriginalFormat(content, eolRef.current, hadBomRef.current)
         })
         if (!response.success || !response.hash)
-          throw new Error(response.error || '文件保存失败，请重试')
+          throw new Error(response.error || t(($) => $.editors.couldNotSaveTheFilePleaseTryAgain))
         lastWrittenHashRef.current = response.hash
         if (pendingContentRef.current === content) pendingContentRef.current = null
       }
@@ -137,7 +138,7 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
       unsavedRef.current = false
       setReadOnly(true)
       if (reason === 'deleted')
-        setState({ loading: false, text: null, hash: null, error: '文件已删除' })
+        setState({ loading: false, text: null, hash: null, error: t(($) => $.editors.fileDeleted) })
     },
     [clearSaveTimer]
   )
@@ -189,7 +190,10 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
         loading: false,
         text: null,
         hash: null,
-        error: normalizeUserFacingError(error, '文件加载失败')
+        error: normalizeUserFacingError(
+          error,
+          t(($) => $.editors.couldNotLoadTheFile)
+        )
       })
     }
   }, [discardDeletedFile])

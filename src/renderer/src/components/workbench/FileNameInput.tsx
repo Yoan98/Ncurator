@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { useEffect, useRef, type FC } from 'react'
 import FileIcon from '../FileIcon'
 
@@ -47,11 +48,13 @@ const FileNameInput: FC<FileNameInputProps> = ({
         <FileIcon name={value} />
         <input
           ref={inputRef}
-          aria-label={renaming ? '重命名文件名' : '新建文件名'}
+          aria-label={
+            renaming ? t(($) => $.workbench.renameFile) : t(($) => $.workbench.newFileName)
+          }
           aria-invalid={Boolean(error)}
           value={value}
           disabled={busy}
-          placeholder="文件名.后缀"
+          placeholder={t(($) => $.workbench.filenameExtension)}
           className="min-w-0 flex-1 bg-transparent text-[#37352F] outline-none"
           onSelect={(event) => clampSelection(event.currentTarget)}
           onChange={(event) => {

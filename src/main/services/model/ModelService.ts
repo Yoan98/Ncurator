@@ -1,9 +1,10 @@
+import { getAppRuntime } from '../app/AppRuntime'
 import fs from 'fs'
 import path from 'path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
-import { DEFAULT_MODEL_SOURCE, type ModelSource } from '../../../shared/modelSources'
+import { defaultModelSource, type ModelSource } from '../../../shared/modelSources'
 import { getModelsPath } from '../../utils/paths'
 
 const HF_ENDPOINT = 'https://hf-mirror.com'
@@ -346,6 +347,7 @@ export class ModelService {
     if (source === 'modelscope') {
       return String(process.env[MODELSCOPE_ENDPOINT_ENV] || '').trim() || MODELSCOPE_ENDPOINT
     }
+    if (source === 'huggingface') return 'https://huggingface.co'
     return String(process.env[HF_ENDPOINT_ENV] || '').trim() || HF_ENDPOINT
   }
 
@@ -367,7 +369,7 @@ export class ModelService {
         .map((file) => String(file.Path))
     }
 
-    const endpoint = this.resolveSourceEndpoint('huggingface-mirror')
+    const endpoint = this.resolveSourceEndpoint(source)
     const url = `${endpoint}/api/models/${repoId}`
     const payload = await this.fetchJsonWithRetry<{
       siblings?: Array<{ rfilename?: string }>
@@ -382,7 +384,7 @@ export class ModelService {
       const endpoint = this.resolveSourceEndpoint('modelscope')
       return `${endpoint}/api/v1/models/${repoId}/repo?Revision=${MODELSCOPE_REVISION}&FilePath=${filename}`
     }
-    const endpoint = this.resolveSourceEndpoint('huggingface-mirror')
+    const endpoint = this.resolveSourceEndpoint(source)
     return `${endpoint}/${repoId}/resolve/main/${filename}`
   }
 
@@ -504,7 +506,7 @@ export class ModelService {
     repoId: string,
     reporter?: ModelDownloadProgressReporter,
     signal?: AbortSignal,
-    source: ModelSource = DEFAULT_MODEL_SOURCE
+    source: ModelSource = defaultModelSource(getAppRuntime().serviceRoute)
   ): Promise<{ success: boolean }> {
     const modelPath = this.resolveModelPath(repoId)
 
@@ -657,7 +659,7 @@ export class ModelService {
     repoId: string,
     reporter?: ModelDownloadProgressReporter,
     signal?: AbortSignal,
-    source: ModelSource = DEFAULT_MODEL_SOURCE
+    source: ModelSource = defaultModelSource(getAppRuntime().serviceRoute)
   ): Promise<{ success: boolean }> {
     const releaseLock = await this.acquireDownloadLock(repoId)
     try {

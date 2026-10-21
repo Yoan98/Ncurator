@@ -1,3 +1,5 @@
+import { normalizeUserFacingError } from '../../utils/userFacingError'
+import { t } from '../../i18n'
 import React, { useEffect, useState } from 'react'
 import { Button, Tooltip, message } from 'antd'
 import { HiOutlineQuestionMarkCircle } from 'react-icons/hi2'
@@ -8,12 +10,12 @@ import { importSelectors } from '../../testing/selectors'
 const SPEED_HELP = (
   <div className="w-[260px] text-[12px] leading-5 text-[#5F5F5B]">
     <div>
-      <span className="font-medium text-[#37352F]">慢速：</span>
-      占用电脑较少的资源来完成索引，完成速度会比较慢
+      <span className="font-medium text-[#37352F]">{t(($) => $.settings.slow)}</span>
+      {t(($) => $.settings.usesFewerComputerResourcesToIndexFilesTakingMore)}
     </div>
     <div className="mt-2">
-      <span className="font-medium text-[#37352F]">高速：</span>
-      全力使用电脑资源来完成索引，完成速度会比较快
+      <span className="font-medium text-[#37352F]">{t(($) => $.settings.fast)}</span>
+      {t(($) => $.settings.usesMoreComputerResourcesToFinishIndexingFaster)}
     </div>
   </div>
 )
@@ -28,7 +30,7 @@ export const KnowledgeIndexSpeedControl: React.FC<{ prepareRunning: boolean }> =
     void window.api
       .appSettingsGet()
       .then(setSettings)
-      .catch(() => message.error('读取索引速度失败'))
+      .catch(() => message.error(t(($) => $.settings.couldNotLoadIndexingSpeed)))
   }, [])
 
   const locked = !settings || saving || prepareRunning
@@ -40,12 +42,19 @@ export const KnowledgeIndexSpeedControl: React.FC<{ prepareRunning: boolean }> =
     setSettings(next)
     setSaving(true)
     try {
-      const response = await window.api.appSettingsSave(next)
-      if (!response.success) throw new Error(response.error || '保存失败')
+      const response = await window.api.appSettingsSave({ knowledgeIndexSpeed })
+      if (!response.success)
+        throw new Error(
+          normalizeUserFacingError(response.error, '') || t(($) => $.common.couldNotSave)
+        )
       setSettings(response.settings || next)
     } catch (error) {
       setSettings(previous)
-      message.error(error instanceof Error ? error.message : '保存索引速度失败')
+      message.error(
+        error instanceof Error
+          ? normalizeUserFacingError(error.message)
+          : t(($) => $.settings.couldNotSaveIndexingSpeed)
+      )
     } finally {
       setSaving(false)
     }
@@ -56,12 +65,14 @@ export const KnowledgeIndexSpeedControl: React.FC<{ prepareRunning: boolean }> =
   return (
     <div className="mt-3">
       <div className="flex items-center gap-1.5">
-        <div className="text-[14px] font-semibold text-[#37352F]">索引速度</div>
+        <div className="text-[14px] font-semibold text-[#37352F]">
+          {t(($) => $.settings.indexingSpeed)}
+        </div>
         <Tooltip title={SPEED_HELP}>
           <button
             type="button"
             className="inline-flex items-center text-[#9B9A97] transition-colors hover:text-[#37352F]"
-            aria-label="索引速度说明"
+            aria-label={t(($) => $.settings.aboutIndexingSpeed)}
             data-testid={importSelectors.workspaceIndexSpeedHelp}
           >
             <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help" />
@@ -79,7 +90,7 @@ export const KnowledgeIndexSpeedControl: React.FC<{ prepareRunning: boolean }> =
           className="!h-7 flex-1 !rounded-none"
           data-testid={importSelectors.workspaceIndexSpeedSlow}
         >
-          慢速
+          {t(($) => $.settings.slow2)}
         </Button>
         <Button
           size="small"
@@ -90,7 +101,7 @@ export const KnowledgeIndexSpeedControl: React.FC<{ prepareRunning: boolean }> =
           className="!h-7 flex-1 !rounded-none"
           data-testid={importSelectors.workspaceIndexSpeedFast}
         >
-          高速
+          {t(($) => $.settings.fast2)}
         </Button>
       </div>
     </div>

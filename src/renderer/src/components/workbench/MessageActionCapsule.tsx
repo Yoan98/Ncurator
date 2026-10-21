@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import React from 'react'
 import { Tooltip } from 'antd'
 import { HiXMark } from 'react-icons/hi2'
@@ -23,7 +24,7 @@ const MessageActionCapsule: React.FC<MessageActionCapsuleProps> = ({
   onAction,
   dismissible = false,
   onDismiss,
-  dismissTooltip = '关闭提示',
+  dismissTooltip = t(($) => $.workbench.dismiss),
   actionTestId,
   dismissTestId,
   labelClassName

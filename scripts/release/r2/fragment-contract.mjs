@@ -1,3 +1,4 @@
+import { assertDistribution, distributionName } from '../shared/distribution.mjs'
 import { access } from 'node:fs/promises'
 import path from 'node:path'
 import { parseReleaseTag } from '../tag.mjs'
@@ -104,6 +105,14 @@ export const assertReleaseFragment = (
   if (expectedPlatform && fragment.platform !== expectedPlatform) {
     fail(label, `expected platform ${expectedPlatform}`)
   }
+  const distribution = assertDistribution(fragment.distribution || 'domestic')
+  const name = distributionName(distribution)
+  if (fragment.audit?.distribution && fragment.audit.distribution !== distribution)
+    fail(label, 'distribution does not match audit')
+  if (distribution === 'international' && !/^[a-f0-9]{64}$/u.test(fragment.sharedAppHash || ''))
+    fail(label, 'international shared application hash is missing')
+  if (fragment.sharedAppHash && fragment.audit?.sharedAppHash !== fragment.sharedAppHash)
+    fail(label, 'shared application hash does not match audit')
   if (!isValidDate(fragment.createdAt)) fail(label, 'createdAt must be a valid timestamp')
 
   if (!Array.isArray(fragment.files) || fragment.files.length === 0) {
@@ -137,8 +146,8 @@ export const assertReleaseFragment = (
   }
   if (fragment.platform === 'windows-x64') {
     const expectedAssets = new Map([
-      [`馆长-${fragment.version}-Windows-x64.exe`, 'Ncurator-windows-x64.exe'],
-      [`馆长-${fragment.version}-Windows-x64.exe.blockmap`, 'Ncurator-windows-x64.exe.blockmap']
+      [`${name}-${fragment.version}-Windows-x64.exe`, 'Ncurator-windows-x64.exe'],
+      [`${name}-${fragment.version}-Windows-x64.exe.blockmap`, 'Ncurator-windows-x64.exe.blockmap']
     ])
     if (
       fragment.files.length !== expectedAssets.size ||
@@ -149,7 +158,7 @@ export const assertReleaseFragment = (
   }
   if (fragment.platform === 'macos-arm64') {
     const expectedAssets = new Map([
-      [`馆长-${fragment.version}-macos-arm64.dmg`, 'Ncurator-mac-arm64.dmg'],
+      [`${name}-${fragment.version}-macos-arm64.dmg`, 'Ncurator-mac-arm64.dmg'],
       [`Ncurator-mac-arm64.dmg.blockmap`, 'Ncurator-mac-arm64.dmg.blockmap'],
       ['Ncurator-mac-arm64.zip', 'Ncurator-mac-arm64.zip'],
       ['Ncurator-mac-arm64.zip.blockmap', 'Ncurator-mac-arm64.zip.blockmap']

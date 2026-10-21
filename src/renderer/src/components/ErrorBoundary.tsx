@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import React from 'react'
 
 type ErrorBoundaryProps = {
@@ -38,7 +39,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
         >
           <div style={{ maxWidth: 480, padding: 24, textAlign: 'center' }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: '#37352F' }}>
-              页面出现异常，已停止渲染
+              {t(($) => $.common.anErrorOccurredRenderingHasStopped)}
             </div>
             <div style={{ marginTop: 8, fontSize: 13, color: '#787774', wordBreak: 'break-all' }}>
               {this.state.error.message || String(this.state.error)}
@@ -59,7 +60,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
                 cursor: 'pointer'
               }}
             >
-              重试
+              {t(($) => $.common.retry)}
             </button>
           </div>
         </div>

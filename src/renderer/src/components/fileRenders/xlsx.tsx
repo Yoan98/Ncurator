@@ -1,3 +1,5 @@
+import { t } from '../../i18n'
+import { getRendererRuntime } from '../../i18n'
 import { useOfficeReviewNavigation } from '../workbench/OfficeReviewContext'
 import DocumentSelectionLayer from './selection/DocumentSelectionLayer'
 import { excelAdapter } from './selection/excelAdapter'
@@ -29,10 +31,11 @@ const readBytes = async (document: XlsxDocument): Promise<ArrayBuffer> => {
   if (document.fileData instanceof Uint8Array) return document.fileData.slice().buffer
   if (document.uri) {
     const response = await fetch(document.uri)
-    if (!response.ok) throw new Error(`读取 Excel 失败（${response.status}）`)
+    if (!response.ok)
+      throw new Error(t(($) => $.editors.couldNotReadExcel, { value1: response.status }))
     return response.arrayBuffer()
   }
-  throw new Error('缺少 Excel 预览数据')
+  throw new Error(t(($) => $.editors.excelPreviewDataIsMissing))
 }
 
 const DIFF_MARKER_RGB = new Set(['#22A06B', '#D14343'])
@@ -148,7 +151,9 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
       import('@univerjs/core'),
       import('@univerjs/core/facade'),
       import('@univerjs/preset-sheets-core'),
-      import('@univerjs/preset-sheets-core/locales/zh-CN')
+      getRendererRuntime().locale === 'zh-CN'
+        ? import('@univerjs/preset-sheets-core/locales/zh-CN')
+        : import('@univerjs/preset-sheets-core/locales/en-US')
     ])
       .then(
         async ([
@@ -161,8 +166,11 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
           if (cancelled) return
           const univer = new Univer({
             logLevel: LogLevel.WARN,
-            locale: LocaleType.ZH_CN,
-            locales: { [LocaleType.ZH_CN]: localeModule.default }
+            locale: getRendererRuntime().locale === 'zh-CN' ? LocaleType.ZH_CN : LocaleType.EN_US,
+            locales: {
+              [getRendererRuntime().locale === 'zh-CN' ? LocaleType.ZH_CN : LocaleType.EN_US]:
+                localeModule.default
+            }
           })
           dispose = () => univer.dispose()
           const sheetPreviewOptions: Record<string, unknown> = {
@@ -259,7 +267,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             await univerAPI.getFormula().onCalculationResultApplied(30_000)
           if (cancelled) return
           const canvas = await waitForRenderedCanvas(container, () => cancelled)
-          if (!cancelled && !canvas) throw new Error('Excel 预览画布加载超时')
+          if (!cancelled && !canvas) throw new Error(t(($) => $.editors.excelPreviewCanvasTimedOut))
           if (!cancelled) {
             // Apply after UI permission initialization so its defaults cannot overwrite read-only.
             await workbook
@@ -277,7 +285,10 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
       )
       .catch((reason) => {
         if (!cancelled) {
-          console.error('Excel 预览失败', reason)
+          console.error(
+            t(($) => $.editors.excelPreviewFailed),
+            reason
+          )
           detachNavigation?.()
           dispose?.()
           dispose = undefined
@@ -308,7 +319,8 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
       {sheetDotCss ? <style>{sheetDotCss}</style> : null}
       {error ? (
         <div className="flex h-full items-center justify-center text-sm text-[#787774]">
-          Excel 预览失败：{error}
+          {t(($) => $.editors.excelPreviewFailed2)}
+          {error}
         </div>
       ) : null}
       {selectionAdapter && document.filePath && (

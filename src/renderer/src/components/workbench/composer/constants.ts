@@ -1,13 +1,15 @@
-﻿import type { ReferenceKind } from '../../../../../shared/types'
-import { PRODUCT_NAME_ZH } from '../../../../../shared/constants'
+import { t, getProductName } from '../../../i18n'
+import type { ReferenceKind } from '../../../../../shared/types'
 
 export const resolvePartnerDisplayName = (partnerName?: string | null): string =>
-  partnerName?.trim() || PRODUCT_NAME_ZH
+  partnerName?.trim() || getProductName()
 
 export const buildComposerPlaceholder = (partnerName?: string | null): string =>
-  `输入你想让${resolvePartnerDisplayName(partnerName)}做的事情或者@文件`
+  t(($) => $.workbench.tellWhatToDoOrAFile, { value1: resolvePartnerDisplayName(partnerName) })
 
 export const buildPartnerGuidePlaceholder = (partnerName?: string | null): string =>
-  `告诉${partnerName?.trim() || '伙伴'}该怎么做`
+  t(($) => $.workbench.tellHowToProceed, {
+    value1: partnerName?.trim() || t(($) => $.common.partner)
+  })
 
 export const COMPOSER_REFERENCE_KINDS: ReferenceKind[] = ['directory', 'file', 'web']

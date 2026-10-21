@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { resolveCandidateDirectory } from './candidate.mjs'
+import { DISTRIBUTIONS } from './shared/distribution.mjs'
 import { findLiveChannelsForTag } from './shared/live-tag.mjs'
 import { parseReleaseTag } from './tag.mjs'
 import { createGitHubReleasePublisher } from './github.mjs'
@@ -64,20 +65,22 @@ if (liveChannels.length > 0) {
 
 const platforms = family === 'mac' ? ['macos-arm64'] : ['windows-x64']
 for (const platform of platforms) {
-  const directory = resolveCandidateDirectory(releaseTag, platform)
-  const statePath = path.join(directory, 'candidate-state.json')
-  const exists = await access(statePath)
-    .then(() => true)
-    .catch((error) => {
-      if (error?.code === 'ENOENT') return false
-      throw error
-    })
-  if (!exists) continue
-  const state = JSON.parse(await readFile(statePath, 'utf8'))
-  if (state?.status === 'published') {
-    throw new Error(
-      `local candidate ${releaseTag} ${platform} is marked published; refuse to abort`
-    )
+  for (const distribution of DISTRIBUTIONS) {
+    const directory = resolveCandidateDirectory(releaseTag, platform, distribution)
+    const statePath = path.join(directory, 'candidate-state.json')
+    const exists = await access(statePath)
+      .then(() => true)
+      .catch((error) => {
+        if (error?.code === 'ENOENT') return false
+        throw error
+      })
+    if (!exists) continue
+    const state = JSON.parse(await readFile(statePath, 'utf8'))
+    if (state?.status === 'published') {
+      throw new Error(
+        `local candidate ${releaseTag} ${platform} is marked published; refuse to abort`
+      )
+    }
   }
 }
 
@@ -111,7 +114,9 @@ if (localExists) {
   process.stdout.write(`[release] deleted local tag ${releaseTag}\n`)
 }
 
-const tagCandidateRoot = path.dirname(resolveCandidateDirectory(releaseTag, platforms[0]))
+const tagCandidateRoot = path.dirname(
+  path.dirname(resolveCandidateDirectory(releaseTag, platforms[0]))
+)
 await rm(tagCandidateRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
 
 process.stdout.write(

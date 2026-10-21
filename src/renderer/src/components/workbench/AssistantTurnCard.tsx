@@ -1,3 +1,5 @@
+import { localizeSystemText } from '../../i18n/systemText'
+import { t } from '../../i18n'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SubagentGroupView, { SubagentCloudProvider } from './SubagentGroupView'
 import { presentSubagentGroups } from './subagentPresentation'
@@ -154,15 +156,17 @@ const getActivityItemText = (
 ): AssistantRichTextSegment[] => {
   if (item.toolName !== 'terminal_run' || !item.terminalReviewState) return getItemText(item)
   const prefix = {
-    reviewing: '正在审核命令 ',
-    ready_to_execute: '审核通过，准备执行命令 ',
-    waiting_approval: '待你确认命令 ',
-    not_executed: '命令未执行 '
+    reviewing: t(($) => $.workbench.reviewingCommand),
+    ready_to_execute: t(($) => $.workbench.approvedPreparingCommand),
+    waiting_approval: t(($) => $.workbench.waitingForApprovalOfCommand),
+    not_executed: t(($) => $.workbench.commandDidNotRun)
   }[item.terminalReviewState]
   const commandSegments = item.runningText.slice(1)
   return [
     { text: prefix },
-    ...(commandSegments.length > 0 ? commandSegments : [{ text: '终端命令' }])
+    ...(commandSegments.length > 0
+      ? commandSegments
+      : [{ text: t(($) => $.workbench.terminalCommand) }])
   ]
 }
 
@@ -170,7 +174,9 @@ const formatRunDuration = (startedAt: number, finishedAt: number): string => {
   const elapsedSeconds = Math.max(0, Math.floor((finishedAt - startedAt) / 1000))
   const minutes = Math.floor(elapsedSeconds / 60)
   const seconds = elapsedSeconds % 60
-  return minutes > 0 ? `${minutes}分钟${seconds}秒` : `${seconds}秒`
+  return minutes > 0
+    ? t(($) => $.workbench.mS, { value1: minutes, value2: seconds })
+    : t(($) => $.workbench.s, { value1: seconds })
 }
 
 const renderSegments = (
@@ -182,18 +188,21 @@ const renderSegments = (
       const textClassName = segment.emphasis ? 'text-[#37352F]' : ''
       if (!segment.iconKind) {
         return (
-          <span key={`${segment.text}-${index}`} className={textClassName}>
-            {segment.text}
+          <span
+            key={`${segment.param ? segment.text : localizeSystemText(segment.text)}-${index}`}
+            className={textClassName}
+          >
+            {segment.param ? segment.text : localizeSystemText(segment.text)}
           </span>
         )
       }
       return (
         <span
-          key={`${segment.text}-${index}`}
+          key={`${segment.param ? segment.text : localizeSystemText(segment.text)}-${index}`}
           className={`inline-flex items-center gap-1 ${textClassName}`}
         >
           <LayerIcon iconKind={segment.iconKind} />
-          {segment.text}
+          {segment.param ? segment.text : localizeSystemText(segment.text)}
         </span>
       )
     })}
@@ -275,7 +284,9 @@ const AssistantProcessThoughtView: React.FC<{
           className={`flex h-[22px] w-4 shrink-0 items-center justify-center rounded-[3px] text-[#9B9A97] transition-all duration-150 hover:text-[#37352F] ${
             expanded ? 'opacity-100' : 'opacity-0 group-hover/thought:opacity-100'
           }`}
-          aria-label={expanded ? '收起思考内容' : '展开思考内容'}
+          aria-label={
+            expanded ? t(($) => $.workbench.hideReasoning) : t(($) => $.workbench.showReasoning)
+          }
           onClick={(e) => {
             e.stopPropagation()
             setExpanded((prev) => !prev)
@@ -445,8 +456,12 @@ const buildAssistantTimeline = (input: {
   return timeline
 }
 
-const WAITING_APPROVAL_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户处理' }]
-const WAITING_INTERACTION_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户处理' }]
+const WAITING_APPROVAL_SUMMARY: AssistantRichTextSegment[] = [
+  { text: t(($) => $.workbench.waitingForYourInput) }
+]
+const WAITING_INTERACTION_SUMMARY: AssistantRichTextSegment[] = [
+  { text: t(($) => $.workbench.waitingForYourInput) }
+]
 
 const AssistantActivityItemView: React.FC<{
   item: AssistantProcessGroup['items'][number]
@@ -496,18 +511,22 @@ const AssistantActivityItemView: React.FC<{
       >
         {item.terminalReviewDecision ? (
           <div data-review-actor="ai">
-            AI 审核结果：
-            {item.terminalReviewDecision === 'auto_approve' ? '已通过' : '需要人工确认'}
+            {t(($) => $.workbench.aiReview)}
+            {item.terminalReviewDecision === 'auto_approve'
+              ? t(($) => $.workbench.approved)
+              : t(($) => $.workbench.humanReviewRequired)}
           </div>
         ) : null}
         {review ? (
           <div data-review-actor="human">
-            人工审核结果：
+            {t(($) => $.workbench.yourDecision)}
             {review.action === 'approve'
-              ? '已允许'
+              ? t(($) => $.workbench.allowed)
               : review.action === 'reject'
-                ? '已拒绝'
-                : `已提供指导${review.message ? `：${review.message}` : ''}`}
+                ? t(($) => $.workbench.rejected)
+                : t(($) => $.workbench.guidanceProvided, {
+                    value1: review.message ? `：${review.message}` : ''
+                  })}
           </div>
         ) : null}
       </div>
@@ -529,7 +548,9 @@ const InteractionResultView: React.FC<{
       return (
         <div key={question.id}>
           <div>{question.question}</div>
-          <div className="text-[#37352F]">{labels.join('、') || '未填写'}</div>
+          <div className="text-[#37352F]">
+            {labels.join('、') || t(($) => $.workbench.notProvided)}
+          </div>
         </div>
       )
     })}
@@ -591,11 +612,13 @@ const AssistantActivityGroupView: React.FC<{
         ? [
             {
               text:
-                reviewingCount === 1 ? '正在审核终端命令' : `正在审核 ${reviewingCount} 条终端命令`
+                reviewingCount === 1
+                  ? t(($) => $.workbench.reviewingTerminalCommand)
+                  : t(($) => $.workbench.reviewingTerminalCommands, { value1: reviewingCount })
             }
           ]
         : onlyNotExecutedTerminalItems
-          ? [{ text: '命令未执行' }]
+          ? [{ text: t(($) => $.workbench.commandDidNotRun2) }]
           : buildAssistantExecutionSummaryText(summaryGroups)
   const iconKind =
     waitingUser || reviewingCount > 0 ? 'terminal' : resolveAssistantExecutionIcon(groups)
@@ -746,14 +769,19 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     type="button"
                     className="mb-2 flex w-full items-center justify-start gap-1.5 border-b border-[#EEEEEC] pb-2 text-left text-[13px] leading-5 text-[#9B9A97]"
                     aria-expanded={processExpanded}
-                    aria-label={`${processExpanded ? '收起' : '展开'}过程记录`}
+                    aria-label={t(($) => $.workbench.activityLog, {
+                      value1: processExpanded
+                        ? t(($) => $.workbench.collapse)
+                        : t(($) => $.workbench.expand)
+                    })}
                     data-testid={`${workbenchSelectors.assistantProcessTogglePrefix}-${messageId}`}
                     onClick={() => setProcessExpanded((expanded) => !expanded)}
                   >
                     <span
                       data-testid={`${workbenchSelectors.assistantRunDurationPrefix}-${messageId}`}
                     >
-                      用时 {formatRunDuration(turn.startedAt, turn.finishedAt ?? currentTime)}
+                      {t(($) => $.workbench.duration)}
+                      {formatRunDuration(turn.startedAt, turn.finishedAt ?? currentTime)}
                     </span>
                     {processExpanded ? (
                       <HiChevronDown className="h-3.5 w-3.5 shrink-0" />
@@ -766,7 +794,8 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     <span
                       data-testid={`${workbenchSelectors.assistantRunDurationPrefix}-${messageId}`}
                     >
-                      已处理 {formatRunDuration(turn.startedAt, currentTime)}
+                      {t(($) => $.workbench.handled)}
+                      {formatRunDuration(turn.startedAt, currentTime)}
                     </span>
                   </div>
                 )
@@ -822,7 +851,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   >
                     {showThinkingIndicator ? (
                       <span className="workbench-thinking-shimmer font-medium text-[#37352F]">
-                        让俺想想
+                        {t(($) => $.workbench.thinking)}
                       </span>
                     ) : null}
                   </div>
@@ -849,14 +878,17 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
               className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm leading-6 text-[#B3261E]"
               data-testid={`${workbenchSelectors.assistantRunFailurePrefix}-${messageId}`}
             >
-              <div>失败：{turn.error}</div>
+              <div>
+                {t(($) => $.workbench.failed2)}
+                {turn.error}
+              </div>
               {turn.errorDetail ? (
                 <details className="mt-2">
                   <summary
                     className="cursor-pointer select-none text-xs text-[#8A4F48] underline-offset-2 hover:underline"
                     data-testid={`${workbenchSelectors.assistantRunFailureDetailTogglePrefix}-${messageId}`}
                   >
-                    查看详情
+                    {t(($) => $.workbench.viewDetails)}
                   </summary>
                   <pre
                     className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[6px] bg-[#F3DDD9] px-3 py-2 text-xs leading-5 text-[#7A3B34]"
@@ -879,14 +911,19 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   <HiOutlineDocumentText className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[14px] font-semibold text-[#37352F]">修改的文件</div>
-                  <div className="mt-0.5 text-xs text-[#787774]">点击文件查看本次修改</div>
+                  <div className="text-[14px] font-semibold text-[#37352F]">
+                    {t(($) => $.workbench.changedFiles)}
+                  </div>
+                  <div className="mt-0.5 text-xs text-[#787774]">
+                    {t(($) => $.workbench.clickAFileToReviewItsChanges)}
+                  </div>
                 </div>
                 <div
                   className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-[#37352F]"
                   data-testid={`${workbenchSelectors.assistantTurnApplyCountPrefix}-${messageId}`}
                 >
-                  {turn.applyTargets.length} 个
+                  {turn.applyTargets.length}
+                  {t(($) => $.common.items2)}
                 </div>
               </div>
               <div>
@@ -894,10 +931,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   const statusLabel =
                     apply.status === 'reverted'
                       ? apply.operation === 'created'
-                        ? '已删除'
-                        : '已回退'
+                        ? t(($) => $.common.deleted)
+                        : t(($) => $.workbench.reverted)
                       : apply.status === 'failed'
-                        ? '失败'
+                        ? t(($) => $.common.failed)
                         : null
                   return (
                     <button
@@ -949,8 +986,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     }`}
                   />
                   {applyTargetsExpanded
-                    ? '收起文件'
-                    : `显示剩余 ${turn.applyTargets.length - MAX_VISIBLE_APPLY_TARGETS} 个文件`}
+                    ? t(($) => $.workbench.collapseFiles)
+                    : t(($) => $.preferences.moreFiles, {
+                        count: turn.applyTargets.length - MAX_VISIBLE_APPLY_TARGETS
+                      })}
                 </button>
               ) : null}
             </div>

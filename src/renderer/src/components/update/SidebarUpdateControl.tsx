@@ -1,6 +1,7 @@
+import { t, getProductName } from '../../i18n'
 import React from 'react'
 import { Tooltip } from 'antd'
-import { PRODUCT_NAME_ZH } from '../../../../shared/constants'
+
 import { useAppUpdate } from '../../contexts/AppUpdateContext'
 import { workbenchSelectors } from '../../testing/selectors'
 
@@ -23,7 +24,7 @@ const SidebarUpdateControl: React.FC = () => {
   if (!updateVisible) {
     const version = `v${snapshot.currentVersion}`
     return (
-      <Tooltip title={`当前版本 ${version}`} placement="top">
+      <Tooltip title={t(($) => $.common.currentVersion, { value1: version })} placement="top">
         <span className="nc-sidebar-version" data-testid={workbenchSelectors.appVersion}>
           {version}
         </span>
@@ -33,20 +34,23 @@ const SidebarUpdateControl: React.FC = () => {
 
   const label =
     snapshot.status === 'downloading'
-      ? `更新 ${progressPercent}%`
+      ? t(($) => $.common.updating, { value1: progressPercent })
       : snapshot.status === 'downloaded'
-        ? '重启更新'
+        ? t(($) => $.common.restartToUpdate)
         : retryable
-          ? '重试'
-          : '更新'
+          ? t(($) => $.common.retry)
+          : t(($) => $.common.update)
   const tooltip =
     snapshot.status === 'downloading'
-      ? `正在下载 ${PRODUCT_NAME_ZH} ${snapshot.availableVersion || ''}`
+      ? t(($) => $.common.downloading3, {
+          value1: getProductName(),
+          value2: snapshot.availableVersion || ''
+        })
       : snapshot.status === 'downloaded'
-        ? '更新已下载，点击重启安装'
+        ? t(($) => $.common.updateDownloadedClickToRestartAndInstall)
         : retryable
-          ? snapshot.error || '下载失败，点击重试'
-          : `发现新版本 ${snapshot.availableVersion || ''}`
+          ? snapshot.error || t(($) => $.common.downloadFailedClickToRetry)
+          : t(($) => $.common.versionAvailable, { value1: snapshot.availableVersion || '' })
   const handleClick = (): void => {
     if (snapshot.status === 'downloaded') {
       void installUpdate()

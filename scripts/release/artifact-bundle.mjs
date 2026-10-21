@@ -1,3 +1,4 @@
+import { assertDistribution } from './shared/distribution.mjs'
 import { createHash } from 'node:crypto'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -42,6 +43,12 @@ export const assertReleaseBundle = (
   if (expectedPlatform && bundle.platform !== expectedPlatform) {
     throw new Error(`release bundle platform must be ${expectedPlatform}`)
   }
+  assertDistribution(bundle.distribution || 'domestic')
+  if (
+    bundle.distribution === 'international' &&
+    !/^[a-f0-9]{64}$/u.test(bundle.sharedAppHash || '')
+  )
+    throw new Error('international bundle shared application hash is missing')
   if (!/^[a-f0-9]{40}$/u.test(bundle.commit)) throw new Error('release bundle commit is invalid')
   if (Number.isNaN(Date.parse(bundle.createdAt))) {
     throw new Error('release bundle createdAt is invalid')
@@ -108,6 +115,8 @@ export const createReleaseBundle = async ({ fragmentPath, outputPath, commit }) 
     tag: fragment.tag,
     commit,
     platform: fragment.platform,
+    distribution: fragment.distribution || 'domestic',
+    sharedAppHash: fragment.sharedAppHash,
     createdAt: new Date().toISOString(),
     fragment: path.basename(fragmentPath),
     files
@@ -128,6 +137,11 @@ export const verifyReleaseBundle = async (bundlePath, expected = {}) => {
   const fragmentPath = path.join(directory, bundle.fragment)
   const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'))
   assertReleaseFragment(fragment, { tag: bundle.tag, platform: bundle.platform })
+  if (
+    (fragment.distribution || 'domestic') !== (bundle.distribution || 'domestic') ||
+    fragment.sharedAppHash !== bundle.sharedAppHash
+  )
+    throw new Error('release bundle distribution/resources do not match fragment')
 
   for (const file of bundle.files) {
     const fragmentFile = fragment.files.find((candidate) => candidate.name === file.name)

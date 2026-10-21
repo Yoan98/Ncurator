@@ -43,7 +43,7 @@ describe('free catalog cache protocol', () => {
       const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-free-cache-'))
       vi.stubEnv('NCURATOR_USER_DATA_PATH', folder)
       try {
-        const cachePath = path.join(folder, 'free-models-catalog.json')
+        const cachePath = path.join(folder, 'domestic-zh-CN-free-models-catalog.json')
         await fs.writeFile(
           cachePath,
           JSON.stringify({
@@ -71,7 +71,7 @@ describe('free catalog cache protocol', () => {
     try {
       const entry = sampleEntry({ apiKey: credential })
       await fs.writeFile(
-        path.join(folder, 'free-models-catalog.json'),
+        path.join(folder, 'domestic-zh-CN-free-models-catalog.json'),
         JSON.stringify({
           schemaVersion: FREE_MODEL_CATALOG_CACHE_VERSION,
           fetchedAt: Date.now(),

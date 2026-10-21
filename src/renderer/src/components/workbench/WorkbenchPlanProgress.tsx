@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import React, { useEffect, useMemo, useState } from 'react'
 import { HiCheck } from 'react-icons/hi2'
 import type { ChatMessageLogPlanItem } from '../../../../shared/types'
@@ -38,7 +39,10 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan }) =
   return (
     <div className="group/plan absolute left-1/2 top-0 z-30 -translate-x-1/2 -translate-y-[calc(100%+8px)]">
       <div
-        aria-label={`计划进度 ${done}/${visiblePlan.length}`}
+        aria-label={t(($) => $.workbench.planProgress, {
+          value1: done,
+          value2: visiblePlan.length
+        })}
         className={`flex h-7 w-7 items-center justify-center rounded-full border border-[#E5E4E0] bg-white shadow-[0_2px_8px_rgba(15,15,15,0.08)] transition duration-200 group-hover/plan:border-[#D8D7D3] ${
           finishing ? 'scale-105 border-[#D8D7D3]' : ''
         }`}

@@ -1,3 +1,4 @@
+import { t, getRendererRuntime } from '../../i18n'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Empty, Spin } from 'antd'
 import { arrayBufferFileLoader, type DocRenderer, type DocRendererProps } from 'react-doc-viewer'
@@ -89,7 +90,7 @@ const useDocumentText = (document: LoadedFileRenderDocument | undefined): TextLo
             text: '',
             error: normalizeUserFacingError(
               error instanceof Error ? error.message : error,
-              '文本预览加载失败'
+              t(($) => $.editors.couldNotLoadTheTextPreview)
             )
           })
         }
@@ -124,7 +125,10 @@ const TextPreviewScaffold = ({
   if (state.error) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-white">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="文件暂时无法预览" />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={t(($) => $.editors.filePreviewUnavailable2)}
+        />
       </div>
     )
   }
@@ -132,7 +136,7 @@ const TextPreviewScaffold = ({
   if (state.text.length === 0) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-white">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="空文件" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(($) => $.editors.emptyFile)} />
       </div>
     )
   }
@@ -141,7 +145,9 @@ const TextPreviewScaffold = ({
     <div className="h-full w-full overflow-auto bg-white">
       {truncated ? (
         <div className="sticky top-0 z-10 border-b border-[#EEEEEC] bg-[#FFF8E5] px-6 py-2 text-xs text-[#7A4D00]">
-          文件较大，仅展示前 {TEXT_PREVIEW_MAX_CHARS.toLocaleString()} 个字符。
+          {t(($) => $.editors.thisFileIsLargeShowingOnlyTheFirst)}
+          {TEXT_PREVIEW_MAX_CHARS.toLocaleString(getRendererRuntime().locale)}
+          {t(($) => $.editors.characters)}
         </div>
       ) : null}
       {children(displayText, truncated)}

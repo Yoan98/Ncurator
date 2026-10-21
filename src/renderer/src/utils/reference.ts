@@ -1,9 +1,10 @@
+import { t } from '../i18n'
 import type { KbAvailability, SelectedReference } from '../../../shared/types'
 
 const KB_AVAILABILITY_LABELS: Record<KbAvailability, string> = {
-  indexed: '已索引',
-  partial: '部分可检索',
-  not_indexed: '未索引'
+  indexed: t(($) => $.common.indexed),
+  partial: t(($) => $.common.partiallySearchable),
+  not_indexed: t(($) => $.common.notIndexed)
 }
 
 export const getKbAvailabilityLabel = (availability: KbAvailability): string =>

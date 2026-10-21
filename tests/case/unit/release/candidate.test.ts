@@ -27,23 +27,31 @@ afterEach(async () => {
 
 const createBundle = async ({
   version = '0.1.21',
-  candidateRoot
-}: { version?: string; candidateRoot?: string } = {}) => {
+  candidateRoot,
+  distribution = 'domestic',
+  sharedAppHash = 'a'.repeat(64)
+}: {
+  version?: string
+  candidateRoot?: string
+  distribution?: 'domestic' | 'international'
+  sharedAppHash?: string
+} = {}) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-candidate-test-'))
   const candidates =
     candidateRoot || (await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-candidates-')))
   tempRoots.push(root)
   if (!candidateRoot) tempRoots.push(candidates)
   process.env.NCURATOR_RELEASE_CANDIDATE_ROOT = candidates
+  const name = distribution === 'international' ? 'NCurator' : '馆长'
   const assets = [
     {
-      name: `馆长-${version}-Windows-x64.exe`,
+      name: `${name}-${version}-Windows-x64.exe`,
       storageName: 'Ncurator-windows-x64.exe',
       role: 'installer',
       content: 'installer'
     },
     {
-      name: `馆长-${version}-Windows-x64.exe.blockmap`,
+      name: `${name}-${version}-Windows-x64.exe.blockmap`,
       storageName: 'Ncurator-windows-x64.exe.blockmap',
       role: 'update',
       content: 'blockmap'
@@ -62,10 +70,14 @@ const createBundle = async ({
     tag: `windows-v${version}`,
     version,
     platform: 'windows-x64',
+    distribution,
+    sharedAppHash,
     createdAt: new Date().toISOString(),
     files,
     metadata: `version: ${version}\n`,
     audit: {
+      distribution,
+      sharedAppHash,
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       platform: 'win32',
@@ -197,7 +209,7 @@ describe('retained release candidate', () => {
         tag: 'windows-v0.1.21',
         platforms: ['windows-x64']
       })
-    ).resolves.toEqual([resolveCandidateDirectory('windows-v0.1.20', 'windows-x64')])
+    ).resolves.toEqual([path.dirname(resolveCandidateDirectory('windows-v0.1.20', 'windows-x64'))])
     await expect(
       fs.access(resolveCandidateDirectory('windows-v0.1.20', 'windows-x64'))
     ).rejects.toThrow()
@@ -207,5 +219,39 @@ describe('retained release candidate', () => {
     await expect(
       readReleaseCandidate({ tag: 'windows-v0.1.22', platform: 'windows-x64' })
     ).resolves.toBeDefined()
+  })
+})
+
+describe('international publication inherits domestic regression', () => {
+  it('requires a passed matching domestic candidate and does not claim independent E2E', async () => {
+    const candidateRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-paired-'))
+    tempRoots.push(candidateRoot)
+    for (const distribution of ['domestic', 'international'] as const) {
+      await materializeReleaseCandidate({
+        bundlePath: await createBundle({ candidateRoot, distribution })
+      })
+    }
+    const request = {
+      tag: 'windows-v0.1.21',
+      platform: 'windows-x64',
+      distribution: 'international',
+      commit: '0123456789012345678901234567890123456789'
+    }
+    await expect(assertCandidatePublishable(request)).rejects.toThrow('is prepared')
+    await recordCandidateE2E({ tag: request.tag, platform: request.platform, status: 'passed' })
+    const international = await assertCandidatePublishable(request)
+    expect(international.state.e2e).toMatchObject({
+      status: 'skipped',
+      sharedAppHash: 'a'.repeat(64)
+    })
+    expect(international.state.e2e.domesticBundleSha256).toMatch(/^[a-f0-9]{64}$/)
+    await materializeReleaseCandidate({
+      bundlePath: await createBundle({
+        candidateRoot,
+        distribution: 'international',
+        sharedAppHash: 'b'.repeat(64)
+      })
+    })
+    await expect(assertCandidatePublishable(request)).rejects.toThrow('resources do not match')
   })
 })

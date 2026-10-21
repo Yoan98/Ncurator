@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
@@ -34,18 +35,18 @@ import PartnerAvatar from '../workbench/PartnerAvatar'
 import ComposerInputEditor from '../workbench/composer/ComposerInputEditor'
 
 const WEEKDAY_OPTIONS = [
-  { value: 0, label: '周日' },
-  { value: 1, label: '周一' },
-  { value: 2, label: '周二' },
-  { value: 3, label: '周三' },
-  { value: 4, label: '周四' },
-  { value: 5, label: '周五' },
-  { value: 6, label: '周六' }
+  { value: 0, label: t(($) => $.scheduledTasks.sun) },
+  { value: 1, label: t(($) => $.scheduledTasks.mon) },
+  { value: 2, label: t(($) => $.scheduledTasks.tue) },
+  { value: 3, label: t(($) => $.scheduledTasks.wed) },
+  { value: 4, label: t(($) => $.scheduledTasks.thu) },
+  { value: 5, label: t(($) => $.scheduledTasks.fri) },
+  { value: 6, label: t(($) => $.scheduledTasks.sat) }
 ]
 
 const SCHEDULE_TYPE_OPTIONS = [
-  { value: 'daily', label: '每天' },
-  { value: 'weekly', label: '每周' }
+  { value: 'daily', label: t(($) => $.scheduledTasks.daily) },
+  { value: 'weekly', label: t(($) => $.scheduledTasks.weekly) }
 ]
 
 type FormState = {
@@ -85,9 +86,12 @@ const weekdayLabel = (weekday: number | null): string => {
 const scheduleLabel = (task: ScheduledTask): string => {
   if (task.scheduleType === 'weekly') {
     const day = weekdayLabel(task.weekday)
-    return `每周${day ? ` ${day}` : ''} ${task.timeOfDay}`
+    return t(($) => $.scheduledTasks.everyAt, {
+      value1: day ? ` ${day}` : '',
+      value2: task.timeOfDay
+    })
   }
-  return `每天 ${task.timeOfDay}`
+  return t(($) => $.scheduledTasks.dailyAt, { value1: task.timeOfDay })
 }
 
 const countEnabledTasks = (tasks: ScheduledTask[]): number =>
@@ -119,7 +123,7 @@ const PartnerOptionList = ({
   >
     {partners.length === 0 ? (
       <div className="flex h-[72px] items-center justify-center text-[13px] text-[#91918E]">
-        暂无伙伴
+        {t(($) => $.common.noPartnersYet)}
       </div>
     ) : (
       <div className="flex flex-col gap-0.5">
@@ -260,11 +264,11 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
       return
     }
     modal.confirm({
-      title: '放弃未保存的更改？',
-      content: '关闭后，本次对定时任务的修改不会保存。',
-      okText: '放弃修改',
+      title: t(($) => $.scheduledTasks.discardUnsavedChanges),
+      content: t(($) => $.scheduledTasks.changesToThisScheduledTaskWillNotBeSaved),
+      okText: t(($) => $.scheduledTasks.discardChanges),
       okButtonProps: { danger: true },
-      cancelText: '继续编辑',
+      cancelText: t(($) => $.scheduledTasks.keepEditing),
       zIndex: 1200,
       onOk: () => setFormOpen(false)
     })
@@ -274,23 +278,23 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
     const timeOfDay = form.timeOfDay.trim()
     const description = form.description.trim()
     if (!partners.some((partner) => partner.id === form.partnerId)) {
-      message.warning('请选择伙伴')
+      message.warning(t(($) => $.scheduledTasks.selectAPartner))
       return null
     }
     if (!form.name.trim()) {
-      message.warning('请填写任务名称')
+      message.warning(t(($) => $.scheduledTasks.enterATaskName))
       return null
     }
     if (!description) {
-      message.warning('请填写任务描述')
+      message.warning(t(($) => $.scheduledTasks.enterATaskDescription))
       return null
     }
     if (!timeOfDay) {
-      message.warning('请选择执行时间')
+      message.warning(t(($) => $.scheduledTasks.selectAnExecutionTime))
       return null
     }
     if (form.scheduleType === 'weekly' && form.weekday === null) {
-      message.warning('请选择星期几')
+      message.warning(t(($) => $.scheduledTasks.selectAWeekday))
       return null
     }
     return {
@@ -316,14 +320,14 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
     try {
       const response = await window.api.scheduledTaskSave(payload)
       if (!response.success) {
-        message.error(response.error || '保存失败')
+        message.error(response.error || t(($) => $.common.couldNotSave))
         return
       }
-      message.success('已保存')
+      message.success(t(($) => $.scheduledTasks.saved))
       setFormOpen(false)
       await loadTasks()
     } catch (error) {
-      message.error('保存失败')
+      message.error(t(($) => $.common.couldNotSave))
       console.error('[SCHEDULED-TASKS] save failed:', error)
     } finally {
       setSaving(false)
@@ -334,31 +338,31 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
     try {
       const response = await window.api.scheduledTaskSetEnabled({ id: task.id, enabled })
       if (!response.success) {
-        message.error(response.error || '操作失败')
+        message.error(response.error || t(($) => $.common.operationFailed))
         return
       }
       setTasks((current) =>
         current.map((item) => (item.id === task.id ? response.task || { ...item, enabled } : item))
       )
     } catch (error) {
-      message.error('操作失败')
+      message.error(t(($) => $.common.operationFailed))
       console.error('[SCHEDULED-TASKS] toggle failed:', error)
     }
   }
 
   const handleRunNow = (task: ScheduledTask): void => {
     modal.confirm({
-      title: '立即执行定时任务？',
-      content: `将按「${task.name}」的配置在绑定伙伴执行。`,
-      okText: '立即执行',
-      cancelText: '取消',
+      title: t(($) => $.common.runThisScheduledTaskNow),
+      content: t(($) => $.common.theTaskWillRunInItsBoundPartnerUsing, { value1: task.name }),
+      okText: t(($) => $.common.runNow),
+      cancelText: t(($) => $.common.cancel),
       onOk: async () => {
         const response = await window.api.scheduledTaskRunNow({ id: task.id })
         if (!response.success) {
-          message.warning(response.error || '立即执行失败')
+          message.warning(response.error || t(($) => $.common.couldNotStartTheTask))
           return
         }
-        message.success('已开始执行')
+        message.success(t(($) => $.common.taskStarted))
         await loadTasks()
       }
     })
@@ -366,18 +370,18 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
 
   const handleDelete = (task: ScheduledTask): void => {
     modal.confirm({
-      title: '删除定时任务',
-      content: `确定删除「${task.name}」吗？`,
-      okText: '删除',
+      title: t(($) => $.scheduledTasks.deleteScheduledTask),
+      content: t(($) => $.scheduledTasks.delete2, { value1: task.name }),
+      okText: t(($) => $.common.delete),
       okButtonProps: { danger: true },
-      cancelText: '取消',
+      cancelText: t(($) => $.common.cancel),
       onOk: async () => {
         const response = await window.api.scheduledTaskDelete(task.id)
         if (!response.success) {
-          message.error(response.error || '删除失败')
+          message.error(response.error || t(($) => $.common.couldNotDelete))
           return
         }
-        message.success('已删除')
+        message.success(t(($) => $.common.deleted))
         await loadTasks()
       }
     })
@@ -393,7 +397,9 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
           <HiOutlineClock
             className={`h-4 w-4 ${enabledCount > 0 ? 'text-[#2F5F8F]' : 'text-[#787774]'}`}
           />
-          <span className="text-[13px] font-medium text-[#37352F]">定时任务</span>
+          <span className="text-[13px] font-medium text-[#37352F]">
+            {t(($) => $.common.scheduledTasks)}
+          </span>
           <ScheduledTaskCountChip
             enabledCount={enabledCount}
             dataTestId={scheduledTaskSelectors.countChip}
@@ -407,7 +413,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
             onClick={openCreate}
             data-testid={scheduledTaskSelectors.addButton}
           >
-            手动创建
+            {t(($) => $.scheduledTasks.createManually)}
           </Button>
           <Button
             type="primary"
@@ -418,7 +424,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
               setAiCreateOpen(true)
             }}
           >
-            AI 创建
+            {t(($) => $.scheduledTasks.createWithAi)}
           </Button>
         </div>
       </div>
@@ -432,7 +438,9 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
           <div className="flex flex-1 items-center justify-center px-6">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="还没有定时任务，点击右上角「手动创建」或「AI 创建」"
+              description={t(
+                ($) => $.scheduledTasks.noScheduledTasksYetChooseCreateManuallyOrCreate
+              )}
             />
           </div>
         ) : (
@@ -450,8 +458,9 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
                     </div>
                     <div className="mt-0.5 truncate text-[12px] text-[#91918E]">
                       {task.partnerId
-                        ? partnerNames.get(task.partnerId) || '伙伴已删除'
-                        : '未绑定 / 已停用'}{' '}
+                        ? partnerNames.get(task.partnerId) ||
+                          t(($) => $.scheduledTasks.partnerDeleted)
+                        : t(($) => $.scheduledTasks.unboundDisabled)}{' '}
                       · {scheduleLabel(task)}
                     </div>
                   </div>
@@ -468,14 +477,14 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
                     onClick={() => handleRunNow(task)}
                     data-testid={`${scheduledTaskSelectors.itemRunNowPrefix}-${task.id}`}
                   >
-                    立即执行
+                    {t(($) => $.common.runNow)}
                   </Button>
                   <Button
                     type="text"
                     size="small"
                     icon={<HiOutlinePencilSquare />}
                     onClick={() => openEdit(task)}
-                    aria-label={`编辑 ${task.name}`}
+                    aria-label={t(($) => $.scheduledTasks.edit2, { value1: task.name })}
                     data-testid={`${scheduledTaskSelectors.itemEditPrefix}-${task.id}`}
                   />
                   <Button
@@ -484,7 +493,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
                     danger
                     icon={<HiOutlineTrash />}
                     onClick={() => handleDelete(task)}
-                    aria-label={`删除 ${task.name}`}
+                    aria-label={t(($) => $.scheduledTasks.delete3, { value1: task.name })}
                   />
                 </div>
               ))}
@@ -495,7 +504,11 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
 
       <Drawer
         open={formOpen}
-        title={form.id ? '编辑定时任务' : '新增定时任务'}
+        title={
+          form.id
+            ? t(($) => $.scheduledTasks.editScheduledTask)
+            : t(($) => $.scheduledTasks.newScheduledTask)
+        }
         placement="right"
         width="min(50vw, 800px)"
         closable
@@ -510,10 +523,10 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
             data-testid={scheduledTaskSelectors.formContent}
           >
             <label className="flex flex-col gap-1.5">
-              <RequiredFieldLabel>任务名称</RequiredFieldLabel>
+              <RequiredFieldLabel>{t(($) => $.scheduledTasks.taskName)}</RequiredFieldLabel>
               <Input
                 value={form.name}
-                placeholder="例如：每日晨报"
+                placeholder={t(($) => $.scheduledTasks.forExampleDailyBriefing)}
                 data-testid={scheduledTaskSelectors.formName}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, name: event.target.value }))
@@ -525,7 +538,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
               className="flex flex-col gap-1.5"
               data-testid={scheduledTaskSelectors.formDescription}
             >
-              <RequiredFieldLabel>任务描述</RequiredFieldLabel>
+              <RequiredFieldLabel>{t(($) => $.scheduledTasks.taskDescription)}</RequiredFieldLabel>
               <ComposerInputEditor
                 value={{
                   input: form.description,
@@ -540,14 +553,16 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
                     selectedReferences: value.selectedReferences
                   }))
                 }
-                placeholder="描述你希望伙伴完成的事，也可使用 @ 引用"
+                placeholder={t(
+                  ($) => $.scheduledTasks.describeWhatThePartnerShouldDoUseToReference
+                )}
                 dataTestId={scheduledTaskSelectors.formDescriptionInput}
                 editorClassName="h-[120px] overflow-y-auto"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <RequiredFieldLabel>伙伴</RequiredFieldLabel>
+              <RequiredFieldLabel>{t(($) => $.common.partner)}</RequiredFieldLabel>
               <PartnerOptionList
                 partners={partners}
                 value={form.partnerId}
@@ -557,7 +572,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
             </div>
 
             <div className="flex flex-col gap-2">
-              <RequiredFieldLabel>执行周期</RequiredFieldLabel>
+              <RequiredFieldLabel>{t(($) => $.scheduledTasks.schedule)}</RequiredFieldLabel>
               <Segmented
                 value={form.scheduleType}
                 options={SCHEDULE_TYPE_OPTIONS}
@@ -573,7 +588,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
                 <Select
                   value={form.weekday ?? undefined}
                   className="w-full"
-                  placeholder="选择星期"
+                  placeholder={t(($) => $.scheduledTasks.selectWeekday)}
                   options={WEEKDAY_OPTIONS}
                   data-testid={scheduledTaskSelectors.formWeekday}
                   onChange={(value) =>
@@ -584,7 +599,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
             </div>
 
             <label className="flex flex-col gap-2">
-              <RequiredFieldLabel>执行时间</RequiredFieldLabel>
+              <RequiredFieldLabel>{t(($) => $.scheduledTasks.executionTime)}</RequiredFieldLabel>
               <span data-testid={scheduledTaskSelectors.formTime}>
                 <TimePicker
                   className="w-full"
@@ -611,7 +626,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
               onClick={requestCloseForm}
               disabled={saving}
             >
-              取消
+              {t(($) => $.common.cancel)}
             </Button>
             <Button
               type="primary"
@@ -619,16 +634,16 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
               loading={saving}
               onClick={() => void handleSave()}
             >
-              保存
+              {t(($) => $.common.save)}
             </Button>
           </div>
         </div>
       </Drawer>
       <Modal
         open={aiCreateOpen}
-        title="选择伙伴"
-        okText="开始 AI 创建"
-        cancelText="取消"
+        title={t(($) => $.common.selectPartner)}
+        okText={t(($) => $.scheduledTasks.startCreatingWithAi)}
+        cancelText={t(($) => $.common.cancel)}
         okButtonProps={{
           disabled: !partners.some((partner) => partner.id === aiPartnerId),
           'data-testid': scheduledTaskSelectors.aiConfirm

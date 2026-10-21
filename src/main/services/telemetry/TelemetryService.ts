@@ -1,7 +1,8 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { OFFICIAL_WEBSITE_URL } from '../../../shared/constants'
+import { officialUrl } from '../../../shared/appPreferences'
+import { getAppRuntime } from '../app/AppRuntime'
 import { buildDesktopAppGatewayHeaders } from '../officialApi/appClient'
 
 export type TelemetryEventName = 'app_started' | 'message_submit_completed'
@@ -48,7 +49,6 @@ type PersistedTelemetryState = {
 
 type DeliveryResult = 'accepted' | 'discard' | 'retry'
 
-const DEFAULT_ENDPOINT = `${OFFICIAL_WEBSITE_URL}/api/telemetry/events`
 const MAX_PENDING_EVENTS = 500
 const RETRY_BACKOFF_MS = 30_000
 const DELIVERY_TIMEOUT_MS = 20_000
@@ -134,7 +134,7 @@ const isPendingEvent = (value: unknown): value is TelemetryEventPayload => {
 
 export class TelemetryService {
   private readonly statePath: string
-  private readonly endpoint: string
+  private readonly endpoint: string | undefined
   private readonly enabled: boolean
   private readonly environment: TelemetryEnvironment
   private statePromise: Promise<PersistedTelemetryState> | null = null
@@ -143,7 +143,7 @@ export class TelemetryService {
 
   public constructor(private readonly options: TelemetryServiceOptions) {
     this.statePath = path.join(options.userDataPath, 'telemetry.json')
-    this.endpoint = String(options.endpoint || DEFAULT_ENDPOINT).trim()
+    this.endpoint = options.endpoint?.trim() || undefined
     this.enabled = shouldEnableTelemetry(options.isPackaged)
     this.environment = resolveEnvironment(options.isPackaged)
   }
@@ -228,14 +228,17 @@ export class TelemetryService {
 
   private async deliver(event: TelemetryEventPayload): Promise<DeliveryResult> {
     try {
+      const endpoint =
+        this.endpoint || officialUrl(getAppRuntime().serviceRoute, '/api/telemetry/events')
       const body = JSON.stringify(event)
-      const response = await fetch(this.endpoint, {
+      const response = await fetch(endpoint, {
         method: 'POST',
+        redirect: 'error',
         headers: {
           'content-type': 'application/json',
           ...buildDesktopAppGatewayHeaders({
             method: 'POST',
-            url: this.endpoint,
+            url: endpoint,
             body
           })
         },

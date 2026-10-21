@@ -1,3 +1,5 @@
+import { localizeSystemText } from '../i18n/systemText'
+import { t } from '../i18n'
 const INTERNAL_ERROR_PATTERNS = [
   /langgraph/iu,
   /recursionlimit/iu,
@@ -21,15 +23,22 @@ const VC_RUNTIME_ERROR_PATTERNS = [
   /\b1114\b/iu
 ]
 
-export const normalizeUserFacingError = (value: unknown, fallback = '操作失败'): string => {
+export const normalizeUserFacingError = (
+  value: unknown,
+  fallback: string = t(($) => $.common.operationFailed)
+): string => {
   const message = String(value || '').trim()
   if (!message) return fallback
   const lower = message.toLowerCase()
-  if (lower === 'cancelled' || lower === 'canceled' || lower === 'run cancelled') return '已取消'
-  if (lower === 'run not active' || lower === 'run not found') return '当前运行已结束'
-  if (lower === 'session deleted') return '当前会话已删除'
+  if (lower === 'cancelled' || lower === 'canceled' || lower === 'run cancelled')
+    return t(($) => $.common.cancelled)
+  if (lower === 'run not active' || lower === 'run not found')
+    return t(($) => $.common.thisRunHasEnded)
+  if (lower === 'session deleted') return t(($) => $.common.thisConversationWasDeleted)
   if (VC_RUNTIME_ERROR_PATTERNS.some((pattern) => pattern.test(message))) {
-    return '向量模型运行库加载失败，请安装 Microsoft Visual C++ 2015-2022 运行库后重试'
+    return t(($) => $.common.couldNotLoadTheVectorModelRuntimeInstallMicrosoft)
   }
-  return INTERNAL_ERROR_PATTERNS.some((pattern) => pattern.test(message)) ? fallback : message
+  return INTERNAL_ERROR_PATTERNS.some((pattern) => pattern.test(message))
+    ? fallback
+    : localizeSystemText(message)
 }

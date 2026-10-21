@@ -1,3 +1,4 @@
+import { t, getManualUrl } from '../../i18n'
 import FileIcon from '../FileIcon'
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Empty, Spin, Tooltip, message } from 'antd'
@@ -43,7 +44,6 @@ import WorkspaceFileExplorer, { type WorkspaceFileExplorerMode } from './Workspa
 import WorkspaceFilesEmptyState from './WorkspaceFilesEmptyState'
 import { findLatestFileChangeForPath } from './fileChangeGroups'
 import { shouldShowWpsOpenWithHint, WPS_OPEN_WITH_HINT } from './wpsOpenWithHint'
-import { WPS_INTEGRATION_MANUAL_URL } from '../../../../shared/constants'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
@@ -114,18 +114,18 @@ const getPathFileName = (value?: string): string => {
 }
 
 export const FileChangeNotice: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => {
-  let title = '文件已发生修改'
-  let description = '暂不支持在应用内审核该文件的修改，你可以使用系统应用打开文件查看。'
+  let title: string = t(($) => $.workbench.fileModified)
+  let description: string = t(($) => $.workbench.inAppReviewIsNotSupportedForThisFile)
 
   if (record.status === 'reverted') {
-    title = '本次修改已回退'
-    description = '文件已经恢复到这次修改发生前的状态。'
+    title = t(($) => $.workbench.thisChangeWasReverted)
+    description = t(($) => $.workbench.theFileHasBeenRestoredToItsStateBefore)
   } else if (record.operation === 'renamed') {
-    title = '本次修改了文件名'
-    description = '文件内容没有变化。'
+    title = t(($) => $.workbench.theFileWasRenamed)
+    description = t(($) => $.workbench.theFileContentsDidNotChange)
   } else if (record.operation === 'deleted') {
-    title = '本次删除了该文件'
-    description = '你可以通过回退恢复文件。'
+    title = t(($) => $.workbench.thisFileWasDeleted)
+    description = t(($) => $.workbench.revertThisChangeToRestoreTheFile)
   }
 
   return (
@@ -139,14 +139,18 @@ export const FileChangeNotice: React.FC<{ record: AiFileChangeRecord }> = ({ rec
         {record.operation === 'renamed' && record.status !== 'reverted' ? (
           <div className="mt-4 grid grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)] items-center gap-2 text-left text-[13px]">
             <div className="min-w-0 rounded-[6px] bg-[#F4F4F2] px-3 py-2">
-              <div className="text-[11px] text-[#91918E]">原文件名</div>
+              <div className="text-[11px] text-[#91918E]">
+                {t(($) => $.workbench.originalFileName)}
+              </div>
               <div className="mt-0.5 truncate text-[#57554F]" title={record.beforePath}>
                 {getPathFileName(record.beforePath)}
               </div>
             </div>
             <HiArrowsRightLeft className="h-4 w-4 text-[#B7B5AF]" />
             <div className="min-w-0 rounded-[6px] bg-[#F4F4F2] px-3 py-2">
-              <div className="text-[11px] text-[#91918E]">当前文件名</div>
+              <div className="text-[11px] text-[#91918E]">
+                {t(($) => $.workbench.currentFileName)}
+              </div>
               <div className="mt-0.5 truncate text-[#37352F]" title={record.afterPath}>
                 {getPathFileName(record.afterPath || record.path)}
               </div>
@@ -165,13 +169,17 @@ const WorkbenchEmptyPanel: React.FC = () => (
       <div className="text-center">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={<span className="text-[12px] text-[#9B9A97]">右侧暂无内容</span>}
+          description={
+            <span className="text-[12px] text-[#9B9A97]">
+              {t(($) => $.workbench.nothingOpenYet)}
+            </span>
+          }
         />
         <div
           className="mt-3 text-[11px] text-[#B0AEA8]"
           data-testid={workbenchSelectors.supportedWritebackSummary}
         >
-          支持直接写回：DOCX、PPTX、XLSX、PNG、JPEG、WebP 和 UTF-8 文本
+          {t(($) => $.workbench.directEditingDocxPptxXlsxPngJpegWebpAnd)}
         </div>
       </div>
     </div>
@@ -249,22 +257,28 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   const [openWithError, setOpenWithError] = useState<string | null>(null)
   const isDeletedCreatedFile = mode === 'edit' && status === 'reverted' && operation === 'created'
   const revealPath = isDeletedCreatedFile ? getParentPath(filePath) : filePath
-  const openTitle = isDeletedCreatedFile ? '文件已删除，不能打开' : '系统默认打开'
+  const openTitle = isDeletedCreatedFile
+    ? t(($) => $.workbench.theFileWasDeletedAndCannotBeOpened)
+    : t(($) => $.workbench.openWithSystemDefault)
   const revertTitle =
     status === 'reverted'
       ? isDeletedCreatedFile
-        ? '已回退，文件已删除'
-        : '已回退，不能重复操作'
-      : '回退本次修改'
+        ? t(($) => $.workbench.revertedFileDeleted)
+        : t(($) => $.workbench.alreadyReverted)
+      : t(($) => $.workbench.revertThisChange)
   const statusBadgeLabel =
-    status === 'reverted' ? (operation === 'created' ? '已删除' : '已回退') : null
+    status === 'reverted'
+      ? operation === 'created'
+        ? t(($) => $.common.deleted)
+        : t(($) => $.workbench.reverted)
+      : null
   const showReviewActions = mode === 'edit' && (!onSwitchDisplayMode || displayMode === 'review')
   const defaultApplication = openWithApplications.find((application) => application.isDefault)
-  const openWithLabel = defaultApplication?.name || '系统默认打开'
+  const openWithLabel = defaultApplication?.name || t(($) => $.workbench.openWithSystemDefault)
   const showWpsOpenWithHint = shouldShowWpsOpenWithHint(filePath, openWithApplications)
   const showExternalApplicationHint = (): void => {
     if (showStaleExternalApplicationHint) {
-      onInfoMessage('如果外部应用仍显示旧内容，请关闭该文档后重新打开。')
+      onInfoMessage(t(($) => $.workbench.ifAnotherApplicationStillShowsOldContentCloseAnd))
     }
   }
 
@@ -282,15 +296,20 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
       const response = await window.api.listOpenWithApplications({ filePath })
       if (!response.success) {
         setOpenWithApplications([])
-        setOpenWithError(response.error || '无法获取可用应用')
+        setOpenWithError(response.error || t(($) => $.workbench.couldNotLoadAvailableApplications))
         return
       }
       setOpenWithApplications(response.applications)
       setPreferredApplicationId(response.preferredApplicationId)
-      if (response.preferenceReset) message.info('原默认应用已不可用，已恢复使用系统设置')
+      if (response.preferenceReset)
+        message.info(t(($) => $.workbench.thePreviousDefaultAppIsUnavailableUsingTheSystem))
     } catch (error) {
       setOpenWithApplications([])
-      setOpenWithError(error instanceof Error ? error.message : '无法获取可用应用')
+      setOpenWithError(
+        error instanceof Error
+          ? error.message
+          : t(($) => $.workbench.couldNotLoadAvailableApplications)
+      )
     } finally {
       setOpenWithLoading(false)
     }
@@ -328,8 +347,11 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
       const name = result.applications.find((item) => item.id === applicationId)?.name
       message.success(
         name
-          ? `已将 ${name} 设为 ${openWithExtension(filePath)} 的默认打开应用`
-          : '已恢复使用系统设置'
+          ? t(($) => $.workbench.isNowTheDefaultAppFor, {
+              value1: name,
+              value2: openWithExtension(filePath)
+            })
+          : t(($) => $.workbench.restoredTheSystemDefault)
       )
       return true
     } catch (reason) {
@@ -346,13 +368,14 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
         applicationId: application?.id
       })
       if (!response.success) {
-        setOpenWithError(response.error || '打开应用失败')
-        message.error(response.error || '打开应用失败')
+        setOpenWithError(response.error || t(($) => $.workbench.couldNotOpenTheApplication))
+        message.error(response.error || t(($) => $.workbench.couldNotOpenTheApplication))
         return
       }
       showExternalApplicationHint()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '打开应用失败'
+      const errorMessage =
+        error instanceof Error ? error.message : t(($) => $.workbench.couldNotOpenTheApplication)
       setOpenWithError(errorMessage)
       message.error(errorMessage)
     }
@@ -369,11 +392,11 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
         data-testid={workbenchSelectors.documentToolbar}
       >
         {backTarget ? (
-          <Tooltip title="返回">
+          <Tooltip title={t(($) => $.workbench.back2)}>
             <Button
               type="text"
               size="small"
-              aria-label="返回"
+              aria-label={t(($) => $.workbench.back2)}
               icon={<HiArrowLeft className="h-4 w-4" />}
               className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
               onClick={() => onBackToPanelState(backTarget)}
@@ -398,13 +421,25 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                       className="inline-flex h-5 items-center rounded-[4px] bg-[#F1F1EF] px-1.5 text-[11px] font-medium text-[#57554F]"
                       data-testid={workbenchSelectors.documentModeTag}
                     >
-                      {displayMode === 'review' ? '审核' : '预览'}
+                      {displayMode === 'review'
+                        ? t(($) => $.workbench.review)
+                        : t(($) => $.common.preview)}
                     </span>
-                    <Tooltip title={displayMode === 'review' ? '切换到预览模式' : '切换到审核模式'}>
+                    <Tooltip
+                      title={
+                        displayMode === 'review'
+                          ? t(($) => $.workbench.switchToPreview)
+                          : t(($) => $.workbench.switchToReview)
+                      }
+                    >
                       <Button
                         type="text"
                         size="small"
-                        aria-label={displayMode === 'review' ? '切换到预览模式' : '切换到审核模式'}
+                        aria-label={
+                          displayMode === 'review'
+                            ? t(($) => $.workbench.switchToPreview)
+                            : t(($) => $.workbench.switchToReview)
+                        }
                         icon={<HiArrowsRightLeft className="h-3.5 w-3.5" />}
                         className="!h-6 !w-6 !min-w-6 !rounded-[4px] !p-0 !text-[#91918E] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
                         data-testid={workbenchSelectors.documentModeToggle}
@@ -434,7 +469,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 type="button"
                 className="flex h-8 w-7 shrink-0 cursor-pointer items-center justify-center text-[#91918E] transition-colors hover:text-[#37352F]"
                 onClick={() => {
-                  void window.api.openExternal(WPS_INTEGRATION_MANUAL_URL)
+                  void window.api.openExternal(getManualUrl('#wps-integration'))
                 }}
                 aria-label={WPS_OPEN_WITH_HINT}
                 data-testid={workbenchSelectors.wpsOpenWithHint}
@@ -493,7 +528,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
               <Button
                 type="text"
                 size="small"
-                aria-label="选择打开应用"
+                aria-label={t(($) => $.workbench.chooseAnApplication)}
                 icon={<HiChevronDown className="h-3.5 w-3.5" />}
                 className="!h-full !rounded-none !border-l !border-l-[#E7E5E0] !px-1.5 !text-[#787774] hover:!bg-[#F1F1EF] disabled:!text-[#C9C7C2]"
                 data-testid={workbenchSelectors.applyOpenSystemButton}
@@ -505,7 +540,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
               <Button
                 type="text"
                 size="small"
-                aria-label="回退本次修改"
+                aria-label={t(($) => $.workbench.revertThisChange)}
                 icon={<HiArrowUturnLeft className="h-4 w-4" />}
                 className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] disabled:!text-[#C9C7C2]"
                 loading={reverting}
@@ -516,11 +551,21 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
             </Tooltip>
           ) : null}
           {onToggleExplorer ? (
-            <Tooltip title={explorerOpen ? '收起文件列表' : '展开文件列表'}>
+            <Tooltip
+              title={
+                explorerOpen
+                  ? t(($) => $.workbench.collapseFileList)
+                  : t(($) => $.workbench.expandFileList)
+              }
+            >
               <Button
                 type="text"
                 size="small"
-                aria-label={explorerOpen ? '收起文件列表' : '展开文件列表'}
+                aria-label={
+                  explorerOpen
+                    ? t(($) => $.workbench.collapseFileList)
+                    : t(($) => $.workbench.expandFileList)
+                }
                 aria-pressed={explorerOpen}
                 icon={<FileIcon kind="directory" expanded={explorerOpen} className="h-4 w-4" />}
                 className={`!h-8 !w-8 !rounded-[6px] !border !p-0 !text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] ${
@@ -546,7 +591,11 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
           <div className="flex h-full items-center justify-center">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={<span className="text-[#787774]">该文件已随回退删除</span>}
+              description={
+                <span className="text-[#787774]">
+                  {t(($) => $.workbench.thisFileWasDeletedWhenTheChangeWasReverted)}
+                </span>
+              }
             />
           </div>
         ) : loading ? (
@@ -665,7 +714,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     const filePath = state.kind === 'file_preview' ? state.file.path : activeApplyRecord?.path
     void flushReferencedTextFiles(filePath ? [filePath] : [])
       .then(action)
-      .catch((reason) => message.error(`保存失败：${String(reason)}`))
+      .catch((reason) =>
+        message.error(t(($) => $.workbench.couldNotSave2, { value1: String(reason) }))
+      )
   }
   const [previewRevision, setPreviewRevision] = useState(0)
   const [editableKind, setEditableKind] = useState<EditableTextKind>(null)
@@ -787,7 +838,10 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         aiRunActiveRef.current || Date.now() <= suppressExternalNoticeUntilRef.current
       if (!noticeSuppressed) {
         void window.api.fileExists(previewWatchPath).then((exists) => {
-          if (exists && !disposed) onSuccessMessage('检测到当前文件被外部修改，已自动刷新')
+          if (exists && !disposed)
+            onSuccessMessage(
+              t(($) => $.workbench.externalFileChangesDetectedTheFileWasRefreshedAutomatically)
+            )
         })
       }
     }
@@ -908,7 +962,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       activeApplyRecord.capability !== 'image' &&
       !activeApplyRecord.previewPath ? (
         <div className="flex h-full items-center justify-center text-sm text-[#B3261E]">
-          审核产物缺失或格式不支持
+          {t(($) => $.workbench.reviewDataIsMissingOrUsesAnUnsupportedFormat)}
         </div>
       ) : activeApplyRecord &&
         ['docx', 'ppt', 'excel'].includes(activeApplyRecord.capability) &&
@@ -927,10 +981,10 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   )
   const applyEmptyText =
     activeApplyRecord?.operation === 'created'
-      ? '本次新建了该文件，暂时无法在应用内预览。'
+      ? t(($) => $.workbench.thisFileWasCreatedInThisRunInApp)
       : hasDedicatedPreview
-        ? '审核内容加载失败，可以使用系统应用打开文件查看。'
-        : '文件暂时无法在应用内预览。'
+        ? t(($) => $.workbench.couldNotLoadReviewContentOpenTheFileIn)
+        : t(($) => $.workbench.inAppPreviewIsCurrentlyUnavailableForThisFile)
   const fallbackChangeContent =
     activeApplyRecord &&
     (activeApplyRecord.operation === 'renamed' ||
@@ -984,8 +1038,12 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                       expanded
                       className="mx-auto h-10 w-10 text-[#91918E]"
                     />
-                    <div className="mt-4 text-[18px] font-semibold text-[#37352F]">打开文件</div>
-                    <div className="mt-2 text-sm text-[#91918E]">从右侧工作区文件列表中选择</div>
+                    <div className="mt-4 text-[18px] font-semibold text-[#37352F]">
+                      {t(($) => $.workbench.openFile)}
+                    </div>
+                    <div className="mt-2 text-sm text-[#91918E]">
+                      {t(($) => $.workbench.chooseFromTheWorkspaceFileListOnTheRight)}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1074,7 +1132,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   className="flex h-full items-center justify-center text-sm text-[#9B9A97]"
                   data-testid={workbenchSelectors.applyPanel}
                 >
-                  {applyLoading ? <Spin /> : '当前没有 AI 修改记录。'}
+                  {applyLoading ? <Spin /> : t(($) => $.workbench.noAiFileChangesYet)}
                 </div>
               )
             ) : null}
@@ -1094,7 +1152,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
           {floatingExplorer && explorerOpen ? (
             <button
               type="button"
-              aria-label="关闭文件列表"
+              aria-label={t(($) => $.workbench.closeFileList)}
               className="absolute inset-x-0 bottom-0 top-11 z-10 cursor-default bg-transparent"
               data-testid={workbenchSelectors.workspaceExplorerBackdrop}
               onClick={() => setExplorerOpen(false)}

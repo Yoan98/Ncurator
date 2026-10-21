@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useState } from 'react'
+import { t } from '../i18n'
+import React, { useEffect, useState } from 'react'
 import { Card, Button, Typography } from 'antd'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -70,11 +71,11 @@ const NotificationCenter: React.FC = () => {
           markLlmConfigMissingShown()
           updateNotification('llm-config-missing', {
             id: 'llm-config-missing',
-            title: '未配置大模型 API',
-            description: '智能回答和对话功能需要配置 LLM API，请先完成配置。',
+            title: t(($) => $.common.noLanguageModelApiConfigured),
+            description: t(($) => $.common.aiConversationsRequireALanguageModelApiConfigureOne),
             icon: <HiOutlineCog6Tooth className="text-xl" />,
             action: {
-              label: '去配置',
+              label: t(($) => $.common.configure),
               onClick: () => navigate('/settings/model')
             }
           })
@@ -114,7 +115,7 @@ const NotificationCenter: React.FC = () => {
               onClick={() => updateNotification(item.id, null)}
               className="text-[#9B9A97]"
             >
-              稍后
+              {t(($) => $.common.later)}
             </Button>,
             <Button
               key="action"
@@ -137,7 +138,11 @@ const NotificationCenter: React.FC = () => {
                 {item.icon}
               </div>
             }
-            title={<span className="text-[#37352F]">{item.title}</span>}
+            title={
+              <span className="block whitespace-normal break-words text-[#37352F]">
+                {item.title}
+              </span>
+            }
             description={<Text className="text-[#787774] text-xs">{item.description}</Text>}
           />
         </Card>

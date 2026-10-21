@@ -116,9 +116,11 @@ export const createGitHubReleasePublisher = ({
         throw new Error('GitHub publication requires a tested release candidate')
       }
       const { bundle, directory } = candidate.verified
+      if (bundle.distribution !== 'international')
+        throw new Error('GitHub requires the international installer')
       const annotation = await verifySource(bundle)
       const installer = bundle.files.find((file) => file.role === 'installer')
-      const githubInstaller = { ...installer, name: installer.name.replace(/^馆长-/u, 'NCurator-') }
+      const githubInstaller = installer
       const staging = path.join(candidate.directory, 'github')
       await mkdir(staging, { recursive: true })
       const installerPath = await resolveReleaseAssetPath(directory, installer)
@@ -161,7 +163,7 @@ export const createGitHubReleasePublisher = ({
           '--draft',
           '--latest=false',
           '--title',
-          `馆长 ${version} · ${platform}`,
+          `NCurator ${version} · ${platform}`,
           '--notes-file',
           notesPath
         ])

@@ -1,3 +1,4 @@
+import { t } from '../../../i18n'
 import type { DocumentSelectionNode } from '../../../../../shared/types'
 import type { SelectionLocation } from '../../workbench/composer/DocumentSelectionContext'
 import {
@@ -36,7 +37,7 @@ export function createTextAdapter(
       if (!element.contains(range.commonAncestorContainer)) return null
       const preview = read()
       const location = captureSelection(element, preview, range)
-      if (!location) throw new Error('当前选区没有可读取的文字。')
+      if (!location) throw new Error(t(($) => $.editors.theSelectionContainsNoReadableText))
       const node = newSelection(filePath, preview.text.slice(location.start, location.end))
       node.contextBefore = Array.from(preview.text.slice(0, location.start)).slice(-150).join('')
       node.contextAfter = Array.from(preview.text.slice(location.end)).slice(0, 150).join('')

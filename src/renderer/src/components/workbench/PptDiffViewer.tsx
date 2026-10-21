@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import React, { useEffect, useMemo, useState } from 'react'
 import type { AiFileChangeRecord } from '../../../../shared/types'
 import { assertSupportedPptDiffManifest } from '../../../../shared/pptDiffManifest'
@@ -35,11 +36,12 @@ const loadLocalUrl = async (filePath: string): Promise<string> => {
 }
 
 const changeLabel = (changes: DiffSlide['changes']): string => {
-  if (changes.includes('deleted')) return '已删除'
-  if (changes.includes('added')) return '新增页'
-  if (changes.includes('moved') && changes.includes('modified')) return '内容已修改，位置已移动'
-  if (changes.includes('moved')) return '位置已移动'
-  if (changes.includes('modified')) return '内容已修改'
+  if (changes.includes('deleted')) return t(($) => $.common.deleted)
+  if (changes.includes('added')) return t(($) => $.workbench.newSlide)
+  if (changes.includes('moved') && changes.includes('modified'))
+    return t(($) => $.workbench.contentChangedAndMoved)
+  if (changes.includes('moved')) return t(($) => $.workbench.positionChanged)
+  if (changes.includes('modified')) return t(($) => $.workbench.contentChanged)
   return ''
 }
 
@@ -57,7 +59,7 @@ const PptDiffViewer: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => 
     setManifest(null)
     if (!record.previewPath) {
       setLoading(false)
-      setError('缺少 PPT 审核内容')
+      setError(t(($) => $.workbench.presentationReviewDataIsMissing))
       return () => undefined
     }
     void window.api

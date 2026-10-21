@@ -1,3 +1,5 @@
+import { timelineLabel } from '../../i18n/systemText'
+import { t } from '../../i18n'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DatePicker, Tooltip } from 'antd'
 import type { Dayjs } from 'dayjs'
@@ -26,7 +28,12 @@ const resolveTimelineLayoutAnchor = (host: HTMLElement): HTMLElement | null => {
 
 const measureTimelineLayout = (
   timelineRoot: HTMLElement
-): { composerClearancePx: number; lineEndPx: number; leftGutterPx: number; hostWidthPx: number } | null => {
+): {
+  composerClearancePx: number
+  lineEndPx: number
+  leftGutterPx: number
+  hostWidthPx: number
+} | null => {
   const host = timelineRoot.parentElement
   if (!host) return null
   const anchor = resolveTimelineLayoutAnchor(host)
@@ -45,10 +52,7 @@ const measureTimelineLayout = (
   if (lastTrack instanceof HTMLElement) {
     const rootRect = timelineRoot.getBoundingClientRect()
     const trackRect = lastTrack.getBoundingClientRect()
-    lineEndPx = Math.max(
-      0,
-      Math.round(rootRect.bottom - (trackRect.top + trackRect.height / 2))
-    )
+    lineEndPx = Math.max(0, Math.round(rootRect.bottom - (trackRect.top + trackRect.height / 2)))
   }
   timelineRoot.style.setProperty('--nc-timeline-line-end', `${lineEndPx}px`)
   return { composerClearancePx, lineEndPx, leftGutterPx, hostWidthPx }
@@ -140,13 +144,15 @@ export const MessageTimeline = ({
                 blockNodeClicks || openPickerNodeId ? ' is-click-blocked' : ''
               }`}
               data-testid={`${workbenchSelectors.timelineItemPrefix}-${node.id}`}
-              aria-label={node.label}
+              aria-label={timelineLabel(node)}
               onClick={() => onSelectNode(node)}
             >
               <span className="nc-message-timeline-track" aria-hidden="true">
                 <span className={`nc-message-timeline-dot nc-message-timeline-dot-${node.level}`} />
               </span>
-              {!compact ? <span className="nc-message-timeline-label">{node.label}</span> : null}
+              {!compact ? (
+                <span className="nc-message-timeline-label">{timelineLabel(node)}</span>
+              ) : null}
             </button>
           )
           return (
@@ -157,7 +163,7 @@ export const MessageTimeline = ({
               }`}
             >
               {compact ? (
-                <Tooltip title={node.label} placement="right" mouseEnterDelay={0.15}>
+                <Tooltip title={timelineLabel(node)} placement="right" mouseEnterDelay={0.15}>
                   {itemButton}
                 </Tooltip>
               ) : (
@@ -225,7 +231,7 @@ const TimelineDayPicker = ({
         type="button"
         className="nc-message-timeline-search"
         data-testid={`${workbenchSelectors.timelineItemPrefix}-search-${node.id}`}
-        aria-label={`选择${node.label}内的日期`}
+        aria-label={t(($) => $.workbench.selectADateIn, { value1: node.label })}
         onClick={(event) => {
           event.stopPropagation()
           onOpenChange(true)

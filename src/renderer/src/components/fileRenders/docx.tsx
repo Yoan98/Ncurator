@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { useOfficeReviewNavigation } from '../workbench/OfficeReviewContext'
 import { useCallback, useEffect, useState } from 'react'
 import type { DocRendererProps } from 'react-doc-viewer'
@@ -158,7 +159,7 @@ export const DocxPreview = ({
             setRenderError(
               normalizeUserFacingError(
                 error instanceof Error ? error.message : error,
-                '读取 docx 预览数据失败'
+                t(($) => $.editors.couldNotReadWordPreviewData)
               )
             )
           }
@@ -167,7 +168,7 @@ export const DocxPreview = ({
       }
       if (!file || cancelled) {
         if (!file && !cancelled) {
-          setRenderError('缺少 docx 预览数据')
+          setRenderError(t(($) => $.editors.wordPreviewDataIsMissing))
         }
         return
       }
@@ -190,7 +191,7 @@ export const DocxPreview = ({
           setRenderError(
             normalizeUserFacingError(
               error instanceof Error ? error.message : error,
-              'docx 渲染失败'
+              t(($) => $.editors.couldNotRenderTheWordDocument)
             )
           )
         }
@@ -274,7 +275,7 @@ export const DocxPreview = ({
       {renderError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-[#F7F7F5] px-6 text-center text-sm text-[#787774]">
           <span className="max-w-[460px] whitespace-pre-wrap break-words">
-            {`docx 预览渲染失败：${renderError}`}
+            {t(($) => $.editors.wordPreviewFailed, { value1: renderError })}
           </span>
         </div>
       ) : null}

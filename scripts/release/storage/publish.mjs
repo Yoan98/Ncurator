@@ -1,3 +1,4 @@
+import { distributionStorage } from '../shared/distribution.mjs'
 import path from 'node:path'
 import process from 'node:process'
 import { resolveReleaseStorageConfigs } from './config.mjs'
@@ -15,7 +16,9 @@ export const prepareReleaseStoragePublication = async (
 ) => {
   // Resolve both sets of credentials and reject newer public versions before
   // GitHub or either storage channel receives any writes.
-  const configs = resolveReleaseStorageConfigs(environment)
+  const configs = resolveReleaseStorageConfigs(environment).filter(
+    (config) => config.target === distributionStorage(fragment.distribution)
+  )
   return Promise.all(
     configs.map(async (config) => ({
       config,
@@ -31,6 +34,8 @@ export const publishReleaseStorage = async (
 ) => {
   const { fragment, directory, fragmentPath } = verified
   for (const { config, current } of channels) {
+    if (config.target !== distributionStorage(fragment.distribution))
+      throw new Error('release distribution cannot be published to this storage')
     const options = {
       cwd: root,
       env: { ...process.env, RELEASE_STORAGE_TARGET: config.target }

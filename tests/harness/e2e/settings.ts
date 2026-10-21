@@ -404,9 +404,16 @@ export const navigateToSettingsSection = async (
     window.location.hash = nextHash
   }, SETTINGS_TARGET_HASHES[section])
   await getSettingsLocator(page, SETTINGS_TARGET_SELECTORS[section]).waitFor({ state: 'visible' })
-  await page.getByRole('heading', { name: SETTINGS_TARGET_HEADINGS[section] }).first().waitFor({
-    state: 'visible'
-  })
+  await page
+    .getByRole('heading', {
+      name: new RegExp(
+        `^(${SETTINGS_TARGET_HEADINGS[section]}|${{ general: 'General', model: 'Language models', workspace: 'Workspace', vector: 'Vector models' }[section]})$`
+      )
+    })
+    .first()
+    .waitFor({
+      state: 'visible'
+    })
 }
 
 export const selectSettingsPresetProviderOption = async (
@@ -539,17 +546,14 @@ export const selectWorkspaceIndexSpeedThroughSettingsUi = async (
     return element instanceof HTMLButtonElement && !element.disabled
   }, testId)
   await button.click()
-  await page.waitForFunction(
-    (speedTestId) => {
-      const element = document.querySelector(`[data-testid="${speedTestId}"]`)
-      return (
-        element instanceof HTMLButtonElement &&
-        !element.disabled &&
-        element.classList.contains('ant-btn-primary')
-      )
-    },
-    testId
-  )
+  await page.waitForFunction((speedTestId) => {
+    const element = document.querySelector(`[data-testid="${speedTestId}"]`)
+    return (
+      element instanceof HTMLButtonElement &&
+      !element.disabled &&
+      element.classList.contains('ant-btn-primary')
+    )
+  }, testId)
 }
 
 export const bindWorkspaceRootThroughSettingsUi = async (
@@ -577,9 +581,7 @@ export const bindWorkspaceRootThroughSettingsUi = async (
     for (const strategy of strategies) {
       try {
         await page.waitForTimeout(1_000)
-        diagnostics.push(
-          await selectDirectoryInNativeDialog(rootPath, electronProcessId, strategy)
-        )
+        diagnostics.push(await selectDirectoryInNativeDialog(rootPath, electronProcessId, strategy))
         if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
       } catch (error) {
         diagnostics.push(error instanceof Error ? error.message : String(error))

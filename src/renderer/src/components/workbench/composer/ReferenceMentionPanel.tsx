@@ -1,3 +1,4 @@
+import { t } from '../../../i18n'
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Empty, Spin } from 'antd'
 import type { SelectedReference } from '../../../../../shared/types'
@@ -57,11 +58,11 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
   })
   const groups = [
     {
-      title: '文件',
+      title: t(($) => $.common.file),
       items: options.filter((reference) => reference.kind !== 'web')
     },
     {
-      title: '网页',
+      title: t(($) => $.workbench.webpage2),
       items: options.filter((reference) => reference.kind === 'web')
     }
   ] satisfies ReferenceMentionGroup[]
@@ -161,7 +162,10 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
             <Spin size="small" />
           </div>
         ) : options.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的资料" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={t(($) => $.workbench.noMatchingSources)}
+          />
         ) : (
           <div className="space-y-2">
             {visibleGroups.map((group) => (

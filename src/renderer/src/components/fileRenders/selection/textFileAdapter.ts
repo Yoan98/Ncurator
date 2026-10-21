@@ -1,3 +1,4 @@
+import { t } from '../../../i18n'
 import type { SelectionLocation } from '../../workbench/composer/DocumentSelectionContext'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import {
@@ -105,9 +106,10 @@ function markdownSourceRange(
     from = index + 1
   }
   matches.sort((a, b) => b.score - a.score)
-  if (!matches.length) throw new Error('无法将当前选区对应到 Markdown 原文。')
+  if (!matches.length)
+    throw new Error(t(($) => $.editors.couldNotMapTheSelectionToTheMarkdownSource))
   if (matches.length > 1 && matches[0].score === matches[1].score)
-    throw new Error('原文位置不唯一，无法引用该选区。')
+    throw new Error(t(($) => $.editors.theSourceTextIsNotUniqueCouldNotReference))
   return matches[0]
 }
 
@@ -181,7 +183,8 @@ export function plainTextAdapter(
         end = textarea.selectionEnd,
         source = textarea.value
       const node = newSelection(filePath, source.slice(start, end))
-      if (!node.selectedText.trim()) throw new Error('当前选区没有可读取的文字。')
+      if (!node.selectedText.trim())
+        throw new Error(t(($) => $.editors.theSelectionContainsNoReadableText))
       node.contextBefore = Array.from(source.slice(0, start)).slice(-150).join('')
       node.contextAfter = Array.from(source.slice(end)).slice(0, 150).join('')
       node.anchor = sourceAnchor(source, start, end)

@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import {
   basenamePath,
   imageMimeFromPath,
@@ -52,7 +53,7 @@ export const resolvePreviewImageName = (img: HTMLImageElement): string => {
   if (localPath) return basenamePath(localPath)
   const alt = (img.getAttribute('alt') || '').trim()
   if (alt) return alt
-  return '图片'
+  return t(($) => $.editors.image)
 }
 
 export const isImageLoaded = (img: HTMLImageElement): boolean =>

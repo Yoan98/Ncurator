@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import {
   getFileExtension,
   isKnownUnsupportedBinaryType,
@@ -94,7 +95,7 @@ export const prepareFileRenderDocument = async (
   createdUrls: string[]
 ): Promise<PreparedFileRenderDocument> => {
   if (document.filePath && !(await window.api.fileExists(document.filePath))) {
-    throw new Error('文件已删除')
+    throw new Error(t(($) => $.editors.fileDeleted))
   }
   const fileName = getFileName(document)
   const sourceMimeType =

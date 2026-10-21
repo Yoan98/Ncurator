@@ -1,3 +1,5 @@
+import { messageTimeLabel } from '../i18n/systemText'
+import { t, getProductName, getManualUrl } from '../i18n'
 import FileIcon from '../components/FileIcon'
 import {
   flushAllTextFiles,
@@ -46,21 +48,14 @@ import type {
   AiApprovalBatchDecision
 } from '../../../shared/types'
 import { PARTNER_AVATAR_SHAPES, PARTNER_AVATAR_COLORS } from '../../../shared/types'
-import {
-  NO_EFFECTIVE_FILE_CHANGE_MESSAGE,
-  PRODUCT_NAME_ZH,
-  USER_MANUAL_URL
-} from '../../../shared/constants'
+import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../shared/constants'
 import { findBrowserTabByUrl } from '../../../shared/browserUrl'
 import {
   pickFallbackWorkbenchModel,
   resolveSelectedWorkbenchModel
 } from '../../../shared/workbenchModelSelection'
 import { isFreeModelConfigId, type FreeModelPublicEntry } from '../../../shared/freeModels'
-import {
-  FREE_MODEL_NO_VISION_WITH_IMAGE_HISTORY_REASON,
-  shouldBlockFreeModelWithoutVision
-} from '../../../shared/messageLogVisionContext'
+import { shouldBlockFreeModelWithoutVision } from '../../../shared/messageLogVisionContext'
 import type { LlmPresetProvider } from '../../../shared/llmPresets'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { NativeConfirmDialog } from '../components/NativeConfirmDialog'
@@ -84,10 +79,7 @@ import {
   type TimelineNode,
   DAY_MS
 } from '../../../shared/workbench/messageTimeline'
-import {
-  collectUserMessageTimeIds,
-  formatUserMessageTimeLabel
-} from '../../../shared/workbench/messageTimeLabel'
+import { collectUserMessageTimeIds } from '../../../shared/workbench/messageTimeLabel'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import ScheduledTasksView from '../components/scheduledTasks/ScheduledTasksView'
 import ScheduledTaskCountChip from '../components/scheduledTasks/ScheduledTaskCountChip'
@@ -154,10 +146,7 @@ import {
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts
 } from '../components/workbench/utils'
-import {
-  clipPartnerListPreview,
-  PARTNER_LIST_EMPTY_PREVIEW
-} from '../../../shared/workbench/conversationProjection'
+import { clipPartnerListPreview } from '../../../shared/workbench/conversationProjection'
 import {
   projectApprovalReviews,
   projectProcessGroups
@@ -275,7 +264,7 @@ const getFileTabId = (filePath: string, platform: string): string => {
 
 const getFileTabTitle = (filePath: string): string => {
   const normalized = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
-  return normalized.split('/').filter(Boolean).pop() || normalized || '文件'
+  return normalized.split('/').filter(Boolean).pop() || normalized || t(($) => $.common.file)
 }
 
 const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
@@ -348,7 +337,7 @@ const buildSearchTurnFromProjectedMessage = (message: ChatMessage): AssistantTur
 })
 
 const formatRunFailureTitle = (event: Extract<AiRunEvent, { type: 'run_failed' }>): string =>
-  event.message?.trim() || '运行失败，请重试'
+  event.message?.trim() || t(($) => $.workbench.theTaskFailedPleaseTryAgain)
 
 const formatRunFailureDetail = (
   event: Extract<AiRunEvent, { type: 'run_failed' }>
@@ -1131,7 +1120,9 @@ const ChatPage: React.FC = () => {
               try {
                 const response = await window.api.partnerUiStateSave({ partnerId: key, state })
                 if (!response.success) {
-                  throw new Error(response.error || '保存会话状态失败')
+                  throw new Error(
+                    response.error || t(($) => $.workbench.couldNotSaveConversationState)
+                  )
                 }
                 persistFailureNotifiedRef.current.delete(key)
                 return
@@ -1146,7 +1137,7 @@ const ChatPage: React.FC = () => {
             console.error('Failed to persist workbench UI state', error)
             if (!persistFailureNotifiedRef.current.has(key)) {
               persistFailureNotifiedRef.current.add(key)
-              message.warning('当前会话状态保存失败')
+              message.warning(t(($) => $.workbench.couldNotSaveTheCurrentConversationState))
             }
             if (persistRevisionsRef.current[key] !== revision) return
             persistRetryTimersRef.current[key] = window.setTimeout(() => {
@@ -1213,10 +1204,10 @@ const ChatPage: React.FC = () => {
             id: `browser:${browser.id}`,
             kind: 'browser',
             browserTabId: browser.id,
-            title: browser.title || (browser.url ? browser.url : '新标签页'),
+            title: browser.title || (browser.url ? browser.url : t(($) => $.workbench.newTab2)),
             state: {
               kind: 'browser',
-              title: browser.title || (browser.url ? browser.url : '新标签页'),
+              title: browser.title || (browser.url ? browser.url : t(($) => $.workbench.newTab2)),
               browserTabId: browser.id
             }
           }))
@@ -1486,9 +1477,9 @@ const ChatPage: React.FC = () => {
 
   const composerSubmitDisabledReason = useMemo(() => {
     if (!input.trim()) return null
-    if (!currentPartnerId) return '请先选择伙伴'
-    if (switchingPartnerId) return '当前伙伴未就绪'
-    if (!modelSelection.mainModel) return '请先选择主模型'
+    if (!currentPartnerId) return t(($) => $.workbench.selectAPartnerFirst)
+    if (switchingPartnerId) return t(($) => $.workbench.theCurrentPartnerIsNotReady)
+    if (!modelSelection.mainModel) return t(($) => $.workbench.selectAMainModelFirst)
     const hasEffectiveImageContext =
       contextUsage?.partnerId === currentPartnerId && contextUsage.hasEffectiveImageContext
     if (
@@ -1498,7 +1489,7 @@ const ChatPage: React.FC = () => {
         hasEffectiveImageContext
       })
     ) {
-      return FREE_MODEL_NO_VISION_WITH_IMAGE_HISTORY_REASON
+      return t(($) => $.preferences.freeNoVision)
     }
     return null
   }, [
@@ -1941,14 +1932,14 @@ const ChatPage: React.FC = () => {
     async (existingTabId?: string): Promise<void> => {
       const ownerId = currentPartnerIdRef.current
       if (!ownerId && !existingTabId) {
-        emitErrorMessage('请先选择伙伴')
+        emitErrorMessage(t(($) => $.workbench.selectAPartnerFirst))
         return
       }
       const response = existingTabId
         ? await window.api.browserPanelStateGet({ tabId: existingTabId })
         : await window.api.browserTabCreate({ ownerId: ownerId as string })
       if (!response.success || !response.state) {
-        emitErrorMessage(response.error || '无法创建浏览器标签')
+        emitErrorMessage(response.error || t(($) => $.workbench.couldNotCreateABrowserTab))
         return
       }
       const browser = response.state
@@ -1956,10 +1947,10 @@ const ChatPage: React.FC = () => {
         id: `browser:${browser.id}`,
         kind: 'browser',
         browserTabId: browser.id,
-        title: browser.title || '新标签页',
+        title: browser.title || t(($) => $.workbench.newTab2),
         state: {
           kind: 'browser',
-          title: browser.title || '新标签页',
+          title: browser.title || t(($) => $.workbench.newTab2),
           browserTabId: browser.id
         }
       })
@@ -2013,7 +2004,7 @@ const ChatPage: React.FC = () => {
       void window.api.browserPanelStateGet({ tabId: browserTabId }).then((response) => {
         if (!response.success || !response.state) return
         const browser = response.state
-        const title = browser.title || browser.url || '新标签页'
+        const title = browser.title || browser.url || t(($) => $.workbench.newTab2)
         void updateBackgroundPanelState(partnerId, (state) => {
           const resourceId = `browser:${browser.id}`
           const tab: WorkbenchResourceTab = {
@@ -2047,7 +2038,7 @@ const ChatPage: React.FC = () => {
         filePath: record.path,
         state: {
           kind: 'apply_workspace',
-          title: '修改的文件',
+          title: t(($) => $.workbench.changedFiles),
           applyId: record.id
         }
       })
@@ -2101,10 +2092,12 @@ const ChatPage: React.FC = () => {
     async (filePath: string): Promise<boolean> => {
       try {
         const result = await window.api.openPath(filePath)
-        if (!result.success) emitErrorMessage(result.error || '打开失败')
+        if (!result.success) emitErrorMessage(result.error || t(($) => $.workbench.couldNotOpen))
         return result.success
       } catch (error) {
-        emitErrorMessage(error instanceof Error ? error.message : '打开失败')
+        emitErrorMessage(
+          error instanceof Error ? error.message : t(($) => $.workbench.couldNotOpen)
+        )
         return false
       }
     },
@@ -2114,7 +2107,8 @@ const ChatPage: React.FC = () => {
   const revealPathOrNotify = useCallback(
     async (filePath: string): Promise<void> => {
       const result = await window.api.revealPath(filePath)
-      if (!result.success) emitErrorMessage(result.error || '定位失败')
+      if (!result.success)
+        emitErrorMessage(result.error || t(($) => $.workbench.couldNotLocateTheContent))
     },
     [emitErrorMessage]
   )
@@ -2464,7 +2458,7 @@ const ChatPage: React.FC = () => {
       setAttachments((current) => current.filter((attachment) => !missingIds.has(attachment.id)))
       if (!missingAttachmentNotifiedRef.current.has(key)) {
         missingAttachmentNotifiedRef.current.add(key)
-        message.warning('部分附件文件已不存在，已从当前会话移除')
+        message.warning(t(($) => $.workbench.someAttachmentFilesNoLongerExistAndWereRemoved))
       }
     })
     return () => {
@@ -2614,7 +2608,7 @@ const ChatPage: React.FC = () => {
           noEffectiveChangeRecords.forEach((record) => {
             if (notifiedNoEffectiveChangeIdsRef.current.has(record.id)) return
             notifiedNoEffectiveChangeIdsRef.current.add(record.id)
-            emitInfoMessage(NO_EFFECTIVE_FILE_CHANGE_MESSAGE)
+            emitInfoMessage(t(($) => $.workbench.noEffectiveFileChange))
           })
         }
         const nextItems = listedItems.filter(
@@ -3197,7 +3191,10 @@ const ChatPage: React.FC = () => {
     })
     void window.api.partnerSetPinned({ id: session.id, pinned: nextPinned }).then((response) => {
       if (!response.success) {
-        emitErrorMessage(response.error || (nextPinned ? '置顶失败' : '取消置顶失败'))
+        emitErrorMessage(
+          response.error ||
+            (nextPinned ? t(($) => $.workbench.couldNotPin) : t(($) => $.workbench.couldNotUnpin))
+        )
         void loadPartners()
       }
     })
@@ -3211,7 +3208,7 @@ const ChatPage: React.FC = () => {
     try {
       const response = await window.api.partnerDelete(id)
       if (!response.success) {
-        return response.error || '删除会话失败'
+        return response.error || t(($) => $.workbench.couldNotDeleteTheConversation)
       }
       const remainingPartners = partners.filter((item) => item.id !== id)
       const retryTimer = persistRetryTimersRef.current[id]
@@ -3244,7 +3241,7 @@ const ChatPage: React.FC = () => {
       void loadPartners()
     } catch (error) {
       console.error(error)
-      return '删除会话失败'
+      return t(($) => $.workbench.couldNotDeleteTheConversation)
     } finally {
       setDeletingPartnerIds((current) => {
         const next = new Set(current)
@@ -3259,7 +3256,7 @@ const ChatPage: React.FC = () => {
       await flushAllTextFiles()
       const state: Extract<WorkbenchContentPanelState, { kind: 'file_preview' }> = {
         kind: 'file_preview',
-        title: '文档查看',
+        title: t(($) => $.workbench.documentViewer),
         file,
         backTarget
       }
@@ -3290,10 +3287,12 @@ const ChatPage: React.FC = () => {
             id: `browser:${existing.id}`,
             kind: 'browser',
             browserTabId: existing.id,
-            title: existing.title || reference.label || existing.url || '浏览器',
+            title:
+              existing.title || reference.label || existing.url || t(($) => $.workbench.browser),
             state: {
               kind: 'browser',
-              title: existing.title || reference.label || existing.url || '浏览器',
+              title:
+                existing.title || reference.label || existing.url || t(($) => $.workbench.browser),
               browserTabId: existing.id
             }
           })
@@ -3302,7 +3301,9 @@ const ChatPage: React.FC = () => {
 
         const createResponse = await window.api.browserTabCreate({ ownerId })
         if (!createResponse.success || !createResponse.state) {
-          emitErrorMessage(createResponse.error || '无法打开内置浏览器')
+          emitErrorMessage(
+            createResponse.error || t(($) => $.workbench.couldNotOpenTheBuiltInBrowser)
+          )
           return
         }
         const browser = createResponse.state
@@ -3310,10 +3311,10 @@ const ChatPage: React.FC = () => {
           id: `browser:${browser.id}`,
           kind: 'browser',
           browserTabId: browser.id,
-          title: browser.title || reference.label || '浏览器',
+          title: browser.title || reference.label || t(($) => $.workbench.browser),
           state: {
             kind: 'browser',
-            title: browser.title || reference.label || '浏览器',
+            title: browser.title || reference.label || t(($) => $.workbench.browser),
             browserTabId: browser.id
           }
         })
@@ -3324,7 +3325,7 @@ const ChatPage: React.FC = () => {
           })
           .then((navigateResponse) => {
             if (!navigateResponse.success) {
-              emitErrorMessage(navigateResponse.error || '打开链接失败')
+              emitErrorMessage(navigateResponse.error || t(($) => $.common.couldNotOpenTheLink2))
             }
           })
         return
@@ -3372,7 +3373,11 @@ const ChatPage: React.FC = () => {
             openWorkspace: true
           })
         })
-        .catch((reason) => message.error(`保存或读取审核失败：${String(reason)}`))
+        .catch((reason) =>
+          message.error(
+            t(($) => $.workbench.couldNotSaveOrLoadReviewData, { value1: String(reason) })
+          )
+        )
     },
     [message]
   )
@@ -3458,7 +3463,7 @@ const ChatPage: React.FC = () => {
   const handleBrowserStateChange = useCallback(
     (browser: BrowserTabState): void => {
       const resourceId = `browser:${browser.id}`
-      const title = browser.title || (browser.url ? browser.url : '新标签页')
+      const title = browser.title || (browser.url ? browser.url : t(($) => $.workbench.newTab2))
       setTabWorkspaces((current) => {
         const ownerKey = browser.ownerId || tabWorkspaceKey
         const workspace = current[ownerKey]
@@ -3501,8 +3506,8 @@ const ChatPage: React.FC = () => {
     openResourceTab({
       id: 'file:launcher',
       kind: 'file',
-      title: '打开文件',
-      state: { kind: 'file_launcher', title: '打开文件' }
+      title: t(($) => $.workbench.openFile),
+      state: { kind: 'file_launcher', title: t(($) => $.workbench.openFile) }
     })
   }, [openResourceTab])
 
@@ -3686,7 +3691,7 @@ const ChatPage: React.FC = () => {
             setLoading(false)
             setPendingApprovalBatch(null)
           }
-          message.warning(event.message || '当前运行出现告警')
+          message.warning(event.message || t(($) => $.workbench.thisRunHasAWarning))
         }
         return
       }
@@ -3755,8 +3760,8 @@ const ChatPage: React.FC = () => {
                   ...item,
                   error: true,
                   content: item.content
-                    ? `${item.content}\n\n失败：${errorText}`
-                    : `失败：${errorText}`
+                    ? t(($) => $.workbench.failed3, { value1: item.content, value2: errorText })
+                    : t(($) => $.workbench.failed4, { value1: errorText })
                 }
               : item
           )
@@ -3793,7 +3798,7 @@ const ChatPage: React.FC = () => {
           partnerSwitchRequestRef.current = requestId
           void loadPartnerOpen(eventPartnerId, requestId)
         }
-        message.info('已取消')
+        message.info(t(($) => $.common.cancelled))
         return
       }
 
@@ -3857,7 +3862,7 @@ const ChatPage: React.FC = () => {
     assetBucketId: string
   } | null> => {
     if (!currentPartnerId) {
-      message.warning('请先选择伙伴后再添加附件')
+      message.warning(t(($) => $.workbench.selectAPartnerBeforeAddingAttachments))
       return null
     }
 
@@ -3886,11 +3891,11 @@ const ChatPage: React.FC = () => {
     )
       return
     if (!currentPartnerId) {
-      message.warning('请先选择伙伴后再发送消息')
+      message.warning(t(($) => $.workbench.selectAPartnerBeforeSendingAMessage))
       return
     }
     if (!modelSelection.mainModel) {
-      message.warning('请先在输入框右下角选择主模型')
+      message.warning(t(($) => $.workbench.selectAMainModelAtTheBottomRightOf))
       return
     }
     if (composerSubmitDisabledReason) {
@@ -3953,7 +3958,11 @@ const ChatPage: React.FC = () => {
       setCurrentMessages((previous) =>
         previous.map((item) =>
           item.id === optimisticAssistantMessage.id
-            ? { ...item, error: true, content: `失败：${normalized}` }
+            ? {
+                ...item,
+                error: true,
+                content: t(($) => $.workbench.failed4, { value1: normalized })
+              }
             : item.id === optimisticUserMessage.id
               ? { ...item, error: true }
               : item
@@ -4050,7 +4059,7 @@ const ChatPage: React.FC = () => {
         !response.userMessage ||
         !response.assistantMessage
       ) {
-        failOptimisticSubmit(response.error || '启动失败')
+        failOptimisticSubmit(response.error || t(($) => $.workbench.couldNotStart))
         return
       }
       clearAcceptedDraft()
@@ -4088,7 +4097,9 @@ const ChatPage: React.FC = () => {
       void loadPartners()
     } catch (error) {
       console.error(error)
-      failOptimisticSubmit(error instanceof Error ? error.message : '发送失败')
+      failOptimisticSubmit(
+        error instanceof Error ? error.message : t(($) => $.workbench.couldNotSend)
+      )
     } finally {
       submitInFlightRef.current = false
       setSubmittingPartnerId(null)
@@ -4102,17 +4113,22 @@ const ChatPage: React.FC = () => {
       const response = await window.api.aiRunCancel(aiRunId)
       if (!response.success) {
         setCancellingRun(false)
-        emitErrorMessage(response.error || '取消失败')
+        emitErrorMessage(response.error || t(($) => $.workbench.couldNotCancel))
       }
     } catch (error) {
       setCancellingRun(false)
-      emitErrorMessage(error instanceof Error ? error.message : '取消失败')
+      emitErrorMessage(
+        error instanceof Error ? error.message : t(($) => $.workbench.couldNotCancel)
+      )
     }
   }
 
   const handleClearPartnerContext = useCallback((): void => {
     if (!currentPartnerId) return
-    setClearConfirmPartner({ id: currentPartnerId, name: currentPartner?.name || '伙伴' })
+    setClearConfirmPartner({
+      id: currentPartnerId,
+      name: currentPartner?.name || t(($) => $.common.partner)
+    })
   }, [currentPartner?.name, currentPartnerId])
 
   const confirmClearPartnerContext = useCallback(
@@ -4122,7 +4138,8 @@ const ChatPage: React.FC = () => {
       try {
         await flushCurrentUiState()
         const response = await window.api.partnerClearContext({ partnerId, deleteFileChanges })
-        if (!response.success) return response.error || '清空消息记录失败'
+        if (!response.success)
+          return response.error || t(($) => $.workbench.couldNotClearMessageHistory)
         if (currentPartnerIdRef.current === partnerId) {
           setCurrentMessages([])
           setHasMoreMessagesBefore(false)
@@ -4143,7 +4160,9 @@ const ChatPage: React.FC = () => {
         void loadPartners()
         void refreshContextUsage(partnerId)
       } catch (error) {
-        return error instanceof Error ? error.message : '清空消息记录失败'
+        return error instanceof Error
+          ? error.message
+          : t(($) => $.workbench.couldNotClearMessageHistory)
       }
     },
     [clearConfirmPartner, loadPartners, refreshContextUsage, flushCurrentUiState]
@@ -4153,17 +4172,17 @@ const ChatPage: React.FC = () => {
     if (!busyCancelTask) return
     const task = busyCancelTask
     modal.confirm({
-      title: '立即执行定时任务？',
-      content: `将按「${task.name}」的配置在绑定伙伴执行。`,
-      okText: '立即执行',
-      cancelText: '取消',
+      title: t(($) => $.common.runThisScheduledTaskNow),
+      content: t(($) => $.common.theTaskWillRunInItsBoundPartnerUsing, { value1: task.name }),
+      okText: t(($) => $.common.runNow),
+      cancelText: t(($) => $.common.cancel),
       onOk: async () => {
         const response = await window.api.scheduledTaskRunNow({ id: task.id })
         if (!response.success) {
-          message.warning(response.error || '立即执行失败')
+          message.warning(response.error || t(($) => $.common.couldNotStartTheTask))
           return
         }
-        message.success('已开始执行')
+        message.success(t(($) => $.common.taskStarted))
         setBusyCancelTask(null)
         void loadPartners()
       }
@@ -4175,19 +4194,19 @@ const ChatPage: React.FC = () => {
     try {
       const response = await window.api.scheduledTaskDismissBusyNotice({ id: busyCancelTask.id })
       if (!response.success) {
-        message.warning(response.error || '关闭失败')
+        message.warning(response.error || t(($) => $.workbench.couldNotClose))
         return
       }
       setBusyCancelTask(null)
     } catch (error) {
-      message.warning(error instanceof Error ? error.message : '关闭失败')
+      message.warning(error instanceof Error ? error.message : t(($) => $.workbench.couldNotClose))
     }
   }, [busyCancelTask, message])
 
   const submitPartnerForm = useCallback(async (): Promise<void> => {
     const name = createPartnerName.trim()
     if (!name) {
-      message.warning('请输入伙伴名称')
+      message.warning(t(($) => $.workbench.enterAPartnerName))
       return
     }
     if (createPartnerSubmitting) return
@@ -4201,7 +4220,7 @@ const ChatPage: React.FC = () => {
           avatar_color: createPartnerColor
         })
         if (!response.success || !response.partner) {
-          emitErrorMessage(response.error || '保存伙伴失败')
+          emitErrorMessage(response.error || t(($) => $.workbench.couldNotSaveThePartner))
           return
         }
         setCreatePartnerOpen(false)
@@ -4216,7 +4235,7 @@ const ChatPage: React.FC = () => {
         avatar_color: createPartnerColor
       })
       if (!response.success || !response.partner) {
-        emitErrorMessage(response.error || '创建伙伴失败')
+        emitErrorMessage(response.error || t(($) => $.workbench.couldNotCreateThePartner))
         return
       }
       setCreatePartnerOpen(false)
@@ -4225,7 +4244,11 @@ const ChatPage: React.FC = () => {
       void loadPartners()
     } catch (error) {
       emitErrorMessage(
-        error instanceof Error ? error.message : editingPartnerId ? '保存伙伴失败' : '创建伙伴失败'
+        error instanceof Error
+          ? error.message
+          : editingPartnerId
+            ? t(($) => $.workbench.couldNotSaveThePartner)
+            : t(($) => $.workbench.couldNotCreateThePartner)
       )
     } finally {
       setCreatePartnerSubmitting(false)
@@ -4263,26 +4286,28 @@ const ChatPage: React.FC = () => {
   }
 
   const submitHumanQuestion = async (answers: AskUserQuestionResult): Promise<void> => {
-    if (!pendingQuestion) throw new Error('当前没有待回答问题')
+    if (!pendingQuestion) throw new Error(t(($) => $.workbench.thereAreNoQuestionsAwaitingAnAnswer))
     const response = await window.api.aiRunHumanInteractionSubmit({
       runId: pendingQuestion.runId,
       interactionId: pendingQuestion.interaction.interactionId,
       answers
     } satisfies AiRunHumanInteractionRequest)
     if (!response.success) {
-      throw new Error(response.error || '提交问题回答失败')
+      throw new Error(response.error || t(($) => $.workbench.couldNotSubmitAnswers))
     }
     // Resolution events own dismissal; a queued approval or question may already be visible.
   }
 
   const submitApprovalBatch = async (decisions: AiApprovalBatchDecision[]): Promise<void> => {
-    if (!pendingApprovalBatch) throw new Error('当前没有待审核操作')
+    if (!pendingApprovalBatch)
+      throw new Error(t(($) => $.workbench.thereAreNoOperationsAwaitingReview))
     const response = await window.api.aiRunApprovalBatchDecide({
       runId: pendingApprovalBatch.runId,
       batchId: pendingApprovalBatch.batchId,
       decisions
     })
-    if (!response.success) throw new Error(response.error || '审核提交失败')
+    if (!response.success)
+      throw new Error(response.error || t(($) => $.workbench.couldNotSubmitTheReview))
     // Resolution events own dismissal, including transitions to the next batch.
   }
 
@@ -4291,7 +4316,7 @@ const ChatPage: React.FC = () => {
     setApplyRevertConfirm({
       changeId: activeApplyRecord.id,
       stage: 'confirm',
-      content: '文件将恢复到这次修改发生前的状态。'
+      content: t(($) => $.workbench.theFileWillBeRestoredToItsStateBefore)
     })
   }
 
@@ -4308,12 +4333,14 @@ const ChatPage: React.FC = () => {
         setApplyRevertConfirm({
           changeId: applyRevertConfirm.changeId,
           stage: 'force',
-          content: response.warning || '文件在这次修改后又发生了变化。继续回退会覆盖之后的内容。'
+          content:
+            response.warning ||
+            t(($) => $.workbench.theFileHasChangedAgainSinceThisOperationReverting)
         })
         return
       }
       if (!response.success) {
-        emitErrorMessage(response.error || '回退失败')
+        emitErrorMessage(response.error || t(($) => $.workbench.couldNotRevert))
         return
       }
       if (response.record) {
@@ -4321,7 +4348,7 @@ const ChatPage: React.FC = () => {
         showApplyWorkspace(response.record)
       }
       setApplyRevertConfirm(null)
-      emitSuccessMessage('已回退本次修改')
+      emitSuccessMessage(t(($) => $.workbench.changeReverted))
       const record = response.record || activeApplyRecord
       if (!record) return
       await loadFileChangesForPartner(record.partnerId, record.runId, {
@@ -4332,7 +4359,7 @@ const ChatPage: React.FC = () => {
       })
     } catch (error) {
       console.error(error)
-      emitErrorMessage('回退失败')
+      emitErrorMessage(t(($) => $.workbench.couldNotRevert))
     } finally {
       setApplyReverting(false)
     }
@@ -4341,24 +4368,24 @@ const ChatPage: React.FC = () => {
   const handleCopyUserMessage = async (messageItem: ChatMessage): Promise<void> => {
     try {
       await navigator.clipboard.writeText(getUserMessagePlainText(messageItem))
-      emitSuccessMessage('已复制')
+      emitSuccessMessage(t(($) => $.common.copied))
     } catch (error) {
       console.error(error)
-      emitErrorMessage('复制失败')
+      emitErrorMessage(t(($) => $.workbench.couldNotCopy))
     }
   }
 
   const handleEditUserMessage = (messageItem: ChatMessage): void => {
     if (!currentPartnerId || aiRunId || messageItem.id !== latestUserMessageId) return
     modal.confirm({
-      title: '编辑这条消息？',
-      content: '将撤回这条消息之后的回答，原文会回到输入框供你修改。已编辑的文件不会被还原。',
-      okText: '确定',
+      title: t(($) => $.workbench.editThisMessage),
+      content: t(($) => $.workbench.repliesAfterThisMessageWillBeWithdrawnAndIts),
+      okText: t(($) => $.common.confirm),
       okButtonProps: {
         danger: true,
         'data-testid': workbenchSelectors.editMessageConfirmButton
       },
-      cancelText: '取消',
+      cancelText: t(($) => $.common.cancel),
       cancelButtonProps: {
         'data-testid': workbenchSelectors.editMessageConfirmCancelButton
       },
@@ -4407,7 +4434,7 @@ const ChatPage: React.FC = () => {
               saveComposerDraftForPartner(currentPartnerId, previousDraft)
               applyComposerDraft(previousDraft, `edit-failed:${messageItem.id}`)
             }
-            emitErrorMessage(response.error || '无法编辑这条消息')
+            emitErrorMessage(response.error || t(($) => $.workbench.thisMessageCannotBeEdited))
             return
           }
 
@@ -4433,7 +4460,7 @@ const ChatPage: React.FC = () => {
             saveComposerDraftForPartner(currentPartnerId, previousDraft)
             applyComposerDraft(previousDraft, `edit-failed:${messageItem.id}`)
           }
-          emitErrorMessage('编辑失败')
+          emitErrorMessage(t(($) => $.workbench.couldNotEdit))
         }
       }
     })
@@ -4460,7 +4487,7 @@ const ChatPage: React.FC = () => {
             className="nc-message-time"
             data-testid={`${workbenchSelectors.userMessageTimePrefix}-${messageItem.id}`}
           >
-            {formatUserMessageTimeLabel(messageItem.timestamp)}
+            {messageTimeLabel(messageItem.timestamp)}
           </div>
         ) : null}
         <div className="group/user-message flex justify-end">
@@ -4573,11 +4600,11 @@ const ChatPage: React.FC = () => {
                 className="mt-1 flex h-6 items-center justify-end gap-1.5 text-[12px] leading-none text-[#9B9A97] opacity-0 transition-opacity duration-150 group-hover/user-message:opacity-100"
                 data-testid={`${workbenchSelectors.userMessageActionsPrefix}-${messageItem.id}`}
               >
-                <Tooltip title="复制">
+                <Tooltip title={t(($) => $.common.copy)}>
                   <button
                     type="button"
                     className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
-                    aria-label="复制消息"
+                    aria-label={t(($) => $.workbench.copyMessage)}
                     data-testid={`${workbenchSelectors.userMessageCopyButtonPrefix}-${messageItem.id}`}
                     onClick={() => void handleCopyUserMessage(messageItem)}
                   >
@@ -4585,11 +4612,11 @@ const ChatPage: React.FC = () => {
                   </button>
                 </Tooltip>
                 {canEdit ? (
-                  <Tooltip title="编辑">
+                  <Tooltip title={t(($) => $.common.edit)}>
                     <button
                       type="button"
                       className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
-                      aria-label="编辑消息"
+                      aria-label={t(($) => $.workbench.editMessage)}
                       data-testid={`${workbenchSelectors.userMessageEditButtonPrefix}-${messageItem.id}`}
                       onClick={() => handleEditUserMessage(messageItem)}
                     >
@@ -4740,38 +4767,43 @@ const ChatPage: React.FC = () => {
               <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
                 {partner.name}
               </div>
-              <Tooltip title={partner.pinned ? '取消置顶' : '置顶'} placement="top">
+              <Tooltip
+                title={partner.pinned ? t(($) => $.workbench.unpin) : t(($) => $.workbench.pin)}
+                placement="top"
+              >
                 <button
                   type="button"
                   className={`${PARTNER_ROW_ACTION_CLASS} ${
                     partner.pinned ? 'flex' : 'hidden group-hover:flex'
                   }`}
                   data-testid={`${workbenchSelectors.partnerPinButtonPrefix}-${partner.id}`}
-                  aria-label={partner.pinned ? '取消置顶' : '置顶'}
+                  aria-label={
+                    partner.pinned ? t(($) => $.workbench.unpin) : t(($) => $.workbench.pin)
+                  }
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => togglePartnerPinned(event, partner)}
                 >
                   <PinIcon className="h-3.5 w-3.5" />
                 </button>
               </Tooltip>
-              <Tooltip title="编辑" placement="top">
+              <Tooltip title={t(($) => $.common.edit)} placement="top">
                 <button
                   type="button"
                   className={`${PARTNER_ROW_ACTION_CLASS} hidden group-hover:flex`}
                   data-testid={`${workbenchSelectors.partnerEditButtonPrefix}-${partner.id}`}
-                  aria-label="编辑伙伴"
+                  aria-label={t(($) => $.workbench.editPartner)}
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => openEditPartnerModal(event, partner)}
                 >
                   <HiOutlinePencilSquare className="h-3.5 w-3.5" />
                 </button>
               </Tooltip>
-              <Tooltip title="删除" placement="top">
+              <Tooltip title={t(($) => $.common.delete)} placement="top">
                 <button
                   type="button"
                   className={`${PARTNER_ROW_ACTION_CLASS} hidden group-hover:flex`}
                   data-testid={`${workbenchSelectors.partnerDeleteButtonPrefix}-${partner.id}`}
-                  aria-label="删除伙伴"
+                  aria-label={t(($) => $.workbench.deletePartner)}
                   disabled={deletingPartnerIds.has(partner.id)}
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => requestDeletePartner(event, partner)}
@@ -4781,16 +4813,22 @@ const ChatPage: React.FC = () => {
               </Tooltip>
               <div className="flex h-6 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
                 {partner.isRunning ? (
-                  <span className="nc-session-running-spinner" aria-label="任务运行中" />
+                  <span
+                    className="nc-session-running-spinner"
+                    aria-label={t(($) => $.workbench.taskRunning)}
+                  />
                 ) : partner.hasUnreadCompletion ? (
-                  <span className="nc-session-unread-dot" aria-label="任务已完成，未查看" />
+                  <span
+                    className="nc-session-unread-dot"
+                    aria-label={t(($) => $.workbench.taskCompletedUnread)}
+                  />
                 ) : null}
                 <span>{formatRelativeTime(partner.lastActivityAt)}</span>
               </div>
             </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] leading-4">
               <span className="min-w-0 flex-1 truncate text-[#8A8781]">
-                {partner.lastUserMessagePreview || PARTNER_LIST_EMPTY_PREVIEW}
+                {partner.lastUserMessagePreview || t(($) => $.preferences.partnerEmptyPreview)}
               </span>
               {partner.needsAssistance ? (
                 <span
@@ -4798,7 +4836,7 @@ const ChatPage: React.FC = () => {
                   data-testid={`${workbenchSelectors.partnerNeedsAssistancePrefix}-${partner.id}`}
                   role="status"
                 >
-                  需要你的协助
+                  {t(($) => $.workbench.yourInputIsNeeded)}
                 </span>
               ) : null}
             </div>
@@ -4914,7 +4952,11 @@ const ChatPage: React.FC = () => {
             setSidebarCollapsed((previous) => !previous)
           }}
           data-testid={workbenchSelectors.partnersToggle}
-          aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+          aria-label={
+            sidebarCollapsed
+              ? t(($) => $.workbench.expandSidebar)
+              : t(($) => $.workbench.collapseSidebar)
+          }
         >
           <SidebarPanelIcon
             className="h-4 w-4"
@@ -4940,7 +4982,7 @@ const ChatPage: React.FC = () => {
                 aria-hidden="true"
               />
               <span className="truncate text-[14px] font-semibold text-[#37352F]">
-                {PRODUCT_NAME_ZH}
+                {getProductName()}
               </span>
             </div>
           </div>
@@ -4954,10 +4996,10 @@ const ChatPage: React.FC = () => {
             className="nc-sidebar-nav-row nc-sidebar-new-chat"
             onClick={openCreatePartnerModal}
             data-testid={workbenchSelectors.newPartnerButton}
-            aria-label="创建伙伴"
+            aria-label={t(($) => $.workbench.createPartner)}
           >
             <HiPlus className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
-            <span>创建伙伴</span>
+            <span>{t(($) => $.workbench.createPartner)}</span>
           </button>
           <button
             type="button"
@@ -4966,8 +5008,8 @@ const ChatPage: React.FC = () => {
             data-testid={workbenchSelectors.scheduledTasksButton}
             aria-label={
               scheduledTaskEnabledCount > 0
-                ? `定时任务，${scheduledTaskEnabledCount} 个已启用`
-                : '定时任务'
+                ? t(($) => $.workbench.scheduledTasksEnabled, { value1: scheduledTaskEnabledCount })
+                : t(($) => $.common.scheduledTasks)
             }
           >
             <HiOutlineClock
@@ -4975,7 +5017,9 @@ const ChatPage: React.FC = () => {
                 scheduledTaskEnabledCount > 0 ? 'text-[#2F5F8F]' : 'text-[#787774]'
               }`}
             />
-            <span className="min-w-0 flex-1 truncate text-left">定时任务</span>
+            <span className="min-w-0 flex-1 truncate text-left">
+              {t(($) => $.common.scheduledTasks)}
+            </span>
             <ScheduledTaskCountChip
               enabledCount={scheduledTaskEnabledCount}
               dataTestId={workbenchSelectors.scheduledTasksCountChip}
@@ -5001,18 +5045,18 @@ const ChatPage: React.FC = () => {
               type="button"
               onClick={() => navigate('/settings/model')}
               className="nc-sidebar-nav-row flex-1"
-              aria-label="设置"
+              aria-label={t(($) => $.common.settings)}
             >
               <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
-              <span>设置</span>
+              <span>{t(($) => $.common.settings)}</span>
             </button>
             <SidebarUpdateControl />
-            <Tooltip title="查看使用帮助" placement="right">
+            <Tooltip title={t(($) => $.common.viewHelp)} placement="right">
               <button
                 type="button"
                 className="nc-manual-help-button"
-                onClick={() => void window.api.openExternal(USER_MANUAL_URL)}
-                aria-label="查看使用帮助"
+                onClick={() => void window.api.openExternal(getManualUrl())}
+                aria-label={t(($) => $.common.viewHelp)}
                 data-testid={workbenchSelectors.settingsHelpButton}
               >
                 <HiOutlineQuestionMarkCircle className="h-4 w-4" />
@@ -5078,12 +5122,12 @@ const ChatPage: React.FC = () => {
                         type="button"
                         className="nc-content-panel-titlebar-toggle workbench-no-drag"
                         style={WORKBENCH_NO_DRAG_REGION_STYLE}
-                        title="展开右侧栏"
+                        title={t(($) => $.workbench.expandRightSidebar)}
                         onClick={() => {
                           restoreCollapsedContentPanel()
                         }}
                         data-testid={workbenchSelectors.contentPanelToggle}
-                        aria-label="展开右侧栏"
+                        aria-label={t(($) => $.workbench.expandRightSidebar)}
                       >
                         <SidebarPanelIcon className="h-4 w-4" variant="expand" />
                       </button>
@@ -5121,12 +5165,12 @@ const ChatPage: React.FC = () => {
                         type="button"
                         className="nc-content-panel-titlebar-toggle workbench-no-drag"
                         style={WORKBENCH_NO_DRAG_REGION_STYLE}
-                        title="展开右侧栏"
+                        title={t(($) => $.workbench.expandRightSidebar)}
                         onClick={() => {
                           restoreCollapsedContentPanel()
                         }}
                         data-testid={workbenchSelectors.contentPanelToggle}
-                        aria-label="展开右侧栏"
+                        aria-label={t(($) => $.workbench.expandRightSidebar)}
                       >
                         <SidebarPanelIcon className="h-4 w-4" variant="expand" />
                       </button>
@@ -5181,7 +5225,7 @@ const ChatPage: React.FC = () => {
                         <div className="nc-document" data-testid={workbenchSelectors.messageList}>
                           {loadingOlderMessages ? (
                             <div className="py-3 text-center text-xs text-[#8A8781]">
-                              正在加载更早消息
+                              {t(($) => $.workbench.loadingEarlierMessages)}
                             </div>
                           ) : null}
                           {currentMessages.map((messageItem) =>
@@ -5206,14 +5250,14 @@ const ChatPage: React.FC = () => {
                         <div className="mx-auto w-full max-w-[760px]">
                           {isNewSession && currentPartnerId ? (
                             <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
-                              <span>找俺干啥？</span>
+                              <span>{t(($) => $.workbench.whatWouldYouLikeToDo)}</span>
                             </div>
                           ) : null}
                           {!currentPartnerId ? (
                             <div className="px-6 py-16 text-center text-[14px] leading-7 text-[#8A8781]">
                               {partners.length === 0
-                                ? '还没有伙伴。从左侧创建一个开始对话。'
-                                : '请选择一个伙伴开始对话。'}
+                                ? t(($) => $.workbench.noPartnersYetCreateOneFromTheSidebarTo)
+                                : t(($) => $.workbench.selectAPartnerToStartAConversation)}
                             </div>
                           ) : pendingQuestion ? (
                             <HumanInteractionCard
@@ -5240,8 +5284,13 @@ const ChatPage: React.FC = () => {
                                   {busyCancelTask ? (
                                     <MessageActionCapsule
                                       icon={<HiOutlineClock className="h-3.5 w-3.5" />}
-                                      label={`立即执行「${busyCancelTask.name}」`}
-                                      tooltip={`「${busyCancelTask.name}」到点时伙伴正忙，本次已取消。点击可立即按该定时任务执行。`}
+                                      label={t(($) => $.workbench.runNow2, {
+                                        value1: busyCancelTask.name
+                                      })}
+                                      tooltip={t(
+                                        ($) => $.workbench.thePartnerWasBusyWhenWasScheduledSoThis,
+                                        { value1: busyCancelTask.name }
+                                      )}
                                       onAction={handleScheduledTaskBusyCancelAction}
                                       dismissible
                                       onDismiss={() => void handleDismissScheduledTaskBusyCancel()}
@@ -5256,8 +5305,13 @@ const ChatPage: React.FC = () => {
                                   {clearContextVisible ? (
                                     <MessageActionCapsule
                                       icon={<PiEraser className="h-3.5 w-3.5" />}
-                                      label="清空消息记录"
-                                      tooltip={`清空「${currentPartner?.name || '伙伴'}」的全部消息记录，无法恢复。`}
+                                      label={t(($) => $.workbench.clearMessageHistory)}
+                                      tooltip={t(
+                                        ($) => $.workbench.clearAllMessagesForThisCannotBeUndone,
+                                        {
+                                          value1: currentPartner?.name || t(($) => $.common.partner)
+                                        }
+                                      )}
                                       onAction={handleClearPartnerContext}
                                       actionTestId={workbenchSelectors.clearContextButton}
                                     />
@@ -5306,7 +5360,7 @@ const ChatPage: React.FC = () => {
                       data-testid={workbenchSelectors.attachmentDropOverlay}
                     >
                       <div className="border border-dashed border-[#7B96A8] bg-white/85 px-5 py-3 text-sm font-medium text-[#37586E] shadow-sm">
-                        松开以添加文件或文件夹
+                        {t(($) => $.workbench.dropToAddFilesOrFolders)}
                       </div>
                     </div>
                   ) : null}
@@ -5440,9 +5494,17 @@ const ChatPage: React.FC = () => {
         )}
         <Modal
           open={Boolean(applyRevertConfirm)}
-          title={applyRevertConfirm?.stage === 'force' ? '仍然回退这次修改？' : '回退这次修改？'}
-          okText={applyRevertConfirm?.stage === 'force' ? '仍然回退' : '回退'}
-          cancelText="取消"
+          title={
+            applyRevertConfirm?.stage === 'force'
+              ? t(($) => $.workbench.revertThisChangeAnyway)
+              : t(($) => $.workbench.revertThisChange3)
+          }
+          okText={
+            applyRevertConfirm?.stage === 'force'
+              ? t(($) => $.workbench.revertAnyway)
+              : t(($) => $.workbench.revert)
+          }
+          cancelText={t(($) => $.common.cancel)}
           okButtonProps={{
             danger: applyRevertConfirm?.stage === 'force',
             'data-testid': workbenchSelectors.applyRevertConfirmButton
@@ -5460,13 +5522,15 @@ const ChatPage: React.FC = () => {
         <ImageLightbox image={previewImage} onClose={() => setPreviewImage(null)} />
         <NativeConfirmDialog
           open={Boolean(clearConfirmPartner)}
-          title="清空消息记录？"
-          message={`将清空「${clearConfirmPartner?.name || '伙伴'}」的全部对话消息及临时缓存。`}
+          title={t(($) => $.workbench.clearMessageHistory2)}
+          message={t(($) => $.workbench.clearAllConversationMessagesAndTemporaryCacheFor, {
+            value1: clearConfirmPartner?.name || t(($) => $.common.partner)
+          })}
           checkbox={{
-            label: '同时删除文件修改历史',
-            help: 'AI 修改的源文件都会进行备份。删除后，将无法回退到对应的修改前版本。'
+            label: t(($) => $.workbench.alsoDeleteFileChangeHistory),
+            help: t(($) => $.workbench.aiEditedSourceFilesAreBackedUpDeletingThis)
           }}
-          confirmText="清空"
+          confirmText={t(($) => $.workbench.clear)}
           danger
           onConfirm={confirmClearPartnerContext}
           onCancel={() => setClearConfirmPartner(null)}
@@ -5474,11 +5538,15 @@ const ChatPage: React.FC = () => {
         />
         <NativeConfirmDialog
           open={Boolean(deleteConfirmPartner)}
-          title="删除这个伙伴？"
-          message="删除后会清掉这个伙伴的消息、记忆和恢复进度。这个操作不能撤回。"
-          detail={deleteConfirmPartner ? deleteConfirmPartner.name || '未命名伙伴' : undefined}
-          confirmText="删除"
-          cancelText="取消"
+          title={t(($) => $.workbench.deleteThisPartner)}
+          message={t(($) => $.workbench.thisDeletesThePartnerSMessagesMemoryAndRecovery)}
+          detail={
+            deleteConfirmPartner
+              ? deleteConfirmPartner.name || t(($) => $.workbench.unnamedPartner)
+              : undefined
+          }
+          confirmText={t(($) => $.common.delete)}
+          cancelText={t(($) => $.common.cancel)}
           danger
           onConfirm={confirmDeletePartner}
           onCancel={() => {
@@ -5489,9 +5557,13 @@ const ChatPage: React.FC = () => {
         />
         <Modal
           open={createPartnerOpen}
-          title={editingPartnerId ? '编辑伙伴' : '创建伙伴'}
-          okText={editingPartnerId ? '保存' : '创建'}
-          cancelText="取消"
+          title={
+            editingPartnerId
+              ? t(($) => $.workbench.editPartner)
+              : t(($) => $.workbench.createPartner)
+          }
+          okText={editingPartnerId ? t(($) => $.common.save) : t(($) => $.workbench.create)}
+          cancelText={t(($) => $.common.cancel)}
           confirmLoading={createPartnerSubmitting}
           onOk={() => void submitPartnerForm()}
           onCancel={() => {
@@ -5503,11 +5575,11 @@ const ChatPage: React.FC = () => {
         >
           <div className="space-y-4">
             <div>
-              <div className="mb-2 text-[13px] text-[#787774]">名称</div>
+              <div className="mb-2 text-[13px] text-[#787774]">{t(($) => $.workbench.name2)}</div>
               <Input
                 value={createPartnerName}
                 onChange={(event) => setCreatePartnerName(event.target.value)}
-                placeholder="给伙伴起个名字"
+                placeholder={t(($) => $.workbench.giveThisPartnerAName)}
                 maxLength={40}
                 onPressEnter={() => void submitPartnerForm()}
                 data-testid={workbenchSelectors.createPartnerNameInput}
@@ -5518,14 +5590,16 @@ const ChatPage: React.FC = () => {
                 shape={createPartnerShape}
                 color={createPartnerColor}
                 size={48}
-                title={createPartnerName || '伙伴预览'}
+                title={createPartnerName || t(($) => $.workbench.partnerPreview)}
                 animationSeed={`preview-${createPartnerShape}-${createPartnerColor}`}
                 animated
               />
-              <div className="text-[13px] text-[#787774]">头像预览</div>
+              <div className="text-[13px] text-[#787774]">
+                {t(($) => $.workbench.avatarPreview)}
+              </div>
             </div>
             <div>
-              <div className="mb-2 text-[13px] text-[#787774]">形状</div>
+              <div className="mb-2 text-[13px] text-[#787774]">{t(($) => $.workbench.shape)}</div>
               <div className="flex flex-wrap gap-2">
                 {PARTNER_AVATAR_SHAPES.map((shape) => (
                   <button
@@ -5549,7 +5623,7 @@ const ChatPage: React.FC = () => {
               </div>
             </div>
             <div>
-              <div className="mb-2 text-[13px] text-[#787774]">颜色</div>
+              <div className="mb-2 text-[13px] text-[#787774]">{t(($) => $.workbench.color)}</div>
               <div className="flex flex-wrap gap-2">
                 {PARTNER_AVATAR_COLORS.map((color) => (
                   <button

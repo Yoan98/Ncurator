@@ -35,6 +35,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   const preference = normalizeAiPreference(payload.preference)
   const executionPermission = normalizeExecutionPermission(payload.executionPermission)
 
+  const freeCatalog = FreeModelCatalogService.getInstance()
+
   const getModelConfig = async (
     selection: typeof payload.mainModel,
     label: string
@@ -45,10 +47,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       throw new Error(`请先选择${label}`)
     }
     if (isFreeModelConfigId(configId)) {
-      const freeCfg = await FreeModelCatalogService.getInstance().resolveRuntimeConfig(
-        configId,
-        modelName
-      )
+      const freeCfg = await freeCatalog.resolveRuntimeConfig(configId, modelName)
       if (!freeCfg) throw new Error(`${label}对应的免费模型不可用，请重新选择`)
       return freeCfg
     }

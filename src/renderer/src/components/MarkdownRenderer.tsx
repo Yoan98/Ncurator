@@ -1,4 +1,5 @@
-﻿import React from 'react'
+import { t } from '../i18n'
+import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -90,7 +91,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               return (
                 <span
                   className="markdown-reference-unavailable"
-                  title="链接无法访问"
+                  title={t(($) => $.common.linkUnavailable)}
                   data-ref-access-status="unavailable"
                 >
                   <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>

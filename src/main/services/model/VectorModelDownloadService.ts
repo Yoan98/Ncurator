@@ -1,8 +1,9 @@
+import { getAppRuntime } from '../app/AppRuntime'
 import fs from 'fs'
 import path from 'path'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import { getModelsPath } from '../../utils/paths'
-import { DEFAULT_MODEL_SOURCE, isModelSource, type ModelSource } from '../../../shared/modelSources'
+import { defaultModelSource, isModelSource, type ModelSource } from '../../../shared/modelSources'
 import type { ModelDownloadProgress } from './ModelService'
 import { ModelDownloadError, ModelService } from './ModelService'
 
@@ -106,7 +107,7 @@ export class VectorModelDownloadService {
     const resolvedSource =
       source ??
       (this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.source : undefined) ??
-      DEFAULT_MODEL_SOURCE
+      defaultModelSource(getAppRuntime().serviceRoute)
 
     this.setSnapshot({
       repoId,
@@ -235,7 +236,7 @@ export class VectorModelDownloadService {
       source:
         this.activeSnapshot?.repoId === payload.repoId && this.activeSnapshot
           ? this.activeSnapshot.source
-          : (payload.source ?? DEFAULT_MODEL_SOURCE),
+          : (payload.source ?? defaultModelSource(getAppRuntime().serviceRoute)),
       updatedAt: Date.now()
     })
     this.emit(payload)
@@ -266,7 +267,9 @@ export class VectorModelDownloadService {
         currentFile: String(parsed.currentFile || ''),
         totalFiles: Math.max(0, Number(parsed.totalFiles || 0)),
         completedFiles: Math.max(0, Number(parsed.completedFiles || 0)),
-        source: isModelSource(parsed.source) ? parsed.source : DEFAULT_MODEL_SOURCE,
+        source: isModelSource(parsed.source)
+          ? parsed.source
+          : defaultModelSource(getAppRuntime().serviceRoute),
         updatedAt: Number(parsed.updatedAt || Date.now())
       }
     } catch {

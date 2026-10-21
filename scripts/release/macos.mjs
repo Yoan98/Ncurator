@@ -1,3 +1,4 @@
+import { DISTRIBUTIONS } from './shared/distribution.mjs'
 import { execFile, spawn } from 'node:child_process'
 import { access, cp, mkdir, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
@@ -156,13 +157,14 @@ const seedNativeCache = async (sourceDirectory) => {
   await cp(cacheSource, cacheTarget, { recursive: true, force: false })
 }
 
-const createCandidate = async (sourceDirectory, platform, commit) => {
-  const distDirectory = path.join(sourceDirectory, 'dist')
+const createCandidate = async (sourceDirectory, platform, commit, distribution) => {
+  const distDirectory = path.join(sourceDirectory, 'dist', distribution)
   const appPath = await findApp(distDirectory)
   await run(process.execPath, [
     path.join(sourceDirectory, 'scripts', 'release', 'verify-macos-signature.mjs'),
     appPath,
-    path.join(distDirectory, 'mac-update-signature.txt')
+    path.join(distDirectory, 'mac-update-signature.txt'),
+    ...(distribution === 'international' ? ['--signature-only'] : [])
   ])
   const fragmentPath = path.join(distDirectory, `${platform}.json`)
   await run(process.execPath, [
@@ -170,7 +172,8 @@ const createCandidate = async (sourceDirectory, platform, commit) => {
     distDirectory,
     fragmentPath,
     releaseTag,
-    platform
+    platform,
+    distribution
   ])
   const bundlePath = path.join(distDirectory, `release-bundle-${platform}.json`)
   await createReleaseBundle({ fragmentPath, outputPath: bundlePath, commit })
@@ -284,10 +287,17 @@ if (mode === 'prepare') {
       cwd: sourceDirectory,
       env: buildEnvironment
     })
-    const candidate = await createCandidate(sourceDirectory, MACOS_PLATFORM, taggedCommit)
-    process.stdout.write(
-      `[release] macOS arm64 candidate prepared; package E2E is required before publish\n${candidate.bundlePath}\n`
-    )
+    for (const distribution of DISTRIBUTIONS) {
+      const candidate = await createCandidate(
+        sourceDirectory,
+        MACOS_PLATFORM,
+        taggedCommit,
+        distribution
+      )
+      process.stdout.write(
+        `[release] ${distribution} macOS candidate prepared: ${candidate.bundlePath}\n`
+      )
+    }
   } finally {
     await workspace.dispose()
   }
@@ -319,22 +329,38 @@ if (mode === 'test') {
   process.exit(0)
 }
 
-const candidate = await assertCandidatePublishable({
-  tag: releaseTag,
-  platform: MACOS_PLATFORM,
-  commit: taggedCommit,
-  allowPublished: true
-})
-const channels = await prepareReleaseStoragePublication(candidate.verified.fragment)
+const candidates = []
+for (const distribution of DISTRIBUTIONS) {
+  candidates.push(
+    await assertCandidatePublishable({
+      tag: releaseTag,
+      platform: MACOS_PLATFORM,
+      distribution,
+      commit: taggedCommit,
+      allowPublished: true
+    })
+  )
+}
+const publications = await Promise.all(
+  candidates.map(async (candidate) => ({
+    candidate,
+    channels: await prepareReleaseStoragePublication(candidate.verified.fragment)
+  }))
+)
 const github = createGitHubReleasePublisher({ root: ROOT })
-const githubRelease = await github.prepare(candidate)
-await publishReleaseStorage(candidate.verified, channels, {
-  root: ROOT,
-  run,
-  awsExecutable: process.env.NCURATOR_AWS_CLI
-})
+const githubRelease = await github.prepare(
+  candidates.find((candidate) => candidate.state.distribution === 'international')
+)
+for (const { candidate, channels } of publications) {
+  await publishReleaseStorage(candidate.verified, channels, {
+    root: ROOT,
+    run,
+    awsExecutable: process.env.NCURATOR_AWS_CLI
+  })
+}
 await github.publish(githubRelease)
-await markCandidatePublished({ tag: releaseTag, platform: MACOS_PLATFORM })
+for (const distribution of DISTRIBUTIONS)
+  await markCandidatePublished({ tag: releaseTag, platform: MACOS_PLATFORM, distribution })
 try {
   await cleanupLocalTestLogs(ROOT)
 } catch (error) {

@@ -20,8 +20,8 @@ afterEach(async () => {
 const createFixture = async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-release-bundle-'))
   tempRoots.push(root)
-  await fs.writeFile(path.join(root, '馆长-0.1.21-Windows-x64.exe'), 'installer')
-  await fs.writeFile(path.join(root, '馆长-0.1.21-Windows-x64.exe.blockmap'), 'blockmap')
+  await fs.writeFile(path.join(root, 'NCurator-0.1.21-Windows-x64.exe'), 'installer')
+  await fs.writeFile(path.join(root, 'NCurator-0.1.21-Windows-x64.exe.blockmap'), 'blockmap')
   await fs.writeFile(path.join(root, 'latest.yml'), 'version: 0.1.21\n')
   await fs.writeFile(
     path.join(root, 'package-audit.json'),
@@ -38,17 +38,19 @@ const createFixture = async () => {
     tag: 'windows-v0.1.21',
     version: '0.1.21',
     platform: 'windows-x64',
+    distribution: 'international',
+    sharedAppHash: 'a'.repeat(64),
     createdAt: new Date().toISOString(),
     files: [
       {
-        name: '馆长-0.1.21-Windows-x64.exe',
+        name: 'NCurator-0.1.21-Windows-x64.exe',
         storageName: 'Ncurator-windows-x64.exe',
         role: 'installer',
         size: 9,
         sha512: ''
       },
       {
-        name: '馆长-0.1.21-Windows-x64.exe.blockmap',
+        name: 'NCurator-0.1.21-Windows-x64.exe.blockmap',
         storageName: 'Ncurator-windows-x64.exe.blockmap',
         role: 'update',
         size: 8,
@@ -57,6 +59,8 @@ const createFixture = async () => {
     ],
     metadata: 'version: 0.1.21\n',
     audit: {
+      distribution: 'international',
+      sharedAppHash: 'a'.repeat(64),
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       platform: 'win32',
@@ -96,7 +100,7 @@ describe('release artifact bundle', () => {
       outputPath: bundlePath,
       commit: '0123456789012345678901234567890123456789'
     })
-    await fs.appendFile(path.join(root, '馆长-0.1.21-Windows-x64.exe'), 'changed')
+    await fs.appendFile(path.join(root, 'NCurator-0.1.21-Windows-x64.exe'), 'changed')
     await expect(verifyReleaseBundle(bundlePath)).rejects.toThrow('release asset size changed')
   })
 })
@@ -229,7 +233,7 @@ describe('GitHub release publication', () => {
       'NCurator-0.1.21-Windows-x64.exe',
       'SHA256SUMS'
     ])
-    expect(candidate.verified.bundle.files[0].name).toBe('馆长-0.1.21-Windows-x64.exe')
+    expect(candidate.verified.bundle.files[0].name).toBe('NCurator-0.1.21-Windows-x64.exe')
     const checksum = state.release!.assets.find((asset) => asset.name === 'SHA256SUMS')!
     expect(state.bytes.get(checksum.browser_download_url)?.toString('utf8')).toBe(
       `${candidate.verified.bundle.files[0].sha256}  NCurator-0.1.21-Windows-x64.exe\n`

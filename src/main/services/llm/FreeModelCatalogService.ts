@@ -1,6 +1,11 @@
+import { getAppRuntime } from '../app/AppRuntime'
+import {
+  officialUrl,
+  routeForOfficialUrl,
+  type AppRuntimeSnapshot
+} from '../../../shared/appPreferences'
 import fs from 'fs/promises'
 import path from 'path'
-import { FREE_MODELS_CATALOG_URL } from '../../../shared/constants'
 import {
   FREE_MODEL_CATALOG_TTL_MS,
   FREE_MODEL_CATALOG_CACHE_VERSION,
@@ -20,7 +25,6 @@ import { getUserDataPath } from '../../utils/paths'
 import { buildDesktopAppGatewayHeaders } from '../officialApi/appClient'
 import { ensureFreeModelToken, readJwtExpiryMs } from '../officialApi/freeModelToken'
 
-const FREE_MODELS_ENDPOINT = FREE_MODELS_CATALOG_URL
 const CACHE_FILE_NAME = 'free-models-catalog.json'
 const FETCH_TIMEOUT_MS = 15_000
 
@@ -104,21 +108,38 @@ const parseResponse = (value: unknown): FreeModelsCatalogResponse | null => {
 }
 
 export class FreeModelCatalogService {
-  private static instance: FreeModelCatalogService | null = null
+  private static instances = new Map<string, FreeModelCatalogService>()
+
+  public constructor(
+    private readonly context: Readonly<AppRuntimeSnapshot> = { ...getAppRuntime() }
+  ) {}
 
   private cache: CachePayload | null = null
   private loadPromise: Promise<void> | null = null
   private refreshPromise: Promise<FreeModelsSnapshot> | null = null
 
   static getInstance(): FreeModelCatalogService {
-    if (!this.instance) {
-      this.instance = new FreeModelCatalogService()
+    const context = { ...getAppRuntime() }
+    const key = `${context.serviceRoute}-${context.locale}`
+    let instance = this.instances.get(key)
+    if (!instance) {
+      instance = new FreeModelCatalogService(context)
+      this.instances.set(key, instance)
     }
-    return this.instance
+    return instance
+  }
+
+  private resolveIconUrl(value: string): string {
+    if (!routeForOfficialUrl(value)) return value
+    const url = new URL(value)
+    return officialUrl(this.context.serviceRoute, `${url.pathname}${url.search}`)
   }
 
   private cachePath(): string {
-    return path.join(getUserDataPath(), CACHE_FILE_NAME)
+    return path.join(
+      getUserDataPath(),
+      `${this.context.serviceRoute}-${this.context.locale}-${CACHE_FILE_NAME}`
+    )
   }
 
   private async toSnapshot(cache: CachePayload | null): Promise<FreeModelsSnapshot> {
@@ -151,6 +172,8 @@ export class FreeModelCatalogService {
       return
     }
     this.loadPromise = (async () => {
+      // Unscoped catalogs cannot identify their credential issuer and must never be reused.
+      await fs.rm(path.join(getUserDataPath(), CACHE_FILE_NAME), { force: true })
       try {
         const raw = await fs.readFile(this.cachePath(), 'utf8')
         const parsed = JSON.parse(raw) as Partial<CachePayload>
@@ -193,13 +216,15 @@ export class FreeModelCatalogService {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
-      const response = await fetch(FREE_MODELS_ENDPOINT, {
+      const response = await fetch(officialUrl(this.context.serviceRoute, '/api/v1/free-models'), {
         method: 'GET',
+        redirect: 'error',
         headers: {
           Accept: 'application/json',
+          'Accept-Language': this.context.locale,
           ...buildDesktopAppGatewayHeaders({
             method: 'GET',
-            url: FREE_MODELS_ENDPOINT,
+            url: officialUrl(this.context.serviceRoute, '/api/v1/free-models'),
             body: ''
           })
         },
@@ -210,6 +235,12 @@ export class FreeModelCatalogService {
       }
       const body: unknown = await response.json()
       const parsed = parseResponse(body)
+      if (parsed)
+        parsed.models = parsed.models.map((model) => ({
+          ...model,
+          baseUrl: officialUrl(this.context.serviceRoute, '/api/v1/free'),
+          iconUrl: this.resolveIconUrl(model.iconUrl)
+        }))
       if (!parsed) {
         throw new Error('免费模型目录数据无效')
       }
@@ -267,13 +298,14 @@ export class FreeModelCatalogService {
     modelName: string
   ): Promise<LlmRuntimeConfig | null> {
     await this.ensureLoaded()
+    if (!this.cache) await this.refresh()
     const entryId = freeModelEntryIdFromConfigId(configId)
     if (!entryId) return null
     const entry = this.cache?.models.find((item) => item.id === entryId)
     if (!entry) return null
     if (modelName.trim() !== entry.modelName) return null
     const runtime = toFreeModelRuntimeConfig(entry)
-    const token = await ensureFreeModelToken(entry.apiKey)
+    const token = await ensureFreeModelToken(entry.apiKey, this.context.serviceRoute)
     return { ...runtime, api_key: token }
   }
 }

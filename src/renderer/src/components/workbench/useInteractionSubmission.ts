@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { useRef, useState } from 'react'
 
 /** Successful submission stays locked until the run event removes this interaction. */
@@ -15,7 +16,9 @@ export const useInteractionSubmission = <T>(onSubmit: (value: T) => Promise<void
     } catch (cause) {
       inFlight.current = false
       setSubmitting(false)
-      setError(cause instanceof Error ? cause.message : '提交失败，请重试')
+      setError(
+        cause instanceof Error ? cause.message : t(($) => $.workbench.couldNotSubmitPleaseTryAgain)
+      )
     }
   }
   return { submitting, error, submit }

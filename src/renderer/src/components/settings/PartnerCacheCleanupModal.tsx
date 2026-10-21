@@ -1,3 +1,5 @@
+import { normalizeUserFacingError } from '../../utils/userFacingError'
+import { t } from '../../i18n'
 import { useEffect, useMemo, useState } from 'react'
 import { App, Checkbox, DatePicker, Modal, Select, Spin, Tooltip } from 'antd'
 import FileIcon from '../FileIcon'
@@ -13,10 +15,24 @@ import { settingsSelectors } from '../../testing/selectors'
 import { NativeConfirmDialog } from '../NativeConfirmDialog'
 
 const descriptions: Record<PartnerCacheCategory, { title: string; description: string }> = {
-  scripts: { title: '临时脚本', description: 'AI 执行任务时编写的临时脚本' },
-  toolresult: { title: '工具结果', description: '工具输出过长时保存的完整文本' },
-  assets: { title: '附件与临时资源', description: '粘贴附件、读图缓存、文档渲染图片及网页截图' },
-  'file-changes': { title: '文件修改历史', description: '修改前备份与差异预览；清理后无法回退' }
+  scripts: {
+    title: t(($) => $.settings.temporaryScripts),
+    description: t(($) => $.settings.temporaryScriptsWrittenByAiWhilePerformingTasks)
+  },
+  toolresult: {
+    title: t(($) => $.settings.toolResults),
+    description: t(($) => $.settings.fullTextSavedWhenToolOutputIsTooLong)
+  },
+  assets: {
+    title: t(($) => $.settings.attachmentsAndTemporaryAssets),
+    description: t(
+      ($) => $.settings.pastedAttachmentsImageCachesDocumentRenderingsAndWebpageScreenshots
+    )
+  },
+  'file-changes': {
+    title: t(($) => $.settings.fileChangeHistory),
+    description: t(($) => $.settings.originalBackupsAndDiffPreviewsRevertingIsUnavailableAfter)
+  }
 }
 
 const sizeText = (bytes: number): string => {
@@ -67,7 +83,12 @@ export default function PartnerCacheCleanupModal({
         )
       })
       .catch((error) => {
-        if (!cancelled) void message.error(error instanceof Error ? error.message : '读取伙伴失败')
+        if (!cancelled)
+          void message.error(
+            error instanceof Error
+              ? normalizeUserFacingError(error.message)
+              : t(($) => $.settings.couldNotLoadPartners)
+          )
       })
     return () => {
       cancelled = true
@@ -103,7 +124,10 @@ export default function PartnerCacheCleanupModal({
             success: false,
             rows: [],
             skippedCount: 0,
-            error: error instanceof Error ? error.message : '读取缓存失败'
+            error:
+              error instanceof Error
+                ? normalizeUserFacingError(error.message)
+                : t(($) => $.settings.couldNotLoadCacheData)
           })
       })
       .finally(() => {
@@ -127,9 +151,17 @@ export default function PartnerCacheCleanupModal({
         partnerId: selectedPartner,
         category
       })
-      if (!result.success) void message.error(result.error || '打开目录失败')
+      if (!result.success)
+        void message.error(
+          normalizeUserFacingError(result.error, '') ||
+            t(($) => $.settings.couldNotOpenTheDirectory)
+        )
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : '打开目录失败')
+      void message.error(
+        error instanceof Error
+          ? normalizeUserFacingError(error.message)
+          : t(($) => $.settings.couldNotOpenTheDirectory)
+      )
     }
   }
 
@@ -137,10 +169,14 @@ export default function PartnerCacheCleanupModal({
     if (!canClean) return
     const name =
       selectedPartner === 'all'
-        ? '全部伙伴'
-        : partners.find((item) => item.id === selectedPartner)?.name || '伙伴'
+        ? t(($) => $.settings.allPartners)
+        : partners.find((item) => item.id === selectedPartner)?.name || t(($) => $.common.partner)
     setConfirmation({
-      message: `将永久删除「${name}」所选目录中 ${date.format('YYYY-MM-DD')} 以前的数据，预计释放 ${sizeText(totalBytes)}。此操作无法恢复。`,
+      message: t(($) => $.settings.permanentlyDeleteSelectedDataForBeforeFreeingAboutThis, {
+        value1: name,
+        value2: date.format('YYYY-MM-DD'),
+        value3: sizeText(totalBytes)
+      }),
       request: { partnerIds: [...partnerIds], categories: [...categories], before }
     })
   }
@@ -152,13 +188,22 @@ export default function PartnerCacheCleanupModal({
       const result = await window.api.partnerCacheCleanup(confirmation.request)
       if (!result.success)
         return (
-          (result.error || '清理失败') +
-          (result.freedBytes ? `，已释放 ${sizeText(result.freedBytes)}` : '')
+          (normalizeUserFacingError(result.error, '') || t(($) => $.settings.cleanupFailed)) +
+          (result.freedBytes
+            ? t(($) => $.settings.freed, { value1: sizeText(result.freedBytes) })
+            : '')
         )
       setConfirmation(null)
-      void message.success(`已清理 ${result.deletedCount} 项，释放 ${sizeText(result.freedBytes)}`)
+      void message.success(
+        t(($) => $.settings.cleanedUpItemsAndFreed, {
+          value1: result.deletedCount,
+          value2: sizeText(result.freedBytes)
+        })
+      )
     } catch (error) {
-      return error instanceof Error ? error.message : '清理失败'
+      return error instanceof Error
+        ? normalizeUserFacingError(error.message)
+        : t(($) => $.settings.cleanupFailed)
     } finally {
       setCleaning(false)
       setRevision((value) => value + 1)
@@ -170,7 +215,7 @@ export default function PartnerCacheCleanupModal({
     <>
       <Modal
         open={open}
-        title="清理伙伴的缓存数据"
+        title={t(($) => $.settings.cleanUpPartnerCache)}
         width={680}
         centered
         styles={{ body: { maxHeight: 'calc(100vh - 240px)', overflowY: 'auto' } }}
@@ -184,9 +229,13 @@ export default function PartnerCacheCleanupModal({
         footer={
           <div className="flex items-center justify-between gap-4 border-t border-[#EEEEEC] pt-4 text-left text-[14px] text-[#37352F]">
             <div>
-              预计释放 <span className="tabular-nums">{sizeText(totalBytes)}</span>
+              {t(($) => $.settings.estimatedSpaceToFree)}
+              <span className="tabular-nums">{sizeText(totalBytes)}</span>
               <div className="mt-0.5 text-[12px] text-[#787774]">
-                {date.format('YYYY-MM-DD')} 00:00 以前 · {totalCount} 项
+                {date.format('YYYY-MM-DD')}
+                {t(($) => $.settings.before0000)}
+                {totalCount}
+                {t(($) => $.settings.items)}
               </div>
             </div>
             <button
@@ -196,30 +245,34 @@ export default function PartnerCacheCleanupModal({
               data-testid={settingsSelectors.cacheCleanupConfirm}
               className="rounded bg-[#F8EBE9] px-4 py-2 text-[13px] text-[#B3261E] hover:bg-[#F3DDD9] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {cleaning ? '正在清理…' : '清理所选数据'}
+              {cleaning
+                ? t(($) => $.settings.cleaningUp)
+                : t(($) => $.settings.cleanUpSelectedData)}
             </button>
           </div>
         }
         destroyOnClose
       >
         <div className="pt-2 text-[14px] text-[#37352F]">
-          <label className="mb-2 block font-medium">伙伴</label>
+          <label className="mb-2 block font-medium">{t(($) => $.common.partner)}</label>
           <Select
             value={selectedPartner}
             onChange={setSelectedPartner}
             className="w-full"
             disabled={cleaning}
-            placeholder="选择伙伴"
+            placeholder={t(($) => $.common.selectPartner)}
             data-testid={settingsSelectors.cachePartnerSelect}
             options={[
               ...partners.map((item) => ({
                 value: item.id,
-                label: item.name + (item.isRunning ? '（运行中）' : '')
+                label: item.name + (item.isRunning ? t(($) => $.settings.running) : '')
               })),
-              ...(partners.length > 1 ? [{ value: 'all', label: '全部伙伴' }] : [])
+              ...(partners.length > 1
+                ? [{ value: 'all', label: t(($) => $.settings.allPartners) }]
+                : [])
             ]}
           />
-          <div className="mb-1 mt-5 font-medium">清理内容</div>
+          <div className="mb-1 mt-5 font-medium">{t(($) => $.settings.contentToCleanUp)}</div>
           {PARTNER_CACHE_CATEGORIES.map((category) => {
             const info = descriptions[category]
             const bytes = (preview?.rows || [])
@@ -259,13 +312,13 @@ export default function PartnerCacheCleanupModal({
                 <Tooltip
                   title={
                     selectedPartner === 'all'
-                      ? '先选择一个伙伴，再打开目录'
-                      : `打开${info.title}文件夹`
+                      ? t(($) => $.settings.selectAPartnerBeforeOpeningItsDirectory)
+                      : t(($) => $.settings.openFolder, { value1: info.title })
                   }
                 >
                   <button
                     type="button"
-                    aria-label={`打开${info.title}文件夹`}
+                    aria-label={t(($) => $.settings.openFolder, { value1: info.title })}
                     disabled={!selectedPartner || selectedPartner === 'all' || cleaning}
                     data-testid={`${settingsSelectors.cacheOpenPrefix}-${category}`}
                     onClick={() => void openDirectory(category)}
@@ -279,7 +332,9 @@ export default function PartnerCacheCleanupModal({
           })}
           <div className="mt-5 flex flex-wrap items-end gap-3">
             <div className="min-w-[200px] flex-1">
-              <label className="mb-2 block font-medium">清理此日期以前的数据</label>
+              <label className="mb-2 block font-medium">
+                {t(($) => $.settings.cleanUpDataBeforeThisDate)}
+              </label>
               <DatePicker
                 value={date}
                 allowClear={false}
@@ -300,22 +355,27 @@ export default function PartnerCacheCleanupModal({
                 onClick={() => setDate(dayjs().subtract(days, 'day').startOf('day'))}
                 className="h-8 rounded border border-[#E6E6E3] px-3 text-[12px] hover:bg-[#F4F4F2] disabled:opacity-40"
               >
-                {days} 天前
+                {days}
+                {t(($) => $.settings.daysAgo)}
               </button>
             ))}
           </div>
           <div className="mb-2 mt-6 flex justify-between">
-            <span className="font-medium">待清理数据</span>
-            <span className="text-[12px] text-[#787774]">按时间，从旧到新</span>
+            <span className="font-medium">{t(($) => $.settings.dataToCleanUp)}</span>
+            <span className="text-[12px] text-[#787774]">
+              {t(($) => $.settings.byDateOldestFirst)}
+            </span>
           </div>
           <Spin spinning={loading}>
             <table className="w-full text-[12px]" data-testid={settingsSelectors.cachePreviewTable}>
               <thead className="bg-[#F4F4F2] text-[#787774]">
                 <tr>
-                  <th className="px-2 py-2 text-left font-normal">日期</th>
-                  <th className="px-2 py-2 text-left font-normal">内容</th>
-                  <th className="px-2 py-2 text-right font-normal">数量</th>
-                  <th className="px-2 py-2 text-right font-normal">占用</th>
+                  <th className="px-2 py-2 text-left font-normal">{t(($) => $.settings.date)}</th>
+                  <th className="px-2 py-2 text-left font-normal">
+                    {t(($) => $.settings.content)}
+                  </th>
+                  <th className="px-2 py-2 text-right font-normal">{t(($) => $.settings.count)}</th>
+                  <th className="px-2 py-2 text-right font-normal">{t(($) => $.settings.size)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -323,14 +383,20 @@ export default function PartnerCacheCleanupModal({
                   <tr key={`${row.day}-${row.category}`} className="border-b border-[#EEEEEC]">
                     <td className="px-2 py-2">{dayjs(row.day).format('YYYY-MM-DD')}</td>
                     <td className="px-2 py-2">{descriptions[row.category].title}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{row.count} 项</td>
+                    <td className="px-2 py-2 text-right tabular-nums">
+                      {row.count}
+                      {t(($) => $.settings.items)}
+                    </td>
                     <td className="px-2 py-2 text-right tabular-nums">{sizeText(row.bytes)}</td>
                   </tr>
                 ))}
                 {!rows.length && (
                   <tr>
                     <td colSpan={4} className="py-6 text-center text-[#787774]">
-                      {!partners.length ? '暂无伙伴' : preview?.error || '当前条件下没有待清理数据'}
+                      {!partners.length
+                        ? t(($) => $.common.noPartnersYet)
+                        : normalizeUserFacingError(preview?.error, '') ||
+                          t(($) => $.settings.noDataToCleanUpWithTheseFilters)}
                     </td>
                   </tr>
                 )}
@@ -338,23 +404,27 @@ export default function PartnerCacheCleanupModal({
             </table>
           </Spin>
           <p className="mt-3 text-[12px] leading-5 text-[#787774]">
-            清理所选目录中截止日期前的数据。伙伴、聊天记录和工作目录文件等不会被删除。
+            {t(($) => $.settings.cleanUpSelectedDirectoriesBeforeTheCutoffDatePartners)}
           </p>
           {busy && (
-            <p className="mt-2 text-[12px] text-[#B3261E]">所选伙伴正在运行，请结束后再清理。</p>
+            <p className="mt-2 text-[12px] text-[#B3261E]">
+              {t(($) => $.settings.theSelectedPartnerIsRunningWaitForItTo)}
+            </p>
           )}
           {!!preview?.skippedCount && (
             <p className="mt-2 text-[12px] text-[#787774]">
-              已跳过 {preview.skippedCount} 项正在使用的数据。
+              {t(($) => $.settings.skipped)}
+              {preview.skippedCount}
+              {t(($) => $.settings.itemsCurrentlyInUse)}
             </p>
           )}
         </div>
       </Modal>
       <NativeConfirmDialog
         open={open && Boolean(confirmation)}
-        title="清理这些缓存数据？"
+        title={t(($) => $.settings.cleanUpThisCachedData)}
         message={confirmation?.message || ''}
-        confirmText="清理"
+        confirmText={t(($) => $.settings.cleanUp)}
         danger
         onConfirm={cleanup}
         onCancel={() => setConfirmation(null)}

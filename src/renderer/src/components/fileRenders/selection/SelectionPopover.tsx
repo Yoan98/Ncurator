@@ -1,3 +1,4 @@
+import { t } from '../../../i18n'
 import { createPortal } from 'react-dom'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { HiOutlineCheck, HiOutlineSparkles, HiOutlineTrash } from 'react-icons/hi2'
@@ -55,7 +56,7 @@ export default function SelectionPopover({
           onClick={() => setPopup((previous) => previous && { ...previous, mode: 'editor' })}
         >
           <HiOutlineSparkles className="h-4 w-4 text-[#80649F]" aria-hidden="true" />
-          AI 引用
+          {t(($) => $.editors.aiReference)}
         </button>
       ) : (
         <>
@@ -66,7 +67,7 @@ export default function SelectionPopover({
               selectedReferences: chatReferences(popup.node.children)
             }}
             variant="inline"
-            placeholder="描述你想对引用内容做什么"
+            placeholder={t(($) => $.editors.describeWhatYouWantToDoWithThisContent)}
             dataTestId={`${testPrefix}-selection-thought`}
             disabled={locked}
             onSubmit={save}
@@ -89,8 +90,8 @@ export default function SelectionPopover({
           {popup.node.number ? (
             <button
               type="button"
-              aria-label="删除引用"
-              title="删除引用"
+              aria-label={t(($) => $.editors.removeReference)}
+              title={t(($) => $.editors.removeReference)}
               disabled={locked}
               className="flex h-[28px] w-[28px] shrink-0 cursor-pointer items-center justify-center rounded-full text-[#91918E] outline-none hover:bg-[#F8EBE9] hover:text-[#B3261E] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] disabled:cursor-not-allowed"
               onClick={() => {
@@ -104,8 +105,16 @@ export default function SelectionPopover({
           <button
             type="button"
             data-testid={`${testPrefix}-selection-save`}
-            aria-label={popup.node.number ? '确认修改' : '添加到输入框'}
-            title={popup.node.number ? '确认修改' : '添加到输入框'}
+            aria-label={
+              popup.node.number
+                ? t(($) => $.editors.confirmChanges)
+                : t(($) => $.editors.addToInput)
+            }
+            title={
+              popup.node.number
+                ? t(($) => $.editors.confirmChanges)
+                : t(($) => $.editors.addToInput)
+            }
             disabled={locked || !hasUserText(popup.node.children)}
             className="flex h-[28px] w-[28px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#37352F] text-white outline-none hover:bg-[#25241F] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#F4F4F2] disabled:text-[#B8B7B3]"
             onClick={save}

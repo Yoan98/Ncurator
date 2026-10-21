@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import React from 'react'
 import { Input, Spin } from 'antd'
 import {
@@ -57,7 +58,7 @@ export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
   >
     <header className="flex shrink-0 items-center justify-between gap-2 px-[18px] pt-3">
       <div className="flex min-w-0 items-center gap-[7px] text-xs text-[#787774]">
-        {props.itemLabel === '问题' ? (
+        {props.itemLabel === t(($) => $.workbench.question) ? (
           <HiOutlineQuestionMarkCircle className="h-[15px] w-[15px] shrink-0" />
         ) : (
           <HiOutlineShieldCheck className="h-[15px] w-[15px] shrink-0" />
@@ -76,7 +77,7 @@ export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
             <button
               type="button"
               className={iconButtonClass}
-              aria-label={`上一个${props.itemLabel}`}
+              aria-label={t(($) => $.workbench.previous, { value1: props.itemLabel })}
               disabled={props.currentIndex === 0 || props.busy || props.cancelling}
               onClick={props.onPrevious}
               data-testid={props.previousTestId}
@@ -86,7 +87,7 @@ export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
             <button
               type="button"
               className={iconButtonClass}
-              aria-label={`下一个${props.itemLabel}`}
+              aria-label={t(($) => $.workbench.next2, { value1: props.itemLabel })}
               disabled={props.currentIndex >= props.total - 1 || props.busy || props.cancelling}
               onClick={props.onNext}
               data-testid={props.nextTestId}
@@ -98,8 +99,12 @@ export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
         <button
           type="button"
           className={`${iconButtonClass} ml-1`}
-          aria-label={props.cancelling ? '正在停止本次运行' : '停止本次运行'}
-          title="停止本次运行"
+          aria-label={
+            props.cancelling
+              ? t(($) => $.workbench.stoppingThisRun)
+              : t(($) => $.workbench.stopThisRun)
+          }
+          title={t(($) => $.workbench.stopThisRun)}
           disabled={props.cancelling}
           onClick={props.onCancel}
           data-testid={props.cancelTestId}
@@ -156,7 +161,9 @@ export const WorkbenchInteractionChoice: React.FC<ChoiceProps> = (props) => (
     <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
       {props.label}
       {props.recommended && (
-        <span className="ml-2 whitespace-nowrap text-[11px] text-[#787774]">推荐</span>
+        <span className="ml-2 whitespace-nowrap text-[11px] text-[#787774]">
+          {t(($) => $.common.recommended)}
+        </span>
       )}
       {props.description && (
         <span className="block text-xs text-[#787774]">{props.description}</span>

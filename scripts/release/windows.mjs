@@ -1,3 +1,4 @@
+import { DISTRIBUTIONS } from './shared/distribution.mjs'
 import { execFile, spawn } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
@@ -256,25 +257,28 @@ if (mode === 'prepare') {
       cwd: sourceDirectory,
       env: environment
     })
-    const distDirectory = path.join(sourceDirectory, 'dist')
-    const fragmentPath = path.join(distDirectory, 'windows-x64.json')
-    await run(
-      process.execPath,
-      [
-        path.join(sourceDirectory, 'scripts', 'release', 'r2', 'create-fragment.mjs'),
-        distDirectory,
-        fragmentPath,
-        releaseTag,
-        'windows-x64'
-      ],
-      { cwd: sourceDirectory, env: environment }
-    )
-    const bundlePath = path.join(distDirectory, 'release-bundle-windows-x64.json')
-    await createReleaseBundle({ fragmentPath, outputPath: bundlePath, commit: taggedCommit })
-    const candidate = await materializeReleaseCandidate({ bundlePath })
-    process.stdout.write(
-      `[release] candidate prepared; impact assessment and package E2E are required before publish\n[release] bundle ${candidate.bundlePath}\n`
-    )
+    for (const distribution of DISTRIBUTIONS) {
+      const distDirectory = path.join(sourceDirectory, 'dist', distribution)
+      const fragmentPath = path.join(distDirectory, 'windows-x64.json')
+      await run(
+        process.execPath,
+        [
+          path.join(sourceDirectory, 'scripts', 'release', 'r2', 'create-fragment.mjs'),
+          distDirectory,
+          fragmentPath,
+          releaseTag,
+          'windows-x64',
+          distribution
+        ],
+        { cwd: sourceDirectory, env: environment }
+      )
+      const bundlePath = path.join(distDirectory, 'release-bundle-windows-x64.json')
+      await createReleaseBundle({ fragmentPath, outputPath: bundlePath, commit: taggedCommit })
+      const candidate = await materializeReleaseCandidate({ bundlePath })
+      process.stdout.write(
+        `[release] ${distribution} candidate prepared: ${candidate.bundlePath}\n`
+      )
+    }
   } finally {
     await workspace.dispose()
   }
@@ -302,22 +306,39 @@ if (mode === 'test') {
   process.exit(0)
 }
 
-const candidate = await assertCandidatePublishable({
-  tag: releaseTag,
-  platform: 'windows-x64',
-  commit: taggedCommit,
-  allowPublished: true
-})
-const channels = await prepareReleaseStoragePublication(candidate.verified.fragment)
+const candidates = []
+for (const distribution of DISTRIBUTIONS) {
+  candidates.push(
+    await assertCandidatePublishable({
+      tag: releaseTag,
+      platform: 'windows-x64',
+      distribution,
+      commit: taggedCommit,
+      allowPublished: true
+    })
+  )
+}
+// Validate every channel before any production write.
+const publications = await Promise.all(
+  candidates.map(async (candidate) => ({
+    candidate,
+    channels: await prepareReleaseStoragePublication(candidate.verified.fragment)
+  }))
+)
 const github = createGitHubReleasePublisher({ root: ROOT })
-const githubRelease = await github.prepare(candidate)
-await publishReleaseStorage(candidate.verified, channels, {
-  root: ROOT,
-  run,
-  awsExecutable: inspection.awsExecutable
-})
+const githubRelease = await github.prepare(
+  candidates.find((candidate) => candidate.state.distribution === 'international')
+)
+for (const { candidate, channels } of publications) {
+  await publishReleaseStorage(candidate.verified, channels, {
+    root: ROOT,
+    run,
+    awsExecutable: inspection.awsExecutable
+  })
+}
 await github.publish(githubRelease)
-await markCandidatePublished({ tag: releaseTag, platform: 'windows-x64' })
+for (const distribution of DISTRIBUTIONS)
+  await markCandidatePublished({ tag: releaseTag, platform: 'windows-x64', distribution })
 await cleanupLocalTestLogsSafely()
 await cleanupLocalCandidates()
 process.stdout.write(

@@ -1,3 +1,6 @@
+import { initializeAppMenu } from './services/app/AppMenu'
+import { getAppRuntime, initializeAppRuntime } from './services/app/AppRuntime'
+import { downloadPageUrl } from '../shared/appPreferences'
 import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
 import { fileURLToPath } from 'node:url'
@@ -18,12 +21,7 @@ import { CdpEndpointService } from './services/browser/CdpEndpointService'
 import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
 import { ElectronWebCrawlerBrowserHost } from './services/webCrawler/ElectronWebCrawlerBrowserHost'
 import { AppUpdateService } from './services/update/AppUpdateService'
-import {
-  APP_ID,
-  APP_QUIT_CHANNEL,
-  APP_STARTUP_GET_STATUS_CHANNEL,
-  OFFICIAL_DOWNLOAD_PAGE_URL
-} from '../shared/constants'
+import { APP_ID, APP_QUIT_CHANNEL, APP_STARTUP_GET_STATUS_CHANNEL } from '../shared/constants'
 import type { AiLlmIoRecord, AppStartupStatus } from '../shared/types'
 import { getModelsPath, syncUserDataPathFromElectron } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
@@ -42,8 +40,11 @@ if (!app.isPackaged) {
 const e2eUserDataPath = String(process.env.NCURATOR_USER_DATA_PATH || '').trim()
 if (e2eUserDataPath) {
   app.setPath('userData', e2eUserDataPath)
-} else if (!app.isPackaged) {
-  app.setPath('userData', `${app.getPath('userData')}-dev`)
+} else {
+  app.setPath(
+    'userData',
+    join(app.getPath('appData'), app.isPackaged ? 'ncurator' : 'ncurator-dev')
+  )
 }
 syncUserDataPathFromElectron()
 
@@ -51,7 +52,7 @@ const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()
 const shutdownCoordinator = new AppShutdownCoordinator()
-let appStartupStatus: AppStartupStatus = { mode: 'normal' }
+let appStartupStatus: AppStartupStatus = { mode: 'normal', ...getAppRuntime() }
 let quitAfterShutdown = false
 let shutdownRequested = false
 let rendererFlushSequence = 0
@@ -258,6 +259,9 @@ if (!singleInstanceLock) {
   // initialization and is ready to create browser windows.
   // Some APIs can only be used after this event occurs.
   app.whenReady().then(async () => {
+    initializeAppRuntime(app.getPreferredSystemLanguages())
+    appStartupStatus = { mode: 'normal', ...getAppRuntime() }
+    initializeAppMenu()
     // Set app user model id for windows
     electronApp.setAppUserModelId(APP_ID)
 
@@ -305,7 +309,10 @@ if (!singleInstanceLock) {
     })
     const appUpdateService = new AppUpdateService({ shutdownApp: prepareAppShutdown })
     appUpdateService.initialize()
-    ipcMain.handle(APP_STARTUP_GET_STATUS_CHANNEL, () => appStartupStatus)
+    ipcMain.handle(APP_STARTUP_GET_STATUS_CHANNEL, () => ({
+      ...appStartupStatus,
+      ...getAppRuntime()
+    }))
     ipcMain.handle(APP_QUIT_CHANNEL, async () => {
       await prepareAppShutdown()
       app.quit()
@@ -320,7 +327,8 @@ if (!singleInstanceLock) {
         mode: 'update_required',
         databaseVersion: error.databaseVersion,
         supportedDatabaseVersion: error.supportedDatabaseVersion,
-        downloadPageUrl: OFFICIAL_DOWNLOAD_PAGE_URL
+        ...getAppRuntime(),
+        downloadPageUrl: downloadPageUrl(getAppRuntime())
       }
       errorLogService.write({
         module: 'sqlite-migration',
@@ -357,6 +365,9 @@ if (!singleInstanceLock) {
     console.log('Starting background initialization of services...')
     await storageService.initialize()
     const appSettings = await storageService.appSettings.get()
+    initializeAppRuntime(app.getPreferredSystemLanguages(), appSettings)
+    appStartupStatus = { mode: 'normal', ...getAppRuntime() }
+    initializeAppMenu()
     embeddingRuntimeClient.setThreadBudget(resolveOrtThreadBudget(appSettings.knowledgeIndexSpeed))
 
     const mainWindow = createWindow()

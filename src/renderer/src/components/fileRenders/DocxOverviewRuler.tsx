@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -28,7 +29,11 @@ const colors = {
   deleted: '#B3261E',
   formatted: '#2F6F4E'
 }
-const changeLabels = { inserted: '新增', deleted: '删除', formatted: '格式修改' }
+const changeLabels = {
+  inserted: t(($) => $.editors.add),
+  deleted: t(($) => $.common.delete),
+  formatted: t(($) => $.editors.formattingChanges)
+}
 
 function measureScrollbar(container: HTMLElement, height: number): Scrollbar | null {
   const maxScroll = container.scrollHeight - container.clientHeight
@@ -145,7 +150,7 @@ export default function DocxOverviewRuler({
             .map(({ node, geometry }) => ({
               id: node.id,
               kind: 'reference' as const,
-              label: `引用 #${node.number}`,
+              label: t(($) => $.editors.reference, { value1: node.number }),
               rects: geometry.rects
             }))
     let frame = 0
@@ -351,7 +356,7 @@ export default function DocxOverviewRuler({
       data-mode={mode}
       data-dragging={dragging}
       role="navigation"
-      aria-label="文档滚动与位置标记"
+      aria-label={t(($) => $.editors.documentPosition)}
       tabIndex={0}
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
@@ -377,7 +382,11 @@ export default function DocxOverviewRuler({
         const kind = marker.targets[0].kind
         const label =
           [...new Set(marker.targets.map((t) => t.label))].join('、') +
-          (marker.targets.length > 1 ? `，共 ${marker.targets.length} 处，连续点击依次定位` : '')
+          (marker.targets.length > 1
+            ? t(($) => $.editors.locationsClickRepeatedlyToCycleThroughThem, {
+                value1: marker.targets.length
+              })
+            : '')
         return (
           <button
             key={marker.key}

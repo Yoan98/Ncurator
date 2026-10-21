@@ -1,3 +1,4 @@
+import { t, getRendererRuntime } from '../../i18n'
 import FileIcon from '../FileIcon'
 import React, {
   useCallback,
@@ -629,7 +630,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       return
     }
     const response = await window.api.attachmentPick(target)
-    if (response.error) message.warning(normalizeUserFacingError(response.error, '选择附件失败'))
+    if (response.error)
+      message.warning(
+        normalizeUserFacingError(
+          response.error,
+          t(($) => $.workbench.couldNotSelectAttachments)
+        )
+      )
     if (!response.canceled) appendAttachments(response.items, target.assetBucketId)
     focusEditorAfterControlChange()
   }, [appendAttachments, focusEditorAfterControlChange, message, requestAttachmentTarget])
@@ -664,7 +671,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       if (!target) return null
       const sourcePath = window.api.attachmentGetSourcePath(file)
       if (!sourcePath) {
-        message.warning('无法读取拖入文件的原始路径')
+        message.warning(t(($) => $.workbench.couldNotReadTheOriginalPathOfTheDropped))
         return null
       }
       const created = await window.api.attachmentCreateFromPath({
@@ -835,18 +842,23 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     : 0
   const contextUsageStroke =
     contextUsagePercent >= 90 ? '#B3261E' : contextUsagePercent >= 70 ? '#B26A00' : '#787774'
-  const contextUsageTitle = contextUsage ? `已用 ${contextUsagePercent}%` : '暂无上下文用量'
+  const contextUsageTitle = contextUsage
+    ? t(($) => $.workbench.used, { value1: contextUsagePercent })
+    : t(($) => $.workbench.contextUsageUnavailable)
   const contextUsageTooltip = contextUsage ? (
     <div className="space-y-1 text-xs leading-5">
-      <div className="font-medium text-[#37352F]">上下文用量</div>
-      <div>已用 {contextUsagePercent}%</div>
+      <div className="font-medium text-[#37352F]">{t(($) => $.workbench.contextUsage)}</div>
+      <div>
+        {t(($) => $.workbench.used2)}
+        {contextUsagePercent}%
+      </div>
       <div className="text-[#787774]">
-        {contextUsage.usedContextTokens.toLocaleString()} /{' '}
-        {contextUsage.contextWindowTokens.toLocaleString()} tokens
+        {contextUsage.usedContextTokens.toLocaleString(getRendererRuntime().locale)} /{' '}
+        {contextUsage.contextWindowTokens.toLocaleString(getRendererRuntime().locale)} tokens
       </div>
     </div>
   ) : (
-    '暂无上下文用量'
+    t(($) => $.workbench.contextUsageUnavailable)
   )
   const currentAttachments = useMemo(() => draftValue.attachments || [], [draftValue.attachments])
 
@@ -901,11 +913,11 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const stoppingRun = showCancel && !sendingWhileRunning
   const sendButtonDisabled = cancelling || (!showCancel && (loading || !canSubmit))
   const sendButtonTooltip = cancelling
-    ? '正在停止本次运行'
+    ? t(($) => $.workbench.stoppingThisRun)
     : !showCancel && loading
-      ? '正在处理上一条请求'
+      ? t(($) => $.workbench.processingThePreviousRequest)
       : !showCancel && !canSubmit
-        ? submitDisabledReason || '当前还不能发送'
+        ? submitDisabledReason || t(($) => $.workbench.sendingIsCurrentlyUnavailable)
         : ''
   const composerHint =
     !showCancel && !loading && !canSubmit && submitDisabledReason ? sendButtonTooltip : ''
@@ -1006,7 +1018,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 <span
                   role="button"
                   tabIndex={0}
-                  aria-label="移除附件"
+                  aria-label={t(($) => $.workbench.removeAttachment)}
                   className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-[#37352F] text-white shadow group-hover:flex"
                   data-testid={`${workbenchSelectors.attachmentRemoveButtonPrefix}-${attachment.id}`}
                   onClick={(event) => {
@@ -1107,7 +1119,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             <button
               type="button"
               className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#787774] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
-              aria-label="添加附件"
+              aria-label={t(($) => $.workbench.addAttachment)}
               data-testid={workbenchSelectors.attachmentAddButton}
               onClick={() => void handlePickAttachments()}
             >
@@ -1121,7 +1133,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 onAiPreferenceChange(nextValue as WorkbenchAiPreference)
                 focusEditorAfterControlChange()
               }}
-              placeholder="偏好"
+              placeholder={t(($) => $.workbench.preferences)}
               compact
               noDrag
               hideChevron
@@ -1137,7 +1149,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 onExecutionPermissionChange(nextValue as WorkbenchExecutionPermission)
                 focusEditorAfterControlChange()
               }}
-              placeholder="权限"
+              placeholder={t(($) => $.workbench.permissions)}
               compact
               noDrag
               hideChevron
@@ -1215,7 +1227,11 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   }`}
                   data-testid={workbenchSelectors.sendButton}
                   aria-label={
-                    cancelling ? '正在停止本次运行' : stoppingRun ? '停止本次运行' : '发送'
+                    cancelling
+                      ? t(($) => $.workbench.stoppingThisRun)
+                      : stoppingRun
+                        ? t(($) => $.workbench.stopThisRun)
+                        : t(($) => $.workbench.send)
                   }
                 >
                   {cancelling ? (

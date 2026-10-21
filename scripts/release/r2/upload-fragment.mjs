@@ -1,3 +1,4 @@
+import { distributionStorage } from '../shared/distribution.mjs'
 import { readFile } from 'node:fs/promises'
 import process from 'node:process'
 import { assertReleaseFragment, resolveReleaseAssetPath } from './fragment-contract.mjs'
@@ -42,6 +43,8 @@ const readRemoteObject = async (key) => {
 
 for (const file of fragment.files) {
   const source = await resolveReleaseAssetPath(inputDirectory, file)
+  if (distributionStorage(fragment.distribution) !== (process.env.RELEASE_STORAGE_TARGET || 'cos'))
+    throw new Error('refuse to upload a distribution to the wrong storage')
   const key = artifactKey(fragment, file.name)
   const existing = await readRemoteObject(key)
   if (existing) {

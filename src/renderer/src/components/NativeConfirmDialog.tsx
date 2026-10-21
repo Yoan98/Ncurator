@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect, useId, useLayoutEffect, useRef } from 'react'
 import type { ConfirmDialogRequest } from '../../../shared/types'
 
@@ -53,7 +54,10 @@ export const NativeConfirmDialog = (props: NativeConfirmDialogProps): null => {
           error =
             (await callbacks.current.onConfirm(response.checkboxChecked === true)) || undefined
         } catch (cause) {
-          error = cause instanceof Error ? cause.message : '操作失败，请重试'
+          error =
+            cause instanceof Error
+              ? cause.message
+              : t(($) => $.common.theOperationFailedPleaseTryAgain)
         }
         if (!error) {
           close()
