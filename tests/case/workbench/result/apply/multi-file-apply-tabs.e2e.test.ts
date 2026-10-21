@@ -142,7 +142,7 @@ describe('workbench result e2e', () => {
           await page.waitForFunction((countPrefix) => {
             const header = document.querySelector(`[data-testid^="${countPrefix}"]`)
             if (!(header instanceof HTMLElement)) return false
-            const match = header.innerText.trim().match(/^(\d+) 个$/u)
+            const match = header.innerText.trim().match(/^(\d+)\s*个$/u)
             return Boolean(match && Number.parseInt(match[1], 10) >= 4)
           }, workbenchSelectors.assistantTurnApplyCountPrefix)
           const applyCountHeader = getWorkbenchPrefixLocator(
@@ -270,10 +270,13 @@ describe('workbench result e2e', () => {
               result.applyEntryCountWhenCollapsed === 3 &&
               result.applyEntryCountWhenExpanded === result.applyEntryCount &&
               result.applyEntryCountAfterReCollapse === 3 &&
-              result.collapseToggleTextCollapsed === `显示剩余 ${remainingCount} 个文件` &&
+              result.collapseToggleTextCollapsed.replace(/\s+/gu, '') ===
+                `显示剩余${remainingCount}个文件` &&
               result.collapseToggleTextExpanded === '收起文件' &&
-              result.applyCountHeaderTextCollapsed === `${result.applyEntryCount} 个` &&
-              result.applyCountHeaderTextExpanded === `${result.applyEntryCount} 个` &&
+              result.applyCountHeaderTextCollapsed.replace(/\s+/gu, '') ===
+                `${result.applyEntryCount}个` &&
+              result.applyCountHeaderTextExpanded.replace(/\s+/gu, '') ===
+                `${result.applyEntryCount}个` &&
               result.firstEntryText.includes(FIRST_FILE) &&
               result.secondEntryText.includes(SECOND_FILE) &&
               result.afterFirstEntryText.includes(FIRST_FILE) &&

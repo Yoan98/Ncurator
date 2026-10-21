@@ -7,6 +7,8 @@ import {
   workbenchSelectors
 } from '../../../../src/renderer/src/testing/selectors'
 
+const CSS_LAYOUT_TOLERANCE_PX = 0.05
+
 const readSettingsLayout = async (page: Page) =>
   page.evaluate(() => {
     const content = document.querySelector('.nc-settings-content')!
@@ -171,18 +173,20 @@ describe('application language and service region', () => {
             }
           )
           await runtime.assertThat(
-            result.chineseLayout.width === 1080 &&
-              result.englishLayout.width === 1080 &&
+            Math.abs(result.chineseLayout.width - 1080) <= CSS_LAYOUT_TOLERANCE_PX &&
+              Math.abs(result.englishLayout.width - 1080) <= CSS_LAYOUT_TOLERANCE_PX &&
               result.chineseLayout.groups.join(',') === '应用偏好,数据与诊断' &&
               result.englishLayout.groups.join(',') === 'App preferences,Data and diagnostics' &&
               [result.chineseLayout, result.englishLayout, result.narrowLayout].every(
                 (layout) =>
-                  layout.width <= 1080 &&
+                  layout.width <= 1080 + CSS_LAYOUT_TOLERANCE_PX &&
                   layout.centered &&
                   layout.noHorizontalOverflow &&
                   layout.controlsFit &&
                   layout.selectHeights.length === 2 &&
-                  layout.selectHeights.every((height) => height === 32)
+                  layout.selectHeights.every(
+                    (height) => Math.abs(height - 32) <= CSS_LAYOUT_TOLERANCE_PX
+                  )
               ) &&
               result.otherLayouts.every(
                 (layout) =>

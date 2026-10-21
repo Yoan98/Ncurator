@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AiFileChangeRecord } from '../../../../src/shared/types'
 import {
   filterVisibleFileChangeRecords,
-  isRuntimeAssetPath
+  isInternalRuntimePath
 } from '../../../../src/shared/fileChangeVisibility'
 
 const record = (input: Partial<AiFileChangeRecord>): AiFileChangeRecord => ({
@@ -23,7 +23,7 @@ const record = (input: Partial<AiFileChangeRecord>): AiFileChangeRecord => ({
 })
 
 describe('workbench file change visibility', () => {
-  it('hides runtime assets while retaining user files and supports Windows paths', () => {
+  it('hides runtime resources and scripts while retaining user files on both path styles', () => {
     const records = [
       record({ id: 'ppt', path: '/workspace/report.pptx', fileName: 'report.pptx' }),
       record({
@@ -37,23 +37,55 @@ describe('workbench file change visibility', () => {
         fileName: 'slide2.png'
       }),
       record({
+        id: 'runtime-script',
+        path: '/userData/partners/partner-1/runtime/scripts/verify_ppt.py',
+        fileName: 'verify_ppt.py'
+      }),
+      record({
+        id: 'runtime-script-windows',
+        path: 'C:\\userData\\partners\\partner-1\\runtime\\scripts\\verify_ppt.py',
+        fileName: 'verify_ppt.py'
+      }),
+      record({
+        id: 'user-script',
+        path: '/workspace/scripts/verify_ppt.py',
+        fileName: 'verify_ppt.py'
+      }),
+      record({
         id: 'legacy-runtime',
         path: '/workspace/.ncurator/runtime/assets/preview.png',
         fileName: 'preview.png'
       })
     ]
 
-    expect(isRuntimeAssetPath('/userData/partners/partner-1/runtime/assets/preview.png')).toBe(true)
-    expect(isRuntimeAssetPath('/workspace/.ncurator/runtime/assets/preview.png')).toBe(true)
-    expect(isRuntimeAssetPath('/userData/partners/partner-1/runtime-assets/preview.png')).toBe(false)
-    expect(isRuntimeAssetPath('/workspace/.ncurator/runtime-assets/preview.png')).toBe(false)
-    expect(filterVisibleFileChangeRecords(records).map((item) => item.id)).toEqual(['ppt'])
+    expect(isInternalRuntimePath('/userData/partners/partner-1/runtime/assets/preview.png')).toBe(
+      true
+    )
+    expect(isInternalRuntimePath('/workspace/.ncurator/runtime/assets/preview.png')).toBe(true)
+    expect(isInternalRuntimePath('/userData/partners/partner-1/runtime-assets/preview.png')).toBe(
+      false
+    )
+    expect(isInternalRuntimePath('/workspace/.ncurator/runtime-assets/preview.png')).toBe(false)
+    expect(
+      isInternalRuntimePath('/userData/partners/partner-1/runtime/scripts-copy/check.py')
+    ).toBe(false)
+    expect(filterVisibleFileChangeRecords(records).map((item) => item.id)).toEqual([
+      'ppt',
+      'user-script'
+    ])
   })
 
-  it('retains a runtime asset when it is an attachment the user submitted', () => {
-    const attachmentPath = '/userData/partners/partner-1/runtime/assets/attachment-bucket/input.docx'
+  it('retains runtime files when they are attachments the user submitted', () => {
+    const attachmentPath =
+      '/userData/partners/partner-1/runtime/assets/attachment-bucket/input.docx'
+    const scriptAttachmentPath = '/userData/partners/partner-1/runtime/scripts/attached-check.py'
     const records = [
       record({ id: 'attachment', path: attachmentPath, fileName: 'input.docx' }),
+      record({
+        id: 'script-attachment',
+        path: scriptAttachmentPath,
+        fileName: 'attached-check.py'
+      }),
       record({
         id: 'generated-preview',
         path: '/userData/partners/partner-1/runtime/assets/previews/page-1.png',
@@ -62,7 +94,9 @@ describe('workbench file change visibility', () => {
     ]
 
     expect(
-      filterVisibleFileChangeRecords(records, [attachmentPath]).map((item) => item.id)
-    ).toEqual(['attachment'])
+      filterVisibleFileChangeRecords(records, [attachmentPath, scriptAttachmentPath]).map(
+        (item) => item.id
+      )
+    ).toEqual(['attachment', 'script-attachment'])
   })
 })

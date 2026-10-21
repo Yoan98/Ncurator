@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { lstat, mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'vitest'
@@ -18,8 +18,6 @@ describe('settings vector real download e2e', () => {
     async () => {
       const modelsPath = await mkdtemp(path.join(os.tmpdir(), 'ncurator-vector-delete-active-'))
       try {
-        const isolatedProfilePath = path.join(modelsPath, 'profile')
-        await mkdir(isolatedProfilePath, { recursive: true })
         await runE2ECase({
           caseId: CASE_ID,
           domain: 'settings',
@@ -29,10 +27,7 @@ describe('settings vector real download e2e', () => {
           fixtures: [],
           serviceMode: 'real',
           extraEnv: {
-            NCURATOR_MODELS_PATH: modelsPath,
-            ...(process.platform === 'win32'
-              ? { USERPROFILE: isolatedProfilePath }
-              : { HOME: isolatedProfilePath })
+            NCURATOR_MODELS_PATH: modelsPath
           },
           windowMode: 'visible',
           runMode: 'single',

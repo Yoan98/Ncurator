@@ -76,7 +76,8 @@ describe('workbench conversation e2e', () => {
           ) {
             throw new Error('completed context usage unavailable')
           }
-          const expectedLabel = `已用 ${Math.max(0, Math.min(100, Math.round((after.ratio || 0) * 100)))}%`
+          const expectedPercent = Math.max(0, Math.min(100, Math.round((after.ratio || 0) * 100)))
+          const expectedLabel = `已用 ${expectedPercent}%`
           await page.waitForFunction(
             ({ testId, label }) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-label') ===
@@ -86,14 +87,16 @@ describe('workbench conversation e2e', () => {
           const label = (await contextRing.getAttribute('aria-label')) || ''
           await contextRing.hover()
           const tooltipTitle = page.getByText('上下文用量', { exact: true })
-          const usedPercent = page.getByText(/^已用 \d+%$/).first()
+          const usedPercent = page
+            .getByText(new RegExp(`^已用\\s*${expectedPercent}%$`, 'u'))
+            .first()
           await tooltipTitle.waitFor({ state: 'visible', timeout: 3000 })
           await usedPercent.waitFor({ state: 'visible', timeout: 3000 })
           const expectedTokens = `${after.usedContextTokens.toLocaleString()} / ${after.contextWindowTokens.toLocaleString()} tokens`
           const tokens = page.getByText(expectedTokens, { exact: true })
           await tokens.waitFor({ state: 'visible' })
           const remainingVisible = await page
-            .getByText(/^剩余 \d+%$/)
+            .getByText(/^剩余\s*\d+%$/u)
             .first()
             .isVisible()
             .catch(() => false)

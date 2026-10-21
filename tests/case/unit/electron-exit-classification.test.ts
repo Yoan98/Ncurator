@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
+import { terminateDesktopProcess } from '../../../scripts/test/desktop-launch.mjs'
 import {
   isExpectedForceKilledTeardownExit,
   isExpectedMacDesktopTeardownExit,
@@ -137,6 +140,7 @@ describe('Force-killed Electron exit classification', () => {
   it('accepts intentional SIGKILL after hung close when the test already passed', () => {
     expect(
       isExpectedForceKilledTeardownExit({
+        platform: 'linux',
         lifecycleEntries: lifecycle(
           'electron-teardown-started',
           'electron-graceful-shutdown-prepared',
@@ -146,6 +150,88 @@ describe('Force-killed Electron exit classification', () => {
         testPassed: true
       })
     ).toBe(true)
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'classifies the real taskkill exit of a process terminated by the harness',
+    async () => {
+      const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      try {
+        await once(child, 'spawn')
+        const exited = once(child, 'exit')
+        terminateDesktopProcess(child.pid)
+        const [code, signal] = await exited
+        expect(code).toBe(1)
+        expect(signal).toBeNull()
+        expect(
+          isExpectedForceKilledTeardownExit({
+            platform: 'win32',
+            testPassed: true,
+            lifecycleEntries: lifecycle('electron-teardown-started', 'electron-force-killed', {
+              name: 'electron-process-exit',
+              data: { code, signal }
+            })
+          })
+        ).toBe(true)
+      } finally {
+        if (child.exitCode === null) child.kill('SIGKILL')
+      }
+    }
+  )
+
+  it.each([
+    {
+      name: 'failed assertions',
+      testPassed: false,
+      lifecycleEntries: lifecycle('electron-teardown-started', 'electron-force-killed', {
+        name: 'electron-process-exit',
+        data: { code: 1, signal: null }
+      })
+    },
+    {
+      name: 'an unrequested exit',
+      testPassed: true,
+      lifecycleEntries: lifecycle('electron-teardown-started', {
+        name: 'electron-process-exit',
+        data: { code: 1, signal: null }
+      })
+    },
+    {
+      name: 'a force-kill marker before teardown',
+      testPassed: true,
+      lifecycleEntries: lifecycle('electron-force-killed', 'electron-teardown-started', {
+        name: 'electron-process-exit',
+        data: { code: 1, signal: null }
+      })
+    },
+    {
+      name: 'a renderer crash',
+      testPassed: true,
+      lifecycleEntries: lifecycle(
+        'electron-teardown-started',
+        'page-crash',
+        'electron-force-killed',
+        {
+          name: 'electron-process-exit',
+          data: { code: 1, signal: null }
+        }
+      )
+    },
+    {
+      name: 'an unrelated exit code',
+      testPassed: true,
+      lifecycleEntries: lifecycle('electron-teardown-started', 'electron-force-killed', {
+        name: 'electron-process-exit',
+        data: { code: 2, signal: null }
+      })
+    }
+  ])('rejects Windows force-kill classification for $name', ({ testPassed, lifecycleEntries }) => {
+    expect(
+      isExpectedForceKilledTeardownExit({ platform: 'win32', testPassed, lifecycleEntries })
+    ).toBe(false)
   })
 
   it.each([
@@ -184,6 +270,7 @@ describe('Force-killed Electron exit classification', () => {
   ])('rejects force-kill classification for %s', (_name, testPassed, lifecycleEntries) => {
     expect(
       isExpectedForceKilledTeardownExit({
+        platform: 'linux',
         lifecycleEntries: lifecycleEntries as E2ELifecycleEntry[],
         testPassed: testPassed as boolean
       })

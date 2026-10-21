@@ -158,7 +158,7 @@ import {
 } from '../components/workbench/applyTargetUtils'
 import {
   filterVisibleFileChangeRecords,
-  isRuntimeAssetPath
+  isInternalRuntimePath
 } from '../../../shared/fileChangeVisibility'
 import {
   createFileChangeRunScope,
@@ -300,7 +300,7 @@ const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel =>
 const artifactToApplyTarget = (
   artifact: AiArtifactRef
 ): AssistantTurnViewModel['applyTargets'][number] | null => {
-  if (artifact.kind !== 'file' || !artifact.applyId || isRuntimeAssetPath(artifact.path))
+  if (artifact.kind !== 'file' || !artifact.applyId || isInternalRuntimePath(artifact.path))
     return null
   return {
     changeId: artifact.applyId,
@@ -384,7 +384,7 @@ const reduceAssistantTurnByRunEvent = (
     }
   }
 
-  if (event.type === 'file_artifact' && !isRuntimeAssetPath(event.path)) {
+  if (event.type === 'file_artifact' && !isInternalRuntimePath(event.path)) {
     next = {
       ...next,
       artifacts: dedupeFileRefs([
@@ -3666,7 +3666,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'file_artifact') {
-        if (isRuntimeAssetPath(event.path)) return
+        if (isInternalRuntimePath(event.path)) return
         appendArtifactForMessage(assistantArtifactsRef.current, messageId, {
           kind: 'file',
           capability: event.capability,

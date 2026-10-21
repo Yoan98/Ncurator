@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'vitest'
@@ -95,8 +95,6 @@ describe('settings vector download source switch e2e', () => {
       })
 
       try {
-        const isolatedProfilePath = path.join(modelsPath, 'profile')
-        await mkdir(isolatedProfilePath, { recursive: true })
         await runE2ECase({
           caseId: CASE_ID,
           domain: 'settings',
@@ -108,10 +106,7 @@ describe('settings vector download source switch e2e', () => {
           extraEnv: {
             NCURATOR_MODELS_PATH: modelsPath,
             NCURATOR_MODELSCOPE_ENDPOINT: modelscopeServer.origin,
-            NCURATOR_HF_MIRROR_ENDPOINT: huggingfaceServer.origin,
-            ...(process.platform === 'win32'
-              ? { USERPROFILE: isolatedProfilePath }
-              : { HOME: isolatedProfilePath })
+            NCURATOR_HF_MIRROR_ENDPOINT: huggingfaceServer.origin
           },
           windowMode: 'visible',
           runMode: 'single',

@@ -884,6 +884,7 @@ export const runE2ECase = async <TResult>(
         testPassed
       })
       const isKnownForceKilledExit = isExpectedForceKilledTeardownExit({
+        platform: process.platform,
         lifecycleEntries: signals.lifecycleEntries,
         testPassed
       })
@@ -913,7 +914,7 @@ export const runE2ECase = async <TResult>(
           type: 'signal',
           name: 'electron-force-kill-exit-warning',
           status: 'info',
-          message: `Electron force-killed after hung close (signal=${String(processExitData?.signal || '')})`,
+          message: `Electron force-killed after hung close (code=${String(processExitData?.code)}, signal=${String(processExitData?.signal || '')})`,
           data: processExitData
         })
       } else if (

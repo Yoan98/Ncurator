@@ -21,6 +21,7 @@ const CASE_ID = 'ppt-create-diff-and-revert'
 const FILE_NAME = 'Workbench-PPT验收.pptx'
 const MARKER = 'ORBIT-PPT-731'
 const OWNER = '王海涛（供应链总监）'
+const VERIFY_FILE_NAME = 'ppt-create-verify.py'
 
 // Observe the SVG already published by the product with the browser's own font engine.
 const inspectDisplayedTable = async (page: Page, testId: string) => {
@@ -35,10 +36,7 @@ const inspectDisplayedTable = async (page: Page, testId: string) => {
   })
   return page.evaluate(
     async ({ svgText, owner }) => {
-      const svg = new DOMParser().parseFromString(
-        svgText,
-        'image/svg+xml'
-      )
+      const svg = new DOMParser().parseFromString(svgText, 'image/svg+xml')
       const probe = document.createElement('div')
       probe.style.cssText =
         'position:fixed;left:-10000px;top:0;visibility:hidden;pointer-events:none'
@@ -102,10 +100,24 @@ describe('workbench result e2e', () => {
             workspaceContents: 'empty'
           })
           const filePath = path.join(setup.workspace.rootPath, FILE_NAME)
+          const partnerId = await page.evaluate(
+            async (name) =>
+              (await window.api.partnerList()).find((partner) => partner.name === name)?.id,
+            setup.workspaceName
+          )
+          if (!partnerId) throw new Error('PPT workspace partner missing')
+          const verificationScriptPath = path.join(
+            runtime.userDataDir,
+            'partners',
+            partnerId,
+            'runtime',
+            'scripts',
+            VERIFY_FILE_NAME
+          )
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请直接在工作区创建“${FILE_NAME}”。做两页简洁专业的 16:9 PPT：第一页标题包含“季度复盘”，并含两行风险表（表头加一行内容），负责人是“${OWNER}”，风险为“芯片供货延迟”；第二页标题包含“下一步”，两页正文都要出现唯一标记“${MARKER}”。必须使用 PPT 工具，每页一次 insert_slide，用元素规格而不是 HTML。表格留足空间容纳中文及全角括号。字号单位是磅；首次 ppt_edit 成功后不要删除、重建、复制或再次修改文件，直接告诉我已写回。`
+            `请直接在工作区创建“${FILE_NAME}”。做两页简洁专业的 16:9 PPT：第一页标题包含“季度复盘”，并含两行风险表（表头加一行内容），负责人是“${OWNER}”，风险为“芯片供货延迟”；第二页标题包含“下一步”，两页正文都要出现唯一标记“${MARKER}”。必须使用 PPT 工具，每页一次 insert_slide，用元素规格而不是 HTML。表格留足空间容纳中文及全角括号，字号单位是磅。另通过文本文件工具，在系统提供的 runtime_paths.scripts 目录中创建一次性 Python 校验脚本“${VERIFY_FILE_NAME}”，用于只读检查 PPT 页数与“${MARKER}”，不得放入用户工作区。两页完成后不要删除、重建、复制或再次修改 PPT，告诉我已写回。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
@@ -115,6 +127,7 @@ describe('workbench result e2e', () => {
             { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          const verificationScriptContent = await fs.readFile(verificationScriptPath, 'utf8')
           const bytes = new Uint8Array(await fs.readFile(filePath))
           const presentation = await loadPresentation(bytes)
           const slideText = getSlides(presentation)
@@ -224,6 +237,14 @@ describe('workbench result e2e', () => {
             .catch(() => false)
           return {
             slideCount: getSlides(presentation).length,
+            verificationScriptPath,
+            verificationScriptExists:
+              verificationScriptContent.length > 0 && verificationScriptContent.includes(MARKER),
+            verificationScriptRecorded: evidence.events.some(
+              (event) =>
+                event.type === 'file_artifact' &&
+                path.resolve(event.path) === verificationScriptPath
+            ),
             slideText,
             reviewTableLayout,
             previewTableLayout,
@@ -256,6 +277,9 @@ describe('workbench result e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.slideCount === 2 &&
+              result.verificationScriptExists &&
+              result.verificationScriptRecorded &&
+              result.verificationScriptPath.replace(/\\/gu, '/').includes('/runtime/scripts/') &&
               result.reviewTableLayout.hasFullName &&
               result.previewTableLayout.hasFullName &&
               result.reviewTableLayout.cellCount >= 4 &&
@@ -264,12 +288,13 @@ describe('workbench result e2e', () => {
               result.previewTableLayout.overflows.length === 0 &&
               result.slideText.includes(MARKER) &&
               result.applyEntryText.includes(FILE_NAME) &&
+              result.assistantApplyEntriesText.length === 1 &&
               result.assistantApplyEntriesText.every(
-                (text) => !text.includes('/.ncurator/runtime/assets/')
+                (text) => !/[/\\]runtime[/\\](?:assets|scripts)[/\\]/u.test(text)
               ) &&
-              result.workspaceExplorerText.includes(`本次运行改动 1`) &&
+              /本次运行改动\s*1(?!\d)/u.test(result.workspaceExplorerText) &&
               result.workspaceExplorerText.includes(FILE_NAME) &&
-              !result.workspaceExplorerText.includes('/.ncurator/runtime/assets/') &&
+              !/[/\\]runtime[/\\](?:assets|scripts)[/\\]/u.test(result.workspaceExplorerText) &&
               result.reviewToolbarText.includes('+2') &&
               result.reviewToolbarText.includes('-0') &&
               result.initialModeTag === '审核' &&

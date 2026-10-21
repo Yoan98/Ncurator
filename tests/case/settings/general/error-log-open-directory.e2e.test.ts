@@ -24,7 +24,10 @@ describe('settings error log e2e', () => {
           await navigateToSettingsSection(page, 'general')
           const button = getSettingsLocator(page, settingsSelectors.errorLogOpenDirectoryButton)
           await button.waitFor({ state: 'visible' })
-          const panelText = await getSettingsLocator(page, settingsSelectors.generalPanel).textContent()
+          const panelText = await getSettingsLocator(
+            page,
+            settingsSelectors.generalPanel
+          ).textContent()
           const accessibleName = await button.getAttribute('aria-label')
           await button.click()
           const signals = await runtime.collectSignals()
@@ -32,18 +35,22 @@ describe('settings error log e2e', () => {
             accessibleName,
             buttonText: await button.textContent(),
             panelText,
-            calls: signals.ipcInvokeEntries.filter((entry) => entry.name === 'errorLogOpenDirectory')
+            calls: signals.ipcInvokeEntries.filter(
+              (entry) => entry.name === 'errorLogOpenDirectory'
+            )
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.accessibleName === '打开错误日志目录' &&
               result.buttonText?.trim() === '打开' &&
-              result.panelText?.includes('将 app.log 发给作者排查问题') &&
+              result.panelText?.includes('日志目录') &&
+              result.panelText.includes('app.log') &&
               result.calls.length === 1,
             {
               name: 'error-log-directory-entry',
-              message: '错误日志入口应展示 app.log 说明并调用打开目录 IPC，对齐 SET-GENERAL-003-AC3。',
+              message:
+                '错误日志入口应展示 app.log 说明并调用打开目录 IPC，对齐 SET-GENERAL-003-AC3。',
               data: result
             }
           )

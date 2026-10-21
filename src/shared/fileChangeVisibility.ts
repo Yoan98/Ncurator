@@ -1,13 +1,13 @@
 import type { AiFileChangeRecord } from './types'
 
-const RUNTIME_ASSET_PATH_PATTERN =
-  /(?:^|\/)(?:\.ncurator\/runtime\/assets|partners\/[^/]+\/runtime\/assets)(?:\/|$)/iu
+const INTERNAL_RUNTIME_PATH_PATTERN =
+  /(?:^|\/)(?:\.ncurator\/runtime|partners\/[^/]+\/runtime)\/(?:assets|scripts)(?:\/|$)/iu
 
-export const isRuntimeAssetPath = (filePath: string | undefined): boolean =>
-  Boolean(filePath && RUNTIME_ASSET_PATH_PATTERN.test(filePath.replace(/\\/g, '/')))
+export const isInternalRuntimePath = (filePath: string | undefined): boolean =>
+  Boolean(filePath && INTERNAL_RUNTIME_PATH_PATTERN.test(filePath.replace(/\\/g, '/')))
 
-export const isRuntimeAssetFileChange = (record: AiFileChangeRecord): boolean =>
-  [record.path, record.beforePath, record.afterPath].some(isRuntimeAssetPath)
+const isInternalRuntimeFileChange = (record: AiFileChangeRecord): boolean =>
+  [record.path, record.beforePath, record.afterPath].some(isInternalRuntimePath)
 
 export const filterVisibleFileChangeRecords = (
   records: readonly AiFileChangeRecord[],
@@ -18,7 +18,7 @@ export const filterVisibleFileChangeRecords = (
   )
   return records.filter(
     (record) =>
-      !isRuntimeAssetFileChange(record) ||
+      !isInternalRuntimeFileChange(record) ||
       [record.path, record.beforePath, record.afterPath]
         .filter((filePath): filePath is string => Boolean(filePath))
         .some((filePath) => preservedPaths.has(filePath.replace(/\\/g, '/')))

@@ -69,8 +69,7 @@ describe('workbench run e2e', () => {
               (prefix) =>
                 document
                   .querySelector(`[data-testid^="${prefix}-"]`)
-                  ?.getAttribute('data-testid') ||
-                null,
+                  ?.getAttribute('data-testid') || null,
               workbenchSelectors.assistantRunDurationPrefix,
               { timeout: 10_000 }
             )
@@ -168,13 +167,16 @@ describe('workbench run e2e', () => {
           }
           await runtime.page.waitForFunction(
             (testId) =>
-              document.querySelector(`[data-testid="${testId}"]`)?.textContent?.includes('用时 '),
+              /^用时\s*(?:[1-9]\d*分钟)?\d+秒$/u.test(
+                document.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim() || ''
+              ),
             firstRunDurationTestId,
             { timeout: 10_000 }
           )
           const firstRunDurationText =
-            (await runtime.page.locator(`[data-testid="${firstRunDurationTestId}"]`).textContent()) ||
-            ''
+            (await runtime.page
+              .locator(`[data-testid="${firstRunDurationTestId}"]`)
+              .textContent()) || ''
           const firstRunAssistantMessageId = firstRunDurationTestId.slice(
             `${workbenchSelectors.assistantRunDurationPrefix}-`.length
           )
@@ -188,9 +190,9 @@ describe('workbench run e2e', () => {
               )
               return Boolean(
                 userMessage &&
-                  assistantTurn &&
-                  (userMessage.compareDocumentPosition(assistantTurn) &
-                    Node.DOCUMENT_POSITION_FOLLOWING)
+                assistantTurn &&
+                userMessage.compareDocumentPosition(assistantTurn) &
+                  Node.DOCUMENT_POSITION_FOLLOWING
               )
             },
             {
@@ -276,7 +278,7 @@ describe('workbench run e2e', () => {
               result.primaryButtonCount === 1 &&
               result.sendButtonCountWithDraft === 1 &&
               result.continuationInput === SECOND_QUEUED_INPUT &&
-              result.firstRunDurationText.includes('用时 ') &&
+              /^用时\s*(?:[1-9]\d*分钟)?\d+秒$/u.test(result.firstRunDurationText.trim()) &&
               result.firstRunUserBeforeAssistant &&
               result.toolResults.some((event) => event.toolName === 'text_file_read' && event.ok),
             {

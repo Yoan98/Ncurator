@@ -202,7 +202,7 @@ describe('settings workspace web e2e', () => {
 
           await runtime.assertThat(
             result.uiSummary.actionableCount === 1 &&
-              result.uiSummary.failedHint === '含失败 1 个' &&
+              /^含失败\s*1\s*个$/u.test(result.uiSummary.failedHint) &&
               !result.progressText.includes('已处理'),
             {
               name: 'prepare-summary-and-progress-copy-match-file-view',

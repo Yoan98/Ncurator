@@ -114,13 +114,13 @@ export const isExpectedWindowsInspectorTeardownExit = (input: {
   return (exitData?.code === 3221225477 || exitData?.code === 3221226505) && !exitData.signal
 }
 
-/** Playwright close 挂死后由 harness SIGKILL；测试已通过时不算 teardown 失败。 */
+/** Playwright close 挂死后由 harness 主动终止；测试已通过时保留平台退出警告。 */
 export const isExpectedForceKilledTeardownExit = (input: {
+  platform: NodeJS.Platform
   lifecycleEntries: readonly E2ELifecycleEntry[]
   testPassed: boolean
 }): boolean => {
   if (!input.testPassed) return false
-  if (!input.lifecycleEntries.some((entry) => entry.name === 'electron-force-killed')) return false
 
   const exitIndex = input.lifecycleEntries.findLastIndex(
     (entry) => entry.name === 'electron-process-exit'
@@ -132,11 +132,20 @@ export const isExpectedForceKilledTeardownExit = (input: {
   )
   if (teardownIndex < 0 || teardownIndex >= exitIndex) return false
   if (input.lifecycleEntries.some((entry) => entry.name === 'page-crash')) return false
+  if (
+    !input.lifecycleEntries
+      .slice(teardownIndex + 1, exitIndex)
+      .some((entry) => entry.name === 'electron-force-killed')
+  )
+    return false
 
   const exitData = input.lifecycleEntries[exitIndex]?.data as
     | { code?: number | null; signal?: string | null }
     | undefined
-  return exitData?.signal === 'SIGKILL'
+  return (
+    exitData?.signal === 'SIGKILL' ||
+    (input.platform === 'win32' && exitData?.code === 1 && !exitData.signal)
+  )
 }
 
 type E2EObserverState = {

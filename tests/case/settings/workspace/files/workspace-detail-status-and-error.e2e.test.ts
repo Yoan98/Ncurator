@@ -72,7 +72,7 @@ describe('settings workspace e2e', () => {
             result.summary.needs_index_count === 0 &&
               result.summary.failed_file_count === 1 &&
               result.counts.actionableCount === 1 &&
-              result.counts.failedHint.includes('含失败 1 个'),
+              /含失败\s*1\s*个/u.test(result.counts.failedHint),
             {
               name: 'workspace-summary-shows-actionable-count-with-failed-hint',
               message:

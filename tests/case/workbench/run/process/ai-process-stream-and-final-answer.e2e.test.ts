@@ -137,7 +137,7 @@ const listVisibleToolNames = (events: AiRunEvent[]): string[] =>
 
 /** Activity header: merge by tool kind; ≤3 kinds → short text /「N 次」/comma; >3 kinds → 已完成 n 项. */
 const isCountOnlyActivityHeader = (summaryText: string): boolean =>
-  /^已完成\s+\d+\s*项$/u.test(summaryText) ||
+  /^已完成\s*\d+\s*项$/u.test(summaryText) ||
   /^\d+\s*项操作中有部分失败$/u.test(summaryText) ||
   /^\d+\s*项操作执行失败$/u.test(summaryText)
 
@@ -145,7 +145,7 @@ const isShortActivityHeader = (summaryText: string, itemCount: number): boolean 
   if (itemCount <= 0) return summaryText.length > 0
   if (summaryText.includes('，')) return false
   // Old wording must not appear.
-  if (/正在执行\s+\d+\s*项操作|已完成\s+\d+\s*项操作/u.test(summaryText)) return false
+  if (/正在执行\s*\d+\s*项操作|已完成\s*\d+\s*项操作/u.test(summaryText)) return false
 
   if (isCountOnlyActivityHeader(summaryText)) {
     // Count form requires enough items to exceed 3 merged kinds.
@@ -257,7 +257,7 @@ describe('workbench run e2e', () => {
             (readDurationSeconds(durationAfterTick) ?? 0) >
               (readDurationSeconds(durationDuringRun) ?? 0)
           const durationFormatValidDuringRun = [durationDuringRun, durationAfterTick].every(
-            (duration) => /^已处理\s+(?:[1-9]\d*分钟)?\d+秒$/u.test(duration)
+            (duration) => /^已处理\s*(?:[1-9]\d*分钟)?\d+秒$/u.test(duration)
           )
           const earlySample = await sampleThinkingWaitEarly(page, processLocator)
           let runWatchDone = false
@@ -407,12 +407,12 @@ describe('workbench run e2e', () => {
           const learnSkillCopyOk =
             !hasLearnSkill ||
             allItemTexts.some((text) => /已学会|正在学习/u.test(text)) ||
-            allSummaryTexts.some((text) => /已学会|正在学习|已完成\s+\d+\s*项|技能/u.test(text))
+            allSummaryTexts.some((text) => /已学会|正在学习|已完成\s*\d+\s*项|技能/u.test(text))
           const docxCopyOk =
             !hasDocxTool ||
             allItemTexts.some((text) => text.includes('Word 文档')) ||
             allSummaryTexts.some(
-              (text) => text.includes('Word 文档') || /已完成\s+\d+\s*项/u.test(text)
+              (text) => text.includes('Word 文档') || /已完成\s*\d+\s*项/u.test(text)
             )
           const thinkingSegmentOk =
             !result.retryAndThinkingCoexist &&
@@ -424,7 +424,7 @@ describe('workbench run e2e', () => {
             result.durationDuringRun.startsWith('已处理') &&
               result.durationAdvanced &&
               result.durationFormatValidDuringRun &&
-              /^用时\s+(?:[1-9]\d*分钟)?\d+秒$/u.test(result.durationTextAtCompletion) &&
+              /^用时\s*(?:[1-9]\d*分钟)?\d+秒$/u.test(result.durationTextAtCompletion) &&
               result.collapsedByDefault &&
               result.expandedAfterClick &&
               result.finalAnswerVisibleWhenCollapsed &&
