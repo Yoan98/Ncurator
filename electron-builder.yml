@@ -37,6 +37,7 @@ asarUnpack:
   - '**/node_modules/node-pty/prebuilds/**/*'
   - '**/node_modules/@napi-rs/canvas/**/*'
   - '**/node_modules/@napi-rs/canvas-*/**/*'
+  - '**/node_modules/@node-rs/jieba-*/**/*'
 win:
   icon: build/icon.ico
   executableName: 馆长

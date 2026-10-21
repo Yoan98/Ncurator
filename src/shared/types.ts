@@ -2,7 +2,6 @@ import type { AppLanguage, AppRuntimeSnapshot, ServiceRoute } from './appPrefere
 
 export type DocumentSourceType = 'file' | 'web'
 export type DocumentImportStatus = 1 | 2 | 3
-export type SearchSourceFilter = 'all' | DocumentSourceType
 export type WebSourceIdentityKind = 'normalized_url'
 export type WebSourceIndexStatus =
   | 'needs_index'
@@ -499,11 +498,6 @@ export interface SearchResult {
   _score?: number
   _relevance_score?: number
   document?: DocumentRecord
-}
-
-export interface SearchResponse {
-  results: SearchResult[]
-  tokens: string[]
 }
 
 export interface ChunkListItem {

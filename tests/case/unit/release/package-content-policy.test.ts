@@ -13,7 +13,7 @@ import {
 import { PROTECTED_MAIN_PLAINTEXT_MARKERS } from '../../../../scripts/build/package/obfuscation.mjs'
 import {
   VC_REDIST_DLL_NAMES,
-  resolveVcRuntimeDllDirectory
+  resolvePackagedWindowsNativeBinaries
 } from '../../../../scripts/build/package/vc-runtime.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -118,10 +118,13 @@ describe('package content policy paths', () => {
     await writeFile(nodePtyHelperPath, '', { mode: 0o755 })
     await writeFile(sidecarExecutablePath, '', { mode: 0o755 })
     await writeFile(playwrightDriverPath, 'module.exports = {}\n')
-    const vcRuntimeDllDirectory = resolveVcRuntimeDllDirectory(packagedApp)
-    await mkdir(vcRuntimeDllDirectory, { recursive: true })
-    for (const filename of VC_REDIST_DLL_NAMES) {
-      await writeFile(path.join(vcRuntimeDllDirectory, filename), 'dummy')
+    for (const binary of resolvePackagedWindowsNativeBinaries(packagedApp)) {
+      const vcRuntimeDllDirectory = path.dirname(binary)
+      await mkdir(vcRuntimeDllDirectory, { recursive: true })
+      await writeFile(binary, 'native fixture')
+      for (const filename of VC_REDIST_DLL_NAMES) {
+        await writeFile(path.join(vcRuntimeDllDirectory, filename), 'dummy')
+      }
     }
     await writeFile(path.join(appSource, 'out', 'main', 'index.js'), 'export const ready = true\n')
     await writeFile(

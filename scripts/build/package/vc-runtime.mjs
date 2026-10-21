@@ -8,15 +8,24 @@ export const VC_REDIST_DLL_NAMES = [
   'vcruntime140_1.dll'
 ]
 
-const ONNX_BIN_SEGMENTS = ['node_modules', 'onnxruntime-node', 'bin', 'napi-v3', 'win32', 'x64']
+const WINDOWS_NATIVE_BINARIES = [
+  'node_modules/onnxruntime-node/bin/napi-v3/win32/x64/onnxruntime_binding.node',
+  'node_modules/@node-rs/jieba-win32-x64-msvc/jieba.win32-x64-msvc.node'
+]
 
 const isWindowsX64 = (platform, arch) => platform === 'win32' && arch === 'x64'
 
-const assertDirectory = (directory, label) => {
-  if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) {
-    throw new Error(`${label} not found: ${directory}`)
+const assertFile = (filePath, label) => {
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    throw new Error(`${label} missing: ${filePath}`)
   }
 }
+
+const resolveNativeBinaries = (root) =>
+  WINDOWS_NATIVE_BINARIES.map((relativePath) => path.join(root, ...relativePath.split('/')))
+
+export const resolvePackagedWindowsNativeBinaries = (appRoot) =>
+  resolveNativeBinaries(path.join(appRoot, 'resources', 'app.asar.unpacked'))
 
 export const installWindowsVcRuntime = ({
   stageDir,
@@ -26,22 +35,22 @@ export const installWindowsVcRuntime = ({
 }) => {
   if (!isWindowsX64(platform, arch)) return
 
-  assertDirectory(vcRedistDir, 'VC++ redistributable source directory')
-  const targetDirectory = path.join(stageDir, ...ONNX_BIN_SEGMENTS)
-  assertDirectory(targetDirectory, 'ONNX Runtime target binary directory')
-
-  for (const filename of VC_REDIST_DLL_NAMES) {
+  const sources = VC_REDIST_DLL_NAMES.map((filename) => {
     const source = path.join(vcRedistDir, filename)
-    if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
-      throw new Error(`VC++ redistributable DLL missing: ${source}`)
+    assertFile(source, 'VC++ redistributable DLL')
+    return source
+  })
+  const binaries = resolveNativeBinaries(stageDir)
+  for (const binary of binaries) assertFile(binary, 'Windows native binary')
+  for (const binary of binaries) {
+    for (const source of sources) {
+      fs.copyFileSync(source, path.join(path.dirname(binary), path.basename(source)))
     }
-    fs.copyFileSync(source, path.join(targetDirectory, filename))
   }
-  process.stdout.write('[package] installed VC++ redistributable DLLs into ONNX Runtime binary directory\n')
+  process.stdout.write(
+    '[package] installed VC++ redistributable DLLs next to ONNX Runtime and Jieba binaries\n'
+  )
 }
-
-export const resolveVcRuntimeDllDirectory = (appRoot) =>
-  path.join(appRoot, 'resources', 'app.asar.unpacked', ...ONNX_BIN_SEGMENTS)
 
 export const assertVcRuntimeDllsPackaged = (
   appRoot,
@@ -49,11 +58,11 @@ export const assertVcRuntimeDllsPackaged = (
 ) => {
   if (!isWindowsX64(platform, arch)) return
 
-  const directory = resolveVcRuntimeDllDirectory(appRoot)
-  for (const filename of VC_REDIST_DLL_NAMES) {
-    const dllPath = path.join(directory, filename)
-    if (!fs.existsSync(dllPath) || !fs.statSync(dllPath).isFile()) {
-      throw new Error(`packaged VC++ redistributable DLL missing: ${filename}`)
+  for (const binary of resolvePackagedWindowsNativeBinaries(appRoot)) {
+    const directory = path.dirname(binary)
+    for (const filename of VC_REDIST_DLL_NAMES) {
+      assertFile(path.join(directory, filename), 'packaged VC++ redistributable DLL')
     }
+    assertFile(binary, 'packaged Windows native binary')
   }
 }

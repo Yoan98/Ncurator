@@ -70,6 +70,13 @@ export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDire
     }
   }
 
+  const { Jieba } = loadStageModule(stageRequire, stageNodeModules, '@node-rs/jieba')
+  const { dict } = loadStageModule(stageRequire, stageNodeModules, '@node-rs/jieba/dict')
+  const jiebaTokens = Jieba.withDict(dict).cutForSearch('中文分词', true)
+  if (!jiebaTokens.includes('中文') || !jiebaTokens.includes('分词')) {
+    throw new Error('Jieba staged native runtime or default dictionary is not working')
+  }
+
   const docxFixture = path.join(root, 'tests', 'fixtures', 'workspace', 'sample-edit.docx')
   const pdfFixture = path.join(root, 'tests', 'fixtures', 'workspace', '学习笔记', '深度学习.pdf')
   for (const fixture of [docxFixture, pdfFixture]) {
@@ -187,6 +194,7 @@ export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDire
   return {
     packages: report.packages.length,
     requiredFiles: report.requiredFiles.length,
+    jiebaTokens: jiebaTokens.length,
     docxDocuments: docxDocuments.length,
     pdfDocuments: pdfDocuments.length,
     formulaSvgBytes: Buffer.byteLength(formulaMarkup),

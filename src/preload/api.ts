@@ -93,8 +93,6 @@ import type {
   LlmModelListResponse,
   PrepareWorkspaceRequest,
   RefreshWebSourceRequest,
-  SearchResponse,
-  SearchSourceFilter,
   PickDirectoryResponse,
   PickFileResponse,
   ListOpenWithApplicationsRequest,
@@ -190,11 +188,6 @@ export type DesktopApi = {
   revealPath: (filePath: string) => Promise<{ success: boolean; error?: string }>
   pickDirectory: () => Promise<PickDirectoryResponse>
   pickFile: (defaultPath?: string) => Promise<PickFileResponse>
-  search: (
-    query: string,
-    sourceType?: SearchSourceFilter,
-    documentIds?: string[]
-  ) => Promise<SearchResponse>
   workspaceList: () => Promise<WorkspaceListResponse>
   workspaceCreate: (payload: CreateWorkspaceSourceRequest) => Promise<WorkspaceMutationResponse>
   workspaceSetRootPath: (payload: SetWorkspaceRootPathRequest) => Promise<WorkspaceMutationResponse>

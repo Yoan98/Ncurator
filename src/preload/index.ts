@@ -8,7 +8,6 @@ import type {
   AppUpdateSnapshot,
   BrowserTabState,
   JsonValue,
-  SearchSourceFilter,
   WorkspaceIndexJobRecord
 } from '../shared/types'
 import {
@@ -204,8 +203,6 @@ const api: DesktopApi = {
     })
     return ipcRenderer.invoke('open-file-with-application', payload)
   },
-  search: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
-    ipcRenderer.invoke('search', query, sourceType, documentIds),
   workspaceList: () => ipcRenderer.invoke('workspace-list'),
   workspaceCreate: (payload) => ipcRenderer.invoke('workspace-create', payload),
   workspaceSetRootPath: (payload) => ipcRenderer.invoke('workspace-set-root-path', payload),

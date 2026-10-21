@@ -571,7 +571,7 @@ const main = async () => {
   if (audit.status !== 0) throw new Error('staging package security audit failed')
 
   process.stdout.write(
-    `[package] staging ready for ${process.platform}-${process.arch}; runtime roots: ${runtimePackageNames.join(', ')}; packaged dependencies: ${String(Object.keys(packagedDependencies).length)}; targeted pruning: ${(runtimePruning.totalBytes / 1024 / 1024).toFixed(1)} MiB; runtime smoke: ${String(runtimeVerification.docxDocuments)} DOCX / ${String(runtimeVerification.pdfDocuments)} PDF document(s), MathJax SVG, ExcelJS round trip; obfuscated main: ${String(obfuscation.totals.files)} file(s)\n`
+    `[package] staging ready for ${process.platform}-${process.arch}; runtime roots: ${runtimePackageNames.join(', ')}; packaged dependencies: ${String(Object.keys(packagedDependencies).length)}; targeted pruning: ${(runtimePruning.totalBytes / 1024 / 1024).toFixed(1)} MiB; runtime smoke: Jieba ${String(runtimeVerification.jiebaTokens)} token(s), ${String(runtimeVerification.docxDocuments)} DOCX / ${String(runtimeVerification.pdfDocuments)} PDF document(s), MathJax SVG, ExcelJS round trip; obfuscated main: ${String(obfuscation.totals.files)} file(s)\n`
   )
 }
 

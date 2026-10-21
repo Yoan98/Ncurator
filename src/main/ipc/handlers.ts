@@ -174,9 +174,6 @@ import type {
 import path from 'path'
 import fs from 'fs'
 import { WEB_INGEST_CONCURRENCY } from '../utils/constant'
-import { Jieba } from '@node-rs/jieba'
-import { dict } from '@node-rs/jieba/dict'
-import { normalizeForIpc } from '../utils/serialization'
 import { writeTextFileAtomically } from '../services/files/TextFileWriteService'
 import { ConfirmDialogWindowService } from '../services/ConfirmDialogWindowService'
 import type { ConfirmDialogRequest, ConfirmDialogResponse } from '../../shared/types'
@@ -222,7 +219,6 @@ const takeE2ENativeDialogSelection = (
   return selectedPath
 }
 
-const jieba = Jieba.withDict(dict)
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
@@ -2606,36 +2602,6 @@ export function registerHandlers(services: {
       } catch (error) {
         console.error('? [REFERENCE-ITEM-LIST] ERROR:', error)
         return { items: [], total: 0, hasMore: false, offset: 0, limit: 50 }
-      }
-    }
-  )
-
-  ipcMain.handle(
-    'search',
-    async (_event, query: string, sourceType?: 'all' | 'file' | 'web', documentIds?: string[]) => {
-      try {
-        const { data: queryVector } = await embeddingService.embed(query)
-        const filter = sourceType && sourceType !== 'all' ? sourceType : undefined
-        const results = await documentsStore.search(
-          queryVector,
-          query,
-          5,
-          filter,
-          undefined,
-          documentIds
-        )
-
-        const tokens = jieba.cutForSearch(query, true)
-
-        const finalResults = results.map(normalizeForIpc)
-
-        return {
-          results: finalResults,
-          tokens
-        }
-      } catch (error) {
-        console.error('? [SEARCH] ERROR:', error)
-        throw error
       }
     }
   )
