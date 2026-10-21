@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -13,11 +14,42 @@ import {
   resolvePackageE2ECleanupRoot
 } from '../../../../scripts/test/package-e2e-isolation.mjs'
 import {
+  findInstalledWindowsShortcut,
   prepareDesktopLaunch,
   resolveMacApplication
 } from '../../../../scripts/test/desktop-launch.mjs'
 
 const tempRoots: string[] = []
+
+const runWindowsShell = (script: string, environment: NodeJS.ProcessEnv = {}) => {
+  const result = spawnSync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-EncodedCommand',
+      Buffer.from(script, 'utf16le').toString('base64')
+    ],
+    { env: { ...process.env, ...environment }, encoding: 'utf8', windowsHide: true }
+  )
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new Error(result.stderr)
+  return result.stdout.trim()
+}
+
+const createWindowsShortcut = (shortcutPath: string, targetPath: string) => {
+  runWindowsShell(
+    String.raw`
+$ErrorActionPreference = 'Stop'
+$shell = New-Object -ComObject WScript.Shell
+$link = $shell.CreateShortcut($env:NCURATOR_UNIT_SHORTCUT_PATH)
+$link.TargetPath = $env:NCURATOR_UNIT_SHORTCUT_TARGET
+$link.WorkingDirectory = [IO.Path]::GetDirectoryName($env:NCURATOR_UNIT_SHORTCUT_TARGET)
+$link.Save()
+`,
+    { NCURATOR_UNIT_SHORTCUT_PATH: shortcutPath, NCURATOR_UNIT_SHORTCUT_TARGET: targetPath }
+  )
+}
 
 afterEach(() => {
   for (const root of tempRoots.splice(0)) {
@@ -26,6 +58,61 @@ afterEach(() => {
 })
 
 describe('package e2e isolation helpers', () => {
+  it.skipIf(process.platform !== 'win32')(
+    'finds an actual Windows shortcut for a Unicode target path',
+    () => {
+      const desktop = runWindowsShell(
+        "[Console]::OutputEncoding = [Text.UTF8Encoding]::UTF8; [Console]::Write([Environment]::GetFolderPath('Desktop'))"
+      )
+      const root = fs.mkdtempSync(path.join(desktop, 'ncurator-shortcut-unit-'))
+      tempRoots.push(root)
+      const target = path.join(root, '带 空格.exe')
+      const shortcut = path.join(root, 'installed.lnk')
+      fs.writeFileSync(target, 'unit shortcut target')
+      createWindowsShortcut(shortcut, target)
+
+      expect(findInstalledWindowsShortcut(target)).toBe(shortcut)
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'reads Windows launch configuration before rejecting a mismatched shortcut',
+    async () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ncurator-launch-config-'))
+      tempRoots.push(root)
+      const shortcut = path.join(root, 'installed.lnk')
+      createWindowsShortcut(shortcut, process.execPath)
+      const launcher = await prepareDesktopLaunch({
+        executablePath: path.join(root, 'NCurator-E2E', '馆长.exe'),
+        entryPath: shortcut,
+        env: {
+          PATH: process.env.PATH || '',
+          SystemRoot: process.env.SystemRoot || 'C:\\Windows',
+          NCURATOR_USER_DATA_PATH: path.join(root, 'data')
+        }
+      })
+      try {
+        const result = spawnSync(
+          process.execPath,
+          [path.resolve('scripts/test/desktop-launch.mjs')],
+          {
+            env: { ...process.env, ...launcher.env },
+            encoding: 'utf8',
+            windowsHide: true,
+            timeout: 15_000
+          }
+        )
+        expect(result.error).toBeUndefined()
+        expect(result.status).toBe(1)
+        expect(result.stderr).toContain(
+          'Installed shortcut target does not match the E2E executable'
+        )
+      } finally {
+        await launcher.dispose()
+      }
+    }
+  )
+
   it('keeps desktop launch configuration private and out of the launch command', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ncurator-desktop-entry-'))
     tempRoots.push(root)

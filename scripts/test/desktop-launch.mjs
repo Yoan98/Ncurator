@@ -33,7 +33,7 @@ export const findInstalledWindowsShortcut = (executablePath) => {
   const script = String.raw`
 $ErrorActionPreference = 'Stop'
 $OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::UTF8
-$target = [IO.Path]::GetFullPath($env.NCURATOR_E2E_SHORTCUT_TARGET)
+$target = [IO.Path]::GetFullPath($env:NCURATOR_E2E_SHORTCUT_TARGET)
 $shell = New-Object -ComObject WScript.Shell
 $roots = @(
   [Environment]::GetFolderPath('Desktop'),
@@ -191,7 +191,7 @@ function run(argv) {
 const WINDOWS_LAUNCH_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
 $OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::UTF8
-$config = Get-Content -LiteralPath $env.NCURATOR_E2E_DESKTOP_LAUNCH_CONFIG -Raw -Encoding UTF8 | ConvertFrom-Json
+$config = Get-Content -LiteralPath $env:NCURATOR_E2E_DESKTOP_LAUNCH_CONFIG -Raw -Encoding UTF8 | ConvertFrom-Json
 $shell = New-Object -ComObject WScript.Shell
 $original = $shell.CreateShortcut($config.entryPath)
 if (-not [string]::Equals($original.TargetPath, $config.executablePath, [StringComparison]::OrdinalIgnoreCase)) {
