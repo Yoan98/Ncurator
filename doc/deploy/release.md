@@ -28,8 +28,7 @@
 1. 校验 `released-migrations.json` 中已锁定 migration 的版本、名称、文件名和 SHA-256。
 2. 并行执行 `typecheck:node`、`typecheck:web`，并准备网页抓取 sidecar。
 3. 使用 6 个 worker 执行全部非 live backend（AI、Knowledge、Unit，包含 update backend；其中由 `requiresBackendPptBrowser` 识别的 PPT 浏览器用例 `pptBrowserFiles` 固定 1 个 worker 串行）。
-4. 必跑 Workbench e2e `prefix-cache-retain-live` 和 `subagent-prefix-cache-retain-live`，分别验证主伙伴跨任务短续接、同一子实例连续调用及主派发收口的前缀稳定和真实缓存；具体门槛按 Workbench 测试计划执行，没有 live key 必须失败，不能跳过。
-5. 全部通过后，把当前连续 migration 纳入发布锁，与 `package.json` 版本一并提交，创建 annotated Tag，并原子推送 `main` 和 Tag。
+4. 全部通过后，把当前连续 migration 纳入发布锁，与 `package.json` 版本一并提交，创建 annotated Tag，并原子推送 `main` 和 Tag。
 
 第一个平台执行 `release:start` 时锁定本次新增 migration；另一平台使用同一份已锁源码。已锁 migration 不能合并、重排或修改，只能新增更高版本。
 
@@ -86,12 +85,16 @@ git diff <previous-platform-tag>..<current-platform-tag>
 
 正式包 E2E 只消费国内发行包已构建的 `release-bundle-*.json`：执行前复验 Tag、commit、fragment 和哈希，安装 EXE/DMG 后测试安装态程序，不重新构建。未指定过滤参数时，发版命令执行全部发版回归用例；指定 `--domain`、`--suite`、`--group` 或 `--case` 时执行定向范围。过滤参数只允许用于 `--test-only`。
 
+正式包回归先执行缓存门槛 `prefix-cache-retain-live` 和 `subagent-prefix-cache-retain-live`，通过后再执行影响评估选出的其余用例。两项均使用安装后的国内候选包和真实模型，不能被定向过滤遗漏；缺少 live key、失败或没有实际执行证据均阻止继续回归和发布。缓存门槛失败后必须停止，向用户说明失败事实、原因和日志，由用户决定是否修正或复测；不得自动重试、调整断言或继续发布。
+
+同一候选包的复测合并实际用例结果，沿用已通过且未受影响的记录；候选包身份变化后重新验证。发布前复验结果中的 Tag、commit、平台、安装包 SHA-256 及两项缓存门槛的实际正式包通过证据。结果保存在候选目录，原始日志在清理临时测试源码前回存到仓库 `tests/logs/**`。
+
 正式包 E2E 不改变候选包品牌，测试安装只落到本机隔离目录：
 
 - Windows 静默安装到 `%LOCALAPPDATA%\NCurator-E2E`。同一 `appId` 下 NSIS 可能覆盖本机已安装的正式包；测试结束后关闭 E2E 进程，删除指向测试目录的快捷方式、卸载项和安装目录。
 - macOS 使用 `ditto` 复制到 `~/Applications/NCurator-E2E/<platform>/`，并将副本改名为「馆长 E2E.app」。不触碰正式的「馆长.app」；测试结束后删除 `~/Applications/NCurator-E2E`。
 
-只执行选定的正式包 E2E，真实 AI / 服务用例也按选定范围执行。源码 E2E、backend、Unit 和独立 AI 测试不能替代正式包 E2E。
+除上述缓存门槛外，正式包 E2E 和真实 AI / 服务用例按选定范围执行。源码 E2E、backend、Unit 和独立 AI 测试不能替代正式包 E2E。
 
 ### 2.3 问题处理
 
@@ -147,7 +150,7 @@ Windows 与 macOS 保持独立 Tag 和 Release，不设置跨平台共用的 Lat
 - 未上线整轮作废：abort 后用同一版本重打，不要另起版本号。
 - 已发布版本有问题：发布更高版本；回退下载通道不会让已安装客户端自动降级。
 - 同一 Tag 的对象已存在但哈希不同：禁止覆盖；未上线时执行 abort 后用同一版本重打。
-- 只有产品级别的问题出现时，才需要询问我如何调整，其他问题基本都能自行修复然后推进发布。
+- 缓存门槛失败必须停止并由用户决定后续处理；其他问题只有涉及产品决策时才询问用户，其余可自行修复并推进。
 
 ## 5. 命令参考
 

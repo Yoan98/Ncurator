@@ -1,5 +1,16 @@
-import { rm } from 'node:fs/promises'
+import { cp, rm } from 'node:fs/promises'
 import path from 'node:path'
+
+export const preserveReleaseTestLogs = async (sourceRoot, releaseRoot) => {
+  try {
+    await cp(path.join(sourceRoot, 'tests/logs'), path.join(releaseRoot, 'tests/logs'), {
+      recursive: true,
+      force: true
+    })
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
+}
 
 export const cleanupLocalTestLogs = async (root) => {
   const rootPath = path.resolve(root)

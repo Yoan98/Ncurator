@@ -1,6 +1,6 @@
 import { DISTRIBUTIONS } from './shared/distribution.mjs'
 import { execFile, spawn } from 'node:child_process'
-import { access, cp, mkdir, readFile, readdir } from 'node:fs/promises'
+import { access, cp, mkdir, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -14,7 +14,7 @@ import {
   recordCandidateE2E
 } from './candidate.mjs'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
-import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
+import { cleanupLocalTestLogs, preserveReleaseTestLogs } from './shared/test-logs.mjs'
 import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
@@ -210,17 +210,9 @@ const runCandidateE2E = async ({ candidates, sourceDirectory }) => {
     await run(
       process.execPath,
       [
-        path.join(sourceDirectory, 'scripts', 'test', 'workflow.mjs'),
-        '--type',
-        'e2e',
-        '--target',
-        'package',
-        ...candidates.flatMap((candidate, index) => [
-          '--bundle',
-          candidate.bundlePath,
-          '--result',
-          resultPaths[index]
-        ]),
+        path.join(sourceDirectory, 'scripts', 'release', 'regression.mjs'),
+        candidates[0].bundlePath,
+        resultPaths[0],
         ...regression.workflowArgs
       ],
       { cwd: sourceDirectory, env: sanitizedTestEnvironment() }
@@ -239,17 +231,10 @@ const runCandidateE2E = async ({ candidates, sourceDirectory }) => {
   } catch (error) {
     await Promise.all(
       candidates.map(async (candidate, index) => {
-        let status = 'failed'
-        try {
-          const result = JSON.parse(await readFile(resultPaths[index], 'utf8'))
-          if (result.status === 'passed') status = 'passed'
-        } catch {
-          // Missing or invalid evidence is a failed candidate result.
-        }
         return await recordCandidateE2E({
           tag: releaseTag,
           platform: candidate.state.platform,
-          status,
+          status: 'failed',
           resultPath: resultPaths[index],
           selection: regression.state
         })
@@ -323,6 +308,7 @@ if (mode === 'test') {
     }
     await runCandidateE2E({ candidates: [candidate], sourceDirectory })
   } finally {
+    await preserveReleaseTestLogs(sourceDirectory, ROOT)
     await workspace.dispose()
   }
   process.stdout.write(`[release] macOS arm64 candidate E2E passed\n`)

@@ -22,7 +22,7 @@ import {
   readRegressionSelection,
   validateReleaseArgs
 } from './regression.mjs'
-import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
+import { cleanupLocalTestLogs, preserveReleaseTestLogs } from './shared/test-logs.mjs'
 import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
 import { createGitHubReleasePublisher } from './github.mjs'
@@ -213,14 +213,8 @@ const runCandidateE2E = async ({ candidate, sourceDirectory, environment }) => {
     await run(
       process.execPath,
       [
-        path.join(sourceDirectory, 'scripts', 'test', 'workflow.mjs'),
-        '--type',
-        'e2e',
-        '--target',
-        'package',
-        '--bundle',
+        path.join(sourceDirectory, 'scripts', 'release', 'regression.mjs'),
         candidate.bundlePath,
-        '--result',
         resultPath,
         ...regression.workflowArgs
       ],
@@ -301,6 +295,7 @@ if (mode === 'test') {
     candidate = await runCandidateE2E({ candidate, sourceDirectory, environment })
     process.stdout.write(`[release] candidate E2E passed: ${candidate.bundlePath}\n`)
   } finally {
+    await preserveReleaseTestLogs(sourceDirectory, ROOT)
     await workspace.dispose()
   }
   process.exit(0)

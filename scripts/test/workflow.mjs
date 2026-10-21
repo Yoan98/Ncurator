@@ -3,6 +3,15 @@ import { readFileSync } from 'node:fs'
 import { cp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  includeGateFiles,
+  readTestCaseIds,
+  readE2ECaseResults,
+  mergeE2ETestResults,
+  passedPackageTest,
+  runE2EGates
+} from './e2e-results.mjs'
 import { spawn, spawnSync } from 'node:child_process'
 import { preparePackagedE2EApplication } from './package-app.mjs'
 
@@ -669,7 +678,8 @@ const runE2ETestFilesConcurrently = async (
   testNamePattern,
   deadlineAt,
   addKnowledgeWarmup = true,
-  configPath = 'vitest.e2e.config.mts'
+  configPath = 'vitest.e2e.config.mts',
+  { gateCaseIds = [], previousResults = [] } = {}
 ) => {
   if (addKnowledgeWarmup && !testFiles.includes(VECTOR_WARMUP_TEST_FILE) && testFiles.length > 1) {
     testFiles = [...testFiles, VECTOR_WARMUP_TEST_FILE]
@@ -692,10 +702,14 @@ const runE2ETestFilesConcurrently = async (
     .map((task, index) => ({ ...task, index }))
   const runnableTasks = tasks
   const warmupTasks = runnableTasks.filter((task) => task.execution === 'warmup')
+  const gateTasks = runnableTasks.filter((task) => gateCaseIds.includes(toCaseId(task.testFile)))
   const concurrentTasks = runnableTasks.filter(
-    (task) => task.execution !== 'exclusive' && task.execution !== 'warmup'
+    (task) =>
+      task.execution !== 'exclusive' && task.execution !== 'warmup' && !gateTasks.includes(task)
   )
-  const exclusiveTasks = runnableTasks.filter((task) => task.execution === 'exclusive')
+  const exclusiveTasks = runnableTasks.filter(
+    (task) => task.execution === 'exclusive' && !gateTasks.includes(task)
+  )
   const results = []
   let exitCode = 0
   let liveActive = 0
@@ -726,13 +740,31 @@ const runE2ETestFilesConcurrently = async (
     process.stdout.write(
       `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
     )
+    const pattern = task.execution === 'warmup' ? '' : testNamePattern
+    const caseIds = readTestCaseIds(task.testFile, await readFile(task.testFile, 'utf8')).filter(
+      (id) => !pattern || new RegExp(pattern, 'u').test(id)
+    )
+    const previous = previousResults.find(
+      (test) => test.file === relativeFile && test.targetId === task.targetId
+    )
+    if (
+      task.execution !== 'warmup' &&
+      previous &&
+      passedPackageTest(previous, task.env.NCURATOR_E2E_ARTIFACT_SHA256) &&
+      caseIds.length > 0 &&
+      caseIds.every((id) => previous.cases.some((item) => item.caseId === id))
+    ) {
+      results.push({ ...previous, index: task.index, reused: true })
+      process.stdout.write(`[test-workflow] reuse passed package evidence: ${relativeFile}\n`)
+      return { code: 0 }
+    }
     const startedAt = Date.now()
     const caseEnv =
       task.cacheMode === 'direct'
         ? await buildDirectKnowledgeCacheEnv(task.env, task.testFile)
         : await buildCaseKnowledgeCacheEnv(task.env, task.testFile)
     if (task.cacheMode === 'warmup') await seedCaseKnowledgeCache(caseEnv, seedPath)
-    const code = await runVitest({
+    let code = await runVitest({
       configPath,
       testFiles: [task.testFile],
       env: caseEnv,
@@ -740,6 +772,20 @@ const runE2ETestFilesConcurrently = async (
       workers: 1,
       deadlineAt
     })
+    const packaged = task.env.NCURATOR_E2E_APP_TARGET === 'package'
+    const cases = packaged
+      ? await readE2ECaseResults({ root: ROOT, testFile: task.testFile, startedAt, caseIds })
+      : []
+    if (
+      packaged &&
+      code === 0 &&
+      (cases.length === 0 || cases.some((item) => item.status !== 'passed'))
+    ) {
+      code = 1
+      process.stderr.write(
+        `[test-workflow] missing or failed actual case evidence: ${relativeFile}\n`
+      )
+    }
     const previousResultIndex = results.findIndex((result) => result.index === task.index)
     const taskResult = {
       index: task.index,
@@ -749,6 +795,7 @@ const runE2ETestFilesConcurrently = async (
       status: code === 0 ? 'passed' : code === DEADLINE_EXIT_CODE ? 'timed_out' : 'failed',
       exitCode: code,
       durationMs: Date.now() - startedAt,
+      cases,
       attempts: 1
     }
     if (previousResultIndex >= 0) results[previousResultIndex] = taskResult
@@ -789,6 +836,19 @@ const runE2ETestFilesConcurrently = async (
     process.stdout.write(
       `[test-workflow] vector warm-up passed; isolated E2E caches will be seeded for ${String(warmupCacheByTarget.size)} target(s)\n`
     )
+  }
+
+  const gateFailure = await runE2EGates(gateTasks, (task) =>
+    runTask(task, warmupCacheByTarget.get(task.targetId) || '')
+  )
+  if (gateFailure) {
+    process.stderr.write(
+      `[release-cache-gate] ${toCaseId(gateFailure.task.testFile)} failed. Stop and report the cause; user decision is required before any correction, retry or further release work.\n`
+    )
+    return {
+      exitCode: gateFailure.code,
+      results: results.sort((left, right) => left.index - right.index)
+    }
   }
 
   const pending = [...concurrentTasks]
@@ -866,7 +926,7 @@ const cleanupStaleE2ETempRoot = async (e2eTempRoot) => {
 }
 
 const runTypeWorkflow = async (input) => {
-  const testFiles = await findTestFiles(input)
+  let testFiles = await findTestFiles(input)
   if (testFiles.length === 0) {
     if (input.caseIds.length > 0) {
       throw new Error(
@@ -877,6 +937,18 @@ const runTypeWorkflow = async (input) => {
     return { exitCode: 0, e2eResults: [] }
   }
 
+  if (input.type === 'e2e' && input.target === 'package' && input.gateCaseIds?.length) {
+    const gates = await findTestFiles({
+      ...input,
+      domain: '',
+      suite: '',
+      groups: [],
+      caseIds: input.gateCaseIds
+    })
+    testFiles = includeGateFiles(testFiles, gates, input.gateCaseIds)
+    if (input.caseIds.length)
+      input = { ...input, caseIds: [...new Set([...input.caseIds, ...input.gateCaseIds])] }
+  }
   const nativeTarget = input.type === 'e2e' ? 'electron' : 'node'
   const shouldFilterByTestName =
     input.caseIds.length > 0 &&
@@ -1003,7 +1075,8 @@ const runTypeWorkflow = async (input) => {
         testNamePattern,
         input.deadlineAt,
         !input.showcase,
-        input.showcase ? 'vitest.showcase.config.mts' : 'vitest.e2e.config.mts'
+        input.showcase ? 'vitest.showcase.config.mts' : 'vitest.e2e.config.mts',
+        { gateCaseIds: input.gateCaseIds || [], previousResults: input.previousResults || [] }
       )
       e2eResults.push(...runResult.results)
       if (runResult.exitCode !== 0) {
@@ -1041,9 +1114,11 @@ const USAGE = `NCurator 测试 runner
   请使用 --domain/--suite/--case 缩小范围；未知参数会导致立即报错退出。
 `
 
-const main = async () => {
+export const runTestWorkflow = async (argv, options = {}) => {
   removeNpmLifecycleEnv()
-  const args = parseArgs(process.argv.slice(2))
+  const args = parseArgs(argv)
+  args.gateCaseIds = options.gateCaseIds || []
+  args.previousResults = options.previousResults || []
   if (args.help) {
     process.stdout.write(USAGE)
     process.exit(0)
@@ -1184,11 +1259,16 @@ const main = async () => {
       })
       exitCode = result.exitCode
       for (const target of packageTargets) {
-        const targetTests = result.e2eResults.filter((test) => test.targetId === target.id)
+        const targetTests = mergeE2ETestResults(
+          args.previousResults.filter((test) => test.targetId === target.id),
+          result.e2eResults.filter((test) => test.targetId === target.id)
+        )
         const targetStatus =
-          targetTests.length > 0 && targetTests.every((test) => Number(test.exitCode) === 0)
+          targetTests.length > 0 &&
+          targetTests.every((test) => passedPackageTest(test, target.session.artifactSha256))
             ? 'passed'
             : 'failed'
+        if (targetStatus !== 'passed') exitCode = exitCode || 1
         target.session.writeSummary({
           status: targetStatus,
           tests: targetTests,
@@ -1217,10 +1297,16 @@ const main = async () => {
     if (cleanupFailed && exitCode === 0) exitCode = 1
   }
 
-  process.exit(exitCode)
+  return exitCode
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
-  process.exit(1)
-})
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  runTestWorkflow(process.argv.slice(2))
+    .then((code) => {
+      process.exit(code)
+    })
+    .catch((error) => {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+      process.exitCode = 1
+    })
+}

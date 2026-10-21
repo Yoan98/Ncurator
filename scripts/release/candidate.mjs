@@ -17,6 +17,7 @@ import process from 'node:process'
 import { verifyReleaseBundle } from './artifact-bundle.mjs'
 import { resolveReleaseAssetPath } from './r2/fragment-contract.mjs'
 import { compareReleaseVersions, parseReleaseTag } from './tag.mjs'
+import { assertPackageRegressionPassed } from './regression.mjs'
 
 const CANDIDATE_STATES = new Set(['prepared', 'ready', 'rejected', 'published'])
 const E2E_STATES = new Set(['pending', 'passed', 'failed', 'skipped'])
@@ -140,16 +141,14 @@ export const recordCandidateE2E = async ({
   selection,
   reason = ''
 }) => {
-  if (!['passed', 'failed', 'skipped'].includes(status)) {
+  if (!['passed', 'failed'].includes(status)) {
     throw new Error(`unsupported candidate E2E status: ${status}`)
-  }
-  if (status === 'skipped' && !String(reason).trim()) {
-    throw new Error('skipped candidate E2E requires a reason')
   }
   const candidate = await readReleaseCandidate({ tag, platform, distribution: 'domestic' })
   if (candidate.state.status === 'published') {
     throw new Error(`published candidate ${tag} ${platform} cannot be retested`)
   }
+  if (status === 'passed') await verifyCandidateRegression(candidate, resultPath)
   const state = {
     ...candidate.state,
     status: status === 'failed' ? 'rejected' : 'ready',
@@ -163,6 +162,16 @@ export const recordCandidateE2E = async ({
   }
   await writeState(candidate.directory, state)
   return { ...candidate, state }
+}
+
+const verifyCandidateRegression = async (candidate, resultPath = '') => {
+  const file =
+    resultPath ||
+    (candidate.state.e2e.result && path.join(candidate.directory, candidate.state.e2e.result))
+  if (!file) throw new Error('candidate requires a package E2E result file')
+  const result = JSON.parse(await readFile(file, 'utf8'))
+  const installer = candidate.verified.bundle.files.find((item) => item.role === 'installer')
+  assertPackageRegressionPassed(result, candidate.verified.bundle, installer)
 }
 
 export const assertCandidatePublishable = async ({
@@ -222,6 +231,11 @@ export const assertCandidatePublishable = async ({
     throw new Error(
       `candidate ${tag} ${platform} is ${candidate.state.status}; prepare or test it before publishing`
     )
+  }
+  if (distribution === 'domestic') {
+    if (candidate.state.e2e.status !== 'passed')
+      throw new Error('domestic package E2E cannot be skipped')
+    await verifyCandidateRegression(candidate)
   }
   return candidate
 }

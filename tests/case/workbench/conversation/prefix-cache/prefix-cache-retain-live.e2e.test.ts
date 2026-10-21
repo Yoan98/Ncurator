@@ -59,7 +59,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['prefix-cache'],
         description:
-          '验证同伙伴三轮短续接（含文本读工具历史）时，相邻跨 run 前缀缓存与 toolsHash 保持稳定（发布准备必跑）。',
+          '验证同伙伴三轮短续接（含文本读工具历史）时，相邻跨 run 前缀缓存与 toolsHash 保持稳定（正式包发布门槛）。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',

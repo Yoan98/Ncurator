@@ -220,7 +220,6 @@ describe('app update publish config', () => {
     expect(testWorkflow).toContain('no test files match --case')
     expect(testWorkflow).toContain('NCURATOR_TEST_RUNNER_DEADLINE_MS')
     expect(testWorkflow).toContain('targetTests.every')
-    expect(macRelease).toContain("if (result.status === 'passed') status = 'passed'")
     expect(macRelease).toContain("const MACOS_PLATFORM = 'macos-arm64'")
     expect(macRelease).not.toContain('macos-x64')
     expect(macRelease).not.toContain('--include-x64-e2e')

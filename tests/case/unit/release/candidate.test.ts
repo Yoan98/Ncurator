@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { RELEASE_CACHE_CASES } from '../../../../scripts/release/regression.mjs'
 import { createReleaseBundle } from '../../../../scripts/release/artifact-bundle.mjs'
 import {
   assertCandidatePublishable,
@@ -96,6 +97,44 @@ const createBundle = async ({
   return bundlePath
 }
 
+const writePassedResult = async (tag = 'windows-v0.1.21') => {
+  const candidate = await readReleaseCandidate({ tag, platform: 'windows-x64' })
+  const installer = candidate.verified.bundle.files.find((file) => file.role === 'installer')!
+  const result = {
+    status: 'passed',
+    releaseTag: tag,
+    releaseCommit: candidate.state.commit,
+    releasePlatform: candidate.state.platform,
+    artifactSha256: installer.sha256,
+    tests: RELEASE_CACHE_CASES.map((caseId) => ({
+      file: `tests/case/workbench/${caseId}.e2e.test.ts`,
+      targetId: 'windows-x64',
+      status: 'passed',
+      exitCode: 0,
+      cases: [
+        {
+          caseId,
+          status: 'passed',
+          app: { target: 'package', isPackaged: true, artifactSha256: installer.sha256 }
+        }
+      ]
+    }))
+  }
+  const resultPath = path.join(candidate.directory, 'package-e2e-result.json')
+  await fs.writeFile(resultPath, JSON.stringify(result))
+  return { result, resultPath }
+}
+const recordPassedCandidate = async (selection?: { mode: string; domain?: string }) => {
+  const { resultPath } = await writePassedResult()
+  return recordCandidateE2E({
+    tag: 'windows-v0.1.21',
+    platform: 'windows-x64',
+    status: 'passed',
+    resultPath,
+    selection
+  })
+}
+
 describe('retained release candidate', () => {
   it('requires a ready state before publishing', async () => {
     const bundlePath = await createBundle()
@@ -108,12 +147,7 @@ describe('retained release candidate', () => {
       })
     ).rejects.toThrow('is prepared')
 
-    await recordCandidateE2E({
-      tag: 'windows-v0.1.21',
-      platform: 'windows-x64',
-      status: 'passed',
-      selection: { mode: 'selected', domain: 'workbench' }
-    })
+    await recordPassedCandidate({ mode: 'selected', domain: 'workbench' })
     await expect(
       assertCandidatePublishable({
         tag: 'windows-v0.1.21',
@@ -150,7 +184,7 @@ describe('retained release candidate', () => {
 
   it('permits verified published candidates only for an explicit publish retry', async () => {
     await materializeReleaseCandidate({ bundlePath: await createBundle() })
-    await recordCandidateE2E({ tag: 'windows-v0.1.21', platform: 'windows-x64', status: 'passed' })
+    await recordPassedCandidate()
     await markCandidatePublished({ tag: 'windows-v0.1.21', platform: 'windows-x64' })
     const request = {
       tag: 'windows-v0.1.21',
@@ -163,36 +197,43 @@ describe('retained release candidate', () => {
     ).resolves.toBeDefined()
   })
 
-  it('allows an explicitly justified E2E skip to become publishable', async () => {
-    const bundlePath = await createBundle()
-    await materializeReleaseCandidate({ bundlePath })
-
+  it('rejects skipping domestic package regression even with a reason', async () => {
+    await materializeReleaseCandidate({ bundlePath: await createBundle() })
     await expect(
       recordCandidateE2E({
         tag: 'windows-v0.1.21',
         platform: 'windows-x64',
-        status: 'skipped'
+        status: 'skipped',
+        reason: 'manual skip'
       })
-    ).rejects.toThrow('requires a reason')
+    ).rejects.toThrow('unsupported candidate E2E status')
+  })
 
-    await recordCandidateE2E({
-      tag: 'windows-v0.1.21',
-      platform: 'windows-x64',
-      status: 'skipped',
-      reason: 'compatibility artifact is published without package E2E',
-      selection: { mode: 'disabled-by-default' }
-    })
-
-    const candidate = await assertCandidatePublishable({
+  it('requires real package cache evidence when recording success and rechecks it before publication', async () => {
+    await materializeReleaseCandidate({ bundlePath: await createBundle() })
+    const request = {
       tag: 'windows-v0.1.21',
       platform: 'windows-x64',
       commit: '0123456789012345678901234567890123456789'
-    })
-    expect(candidate.state.e2e).toMatchObject({
-      status: 'skipped',
-      reason: 'compatibility artifact is published without package E2E',
-      selection: { mode: 'disabled-by-default' }
-    })
+    }
+    await expect(recordCandidateE2E({ ...request, status: 'passed' })).rejects.toThrow(
+      'result file'
+    )
+    const { result, resultPath } = await writePassedResult()
+    const missingGate = { ...result, tests: result.tests.slice(0, 1) }
+    await fs.writeFile(resultPath, JSON.stringify(missingGate))
+    await expect(recordCandidateE2E({ ...request, status: 'passed', resultPath })).rejects.toThrow(
+      'cache gate'
+    )
+    await fs.writeFile(resultPath, JSON.stringify(result))
+    await recordCandidateE2E({ ...request, status: 'passed', resultPath })
+    result.tests[0].cases[0].app.target = 'source'
+    await fs.writeFile(resultPath, JSON.stringify(result))
+    await expect(assertCandidatePublishable(request)).rejects.toThrow('actual passed package')
+    result.tests[0].cases[0].app.target = 'package'
+    result.artifactSha256 = 'b'.repeat(64)
+    await fs.writeFile(resultPath, JSON.stringify(result))
+    await expect(assertCandidatePublishable(request)).rejects.toThrow('does not match')
   })
 
   it('keeps the current and newer candidates while removing superseded versions', async () => {
@@ -238,7 +279,7 @@ describe('international publication inherits domestic regression', () => {
       commit: '0123456789012345678901234567890123456789'
     }
     await expect(assertCandidatePublishable(request)).rejects.toThrow('is prepared')
-    await recordCandidateE2E({ tag: request.tag, platform: request.platform, status: 'passed' })
+    await recordPassedCandidate()
     const international = await assertCandidatePublishable(request)
     expect(international.state.e2e).toMatchObject({
       status: 'skipped',

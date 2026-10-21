@@ -1,3 +1,9 @@
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { resolveBundleInstaller } from './artifact-bundle.mjs'
+import { passedPackageTest } from '../test/e2e-results.mjs'
+
 const valueAfter = (args, name) => {
   const index = args.indexOf(name)
   if (index < 0) return ''
@@ -80,3 +86,81 @@ export const hasRegressionSelectionArgs = (args) =>
   args.some((arg) =>
     ['--domain', '--suite', '--group', '--case', '--fresh-knowledge-cache'].includes(arg)
   )
+export const RELEASE_CACHE_CASES = ['prefix-cache-retain-live', 'subagent-prefix-cache-retain-live']
+
+export const assertPackageResultIdentity = (result, bundle, installer) => {
+  if (
+    result?.releaseTag !== bundle.tag ||
+    result.releaseCommit !== bundle.commit ||
+    result.releasePlatform !== bundle.platform ||
+    result.artifactSha256 !== installer.sha256
+  ) {
+    throw new Error(
+      'package E2E result does not match the candidate tag, commit, platform or installer'
+    )
+  }
+}
+
+export const assertPackageRegressionPassed = (result, bundle, installer) => {
+  assertPackageResultIdentity(result, bundle, installer)
+  if (
+    result.status !== 'passed' ||
+    !result.tests?.length ||
+    !result.tests.every((test) => passedPackageTest(test, installer.sha256))
+  ) {
+    throw new Error('candidate requires actual passed package E2E case evidence')
+  }
+  for (const id of RELEASE_CACHE_CASES) {
+    if (
+      !result.tests.some((test) =>
+        test.cases.some((item) => item.caseId === id && item.status === 'passed')
+      )
+    ) {
+      throw new Error(`candidate requires passed package cache gate: ${id}`)
+    }
+  }
+}
+
+const runPackageRegression = async (bundlePath, resultPath, args) => {
+  const { bundle, installer } = await resolveBundleInstaller(bundlePath)
+  let previousResults = []
+  try {
+    const previous = JSON.parse(await readFile(resultPath, 'utf8'))
+    assertPackageResultIdentity(previous, bundle, installer)
+    previousResults = previous.tests || []
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
+  const { runTestWorkflow } = await import('../test/workflow.mjs')
+  const code = await runTestWorkflow(
+    [
+      '--type',
+      'e2e',
+      '--target',
+      'package',
+      '--bundle',
+      bundlePath,
+      '--result',
+      resultPath,
+      ...args
+    ],
+    { gateCaseIds: RELEASE_CACHE_CASES, previousResults }
+  )
+  if (code !== 0) return code
+  assertPackageRegressionPassed(JSON.parse(await readFile(resultPath, 'utf8')), bundle, installer)
+  return 0
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  const [bundlePath, resultPath, ...args] = process.argv.slice(2)
+  if (!bundlePath || !resultPath)
+    throw new Error('release regression requires bundle and result paths')
+  runPackageRegression(bundlePath, resultPath, args)
+    .then((code) => {
+      process.exit(code)
+    })
+    .catch((error) => {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+      process.exitCode = 1
+    })
+}
