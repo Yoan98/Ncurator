@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, rm, symlink } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import {
   hasRegressionSelectionArgs,
   readRegressionSelection,
@@ -13,6 +17,31 @@ import {
 } from '../../../../scripts/test/e2e-results.mjs'
 
 describe('release regression selection', () => {
+  it('executes CLI entry points through a directory alias instead of silently exiting', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'ncurator-release-entry-'))
+    const alias = path.join(root, 'repository')
+    try {
+      await symlink(process.cwd(), alias, process.platform === 'win32' ? 'junction' : 'dir')
+      const help = execFileSync(
+        process.execPath,
+        [path.join(alias, 'scripts/test/workflow.mjs'), '--help'],
+        { encoding: 'utf8' }
+      )
+      expect(help).toContain('--target <source|package>')
+      try {
+        execFileSync(process.execPath, [path.join(alias, 'scripts/release/regression.mjs')], {
+          stdio: 'pipe'
+        })
+        throw new Error('release regression entry point was not executed')
+      } catch (error) {
+        expect(String((error as { stderr?: Buffer }).stderr)).toContain(
+          'requires bundle and result paths'
+        )
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
   it('includes gates outside the selected domain exactly once and rejects missing gates', () => {
     const settings = '/tests/case/settings/general/language.e2e.test.ts'
     const gate = '/tests/case/workbench/conversation/prefix-cache-retain-live.e2e.test.ts'

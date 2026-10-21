@@ -1,5 +1,5 @@
+import { realpathSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveBundleInstaller } from './artifact-bundle.mjs'
 import { passedPackageTest } from '../test/e2e-results.mjs'
@@ -151,7 +151,7 @@ const runPackageRegression = async (bundlePath, resultPath, args) => {
   return 0
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   const [bundlePath, resultPath, ...args] = process.argv.slice(2)
   if (!bundlePath || !resultPath)
     throw new Error('release regression requires bundle and result paths')

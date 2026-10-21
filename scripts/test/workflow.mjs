@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { cp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -1300,7 +1300,7 @@ export const runTestWorkflow = async (argv, options = {}) => {
   return exitCode
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   runTestWorkflow(process.argv.slice(2))
     .then((code) => {
       process.exit(code)
