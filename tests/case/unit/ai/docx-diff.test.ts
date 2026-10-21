@@ -114,6 +114,39 @@ describe('DOCX first/final net review', () => {
     expect(result.stats).toEqual({ changeCount: 1, insertCount: 0, deleteCount: 0 })
     expect(storyText(result.document)).toEqual(['前中后'])
   })
+  it('aligns repeated text with the retained formatting when simplification removes an earlier occurrence', async () => {
+    const before =
+      '<w:p><w:r><w:t>本产品是一套面向社区公开资料整理与分享场景的 </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>公开资料整理工作台</w:t></w:r><w:r><w:t>，支持资料检索。</w:t></w:r></w:p>'
+    const after =
+      '<w:p><w:r><w:t>本产品是一套</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>公开资料整理工作台</w:t></w:r><w:r><w:t>，支持资料检索。</w:t></w:r></w:p>'
+    const result = await compare(before, after)
+    expect(storyText(result.document, false)).toEqual([
+      '本产品是一套面向社区公开资料整理与分享场景的 公开资料整理工作台，支持资料检索。'
+    ])
+    expect(storyText(result.document, true)).toEqual([
+      '本产品是一套公开资料整理工作台，支持资料检索。'
+    ])
+    expect(reviewRuns(result.document).filter((run) => run.kind === 'formatted')).toEqual([])
+    expect(
+      reviewRuns(result.document)
+        .filter((run) => run.kind === 'deleted')
+        .map((run) => run.text)
+        .join('')
+    ).toBe('面向社区公开资料整理与分享场景的 ')
+  })
+  it('keeps real format changes when matching repeated formatting would remove unchanged text', async () => {
+    const result = await compare(
+      '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>同</w:t></w:r><w:r><w:t>同</w:t></w:r></w:p>',
+      '<w:p><w:r><w:t>同</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>同</w:t></w:r></w:p>'
+    )
+    const runs = reviewRuns(result.document)
+    expect(runs.every((run) => run.kind === 'formatted')).toBe(true)
+    expect(runs.map((run) => run.text).join('')).toBe('同同')
+    expect(result.stats.insertCount).toBe(0)
+    expect(result.stats.deleteCount).toBe(0)
+    expect(storyText(result.document, false)).toEqual(['同同'])
+    expect(storyText(result.document, true)).toEqual(['同同'])
+  })
   it('uses border when background has been removed', async () => {
     const result = await compare(p('背景', '<w:shd w:fill="FFFF00"/>'), p('背景'))
     expect(

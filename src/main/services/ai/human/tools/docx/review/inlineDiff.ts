@@ -311,6 +311,67 @@ const appendTokens = (paragraph: Element, selected: SelectedToken[]): void => {
     }
 }
 
+/** Prefer retained formatting only when it keeps the same maximal text alignment. */
+const diffTokens = (
+  before: InlineToken[],
+  after: InlineToken[]
+): ReturnType<typeof sequenceDiff> => {
+  const oldKeys = before.map((token) => token.key),
+    newKeys = after.map((token) => token.key)
+  const plain = sequenceDiff(oldKeys, newKeys)
+  const score = (chunks: ReturnType<typeof sequenceDiff>): { text: number; format: number } => {
+    let oldIndex = 0,
+      newIndex = 0,
+      text = 0,
+      format = 0
+    for (const chunk of chunks) {
+      if (!chunk.added && !chunk.removed)
+        for (let index = 0; index < chunk.count; index++) {
+          text++
+          if (before[oldIndex + index]!.format === after[newIndex + index]!.format) format++
+        }
+      if (!chunk.added) oldIndex += chunk.count
+      if (!chunk.removed) newIndex += chunk.count
+    }
+    return { text, format }
+  }
+  const plainScore = score(plain)
+  if (plainScore.text === plainScore.format) return plain
+
+  const styled = sequenceDiff(
+    before.map((token) => JSON.stringify([token.key, token.format])),
+    after.map((token) => JSON.stringify([token.key, token.format]))
+  )
+  const candidate: ReturnType<typeof sequenceDiff> = []
+  let oldIndex = 0,
+    newIndex = 0,
+    oldStart = 0,
+    newStart = 0
+  const appendGap = (): void => {
+    // Re-align gaps as text so genuine format changes remain format-only changes.
+    for (const chunk of sequenceDiff(
+      oldKeys.slice(oldStart, oldIndex),
+      newKeys.slice(newStart, newIndex)
+    ))
+      candidate.push(chunk)
+  }
+  for (const chunk of styled) {
+    if (!chunk.added && !chunk.removed) {
+      appendGap()
+      candidate.push({ value: newKeys.slice(newIndex, newIndex + chunk.count), count: chunk.count })
+      oldStart = oldIndex + chunk.count
+      newStart = newIndex + chunk.count
+    }
+    if (!chunk.added) oldIndex += chunk.count
+    if (!chunk.removed) newIndex += chunk.count
+  }
+  appendGap()
+  const candidateScore = score(candidate)
+  return candidateScore.text === plainScore.text && candidateScore.format > plainScore.format
+    ? candidate
+    : plain
+}
+
 export type InlineResult = { element: Element; textChanged: boolean; formatChanged: boolean }
 export const renderParagraphDiff = (
   before: Element,
@@ -380,10 +441,7 @@ export const renderParagraphDiff = (
     newIndex = 0,
     textChanged = false,
     formatChanged = paragraphFormatChanged
-  const chunks = sequenceDiff(
-    oldTokens.map((t) => t.key),
-    newTokens.map((t) => t.key)
-  )
+  const chunks = diffTokens(oldTokens, newTokens)
   // Myers can emit insertion before deletion; replacements always show old before new.
   for (let i = 0; i < chunks.length - 1; i++)
     if (chunks[i]!.added && chunks[i + 1]!.removed)
