@@ -121,6 +121,7 @@ const scanPendingFileThenPrepare = async (input: {
   content: string
 }): Promise<void> => {
   await writeFile(input.filePath, input.content)
+  await input.page.mouse.move(0, 0)
   await getSettingsLocator(input.page, importSelectors.workspaceQuickScanButton).click()
   await waitForFileIndexJobIdle(input.page, input.workspaceId)
   await waitForActionableIndexCount(input.page, 1)
@@ -149,6 +150,7 @@ const waitForEmbeddingRuntimeAlive = async (page: Page, timeoutMs = 60_000): Pro
 }
 
 const clickPrepareUntilSpeedLocked = async (page: Page): Promise<void> => {
+  await page.mouse.move(0, 0)
   await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
   try {
     await page.waitForFunction(

@@ -25,6 +25,8 @@ import {
 import type { AiRunEvent } from '../../../../../src/shared/types'
 
 const CASE_ID = 'subagent-delegation-browser-sidecar'
+const TASK_SCOPE =
+  '所有参与者只做本次列出的工作；完成目标后简短交付，不追加多重交叉验证、BOM/字节/哈希/字符数统计或额外验证脚本。必要事实核对一次即可。'
 const ACTIVE_CLOUD_SELECTOR =
   '.ant-tooltip:not(.ant-tooltip-hidden):not([class*="-leave"]) [data-testid="subagent-thought"]:visible'
 const waitUntil = async (check: () => Promise<boolean>, timeout = 240_000): Promise<void> => {
@@ -331,7 +333,7 @@ describe('subagent browser and sidecar real UI', () => {
           const started = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
-            `请一次派发三位临时帮手分头处理，每位开始操作前先简短告诉我正在做什么，网页帮手提交表单后再用一句话报告进展，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后用文本编辑工具将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你用文本编辑工具把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
+            `${TASK_SCOPE}\n请一次派发三位临时帮手分头处理，每位开始操作前先简短告诉我正在做什么，网页帮手提交表单后再用一句话报告进展，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后用文本编辑工具将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你用文本编辑工具把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
           )
           const pendingRow = runtime.page
             .locator('[data-testid="subagent-task"][data-status="running"]')
@@ -743,7 +745,7 @@ describe('subagent browser and sidecar real UI', () => {
             const saved = path.join(setup.workspace.rootPath, crash ? '崩溃前.txt' : '停止前.txt')
             await sendWorkbenchMessage(
               runtime.page,
-              `这是新的独立任务，${crash ? '本次要创建一个名叫“崩溃前.txt”的新文件，先前“停止前.txt”保持原样。' : '本次要保存“停止前.txt”。'}找两位临时帮手同时处理：第一位创建 ${saved}，内容仅为 SAVED_${crash ? 'CRASH' : 'STOP'}，核对本次文件路径和实际内容后立刻交付；第二位在内置浏览器打开 ${site.url}/slow，等待网页加载后汇报。你等待两项完成后整合。`
+              `${TASK_SCOPE}\n这是新的独立任务，${crash ? '本次要创建一个名叫“崩溃前.txt”的新文件，先前“停止前.txt”保持原样。' : '本次要保存“停止前.txt”。'}找两位临时帮手同时处理：第一位创建 ${saved}，内容仅为 SAVED_${crash ? 'CRASH' : 'STOP'}，核对本次文件路径和实际内容后立刻交付；第二位在内置浏览器打开 ${site.url}/slow，等待网页加载后汇报。你等待两项完成后整合。`
             )
             await waitUntil(
               async () =>
@@ -855,7 +857,7 @@ describe('subagent browser and sidecar real UI', () => {
             const replacementUrl = `${site.url}/facts?marker=94217`
             await sendWorkbenchMessage(
               runtime.page,
-              `继续：先查询未完成子 agent，续接原会话，把下面完整的新任务原样交给它：\n用内置浏览器打开 ${replacementUrl} 并核对页面数字；旧的 /slow 网页不再访问。读取已保存的 ${saved}，保持该文件原样；用文本编辑工具写 ${saved}.continued.md，说明先前已保存的文件内容和这次新页面的核验数字。`
+              `继续：先查询未完成子 agent，续接原会话，把下面完整的新任务原样交给它：\n${TASK_SCOPE}\n用内置浏览器打开 ${replacementUrl} 并核对页面数字；旧的 /slow 网页不再访问。读取已保存的 ${saved}，保持该文件原样；用文本编辑工具写 ${saved}.continued.md，说明先前已保存的文件内容和这次新页面的核验数字。`
             )
             const dispatch = await waitForWorkbenchAiEvent(runtime, {
               name: 'resume-with-new-page-task',

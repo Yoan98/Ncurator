@@ -426,11 +426,9 @@ export const selectSettingsPresetProviderOption = async (
   const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').last()
   await dropdown.waitFor({ state: 'visible' })
   const option = dropdown.locator('.ant-select-item-option').filter({ hasText: label }).first()
-  await option.waitFor({ state: 'attached' })
+  await option.waitFor({ state: 'visible' })
   await option.scrollIntoViewIfNeeded()
-  // Ant Select virtual list / animated options can briefly report as unstable; force keeps the
-  // real UI click path without waiting out the animation race.
-  await option.click({ force: true })
+  await option.click()
   await providerSelect.locator('.ant-select-selection-item').filter({ hasText: label }).waitFor({
     state: 'visible'
   })
