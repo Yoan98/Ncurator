@@ -56,7 +56,12 @@ describe('managed sidecar serial transport', () => {
       await peer.service.search({ query: 'cwd' })
       cwd = (await peer.receipts())[0].cwd
       expect(cwd).not.toBe(process.cwd())
-      expect(path.relative(cwd, process.execPath).startsWith('..')).toBe(true)
+      const relativeExecutablePath = path.relative(cwd, process.execPath)
+      expect(
+        path.isAbsolute(relativeExecutablePath) ||
+          relativeExecutablePath === '..' ||
+          relativeExecutablePath.startsWith(`..${path.sep}`)
+      ).toBe(true)
       expect(await fs.readdir(cwd)).toEqual([])
     } finally {
       await peer.close()
