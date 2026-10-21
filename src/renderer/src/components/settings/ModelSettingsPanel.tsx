@@ -281,16 +281,17 @@ const ModelSettingsPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
       data-testid={settingsSelectors.modelPanel}
     >
-      <section className="shrink-0 px-1 pt-1">
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <span
-            className="rounded-full border border-[#EEEEEC] bg-white px-3 py-1 text-[12px] text-[#787774]"
-            data-testid={settingsSelectors.modelConfigCount}
-          >
-            {t(($) => $.settings.total)}
-            {configs.length}
-            {t(($) => $.settings.configurations)}
-          </span>
+      <section className="nc-settings-panel flex min-h-0 flex-col overflow-hidden">
+        <div className="nc-settings-panel-toolbar shrink-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2>{t(($) => $.settings.configuredServices)}</h2>
+            <span
+              className="text-[12px] text-[#787774]"
+              data-testid={settingsSelectors.modelConfigCount}
+            >
+              {t(($) => $.settings.serviceConnectionCount, { count: configs.length })}
+            </span>
+          </div>
           <Button
             type="primary"
             icon={<HiPlus className="h-4 w-4" />}
@@ -301,12 +302,9 @@ const ModelSettingsPanel: React.FC = () => {
             {t(($) => $.settings.addConfiguration)}
           </Button>
         </div>
-      </section>
+        {actionError ? <div className="nc-notice nc-notice-danger m-3">{actionError}</div> : null}
 
-      {actionError ? <div className="nc-notice nc-notice-danger">{actionError}</div> : null}
-
-      <section className="min-h-0 flex-1">
-        <div className="h-full overflow-auto pr-1">
+        <div className="min-h-0 overflow-auto">
           <Table
             dataSource={configs}
             columns={columns}

@@ -515,8 +515,8 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：真实 AI 用 `web_search(type=search)` 搜索 DeepSeek 融资，并用 `type=fetch` 读取最相关网页正文后总结。
 - Why：搜索必须落到网页正文证据上；必须守住 search → fetch 的真实网页信息闭环。
-- How：通过真实 Workbench UI 发送约束型提示：只搜索一次、只 fetch 一条最相关新闻链接后总结；等待真实 AI run 完成；检查 `web_search` 的 search/fetch 工具调用和结果。
-- Oracle：run 完成；至少一次 `web_search(type=search)` 的 query 包含 DeepSeek；至少一次 `type=fetch` 返回 `ok=true` 且正文非空；最终回答使用网页事实；运行期间右侧不得出现搜索列表面板（该面板已不存在），对齐 `WB-CORE-007-AC4`；本 case 只验证搜索与读取成功链路；失败边界和严谨偏好限制见 §6 自动化覆盖边界；不出现 fake 信号。 已核对的具体验收：`WB-CORE-007-AC1`。
+- How：通过真实 Workbench UI 发送约束型提示：只搜索一次、只 fetch 一条最相关新闻链接后总结；等待真实 AI run 完成；按 toolCallId 分别关联 `web_search` 的 search/fetch 输入和结果。正式包按共用 runner 规则从卷根目录启动，验证后台 sidecar 不依赖父进程工作目录。
+- Oracle：run 完成；至少一次 `web_search(type=search)` 的 query 包含 DeepSeek，且该 search 调用返回 `ok=true` 和非空搜索结果；至少一次 `type=fetch` 返回 `ok=true` 且正文非空，不能用 fetch 成功替代 search 成功；最终回答使用网页事实；运行期间右侧不得出现搜索列表面板（该面板已不存在），对齐 `WB-CORE-007-AC4`；本 case 只验证搜索与读取成功链路；失败边界和严谨偏好限制见 §6 自动化覆盖边界；不出现 fake 信号。 已核对的具体验收：`WB-CORE-007-AC1`。
 
 #### `web-read-direct-url`
 

@@ -3,6 +3,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -155,7 +156,10 @@ def main() -> int:
         **dict(os.environ),
         "PYINSTALLER_CONFIG_DIR": str(PYINSTALLER_CONFIG_DIR),
     }
-    subprocess.run(command, check=True, cwd=str(ROOT), env=env)
+    # The local venv may live below ROOT. NLTK's import guard would then reject
+    # its own dependencies while PyInstaller runs the analysis hooks.
+    with tempfile.TemporaryDirectory(prefix="ncurator-sidecar-build-") as working_directory:
+        subprocess.run(command, check=True, cwd=working_directory, env=env)
     executable_path = sidecar_dist_dir / platform_name()
     if not executable_path.exists():
         print(f"Missing built sidecar executable: {executable_path}", file=sys.stderr)

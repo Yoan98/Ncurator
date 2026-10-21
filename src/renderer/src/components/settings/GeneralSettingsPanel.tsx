@@ -7,6 +7,7 @@ import FileIcon from '../FileIcon'
 import type { AppSettings } from '../../../../shared/types'
 import { settingsSelectors } from '../../testing/selectors'
 import PartnerCacheCleanupModal from './PartnerCacheCleanupModal'
+import SettingsGroup, { SettingsRow } from './SettingsGroup'
 
 const GeneralSettingsPanel: React.FC = () => {
   const { t } = useTranslation()
@@ -95,24 +96,19 @@ const GeneralSettingsPanel: React.FC = () => {
 
   return (
     <section
-      className="h-full overflow-y-auto"
+      className="nc-settings-general h-full overflow-y-auto"
       data-testid={settingsSelectors.generalPanel}
       aria-label={t(($) => $.settings.generalSettings)}
     >
-      <div className="w-full pt-2">
-        <div className="flex items-center justify-between gap-6 border-b border-[#EEEEEC] pb-5">
-          <div className="min-w-0">
-            <div className="text-[14px] font-medium text-[#37352F]">
-              {t(($) => $.preferences.language)}
-            </div>
-            <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-              {t(($) => $.preferences.languageDescription)}
-            </div>
-          </div>
+      <SettingsGroup title={t(($) => $.settings.applicationPreferences)}>
+        <SettingsRow
+          title={t(($) => $.preferences.language)}
+          description={t(($) => $.preferences.languageDescription)}
+        >
           <Select
             data-testid="settings-language"
             aria-label={t(($) => $.preferences.language)}
-            className="min-w-[160px] shrink-0"
+            className="nc-settings-preference-select"
             value={settings?.language ?? 'system'}
             disabled={!settings || saving}
             options={[
@@ -122,20 +118,15 @@ const GeneralSettingsPanel: React.FC = () => {
             ]}
             onChange={(language: AppSettings['language']) => void updatePreference({ language })}
           />
-        </div>
-        <div className="flex items-center justify-between gap-6 border-b border-[#EEEEEC] py-5 mb-5">
-          <div className="min-w-0">
-            <div className="text-[14px] font-medium text-[#37352F]">
-              {t(($) => $.preferences.serviceRoute)}
-            </div>
-            <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-              {t(($) => $.preferences.serviceRouteDescription)}
-            </div>
-          </div>
+        </SettingsRow>
+        <SettingsRow
+          title={t(($) => $.preferences.serviceRoute)}
+          description={t(($) => $.preferences.serviceRouteDescription)}
+        >
           <Select
             data-testid="settings-service-route"
             aria-label={t(($) => $.preferences.serviceRoute)}
-            className="min-w-[160px] shrink-0"
+            className="nc-settings-preference-select"
             value={settings?.serviceRoute ?? 'domestic'}
             disabled={!settings || saving}
             options={[
@@ -146,16 +137,11 @@ const GeneralSettingsPanel: React.FC = () => {
               void updatePreference({ serviceRoute })
             }
           />
-        </div>
-        <div className="flex items-center justify-between gap-6">
-          <div className="min-w-0">
-            <div className="text-[14px] font-medium text-[#37352F]">
-              {t(($) => $.settings.aiTaskNotifications)}
-            </div>
-            <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-              {t(($) => $.settings.sendDesktopNotificationsWhenAiTasksSucceedFailOr)}
-            </div>
-          </div>
+        </SettingsRow>
+        <SettingsRow
+          title={t(($) => $.settings.aiTaskNotifications)}
+          description={t(($) => $.settings.sendDesktopNotificationsWhenAiTasksSucceedFailOr)}
+        >
           <Switch
             checked={settings?.systemNotificationsEnabled ?? true}
             loading={!settings || saving}
@@ -163,19 +149,16 @@ const GeneralSettingsPanel: React.FC = () => {
             data-testid={settingsSelectors.systemNotificationsSwitch}
             aria-label={t(($) => $.settings.aiTaskNotifications)}
           />
-        </div>
-        <div className="mt-5 flex items-center justify-between gap-6 border-t border-[#EEEEEC] py-5">
-          <div className="min-w-0">
-            <div className="text-[14px] font-medium text-[#37352F]">
-              {t(($) => $.settings.errorLog)}
-            </div>
-            <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-              {t(($) => $.settings.runtimeAndIndexingErrorsAreLoggedLocallyShareApp)}
-            </div>
-          </div>
+        </SettingsRow>
+      </SettingsGroup>
+      <SettingsGroup title={t(($) => $.settings.dataAndDiagnostics)}>
+        <SettingsRow
+          title={t(($) => $.settings.errorLog)}
+          description={t(($) => $.settings.runtimeAndIndexingErrorsAreLoggedLocallyShareApp)}
+        >
           <button
             type="button"
-            className="nc-no-drag inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded border border-[#E6E6E3] px-3 text-[12px] font-medium text-[#5F5F5B] transition-colors hover:border-[#C9C9C5] hover:bg-[#F6F6F4] disabled:cursor-not-allowed disabled:opacity-50"
+            className="nc-no-drag nc-settings-action"
             onClick={() => void openErrorLogDirectory()}
             disabled={openingLogDirectory}
             data-testid={settingsSelectors.errorLogOpenDirectoryButton}
@@ -185,26 +168,21 @@ const GeneralSettingsPanel: React.FC = () => {
             <FileIcon kind="directory" expanded className="h-4 w-4" />
             <span>{t(($) => $.settings.open)}</span>
           </button>
-        </div>
-        <div className="flex items-center justify-between gap-6 border-t border-[#EEEEEC] py-5">
-          <div>
-            <div className="text-[14px] font-medium text-[#37352F]">
-              {t(($) => $.settings.cleanUpPartnerCache)}
-            </div>
-            <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-              {t(($) => $.settings.freeDiskSpaceByPartnerContentTypeAndDate)}
-            </div>
-          </div>
+        </SettingsRow>
+        <SettingsRow
+          title={t(($) => $.settings.partnerCache)}
+          description={t(($) => $.settings.freeDiskSpaceByPartnerContentTypeAndDate)}
+        >
           <button
             type="button"
             data-testid={settingsSelectors.cacheCleanupOpen}
             onClick={() => setCacheCleanupOpen(true)}
-            className="nc-no-drag h-8 shrink-0 rounded border border-[#E6E6E3] px-3 text-[12px] font-medium text-[#5F5F5B] hover:bg-[#F6F6F4]"
+            className="nc-no-drag nc-settings-action"
           >
-            {t(($) => $.settings.manage)}
+            {t(($) => $.settings.manageCache)}
           </button>
-        </div>
-      </div>
+        </SettingsRow>
+      </SettingsGroup>
       <PartnerCacheCleanupModal
         open={cacheCleanupOpen}
         onClose={() => setCacheCleanupOpen(false)}

@@ -11,6 +11,7 @@ import {
   type PartnerCacheRequest,
   type PartnerCachePreview,
   type PartnerCacheCleanupResult,
+  type PartnerCacheTotal,
   type PartnerCacheRow
 } from '../../../shared/partnerCache'
 
@@ -221,12 +222,22 @@ export class PartnerCacheService {
     try {
       const partnerIds = this.validate(request)
       const rows = new Map<string, PartnerCacheRow>()
-      let skippedCount = 0
+      const totals = new Map<string, PartnerCacheTotal>()
       for (const partnerId of partnerIds) {
         for (const unit of await this.collect(partnerId, request.categories)) {
+          const bytes = unit.files.reduce((sum, file) => sum + file.bytes, 0)
+          const total = totals.get(unit.category) || {
+            category: unit.category,
+            count: 0,
+            bytes: 0,
+            skippedCount: 0
+          }
+          total.count += unit.count
+          total.bytes += bytes
+          totals.set(unit.category, total)
           if (unit.timestamp >= request.before) continue
           if (unit.protected) {
-            skippedCount += unit.count
+            total.skippedCount += unit.count
             continue
           }
           const day = new Date(unit.timestamp)
@@ -239,22 +250,22 @@ export class PartnerCacheService {
             bytes: 0
           }
           row.count += unit.count
-          row.bytes += unit.files.reduce((sum, file) => sum + file.bytes, 0)
+          row.bytes += bytes
           rows.set(key, row)
         }
       }
       return {
         success: true,
+        totals: [...totals.values()],
         rows: [...rows.values()].sort(
           (a, b) => a.day - b.day || a.category.localeCompare(b.category)
-        ),
-        skippedCount
+        )
       }
     } catch (error) {
       return {
         success: false,
+        totals: [],
         rows: [],
-        skippedCount: 0,
         error: error instanceof Error ? error.message : '读取缓存失败'
       }
     }

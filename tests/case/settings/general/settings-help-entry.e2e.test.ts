@@ -16,7 +16,7 @@ describe('settings help e2e', () => {
         caseId: 'settings-help-entry',
         domain: 'settings',
         suite: 'general',
-        description: '设置页在向量模型下方展示同级使用帮助入口，并打开官方手册。',
+        description: '使用帮助展示目标地址，取消不跳转，确认后打开官方手册。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -35,10 +35,48 @@ describe('settings help e2e', () => {
           const accessibleName = (await helpButton.getAttribute('aria-label')) || ''
           const label = (await helpButton.textContent()) || ''
 
+          const readExternalCalls = async () =>
+            (await runtime.collectSignals()).ipcInvokeEntries.filter(
+              (entry) => entry.name === 'openExternal'
+            )
+          const baselineCallCount = (await readExternalCalls()).length
+          const dialog = page.getByRole('dialog', { name: '前往官网查看使用帮助？' })
+          const dismissals = []
+          for (const method of ['cancel', 'escape', 'close', 'mask'] as const) {
+            await helpButton.click()
+            await dialog.waitFor({ state: 'visible' })
+            if (method === 'cancel') {
+              await dialog.getByRole('button', { name: /^取\s*消$/u }).click()
+            } else if (method === 'escape') {
+              await dialog.getByRole('button', { name: /^取\s*消$/u }).press('Escape')
+            } else if (method === 'close') {
+              await dialog.locator('.ant-modal-close').click()
+            } else {
+              await page.locator('.ant-modal-wrap:visible').click({ position: { x: 8, y: 80 } })
+            }
+            await dialog.waitFor({ state: 'hidden' })
+            dismissals.push({
+              method,
+              externalCallCount: (await readExternalCalls()).length - baselineCallCount,
+              routeUnchanged: (await page.evaluate(() => window.location.hash)) === routeBeforeClick
+            })
+          }
+
           await helpButton.click()
-          const signals = await runtime.collectSignals()
+          await dialog.waitFor({ state: 'visible' })
+          const confirmationText = await dialog.textContent()
+          const callsBeforeConfirm = (await readExternalCalls()).length - baselineCallCount
+          await runtime.captureScreenshot({
+            name: 'help-website-confirmation',
+            message: '确认后才会通过系统浏览器打开显示的官网地址'
+          })
+          await dialog.getByRole('button', { name: '打开官网', exact: true }).click()
+          await dialog.waitFor({ state: 'hidden' })
 
           return {
+            dismissals,
+            confirmationText,
+            callsBeforeConfirm,
             accessibleName,
             label,
             routeBeforeClick,
@@ -48,12 +86,22 @@ describe('settings help e2e', () => {
               Math.abs((helpBox?.y || 0) - ((vectorBox?.y || 0) + (vectorBox?.height || 0))) <= 8,
             matchesMenuStyle:
               (await helpButton.getAttribute('class'))?.includes('nc-sidebar-item') || false,
-            openExternalCalls: signals.ipcInvokeEntries.filter(
-              (entry) => entry.name === 'openExternal'
-            )
+            openExternalCalls: (await readExternalCalls()).slice(baselineCallCount)
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.dismissals.length === 4 &&
+              result.dismissals.every(
+                (dismissal) => dismissal.externalCallCount === 0 && dismissal.routeUnchanged
+              ),
+            {
+              name: 'dismiss-help-without-navigation',
+              message:
+                '取消、Escape、关闭和遮罩均只关闭确认框，不打开浏览器或改变设置路由，对齐 SET-HELP-001-AC3。',
+              data: result.dismissals
+            }
+          )
           await runtime.assertThat(
             result.label.includes('使用帮助') &&
               result.accessibleName === '查看使用帮助' &&
@@ -67,12 +115,15 @@ describe('settings help e2e', () => {
             }
           )
           await runtime.assertThat(
-            result.openExternalCalls.some((entry) => entry.payload === USER_MANUAL_URL) &&
+            result.confirmationText?.includes(USER_MANUAL_URL) &&
+              result.callsBeforeConfirm === 0 &&
+              result.openExternalCalls.length === 1 &&
+              result.openExternalCalls[0]?.payload === USER_MANUAL_URL &&
               result.routeAfterClick === result.routeBeforeClick,
             {
               name: 'settings-help-entry-opens-official-manual',
               message:
-                '点击“使用帮助”后应通过 openExternal 打开官方中文手册，并保持当前设置页路由，对齐 SET-HELP-001-AC2。',
+                '只有确认后才通过 openExternal 打开官方中文手册，并保持当前设置页路由，对齐 SET-HELP-001-AC2。',
               data: result
             }
           )

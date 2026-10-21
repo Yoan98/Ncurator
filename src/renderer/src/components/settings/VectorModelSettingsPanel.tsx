@@ -238,8 +238,11 @@ const VectorModelSettingsPanel: React.FC = () => {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5" data-testid={vectorSelectors.page}>
-      <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+    <div className="flex h-full min-h-0 flex-col gap-5" data-testid={vectorSelectors.page}>
+      <section className="nc-settings-panel flex min-h-0 flex-col overflow-hidden">
+        <div className="nc-settings-panel-toolbar shrink-0">
+          <h2>{t(($) => $.settings.availableModels)}</h2>
+        </div>
         <div className="min-h-0 flex-1 overflow-auto [&_.ant-list-item]:!border-[#EEEEEC] [&_.ant-list-item]:transition-colors [&_.ant-list-item:hover]:!bg-[#F7F7F5]">
           {catalogError ? (
             <div
@@ -254,6 +257,7 @@ const VectorModelSettingsPanel: React.FC = () => {
             loading={loading}
             itemLayout="horizontal"
             dataSource={models}
+            className="nc-settings-vector-list"
             data-testid={vectorSelectors.list}
             renderItem={(item) => (
               <List.Item
@@ -333,12 +337,11 @@ const VectorModelSettingsPanel: React.FC = () => {
                           </Button>
                         ]
                 }
-                className="!px-3 !py-4"
               >
                 <List.Item.Meta
                   title={
-                    <div className="mb-2 flex items-center gap-3">
-                      <span className="text-[16px] font-semibold text-[#37352F]">{item.name}</span>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="text-[14px] font-medium text-[#37352F]">{item.name}</span>
                       {item.tags.map((tag) => (
                         <Tag key={tag} className="mr-0 text-xs">
                           {tag}
@@ -348,7 +351,7 @@ const VectorModelSettingsPanel: React.FC = () => {
                   }
                   description={
                     <div className="space-y-4">
-                      <p className="text-[#787774]">{item.description}</p>
+                      <p className="text-[13px] leading-5 text-[#787774]">{item.description}</p>
 
                       {downloadingId === item.id ? (
                         <div

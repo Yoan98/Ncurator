@@ -3,7 +3,12 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { parse } from 'yaml'
-import { DISTRIBUTIONS, hashSharedApp } from '../../release/shared/distribution.mjs'
+import {
+  DISTRIBUTIONS,
+  distributionName,
+  hashSharedApp
+} from '../../release/shared/distribution.mjs'
+import { verifySidecarStartup } from '../sidecar/verify.mjs'
 
 const platform = process.argv[2]
 if (!['win', 'mac'].includes(platform))
@@ -64,4 +69,23 @@ for (const distribution of DISTRIBUTIONS) {
     output,
     path.join(root, 'release-stage/runtime-trace-report.json')
   ])
+  const resourcesDirectory =
+    platform === 'mac'
+      ? path.join(
+          output,
+          'mac-arm64',
+          `${distributionName(distribution)}.app`,
+          'Contents',
+          'Resources'
+        )
+      : path.join(output, 'win-unpacked', 'resources')
+  verifySidecarStartup(
+    path.join(
+      resourcesDirectory,
+      'web_crawler_sidecar',
+      'bin',
+      'web_crawler_sidecar',
+      platform === 'win' ? 'web_crawler_sidecar.exe' : 'web_crawler_sidecar'
+    )
+  )
 }

@@ -256,7 +256,7 @@ const resolveElectronLaunch = async (): Promise<{
     target,
     executablePath,
     args: [],
-    cwd: path.dirname(executablePath)
+    cwd: path.parse(executablePath).root
   }
 }
 

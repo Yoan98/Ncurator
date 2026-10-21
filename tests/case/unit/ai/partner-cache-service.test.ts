@@ -111,6 +111,29 @@ describe('partner-cache-service', () => {
       ]
     })
     const preview = await cache.preview(request(['scripts', 'assets']))
+    const bytes = async (files: string[]) =>
+      (await Promise.all(files.map((file) => fs.stat(file)))).reduce(
+        (sum, stat) => sum + stat.size,
+        0
+      )
+    expect(preview.totals).toEqual(
+      expect.arrayContaining([
+        { category: 'scripts', count: 2, bytes: await bytes([deleted, boundary]), skippedCount: 0 },
+        { category: 'assets', count: 2, bytes: await bytes([oldPage, newPage]), skippedCount: 0 }
+      ])
+    )
+    const earlier = await cache.preview({ ...request(['scripts', 'assets']), before: old })
+    expect(earlier.rows).toEqual([])
+    expect(earlier.totals).toEqual(preview.totals)
+    const allPartners = await cache.preview({ ...request(['scripts']), partnerIds: ['a', 'b'] })
+    expect(allPartners.totals).toEqual([
+      {
+        category: 'scripts',
+        count: 3,
+        bytes: await bytes([deleted, boundary, other]),
+        skippedCount: 0
+      }
+    ])
     expect(preview.success).toBe(true)
     expect(preview.rows.reduce((sum, row) => sum + row.count, 0)).toBe(1)
     const result = await cache.cleanup(request(['scripts', 'assets']))
@@ -120,6 +143,9 @@ describe('partner-cache-service', () => {
     for (const file of [boundary, other, oldPage, newPage]) expect(await exists(file)).toBe(true)
     expect((await log.list('a'))[0].entry.kind).toBe('user')
     expect(await partners.getPartner('a')).not.toBeNull()
+    expect((await cache.preview(request(['scripts']))).totals).toEqual([
+      { category: 'scripts', count: 1, bytes: (await fs.stat(boundary)).size, skippedCount: 0 }
+    ])
   })
 
   it('partner-cache-protects-draft-attachments', async () => {
@@ -139,7 +165,9 @@ describe('partner-cache-service', () => {
     await ui.savePartnerState('a', state)
     const preview = await cache.preview(request(['assets']))
     expect(preview.rows).toEqual([])
-    expect(preview.skippedCount).toBe(2)
+    expect(preview.totals).toEqual([
+      { category: 'assets', count: 2, bytes: 3 + (await fs.stat(sibling)).size, skippedCount: 2 }
+    ])
     const result = await cache.cleanup(request(['assets']))
     expect(result.success).toBe(true)
     expect(result.skippedCount).toBe(2)

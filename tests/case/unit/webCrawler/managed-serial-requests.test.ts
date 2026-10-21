@@ -15,7 +15,7 @@ const peerProgram = String.raw`
 const fs = require('node:fs');
 require('node:readline').createInterface({input: process.stdin}).on('line', line => {
   const request = JSON.parse(line);
-  fs.appendFileSync(process.argv[1], JSON.stringify({query: request.input.query, pid: process.pid}) + '\n');
+  fs.appendFileSync(process.argv[1], JSON.stringify({query: request.input.query, pid: process.pid, cwd: process.cwd()}) + '\n');
   if (request.input.query === 'hold') return;
   setTimeout(() => console.log(JSON.stringify({id: request.id, ok: true, data: {query: request.input.query, results: []}})), 700);
 });
@@ -40,7 +40,7 @@ const createPeer = async (
         .trim()
         .split('\n')
         .filter(Boolean)
-        .map((line) => JSON.parse(line) as { query: string; pid: number }),
+        .map((line) => JSON.parse(line) as { query: string; pid: number; cwd: string }),
     close: async () => {
       await service.close()
       await fs.rm(directory, { recursive: true, force: true })
@@ -49,6 +49,21 @@ const createPeer = async (
 }
 
 describe('managed sidecar serial transport', () => {
+  it('isolates the runtime from the parent working directory and removes it on close', async () => {
+    const peer = await createPeer()
+    let cwd = ''
+    try {
+      await peer.service.search({ query: 'cwd' })
+      cwd = (await peer.receipts())[0].cwd
+      expect(cwd).not.toBe(process.cwd())
+      expect(path.relative(cwd, process.execPath).startsWith('..')).toBe(true)
+      expect(await fs.readdir(cwd)).toEqual([])
+    } finally {
+      await peer.close()
+    }
+    await expect(fs.access(cwd)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('starts queued deadlines on submission and recovers the timed-out process first', async () => {
     const peer = await createPeer()
     try {

@@ -4,6 +4,7 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { verifySidecarStartup } from './verify.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const SIDECAR_DIR = path.join(ROOT, 'resources', 'web_crawler_sidecar')
@@ -21,6 +22,11 @@ const PIP_CACHE_DIR = path.resolve(
     path.join(ROOT, '.pip-cache', 'web_crawler_sidecar')
 )
 const BIN_DIR = path.join(SIDECAR_DIR, 'bin')
+const EXECUTABLE_PATH = path.join(
+  BIN_DIR,
+  'web_crawler_sidecar',
+  process.platform === 'win32' ? 'web_crawler_sidecar.exe' : 'web_crawler_sidecar'
+)
 const SOURCE_STAMP_PATH = path.join(BIN_DIR, '.source.sha256')
 const SIDECAR_RUNTIME_LAYOUT_VERSION = 'electron-cdp-v1'
 
@@ -125,6 +131,7 @@ const computeSourceHash = () => {
   hash.update(fs.readFileSync(REQUIREMENTS_PATH))
   hash.update(fs.readFileSync(BUILD_SCRIPT_PATH))
   hash.update(fs.readFileSync(THIS_SCRIPT_PATH))
+  hash.update(fs.readFileSync(new URL('./verify.mjs', import.meta.url)))
   hash.update(SIDECAR_RUNTIME_LAYOUT_VERSION)
   return hash.digest('hex')
 }
@@ -132,9 +139,7 @@ const computeSourceHash = () => {
 const hasCurrentBuiltSidecar = () => {
   if (!pathExists(SOURCE_STAMP_PATH)) return false
   if (fs.readFileSync(SOURCE_STAMP_PATH, 'utf8').trim() !== computeSourceHash()) return false
-  const executableName =
-    process.platform === 'win32' ? 'web_crawler_sidecar.exe' : 'web_crawler_sidecar'
-  if (!pathExists(path.join(BIN_DIR, 'web_crawler_sidecar', executableName))) return false
+  if (!pathExists(EXECUTABLE_PATH)) return false
 
   const forbiddenBrowserPaths = []
   const walk = (directory) => {
@@ -188,6 +193,7 @@ const main = () => {
   }
 
   if (hasCurrentBuiltSidecar()) {
+    verifySidecarStartup(EXECUTABLE_PATH)
     process.stdout.write(`[sidecar] current ${process.platform}-${process.arch} bundle reused\n`)
     return
   }
@@ -197,6 +203,7 @@ const main = () => {
   const venvPythonPath = ensureVenv(bootstrapPython)
   ensureSidecarDependencies(venvPythonPath)
   buildSidecar(venvPythonPath)
+  verifySidecarStartup(EXECUTABLE_PATH)
   writeSourceStamp(sourceHash)
 }
 

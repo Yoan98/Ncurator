@@ -95,8 +95,24 @@ describe('settings partner cache e2e', () => {
           await page.getByTestId(settingsSelectors.cacheCleanupOpen).click()
           const dialog = page.getByTestId(settingsSelectors.cacheCleanupModal)
           await dialog.waitFor({ state: 'visible' })
+          const dateInput = page.getByTestId(settingsSelectors.cacheCutoffDate)
+          const defaultDate = await dateInput.inputValue()
+          const waitForPreview = async () => {
+            await page.waitForFunction(
+              (selector) =>
+                document.querySelector(`[data-testid="${selector}"]`)?.getAttribute('aria-busy') ===
+                'false',
+              settingsSelectors.cachePreviewList
+            )
+          }
+          await waitForPreview()
+          const quickOptionCount = await dialog
+            .locator(`[data-testid^="${settingsSelectors.cacheQuickDatePrefix}-"]`)
+            .count()
           await page.getByTestId(settingsSelectors.cachePartnerSelect).click()
-          await page.locator('.ant-select-dropdown').getByText('全部伙伴', { exact: true }).click()
+          const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+          const animatedOptionCount = await dropdown.locator('.nc-partner-avatar-animated').count()
+          await dropdown.getByText('全部伙伴', { exact: true }).click()
           const allPartnerOpenDisabled = await page
             .getByTestId(`${settingsSelectors.cacheOpenPrefix}-assets`)
             .isDisabled()
@@ -105,9 +121,68 @@ describe('settings partner cache e2e', () => {
             .locator('.ant-select-dropdown')
             .getByText('缓存清理伙伴 A', { exact: true })
             .click()
+          await waitForPreview()
+          const selectedAvatar = await page
+            .getByTestId(settingsSelectors.cachePartnerSelect)
+            .getByRole('img', { name: '缓存清理伙伴 A', exact: true })
+            .count()
+          const totalSize = async () =>
+            await Promise.all(
+              ['assets', 'file-changes'].map((category) =>
+                page
+                  .getByTestId(`${settingsSelectors.cacheCategorySizePrefix}-${category}`)
+                  .innerText()
+              )
+            )
+          const initialSizes = await totalSize()
+          await runtime.captureScreenshot({
+            name: 'partner-cache-default-date',
+            message: '截止日期默认当天，伙伴头像与实际总占用正常显示。'
+          })
+          await page.getByTestId(`${settingsSelectors.cacheQuickDatePrefix}-7`).click()
+          await waitForPreview()
+          const sevenDays = await dateInput.inputValue()
+          const sevenDaySizes = await totalSize()
+          await page.getByTestId(`${settingsSelectors.cacheQuickDatePrefix}-30`).click()
+          await waitForPreview()
+          const thirtyDays = await dateInput.inputValue()
+          const thirtyDaySizes = await totalSize()
+          const cutoffEmptyText = await page
+            .getByTestId(settingsSelectors.cachePreviewTable)
+            .innerText()
+          await runtime.captureScreenshot({
+            name: 'partner-cache-date-filter',
+            message: '日期筛选排除近期数据时，分类仍显示实际总占用和对应伙伴动画头像。'
+          })
+          const originalSize = await page.evaluate(() => ({
+            width: innerWidth,
+            height: innerHeight
+          }))
+          const windowLayouts: boolean[] = []
+          for (const height of [720, 640]) {
+            await page.setViewportSize({ width: 1100, height })
+            await page.waitForTimeout(250)
+            const layout = await dialog.locator('.ant-modal-content').boundingBox()
+            const footer = await page
+              .getByTestId(settingsSelectors.cacheCleanupConfirm)
+              .boundingBox()
+            windowLayouts.push(
+              Boolean(
+                layout &&
+                footer &&
+                layout.y >= 0 &&
+                layout.y + layout.height <= height + 1 &&
+                footer.y + footer.height <= height + 1
+              )
+            )
+            await runtime.captureScreenshot({
+              name: `partner-cache-window-${height}`,
+              message: `窗口高度 ${height}px 时保持标题和底部操作区可见。`
+            })
+          }
+          await page.setViewportSize(originalSize)
           for (const category of ['scripts', 'toolresult'])
             await page.getByTestId(`${settingsSelectors.cacheCategoryPrefix}-${category}`).click()
-          const dateInput = page.getByTestId(settingsSelectors.cacheCutoffDate)
           await dateInput.fill(dayjs().format('YYYY-MM-DD'))
           await dateInput.press('Enter')
           await dialog.getByText('清理内容', { exact: true }).click()
@@ -131,6 +206,49 @@ describe('settings partner cache e2e', () => {
                 ?.disabled,
             settingsSelectors.cacheCleanupConfirm
           )
+          await waitForPreview()
+          const preview = await page.evaluate(
+            async ({ partnerId, before }) =>
+              window.api.partnerCachePreview({
+                partnerIds: [partnerId],
+                categories: ['assets', 'file-changes'],
+                before
+              }),
+            { partnerId: first.partnerId, before: dayjs().add(1, 'day').startOf('day').valueOf() }
+          )
+          const directoryBytes = async (directory: string): Promise<number> => {
+            const entries = await fs.readdir(directory, { withFileTypes: true })
+            return (
+              await Promise.all(
+                entries.map(async (entry) => {
+                  const file = path.join(directory, entry.name)
+                  return entry.isDirectory()
+                    ? directoryBytes(file)
+                    : entry.isFile()
+                      ? (await fs.stat(file)).size
+                      : 0
+                })
+              )
+            ).reduce((sum, bytes) => sum + bytes, 0)
+          }
+          const diskTotals = await Promise.all(
+            ['assets', 'file-changes'].map(async (category) => ({
+              category,
+              bytes: await directoryBytes(
+                path.join(runtime.userDataDir, 'partners', first.partnerId, 'runtime', category)
+              )
+            }))
+          )
+          const totalsMatchDisk =
+            preview.success &&
+            diskTotals.every(
+              (total) =>
+                preview.totals.find((item) => item.category === total.category)?.bytes ===
+                total.bytes
+            )
+          const candidateBytesMatchTotal =
+            preview.rows.reduce((sum, row) => sum + row.bytes, 0) ===
+            diskTotals.reduce((sum, item) => sum + item.bytes, 0)
           const previewText = await page
             .getByTestId(settingsSelectors.cachePreviewTable)
             .innerText()
@@ -165,6 +283,19 @@ describe('settings partner cache e2e', () => {
           return {
             description,
             previewText,
+            defaultDate,
+            quickOptionCount,
+            animatedOptionCount,
+            selectedAvatar,
+            initialSizes,
+            sevenDays,
+            sevenDaySizes,
+            thirtyDays,
+            thirtyDaySizes,
+            cutoffEmptyText,
+            totalsMatchDisk,
+            candidateBytesMatchTotal,
+            smallWindowFits: windowLayouts.every(Boolean),
             excludesToday,
             retainedAfterCancel,
             removed: !(await exists(first.file)),
@@ -196,6 +327,19 @@ describe('settings partner cache e2e', () => {
               !result.description.includes('查看修改前版本') &&
               result.previewText.includes('附件与临时资源') &&
               result.excludesToday &&
+              result.defaultDate === dayjs().format('YYYY-MM-DD') &&
+              result.quickOptionCount === 2 &&
+              result.sevenDays === dayjs().subtract(7, 'day').format('YYYY-MM-DD') &&
+              result.thirtyDays === dayjs().subtract(30, 'day').format('YYYY-MM-DD') &&
+              result.animatedOptionCount === 2 &&
+              result.selectedAvatar === 1 &&
+              result.initialSizes.every((text) => text !== '0 B') &&
+              JSON.stringify(result.initialSizes) === JSON.stringify(result.sevenDaySizes) &&
+              JSON.stringify(result.initialSizes) === JSON.stringify(result.thirtyDaySizes) &&
+              result.cutoffEmptyText.includes('已有缓存') &&
+              result.totalsMatchDisk &&
+              result.candidateBytesMatchTotal &&
+              result.smallWindowFits &&
               result.allPartnerOpenDisabled &&
               result.openedDirectory,
             {

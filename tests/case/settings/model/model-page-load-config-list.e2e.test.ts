@@ -51,6 +51,10 @@ describe('settings model e2e', () => {
             }
           })
 
+          await runtime.captureScreenshot({
+            name: 'model-service-connections',
+            message: '真实配置在分组表格中展示，操作栏与内容对齐'
+          })
           const zhipuRow = page.locator('tbody tr').filter({ hasText: '智谱 GLM' }).first()
           const customRow = page.locator('tbody tr').filter({ hasText: '公司自定义' }).first()
 

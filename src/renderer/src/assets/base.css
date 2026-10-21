@@ -1289,6 +1289,227 @@ textarea,
   z-index: 4;
   user-select: none;
   -webkit-user-select: none;
+  flex-shrink: 0;
+  padding-bottom: 28px;
+}
+
+.nc-settings-content-frame {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 64px 40px 32px;
+  overflow: hidden;
+}
+
+.nc-settings-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-width: 1080px;
+  margin-inline: auto;
+}
+
+.nc-settings-header h1 {
+  margin: 0;
+  color: var(--notion-text);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.5px;
+}
+
+.nc-settings-header p {
+  margin: 6px 0 0;
+  color: var(--notion-text-soft);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.nc-settings-group + .nc-settings-group {
+  margin-top: 28px;
+}
+
+.nc-settings-group-title {
+  margin: 0 0 10px;
+  color: var(--notion-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.nc-settings-panel,
+.nc-settings-side-section {
+  border: 1px solid var(--notion-line);
+  border-radius: 10px;
+  background: white;
+}
+
+.nc-settings-rows {
+  padding-inline: 18px;
+}
+
+.nc-settings-general {
+  padding-bottom: 4px;
+}
+
+.nc-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-block: 16px;
+}
+
+.nc-settings-row + .nc-settings-row {
+  border-top: 1px solid var(--notion-line);
+}
+
+.nc-settings-row-copy {
+  min-width: 0;
+}
+
+.nc-settings-row-title {
+  color: var(--notion-text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.nc-settings-row-description {
+  margin-top: 3px;
+  color: var(--notion-text-soft);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.nc-settings-row-control {
+  flex-shrink: 0;
+}
+
+.nc-settings-preference-select {
+  width: 160px;
+  height: 32px;
+}
+
+.nc-settings-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--notion-line-strong);
+  border-radius: 6px;
+  background: white;
+  color: var(--notion-text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 150ms ease;
+}
+
+.nc-settings-action:hover {
+  background: var(--notion-surface-hover);
+}
+
+.nc-settings-action:focus-visible {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: 2px;
+}
+
+.nc-settings-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.nc-settings-panel-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--notion-line);
+}
+
+.nc-settings-panel-toolbar h2 {
+  margin: 0;
+  color: var(--notion-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nc-settings-workspace-columns {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  gap: 20px;
+}
+
+.nc-settings-workspace-sidebar {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.nc-settings-workspace-sidebar > * + * {
+  margin-top: 20px;
+}
+
+.nc-settings-side-section {
+  padding: 16px;
+}
+
+.nc-settings-vector-list .ant-list-item {
+  padding: 18px;
+}
+
+@media (max-width: 1000px) {
+  .nc-settings-content-frame {
+    padding: 56px 24px 24px;
+  }
+
+  .nc-settings-workspace-columns {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .nc-settings-workspace-sidebar {
+    flex-shrink: 0;
+    overflow: visible;
+  }
+
+  .nc-settings-workspace-columns > section,
+  .nc-settings-workspace-columns > .nc-settings-panel {
+    flex: 1 0 320px;
+  }
+}
+
+@media (max-width: 760px) {
+  .nc-settings-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .nc-settings-row-copy {
+    flex: 1 0 100%;
+  }
+
+  .nc-settings-row-control {
+    margin-left: auto;
+  }
+
+  .nc-settings-vector-list .ant-list-item {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .nc-settings-vector-list .ant-list-item-action {
+    margin-left: auto;
+  }
 }
 
 .nc-manual-help-button {
@@ -1377,10 +1598,6 @@ textarea,
 
 .nc-list-row {
   @apply border-b border-[#EEEEEC] transition-colors last:border-b-0 hover:bg-[#F7F7F5];
-}
-
-.nc-settings-side-section {
-  @apply bg-white;
 }
 
 .nc-notice {
@@ -1746,7 +1963,7 @@ mark {
 }
 
 .markdown-body--thought {
-  color: #37352F;
+  color: #37352f;
   font-size: 13.5px;
   line-height: 1.6;
 }
@@ -1760,7 +1977,7 @@ mark {
   margin: 0.5rem 0 0.25rem;
   font-size: 13.5px;
   font-weight: 600;
-  color: #37352F;
+  color: #37352f;
 }
 
 .markdown-body--thought p,
@@ -1768,12 +1985,12 @@ mark {
 .markdown-body--thought ol,
 .markdown-body--thought li {
   margin-bottom: 0.35rem;
-  color: #37352F;
+  color: #37352f;
 }
 
 .markdown-body--thought .markdown-inline-code,
 .markdown-body--thought :not(pre) > code {
-  color: #37352F;
+  color: #37352f;
   background-color: rgba(0, 0, 0, 0.04);
 }
 
@@ -1790,7 +2007,7 @@ mark {
   margin: 0 !important;
   padding: 0 !important;
   white-space: nowrap !important;
-  color: #37352F !important;
+  color: #37352f !important;
 }
 
 .markdown-body a {
@@ -2240,7 +2457,7 @@ mark {
 }
 
 .nc-message-timeline-row.is-active .nc-message-timeline-label {
-  color: #37352F;
+  color: #37352f;
   font-size: 12px;
   font-weight: 600;
 }
@@ -2338,7 +2555,8 @@ mark {
   border-radius: 999px;
 }
 
-.nc-message-action-capsule:has(.nc-message-action-capsule-dismiss) .nc-message-action-capsule-action {
+.nc-message-action-capsule:has(.nc-message-action-capsule-dismiss)
+  .nc-message-action-capsule-action {
   padding-right: 4px;
   border-radius: 999px 0 0 999px;
 }

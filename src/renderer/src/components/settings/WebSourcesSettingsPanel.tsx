@@ -328,11 +328,11 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
 
   return (
     <div
-      className="grid h-full min-h-0 gap-4 xl:grid-cols-[260px_minmax(0,1fr)]"
+      className="nc-settings-workspace-columns h-full"
       data-testid={importSelectors.webSourceSection}
     >
-      <div className="space-y-5">
-        <section className="nc-settings-side-section pb-4">
+      <div className="nc-settings-workspace-sidebar">
+        <section className="nc-settings-side-section">
           <div className="text-[14px] font-semibold text-[#37352F]">
             {t(($) => $.settings.webSources)}
           </div>
@@ -350,7 +350,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
           </Button>
         </section>
 
-        <section className="nc-settings-side-section pb-4">
+        <section className="nc-settings-side-section">
           <div className="flex items-center gap-1.5">
             <div className="text-[14px] font-semibold text-[#37352F]">
               {t(($) => $.settings.indexStatus)}
@@ -361,7 +361,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
           </div>
 
           <div className="mt-3 text-[12px] text-[#787774]">
-            <div className="ui-inset px-3 py-3">
+            <div className="border-y border-[#EEEEEC] py-3">
               <div className="inline-flex items-center gap-1.5">
                 <HiArrowPath className="h-4 w-4 text-[#787774]" />
                 <span>{t(($) => $.settings.indexable)}</span>
@@ -386,7 +386,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
           </div>
 
           <KnowledgeIndexSpeedControl prepareRunning={webPrepareRunning} />
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="mt-4 flex flex-col gap-2">
             <Button
               icon={<HiArrowPath className="h-4 w-4" />}
               onClick={() => void handleScanWebSources()}
@@ -432,12 +432,12 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
         </section>
       </div>
 
-      <section className="flex min-h-0 min-w-0 flex-col">
-        <div className="mb-3 text-[14px] font-semibold text-[#37352F]">
+      <section className="nc-settings-panel flex min-h-0 min-w-0 flex-col overflow-hidden">
+        <div className="nc-settings-panel-toolbar shrink-0 text-[14px] font-medium text-[#37352F]">
           {t(($) => $.settings.webpageList)}
         </div>
         <div
-          className="nc-list-shell-borderless flex min-h-0 flex-1"
+          className="flex min-h-0 flex-1 overflow-auto"
           data-testid={importSelectors.webSourceList}
         >
           {webSources.length === 0 ? (

@@ -73,11 +73,20 @@ describe('workbench run e2e', () => {
               event.type === 'tool_call_started'
           )
           const searchStarts = toolStarts.filter((event) => event.toolName === 'web_search')
-          const searchResults = evidence.events.filter(
+          const toolResults = evidence.events.filter(
             (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
               event.type === 'tool_call_result' && event.toolName === 'web_search'
           )
-          const fetchOk = searchResults.some(
+          const inputTypes = new Map(
+            searchStarts.map((event) => [event.toolCallId, readWebSearchInput(event, 'type')])
+          )
+          const searchResults = toolResults.filter(
+            (event) => inputTypes.get(event.toolCallId) === 'search'
+          )
+          const fetchResults = toolResults.filter(
+            (event) => inputTypes.get(event.toolCallId) === 'fetch'
+          )
+          const fetchOk = fetchResults.some(
             (event) =>
               event.result?.ok === true &&
               isObjectRecord(event.result.data) &&
@@ -94,10 +103,16 @@ describe('workbench run e2e', () => {
             fetchUrls: searchStarts
               .filter((event) => readWebSearchInput(event, 'type') === 'fetch')
               .map((event) => readWebSearchInput(event, 'url')),
-            searchOk: searchResults.some((event) => event.result?.ok === true),
+            searchOk: searchResults.some(
+              (event) =>
+                event.result?.ok === true &&
+                isObjectRecord(event.result.data) &&
+                Array.isArray(event.result.data.results) &&
+                event.result.data.results.length > 0
+            ),
             fetchOk,
-            contentMarkdown: readContentMarkdown(evidence.events),
-            searchErrors: searchResults.map((event) => event.error || '').filter(Boolean)
+            contentMarkdown: readContentMarkdown(fetchResults),
+            searchErrors: toolResults.map((event) => event.error || '').filter(Boolean)
           }
         },
         assert: async (result, runtime) => {

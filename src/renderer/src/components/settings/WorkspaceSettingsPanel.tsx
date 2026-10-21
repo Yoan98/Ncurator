@@ -655,7 +655,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         className="flex h-full min-h-0 flex-col overflow-hidden bg-white"
         data-testid={importSelectors.page}
       >
-        <div className="min-h-0 flex flex-1 flex-col overflow-hidden px-5 py-5 pr-4">
+        <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
           <Tabs
             className="flex h-full min-h-0 flex-col [&_.ant-tabs-content]:h-full [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:flex-1 [&_.ant-tabs-nav]:mb-4 [&_.ant-tabs-tabpane]:h-full [&_.ant-tabs-tabpane]:overflow-hidden"
             activeKey={selectedTabKey}
@@ -666,9 +666,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                 label: t(($) => $.settings.file2, { value1: summedSummary.file_count }),
                 children: (
                   <div className="flex h-full min-h-0 flex-col gap-4">
-                    <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
-                      <div className="space-y-5">
-                        <section className="nc-settings-side-section pb-4">
+                    <div className="nc-settings-workspace-columns">
+                      <div className="nc-settings-workspace-sidebar">
+                        <section className="nc-settings-side-section">
                           <div className="text-[14px] font-semibold text-[#37352F]">
                             {t(($) => $.settings.fileLocations)}
                           </div>
@@ -688,7 +688,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           </div>
                         </section>
 
-                        <section className="nc-settings-side-section pb-4">
+                        <section className="nc-settings-side-section">
                           <div className="flex items-center gap-1.5">
                             <div className="text-[14px] font-semibold text-[#37352F]">
                               {t(($) => $.settings.indexStatus)}
@@ -702,7 +702,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             </Tooltip>
                           </div>
                           <div className="mt-3 text-[12px] text-[#787774]">
-                            <div className="ui-inset px-3 py-3">
+                            <div className="border-y border-[#EEEEEC] py-3">
                               <div className="inline-flex items-center gap-1.5">
                                 <HiArrowPath className="h-4 w-4 text-[#787774]" />
                                 <span>{t(($) => $.settings.indexable)}</span>
@@ -726,7 +726,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             </div>
                           </div>
                           <KnowledgeIndexSpeedControl prepareRunning={filePrepareRunning} />
-                          <div className="mt-4 grid grid-cols-2 gap-2">
+                          <div className="mt-4 flex flex-col gap-2">
                             <Tooltip
                               title={t(
                                 ($) => $.settings.checkThisDirectoryForAddedChangedOrDeletedFiles
@@ -779,8 +779,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         </section>
                       </div>
 
-                      <div className="flex min-h-0 min-w-0 flex-col">
-                        <div className="mb-3 flex items-center justify-between">
+                      <div className="nc-settings-panel flex min-h-0 min-w-0 flex-col">
+                        <div className="nc-settings-panel-toolbar shrink-0">
                           <div className="text-[14px] font-semibold text-[#37352F]">
                             {t(($) => $.settings.directoryTree)}
                           </div>
@@ -801,7 +801,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           </Tooltip>
                         </div>
                         <div
-                          className="nc-list-shell-borderless flex min-h-0 flex-1 overflow-auto px-1 py-3"
+                          className="flex min-h-0 flex-1 overflow-auto px-2 py-3"
                           data-testid={importSelectors.workspaceTree}
                         >
                           {workspaces.length === 0 ? (

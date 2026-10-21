@@ -2,6 +2,7 @@ import { SerialRequestQueue } from './SerialRequestQueue'
 import { randomUUID } from 'node:crypto'
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 import type { JsonObject, JsonValue } from '../../../shared/types'
@@ -451,6 +452,7 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
   private pending = new Map<string, PendingRequest>()
   private stdoutInterface?: readline.Interface
   private stderrBuffer = ''
+  private temporaryWorkingDirectory?: string
 
   public constructor(options: WebCrawlerServiceOptions = {}) {
     this.sidecarCommand = options.sidecarCommand || resolveDefaultSidecarCommand(options)
@@ -510,6 +512,10 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     this.rejectAllPending(new Error('web crawler sidecar closed'))
     await this.childStartupPromise?.catch(() => undefined)
     await this.stopChild()
+    if (this.temporaryWorkingDirectory) {
+      await fs.promises.rm(this.temporaryWorkingDirectory, { recursive: true, force: true })
+      this.temporaryWorkingDirectory = undefined
+    }
   }
 
   private async ensureChild(): Promise<ChildProcessWithoutNullStreams> {
@@ -550,8 +556,16 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
       throw new Error('invalid Electron CDP context marker for web crawler sidecar')
     }
 
+    // NLTK checks every import below cwd, including bundled stdlib modules.
+    // A desktop launch can inherit / (or a drive root), so use an empty sibling
+    // directory rather than any ancestor of the frozen Python runtime.
+    const cwd =
+      this.sidecarCommand.cwd ??
+      (this.temporaryWorkingDirectory ??= fs.mkdtempSync(
+        path.join(os.tmpdir(), 'ncurator-web-crawler-')
+      ))
     const child = spawn(this.sidecarCommand.executablePath, this.sidecarCommand.args, {
-      cwd: this.sidecarCommand.cwd,
+      cwd,
       env: {
         ...process.env,
         ...this.sidecarCommand.env,

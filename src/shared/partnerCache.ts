@@ -15,10 +15,12 @@ export type PartnerCacheRow = {
   bytes: number
 }
 
+export type PartnerCacheTotal = Omit<PartnerCacheRow, 'day'> & { skippedCount: number }
+
 export type PartnerCachePreview = {
   success: boolean
+  totals: PartnerCacheTotal[]
   rows: PartnerCacheRow[]
-  skippedCount: number
   error?: string
 }
 
