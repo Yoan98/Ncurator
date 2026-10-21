@@ -12,6 +12,7 @@ import {
   resolveMacPackageE2EInstallRoot,
   resolveWindowsPackageE2EInstallRoot
 } from './package-e2e-isolation.mjs'
+import { findInstalledWindowsShortcut } from './desktop-launch.mjs'
 
 const ROOT = process.cwd()
 const LOGS_ROOT = path.join(ROOT, 'tests', 'logs', 'package')
@@ -198,6 +199,14 @@ export const preparePackagedE2EApplication = async (bundlePath, { resultPath = '
   }
 
   const artifactSha256 = installer.sha256
+  let launchEntryPath
+  try {
+    launchEntryPath =
+      process.platform === 'win32' ? findInstalledWindowsShortcut(executablePath) : installedAppPath
+  } catch (error) {
+    cleanupPackagedE2EInstall({ installRoot: installedAppPath, log })
+    throw error
+  }
   const metadata = {
     schemaVersion: 1,
     runId,
@@ -211,7 +220,8 @@ export const preparePackagedE2EApplication = async (bundlePath, { resultPath = '
     artifactPath,
     artifactSha256,
     installedAppPath,
-    executablePath
+    executablePath,
+    launchEntryPath
   }
   writeFileSync(
     path.join(logDir, 'artifact.json'),
@@ -227,6 +237,7 @@ export const preparePackagedE2EApplication = async (bundlePath, { resultPath = '
     env: {
       NCURATOR_E2E_APP_TARGET: 'package',
       NCURATOR_E2E_EXECUTABLE: executablePath,
+      NCURATOR_E2E_LAUNCH_ENTRY: launchEntryPath,
       NCURATOR_E2E_ARTIFACT_PATH: artifactPath,
       NCURATOR_E2E_ARTIFACT_SHA256: artifactSha256,
       NCURATOR_BETTER_SQLITE3_NATIVE_BINDING: ''

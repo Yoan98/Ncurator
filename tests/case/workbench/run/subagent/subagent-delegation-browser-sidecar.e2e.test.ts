@@ -185,7 +185,6 @@ describe('subagent browser and sidecar real UI', () => {
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',
-        extraEnv: { NCURATOR_WEB_SEARCH_LOOPBACK_FETCH: '0' },
         runMode: 'single',
         execute: async (runtime) => {
           const site = await createSite()

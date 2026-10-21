@@ -10,11 +10,17 @@
 
 prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` P12（自建更新签名，`timestamp: none`、`notarize: false`，非 Apple Developer ID 公证）。候选包须完成正式包 E2E；发布时需 AWS CLI、COS 和 R2 存储配置及已登录的 GitHub CLI。不构建、测试或发布 Intel Mac。
 
-### 构建与审计硬约束
+### 构建与产物边界
 
-`pnpm run build`：准备 native 依赖 → 类型检查 → 构建网页抓取 sidecar 与 vditor 资源 → `electron-vite` 构建 → 追踪生产依赖并生成最小化 `release-stage/app` → 真实验证关键读取/写入路径 → 混淆 `release-stage/app/out/main` → 审计 staging。安装包由 `build:win` / `build:mac:release:arm64` 在 `build` 之后调用 electron-builder 打包，并审计真实 `win-unpacked` / `.app`（macOS 另做签名与启动验证）。
+`pnpm run build` 生成并审计 `release-stage/app`，包括 native 与 sidecar 准备、类型检查、应用构建、生产依赖追踪、关键读写路径验证和 Main 混淆。`build:win` / `build:mac:release:arm64` 随后调用 electron-builder 打包，并审计实际的 `win-unpacked` / `.app`；macOS 另做签名与启动验证。
 
-electron-builder 只从 `release-stage/app` 打包。安装包不得含源码、测试、文档、开发配置、`.env`、锁文件、Source Map、测试日志、fixture、私钥或错误平台文件。网页抓取 sidecar 须保留 Playwright 驱动 JS，不得含 Playwright Node、`.local-browsers` 或 `chromium_headless_shell-*`，解包体积 ≤ 400 MiB。被定向裁剪的 Node 目录属审计禁区；trace 若触达则删除前构建失败。`app.asar` 非加密，`VITE_*` 按公开信息处理。使用 `maximum` 压缩。候选 bundle 绑定 Tag、commit、fragment、安装包、更新文件与哈希；测试与发布前复验。
+- electron-builder 以 `release-stage/app` 为唯一应用输入，开发工作区不直接进入安装包。
+- 安装包包含构建后的应用、生产依赖与运行资源，排除开发和测试资料、`.env`、私钥、Source Map 及其他平台文件。`app.asar` 与 `VITE_*` 可由用户读取，不作为凭证保护手段。
+- 生产依赖按追踪结果裁剪，并验证关键读写路径；追踪触达待裁剪目录时构建失败，避免误删运行依赖。
+- 网页抓取 sidecar 保留 Playwright 驱动 JS，复用 Electron 提供的 Node 与浏览器，不重复打包这些运行时。构建、缓存复用和打包后检查 sidecar 能否实际启动。
+- 候选 bundle 绑定 Tag、commit、fragment、安装包、更新文件与哈希，测试和发布消费同一份可校验产物。
+
+具体文件排除规则与体积预算由[构建审计脚本](../../scripts/build/package/content-policy.mjs)维护，打包参数见 [electron-builder 配置](../../electron-builder.yml)。
 
 ## 2. 对象存储与公开通道
 

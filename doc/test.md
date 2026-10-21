@@ -145,6 +145,21 @@ runner 不负责：
 - 写失败原因分析。
 - 写优化建议。
 
+#### 运行目标与隔离
+
+- `source` 构建当前源码并直接启动应用。
+- `package` 校验既有 release bundle，安装后运行所选 E2E，不重新构建。macOS 经 Launch Services 打开隔离安装的 `.app`；Windows 经安装器创建的快捷方式启动，保留其目标与起始位置。工作目录由系统入口决定，日志记录实际程序路径、版本与工作目录。
+- runner 统一准备 native 依赖、临时应用和知识库缓存；各 case 使用隔离的用户数据与工作区。
+
+#### 调度与缓存
+
+- E2E 通过 `execution` 声明调度方式：默认 `normal`；真实 AI / 服务调用使用 `live`；需要桌面焦点、鼠标或原生对话框的用例使用 `exclusive`；向量冷启动预热用例使用 `warmup`。
+- 一次执行超过一个 E2E 文件时，runner 自动纳入唯一的 `warmup` 并先串行执行，不受 domain、suite、case 或测试名称筛选影响。预热共享 fixture 的索引供后续 case 复用；预热失败则停止后续执行。
+- backend 普通测试并发上限为 6；E2E 总并发上限为 3，其中 `live` 上限为 3；`exclusive` 用例串行独占。case 失败后不自动重跑，继续收集其余 case 的结果。
+- 源码 E2E 按构建指纹共享 split/vector 内容缓存，各 case 隔离统计文件；正式包 E2E 将预热缓存复制到各 case 的隔离目录。缓存重建与调试复用通过下述参数控制。
+
+#### 常用命令与参数
+
 当前常用命令按域收口如下。
 
 - AI
@@ -188,14 +203,6 @@ runner 支持的过滤参数：
 - `--showcase`，执行 showcase 采集类别。
 - `--result`，showcase/发布流程用的结果输出路径。
 - `--help`（或 `-h`），打印 runner 用法后直接退出；传入未识别的参数会立即报错并退出（退出码 2），防止未知参数被静默忽略而误触发全量执行。
-
-补充规则：
-
-- runner 强制执行固定 domain/type 边界。backend 普通测试并发为 6；Source E2E 与正式包 E2E 在多 case 时都先串行执行全仓唯一的 `warmup` 用例（先冷启动索引共享 fixture，后续 case 复用缓存）。Source 的所有 case 直接共享按构建指纹保存的 split/vector 内容缓存，各 case 只隔离统计文件；正式包 E2E 则把缓存种子复制到后续 case 的隔离缓存目录。随后开放总并发 3、live 并发 3，`exclusive` 用例串行独占；某个 case 失败后不自动重跑，继续收集剩余 case；warm-up 失败则不启动后续并发。
-- E2E（source 与正式包）即使通过 `--domain`/`--suite`/`--case` 过滤范围，只要本次实际执行的测试文件数超过 1，runner 也会自动把全仓唯一的 `warmup` 用例纳入执行并先串行预热，避免过滤后漏掉 warmup 导致全部 case 冷启动重复索引；`--case` 过滤时 `warmup` 用例不受 `--testNamePattern` 影响。
-- E2E 默认执行类型为 `normal`；真实 AI/服务调用声明 `execution: 'live'`，原生对话框、鼠标和桌面焦点用例声明 `execution: 'exclusive'`，唯一的向量冷启动用例声明 `execution: 'warmup'`。
-- `source` 是源码目标，直接复用内容缓存；`package` 只接受既有 release bundle，安装后运行所选 E2E，不负责构建。
-- native binding、知识库缓存和临时 Electron app 由 runner 自动准备；普通测试不手工修改 `node_modules` 或复用正式包缓存。
 
 ### 3.3 读取与分析 raw logs
 

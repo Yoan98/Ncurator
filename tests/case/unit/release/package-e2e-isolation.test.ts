@@ -12,6 +12,10 @@ import {
   resolveMacPackageE2EAppPath,
   resolvePackageE2ECleanupRoot
 } from '../../../../scripts/test/package-e2e-isolation.mjs'
+import {
+  prepareDesktopLaunch,
+  resolveMacApplication
+} from '../../../../scripts/test/desktop-launch.mjs'
 
 const tempRoots: string[] = []
 
@@ -22,6 +26,36 @@ afterEach(() => {
 })
 
 describe('package e2e isolation helpers', () => {
+  it('keeps desktop launch configuration private and out of the launch command', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ncurator-desktop-entry-'))
+    tempRoots.push(root)
+    const app = path.join(root, 'NCurator-E2E', '带 空格.app')
+    const executablePath = path.join(app, 'Contents', 'MacOS', '馆长')
+    expect(resolveMacApplication(executablePath)).toBe(app)
+    const launcher = await prepareDesktopLaunch({
+      executablePath,
+      entryPath: process.platform === 'win32' ? path.join(root, 'installed.lnk') : app,
+      env: { NCURATOR_USER_DATA_PATH: path.join(root, 'data'), TEST_SECRET: 'unit-private-value' }
+    })
+    const configPath = launcher.env.NCURATOR_E2E_DESKTOP_LAUNCH_CONFIG
+    try {
+      expect(fs.readFileSync(launcher.executablePath, 'utf8')).not.toContain('unit-private-value')
+      expect(JSON.parse(fs.readFileSync(configPath, 'utf8')).environment.TEST_SECRET).toBe(
+        'unit-private-value'
+      )
+      if (process.platform !== 'win32') expect(fs.statSync(configPath).mode & 0o777).toBe(0o600)
+    } finally {
+      await launcher.dispose()
+    }
+    expect(fs.existsSync(configPath)).toBe(false)
+    await expect(
+      prepareDesktopLaunch({
+        executablePath: '/Applications/馆长.app/Contents/MacOS/馆长',
+        env: {}
+      })
+    ).rejects.toThrow('Refusing to launch a production installation')
+  })
+
   it('detects NCurator-E2E install paths on Windows and macOS', () => {
     expect(
       isPackageE2EInstallPath(
@@ -49,9 +83,7 @@ describe('package e2e isolation helpers', () => {
 
   it('only treats launchers pointing at the E2E install as removable', () => {
     const installRoot = path.join('C:', 'Users', 'Admin', 'AppData', 'Local', 'NCurator-E2E')
-    expect(
-      isPackageE2ELauncherTarget(path.join(installRoot, '馆长.exe'), installRoot)
-    ).toBe(true)
+    expect(isPackageE2ELauncherTarget(path.join(installRoot, '馆长.exe'), installRoot)).toBe(true)
     expect(
       isPackageE2ELauncherTarget(path.join('D:', '馆长', 'Ncurator', '馆长.exe'), installRoot)
     ).toBe(false)

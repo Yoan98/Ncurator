@@ -23,7 +23,7 @@
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；必须在无进程级远程调试口下完成。同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
-- `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 验证 type=fetch 读取网页正文后再回答。两类 case 均验证结果只回模型、不自动展开右侧面板，对齐 `WB-CORE-007-AC4`。
+- `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 使用正文由 JavaScript 渲染的真实本地页面，验证冻结网页后台进程连接浏览器并取得正文，不设置本地地址绕过抓取的测试配置。两类 case 均验证结果只回模型、不自动展开右侧面板，对齐 `WB-CORE-007-AC4`；正式包从系统真实入口启动，规则见 `doc/test.md`。
 - Workbench 附件链路不限制文件扩展名、大小、数量或目录大小；点击 `+` 直接打开可选择文件或目录的系统选择器，拖放接受文件与目录并保留源绝对路径，目录不递归扫描；附件卡片采用紧凑内边距，文件夹、音频和视频分别使用对应图标；图片保持灯箱预览，支持右侧文件预览的文档打开资源 Tab，文件夹打开系统文件管理器，音视频和其他不支持右侧预览的文件定位到系统文件所在位置；粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
 - Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 测试承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧（`WB-EXCEL-001` / `WB-EXCEL-002`）覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（`WB-EXCEL-002-AC3` 记录/baseline **只在 ai-test 硬断言**）；Workbench e2e 覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9` 用户闭环（UI 可见单入口，不重复硬断言 AC3）。
 
@@ -515,7 +515,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：真实 AI 用 `web_search(type=search)` 搜索 DeepSeek 融资，并用 `type=fetch` 读取最相关网页正文后总结。
 - Why：搜索必须落到网页正文证据上；必须守住 search → fetch 的真实网页信息闭环。
-- How：通过真实 Workbench UI 发送约束型提示：只搜索一次、只 fetch 一条最相关新闻链接后总结；等待真实 AI run 完成；按 toolCallId 分别关联 `web_search` 的 search/fetch 输入和结果。正式包按共用 runner 规则从卷根目录启动，验证后台 sidecar 不依赖父进程工作目录。
+- How：通过 Settings UI 添加空文件地址并创建伙伴、配置真实模型，不依赖文件资料索引；在真实 Workbench UI 发送约束型提示：只搜索一次、只 fetch 一条最相关新闻链接后总结；等待真实 AI run 完成；按 toolCallId 分别关联 `web_search` 的 search/fetch 输入和结果。正式包经系统真实入口启动，记录实际程序路径、版本、进程及工作目录，验证后台 sidecar 不依赖父进程工作目录。
 - Oracle：run 完成；至少一次 `web_search(type=search)` 的 query 包含 DeepSeek，且该 search 调用返回 `ok=true` 和非空搜索结果；至少一次 `type=fetch` 返回 `ok=true` 且正文非空，不能用 fetch 成功替代 search 成功；最终回答使用网页事实；运行期间右侧不得出现搜索列表面板（该面板已不存在），对齐 `WB-CORE-007-AC4`；本 case 只验证搜索与读取成功链路；失败边界和严谨偏好限制见 §6 自动化覆盖边界；不出现 fake 信号。 已核对的具体验收：`WB-CORE-007-AC1`。
 
 #### `web-read-direct-url`
@@ -523,8 +523,8 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：用户直接给 URL 时，真实 AI 使用 `web_search(type=fetch)` 读取网页正文，并回答正文中的唯一口令。
 - Why：直接 URL 读取是网页阅读的最小闭环，不能退化成浏览器点击任务或只复述 URL。
-- How：启动本地 HTTP 页面并写入唯一口令；通过真实 Workbench UI 要求 AI 读取该 URL 正文；等待真实 AI run 完成。
-- Oracle：run 完成；至少一次 `web_search` 成功；不调用 `browser_use`；最终回答包含本地网页唯一口令；右侧不得出现搜索列表面板（该面板已不存在），对齐 `WB-CORE-007-AC4`；不出现 fake crawl / fake AI 信号。
+- How：通过 Settings UI 添加空文件地址并创建伙伴、配置真实模型，不依赖文件资料索引。启动真实本地 HTTP 页面，初始 HTML 没有正文，由 JavaScript 请求正文接口后渲染本次唯一口令；通过真实 Workbench UI 要求 AI 读取该 URL 正文；等待真实 AI run 完成。不注入模型结果，不直接调用抓取 IPC，不绕过生产 HTTP → 浏览器抓取流程；正式包经系统真实入口启动。
+- Oracle：run 完成；与该 URL 的 fetch 调用关联的结果 `ok=true` 且正文包含本次唯一口令；本地服务记录正文接口被浏览器请求，证明抓取进程完成真实渲染；不调用 `browser_use`；右侧不得出现搜索列表面板（该面板已不存在），对齐 `WB-CORE-007-AC4`；不出现 fake crawl / fake AI 信号。
 
 ### 5.3 `result`
 

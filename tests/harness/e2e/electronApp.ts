@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import os from 'node:os'
 import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -10,6 +9,10 @@ import {
   type Page
 } from 'playwright'
 import type { AiLlmIoRecord, AiRunEvent, JsonValue } from '../../../src/shared/types'
+import {
+  prepareDesktopLaunch,
+  terminateDesktopProcess
+} from '../../../scripts/test/desktop-launch.mjs'
 
 type E2EConsoleLevel = 'log' | 'warning' | 'error'
 
@@ -50,6 +53,41 @@ export type E2ELifecycleEntry = {
   ts: string
   name: string
   data?: JsonValue
+}
+
+/** Launch Services does not expose the application's native exit status. */
+export const isExpectedMacDesktopTeardownExit = (input: {
+  platform: NodeJS.Platform
+  lifecycleEntries: readonly E2ELifecycleEntry[]
+  testPassed: boolean
+}): boolean => {
+  if (input.platform !== 'darwin' || !input.testPassed) return false
+  const teardownIndex = input.lifecycleEntries.findIndex(
+    (entry) => entry.name === 'electron-teardown-started'
+  )
+  const exitIndex = input.lifecycleEntries.findLastIndex(
+    (entry) => entry.name === 'electron-process-exit'
+  )
+  if (teardownIndex < 0 || exitIndex <= teardownIndex) return false
+  if (input.lifecycleEntries.some((entry) => entry.name === 'page-crash')) return false
+  if (
+    !input.lifecycleEntries
+      .slice(teardownIndex, exitIndex)
+      .some(
+        (entry) =>
+          entry.name === 'electron-graceful-shutdown-prepared' ||
+          entry.name === 'electron-force-killed'
+      )
+  )
+    return false
+  const data = input.lifecycleEntries[exitIndex].data
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false
+  return (
+    data.code === null &&
+    data.signal === null &&
+    data.launcherExitCode === 0 &&
+    data.exited === true
+  )
 }
 
 export const isExpectedWindowsInspectorTeardownExit = (input: {
@@ -150,6 +188,11 @@ export type E2EAppInfo = {
   executablePath: string
   resourcesPath: string
   version: string
+  pid: number
+  cwd: string
+  userDataPath: string
+  launchMethod: 'source' | 'launch-services' | 'installed-shortcut'
+  launchEntry: string
   artifactPath: string | null
   artifactSha256: string | null
 }
@@ -234,7 +277,7 @@ const resolveElectronLaunch = async (): Promise<{
   target: E2EAppTarget
   executablePath: string
   args: string[]
-  cwd: string
+  cwd?: string
 }> => {
   const target = resolveAppTarget()
   if (target === 'source') {
@@ -255,8 +298,8 @@ const resolveElectronLaunch = async (): Promise<{
   return {
     target,
     executablePath,
-    args: [],
-    cwd: path.parse(executablePath).root
+    args: []
+    // The desktop launcher determines the working directory, as for users.
   }
 }
 
@@ -322,7 +365,6 @@ const buildElectronLaunchEnv = (
   }
   env.NCURATOR_E2E_WINDOW_MODE = windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
   env.NCURATOR_USER_DATA_PATH = userDataDir
-  env.NCURATOR_WEB_SEARCH_LOOPBACK_FETCH = '1'
 
   for (const [key, value] of Object.entries(extraEnv || {})) {
     env[key] = value
@@ -491,16 +533,30 @@ export const launchElectronApp = async (input: {
     input.windowMode,
     input.extraEnv
   )
-  const electronApp = await electron.launch({
-    executablePath: launch.executablePath,
-    args: launch.args,
-    cwd: launch.cwd,
-    env: launchEnv as Record<string, string>
-  })
+  const desktopLaunch =
+    launch.target === 'package'
+      ? await prepareDesktopLaunch({
+          executablePath: launch.executablePath,
+          entryPath: process.env.NCURATOR_E2E_LAUNCH_ENTRY,
+          env: launchEnv
+        })
+      : undefined
+  let electronApp: ElectronApplication
+  try {
+    electronApp = await electron.launch({
+      executablePath: desktopLaunch?.executablePath || launch.executablePath,
+      args: launch.args,
+      cwd: launch.cwd,
+      env: (desktopLaunch?.env || launchEnv) as Record<string, string>,
+      timeout: 90_000
+    })
+  } catch (error) {
+    await desktopLaunch?.dispose()
+    if (!input.userDataDir) await rm(userDataDir, { recursive: true, force: true })
+    throw error
+  }
   const electronProcess = electronApp.process()
-  recordLifecycle('electron-process-started', {
-    pid: electronProcess?.pid || null
-  })
+  let applicationPid = electronProcess?.pid || 0
   electronProcess?.stdout?.on('data', (chunk) => {
     pushProcessLog(consoleEntries, 'log', 'main:stdout', chunk, input.signalSink)
   })
@@ -508,9 +564,12 @@ export const launchElectronApp = async (input: {
     pushProcessLog(consoleEntries, 'error', 'main:stderr', chunk, input.signalSink)
   })
   electronProcess?.on('exit', (code, signal) => {
+    const desktopState = desktopLaunch?.readState()
     recordLifecycle('electron-process-exit', {
-      code,
-      signal: signal || null
+      pid: applicationPid,
+      code: desktopLaunch ? (desktopState?.exitCode ?? null) : code,
+      signal: signal || null,
+      ...(desktopLaunch ? { launcherExitCode: code, exited: desktopState?.exited === true } : {})
     })
     pushProcessLog(
       consoleEntries,
@@ -529,7 +588,8 @@ export const launchElectronApp = async (input: {
       .slice(-20)
       .map((entry) => entry.text)
       .join('\n')
-    await electronApp.close().catch(() => undefined)
+    if (desktopLaunch) await desktopLaunch.dispose()
+    else await electronApp.close().catch(() => undefined)
     await rm(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}${
@@ -544,8 +604,30 @@ export const launchElectronApp = async (input: {
     appPath: app.getAppPath(),
     executablePath: app.getPath('exe'),
     resourcesPath: process.resourcesPath,
-    version: app.getVersion()
+    version: app.getVersion(),
+    pid: process.pid,
+    cwd: process.cwd(),
+    userDataPath: app.getPath('userData')
   }))
+  applicationPid = processInfo.pid
+  const desktopState = desktopLaunch?.readState()
+  if (
+    launch.target === 'package' &&
+    (path.resolve(processInfo.executablePath).toLowerCase() !==
+      path.resolve(launch.executablePath).toLowerCase() ||
+      path.resolve(processInfo.userDataPath) !== path.resolve(userDataDir) ||
+      desktopState?.pid !== applicationPid ||
+      (process.platform === 'win32' &&
+        path.resolve(processInfo.cwd).toLowerCase() !==
+          path.resolve(desktopState?.workingDirectory || '').toLowerCase()))
+  ) {
+    await desktopLaunch?.dispose()
+    throw new Error('Desktop E2E did not connect to the expected isolated application process')
+  }
+  recordLifecycle('electron-process-started', {
+    pid: applicationPid,
+    ...(desktopLaunch ? { launcherPid: electronProcess?.pid || null } : {})
+  })
   if (launch.target === 'package' && !processInfo.isPackaged) {
     throw new Error(
       `Package E2E launched a non-packaged application: ${processInfo.executablePath}`
@@ -559,6 +641,13 @@ export const launchElectronApp = async (input: {
   const appInfo: E2EAppInfo = {
     target: launch.target,
     ...processInfo,
+    launchMethod:
+      launch.target === 'source'
+        ? 'source'
+        : process.platform === 'darwin'
+          ? 'launch-services'
+          : 'installed-shortcut',
+    launchEntry: desktopLaunch?.readState()?.entryPath || launch.executablePath,
     artifactPath: String(process.env.NCURATOR_E2E_ARTIFACT_PATH || '').trim() || null,
     artifactSha256: String(process.env.NCURATOR_E2E_ARTIFACT_SHA256 || '').trim() || null
   }
@@ -600,7 +689,7 @@ export const launchElectronApp = async (input: {
   await page.evaluate((processId) => {
     const currentWindow = window as E2EWindow
     currentWindow.__NCURATOR_E2E_ELECTRON_PROCESS_ID__ = processId || undefined
-  }, electronProcess?.pid || null)
+  }, applicationPid || null)
 
   return {
     electronApp,
@@ -673,25 +762,7 @@ export const launchElectronApp = async (input: {
       }
       if (closeInput.crash && electronProcess?.pid) {
         // Only terminate the process tree launched by this harness. No production shutdown hooks.
-        if (process.platform === 'win32')
-          execFileSync('taskkill', ['/PID', String(electronProcess.pid), '/T', '/F'])
-        else {
-          const rows = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8' })
-            .trim()
-            .split('\n')
-            .map((line) => line.trim().split(/\s+/).map(Number))
-          const descendants = [electronProcess.pid]
-          for (let index = 0; index < descendants.length; index++)
-            for (const [pid, parent] of rows)
-              if (parent === descendants[index] && !descendants.includes(pid)) descendants.push(pid)
-          for (const pid of descendants.reverse()) {
-            try {
-              process.kill(pid, 'SIGKILL')
-            } catch {
-              /* already exited */
-            }
-          }
-        }
+        terminateDesktopProcess(applicationPid)
         recordLifecycle('electron-force-killed')
         await new Promise<void>((resolve) => {
           const timer = setTimeout(resolve, 3000)
@@ -700,6 +771,7 @@ export const launchElectronApp = async (input: {
             resolve()
           })
         })
+        await desktopLaunch?.dispose()
         return
       }
       let gracefulExitRequested = false
@@ -717,6 +789,7 @@ export const launchElectronApp = async (input: {
         })
         if (gracefulExitRequested) {
           recordLifecycle('electron-graceful-shutdown-prepared')
+          await desktopLaunch?.releaseDebugger()
         }
       } catch (error) {
         pushProcessLog(
@@ -759,7 +832,7 @@ export const launchElectronApp = async (input: {
       // graceful 后仍未退出、或 Playwright close 超时：强制结束，避免 live 门禁卡死
       if (electronProcess && electronProcess.exitCode === null && !electronProcess.killed) {
         try {
-          electronProcess.kill('SIGKILL')
+          terminateDesktopProcess(applicationPid)
           recordLifecycle('electron-force-killed')
         } catch (error) {
           pushProcessLog(
@@ -778,6 +851,7 @@ export const launchElectronApp = async (input: {
           })
         })
       }
+      await desktopLaunch?.dispose()
       if (!closeInput.preserveUserData) {
         await rm(userDataDir, {
           recursive: true,

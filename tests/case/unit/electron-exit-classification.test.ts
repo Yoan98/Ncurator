@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isExpectedForceKilledTeardownExit,
+  isExpectedMacDesktopTeardownExit,
   isExpectedWindowsInspectorTeardownExit,
   type E2ELifecycleEntry
 } from '../../harness/e2e/electronApp'
@@ -13,10 +14,7 @@ const lifecycle = (
       return {
         ts: new Date().toISOString(),
         name: entry,
-        data:
-          entry === 'electron-process-exit'
-            ? { code: 3221225477, signal: null }
-            : undefined
+        data: entry === 'electron-process-exit' ? { code: 3221225477, signal: null } : undefined
       }
     }
     return {
@@ -43,9 +41,24 @@ describe('Windows Electron exit classification', () => {
   })
 
   it.each([
-    ['failed test', 'win32', false, lifecycle('electron-teardown-started', 'electron-process-exit')],
-    ['non-Windows', 'darwin', true, lifecycle('electron-teardown-started', 'electron-process-exit')],
-    ['pre-teardown exit', 'win32', true, lifecycle('electron-process-exit', 'electron-teardown-started')],
+    [
+      'failed test',
+      'win32',
+      false,
+      lifecycle('electron-teardown-started', 'electron-process-exit')
+    ],
+    [
+      'non-Windows',
+      'darwin',
+      true,
+      lifecycle('electron-teardown-started', 'electron-process-exit')
+    ],
+    [
+      'pre-teardown exit',
+      'win32',
+      true,
+      lifecycle('electron-process-exit', 'electron-teardown-started')
+    ],
     [
       'renderer crash',
       'win32',
@@ -78,6 +91,48 @@ describe('Windows Electron exit classification', () => {
   })
 })
 
+describe('macOS desktop exit observation', () => {
+  const exit = {
+    name: 'electron-process-exit',
+    data: { code: null, signal: null, launcherExitCode: 0, exited: true }
+  }
+  it('accepts an observed exit after requested teardown without inventing a native status', () => {
+    expect(
+      isExpectedMacDesktopTeardownExit({
+        platform: 'darwin',
+        testPassed: true,
+        lifecycleEntries: lifecycle(
+          'electron-teardown-started',
+          'electron-graceful-shutdown-prepared',
+          exit
+        )
+      })
+    ).toBe(true)
+  })
+  it.each([
+    lifecycle(exit, 'electron-teardown-started'),
+    lifecycle('electron-teardown-started', exit),
+    lifecycle(
+      'electron-teardown-started',
+      'electron-graceful-shutdown-prepared',
+      'page-crash',
+      exit
+    ),
+    lifecycle('electron-teardown-started', 'electron-graceful-shutdown-prepared', {
+      ...exit,
+      data: { ...exit.data, exited: false }
+    }),
+    lifecycle('electron-teardown-started', 'electron-graceful-shutdown-prepared', {
+      ...exit,
+      data: { ...exit.data, launcherExitCode: 1 }
+    })
+  ])('rejects an unverified exit', (...lifecycleEntries) => {
+    expect(
+      isExpectedMacDesktopTeardownExit({ platform: 'darwin', testPassed: true, lifecycleEntries })
+    ).toBe(false)
+  })
+})
+
 describe('Force-killed Electron exit classification', () => {
   it('accepts intentional SIGKILL after hung close when the test already passed', () => {
     expect(
@@ -97,38 +152,34 @@ describe('Force-killed Electron exit classification', () => {
     [
       'failed test',
       false,
-      lifecycle(
-        'electron-teardown-started',
-        'electron-force-killed',
-        { name: 'electron-process-exit', data: { code: null, signal: 'SIGKILL' } }
-      )
+      lifecycle('electron-teardown-started', 'electron-force-killed', {
+        name: 'electron-process-exit',
+        data: { code: null, signal: 'SIGKILL' }
+      })
     ],
     [
       'missing force-kill marker',
       true,
-      lifecycle(
-        'electron-teardown-started',
-        { name: 'electron-process-exit', data: { code: null, signal: 'SIGKILL' } }
-      )
+      lifecycle('electron-teardown-started', {
+        name: 'electron-process-exit',
+        data: { code: null, signal: 'SIGKILL' }
+      })
     ],
     [
       'renderer crash',
       true,
-      lifecycle(
-        'electron-teardown-started',
-        'page-crash',
-        'electron-force-killed',
-        { name: 'electron-process-exit', data: { code: null, signal: 'SIGKILL' } }
-      )
+      lifecycle('electron-teardown-started', 'page-crash', 'electron-force-killed', {
+        name: 'electron-process-exit',
+        data: { code: null, signal: 'SIGKILL' }
+      })
     ],
     [
       'non-SIGKILL exit',
       true,
-      lifecycle(
-        'electron-teardown-started',
-        'electron-force-killed',
-        { name: 'electron-process-exit', data: { code: 1, signal: null } }
-      )
+      lifecycle('electron-teardown-started', 'electron-force-killed', {
+        name: 'electron-process-exit',
+        data: { code: 1, signal: null }
+      })
     ]
   ])('rejects force-kill classification for %s', (_name, testPassed, lifecycleEntries) => {
     expect(

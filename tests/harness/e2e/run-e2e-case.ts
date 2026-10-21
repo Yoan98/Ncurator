@@ -23,6 +23,7 @@ import {
 import {
   launchElectronApp,
   isExpectedForceKilledTeardownExit,
+  isExpectedMacDesktopTeardownExit,
   isExpectedWindowsInspectorTeardownExit,
   type E2ERuntimeSignals,
   type E2EServiceMode,
@@ -886,7 +887,20 @@ export const runE2ECase = async <TResult>(
         lifecycleEntries: signals.lifecycleEntries,
         testPassed
       })
-      if (isKnownWindowsInspectorExit) {
+      const isMacDesktopExit = isExpectedMacDesktopTeardownExit({
+        platform: process.platform,
+        lifecycleEntries: signals.lifecycleEntries,
+        testPassed
+      })
+      if (isMacDesktopExit) {
+        recordEvent({
+          type: 'signal',
+          name: 'electron-desktop-exit-observed',
+          status: 'info',
+          message: 'macOS 应用已在 teardown 后退出；Launch Services 不提供原生退出码。',
+          data: processExit?.data
+        })
+      } else if (isKnownWindowsInspectorExit) {
         recordEvent({
           type: 'signal',
           name: 'electron-inspector-exit-warning',

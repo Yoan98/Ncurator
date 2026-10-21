@@ -49,14 +49,17 @@ describe('workbench run e2e', () => {
         suite: 'run',
         groups: ['browser'],
         description: '真实 AI 用 web_search 搜索 DeepSeek 融资并读取网页正文后总结。',
-        fixtures: ['tests/fixtures/workspace'],
+        fixtures: [],
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          const setup = await setupWorkbenchWithTempWorkspace(page, {
+            caseId: CASE_ID,
+            workspaceContents: 'empty'
+          })
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(page, PROMPT)
           const evidence = await waitForWorkbenchAiRunCompletion(

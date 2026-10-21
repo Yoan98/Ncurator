@@ -26,12 +26,7 @@ import type {
   WebSearchLinkItem,
   WebSearchSearchOutput
 } from './outputTypes'
-import {
-  fetchHttpPage,
-  isHttpPageFetchError,
-  isLoopbackHttpUrl,
-  shouldBypassCrawlerForLoopbackFetch
-} from './httpPageFetch'
+import { fetchHttpPage, isHttpPageFetchError } from './httpPageFetch'
 import { isCancelledError } from '../../../utils/runFailure'
 
 const WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS = 200
@@ -342,29 +337,21 @@ export const webToolFamily: ToolFamilyDefinition = {
                 }
 
                 let payload: WebSearchFetchOutput
-                if (shouldBypassCrawlerForLoopbackFetch() && isLoopbackHttpUrl(crawlUrl)) {
-                  const httpOnly = await tryHttpPage()
-                  if (!httpOnly) {
-                    throw new Error('网页正文为空')
-                  }
-                  payload = httpOnly
+                const httpResult = await tryHttpPage()
+                if (
+                  httpResult &&
+                  httpResult.markdown.length >= WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS
+                ) {
+                  payload = httpResult
                 } else {
-                  const httpResult = await tryHttpPage()
-                  if (
-                    httpResult &&
-                    httpResult.markdown.length >= WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS
-                  ) {
-                    payload = httpResult
-                  } else {
-                    try {
-                      payload = await crawlPage()
-                    } catch (crawlError) {
-                      if (isCancelledError(crawlError)) throw crawlError
-                      if (httpResult) {
-                        payload = httpResult
-                      } else {
-                        throw crawlError
-                      }
+                  try {
+                    payload = await crawlPage()
+                  } catch (crawlError) {
+                    if (isCancelledError(crawlError)) throw crawlError
+                    if (httpResult) {
+                      payload = httpResult
+                    } else {
+                      throw crawlError
                     }
                   }
                 }

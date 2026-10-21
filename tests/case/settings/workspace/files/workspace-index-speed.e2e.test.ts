@@ -225,7 +225,7 @@ describe('settings workspace e2e', () => {
             element.classList.contains('ant-btn-primary')
           )
 
-          const electronPid = runtime.electronApp.process()?.pid
+          const electronPid = await runtime.electronApp.evaluate(() => process.pid)
           if (!electronPid) throw new Error('electron pid is required to measure embedding threads')
           const slowBudget = resolveOrtThreadBudget('slow')
           const fastBudget = resolveOrtThreadBudget('fast')
