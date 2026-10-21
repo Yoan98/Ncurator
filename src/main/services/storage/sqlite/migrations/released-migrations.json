@@ -1,5 +1,5 @@
 {
-  "publishedThrough": 17,
+  "publishedThrough": 18,
   "migrations": [
     {
       "version": 1,
@@ -102,6 +102,12 @@
       "name": "open_with_preferences",
       "file": "017_open_with_preferences.ts",
       "sha256": "fe5fc23722421db7512181a82ad95f383b6554797704a36d9a592d826da46572"
+    },
+    {
+      "version": 18,
+      "name": "app_language_and_service_route",
+      "file": "018_app_language_and_service_route.ts",
+      "sha256": "7c17688e31f4ef9f6550431bb1fe8992ba3fe79bd329a2be8750c531d40630ff"
     }
   ]
 }
