@@ -333,7 +333,7 @@ describe('subagent browser and sidecar real UI', () => {
           const started = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
-            `${TASK_SCOPE}\n请一次派发三位临时帮手分头处理，每位开始操作前先简短告诉我正在做什么，网页帮手提交表单后再用一句话报告进展，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后用文本编辑工具将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你用文本编辑工具把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
+            `${TASK_SCOPE}\n请一次派发三位临时帮手分头处理，每位开始操作前先简短告诉我正在做什么，网页帮手在提交表单后、核验资料数字后分别用一句话报告进展，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后用文本编辑工具将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你用文本编辑工具把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
           )
           const pendingRow = runtime.page
             .locator('[data-testid="subagent-task"][data-status="running"]')
@@ -363,25 +363,6 @@ describe('subagent browser and sidecar real UI', () => {
             async () => !(await pendingRow.evaluate((row) => row.matches(':hover, :focus'))),
             5000
           )
-          // No hover: the real public text stream opens the cloud and shows its trailing dot.
-          const automaticCloud = runtime.page.locator(ACTIVE_CLOUD_SELECTOR)
-          const automaticDeadline = Date.now() + 120_000
-          let automaticSnapshot = await readCloudSnapshot(automaticCloud)
-          while (
-            !automaticSnapshot ||
-            automaticSnapshot.streamAnimation === null ||
-            !automaticSnapshot.message.trim()
-          ) {
-            if (Date.now() > automaticDeadline) throw new Error('未观察到唯一的自动文字流云')
-            await runtime.page.waitForTimeout(50)
-            automaticSnapshot = await readCloudSnapshot(automaticCloud)
-          }
-          expect(automaticSnapshot.inside).toBe(true)
-          expect(automaticSnapshot.streamAnimation).toBe('nc-subagent-dot-breathe')
-          await runtime.captureScreenshot({
-            name: 'subagent-cloud-auto',
-            message: '未悬浮时最新公开消息自动显示，文字及黑球位于云内'
-          })
           await waitUntil(async () =>
             (await updates(runtime, started)).some((event) => event.update.status === 'running')
           )
@@ -409,6 +390,25 @@ describe('subagent browser and sidecar real UI', () => {
           })
           await runtime.page.mouse.move(0, 0)
           await queuedCloud.waitFor({ state: 'hidden' })
+          // No hover: the real public text stream opens the cloud and shows its trailing dot.
+          const automaticCloud = runtime.page.locator(ACTIVE_CLOUD_SELECTOR)
+          const automaticDeadline = Date.now() + 120_000
+          let automaticSnapshot = await readCloudSnapshot(automaticCloud)
+          while (
+            !automaticSnapshot ||
+            automaticSnapshot.streamAnimation === null ||
+            !automaticSnapshot.message.trim()
+          ) {
+            if (Date.now() > automaticDeadline) throw new Error('未观察到唯一的自动文字流云')
+            await runtime.page.waitForTimeout(50)
+            automaticSnapshot = await readCloudSnapshot(automaticCloud)
+          }
+          expect(automaticSnapshot.inside).toBe(true)
+          expect(automaticSnapshot.streamAnimation).toBe('nc-subagent-dot-breathe')
+          await runtime.captureScreenshot({
+            name: 'subagent-cloud-auto',
+            message: '未悬浮时最新公开消息自动显示，文字及黑球位于云内'
+          })
           let previewChildRunId = ''
           await waitUntil(async () => {
             const action = (await updates(runtime, started)).find((event) =>

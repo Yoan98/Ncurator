@@ -1081,8 +1081,10 @@ export const createPartnerThroughWorkbenchUi = async (
   await getWorkbenchLocator(page, workbenchSelectors.newPartnerButton).click()
   const nameInput = getWorkbenchLocator(page, workbenchSelectors.createPartnerNameInput)
   await nameInput.waitFor({ state: 'visible' })
+  await nameInput.click()
   await nameInput.fill(partnerName)
   await nameInput.press('Enter')
+  await getWorkbenchLocator(page, workbenchSelectors.createPartnerModal).waitFor({ state: 'hidden' })
   await waitForVisiblePartnerRow(page, partnerName)
   await dismissWorkbenchLlmConfigMissingNotification(page)
   return partnerName
