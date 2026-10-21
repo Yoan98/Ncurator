@@ -93,3 +93,7 @@ pnpm dev
 ## 许可证
 
 采用 [AGPL-3.0-only](./LICENSE)，允许遵守许可证的商业使用。第三方组件保留各自许可证。
+
+## 友链
+
+- [LinuxDo 社区](https://linux.do/)
