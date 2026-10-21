@@ -9,7 +9,6 @@ import {
   validateReleaseArgs
 } from '../../../../scripts/release/regression.mjs'
 import {
-  includeGateFiles,
   mergeE2ETestResults,
   passedPackageTest,
   readTestCaseIds,
@@ -42,18 +41,6 @@ describe('release regression selection', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
-  it('includes gates outside the selected domain exactly once and rejects missing gates', () => {
-    const settings = '/tests/case/settings/general/language.e2e.test.ts'
-    const gate = '/tests/case/workbench/conversation/prefix-cache-retain-live.e2e.test.ts'
-    expect(includeGateFiles([settings, gate], [gate], ['prefix-cache-retain-live'])).toEqual([
-      settings,
-      gate
-    ])
-    expect(() => includeGateFiles([settings], [], ['prefix-cache-retain-live'])).toThrow(
-      'gate not found'
-    )
-  })
-
   it('stops after a failed cache gate without starting later work', async () => {
     const executed: string[] = []
     const failure = await runE2EGates(

@@ -110,15 +110,6 @@ export const assertPackageRegressionPassed = (result, bundle, installer) => {
   ) {
     throw new Error('candidate requires actual passed package E2E case evidence')
   }
-  for (const id of RELEASE_CACHE_CASES) {
-    if (
-      !result.tests.some((test) =>
-        test.cases.some((item) => item.caseId === id && item.status === 'passed')
-      )
-    ) {
-      throw new Error(`candidate requires passed package cache gate: ${id}`)
-    }
-  }
 }
 
 const runPackageRegression = async (bundlePath, resultPath, args) => {

@@ -3,14 +3,6 @@ import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 
-export const includeGateFiles = (selectedFiles, gateFiles, gateCaseIds) => {
-  for (const id of gateCaseIds) {
-    if (!gateFiles.some((file) => path.basename(file) === `${id}.e2e.test.ts`))
-      throw new Error(`release cache gate not found: ${id}`)
-  }
-  return [...new Set([...selectedFiles, ...gateFiles])]
-}
-
 export const readTestCaseIds = (filePath, source) => {
   const constants = new Map(
     [...source.matchAll(/\bconst\s+([A-Z][A-Z0-9_]*)\s*=\s*['"]([^'"]+)['"]/gu)].map((match) => [

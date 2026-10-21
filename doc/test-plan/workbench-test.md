@@ -70,7 +70,7 @@ tests/case/workbench/
     timeline/
     message/
     scope/
-    prefix-cache/      # 正式包缓存门槛：跨 run 前缀缓存
+    prefix-cache/      # 跨 run 前缀缓存
     provider-matrix/   # 正式 E2E：发版按影响范围或全量测试
   run/
     process/
@@ -245,9 +245,9 @@ pnpm test:update:e2e
 
 #### `prefix-cache-retain-live`
 
-- 测试类型：`e2e / live`（路径 `conversation/prefix-cache/`；安装后正式包发布门槛）
+- 测试类型：`e2e / live`（路径 `conversation/prefix-cache/`）
 - What：同一伙伴经真实 Workbench UI 连续三轮短任务（Run1 `@` 选中极短笔记抽出事实，Run2/Run3 同选中文件追问），相邻跨 run 首轮 brain 均须明显复用上一 run 末次前缀缓存，且 `toolsHash` 一致。
-- Why：正式包发布需要一条轻量、专职的前缀缓存回归。纯闲聊测不到 tool 历史投影与 tools 前缀稳态；backend 直调 `AiRunService` 也绕过 Composer `@` 选中与生产发送组装。若消息重建或工具表漂移导致缓存丢失，会拖高成本并放大续接不稳定。
+- Why：验证真实发送链路中的前缀缓存。纯闲聊测不到 tool 历史投影与 tools 前缀稳态；backend 直调 `AiRunService` 也绕过 Composer `@` 选中与生产发送组装。若消息重建或工具表漂移导致缓存丢失，会拖高成本并放大续接不稳定。
 - How：发布时通过 `--target package` 在隔离安装的国内候选包执行；源码执行仅用于开发排查。创建空临时 workspace，仅写入 `cache-retain-note.txt`，经 Settings 添加文件地址并建伙伴、选 live 模型。每轮用 `@` 选中该文件再发送（不得 `sendWorkbenchMessage` 清空 token）。Run1 要求读笔记说出项目代号（硬断言文本读工具）；Run2 问发布窗口；Run3 问负责人。e2e observer 只采集生产 `recordLlmIo` 并写入 `llm-io.jsonl`。两段跨 run 缓存用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）；硬断言相邻段 `toolsHash` 相等；按实际 runId 选择完成日志中的请求，禁止按数组长度切分；断言 data 附带双方 runId/callId、历史前缀是否一致和 `requestWireDiff` 供排障。
 - Oracle：三轮均 `completed`，对齐 `WB-SESSION-005`；Run1 有 `text_file_read` / `text_file_search` 证据，且发送带 `@` 选中，对齐 `WB-CORE-002`；Run2 首次 brain 相对 Run1 末次、以及 Run3 首次 brain 相对 Run2 末次，均满足 `cachedInputTokens / 上一末次 inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，且两段 `toolsHash` 分别一致。没有 live key 必须失败，不能跳过。
 
@@ -369,7 +369,7 @@ pnpm test:update:e2e
 
 #### `subagent-prefix-cache-retain-live`
 
-- 测试类型：e2e / live；suite `run`，group `subagent`；serviceMode `real`；安装后正式包发布门槛。
+- 测试类型：e2e / live；suite `run`，group `subagent`；serviceMode `real`。
 - What：同一持久子会话中断后新执行首次请求的前缀与真实缓存，以及子内部连续调用和父派发收口缓存。
 - Why：SQLite 转录、恢复技能/checkpoint 和续接追加不能改写既有模型前缀。
 - How：发布时通过 `--target package` 在隔离安装的国内候选包执行；源码执行仅用于开发排查。真实 UI 配置模型、派发两项任务，复制现有排期/口径/备注/财务跟进 fixture 到临时资料目录，待续接任务依次核对排期、主负责人和财务执行动作。主伙伴只派发与汇总，不提前探测网页，完整转达各子任务的文件与网页核对要求。一个完成，另一个读完后进入真实待加载网页；同时取得子任务执行 `browser_use` 与页面请求证据后，通过 UI 停止并要求查询、续接原子会话，不能把其他网络访问当作子任务已进入待加载状态。相同模型/工作区短间隔续接，不填充提示或伪造输出/usage。真实本地页面只作输入，observer/只读 IPC 只取证。

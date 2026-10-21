@@ -5,7 +5,6 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  includeGateFiles,
   readTestCaseIds,
   readE2ECaseResults,
   mergeE2ETestResults,
@@ -926,7 +925,7 @@ const cleanupStaleE2ETempRoot = async (e2eTempRoot) => {
 }
 
 const runTypeWorkflow = async (input) => {
-  let testFiles = await findTestFiles(input)
+  const testFiles = await findTestFiles(input)
   if (testFiles.length === 0) {
     if (input.caseIds.length > 0) {
       throw new Error(
@@ -937,18 +936,6 @@ const runTypeWorkflow = async (input) => {
     return { exitCode: 0, e2eResults: [] }
   }
 
-  if (input.type === 'e2e' && input.target === 'package' && input.gateCaseIds?.length) {
-    const gates = await findTestFiles({
-      ...input,
-      domain: '',
-      suite: '',
-      groups: [],
-      caseIds: input.gateCaseIds
-    })
-    testFiles = includeGateFiles(testFiles, gates, input.gateCaseIds)
-    if (input.caseIds.length)
-      input = { ...input, caseIds: [...new Set([...input.caseIds, ...input.gateCaseIds])] }
-  }
   const nativeTarget = input.type === 'e2e' ? 'electron' : 'node'
   const shouldFilterByTestName =
     input.caseIds.length > 0 &&

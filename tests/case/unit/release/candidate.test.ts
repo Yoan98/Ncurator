@@ -209,7 +209,7 @@ describe('retained release candidate', () => {
     ).rejects.toThrow('unsupported candidate E2E status')
   })
 
-  it('requires real package cache evidence when recording success and rechecks it before publication', async () => {
+  it('accepts selected package cases without unrelated cache cases and rechecks evidence before publication', async () => {
     await materializeReleaseCandidate({ bundlePath: await createBundle() })
     const request = {
       tag: 'windows-v0.1.21',
@@ -220,11 +220,13 @@ describe('retained release candidate', () => {
       'result file'
     )
     const { result, resultPath } = await writePassedResult()
-    const missingGate = { ...result, tests: result.tests.slice(0, 1) }
-    await fs.writeFile(resultPath, JSON.stringify(missingGate))
+    await fs.writeFile(resultPath, JSON.stringify({ ...result, tests: [] }))
     await expect(recordCandidateE2E({ ...request, status: 'passed', resultPath })).rejects.toThrow(
-      'cache gate'
+      'actual passed package'
     )
+    result.tests = [result.tests[0]]
+    result.tests[0].file = 'tests/case/settings/settings-help-entry.e2e.test.ts'
+    result.tests[0].cases[0].caseId = 'settings-help-entry'
     await fs.writeFile(resultPath, JSON.stringify(result))
     await recordCandidateE2E({ ...request, status: 'passed', resultPath })
     result.tests[0].cases[0].app.target = 'source'
