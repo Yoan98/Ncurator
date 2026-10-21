@@ -477,6 +477,18 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       }
       editor.normalize()
       syncDraftFromEditor()
+      // Programmatic insertion needs an explicit scroll, including after a trailing newline.
+      const caretMarker = document.createElement('span')
+      caretMarker.textContent = '\u200b'
+      const caretRange = nextSelection.getRangeAt(0)
+      caretRange.insertNode(caretMarker)
+      caretMarker.scrollIntoView({ block: 'nearest' })
+      caretRange.setStartBefore(caretMarker)
+      caretRange.collapse(true)
+      nextSelection.removeAllRanges()
+      nextSelection.addRange(caretRange)
+      caretMarker.remove()
+      editor.normalize()
       refreshMentionContext()
     },
     [focusEditorAtEnd, refreshMentionContext, syncDraftFromEditor]
@@ -1049,7 +1061,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             aria-multiline="true"
             tabIndex={0}
             spellCheck={false}
-            className="block min-h-[32px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#37352F] outline-none [&_[data-role='scope-token']]:align-baseline"
+            className="block max-h-[min(240px,30dvh)] min-h-[32px] w-full overflow-x-hidden overflow-y-auto overscroll-y-contain whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#37352F] outline-none [&_[data-role='scope-token']]:align-baseline"
             data-testid={workbenchSelectors.input}
             onClick={(event) => {
               const token =
