@@ -78,6 +78,7 @@ export const createSubagentDispatcher = (
         let blocker: string | undefined
         const actions = new Map<string, { text: string; messageId: string }>()
         let publicToolText = ''
+        let finished = false
         const publish = (update: SubagentUpdate): Promise<void> => {
           const next = updates.then(async () => {
             deps.subagentStore.publish(
@@ -189,6 +190,8 @@ export const createSubagentDispatcher = (
                 },
                 requestUserQuestion: async () => needParent('子任务需要用户协助，请由主伙伴询问'),
                 sendEvent: (event) => {
+                  // Tool cleanup may finish after cancellation or graph completion.
+                  if (finished || controller.signal.aborted || deps.isCancelled()) return
                   // The thought event is public assistant text accompanying this round of tool calls.
                   // Raw reasoning deltas, skill state and lifecycle remain local.
                   if (event.type === 'assistant_brain_stream_started') {
@@ -272,6 +275,7 @@ export const createSubagentDispatcher = (
                   : undefined
               }
             )
+            finished = true
             const update: SubagentUpdate = {
               ...base,
               status:
@@ -294,6 +298,7 @@ export const createSubagentDispatcher = (
             await publish(update)
             return update
           } catch (error) {
+            finished = true
             const update: SubagentUpdate = {
               ...base,
               status: controller.signal.aborted || deps.isCancelled() ? 'cancelled' : 'failed',

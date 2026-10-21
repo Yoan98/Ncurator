@@ -621,7 +621,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：子 SQLite 投影、连续工具结果追加、新会话隔离、中断后同会话续接的请求前缀，以及公开文字流的消息标识、开始与结束。
 - Why：确定性区分请求前缀改写与供应商缓存低命中，守住临时实例隔离和文字流生命周期。
 - How：生产 AiRunService、人类 graph、真实文本文件及工具；只脚本化 LLM 派发、学习及读取决策，连续两轮使用相同公开文案以核对消息身份。保存真实 requestWire，比较稳定工具集合下的相邻主子 brain；两次派发创建新会话。另经生产 ChatRunService 让子任务读文件后进入真实终端等待，停止主运行、重新打开 SQLite，通过 list_agent 查询并续接原会话。
-- Oracle：已有消息逐项保留，工具定义和顺序不变；新子 System/初始工具相同且无旧子历史；主上下文只含派发汇总，没有子过程 annotation；续接沿用 agentId、名称和原任务，执行 ID 改变，首次请求保留原末次有效请求的消息和工具前缀，完成后子会话被清理。公开文字每轮使用独立消息标识，同轮 delta 与完成快照标识一致；delta 开始流、completed/reset/取消结束流，审核请求不能冒充文字流。服务端缓存由 Workbench `subagent-prefix-cache-retain-live` 验证，mock 不伪造命中。
+- Oracle：已有消息逐项保留，工具定义和顺序不变；新子 System/初始工具相同且无旧子历史；主上下文只含派发汇总，没有子过程 annotation；取消终态不被迟到的工具事件恢复为活跃状态；续接沿用 agentId、名称和原任务，执行 ID 改变，首次请求保留原末次有效请求的消息和工具前缀，完成后子会话被清理。公开文字每轮使用独立消息标识，同轮 delta 与完成快照标识一致；delta 开始流、completed/reset/取消结束流，审核请求不能冒充文字流。服务端缓存由 Workbench `subagent-prefix-cache-retain-live` 验证，mock 不伪造命中。
 
 ##### `human-subagent-file-cancellation`
 
@@ -879,7 +879,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：免费目录明确无视觉能力时，读图返回可理解的工具错误，human 继续完成文字交付。
 - Why：免费文字模型不能因读图把整个运行变成 provider 图片输入失败，模型必须获得准确能力反馈。
-- How：在隔离 userData 准备当前协议版本的免费代理目录缓存、有效短时凭证和真实本地图片；通过生产目录解析与运行模型选择创建上下文，沿用既有脚本化 LLM 决策，真实执行 human graph 和 read_image 工具；观测后续 brain 请求及持久 log，不替换工具或 store。
+- How：在隔离 userData 按当前运行时的服务线路和有效语言准备免费代理目录缓存，使用当前协议版本、有效短时凭证和真实本地图片；通过生产目录解析与运行模型选择创建上下文，沿用既有脚本化 LLM 决策，真实执行 human graph 和 read_image 工具；观测后续 brain 请求及持久 log，不替换工具或 store。
 - Oracle：read_image 返回能力限制且无图片引用；下一次 brain 请求包含完整限制说明、没有图片块；运行正常完成且没有 run_failed；有效历史不含图片，原文件保持不变，对齐 `WB-COMPOSER-013-AC6` 的 backend 边界。支持视觉、目录未命中和非免费模型的工具行为由 unit `read-image-multimodal` 覆盖；本 case 不证明真实模型的自然语言表达。
 
 ##### `kb-answer-with-real-kb`

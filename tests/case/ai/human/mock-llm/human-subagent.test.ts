@@ -28,7 +28,11 @@ import { createSqliteTranscript } from '../../../../../src/main/services/ai/huma
 import { collectBrainPrefixCacheReuse } from '../../../../harness/core/continuation-prefix-cache'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { terminalSessionManager } from '../../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
-import type { ChatMessageLogEntry, SubagentUpdate } from '../../../../../src/shared/types'
+import type {
+  AiRunEvent,
+  ChatMessageLogEntry,
+  SubagentUpdate
+} from '../../../../../src/shared/types'
 
 const complete = (text: string) => buildCompleteTaskDecision({ summary: text })
 const delegate = (agents: Array<{ name: string; instruction: string }>) =>
@@ -695,6 +699,19 @@ describe('temporary subagents through production AiRunService', () => {
         )
         const executionIds = [...new Set(childIo.map((record) => record.runId))]
         expect(executionIds).toHaveLength(2)
+        const stoppedUpdates = continued.events.filter(
+          (event): event is Extract<AiRunEvent, { type: 'subagent_updated' }> =>
+            event.type === 'subagent_updated' && event.update.childRunId === executionIds[0]
+        )
+        const cancelledIndex = stoppedUpdates.findIndex(
+          (event) => event.update.status === 'cancelled'
+        )
+        expect(cancelledIndex).toBeGreaterThanOrEqual(0)
+        expect(
+          stoppedUpdates
+            .slice(cancelledIndex + 1)
+            .every((event) => event.update.status === 'cancelled')
+        ).toBe(true)
         const lastBefore = childIo
           .filter((record) => record.runId === executionIds[0] && record.status === 'completed')
           .at(-1)

@@ -9,6 +9,7 @@ import {
 import { hasEffectiveImageContextInMessageLog } from '../../../../../src/shared/messageLogVisionContext'
 import { messagesFromLogEntries } from '../../../../../src/main/services/ai/human/memory/conversationLogMessages'
 import { projectMessagesForMainModel } from '../../../../../src/main/services/ai/human/memory/multimodal'
+import { getAppRuntime } from '../../../../../src/main/services/app/AppRuntime'
 import { createPdfToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -54,8 +55,9 @@ describe('ai human mock-llm backend', () => {
         }
         await fs.mkdir(userDataPath, { recursive: true })
         await fs.writeFile(imagePath, imageBytes)
+        const { serviceRoute, locale } = getAppRuntime()
         await fs.writeFile(
-          path.join(userDataPath, 'free-models-catalog.json'),
+          path.join(userDataPath, `${serviceRoute}-${locale}-free-models-catalog.json`),
           JSON.stringify({
             schemaVersion: FREE_MODEL_CATALOG_CACHE_VERSION,
             fetchedAt: Date.now(),
