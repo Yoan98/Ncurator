@@ -29,6 +29,10 @@
   <a href="https://www.ncurator.com/api/download/mac-arm64"><strong>Download for macOS (Apple silicon)</strong></a>
 </p>
 
+<p align="center">
+  If macOS reports that the app is damaged or cannot be opened, see the <a href="https://www.ncurator.com/en/manual#mac-download">Mac installation troubleshooting guide</a>.
+</p>
+
 ## Architecture Design
 
 <p align="center">
@@ -39,13 +43,17 @@ Both distributions include Simplified Chinese and English interfaces. Choose a l
 
 ## Capabilities
 
-| Capability              | What it does                                                               |
-| ----------------------- | -------------------------------------------------------------------------- |
-| 📄 Office documents     | Read, create, and edit DOCX, PPTX, XLSX, and text; read PDFs               |
-| 🧠 Local knowledge base | Index local folders and web material, retrieve content, and cite sources   |
-| 🌐 Web and browser      | Search for information, extract web content, and use the built-in browser  |
-| ✍️ Change review        | Preview results, inspect changes, and revert supported file edits          |
-| ⏰ Scheduled tasks      | Run tasks on a schedule using a partner's material and model configuration |
+| Capability              | What it does                                                                                          |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| 📄 Office documents     | Read, create, and edit DOCX, PPTX, XLSX, and plain text; read PDFs                                        |
+| 🧠 Local knowledge base | Index local folders and web material, retrieve content, and cite sources                               |
+| 🔍 Web search           | Search the web, read page content, and use the built-in browser                                         |
+| 💻 Local terminal       | Run local commands and scripts for data processing and task automation                                 |
+| ✍️ Change review        | Preview results, inspect changes, and revert supported file edits                                      |
+| 🔗 WPS integration      | Click an AI change to open the document at that location in WPS; auto-refresh after AI edits or reverts |
+| ⏰ Scheduled tasks      | Run tasks on a schedule using a partner's material and model configuration                              |
+
+WPS integration requires its add-in to be enabled. To jump to a change, set WPS as the default app for that file type. See the [setup guide](https://www.ncurator.com/en/manual#wps-integration).
 
 See the [website](https://www.ncurator.com/en) for demos and real task examples.
 
@@ -63,8 +71,11 @@ Join the discussion and help shape these plans:
 | ---------------------------- | ------------------------------------------------------------------ |
 | 🔤 English knowledge base    | English embedding models and indexing                              |
 | 🧩 Skill integration         | Connect and manage custom and third-party Skills                   |
+| 🔌 Integration ecosystem     | Connect WeCom, email services, and other workplace platforms        |
+| 📱 Mobile web access         | Connect to your computer from a phone browser to use NCurator remotely |
 | 🧭 Browser data import       | Import data from your browser, starting with bookmarks and history |
 | 🖼️ Multimodal knowledge base | Parse, index, and retrieve images and audio with source references |
+| 🧠 Partner memory            | Build long-term memory                                             |
 
 ## Get involved
 
