@@ -6,7 +6,7 @@ import { createAiServiceTestRunner } from '../../../../harness/backend/aiService
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
+  buildLoadToolsetsDecision,
   buildToolDecision,
   filterAiRunEventsByType
 } from '../testUtils'
@@ -73,8 +73,8 @@ describe('ai human mock-llm backend', () => {
           llmScript: {
             'human.brain': [
               {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['ppt-read', 'ppt-write'],
+                output: buildLoadToolsetsDecision({
+                  toolsetIds: ['ppt-read', 'ppt-write'],
                   summary: '学习 PPT 读写能力'
                 })
               },

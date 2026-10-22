@@ -1,6 +1,6 @@
 import type { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../shared/types'
-import type { RuntimeSkillId } from '../../types'
+import type { RuntimeToolsetId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
@@ -21,8 +21,8 @@ type PptToolName = 'ppt_read_outline' | 'ppt_read_slides' | 'ppt_search' | 'ppt_
 type PptToolSpec<
   TArgs extends JsonObject,
   TName extends PptToolName,
-  TSkillId extends RuntimeSkillId
-> = HumanToolSpec<TArgs, TName, TSkillId>
+  TToolsetId extends RuntimeToolsetId
+> = HumanToolSpec<TArgs, TName, TToolsetId>
 
 const readExecutionMeta = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -33,7 +33,7 @@ const readExecutionMeta = createStaticExecutionMetaResolver({
 export const PPT_READ_OUTLINE_TOOL_SPEC = {
   name: 'ppt_read_outline',
   familyId: 'ppt',
-  skillIds: ['ppt-read'],
+  toolsetIds: ['ppt-read'],
   inputSchema: pptOutlineSchema,
   promptSpec: {
     name: 'ppt_read_outline',
@@ -46,7 +46,7 @@ export const PPT_READ_OUTLINE_TOOL_SPEC = {
 export const PPT_READ_SLIDES_TOOL_SPEC = {
   name: 'ppt_read_slides',
   familyId: 'ppt',
-  skillIds: ['ppt-read'],
+  toolsetIds: ['ppt-read'],
   inputSchema: pptReadSlidesSchema,
   promptSpec: {
     name: 'ppt_read_slides',
@@ -59,7 +59,7 @@ export const PPT_READ_SLIDES_TOOL_SPEC = {
 export const PPT_SEARCH_TOOL_SPEC = {
   name: 'ppt_search',
   familyId: 'ppt',
-  skillIds: ['ppt-read'],
+  toolsetIds: ['ppt-read'],
   inputSchema: pptSearchSchema,
   promptSpec: {
     name: 'ppt_search',
@@ -72,7 +72,7 @@ export const PPT_SEARCH_TOOL_SPEC = {
 export const PPT_EDIT_TOOL_SPEC = {
   name: 'ppt_edit',
   familyId: 'ppt',
-  skillIds: ['ppt-write'],
+  toolsetIds: ['ppt-write'],
   inputSchema: pptEditSchema,
   promptSpec: {
     name: 'ppt_edit',

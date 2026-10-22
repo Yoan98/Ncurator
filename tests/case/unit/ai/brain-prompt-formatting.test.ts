@@ -111,13 +111,13 @@ describe('ai unit brain prompt formatting', () => {
     expect(user).not.toContain('当前没有用户添加的附件')
   })
 
-  it('omits memory and active_state even if skills and plan exist', () => {
+  it('omits memory and active_state even if toolsets and plan exist', () => {
     const state = createInitialHumanState({
       taskId: 'task-prompt-formatting',
       userInput: '继续处理任务'
     })
     state.memory.plan = [{ title: '整理资料', status: 'done' }]
-    state.skills.learnedSkillIds = ['docx-read']
+    state.toolsets.loadedToolsetIds = ['docx-read']
     const user = buildBrainUserMessage({ state, ctx: createFakeCtx() })
     expect(user).not.toContain('<active_state>')
     expect(user).not.toContain('<memory>')

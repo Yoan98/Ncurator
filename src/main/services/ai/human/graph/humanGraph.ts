@@ -2,12 +2,13 @@ import { SubagentBlockedError } from '../../run/toolPolicy'
 import { END, START, StateGraph } from '@langchain/langgraph'
 import { SystemMessage } from '@langchain/core/messages'
 import type { AiRunContext, HumanRunDispatchOptions } from '../../types'
-import { HUMAN_GRAPH_RECURSION_LIMIT } from '../constants'
+import { HUMAN_GRAPH_RECURSION_LIMIT, HUMAN_MAX_ACTIVE_TOOLS } from '../constants'
 import type { HumanState, HumanTaskInput, HumanTaskOutput } from '../types'
 import { createBrainNode } from '../node/brainNode'
 import { createContextCompactionNode } from '../node/contextCompactionNode'
 import { createContextBudgetNode } from '../node/contextBudgetNode'
-import { createLearningNode } from '../node/learningNode'
+import { createSkillLoadingNode } from '../node/skillLoadingNode'
+import { createToolsetLoadingNode } from '../node/toolsetLoadingNode'
 import { createPlanNode } from '../node/planNode'
 import { createHandNode } from '../node/handNode'
 import { createHumanInteractionNode } from '../node/humanInteractionNode'
@@ -17,7 +18,13 @@ import { createHumanRunStateSchema, createInitialHumanState } from '../state/sch
 import { buildBrainSystemPrompt } from '../prompts/brain'
 import { projectMessageLogRecords } from '../memory/transcript'
 import { projectBrainMessagesFromLog } from '../memory/brainMessageProjection'
-import { isLearnableSkillId } from '../skills'
+import {
+  getToolsetDefinition,
+  isLoadableToolsetId,
+  listBuiltinToolsetDefinitions
+} from '../toolsets'
+import { fitToolsetIdsToToolBudget } from '../node/toolsetLoadingNode/toolBudget'
+import { isUserSkillId } from '../userSkills'
 import { classifyThrownErrorToAiRunFailure } from '../../utils/runFailure'
 import { applyDeliverySideEffects } from '../node/brainNode/finalizeDelivery'
 
@@ -47,7 +54,8 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         cache,
         emitAnswerEvents: Boolean(options.emitAnswerEvents)
       })
-      const learningNode = createLearningNode({ ctx, cache })
+      const skillLoadingNode = createSkillLoadingNode({ ctx, cache })
+      const toolsetLoadingNode = createToolsetLoadingNode({ ctx, cache })
       const planNode = createPlanNode({ ctx, cache })
       const handNode = createHandNode({ ctx, cache })
       const humanInteractionNode = createHumanInteractionNode({ ctx, cache })
@@ -70,7 +78,12 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           cache.currentState = nextState
           return nextState
         })
-        .addNode('human_learning_node', (state) => runNode(state as HumanState, learningNode))
+        .addNode('human_skill_loading_node', (state) =>
+          runNode(state as HumanState, skillLoadingNode)
+        )
+        .addNode('human_toolset_loading_node', (state) =>
+          runNode(state as HumanState, toolsetLoadingNode)
+        )
         .addNode('human_plan_node', (state) => runNode(state as HumanState, planNode))
         .addNode('human_hand_node', (state) => runNode(state as HumanState, handNode))
         .addNode('human_interaction_node', (state) =>
@@ -94,13 +107,19 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         })
         .addConditionalEdges('human_dispatch_node', (state) => {
           const humanState = state as HumanState
-          if (humanState.execution.stage === 'learning') return 'human_learning_node'
+          if (humanState.execution.stage === 'skill_loading') return 'human_skill_loading_node'
+          if (humanState.execution.stage === 'toolset_loading') return 'human_toolset_loading_node'
           if (humanState.execution.stage === 'plan') return 'human_plan_node'
           if (humanState.execution.stage === 'hand') return 'human_hand_node'
           if (humanState.execution.stage === 'interaction') return 'human_interaction_node'
           return 'human_context_budget_node'
         })
-        .addConditionalEdges('human_learning_node', (state) => routeToolReturn(state as HumanState))
+        .addConditionalEdges('human_skill_loading_node', (state) =>
+          routeToolReturn(state as HumanState)
+        )
+        .addConditionalEdges('human_toolset_loading_node', (state) =>
+          routeToolReturn(state as HumanState)
+        )
         .addConditionalEdges('human_plan_node', (state) => routeToolReturn(state as HumanState))
         .addConditionalEdges('human_hand_node', (state) => routeToolReturn(state as HumanState))
         .addConditionalEdges('human_interaction_node', (state) =>
@@ -112,9 +131,27 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       cache.currentState = baseInitialState
       const messageLogRecords = await ctx.loadMessageLog()
       const logProjection = projectMessageLogRecords(messageLogRecords)
-      const learnedSkillIds = Array.from(new Set(logProjection.learnedSkillIds)).filter(
-        isLearnableSkillId
+      const restoredToolsetIds = Array.from(new Set(logProjection.loadedToolsetIds)).filter(
+        isLoadableToolsetId
       )
+      const fittedToolsets = fitToolsetIdsToToolBudget({
+        existingToolsetIds: restoredToolsetIds,
+        requestedToolsetIds: [],
+        maxActiveTools: HUMAN_MAX_ACTIVE_TOOLS,
+        getToolNames: (id) => getToolsetDefinition(id).toolNames,
+        baseToolNames: listBuiltinToolsetDefinitions().flatMap((item) => item.toolNames)
+      })
+      if (!fittedToolsets.ok) throw new Error('Builtin tools exceed the active tool limit.')
+      const loadedToolsetIds = fittedToolsets.loadedToolsetIds
+      if (fittedToolsets.evictedToolsetIds.length) {
+        await ctx.appendMessageLog([
+          {
+            kind: 'annotation',
+            eventType: 'toolset_state_updated',
+            payload: { loadedToolsetIds }
+          }
+        ])
+      }
       const initialState: HumanState = {
         ...baseInitialState,
         task: options.initialState?.task || taskInput,
@@ -122,9 +159,8 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           plan: logProjection.plan,
           compactions: []
         },
-        skills: {
-          learnedSkillIds
-        }
+        toolsets: { loadedToolsetIds },
+        skills: { loadedSkillIds: logProjection.loadedSkillIds.filter(isUserSkillId) }
       }
       cache.currentState = initialState
       cache.currentUserLogAppended =

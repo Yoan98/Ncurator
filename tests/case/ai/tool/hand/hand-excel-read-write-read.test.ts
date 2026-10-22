@@ -3,7 +3,7 @@ import path from 'node:path'
 import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
 import { createHandNode } from '../../../../../src/main/services/ai/human/node/handNode'
-import { ensureSkillTools } from '../../../../../src/main/services/ai/human/node/learningNode/skillLoader'
+import { ensureToolsetTools } from '../../../../../src/main/services/ai/human/node/toolsetLoadingNode/toolsetLoader'
 import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../../src/main/services/ai/human/state/schema'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -32,19 +32,19 @@ describe('ai tool hand excel backend', () => {
 
         const ctx = runtime.createAiRunContext()
         const cache = createHumanRuntimeCache()
-        ensureSkillTools({
+        ensureToolsetTools({
           cache,
           ctx,
           runId: runtime.runId,
           taskId: runtime.taskId,
-          skillId: 'excel-read'
+          toolsetId: 'excel-read'
         })
-        ensureSkillTools({
+        ensureToolsetTools({
           cache,
           ctx,
           runId: runtime.runId,
           taskId: runtime.taskId,
-          skillId: 'excel-write'
+          toolsetId: 'excel-write'
         })
         const initial = createInitialHumanState({
           taskId: runtime.taskId,
@@ -52,7 +52,7 @@ describe('ai tool hand excel backend', () => {
         })
         const state = await createHandNode({ ctx, cache })({
           ...initial,
-          skills: { learnedSkillIds: ['excel-read', 'excel-write'] },
+          toolsets: { loadedToolsetIds: ['excel-read', 'excel-write'] },
           execution: {
             ...initial.execution,
             pendingRound: {
@@ -99,8 +99,7 @@ describe('ai tool hand excel backend', () => {
       assert: async (result, runtime) => {
         const results = result.state.execution.lastToolResults || []
         runtime.assertThat(
-          results.map((item) => item.toolName).join(',') ===
-            'excel_read,excel_edit,excel_read' &&
+          results.map((item) => item.toolName).join(',') === 'excel_read,excel_edit,excel_read' &&
             results.every((item) => item.ok) &&
             JSON.stringify(results[2]?.data).includes('20'),
           {

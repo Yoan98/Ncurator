@@ -1,4 +1,4 @@
-export type LearnSkillOutput = Record<string, never>
+export type LoadToolsetOutput = Record<string, never>
 
 export type UpdatePlanOutput = Record<string, never>
 

@@ -16,7 +16,7 @@ import type { ScriptedLlmCall, ScriptedLlmStep } from '../../../../harness/backe
 import {
   buildCompleteTaskDecision,
   buildToolDecision,
-  buildLearnSkillsDecision,
+  buildLoadToolsetsDecision,
   collectTerminalReviewCommandIds
 } from '../testUtils'
 import {
@@ -823,7 +823,10 @@ describe('temporary subagents through production AiRunService', () => {
               if (!isChild(call)) {
                 const parentStep = ++parentCall
                 if (parentStep === 1)
-                  return buildLearnSkillsDecision({ skillIds: ['docx-read'], summary: '查看文档' })
+                  return buildLoadToolsetsDecision({
+                    toolsetIds: ['docx-read'],
+                    summary: '查看文档'
+                  })
                 if (parentStep === 2)
                   return buildToolDecision({
                     toolName: 'docx_search',
@@ -855,8 +858,8 @@ describe('temporary subagents through production AiRunService', () => {
                 return complete('等待取消')
               }
               if (count === 2)
-                return buildLearnSkillsDecision({
-                  skillIds: ['docx-read', 'docx-write'],
+                return buildLoadToolsetsDecision({
+                  toolsetIds: ['docx-read', 'docx-write'],
                   summary: '文档编辑'
                 })
               if (count === 3)

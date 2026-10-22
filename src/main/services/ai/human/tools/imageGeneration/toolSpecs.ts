@@ -11,7 +11,7 @@ export const IMAGE_GENERATE_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'image_generate',
   familyId: 'image-generation',
-  skillIds: ['image-generation'],
+  toolsetIds: ['image-generation'],
   inputSchema: imageGenerateSchema,
   promptSpec: {
     name: 'image_generate',

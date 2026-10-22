@@ -4,20 +4,20 @@ import { jsonObjectSchema, jsonValueSchema, toolResourceContextSchema } from './
 import {
   AI_TOOL_FAMILY_IDS,
   HUMAN_ROUND_EXECUTION_KINDS,
-  HUMAN_SKILL_SOURCES,
+  HUMAN_TOOLSET_SOURCES,
   HUMAN_STAGES,
   HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
-  RUNTIME_SKILL_IDS
+  RUNTIME_TOOLSET_IDS
 } from './constants'
-import { BUILTIN_RUNTIME_SKILL_IDS } from './skills'
+import { BUILTIN_RUNTIME_TOOLSET_IDS } from './toolsets'
 
-export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
+export const runtimeToolsetIdSchema = z.enum(RUNTIME_TOOLSET_IDS)
 export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
-export const humanSkillSourceSchema = z.enum(HUMAN_SKILL_SOURCES)
+export const humanToolsetSourceSchema = z.enum(HUMAN_TOOLSET_SOURCES)
 export const humanRoundExecutionKindSchema = z.enum(HUMAN_ROUND_EXECUTION_KINDS)
 
 export const humanTaskInputSchema = z.object({
@@ -25,10 +25,10 @@ export const humanTaskInputSchema = z.object({
   userInput: z.string()
 })
 
-export const skillDefinitionBaseSchema = z.object({
-  skillId: runtimeSkillIdSchema,
+export const toolsetDefinitionBaseSchema = z.object({
+  toolsetId: runtimeToolsetIdSchema,
   familyId: toolFamilyIdSchema,
-  source: humanSkillSourceSchema,
+  source: humanToolsetSourceSchema,
   countsTowardToolBudget: z.boolean(),
   title: z.string().min(1),
   description: z.string().min(1),
@@ -75,12 +75,19 @@ export const toolCallResultSchema = z.discriminatedUnion('ok', [
 
 export const handCallsSchema = z.array(toolCallParamSchema)
 
-export const humanLearningOutcomeSchema = z.object({
+export const humanSkillLoadingOutcomeSchema = z.object({
   requestedSkillIds: z.array(z.string().min(1)),
-  loadedSkillIds: z.array(runtimeSkillIdSchema),
-  skippedDuplicateSkillIds: z.array(runtimeSkillIdSchema),
-  skippedUnknownSkillIds: z.array(z.string().min(1)),
-  evictedSkillIds: z.array(runtimeSkillIdSchema),
+  loadedSkillIds: z.array(z.string().startsWith('user:')),
+  skippedDuplicateSkillIds: z.array(z.string().startsWith('user:')),
+  unavailableSkillIds: z.array(z.string().min(1))
+})
+
+export const humanToolsetLoadingOutcomeSchema = z.object({
+  requestedToolsetIds: z.array(z.string().min(1)),
+  loadedToolsetIds: z.array(runtimeToolsetIdSchema),
+  skippedDuplicateToolsetIds: z.array(runtimeToolsetIdSchema),
+  skippedUnknownToolsetIds: z.array(z.string().min(1)),
+  evictedToolsetIds: z.array(runtimeToolsetIdSchema),
   activeToolCount: z.number().int().min(0)
 })
 
@@ -114,8 +121,13 @@ export const humanNextActionSchema = z.discriminatedUnion('action', [
     args: jsonObjectSchema
   }),
   z.object({
-    action: z.literal('learning'),
-    wantLearnSkillIds: z.array(z.string().min(1)).min(1),
+    action: z.literal('skill_loading'),
+    wantLoadSkillIds: z.array(z.string().min(1)).min(1),
+    toolCallId: z.string().min(1)
+  }),
+  z.object({
+    action: z.literal('toolset_loading'),
+    wantLoadToolsetIds: z.array(z.string().min(1)).min(1),
     toolCallId: z.string().min(1)
   }),
   z.object({
@@ -168,7 +180,7 @@ export const humanDispatchItemSchema = z.object({
   toolCallId: z.string().min(1),
   toolName: z.string().min(1),
   args: jsonObjectSchema,
-  target: z.enum(['learning', 'plan', 'hand', 'interaction'])
+  target: z.enum(['skill_loading', 'toolset_loading', 'plan', 'hand', 'interaction'])
 })
 
 export const humanExecutionSchema = z.object({
@@ -183,7 +195,8 @@ export const humanExecutionSchema = z.object({
   pendingDispatch: z.array(humanDispatchItemSchema).optional(),
   deliveryGuidanceItems: z.array(deliveryGuidanceItemSchema).optional(),
   lastToolResults: z.array(toolCallResultSchema).optional(),
-  lastLearningOutcome: humanLearningOutcomeSchema.optional(),
+  lastToolsetLoadingOutcome: humanToolsetLoadingOutcomeSchema.optional(),
+  lastSkillLoadingOutcome: humanSkillLoadingOutcomeSchema.optional(),
   artifacts: z.array(aiArtifactRefSchema),
   fileChanges: fileChangesSummarySchema.optional(),
   evidenceReferences: z.array(humanReferenceSchema).optional(),
@@ -217,18 +230,22 @@ export const humanMemorySchema = z.object({
 })
 
 export const humanSkillsSchema = z.object({
-  learnedSkillIds: z
-    .array(runtimeSkillIdSchema)
+  loadedSkillIds: z.array(z.string().startsWith('user:'))
+})
+
+export const humanToolsetsSchema = z.object({
+  loadedToolsetIds: z
+    .array(runtimeToolsetIdSchema)
     .refine(
-      (skillIds) =>
-        skillIds.every(
-          (skillId) =>
-            !BUILTIN_RUNTIME_SKILL_IDS.includes(
-              skillId as (typeof BUILTIN_RUNTIME_SKILL_IDS)[number]
+      (toolsetIds) =>
+        toolsetIds.every(
+          (toolsetId) =>
+            !BUILTIN_RUNTIME_TOOLSET_IDS.includes(
+              toolsetId as (typeof BUILTIN_RUNTIME_TOOLSET_IDS)[number]
             )
         ),
       {
-        message: 'learnedSkillIds 只允许 external skill。'
+        message: 'loadedToolsetIds 只允许 external toolset。'
       }
     )
 })
@@ -238,7 +255,7 @@ export const humanTraceStepSchema = z.object({
   action: z.enum(HUMAN_STEP_ACTIONS),
   publicNarrative: z.string(),
   resultStatus: z.enum(HUMAN_STEP_RESULT_STATUSES).optional(),
-  skillId: runtimeSkillIdSchema.optional(),
+  toolsetId: runtimeToolsetIdSchema.optional(),
   toolName: z.string().optional(),
   summary: z.string()
 })
@@ -251,6 +268,7 @@ export const humanStateContractSchema = z.object({
   task: humanTaskInputSchema,
   execution: humanExecutionSchema,
   memory: humanMemorySchema,
+  toolsets: humanToolsetsSchema,
   skills: humanSkillsSchema,
   result: humanResultSchema.optional(),
   trace: humanTraceSchema

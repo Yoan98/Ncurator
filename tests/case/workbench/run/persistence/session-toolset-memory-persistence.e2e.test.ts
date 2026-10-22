@@ -12,9 +12,9 @@ import type { AiRunEvent } from '../../../../../src/shared/types'
 
 const CASE_ID = 'session-skill-memory-persistence'
 const FIRST_PROMPT =
-  '请先学习读取 Word 文档的技能，然后读取当前工作区的 sample-edit.docx，最后简要说明文档内容。'
+  '请先加载读取 Word 文档的工具组，然后读取当前工作区的 sample-edit.docx，最后简要说明文档内容。'
 const SECOND_PROMPT =
-  '继续处理刚才的 Word 文档。不要再次学习技能，直接读取 sample-edit.docx，并说明当前是否还能使用 Word 读取能力。'
+  '继续处理刚才的 Word 文档。不要再次加载工具组，直接读取 sample-edit.docx，并说明当前是否还能使用 Word 读取能力。'
 
 const getHumanSteps = (events: AiRunEvent[]) =>
   events.filter(
@@ -31,7 +31,7 @@ describe('workbench run e2e', () => {
         suite: 'run',
         groups: ['persistence'],
         description:
-          '真实 Workbench 同一会话的多轮 AI run 应共享已学习的 Word 技能，后续 run 不需要重新 learning。',
+          '真实 Workbench 同一会话的多轮 AI run 应共享已加载的 Word 工具组，后续 run 不需要重新 toolset_loading。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -71,33 +71,33 @@ describe('workbench run e2e', () => {
           }
         },
         assert: async (result, runtime) => {
-          const firstLearningSteps = result.firstHumanSteps.filter(
-            (step) => step.action === 'learn_skill'
+          const firstToolsetLoadingSteps = result.firstHumanSteps.filter(
+            (step) => step.action === 'load_toolset'
           )
-          const secondLearningSteps = result.secondHumanSteps.filter(
-            (step) => step.action === 'learn_skill'
+          const secondToolsetLoadingSteps = result.secondHumanSteps.filter(
+            (step) => step.action === 'load_toolset'
           )
           const secondBrainSteps = result.secondHumanSteps.filter(
             (step) => step.action === 'brain_decision'
           )
 
           await runtime.assertThat(
-            firstLearningSteps.some((step) => step.skillId === 'docx-read') &&
-              secondLearningSteps.length === 0 &&
+            firstToolsetLoadingSteps.some((step) => step.toolsetId === 'docx-read') &&
+              secondToolsetLoadingSteps.length === 0 &&
               secondBrainSteps.some(
                 (step) =>
-                  step.learnedSkillIds.includes('docx-read') &&
+                  step.loadedToolsetIds.includes('docx-read') &&
                   step.availableToolNames.includes('docx_read_outline')
               ) &&
               result.firstFinalAnswer.trim().length > 0 &&
               result.secondFinalAnswer.trim().length > 0,
             {
-              name: 'workbench-session-skill-memory-persists-across-runs',
+              name: 'workbench-session-toolset-memory-persists-across-runs',
               message:
-                'Workbench 同一会话第二轮应直接恢复第一轮学习的 docx-read 技能，不应重新执行 learning。',
+                'Workbench 同一会话第二轮应直接恢复第一轮加载的 docx-read 工具组，不应重新执行 toolset_loading。',
               data: {
-                firstLearningSteps,
-                secondLearningSteps,
+                firstToolsetLoadingSteps,
+                secondToolsetLoadingSteps,
                 secondBrainSteps,
                 firstFinalAnswer: result.firstFinalAnswer,
                 secondFinalAnswer: result.secondFinalAnswer

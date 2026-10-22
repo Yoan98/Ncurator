@@ -1,7 +1,7 @@
 import { renderTextFileReadModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { renderTextFileEditModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { describe, expect, it } from 'vitest'
-import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
+import { TOOLSET_DEFINITIONS } from '../../../../src/main/services/ai/human/toolsets'
 import { TEXT_FILE_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/textFile/toolSpecs'
 import {
   TEXT_FILE_EDIT_SCHEMA,
@@ -13,19 +13,19 @@ import {
 } from '../../../../src/main/services/ai/human/tools/textFile/toolSchemas'
 
 describe('ai unit text-file tool contract', () => {
-  it('binds three tools to the text-file skill', () => {
+  it('binds three tools to the text-file toolset', () => {
     expect(TEXT_FILE_TOOL_SPECS.map((spec) => spec.name)).toEqual([
       'text_file_read',
       'text_file_search',
       'text_file_edit'
     ])
-    expect(SKILL_DEFINITIONS['text-file'].toolNames).toEqual([
+    expect(TOOLSET_DEFINITIONS['text-file'].toolNames).toEqual([
       'text_file_read',
       'text_file_search',
       'text_file_edit'
     ])
     TEXT_FILE_TOOL_SPECS.forEach((spec) => {
-      expect(spec.skillIds).toEqual(['text-file'])
+      expect(spec.toolsetIds).toEqual(['text-file'])
       expect(spec.familyId).toBe('text-file')
       expect(typeof spec.modelResult.renderSuccess).toBe('function')
     })

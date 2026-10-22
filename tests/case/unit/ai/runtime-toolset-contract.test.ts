@@ -1,25 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getEffectiveLearnedSkillIds,
-  getSkillDefinition,
-  listBuiltinSkillDefinitions,
-  listExternalSkillDefinitions
-} from '../../../../src/main/services/ai/human/skills'
+  getEffectiveLoadedToolsetIds,
+  getToolsetDefinition,
+  listBuiltinToolsetDefinitions,
+  listExternalToolsetDefinitions
+} from '../../../../src/main/services/ai/human/toolsets'
 import {
   SCHEDULED_TASK_ACTION_SPEC,
   SCHEDULED_TASK_LIST_SPEC
 } from '../../../../src/main/services/ai/human/tools/scheduledTasks/toolSpecs'
 
-describe('ai unit runtime skill contract', () => {
-  it('exposes builtin skills', () => {
-    expect(listBuiltinSkillDefinitions().map((definition) => definition.skillId)).toEqual([
+describe('ai unit runtime toolset contract', () => {
+  it('exposes builtin toolsets', () => {
+    expect(listBuiltinToolsetDefinitions().map((definition) => definition.toolsetId)).toEqual([
       'terminal',
       'text-file',
       'kb-retrieval',
       'web-browsing',
       'agent-control'
     ])
-    expect(listExternalSkillDefinitions().map((definition) => definition.skillId)).toEqual([
+    expect(listExternalToolsetDefinitions().map((definition) => definition.toolsetId)).toEqual([
       'docx-read',
       'docx-write',
       'pdf-read',
@@ -32,13 +32,13 @@ describe('ai unit runtime skill contract', () => {
     ])
   })
 
-  it('binds excel skills to their tool names', () => {
-    expect(getSkillDefinition('excel-read').toolNames).toEqual(['excel_read'])
-    expect(getSkillDefinition('excel-write').toolNames).toEqual(['excel_edit'])
+  it('binds excel toolsets to their tool names', () => {
+    expect(getToolsetDefinition('excel-read').toolNames).toEqual(['excel_read'])
+    expect(getToolsetDefinition('excel-write').toolNames).toEqual(['excel_edit'])
   })
 
-  it('binds scheduled task skill to one read tool and one action tool', () => {
-    expect(getSkillDefinition('scheduled-tasks').toolNames).toEqual([
+  it('binds scheduled task toolset to one read tool and one action tool', () => {
+    expect(getToolsetDefinition('scheduled-tasks').toolNames).toEqual([
       'scheduled_task_list',
       'scheduled_task_action'
     ])
@@ -109,8 +109,8 @@ describe('ai unit runtime skill contract', () => {
     ).toBe(true)
   })
 
-  it('includes builtin skills in effective skills before any external learning', () => {
-    expect(getEffectiveLearnedSkillIds([])).toEqual([
+  it('includes builtin toolsets in effective toolsets before any external loading', () => {
+    expect(getEffectiveLoadedToolsetIds([])).toEqual([
       'terminal',
       'text-file',
       'kb-retrieval',

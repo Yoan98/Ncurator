@@ -3,7 +3,7 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
+  buildLoadToolsetsDecision,
   buildToolDecision,
   filterAiRunEventsByType,
   summarizeHumanSteps
@@ -18,7 +18,7 @@ describe('ai human mock-llm backend', () => {
       suite: 'human',
       groups: ['mock-llm'],
       description:
-        '验证真实 human graph 在 mock-llm 模式下能稳定走通 brain -> learning -> hand -> 最终交付主链路。',
+        '验证真实 human graph 在 mock-llm 模式下能稳定走通 brain -> toolset_loading -> hand -> 最终交付主链路。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -26,8 +26,8 @@ describe('ai human mock-llm backend', () => {
           structuredOutputScript: {
             'human.brain': [
               {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['docx-read'],
+                output: buildLoadToolsetsDecision({
+                  toolsetIds: ['docx-read'],
                   summary: '先学习 docx-read'
                 })
               },
@@ -52,7 +52,7 @@ describe('ai human mock-llm backend', () => {
 
         const output = await runner.run({
           taskId: runtime.taskId,
-          userInput: '请学习一个 skill，调用一次工具，然后给出最终结果。'
+          userInput: '请学习一个 toolset，调用一次工具，然后给出最终结果。'
         })
 
         return {
@@ -68,11 +68,11 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             stageSet.has('human_brain') &&
-            stageSet.has('human_learning') &&
+            stageSet.has('human_toolset_loading') &&
             stageSet.has('human_hand'),
           {
             name: 'human-mainline-visits-all-three-parts',
-            message: 'mock-llm smoke case 应显式走过 brain、learning、hand 三个部位。',
+            message: 'mock-llm smoke case 应显式走过 brain、toolset_loading、hand 三个部位。',
             data: {
               stages: Array.from(stageSet),
               steps: summarizeHumanSteps(result.events)

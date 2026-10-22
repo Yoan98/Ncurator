@@ -5,7 +5,7 @@ import { createAiServiceTestRunner } from '../../../../harness/backend/aiService
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
+  buildLoadToolsetsDecision,
   buildToolDecision,
   filterAiRunEventsByType
 } from '../testUtils'
@@ -30,8 +30,8 @@ describe('ai human mock-llm text backend', () => {
           llmScript: {
             'human.brain': [
               {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['text-file'],
+                output: buildLoadToolsetsDecision({
+                  toolsetIds: ['text-file'],
                   summary: '学习文本读写能力'
                 })
               },

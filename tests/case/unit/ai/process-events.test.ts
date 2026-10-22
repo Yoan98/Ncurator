@@ -8,7 +8,7 @@ import {
 import type { AiRunEvent } from '../../../../src/shared/types'
 
 describe('ai process events', () => {
-  it('uses tool call identity for process group ids so repeated skills stay separate', () => {
+  it('uses tool call identity for process group ids so repeated toolsets stay separate', () => {
     const events: AiRunEvent[] = []
     const sendEvent = (event: AiRunEvent): void => {
       events.push(event)
@@ -61,7 +61,7 @@ describe('ai process events', () => {
       sendEvent,
       runId: 'run-1',
       toolCallId: 'learn-1',
-      toolName: 'learn_skill',
+      toolName: 'load_toolset',
       ok: true
     })
     emitCompactionCompleted({

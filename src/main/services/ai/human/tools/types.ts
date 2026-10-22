@@ -4,7 +4,7 @@ import type { RuntimeToolName } from '../../../../../shared/runtimeCapabilities'
 import type { AiRunContext } from '../../types'
 import type { z } from 'zod/v4'
 import { AI_TOOL_FAMILY_IDS } from '../constants'
-import type { HumanRuntimeCache, RuntimeSkillId, ToolPromptSpec } from '../types'
+import type { HumanRuntimeCache, RuntimeToolsetId, ToolPromptSpec } from '../types'
 
 export type AiToolFamilyId = (typeof AI_TOOL_FAMILY_IDS)[number]
 
@@ -64,11 +64,11 @@ export type WorkspaceCapabilityBuildInput<TContext = AiRunContext> = {
 export type HumanToolSpec<
   TInput extends JsonObject = JsonObject,
   TName extends RuntimeToolName = RuntimeToolName,
-  TSkillId extends RuntimeSkillId = RuntimeSkillId
+  TToolsetId extends RuntimeToolsetId = RuntimeToolsetId
 > = {
   name: TName
   familyId: AiToolFamilyId
-  skillIds: TSkillId[]
+  toolsetIds: TToolsetId[]
   inputSchema: z.ZodType<TInput>
   promptSpec: ToolPromptSpec
   resolveExecutionMeta: ToolExecutionMetaResolver

@@ -1,5 +1,5 @@
-import type { IpcJsonObject, IpcJsonValue, RuntimeSkillId } from './types'
-import { getRuntimeSkillDisplayName, type RuntimeToolName } from './runtimeCapabilities'
+import type { IpcJsonObject, IpcJsonValue, RuntimeToolsetId } from './types'
+import { getRuntimeToolsetDisplayName, type RuntimeToolName } from './runtimeCapabilities'
 import type {
   AssistantExecutionStatus,
   AssistantExecutionTextSegment,
@@ -102,17 +102,17 @@ const readDocxRangeLabel = (input?: IpcJsonObject): string => {
   return '内容'
 }
 
-const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
-  return skillId ? getRuntimeSkillDisplayName(skillId) || '新能力' : '新能力'
+const getToolsetDisplayName = (toolsetId?: RuntimeToolsetId): string => {
+  return toolsetId ? getRuntimeToolsetDisplayName(toolsetId) || '新能力' : '新能力'
 }
 
-const readLearnSkillNames = (input?: IpcJsonObject): string => {
+const readLoadToolsetNames = (input?: IpcJsonObject): string => {
   if (!input) return '新能力'
-  const raw = (input as Record<string, IpcJsonValue>).skillIds
+  const raw = (input as Record<string, IpcJsonValue>).toolsetIds
   if (!Array.isArray(raw)) return '新能力'
   const names = raw
     .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-    .map((skillId) => getSkillDisplayName(skillId as RuntimeSkillId))
+    .map((toolsetId) => getToolsetDisplayName(toolsetId as RuntimeToolsetId))
   return names.length > 0 ? names.join('、') : '新能力'
 }
 
@@ -277,23 +277,38 @@ const TOOL_ITEM_RENDERERS = {
   ask_user_question: () => toolCopy('询问用户', sentence(text('等待用户确认关键信息'))),
   image_generate: (input) =>
     toolCopy('生成图片', sentence(text('生成图片 '), param(readToolFileLabel(input)))),
-  learn_skill: (input, status) => {
-    const skillName = readLearnSkillNames(input)
+  load_skill: (_input, status) =>
+    toolCopy(
+      status === 'running'
+        ? '正在加载用户技能说明'
+        : status === 'completed'
+          ? '已加载用户技能说明'
+          : '用户技能说明加载失败',
+      sentence(text('用户技能说明'))
+    ),
+  load_toolset: (input, status) => {
+    const toolsetName = readLoadToolsetNames(input)
     if (status === 'running') {
-      return toolCopy(`正在学习 ${skillName}`, sentence(text('正在学习 '), text(skillName)))
+      return toolCopy(
+        `正在加载工具组 ${toolsetName}`,
+        sentence(text('正在加载工具组 '), text(toolsetName))
+      )
     }
     if (status === 'completed') {
-      return toolCopy(`已学会 ${skillName}`, sentence(text('已学会 '), text(skillName)))
+      return toolCopy(
+        `已加载工具组 ${toolsetName}`,
+        sentence(text('已加载工具组 '), text(toolsetName))
+      )
     }
     if (status === 'partial_failed') {
       return toolCopy(
-        `学习 ${skillName} 有部分失败`,
-        sentence(text('学习 '), text(skillName), text(' 有部分失败'))
+        `加载工具组 ${toolsetName} 有部分失败`,
+        sentence(text('加载工具组 '), text(toolsetName), text(' 有部分失败'))
       )
     }
     return toolCopy(
-      `学习 ${skillName} 失败了`,
-      sentence(text('学习 '), text(skillName), text(' 失败了'))
+      `加载工具组 ${toolsetName} 失败了`,
+      sentence(text('加载工具组 '), text(toolsetName), text(' 失败了'))
     )
   },
   list_agent: () => toolCopy('查看子任务', sentence(text('查看子任务'))),

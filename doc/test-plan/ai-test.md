@@ -22,7 +22,7 @@
 
 ### 2.2 `human`
 
-- `mock-llm`：在 non-live 下验证 `AiRunService -> human` 入口与主链；只允许固定 LLM 输入输出，必须真实走 `createAiRunContext -> human graph -> learning / hand -> store / apply / artifact`；禁止 `humanReasonOverrides`、`toolExecutionOverrides`、手工串 node、fake tool/store/docx apply service。要通过不同 case 把关键节点与关键边都跑到。
+- `mock-llm`：在 non-live 下验证 `AiRunService -> human` 入口与主链；只允许固定 LLM 输入输出，必须真实走 `createAiRunContext -> human graph -> toolset_loading / hand -> store / apply / artifact`；禁止 `humanReasonOverrides`、`toolExecutionOverrides`、手工串 node、fake tool/store/docx apply service。要通过不同 case 把关键节点与关键边都跑到。
 - `live`：验证真实模型下的真实业务执行；必须走真实 LLM executor、真实 KB、真实工具与 apply / artifact；禁止 scripted driver、`chatStructuredOverride`、fixture store override。用户输入不得包含内部工具名或固定调用顺序。至少保留 1 条简单与 1 条复杂回归 case；全内置服务商连通性由 Workbench `live-preset-provider-smoke` 覆盖。质量评估按各场景 Oracle 人工复核并写入运行结论，不回填本计划。共享 live 环境变量与断言规则见 [测试规范](../test.md)。
 
 ## 3. 领域特有规则
@@ -637,7 +637,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：持久子会话投影、compaction、同会话续接与缺失派发结果恢复。
 - Why：共用消息链且重启不复活子实例，保留已完成事实。
 - How：生产运行、公共 compaction 节点与投影入口；只脚本化 LLM 决策，日志与存储真实。
-- Oracle：重新打开 SQLite 后 checkpoint、tail、技能与计划正确；尚未开始执行的排队会话续接时同时收到原任务和新任务；完成后子会话清理，主结果保留。同会话中断续接由 prefix-stability 验证，结果事务及跨伙伴/重复派发由 SQLite unit 验证。子 compaction 不污染主计划/技能；已完成子结果进入合成反馈，排队及运行中任务均标记中断；修复不写真实 tool 行、不自动派发。
+- Oracle：重新打开 SQLite 后 checkpoint、tail、工具包与计划正确；尚未开始执行的排队会话续接时同时收到原任务和新任务；完成后子会话清理，主结果保留。同会话中断续接由 prefix-stability 验证，结果事务及跨伙伴/重复派发由 SQLite unit 验证。子 compaction 不污染主计划/工具包；已完成子结果进入合成反馈，排队及运行中任务均标记中断；修复不写真实 tool 行、不自动派发。
 
 ##### `human-subagent-approval`
 
@@ -662,16 +662,16 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 
 - 测试类型：`backend / mock-llm`
 - What：human 直接使用 builtin `image_generate` 生成并交付 PNG，无需学习。
-- Why：Tool 测试不覆盖 Brain、Hand 的技能装载和交付主链。
+- Why：Tool 测试不覆盖 Brain、Hand 的工具包装载和交付主链。
 - How：通过生产 `AiRunService.run` 包含真正主 run 的文件收尾；只脚本化 LLM 决策，真实执行 human graph、图片渲染、修改记录和 Artifact。
 - Oracle：主链经过 Hand 与 brain 交付；只调用一次 `image_generate`；PNG 可解码且尺寸正确；Artifact 和最终交付文件名一致。
 
 ##### `human-excel-read-edit`
 
 - 测试类型：`backend`
-- What：human 仅凭选区定位学习 Excel 能力，读取已有工作簿、修改并复读验证。
+- What：human 仅凭选区定位加载 Excel 能力，读取已有工作簿、修改并复读验证。
 - Why：补齐 Excel 在真实 human graph 中完全缺失的 non-live 回归。
-- How：通过生产 `ChatRunService -> AiRunService.run` 提交选区并完成真正主 run 的文件收尾；传入带内部单元格快照的 Excel 选区，只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。脚本从 User 定位信息取得工作表和范围，再调用 `excel_read` / `excel_edit` 学技能后读-写-复读，采集真正传给下一轮 brain 的工具结果。
+- How：通过生产 `ChatRunService -> AiRunService.run` 提交选区并完成真正主 run 的文件收尾；传入带内部单元格快照的 Excel 选区，只脚本化 LLM 决策，真实走 toolset_loading、hand、Excel runtime、apply/artifact 与 brain 交付。脚本从 User 定位信息取得工作表和范围，再调用 `excel_read` / `excel_edit` 加载工具包后读-写-复读，采集真正传给下一轮 brain 的工具结果。
 - Oracle：初始 User 只有文件路径、工作表和范围，没有选中内容、单元格值、公式或 merges；按该定位读取后，真实源文件的值和公式进入下一轮 brain。任务完成；调用包含读、写、复读；正式文件、累计 record 与 artifact 一致，区域外单元格及合并关系不变。
 
 ##### `human-text-file-read-write`
@@ -719,8 +719,8 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend`
 - What：`AiRunService` 在 mock-llm 模式下会直接进入真实 `human` graph。
 - Why：run 入口已经是 human-only 运行时，必须有回归 case 长期守住这条入口事实。
-- How：通过 `AiRunService.getInstance().run(...)` 启动一次真实 run，再用 scripted structured output 驱动 `brain -> learning -> hand -> brain 交付` 完成闭环。
-- Oracle：真实出现 `human_brain`、`human_learning`、`human_hand` 三个 stage，`AiRunState.finalDeliveryMarkdown` 正常落地，且 `AiRunService` 自身不直接发 `run_completed`。
+- How：通过 `AiRunService.getInstance().run(...)` 启动一次真实 run，再用 scripted structured output 驱动 `brain -> toolset_loading -> hand -> brain 交付` 完成闭环。
+- Oracle：真实出现 `human_brain`、`human_toolset_loading`、`human_hand` 三个 stage，`AiRunState.finalDeliveryMarkdown` 正常落地，且 `AiRunService` 自身不直接发 `run_completed`。
 
 ##### `human-queued-message-safe-boundary`
 
@@ -749,18 +749,18 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `learning-hand-mouth-smoke`
 
 - 测试类型：`backend`
-- What：`human` 在 mock-llm 模式下能稳定走通真实 `brain -> learning -> hand -> brain 交付` 主链路。
+- What：`human` 在 mock-llm 模式下能稳定走通真实 `brain -> toolset_loading -> hand -> brain 交付` 主链路。
 - Why：`human` graph 的最小真实闭环，后续所有复杂样例都建立在这条主链路之上。
-- How：通过 scripted structured output 先学习一个真实 external skill（例如 `docx-read`），再直接执行一次 builtin terminal 工具 `terminal_run(pwd)`，最后由 `brain` 无工具调用输出最终交付。
-- Oracle：`human_brain`、`human_learning`、`human_hand` 三个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实最终交付。
+- How：通过 scripted structured output 先加载一个真实 external toolset（例如 `docx-read`），再直接执行一次 builtin terminal 工具 `terminal_run(pwd)`，最后由 `brain` 无工具调用输出最终交付。
+- Oracle：`human_brain`、`human_toolset_loading`、`human_hand` 三个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实最终交付。
 
 ##### `learning-tool-budget-tracking`
 
 - 测试类型：`backend`
-- What：真实 `learning` 会持续记录当前 active tool 数，并在预算未超限时保留当前已学习 skill 集。
-- Why：`learning` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，回归 case 需要先守住基础统计与状态可见性。
-- How：通过 scripted structured output 先学习 `docx-read`，再学习 `docx-write`，最后故意请求 builtin skill（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认 builtin skill 请求被过滤（learning 返回「学习失败，学习请求中没有可加载的技能。」工具结果）。
-- Oracle：任务最终完成；最后一轮真实 `human_learning` 事件中只保留 external skill，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 skill 淘汰文案；builtin skill 始终计入 active tool 上限统计，但请求 builtin skill id 不会进入 `learnedSkillIds`。
+- What：真实 `toolset_loading` 会持续记录当前 active tool 数，并在预算未超限时保留当前已加载 toolset 集。
+- Why：`toolset_loading` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，回归 case 需要先守住基础统计与状态可见性。
+- How：通过 scripted structured output 先加载 `docx-read`，重新加载习 `docx-write`，最后故意请求 builtin toolset（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_toolset_loading` 事件中的 `loadedToolsetIds`、`availableToolNames` 与 summary，并确认 builtin toolset 请求被过滤（toolset_loading 返回「加载失败，请求中没有可加载的工具包。」工具结果）。
+- Oracle：任务最终完成；最后一轮真实 `human_toolset_loading` 事件中只保留 external toolset，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 toolset 淘汰文案；builtin toolset 始终计入 active tool 上限统计，但请求 builtin toolset id 不会进入 `loadedToolsetIds`。
 
 ##### `tool-failure-recovery`
 
@@ -789,9 +789,9 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `human-mixed-tool-dispatch`
 
 - 测试类型：`backend / mock-llm`
-- What：同一轮 assistant 返回 learning、plan 和 hand 混合工具调用时，全部调用只由 dispatch 按原顺序消费。
+- What：同一轮 assistant 返回 toolset_loading、plan 和 hand 混合工具调用时，全部调用只由 dispatch 按原顺序消费。
 - Why：任一领域节点自行推进或清空队列，都会造成工具被跳过以及缺少 `tool_call_id` 对应结果的 provider 400。
-- How：覆盖 `update_plan + docx_search + docx_read_nodes`、连续两个 `learn_skill`、工具参数失败和审批拒绝后仍有剩余调用四个子场景。
+- How：覆盖 `update_plan + docx_search + docx_read_nodes`、连续两个 `load_toolset`、工具参数失败和审批拒绝后仍有剩余调用四个子场景。
 - Oracle：dispatch 是唯一改变 `pendingDispatch` 的节点；每个调用产生且只产生一条同 ID ToolMessage；失败不丢弃后续调用；下一轮 provider 消息序列合法。
 
 ##### `human-mixed-tool-dispatch-after-invalid-plan`
@@ -839,16 +839,16 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：续接（跨伙伴 / 中断恢复）重建消息数组时，顺序为 `system + 历史 user.content + interleaved assistant/tool + 当前 run buildBrainUserMessage user`；每条 log `user` 的 `content` 就是当时发给模型的全文；末条 assistant 有悬空 tool_calls 时仅在模型上下文投影里补 `interrupted` ToolMessage。
 - Why：模型上下文唯一真相源是伙伴消息记录，续接必须忠实回放**上次发给模型的**历史并把新诉求追加到末尾；若上一条 assistant 声明了 tool_call 却没有对应结果，接口会直接报错，必须补一条意外中断反馈。
-- How：mock-llm 下跑两个子场景：其一 run-1 正常完成（含 learn_skill 与最终交付），run-2 捕获首次 brain 的 `request.messages`；其二 run-1 的 brain 返回 learn_skill tool_call 后在 brain 调用返回时 abort 控制器，run-2 恢复并捕获消息数组。
-- Oracle：子场景一：消息数组首条为 system（无 `current_time`），历史含 run-1 的 user.content、assistant/tool 与 run-2 末尾 build user（共 2 条 human，末条含本 run `current_time`，不含 `<active_state>` / `<memory>`）；子场景二：run-1 为 `user_cancelled`，run-2 在悬空 learn_skill tool_call 后补相同 ID 的合成 ToolMessage；该结果只用于满足本次模型调用的 tool-call 配对要求，不写入 transcript 或伪装成真实工具失败，且消息数组含 run-1 与 run-2 两条 User。
+- How：mock-llm 下跑两个子场景：其一 run-1 正常完成（含 load_toolset 与最终交付），run-2 捕获首次 brain 的 `request.messages`；其二 run-1 的 brain 返回 load_toolset tool_call 后在 brain 调用返回时 abort 控制器，run-2 恢复并捕获消息数组。
+- Oracle：子场景一：消息数组首条为 system（无 `current_time`），历史含 run-1 的 user.content、assistant/tool 与 run-2 末尾 build user（共 2 条 human，末条含本 run `current_time`，不含 `<active_state>` / `<memory>`）；子场景二：run-1 为 `user_cancelled`，run-2 在悬空 load_toolset tool_call 后补相同 ID 的合成 ToolMessage；该结果只用于满足本次模型调用的 tool-call 配对要求，不写入 transcript 或伪装成真实工具失败，且消息数组含 run-1 与 run-2 两条 User。
 
 ##### `partner-skill-memory-multi-run`
 
 - 测试类型：`backend / mock-llm`
-- What：同一伙伴的多轮 human run 能复用已学习技能记忆；在 `HUMAN_MAX_ACTIVE_TOOLS=30` 下学满后会 FIFO 淘汰，被淘汰 skill 可再学回来。
-- Why：技能记忆是 AI 架构跨轮次协作的核心；active tool 上限下的遗忘与再学必须由真实 learning 链路守住，不能只靠 unit 算法。
-- How：跨五轮逐步学习 DOCX、PDF、Excel、PPT 和图片技能；第四轮加载 `excel-read + image-generation + docx-write` 挤爆预算；第五轮再学被淘汰的 `docx-read`。
-- Oracle：技能跨 run 保留；第三轮的 DOCX/PDF/Excel/PPT 技能均保留。第四轮包含新请求的 `excel-read/image-generation/docx-write`，最早学习的 `docx-read` 按 FIFO 淘汰，`pdf-read` 仍保留；第五轮真实重新加载 `docx-read` 且最终快照包含它。
+- What：同一伙伴的多轮 human run 能复用已加载工具包记忆；在 `HUMAN_MAX_ACTIVE_TOOLS=30` 下加载到上限后会 FIFO 淘汰，被淘汰 toolset 可重新加载回来。
+- Why：工具包记忆是 AI 架构跨轮次协作的核心；active tool 上限下的遗忘与重新加载必须由真实 toolset_loading 链路守住，不能只靠 unit 算法。
+- How：跨五轮逐步加载 DOCX、PDF、Excel、PPT 和图片工具包；第四轮加载 `excel-read + image-generation + docx-write` 挤爆预算；第五轮重新加载被淘汰的 `docx-read`。
+- Oracle：工具包跨 run 保留；第三轮的 DOCX/PDF/Excel/PPT 工具包均保留。第四轮包含新请求的 `excel-read/image-generation/docx-write`，最早加载的 `docx-read` 按 FIFO 淘汰，`pdf-read` 仍保留；第五轮真实重新加载 `docx-read` 且最终快照包含它。
 
 ##### `plan-memory-maintenance`
 
@@ -863,7 +863,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend`
 - What：`human` 会通过真实 `hand` 执行一次顺序多工具协作。
 - Why：`human` 不能只验证单工具 happy path，还必须覆盖真实多工具串行读工具场景。
-- How：先 seed 真实 KB 文档，再学习 terminal 与 KB skill，随后在一次 `hand` 决策中按顺序执行 `terminal_run(pwd)` 与 `kb_list_documents`。
+- How：先 seed 真实 KB 文档，重新加载习 terminal 与 KB toolset，随后在一次 `hand` 决策中按顺序执行 `terminal_run(pwd)` 与 `kb_list_documents`。
 - Oracle：同一条任务中真实出现 terminal 与 KB 两类工具结果，任务最终完成。
 
 ##### `human-pdf-read-image-collaboration`
@@ -871,7 +871,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：mock human 能组合 PDF 页面读取与主模型图片输入。
 - Why：扫描 PDF 需要页面图片路径，但图片理解应由主模型完成。
-- How：脚本化 human 先调用真实 `pdf_read_pages`；下一批把返回的 `pageImagePath` 交给两次 `read_image`，中间夹入 `learn_skill`，覆盖跨 hand/learning 节点分段投影。
+- How：脚本化 human 先调用真实 `pdf_read_pages`；下一批把返回的 `pageImagePath` 交给两次 `read_image`，中间夹入 `load_toolset`，覆盖跨 hand/toolset_loading 节点分段投影。
 - Oracle：下一次真实 brain 请求中，同一 assistant 的全部工具结果连续位于图片消息之前；两次读图按输入顺序进入同一多模态消息，持久 log 重建与运行中缓存一致。任务完成且 PDF 和 read_image 工具实际成功。
 
 ##### `human-read-image-no-vision`
@@ -887,23 +887,23 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend`
 - What：mock-llm 下的 KB 回答仍通过真实知识库存储、真实 embedding 与真实检索执行。
 - Why：KB 是当前最敏感的 fake 风险点，必须单独有回归 case 显式守住。
-- How：seed 两份真实 KB 文档，学习 KB skill 后真实执行 `kb_search(strategy=keyword)`，再由 `brain` 无工具调用生成最终回答。
+- How：seed 两份真实 KB 文档，加载 KB toolset 后真实执行 `kb_search(strategy=keyword)`，再由 `brain` 无工具调用生成最终回答。
 - Oracle：真实 KB 检索结果中包含目标文档 `doc-1` 的证据，且这条证据文本会进入 brain 的最终交付，任务最终完成。
 
 ##### `create-ppt-deck`
 
 - 测试类型：`backend / mock-llm`
-- What：AI 能学习 `ppt-read / ppt-write`，通过两次 `ppt_edit(insert_slide)` 创建多页并交付 PPT。
-- Why：需要验证 human 主链能正确学习并调用 PPT 能力。
+- What：AI 能加载 `ppt-read / ppt-write`，通过两次 `ppt_edit(insert_slide)` 创建多页并交付 PPT。
+- Why：需要验证 human 主链能正确加载并调用 PPT 能力。
 - How：通过生产 `AiRunService.run` 包含真正主 run 的文件收尾；使用 scripted LLM 输出驱动真实 human graph 创建并交付 PPT。
 - Oracle：最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
 
 ##### `scheduled-task-learn-create-read-update-read`
 
 - 测试类型：`backend / mock-llm`
-- What：human 先学习 `scheduled-tasks`，再创建、读取、修改并复读当前伙伴任务。
-- Why：工具注册测试不能证明 learning、hand、结果投递和当前伙伴绑定能完整闭环。
-- How：脚本化模型依次学习 skill、调用 create、list、update、list，真实执行领域服务和 SQLite 存储。
+- What：human 先加载 `scheduled-tasks`，再创建、读取、修改并复读当前伙伴任务。
+- Why：工具注册测试不能证明 toolset_loading、hand、结果投递和当前伙伴绑定能完整闭环。
+- How：脚本化模型依次加载 toolset、调用 create、list、update、list，真实执行领域服务和 SQLite 存储。
 - Oracle：只出现 `scheduled_task_list` 与 `scheduled_task_action` 两个领域工具；创建自动绑定当前伙伴且默认开启；修改时间与停用同时成功；两次 list 均能供下一轮 brain 使用。
 
 #### live 类别
@@ -935,10 +935,10 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `human-scheduled-task-lifecycle-live`
 
 - 测试类型：`backend / live`
-- What：真实模型在同一伙伴的多个 run 中学习定时任务技能，完成任务创建、读取、修改、停用、删除并复读确认。
-- Why：需要验证真实模型能发现并学习 external skill，正确选择 action，并遵循写后再读的工具设计。
+- What：真实模型在同一伙伴的多个 run 中加载定时任务工具包，完成任务创建、读取、修改、停用、删除并复读确认。
+- Why：需要验证真实模型能发现并学习 external toolset，正确选择 action，并遵循写后再读的工具设计。
 - How：Run 1 要求创建每天 09:00 的晨报并读取确认；Run 2 要求修改为 10:00、更新描述并关闭，再次读取确认；Run 3 要求删除任务并读取确认。不等待真实调度触发。
-- Oracle：Run 1 出现 `learn_skill(scheduled-tasks)`、create 和 list，创建默认开启；Run 2 出现 update 和 list，时间、描述和停用状态落库；Run 3 出现 delete 和 list，最终当前伙伴没有定时任务。不固定工具调用顺序，只验证这些动作和最终事实。
+- Oracle：Run 1 出现 `load_toolset(scheduled-tasks)`、create 和 list，创建默认开启；Run 2 出现 update 和 list，时间、描述和停用状态落库；Run 3 出现 delete 和 list，最终当前伙伴没有定时任务。不固定工具调用顺序，只验证这些动作和最终事实。
 
 ##### `human-excel-read-weekly-review-live`
 
@@ -993,7 +993,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / live`
 - What：live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一伙伴新诉求可从不可变消息日志恢复旧语义上下文，同时本轮新选择文件只作用于新 user 消息；恢复 run 首轮 brain 须明显复用中断前末次前缀缓存。
 - Why：恢复能力的真实价值是让用户在长任务中断后继续对话；如果中断前已读到的事实丢失，或恢复时忽略最新诉求/最新选中文件，就会把恢复退化成重跑或错误沿用旧入口；跨 run 前缀被改写也会丢失 provider 缓存。
-- How：使用共享 workspace fixture（运行时为文件地址 + 伙伴）。Run 1 选中文件 A `深度学习.docx`，在读取并沉淀过拟合事实后注入 `llm_request_failed`（如 provider `fetch failed`）。Run 2 在同伙伴追加“继续”类 user 消息并改选文件 B `图形学.docx`，检查历史 user 配置未变、新 user 使用文件 B、计划来自 `plan_updated`、技能来自该伙伴剩余 log 的 skill state。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）。
+- How：使用共享 workspace fixture（运行时为文件地址 + 伙伴）。Run 1 选中文件 A `深度学习.docx`，在读取并沉淀过拟合事实后注入 `llm_request_failed`（如 provider `fetch failed`）。Run 2 在同伙伴追加“继续”类 user 消息并改选文件 B `图形学.docx`，检查历史 user 配置未变、新 user 使用文件 B、计划来自 `plan_updated`、工具包来自该伙伴剩余 log 的 toolset state。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）。
 - Oracle：Run 1 为 `llm_request_failed`；中断前事实和计划记录仍在 `chat_session_message_log`。Run 2 消息数组包含 Run 1 的 build user、历史 assistant/tool 投影与 Run 2 末尾 build user；Run 2 通过任一 DOCX 读工具（`docx_read_outline` / `docx_search` / `docx_read_nodes`）使用文件 B，且不会改写 Run 1 的文件 A 配置，最终交付包含过拟合与反走样事实。Run 2 首次 brain 的 `cachedInputTokens / Run1 末次有效 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
 
 ##### `human-partner-continuation-live`
@@ -1007,10 +1007,10 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `human-skill-eviction-relearn-loop-live`
 
 - 测试类型：`backend / live`
-- What：同一伙伴在生产 `HUMAN_MAX_ACTIVE_TOOLS=30` 下先学满多项阅读技能，再学写入技能触发 FIFO 淘汰；淘汰后续做仍能完成，随后在再次需要被淘汰 skill 时自动再学（可在同一 Run 内闭环，也可跨 Run3）；跨 run 首轮 brain 须明显复用上一 run 末次前缀缓存。
-- Why：技能遗忘若只靠 unit/mock，无法证明真实模型在自然语言任务下会触发淘汰、淘汰后不卡死、需要时再学；这是学习预算闭环的生产风险；续做跨 run 时前缀缓存也不应因消息重建漂移而丢失。
-- How：共用伙伴，测值与生产一致（无 maxActiveTools override）。fixture 含 `学习笔记/深度学习.docx`、`学习笔记/深度学习.pdf`、`品牌策略提案.pptx`、`经营周报.xlsx`。Run 1 按顺序只读四类资料并口头汇总（期望学会含 `docx-read` 在内的多项阅读技能，不淘汰）。Run 2 新建 Word 备忘、给 PPT 加附录页并新建 Excel 资料索引，触发 Word/PPT/Excel 写入技能，总工具数超过 30，淘汰最早的 `docx-read`；若 Run2 同轮已再学回 `docx-read`，则闭环完成且不启 Run3；否则 Run 3 再读课件核对备忘，迫使再学。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）。
-- Oracle：Run 1 `completed`，`learnedSkillIds` 含 `docx-read` 且至少另一项 external，无淘汰证据，并有 docx 读工具证据。Run 2 `completed`，learning summary 出现淘汰 `docx-read`，且 Word/PPT 写入或备忘文件落地，并有 Excel 写入证据。再学闭环二选一成立：Run2 同轮再学 `docx-read` 并有读工具证据，或 Run3 `completed` 再学并有读工具证据。Run2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`；若启动 Run3，则 Run3 首次 brain 相对 Run2 末次同样满足该门槛。人工依据 raw logs 评价并写入该次运行结论。
+- What：同一伙伴在生产 `HUMAN_MAX_ACTIVE_TOOLS=30` 下先加载到上限多项阅读工具包，重新加载写入工具包触发 FIFO 淘汰；淘汰后续做仍能完成，随后在再次需要被淘汰 toolset 时自动重新加载（可在同一 Run 内闭环，也可跨 Run3）；跨 run 首轮 brain 须明显复用上一 run 末次前缀缓存。
+- Why：工具包遗忘若只靠 unit/mock，无法证明真实模型在自然语言任务下会触发淘汰、淘汰后不卡死、需要时重新加载；这是工具包预算闭环的生产风险；续做跨 run 时前缀缓存也不应因消息重建漂移而丢失。
+- How：共用伙伴，测值与生产一致（无 maxActiveTools override）。fixture 含 `学习笔记/深度学习.docx`、`学习笔记/深度学习.pdf`、`品牌策略提案.pptx`、`经营周报.xlsx`。Run 1 按顺序只读四类资料并口头汇总（期望加载含 `docx-read` 在内的多项阅读工具包，不淘汰）。Run 2 新建 Word 备忘、给 PPT 加附录页并新建 Excel 资料索引，触发 Word/PPT/Excel 写入工具包，总工具数超过 30，淘汰最早的 `docx-read`；若 Run2 同轮已重新加载回 `docx-read`，则闭环完成且不启 Run3；否则 Run 3 再读课件核对备忘，迫使重新加载。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）。
+- Oracle：Run 1 `completed`，`loadedToolsetIds` 含 `docx-read` 且至少另一项 external，无淘汰证据，并有 docx 读工具证据。Run 2 `completed`，toolset_loading summary 出现淘汰 `docx-read`，且 Word/PPT 写入或备忘文件落地，并有 Excel 写入证据。重新加载闭环二选一成立：Run2 同轮重新加载 `docx-read` 并有读工具证据，或 Run3 `completed` 重新加载并有读工具证据。Run2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`；若启动 Run3，则 Run3 首次 brain 相对 Run2 末次同样满足该门槛。人工依据 raw logs 评价并写入该次运行结论。
 
 ##### `human-ppt-edit-management-review-live`
 
@@ -1057,7 +1057,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / live`
 - What：live 模式下 `human` 会先用普通短问铺出一条完整历史轮，再在风险周报长任务中自然触发压缩；压完后发给主模型的数组为 `[System] + [Compact User] + 原文 tail`。同一次可走历史 + 半截。Run 2 未压出 checkpoint 则不发 Run 3。续做再压，且 Run 3 首轮 brain 必须明显复用 Run 2 末次前缀缓存。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩、当前工作仍能做完”的能力；同时守住跨 run 只 append 新 user、历史前缀字节不变时 provider 前缀缓存应命中。
-- How：复用风险周报 live 的真实文件地址。override 仍走生产公式（`modelContext × 0.8` 得压缩线）。要让压缩线为 45_000，注入 `humanRuntimeOverrides.modelContextWindowTokens=56_250`（`ceil(45_000 / 0.8)`），effectiveWindow 即 45_000。tail 由 effectiveWindow × `CONTEXT_COMPACTION_TAIL_RATIO`（0.1）算出，不再单独 override keep。切点只认伙伴 log 可见行（`seq > historyFloorSeq` 的 `user|assistant|tool`），`throughSeq` 为 firstKept 之前最大 seq；压完用同一投影函数（`appendCurrentUser=false`）重投影。`context_compaction_started` / `completed` 带 `throughSeq` / `firstKeptSeq` / `historyFloorSeq` / `historyFloorKind`（`compaction` / `none`） / `isSplitTurn` / `foldedCount` / `tailCount`；timeline assertion `data` 只记切点与 roles，prompt 回看 `llm-io.jsonl`。case 结束写出 `artifacts/message-log-annotations.json`。Run 1 发普通短问（上周周报文件名），不要求自己压到。Run 2 用更重的周报诉求（必须逐份打开模板、上周周报、客户周会、交付合规、供应商、法务、站会、Q2 复盘及三份 txt，并打开一次根目录经营周报.xlsx 把关键数字写进财务节；按材料分小节且每节引用原句，不能只扫目录或写成一段总述），靠材料正文与 Excel 阅读技能堆过 45k，应压到，覆盖历史 + 半截。Run 2 若未压出 checkpoint，不发 Run 3，直接按 Run 2 断言失败。Run 3 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。Run 3 首次 brain 用 `cachedInputTokens / Run2 末次 brain inputTokens` 与公用跨 run 门槛 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85，定义于 `tests/harness/core/continuation-prefix-cache.ts`）对比。brain 的 `llm-io` 另记 `requestWire`（发给 LangChain 的 messages 含 assistant `toolCalls.arguments` 字符串，以及每个工具的完整 `parameters` schema），跨 run 缓存断言会把 Run2 末次 vs Run3 首次的第一处 diff 写进 timeline。固定开销（工具 schema + system）几乎不随压缩减少，过小窗口会连续压缩；过线靠加重 Run 2 用户诉求，不靠降阈值。continuation / resume live 仍分开，不并入本 case。
+- How：复用风险周报 live 的真实文件地址。override 仍走生产公式（`modelContext × 0.8` 得压缩线）。要让压缩线为 45_000，注入 `humanRuntimeOverrides.modelContextWindowTokens=56_250`（`ceil(45_000 / 0.8)`），effectiveWindow 即 45_000。tail 由 effectiveWindow × `CONTEXT_COMPACTION_TAIL_RATIO`（0.1）算出，不再单独 override keep。切点只认伙伴 log 可见行（`seq > historyFloorSeq` 的 `user|assistant|tool`），`throughSeq` 为 firstKept 之前最大 seq；压完用同一投影函数（`appendCurrentUser=false`）重投影。`context_compaction_started` / `completed` 带 `throughSeq` / `firstKeptSeq` / `historyFloorSeq` / `historyFloorKind`（`compaction` / `none`） / `isSplitTurn` / `foldedCount` / `tailCount`；timeline assertion `data` 只记切点与 roles，prompt 回看 `llm-io.jsonl`。case 结束写出 `artifacts/message-log-annotations.json`。Run 1 发普通短问（上周周报文件名），不要求自己压到。Run 2 用更重的周报诉求（必须逐份打开模板、上周周报、客户周会、交付合规、供应商、法务、站会、Q2 复盘及三份 txt，并打开一次根目录经营周报.xlsx 把关键数字写进财务节；按材料分小节且每节引用原句，不能只扫目录或写成一段总述），靠材料正文与 Excel 阅读工具包堆过 45k，应压到，覆盖历史 + 半截。Run 2 若未压出 checkpoint，不发 Run 3，直接按 Run 2 断言失败。Run 3 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。Run 3 首次 brain 用 `cachedInputTokens / Run2 末次 brain inputTokens` 与公用跨 run 门槛 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85，定义于 `tests/harness/core/continuation-prefix-cache.ts`）对比。brain 的 `llm-io` 另记 `requestWire`（发给 LangChain 的 messages 含 assistant `toolCalls.arguments` 字符串，以及每个工具的完整 `parameters` schema），跨 run 缓存断言会把 Run2 末次 vs Run3 首次的第一处 diff 写进 timeline。固定开销（工具 schema + system）几乎不随压缩减少，过小窗口会连续压缩；过线靠加重 Run 2 用户诉求，不靠降阈值。continuation / resume live 仍分开，不并入本 case。
 - Oracle：Run 1 `completed`，不要求压缩。Run 2 至少一次完整 compaction；每次 started/completed 都带有效切点字段；压完后下一次 brain 消息为 `system + human(checkpoint) + 原文 tail`，不能 System 后直接 AI；落库 checkpoint 为六栏（半轮可含 Turn Context）；提示词无 `<previous-summary>` / `[round]` / `<current>` / `<earlier>`；含「上周周报」、不编造「上周工作周报.docx」；周报 docx 交付成功；不对 tail 逐条复述。Run 3 首次 brain 为 `system, human(checkpoint), …原文…, human(新任务)`，不能 System 后直接 AI；再压至少一次且 `completed`，切点字段同样有效；「目标 / 进度 / 下一步 / 约束与偏好」说的是对照、改标题或法务，而不是整段重填周报。Run 3 首次 brain 必须带回 provider 缓存 usage，且 `cachedInputTokens / Run2 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。按 10 分制评估压缩生命周期、摘要结构和文件交付，严格超过 8 分通过。
 
 ##### `human-risk-report-draft-live`

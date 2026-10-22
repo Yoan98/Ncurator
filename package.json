@@ -133,6 +133,7 @@
     "uuid": "^13.0.0",
     "vditor": "^3.11.3",
     "word-extractor": "^1.0.4",
+    "yaml": "2.8.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -165,8 +166,7 @@
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
     "vite": "^7.2.6",
-    "vitest": "^4.0.18",
-    "yaml": "2.8.2"
+    "vitest": "^4.0.18"
   },
   "packageManager": "pnpm@9.12.2+sha512.22721b3a11f81661ae1ec68ce1a7b879425a1ca5b991c975b074ac220b187ce56c708fe5db69f4c962c989452eee76c82877f4ee80f474cebd61ee13461b6228",
   "pnpm": {

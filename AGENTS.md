@@ -35,7 +35,7 @@
 
 - `doc/prd/workbench.md`：涉及 Workbench 产品需求、发送前置条件、消息流/过程层交互、定时任务或 composer 偏好验收标准时阅读。
 - `doc/prd/settings.md`：涉及 Settings 产品需求、文件地址森林、全局网页资料、索引/模型/通知或验收标准时阅读。
-- `doc/ai-tool-prompt-audit.md`：Skill / Tool 契约活例子，**按需生成、不入库**（`pnpm doc:ai-tool-prompt-audit`）；改工具契约时本地生成对照，不替代 `tool-design.md`。
+- `doc/ai-tool-prompt-audit.md`：Toolset / Tool 契约活例子，**按需生成、不入库**（`pnpm doc:ai-tool-prompt-audit`）；改工具契约时本地生成对照，不替代 `tool-design.md`。
 
 ## 2. 项目目录结构
 

@@ -6,7 +6,7 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { createScriptedStructuredOutputDriver } from '../../../../harness/backend/scriptedStructuredOutputDriver'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
+  buildLoadToolsetsDecision,
   buildToolDecision,
   filterAiRunEventsByType,
   summarizeHumanSteps
@@ -40,7 +40,7 @@ describe('ai human mock-llm backend', () => {
           {
             runId: runtime.runId,
             partnerId: 'human-only-session',
-            input: '请学习一个 skill，调用一次工具，然后直接给出最终答复。',
+            input: '请学习一个 toolset，调用一次工具，然后直接给出最终答复。',
             mainModel: {
               configId: 'mock-llm-scripted',
               modelName: 'scripted-llm'
@@ -71,8 +71,8 @@ describe('ai human mock-llm backend', () => {
             llmDriver: createScriptedStructuredOutputDriver({
               'human.brain': [
                 {
-                  output: buildLearnSkillsDecision({
-                    skillIds: ['docx-read'],
+                  output: buildLoadToolsetsDecision({
+                    toolsetIds: ['docx-read'],
                     summary: '先学习 docx-read'
                   })
                 },
@@ -134,7 +134,7 @@ describe('ai human mock-llm backend', () => {
           result.result.status === 'completed' &&
             result.result.finalDeliveryMarkdown?.includes('Human Only') === true &&
             stages.has('human_brain') &&
-            stages.has('human_learning') &&
+            stages.has('human_toolset_loading') &&
             stages.has('human_hand'),
           {
             name: 'ai-run-service-goes-directly-through-human',
@@ -156,24 +156,24 @@ describe('ai human mock-llm backend', () => {
           }
         })
 
-        const learningItemStarted = processItemStartedEvents.find(
-          (event) => event.display.kind === 'tool' && event.display.toolName === 'learn_skill'
+        const toolsetLoadingItemStarted = processItemStartedEvents.find(
+          (event) => event.display.kind === 'tool' && event.display.toolName === 'load_toolset'
         )
-        const learningGroupStarted = processGroupStartedEvents.find(
-          (event) => event.groupId === learningItemStarted?.groupId
+        const toolsetLoadingGroupStarted = processGroupStartedEvents.find(
+          (event) => event.groupId === toolsetLoadingItemStarted?.groupId
         )
-        const learningGroupCompleted = processGroupCompletedEvents.find(
-          (event) => event.groupId === learningItemStarted?.groupId
+        const toolsetLoadingGroupCompleted = processGroupCompletedEvents.find(
+          (event) => event.groupId === toolsetLoadingItemStarted?.groupId
         )
-        const learningStartedIndex = learningGroupStarted
-          ? result.events.indexOf(learningGroupStarted)
+        const toolsetLoadingStartedIndex = toolsetLoadingGroupStarted
+          ? result.events.indexOf(toolsetLoadingGroupStarted)
           : -1
-        const learningCompletedIndex = learningGroupCompleted
-          ? result.events.indexOf(learningGroupCompleted)
+        const toolsetLoadingCompletedIndex = toolsetLoadingGroupCompleted
+          ? result.events.indexOf(toolsetLoadingGroupCompleted)
           : -1
         const terminalGroupStarted = processGroupStartedEvents.find(
           (event) =>
-            event.kind === 'skill' &&
+            event.kind === 'toolset' &&
             event.display.kind === 'tool' &&
             event.display.toolName === 'terminal_run'
         )
@@ -214,8 +214,8 @@ describe('ai human mock-llm backend', () => {
         })
 
         runtime.assertThat(
-          learningStartedIndex >= 0 &&
-            learningCompletedIndex > learningStartedIndex &&
+          toolsetLoadingStartedIndex >= 0 &&
+            toolsetLoadingCompletedIndex > toolsetLoadingStartedIndex &&
             Boolean(terminalGroupStarted) &&
             Boolean(terminalItemStarted) &&
             Boolean(terminalItemCompleted) &&
@@ -227,7 +227,7 @@ describe('ai human mock-llm backend', () => {
           {
             name: 'assistant-process-events-follow-human-lifecycle',
             message:
-              'Assistant process 协议应按 human 生命周期发出公开思路、learn_skill 与 hand 工具组/工具项事件，最终交付不作为过程项展示。',
+              'Assistant process 协议应按 human 生命周期发出公开思路、load_toolset 与 hand 工具组/工具项事件，最终交付不作为过程项展示。',
             data: {
               processThoughts: processThoughtEvents.map((event) => ({
                 thoughtId: event.thoughtId,

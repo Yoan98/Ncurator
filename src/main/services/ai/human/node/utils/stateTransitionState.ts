@@ -10,7 +10,7 @@ export type HumanTraceItemInput = {
   action: HumanTraceStep['action']
   publicNarrative: string
   resultStatus?: HumanTraceStep['resultStatus']
-  skillId?: HumanTraceStep['skillId']
+  toolsetId?: HumanTraceStep['toolsetId']
   toolName?: string
   summary: string
 }
@@ -46,7 +46,7 @@ export const appendHumanTraceStep = (input: {
       action: input.item.action,
       publicNarrative: input.item.publicNarrative,
       resultStatus: input.item.resultStatus,
-      skillId: input.item.skillId,
+      toolsetId: input.item.toolsetId,
       toolName: input.item.toolName,
       summary: input.item.summary
     }
@@ -92,14 +92,9 @@ export const returnToBrainAfterTraceState = (input: {
   })
 }
 
-const resolveBrainNextStage = (action: HumanNextAction['action']): HumanState['execution']['stage'] =>
-  action === 'learning'
-    ? 'learning'
-    : action === 'hand'
-      ? 'hand'
-      : action === 'interaction'
-        ? 'interaction'
-        : 'plan'
+const resolveBrainNextStage = (
+  action: HumanNextAction['action']
+): HumanState['execution']['stage'] => action
 
 export const applyBrainDecisionState = (input: {
   state: HumanState

@@ -1,21 +1,20 @@
 import type { AiRunContext } from '../../../types'
-import type {
-  HumanRuntimeCache,
-  HumanState,
-  HumanTraceStep,
-  RuntimeSkillId
-} from '../../types'
-import { getEffectiveLearnedSkillIds } from '../../skills'
+import type { HumanRuntimeCache, HumanState, HumanTraceStep, RuntimeToolsetId } from '../../types'
+import { getEffectiveLoadedToolsetIds } from '../../toolsets'
 import { getAvailableToolNames } from './runtimeCache'
 
-export type HumanEventStage = 'human_brain' | 'human_learning' | 'human_hand'
+export type HumanEventStage =
+  | 'human_brain'
+  | 'human_toolset_loading'
+  | 'human_skill_loading'
+  | 'human_hand'
 
 const emitHumanStep = (input: {
   ctx: AiRunContext
   taskId: string
   step: HumanTraceStep
-  learnedSkillIds: RuntimeSkillId[]
-  effectiveSkillIds: RuntimeSkillId[]
+  loadedToolsetIds: RuntimeToolsetId[]
+  effectiveToolsetIds: RuntimeToolsetId[]
   availableToolNames: string[]
   stage: HumanEventStage
 }) => {
@@ -25,11 +24,11 @@ const emitHumanStep = (input: {
     taskId: input.taskId,
     stepIndex: input.step.step,
     action: input.step.action,
-    skillId: input.step.skillId,
+    toolsetId: input.step.toolsetId,
     toolName: input.step.toolName,
     publicNarrative: input.step.publicNarrative,
-    learnedSkillIds: [...input.learnedSkillIds],
-    effectiveSkillIds: [...input.effectiveSkillIds],
+    loadedToolsetIds: [...input.loadedToolsetIds],
+    effectiveToolsetIds: [...input.effectiveToolsetIds],
     availableToolNames: [...input.availableToolNames],
     resultStatus: input.step.resultStatus,
     summary: input.step.summary,
@@ -43,10 +42,10 @@ const buildStepToolContext = (input: {
   cache: HumanRuntimeCache
   state: HumanState
 }) => ({
-  learnedSkillIds: input.state.skills.learnedSkillIds,
-  effectiveSkillIds: getEffectiveLearnedSkillIds(input.state.skills.learnedSkillIds),
+  loadedToolsetIds: input.state.toolsets.loadedToolsetIds,
+  effectiveToolsetIds: getEffectiveLoadedToolsetIds(input.state.toolsets.loadedToolsetIds),
   availableToolNames: getAvailableToolNames({
-    learnedSkillIds: input.state.skills.learnedSkillIds
+    loadedToolsetIds: input.state.toolsets.loadedToolsetIds
   })
 })
 
@@ -69,8 +68,8 @@ export const emitLatestHumanStepForState = (input: {
     ctx: input.ctx,
     taskId: input.taskId,
     step,
-    learnedSkillIds: toolContext.learnedSkillIds,
-    effectiveSkillIds: toolContext.effectiveSkillIds,
+    loadedToolsetIds: toolContext.loadedToolsetIds,
+    effectiveToolsetIds: toolContext.effectiveToolsetIds,
     availableToolNames: toolContext.availableToolNames,
     stage: input.stage
   })
@@ -96,8 +95,8 @@ export const emitTailHumanStepsForState = (input: {
       ctx: input.ctx,
       taskId: input.taskId,
       step,
-      learnedSkillIds: toolContext.learnedSkillIds,
-      effectiveSkillIds: toolContext.effectiveSkillIds,
+      loadedToolsetIds: toolContext.loadedToolsetIds,
+      effectiveToolsetIds: toolContext.effectiveToolsetIds,
       availableToolNames: toolContext.availableToolNames,
       stage: input.stage
     })

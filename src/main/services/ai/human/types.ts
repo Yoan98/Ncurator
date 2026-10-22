@@ -7,10 +7,10 @@ import type { DocxToolRuntime } from './tools/docx/runtime'
 import type { PdfToolRuntime } from './tools/pdf/runtime'
 import type { PptToolRuntime } from './tools/ppt/types'
 import type { ExcelToolRuntime } from './tools/excel/types'
-import type { RuntimeSkillId as RegisteredRuntimeSkillId } from '../../../../shared/runtimeCapabilities'
+import type { RuntimeToolsetId as RegisteredRuntimeToolsetId } from '../../../../shared/runtimeCapabilities'
 import {
   HUMAN_ROUND_EXECUTION_KINDS,
-  HUMAN_SKILL_SOURCES,
+  HUMAN_TOOLSET_SOURCES,
   HUMAN_STATUSES,
   HUMAN_STAGES,
   HUMAN_STEP_ACTIONS,
@@ -23,7 +23,7 @@ import {
   humanPlanItemSchema,
   humanPlanItemStatusSchema,
   humanExecutionSchema,
-  humanLearningOutcomeSchema,
+  humanToolsetLoadingOutcomeSchema,
   humanResultSchema,
   humanStateContractSchema,
   humanTaskInputSchema,
@@ -33,7 +33,7 @@ import {
   humanReferenceSchema,
   fileChangesSummarySchema,
   fileChangeSummaryItemSchema,
-  skillDefinitionBaseSchema,
+  toolsetDefinitionBaseSchema,
   toolCallParamSchema,
   toolCallResultSchema,
   handCallsSchema,
@@ -42,12 +42,12 @@ import {
 } from './schema'
 import { toolResourceContextSchema } from './toolSchemas'
 
-export type RuntimeSkillId = RegisteredRuntimeSkillId
+export type RuntimeToolsetId = RegisteredRuntimeToolsetId
 export type HumanStage = (typeof HUMAN_STAGES)[number]
 export type HumanStatus = (typeof HUMAN_STATUSES)[number]
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
-export type HumanSkillSource = (typeof HUMAN_SKILL_SOURCES)[number]
+export type HumanToolsetSource = (typeof HUMAN_TOOLSET_SOURCES)[number]
 export type HumanRoundExecutionKind = (typeof HUMAN_ROUND_EXECUTION_KINDS)[number]
 
 export type ToolPromptSpec = {
@@ -55,8 +55,8 @@ export type ToolPromptSpec = {
   description: string
 }
 
-export type SkillDefinitionBase = z.infer<typeof skillDefinitionBaseSchema>
-export type SkillDefinition = SkillDefinitionBase
+export type ToolsetDefinitionBase = z.infer<typeof toolsetDefinitionBaseSchema>
+export type ToolsetDefinition = ToolsetDefinitionBase
 
 export type HumanRoundThought = z.infer<typeof humanRoundThoughtSchema>
 export type HumanNextAction = z.infer<typeof humanNextActionSchema>
@@ -71,7 +71,7 @@ export type ToolCallParam = z.infer<typeof toolCallParamSchema>
 export type HandCallList = z.infer<typeof handCallsSchema>
 export type ToolResourceContext = z.infer<typeof toolResourceContextSchema>
 export type ToolCallResult = z.infer<typeof toolCallResultSchema>
-export type HumanLearningOutcome = z.infer<typeof humanLearningOutcomeSchema>
+export type HumanToolsetLoadingOutcome = z.infer<typeof humanToolsetLoadingOutcomeSchema>
 export type HumanCompactionBlock = z.infer<typeof humanCompactionBlockSchema>
 export type HumanResult = z.infer<typeof humanResultSchema>
 export type HumanTraceStep = z.infer<typeof humanTraceStepSchema>
@@ -84,7 +84,7 @@ export type FileChangesSummary = z.infer<typeof fileChangesSummarySchema>
 
 export type HumanRuntimeCache = {
   familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>
-  skillToolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
+  toolsetTools: Partial<Record<RuntimeToolsetId, StructuredToolInterface[]>>
   docxRuntime?: DocxToolRuntime
   pdfRuntime?: PdfToolRuntime
   pptRuntime?: PptToolRuntime

@@ -115,7 +115,8 @@ export const deriveMessageLogMessages = (input: {
 export type MessageLogProjection = {
   messages: BaseMessage[]
   plan: ChatMessageLogPlanItem[]
-  learnedSkillIds: string[]
+  loadedToolsetIds: string[]
+  loadedSkillIds: string[]
   compactionCheckpoint?: {
     compactBlockId: string
     throughSeq: number
@@ -186,22 +187,34 @@ export const projectMessageLogRecords = (records: ChatMessageLogRecord[]): Messa
     entries: projectedRecords.map((record) => record.entry).filter((entry) => entry.kind !== 'user')
   })
   let plan: ChatMessageLogPlanItem[] = []
-  let learnedSkillIds: string[] = []
+  let loadedToolsetIds: string[] = []
+  let loadedSkillIds: string[] = []
   for (const record of ordered) {
     const entry = record.entry
     if (entry.kind === 'annotation' && entry.eventType === 'plan_updated') {
       plan = entry.payload.plan.map((item) => ({ ...item }))
     } else if (entry.kind === 'annotation' && entry.eventType === 'finalizing_started') {
       plan = []
+    } else if (entry.kind === 'annotation' && entry.eventType === 'toolset_state_updated') {
+      if (Array.isArray(entry.payload?.loadedToolsetIds)) {
+        loadedToolsetIds = entry.payload.loadedToolsetIds.filter(
+          (id): id is string => typeof id === 'string'
+        )
+      }
     } else if (entry.kind === 'annotation' && entry.eventType === 'skill_state_updated') {
-      learnedSkillIds = [...entry.payload.learnedSkillIds]
+      if (Array.isArray(entry.payload?.loadedSkillIds)) {
+        loadedSkillIds = entry.payload.loadedSkillIds.filter(
+          (id): id is string => typeof id === 'string'
+        )
+      }
     }
   }
 
   return {
     messages: repairInterruptedToolCalls(messages, ordered),
     plan,
-    learnedSkillIds,
+    loadedToolsetIds,
+    loadedSkillIds,
     compactionCheckpoint: floor.compactionCheckpoint,
     historyFloorSeq: floor.historyFloorSeq
   }

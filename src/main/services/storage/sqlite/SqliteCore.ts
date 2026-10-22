@@ -23,6 +23,8 @@ import { subagentSessionsMigration } from './migrations/016_subagent_sessions'
 import { openWithPreferencesMigration } from './migrations/017_open_with_preferences'
 import { appLanguageAndServiceRouteMigration } from './migrations/018_app_language_and_service_route'
 
+import { userSkillsMigration } from './migrations/019_user_skills'
+
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
 
@@ -44,10 +46,11 @@ const MIGRATIONS: readonly Migration[] = [
   aiRunPendingMessagesMigration,
   subagentSessionsMigration,
   openWithPreferencesMigration,
-  appLanguageAndServiceRouteMigration
+  appLanguageAndServiceRouteMigration,
+  userSkillsMigration
 ]
 
-export const CURRENT_SCHEMA_VERSION = 18
+export const CURRENT_SCHEMA_VERSION = 19
 
 const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
   [2, new Set(['workspace_change_sets'])]

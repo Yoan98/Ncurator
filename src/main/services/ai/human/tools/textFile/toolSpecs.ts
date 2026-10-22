@@ -21,7 +21,7 @@ export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'text_file_read',
   familyId: 'text-file',
-  skillIds: ['text-file'],
+  toolsetIds: ['text-file'],
   inputSchema: TEXT_FILE_READ_SCHEMA,
   promptSpec: {
     name: 'text_file_read',
@@ -43,7 +43,7 @@ export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'text_file_search',
   familyId: 'text-file',
-  skillIds: ['text-file'],
+  toolsetIds: ['text-file'],
   inputSchema: TEXT_FILE_SEARCH_SCHEMA,
   promptSpec: {
     name: 'text_file_search',
@@ -63,7 +63,7 @@ export const TEXT_FILE_EDIT_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'text_file_edit',
   familyId: 'text-file',
-  skillIds: ['text-file'],
+  toolsetIds: ['text-file'],
   inputSchema: TEXT_FILE_EDIT_SCHEMA,
   promptSpec: {
     name: 'text_file_edit',

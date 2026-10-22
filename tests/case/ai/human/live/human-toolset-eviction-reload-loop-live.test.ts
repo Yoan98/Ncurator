@@ -18,7 +18,7 @@ import {
 } from '../../../../harness/core/continuation-prefix-cache'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
-const PARTNER_ID = 'live-skill-eviction-relearn'
+const PARTNER_ID = 'live-toolset-eviction-relearn'
 const PPT_FIXTURE_PATH = `${SHARED_WORKSPACE_FIXTURE_PATH}/品牌策略提案.pptx` as const
 const EXCEL_FIXTURE_PATH = `${SHARED_WORKSPACE_FIXTURE_PATH}/经营周报.xlsx` as const
 const DOCX_NAME = '深度学习.docx'
@@ -48,48 +48,48 @@ const RUN3_USER_INPUT = [
   '如有出入，以课件为准改备忘，并在最终答复里说明你核对过。'
 ].join('')
 
-const readLatestLearnedSkillIds = (records: ChatMessageLogRecord[]): string[] => {
-  let learnedSkillIds: string[] = []
+const readLatestLoadedToolsetIds = (records: ChatMessageLogRecord[]): string[] => {
+  let loadedToolsetIds: string[] = []
   for (const record of records) {
     const entry = record.entry
-    if (entry.kind === 'annotation' && entry.eventType === 'skill_state_updated') {
-      learnedSkillIds = [...entry.payload.learnedSkillIds]
+    if (entry.kind === 'annotation' && entry.eventType === 'toolset_state_updated') {
+      loadedToolsetIds = [...entry.payload.loadedToolsetIds]
     }
   }
-  return learnedSkillIds
+  return loadedToolsetIds
 }
 
-const collectLearningEvictionEvidence = (events: readonly AiRunEvent[]) => {
-  const learningSteps = filterAiRunEventsByType(events, 'human_step').filter(
-    (event) => event.stage === 'human_learning'
+const collectToolsetLoadingEvictionEvidence = (events: readonly AiRunEvent[]) => {
+  const toolsetLoadingSteps = filterAiRunEventsByType(events, 'human_step').filter(
+    (event) => event.stage === 'human_toolset_loading'
   )
-  const evictionSummaries = learningSteps
+  const evictionSummaries = toolsetLoadingSteps
     .map((event) => event.summary)
-    .filter((summary) => summary.includes('已淘汰最早学习的 skill='))
-  const learnSkillResults = filterAiRunEventsByType(events, 'tool_call_result').filter(
-    (event) => event.toolName === 'learn_skill'
+    .filter((summary) => summary.includes('已淘汰最早加载的 toolset='))
+  const loadToolsetResults = filterAiRunEventsByType(events, 'tool_call_result').filter(
+    (event) => event.toolName === 'load_toolset'
   )
-  const resultText = JSON.stringify(learnSkillResults)
-  const docxReadEvictionIndex = learningSteps.findIndex((event) =>
-    /已淘汰最早学习的 skill=\[[^\]]*docx-read/.test(event.summary)
+  const resultText = JSON.stringify(loadToolsetResults)
+  const docxReadEvictionIndex = toolsetLoadingSteps.findIndex((event) =>
+    /已淘汰最早加载的 toolset=\[[^\]]*docx-read/.test(event.summary)
   )
   const docxReadRelearnAfterEviction =
     docxReadEvictionIndex >= 0 &&
-    learningSteps
+    toolsetLoadingSteps
       .slice(docxReadEvictionIndex + 1)
       .some(
         (event) =>
-          event.skillId === 'docx-read' &&
-          (event.summary.includes('learning 已加载 docx-read') ||
-            event.publicNarrative.includes('已学习 docx-read'))
+          event.toolsetId === 'docx-read' &&
+          (event.summary.includes('toolset_loading 已加载 docx-read') ||
+            event.publicNarrative.includes('已加载 docx-read'))
       )
   return {
-    learningSteps,
+    toolsetLoadingSteps,
     evictionSummaries,
     hasEviction:
       evictionSummaries.length > 0 ||
       resultText.includes('evicted=') ||
-      resultText.includes('已淘汰最早学习的 skill='),
+      resultText.includes('已淘汰最早加载的 toolset='),
     evictedDocxRead: docxReadEvictionIndex >= 0,
     relearnedDocxReadAfterEviction: docxReadRelearnAfterEviction
   }
@@ -120,7 +120,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 下同一伙伴学满 active tool 上限后 FIFO 淘汰，续做仍能推进，需要时再自动学习被淘汰 skill；跨 run 首轮 brain 应明显复用上一 run 末次前缀缓存。',
+          '验证 live 下同一伙伴学满 active tool 上限后 FIFO 淘汰，续做仍能推进，需要时再自动学习被淘汰 toolset；跨 run 首轮 brain 应明显复用上一 run 末次前缀缓存。',
         fixtures: [
           DOCX_READING_FIXTURE_PATHS[0],
           PDF_READING_FIXTURE_PATH,
@@ -143,7 +143,7 @@ describe('ai human live backend', () => {
           await assertRunFileReviews(runtime, run1Output)
           const run1Events = runtime.eventCollector.snapshot()
           const run1LlmIo = await runtime.eventCollector.snapshotLlmIo()
-          const skillsAfterRun1 = readLatestLearnedSkillIds(
+          const toolsetsAfterRun1 = readLatestLoadedToolsetIds(
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
 
@@ -161,10 +161,10 @@ describe('ai human live backend', () => {
           const run2LlmIo = afterRun2LlmIo.filter(
             (record) => record.runId === `${runtime.runId}-run-2`
           )
-          const skillsAfterRun2 = readLatestLearnedSkillIds(
+          const toolsetsAfterRun2 = readLatestLoadedToolsetIds(
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
-          const run2Eviction = collectLearningEvictionEvidence(run2Events)
+          const run2Eviction = collectToolsetLoadingEvictionEvidence(run2Events)
           const run2PrefixCache = collectContinuationPrefixCacheReuse({
             previousRunId: `${runtime.runId}-run-1`,
             nextRunId: `${runtime.runId}-run-2`,
@@ -182,9 +182,9 @@ describe('ai human live backend', () => {
               run1Output,
               run2Output,
               run3Output: undefined,
-              skillsAfterRun1,
-              skillsAfterRun2,
-              skillsAfterRun3: skillsAfterRun2,
+              toolsetsAfterRun1,
+              toolsetsAfterRun2,
+              toolsetsAfterRun3: toolsetsAfterRun2,
               run1Events,
               run2Events,
               run3Events: [] as AiRunEvent[],
@@ -204,9 +204,9 @@ describe('ai human live backend', () => {
               run1Output,
               run2Output,
               run3Output: undefined,
-              skillsAfterRun1,
-              skillsAfterRun2,
-              skillsAfterRun3: skillsAfterRun2,
+              toolsetsAfterRun1,
+              toolsetsAfterRun2,
+              toolsetsAfterRun3: toolsetsAfterRun2,
               run1Events,
               run2Events,
               run3Events: [] as AiRunEvent[],
@@ -233,7 +233,7 @@ describe('ai human live backend', () => {
           const allLlmIo = await runtime.eventCollector.snapshotLlmIo()
           const run3Events = allEvents.slice(afterRun2Events.length)
           const run3LlmIo = allLlmIo.filter((record) => record.runId === `${runtime.runId}-run-3`)
-          const skillsAfterRun3 = readLatestLearnedSkillIds(
+          const toolsetsAfterRun3 = readLatestLoadedToolsetIds(
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
 
@@ -241,9 +241,9 @@ describe('ai human live backend', () => {
             run1Output,
             run2Output,
             run3Output,
-            skillsAfterRun1,
-            skillsAfterRun2,
-            skillsAfterRun3,
+            toolsetsAfterRun1,
+            toolsetsAfterRun2,
+            toolsetsAfterRun3,
             run1Events,
             run2Events,
             run3Events,
@@ -266,38 +266,38 @@ describe('ai human live backend', () => {
           const run1Tools = collectStartedToolNames(result.run1Events)
           const run2Tools = collectStartedToolNames(result.run2Events)
           const run3Tools = collectStartedToolNames(result.run3Events)
-          const run1Eviction = collectLearningEvictionEvidence(result.run1Events)
-          const run2Eviction = collectLearningEvictionEvidence(result.run2Events)
-          const run3Learning = collectLearningEvictionEvidence(result.run3Events)
+          const run1Eviction = collectToolsetLoadingEvictionEvidence(result.run1Events)
+          const run2Eviction = collectToolsetLoadingEvictionEvidence(result.run2Events)
+          const run3ToolsetLoading = collectToolsetLoadingEvictionEvidence(result.run3Events)
           const run3RelearnedDocxRead =
-            result.skillsAfterRun3.includes('docx-read') &&
-            (run3Learning.learningSteps.some(
+            result.toolsetsAfterRun3.includes('docx-read') &&
+            (run3ToolsetLoading.toolsetLoadingSteps.some(
               (event) =>
-                event.summary.includes('learning 已加载 docx-read') ||
-                event.publicNarrative.includes('已学习 docx-read')
+                event.summary.includes('toolset_loading 已加载 docx-read') ||
+                event.publicNarrative.includes('已加载 docx-read')
             ) ||
               JSON.stringify(
                 filterAiRunEventsByType(result.run3Events, 'tool_call_result').filter(
-                  (event) => event.toolName === 'learn_skill'
+                  (event) => event.toolName === 'load_toolset'
                 )
               ).includes('docx-read'))
 
           runtime.assertThat(
             result.run1Output?.status === 'completed' &&
               !run1Eviction.hasEviction &&
-              result.skillsAfterRun1.includes('docx-read') &&
+              result.toolsetsAfterRun1.includes('docx-read') &&
               hasDocxReadEvidence(run1Tools) &&
               (hasPdfReadEvidence(run1Tools) ||
                 hasPptReadEvidence(run1Tools) ||
                 hasExcelReadEvidence(run1Tools)) &&
-              result.skillsAfterRun1.length >= 2,
+              result.toolsetsAfterRun1.length >= 2,
             {
-              name: 'run1-fills-skills-without-eviction',
+              name: 'run1-fills-toolsets-without-eviction',
               message:
                 'Run1 应先学到含 docx-read 在内的多项阅读技能并完成任务，且不应触发 FIFO 淘汰。',
               data: {
                 status: result.run1Output?.status,
-                skillsAfterRun1: result.skillsAfterRun1,
+                toolsetsAfterRun1: result.toolsetsAfterRun1,
                 run1Tools,
                 run1Eviction
               }
@@ -312,11 +312,11 @@ describe('ai human live backend', () => {
                 run2Tools.includes('ppt_edit') ||
                 result.memoExists),
             {
-              name: 'run2-evicts-oldest-skill-and-continues',
+              name: 'run2-evicts-oldest-toolset-and-continues',
               message: 'Run2 学新技能时应 FIFO 淘汰最早的 docx-read，并在淘汰后仍能完成写入续做。',
               data: {
                 status: result.run2Output?.status,
-                skillsAfterRun2: result.skillsAfterRun2,
+                toolsetsAfterRun2: result.toolsetsAfterRun2,
                 run2Tools,
                 run2Eviction,
                 memoExists: result.memoExists,
@@ -339,11 +339,11 @@ describe('ai human live backend', () => {
             runtime.assertThat(
               run2Eviction.relearnedDocxReadAfterEviction && hasDocxReadEvidence(run2Tools),
               {
-                name: 'run2-relearns-evicted-skill-in-same-run',
+                name: 'run2-relearns-evicted-toolset-in-same-run',
                 message:
                   '若 Run2 同轮再次需要 Word 阅读，应在淘汰后自动再学 docx-read 并产生读工具证据。',
                 data: {
-                  skillsAfterRun2: result.skillsAfterRun2,
+                  toolsetsAfterRun2: result.toolsetsAfterRun2,
                   run2Tools,
                   run2Eviction
                 }
@@ -361,13 +361,13 @@ describe('ai human live backend', () => {
               run3RelearnedDocxRead &&
               hasDocxReadEvidence(run3Tools),
             {
-              name: 'run3-relearns-evicted-skill-and-finishes',
+              name: 'run3-relearns-evicted-toolset-and-finishes',
               message: 'Run3 在再次需要 Word 阅读时应自动再学 docx-read，并用它完成核对任务。',
               data: {
                 status: result.run3Output?.status,
-                skillsAfterRun3: result.skillsAfterRun3,
+                toolsetsAfterRun3: result.toolsetsAfterRun3,
                 run3Tools,
-                run3Learning
+                run3ToolsetLoading
               }
             }
           )

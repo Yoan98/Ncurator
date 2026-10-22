@@ -32,14 +32,14 @@ describe('ai unit message transcript repair', () => {
       {
         kind: 'assistant',
         content: '先学习技能',
-        toolCalls: [{ id: 'call-1', name: 'learn_skill', args: { skillIds: ['docx-read'] } }]
+        toolCalls: [{ id: 'call-1', name: 'load_toolset', args: { toolsetIds: ['docx-read'] } }]
       },
       {
         kind: 'tool',
         toolCallId: 'call-1',
-        toolName: 'learn_skill',
+        toolName: 'load_toolset',
         ok: true,
-        content: 'Skill loaded successfully: docx-read.'
+        content: 'Toolset loaded successfully: docx-read.'
       },
       userEntry('第二个诉求')
     ]
@@ -50,7 +50,7 @@ describe('ai unit message transcript repair', () => {
     expect(String(skipped[0].content)).toBe('第一个诉求')
     expect(String(skipped[0].content)).not.toContain('<historical_user_turn>')
     expect(String(skipped[0].content)).not.toContain('workspace-1')
-    expect(skipped[2].content).toBe('Skill loaded successfully: docx-read.')
+    expect(skipped[2].content).toBe('Toolset loaded successfully: docx-read.')
     expect(skipped.some((message) => String(message.content).includes('第二个诉求'))).toBe(false)
 
     const all = deriveMessageLogMessages({ entries, skipLastUserEntry: false })
@@ -109,9 +109,7 @@ describe('ai unit message transcript repair', () => {
         toolName: 'read_image',
         ok: true,
         content: 'a',
-        images: [
-          { path: '/tmp/a.png', mimeType: 'image/png', sizeBytes: 10, width: 1, height: 1 }
-        ]
+        images: [{ path: '/tmp/a.png', mimeType: 'image/png', sizeBytes: 10, width: 1, height: 1 }]
       },
       {
         kind: 'tool',
@@ -119,9 +117,7 @@ describe('ai unit message transcript repair', () => {
         toolName: 'read_image',
         ok: true,
         content: 'b',
-        images: [
-          { path: '/tmp/b.png', mimeType: 'image/png', sizeBytes: 20, width: 2, height: 2 }
-        ]
+        images: [{ path: '/tmp/b.png', mimeType: 'image/png', sizeBytes: 20, width: 2, height: 2 }]
       },
       { kind: 'assistant', content: '完成', toolCalls: [] }
     ]
@@ -135,8 +131,8 @@ describe('ai unit message transcript repair', () => {
       'ai'
     ])
     expect(JSON.stringify(messages[3]?.content)).toContain(encodeURIComponent('/tmp/a.png'))
-    expect(JSON.stringify(messages[3]?.content).indexOf(encodeURIComponent('/tmp/a.png'))).toBeLessThan(
-      JSON.stringify(messages[3]?.content).indexOf(encodeURIComponent('/tmp/b.png'))
-    )
+    expect(
+      JSON.stringify(messages[3]?.content).indexOf(encodeURIComponent('/tmp/a.png'))
+    ).toBeLessThan(JSON.stringify(messages[3]?.content).indexOf(encodeURIComponent('/tmp/b.png')))
   })
 })

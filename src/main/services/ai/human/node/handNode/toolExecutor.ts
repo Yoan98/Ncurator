@@ -6,25 +6,25 @@ import type { JsonObject, JsonValue } from '../../../../../../shared/types'
 import { isJsonObject } from '../../../../../utils/aiCapabilityUtils'
 import { clipText } from '../../../utils/text'
 import type { AiRunContext } from '../../../types'
-import { ensureSkillTools } from '../learningNode/skillLoader'
+import { ensureToolsetTools } from '../toolsetLoadingNode/toolsetLoader'
 import { resolveToolResultErrorText } from '../../shared/toolResultRenderers'
 import {
-  findEffectiveSkillIdByToolName,
-  getEffectiveLearnedSkillIds,
-  getSkillDefinition
-} from '../../skills'
-import type { HumanRuntimeCache, RuntimeSkillId, ToolCallResult } from '../../types'
+  findEffectiveToolsetIdByToolName,
+  getEffectiveLoadedToolsetIds,
+  getToolsetDefinition
+} from '../../toolsets'
+import type { HumanRuntimeCache, RuntimeToolsetId, ToolCallResult } from '../../types'
 import { withToolLifecycle } from '../../tools/utils/lifecycle'
 import { createToolEventEmitter, withActiveToolCall } from '../../tools/utils/toolEvents'
 import { isCancelledError } from '../../../utils/runFailure'
 
 const findTool = (input: {
   toolName: string
-  learnedSkillIds: RuntimeSkillId[]
+  loadedToolsetIds: RuntimeToolsetId[]
   cache: HumanRuntimeCache
 }): StructuredToolInterface | undefined => {
-  for (const skillId of getEffectiveLearnedSkillIds(input.learnedSkillIds)) {
-    const matched = (input.cache.skillToolsets[skillId] || []).find(
+  for (const toolsetId of getEffectiveLoadedToolsetIds(input.loadedToolsetIds)) {
+    const matched = (input.cache.toolsetTools[toolsetId] || []).find(
       (tool) => String(tool.name || '').trim() === input.toolName
     )
     if (matched) return matched
@@ -191,7 +191,7 @@ export const executeToolCall = async (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   taskId: string
-  learnedSkillIds: RuntimeSkillId[]
+  loadedToolsetIds: RuntimeToolsetId[]
   toolCallId: string
   toolName: string
   args: Record<string, JsonValue>
@@ -207,9 +207,9 @@ export const executeToolCall = async (input: {
     input.cache.pptRuntime = undefined
     for (const family of ['docx', 'excel', 'ppt'] as const)
       delete input.cache.familyToolsets[family]
-    for (const skillId of getEffectiveLearnedSkillIds(input.learnedSkillIds)) {
-      if (['docx', 'excel', 'ppt'].includes(getSkillDefinition(skillId).familyId)) {
-        delete input.cache.skillToolsets[skillId]
+    for (const toolsetId of getEffectiveLoadedToolsetIds(input.loadedToolsetIds)) {
+      if (['docx', 'excel', 'ppt'].includes(getToolsetDefinition(toolsetId).familyId)) {
+        delete input.cache.toolsetTools[toolsetId]
       }
     }
     releaseRunFiles(input.ctx.runId)
@@ -228,22 +228,22 @@ export const executeToolCall = async (input: {
     toolCallId: input.toolCallId,
     stage: 'human_hand'
   })
-  const matchedSkillId = findEffectiveSkillIdByToolName({
+  const matchedToolsetId = findEffectiveToolsetIdByToolName({
     toolName: input.toolName,
-    learnedSkillIds: input.learnedSkillIds
+    loadedToolsetIds: input.loadedToolsetIds
   })
-  if (matchedSkillId) {
-    ensureSkillTools({
+  if (matchedToolsetId) {
+    ensureToolsetTools({
       cache: input.cache,
       ctx: input.ctx,
       runId: input.ctx.runId,
       taskId: input.taskId,
-      skillId: matchedSkillId
+      toolsetId: matchedToolsetId
     })
   }
   const tool = findTool({
     toolName: input.toolName,
-    learnedSkillIds: input.learnedSkillIds,
+    loadedToolsetIds: input.loadedToolsetIds,
     cache: input.cache
   })
   if (!tool) {

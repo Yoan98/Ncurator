@@ -10,7 +10,7 @@ import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../
 import { buildModelToolResultDelivery } from '../../shared/modelToolResult'
 import { buildToolFeedback } from '../../shared/toolFeedback'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
-import { assertExternalLearnedSkillIds } from '../../skills'
+import { assertExternalLoadedToolsetIds } from '../../toolsets'
 import { analyzeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
 import type { HumanRuntimeCache, HumanState, ToolCallResult } from '../../types'
 import { executeToolCall } from './toolExecutor'
@@ -81,7 +81,7 @@ const executeHandCalls = async (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   taskId: string
-  learnedSkillIds: HumanState['skills']['learnedSkillIds']
+  loadedToolsetIds: HumanState['toolsets']['loadedToolsetIds']
 }): Promise<ToolCallResult[]> => {
   const results: ToolCallResult[] = []
   for (const toolCall of input.calls) {
@@ -90,7 +90,7 @@ const executeHandCalls = async (input: {
         ctx: input.ctx,
         cache: input.cache,
         taskId: input.taskId,
-        learnedSkillIds: input.learnedSkillIds,
+        loadedToolsetIds: input.loadedToolsetIds,
         toolCallId: toolCall.toolCallId,
         toolName: toolCall.toolName,
         args: toolCall.args
@@ -264,7 +264,7 @@ const appendBlockedApprovalToolMessages = (input: {
 export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
-    assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
+    assertExternalLoadedToolsetIds(state.toolsets.loadedToolsetIds)
     input.cache.currentState = state
 
     const pendingRound = state.execution.pendingRound
@@ -405,7 +405,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       ctx: input.ctx,
       cache: input.cache,
       taskId: state.task.taskId,
-      learnedSkillIds: state.skills.learnedSkillIds
+      loadedToolsetIds: state.toolsets.loadedToolsetIds
     })
     const readyState = input.cache.currentState || state
     input.cache.toolCallCount += results.length

@@ -7,8 +7,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { toJSONSchema } from 'zod/v4'
 import type { z } from 'zod/v4'
-import { RUNTIME_SKILL_IDS } from '../../src/main/services/ai/human/constants'
-import { RUNTIME_SKILL_CATALOG, listRuntimeToolNamesForSkill } from '../../src/main/services/ai/human/skills'
+import { RUNTIME_TOOLSET_IDS } from '../../src/main/services/ai/human/constants'
+import {
+  RUNTIME_TOOLSET_CATALOG,
+  listRuntimeToolNamesForToolset
+} from '../../src/main/services/ai/human/toolsets'
 import { getToolSpec } from '../../src/main/services/ai/human/tools/registry'
 import {
   renderGenericModelError,
@@ -153,20 +156,20 @@ const extractFieldRows = (schema: z.ZodType): FieldRow[] => {
 const collectRootUnionFieldRows = (schema: z.ZodType): FieldRow[] | null => {
   const root = toJSONSchema(schema) as JsonSchemaNode
   const top = unwrapNode(root, root)
-  const branches = asNodeArray(top.oneOf).length > 0 ? asNodeArray(top.oneOf) : asNodeArray(top.anyOf)
+  const branches =
+    asNodeArray(top.oneOf).length > 0 ? asNodeArray(top.oneOf) : asNodeArray(top.anyOf)
   if (branches.length <= 1) return null
   const rows: FieldRow[] = []
   branches.forEach((branch, index) => {
     const branchNode = unwrapNode(branch, root)
-    const label =
-      Object.prototype.hasOwnProperty.call(branchNode, 'const')
-        ? String(branchNode.const)
-        : typeof branchNode.properties === 'object' &&
-            isJsonObject(branchNode.properties) &&
-            isJsonObject(branchNode.properties.type) &&
-            Object.prototype.hasOwnProperty.call(branchNode.properties.type, 'const')
-          ? String((branchNode.properties.type as JsonSchemaNode).const)
-          : `branch_${index + 1}`
+    const label = Object.prototype.hasOwnProperty.call(branchNode, 'const')
+      ? String(branchNode.const)
+      : typeof branchNode.properties === 'object' &&
+          isJsonObject(branchNode.properties) &&
+          isJsonObject(branchNode.properties.type) &&
+          Object.prototype.hasOwnProperty.call(branchNode.properties.type, 'const')
+        ? String((branchNode.properties.type as JsonSchemaNode).const)
+        : `branch_${index + 1}`
     collectFieldRows(branchNode, root, `[${label}]`, new Set(), rows)
   })
   return rows
@@ -215,7 +218,8 @@ const branchLabelFromInput = (input: JsonObject, index: number): string => {
 const extractUnionExamples = (schema: z.ZodType): Array<{ label: string; input: JsonObject }> => {
   const root = toJSONSchema(schema) as JsonSchemaNode
   const top = unwrapNode(root, root)
-  const branches = asNodeArray(top.oneOf).length > 0 ? asNodeArray(top.oneOf) : asNodeArray(top.anyOf)
+  const branches =
+    asNodeArray(top.oneOf).length > 0 ? asNodeArray(top.oneOf) : asNodeArray(top.anyOf)
   if (branches.length > 1) {
     return branches.map((branch, index) => {
       const input = minimalFromSchema(branch, root) as JsonObject
@@ -227,7 +231,8 @@ const extractUnionExamples = (schema: z.ZodType): Array<{ label: string; input: 
     for (const [key, rawChild] of Object.entries(properties)) {
       if (!isJsonObject(rawChild)) continue
       const child = unwrapNode(rawChild, root)
-      const nested = asNodeArray(child.oneOf).length > 0 ? asNodeArray(child.oneOf) : asNodeArray(child.anyOf)
+      const nested =
+        asNodeArray(child.oneOf).length > 0 ? asNodeArray(child.oneOf) : asNodeArray(child.anyOf)
       if (nested.length > 1) {
         const base = minimalFromSchema(top, root) as JsonObject
         return nested.map((branch, index) => {
@@ -246,7 +251,9 @@ const extractUnionExamples = (schema: z.ZodType): Array<{ label: string; input: 
   return [
     {
       label: 'default',
-      input: (typeof input === 'object' && input && !Array.isArray(input) ? input : {}) as JsonObject
+      input: (typeof input === 'object' && input && !Array.isArray(input)
+        ? input
+        : {}) as JsonObject
     }
   ]
 }
@@ -375,7 +382,10 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
     { path: 'args.type', description: 'search | fetch' },
     { path: 'query / results[]', description: 'search：关键词与 SERP 列表' },
     { path: 'results[].rank / title / url / snippet?', description: 'search 候选' },
-    { path: 'requestedUrl / finalUrl / title? / markdown / links / publishedAt?', description: 'fetch 单页正文' },
+    {
+      path: 'requestedUrl / finalUrl / title? / markdown / links / publishedAt?',
+      description: 'fetch 单页正文'
+    },
     { path: 'error?', description: '失败文案' }
   ],
   browser_use: [
@@ -384,7 +394,10 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
     { path: 'page.url / page.title?', description: '当前页' },
     { path: 'content', description: 'extract 正文' },
     { path: 'actions[].description', description: 'observe 候选动作' },
-    { path: 'message / actionDescription', description: 'act 执行说明（成败由 ToolCallResult.ok 表达）' }
+    {
+      path: 'message / actionDescription',
+      description: 'act 执行说明（成败由 ToolCallResult.ok 表达）'
+    }
   ],
   docx_read_outline: [
     { path: 'fromPercent / toPercent', description: '比例区间' },
@@ -445,7 +458,10 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
   ],
   ppt_search: [
     { path: 'totalMatchCount / returnedMatchCount / truncated', description: '命中计数' },
-    { path: 'matches[].slideIndex / slideId / source / matchedText / text', description: '命中详情' }
+    {
+      path: 'matches[].slideIndex / slideId / source / matchedText / text',
+      description: '命中详情'
+    }
   ],
   ppt_edit: [
     { path: 'slideId?', description: '页面 ID' },
@@ -462,7 +478,8 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
     { path: 'error?', description: '失败文案' },
     { path: 'outputPath?', description: '保存路径' }
   ],
-  learn_skill: [{ path: 'args.skillIds', description: '加载的技能 ID' }],
+  load_toolset: [{ path: 'args.toolsetIds', description: '加载的工具包 ID' }],
+  load_skill: [{ path: 'args.skillIds', description: '当前伙伴启用的说明技能 ID' }],
   update_plan: [{ path: '—', description: '固定文案，不读 data' }],
   read_image: [
     { path: 'error?', description: '失败原因；免费目录明确无视觉能力时说明模型限制' },
@@ -537,7 +554,7 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
           ' FAIL  tests/case/unit/app.test.ts > compile > should pass typecheck',
           'AssertionError: expected true to be false',
           ' ❯ tests/case/unit/app.test.ts:42:5',
-          '     40|   it(\'should pass typecheck\', () => {',
+          "     40|   it('should pass typecheck', () => {",
           '     41|     const ok = validateProject()',
           '     42|     expect(ok).toBe(false)',
           '       |     ^',
@@ -681,14 +698,18 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
             line: 52,
             matchText: 'renderTerminalStream',
             textContext:
-              '  return renderTerminalStream({\n    output: readString(obj.output) || \'\',\n    markers: buildTerminalMarkers([',
+              "  return renderTerminalStream({\n    output: readString(obj.output) || '',\n    markers: buildTerminalMarkers([",
             truncated: true
           }
         ]
       }
     },
     { label: '无命中', ok: true, data: { totalMatchCount: 0, returnedMatchCount: 0, matches: [] } },
-    { label: '搜索失败', ok: false, data: { error: 'Invalid regular expression: Unterminated group' } }
+    {
+      label: '搜索失败',
+      ok: false,
+      data: { error: 'Invalid regular expression: Unterminated group' }
+    }
   ],
   text_file_edit: [
     {
@@ -926,8 +947,7 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
             story: 'body',
             fromNodeIndex: 3,
             toNodeIndex: 6,
-            textMap:
-              '结构：表格 4x3 KPI 表\n关键词：GMV、转化率、留存\n代表句：[5] 华东区增长最快'
+            textMap: '结构：表格 4x3 KPI 表\n关键词：GMV、转化率、留存\n代表句：[5] 华东区增长最快'
           }
         ]
       }
@@ -1385,14 +1405,15 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
     },
     { label: '失败', ok: true, data: { error: 'Invalid SVG: unclosed tag <rect>' } }
   ],
-  learn_skill: [
+  load_toolset: [
     {
       label: '成功',
-      input: { skillIds: ['docx-read', 'terminal'] },
+      input: { toolsetIds: ['docx-read', 'docx-write'] },
       ok: true,
       data: {}
     }
   ],
+  load_skill: [{ label: '说明加载', input: { skillIds: ['user:example'] }, ok: true, data: {} }],
   update_plan: [{ label: '成功', ok: true, data: {} }],
   read_image: [
     {
@@ -1484,7 +1505,8 @@ const renderToolSection = (toolName: string): string => {
   const spec = getToolSpec(toolName)
   if (!spec) return `## ${toolName}\n\n_未找到_\n`
 
-  const fieldRows = collectRootUnionFieldRows(spec.inputSchema) || extractFieldRows(spec.inputSchema)
+  const fieldRows =
+    collectRootUnionFieldRows(spec.inputSchema) || extractFieldRows(spec.inputSchema)
   const examples = buildExamples(toolName, spec)
 
   const lines: string[] = []
@@ -1523,16 +1545,16 @@ const renderToolSection = (toolName: string): string => {
 
 const buildDocument = (): string => {
   const lines: string[] = []
-  lines.push('# Skill / Tool 契约审计')
+  lines.push('# Toolset / Tool 契约审计')
   lines.push('')
   lines.push(`> \`pnpm doc:ai-tool-prompt-audit\` · ${new Date().toISOString()}`)
   lines.push('')
 
-  for (const skillId of RUNTIME_SKILL_IDS) {
-    const skill = RUNTIME_SKILL_CATALOG[skillId]
-    const toolNames = listRuntimeToolNamesForSkill(skillId)
-    lines.push(`# Skill: ${skillId}`)
-    lines.push(`> ${skill.description}`)
+  for (const toolsetId of RUNTIME_TOOLSET_IDS) {
+    const toolset = RUNTIME_TOOLSET_CATALOG[toolsetId]
+    const toolNames = listRuntimeToolNamesForToolset(toolsetId)
+    lines.push(`# Toolset: ${toolsetId}`)
+    lines.push(`> ${toolset.description}`)
     lines.push('')
     for (const toolName of toolNames) {
       lines.push(renderToolSection(toolName))

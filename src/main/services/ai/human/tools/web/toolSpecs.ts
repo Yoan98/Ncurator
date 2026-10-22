@@ -15,7 +15,7 @@ export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'web_search',
   familyId: 'web',
-  skillIds: ['web-browsing'],
+  toolsetIds: ['web-browsing'],
   inputSchema: WEB_SEARCH_SCHEMA,
   promptSpec: {
     name: 'web_search',
@@ -38,7 +38,7 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'browser_use',
   familyId: 'web',
-  skillIds: ['web-browsing'],
+  toolsetIds: ['web-browsing'],
   inputSchema: BROWSER_USE_SCHEMA,
   promptSpec: {
     name: 'browser_use',
