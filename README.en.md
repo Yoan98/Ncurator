@@ -29,10 +29,6 @@
   <a href="https://www.ncurator.com/api/download/mac-arm64"><strong>Download for macOS (Apple silicon)</strong></a>
 </p>
 
-<p align="center">
-  If macOS reports that the app is damaged or cannot be opened, see the <a href="https://www.ncurator.com/en/manual#mac-download">Mac installation troubleshooting guide</a>.
-</p>
-
 ## Architecture Design
 
 <p align="center">
@@ -103,3 +99,9 @@ A separately maintained bookmark viewer and URL copying tool: [Source repository
 ## License
 
 Licensed under [AGPL-3.0-only](./LICENSE). Commercial use is permitted subject to compliance with the license. Third-party components retain their own licenses.
+
+## FAQ
+
+### Mac installation issues
+
+If macOS reports that the app is damaged or cannot be opened, see the [Mac installation troubleshooting guide](https://www.ncurator.com/en/manual#mac-download).

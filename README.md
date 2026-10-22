@@ -29,10 +29,6 @@
   <a href="https://www.guanzhangai.cn/api/download/mac-arm64"><strong>下载 macOS（Apple 芯片）</strong></a>
 </p>
 
-<p align="center">
-  macOS 安装后提示“已损坏”或无法打开，请查看<a href="https://www.guanzhangai.cn/zh/manual#mac-download">Mac 安装问题解决指南</a>。
-</p>
-
 ## 架构设计
 
 <p align="center">
@@ -105,3 +101,9 @@ pnpm dev
 ## 友链
 
 - [LinuxDo 社区](https://linux.do/)
+
+## 常见问题
+
+### Mac 安装问题
+
+macOS 安装后提示“已损坏”或无法打开，请查看[Mac 安装问题解决指南](https://www.guanzhangai.cn/zh/manual#mac-download)。
