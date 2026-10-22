@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
+import { TOOLSET_DEFINITIONS } from '../../../../src/main/services/ai/human/toolsets'
 import { PPT_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/ppt/toolSpecs'
 import {
   assertPptElementInCanvas,
@@ -25,13 +25,13 @@ const emptySlide = {
 }
 
 describe('ai unit ppt tool contract', () => {
-  it('splits ppt reading and writing into two skills and five prefixed tools', () => {
-    expect(SKILL_DEFINITIONS['ppt-read'].toolNames).toEqual([
+  it('splits ppt reading and writing into two toolsets and five prefixed tools', () => {
+    expect(TOOLSET_DEFINITIONS['ppt-read'].toolNames).toEqual([
       'ppt_read_outline',
       'ppt_read_slides',
       'ppt_search'
     ])
-    expect(SKILL_DEFINITIONS['ppt-write'].toolNames).toEqual(['ppt_edit'])
+    expect(TOOLSET_DEFINITIONS['ppt-write'].toolNames).toEqual(['ppt_edit'])
     expect(PPT_TOOL_SPECS.map((spec) => spec.name)).toEqual([
       'ppt_read_outline',
       'ppt_read_slides',

@@ -14,7 +14,7 @@ export type AssistantExecutionIconKind =
   | 'document'
   | 'edit'
   | 'retry'
-  | 'learning'
+  | 'toolset_loading'
   | 'compaction'
   | 'eye'
   | 'camera'
@@ -25,7 +25,7 @@ export type AssistantExecutionIconKind =
   | 'question'
   | 'default'
 
-export type AssistantExecutionSkillKey =
+export type AssistantExecutionToolsetKey =
   | 'docx-read'
   | 'docx-edit'
   | 'file-read'
@@ -42,7 +42,7 @@ export type AssistantExecutionSkillKey =
   | 'browser'
   | 'image-generation'
   | 'image-read'
-  | 'learning'
+  | 'toolset_loading'
   | 'generic'
 
 export type AssistantExecutionTextSegment = {
@@ -55,7 +55,7 @@ export type AssistantExecutionTextSegment = {
 
 export type AssistantExecutionGroup = {
   id: string
-  skillKey: AssistantExecutionSkillKey
+  toolsetKey: AssistantExecutionToolsetKey
   status: AssistantExecutionStatus
   items: readonly {
     toolName?: RuntimeToolName | 'unnamed'
@@ -109,7 +109,8 @@ const TOOL_UI_KINDS = {
   web_search: 'web-search',
   browser_use: 'browser',
   image_generate: 'image-generation',
-  learn_skill: 'learning',
+  load_toolset: 'toolset_loading',
+  load_skill: 'generic',
   update_plan: 'generic',
   read_image: 'image-read',
   list_agent: 'generic',
@@ -117,33 +118,33 @@ const TOOL_UI_KINDS = {
   ask_user_question: 'generic',
   scheduled_task_list: 'generic',
   scheduled_task_action: 'generic'
-} as const satisfies Record<RuntimeToolName, AssistantExecutionSkillKey>
+} as const satisfies Record<RuntimeToolName, AssistantExecutionToolsetKey>
 
 export const getAssistantToolUiKind = (
   toolName?: RuntimeToolName | 'unnamed'
-): AssistantExecutionSkillKey =>
+): AssistantExecutionToolsetKey =>
   toolName && toolName !== 'unnamed' ? TOOL_UI_KINDS[toolName] : 'generic'
 
 export const getAssistantToolIconKind = (
-  skillKey: AssistantExecutionSkillKey
+  toolsetKey: AssistantExecutionToolsetKey
 ): AssistantExecutionIconKind => {
-  if (skillKey === 'docx-edit' || skillKey === 'file-edit') return 'edit'
+  if (toolsetKey === 'docx-edit' || toolsetKey === 'file-edit') return 'edit'
   if (
-    skillKey === 'docx-read' ||
-    skillKey === 'file-read' ||
-    skillKey === 'pdf-read' ||
-    skillKey === 'ppt-read' ||
-    skillKey === 'excel-read'
+    toolsetKey === 'docx-read' ||
+    toolsetKey === 'file-read' ||
+    toolsetKey === 'pdf-read' ||
+    toolsetKey === 'ppt-read' ||
+    toolsetKey === 'excel-read'
   ) {
     return 'document'
   }
-  if (skillKey === 'ppt-search' || skillKey === 'web-search') return 'search'
-  if (skillKey === 'ppt-edit' || skillKey === 'excel-edit') return 'edit'
-  if (skillKey === 'kb') return 'knowledge'
-  if (skillKey === 'browser') return 'browser'
-  if (skillKey === 'image-generation' || skillKey === 'image-read') return 'image'
-  if (skillKey === 'learning') return 'learning'
-  if (skillKey === 'terminal') return 'terminal'
+  if (toolsetKey === 'ppt-search' || toolsetKey === 'web-search') return 'search'
+  if (toolsetKey === 'ppt-edit' || toolsetKey === 'excel-edit') return 'edit'
+  if (toolsetKey === 'kb') return 'knowledge'
+  if (toolsetKey === 'browser') return 'browser'
+  if (toolsetKey === 'image-generation' || toolsetKey === 'image-read') return 'image'
+  if (toolsetKey === 'toolset_loading') return 'toolset_loading'
+  if (toolsetKey === 'terminal') return 'terminal'
   return 'default'
 }
 
@@ -170,12 +171,12 @@ const statusText = (
 
 /** Fallback summaries for non-tool process groups (e.g. search mode kb placeholder). */
 export const getAssistantToolSummaryText = (
-  skillKey: AssistantExecutionSkillKey,
+  toolsetKey: AssistantExecutionToolsetKey,
   status: AssistantExecutionStatus,
   count = 1
 ): AssistantExecutionTextSegment[] => {
   const normalizedCount = String(Math.max(1, count))
-  if (skillKey === 'docx-read') {
+  if (toolsetKey === 'docx-read') {
     return statusText(status, {
       running: `正在读取 ${normalizedCount} 个 Word 文档`,
       completed: `已读取 ${normalizedCount} 个 Word 文档`,
@@ -183,7 +184,7 @@ export const getAssistantToolSummaryText = (
       failed: `读取 ${normalizedCount} 个 Word 文档失败`
     })
   }
-  if (skillKey === 'docx-edit') {
+  if (toolsetKey === 'docx-edit') {
     return statusText(status, {
       running: `正在编辑 ${normalizedCount} 个 Word 文档`,
       completed: `已编辑 ${normalizedCount} 个 Word 文档`,
@@ -191,7 +192,7 @@ export const getAssistantToolSummaryText = (
       failed: `编辑 ${normalizedCount} 个 Word 文档失败`
     })
   }
-  if (skillKey === 'file-read') {
+  if (toolsetKey === 'file-read') {
     return statusText(status, {
       running: `正在读取 ${normalizedCount} 个文件`,
       completed: `已读取 ${normalizedCount} 个文件`,
@@ -199,7 +200,7 @@ export const getAssistantToolSummaryText = (
       failed: `读取 ${normalizedCount} 个文件失败`
     })
   }
-  if (skillKey === 'file-edit') {
+  if (toolsetKey === 'file-edit') {
     return statusText(status, {
       running: `正在编辑 ${normalizedCount} 个文件`,
       completed: `已编辑 ${normalizedCount} 个文件`,
@@ -207,7 +208,7 @@ export const getAssistantToolSummaryText = (
       failed: `编辑 ${normalizedCount} 个文件失败`
     })
   }
-  if (skillKey === 'pdf-read') {
+  if (toolsetKey === 'pdf-read') {
     return statusText(status, {
       running: `正在读取 ${normalizedCount} 个 PDF 文件`,
       completed: `已读取 ${normalizedCount} 个 PDF 文件`,
@@ -215,7 +216,7 @@ export const getAssistantToolSummaryText = (
       failed: `读取 ${normalizedCount} 个 PDF 文件失败`
     })
   }
-  if (skillKey === 'ppt-read') {
+  if (toolsetKey === 'ppt-read') {
     return statusText(status, {
       running: `正在读取 ${normalizedCount} 个 PPT 文件`,
       completed: `已读取 ${normalizedCount} 个 PPT 文件`,
@@ -223,7 +224,7 @@ export const getAssistantToolSummaryText = (
       failed: `读取 ${normalizedCount} 个 PPT 文件失败`
     })
   }
-  if (skillKey === 'ppt-search') {
+  if (toolsetKey === 'ppt-search') {
     return statusText(status, {
       running: '正在搜索 PPT',
       completed: '已搜索 PPT',
@@ -231,7 +232,7 @@ export const getAssistantToolSummaryText = (
       failed: '搜索 PPT 失败'
     })
   }
-  if (skillKey === 'ppt-edit') {
+  if (toolsetKey === 'ppt-edit') {
     return statusText(status, {
       running: `正在编辑 ${normalizedCount} 个 PPT 文件`,
       completed: `已编辑 ${normalizedCount} 个 PPT 文件`,
@@ -239,7 +240,7 @@ export const getAssistantToolSummaryText = (
       failed: `编辑 ${normalizedCount} 个 PPT 文件失败`
     })
   }
-  if (skillKey === 'excel-read') {
+  if (toolsetKey === 'excel-read') {
     return statusText(status, {
       running: `正在读取 ${normalizedCount} 个 Excel 文件`,
       completed: `已读取 ${normalizedCount} 个 Excel 文件`,
@@ -247,7 +248,7 @@ export const getAssistantToolSummaryText = (
       failed: `读取 ${normalizedCount} 个 Excel 文件失败`
     })
   }
-  if (skillKey === 'excel-edit') {
+  if (toolsetKey === 'excel-edit') {
     return statusText(status, {
       running: `正在编辑 ${normalizedCount} 个 Excel 文件`,
       completed: `已编辑 ${normalizedCount} 个 Excel 文件`,
@@ -255,7 +256,7 @@ export const getAssistantToolSummaryText = (
       failed: `编辑 ${normalizedCount} 个 Excel 文件失败`
     })
   }
-  if (skillKey === 'kb') {
+  if (toolsetKey === 'kb') {
     return statusText(status, {
       running: '正在检索知识库',
       completed: '已检索知识库',
@@ -263,7 +264,7 @@ export const getAssistantToolSummaryText = (
       failed: '检索知识库失败'
     })
   }
-  if (skillKey === 'terminal') {
+  if (toolsetKey === 'terminal') {
     return statusText(status, {
       running: '正在执行终端指令',
       completed: '已执行终端指令',
@@ -271,7 +272,7 @@ export const getAssistantToolSummaryText = (
       failed: '执行终端指令失败'
     })
   }
-  if (skillKey === 'web-search') {
+  if (toolsetKey === 'web-search') {
     return statusText(status, {
       running: '正在搜索网页',
       completed: '已搜索网页',
@@ -279,7 +280,7 @@ export const getAssistantToolSummaryText = (
       failed: '搜索网页失败'
     })
   }
-  if (skillKey === 'browser') {
+  if (toolsetKey === 'browser') {
     return statusText(status, {
       running: '正在操作浏览器',
       completed: `已操作浏览器 ${normalizedCount} 次`,
@@ -287,7 +288,7 @@ export const getAssistantToolSummaryText = (
       failed: '浏览器操作失败'
     })
   }
-  if (skillKey === 'image-generation') {
+  if (toolsetKey === 'image-generation') {
     return statusText(status, {
       running: '正在生成图片',
       completed: '已生成图片',
@@ -295,12 +296,12 @@ export const getAssistantToolSummaryText = (
       failed: '图片生成失败'
     })
   }
-  if (skillKey === 'learning') {
+  if (toolsetKey === 'toolset_loading') {
     return statusText(status, {
-      running: '正在学习技能',
-      completed: '已学会技能',
-      partial_failed: '部分技能学习失败',
-      failed: '学习技能失败'
+      running: '正在加载工具组',
+      completed: '已加载工具组',
+      partial_failed: '部分工具组加载失败',
+      failed: '工具组加载失败'
     })
   }
   return statusText(status, {
@@ -441,7 +442,7 @@ export const resolveItemIconKind = (
     input?: IpcJsonObject
     headerShortText?: string
   },
-  fallbackSkillKey?: AssistantExecutionSkillKey
+  fallbackToolsetKey?: AssistantExecutionToolsetKey
 ): AssistantExecutionIconKind => {
   if (item.toolName === 'ask_user_question') return 'question'
   if (item.toolName === 'browser_use') {
@@ -466,7 +467,7 @@ export const resolveItemIconKind = (
   if (item.toolName && item.toolName !== 'unnamed') {
     return getAssistantToolIconKind(getAssistantToolUiKind(item.toolName))
   }
-  return getAssistantToolIconKind(fallbackSkillKey || 'generic')
+  return getAssistantToolIconKind(fallbackToolsetKey || 'generic')
 }
 
 export const resolveAssistantExecutionIcon = (
@@ -476,10 +477,10 @@ export const resolveAssistantExecutionIcon = (
   for (const group of groups) {
     if (group.items.length > 0) {
       for (const item of group.items) {
-        iconKinds.add(resolveItemIconKind(item, group.skillKey))
+        iconKinds.add(resolveItemIconKind(item, group.toolsetKey))
       }
     } else {
-      iconKinds.add(getAssistantToolIconKind(group.skillKey))
+      iconKinds.add(getAssistantToolIconKind(group.toolsetKey))
     }
   }
   if (iconKinds.size === 1) return [...iconKinds][0] || 'generic'

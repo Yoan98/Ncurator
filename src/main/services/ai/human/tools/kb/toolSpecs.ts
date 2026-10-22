@@ -20,7 +20,7 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'kb_search',
   familyId: 'kb',
-  skillIds: ['kb-retrieval'],
+  toolsetIds: ['kb-retrieval'],
   inputSchema: KB_SEARCH_SCHEMA,
   promptSpec: {
     name: 'kb_search',
@@ -40,7 +40,7 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'kb_list_documents',
   familyId: 'kb',
-  skillIds: ['kb-retrieval'],
+  toolsetIds: ['kb-retrieval'],
   inputSchema: KB_LIST_DOCUMENTS_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',

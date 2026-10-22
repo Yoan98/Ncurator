@@ -19,7 +19,7 @@ export const SCHEDULED_TASK_LIST_SPEC: HumanToolSpec<
 > = {
   name: 'scheduled_task_list',
   familyId: 'scheduled-tasks',
-  skillIds: ['scheduled-tasks'],
+  toolsetIds: ['scheduled-tasks'],
   inputSchema: SCHEDULED_TASK_LIST_SCHEMA,
   promptSpec: {
     name: 'scheduled_task_list',
@@ -42,7 +42,7 @@ export const SCHEDULED_TASK_ACTION_SPEC: HumanToolSpec<
 > = {
   name: 'scheduled_task_action',
   familyId: 'scheduled-tasks',
-  skillIds: ['scheduled-tasks'],
+  toolsetIds: ['scheduled-tasks'],
   inputSchema: SCHEDULED_TASK_ACTION_SCHEMA,
   promptSpec: {
     name: 'scheduled_task_action',

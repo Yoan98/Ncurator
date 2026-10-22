@@ -4,9 +4,7 @@ import {
   type AssistantTurnViewModel
 } from '../../../harness/core/partnerLiveTurns'
 
-const createTurn = (
-  overrides: Partial<AssistantTurnViewModel> = {}
-): AssistantTurnViewModel => ({
+const createTurn = (overrides: Partial<AssistantTurnViewModel> = {}): AssistantTurnViewModel => ({
   messageId: 'msg-1',
   runId: 'run-1',
   status: 'running',
@@ -31,8 +29,10 @@ describe('resumeAssistantTurnFromLive', () => {
     const snapshot = createTurn({ isBrainThinking: false })
     expect(resumeAssistantTurnFromLive(snapshot, undefined)).toBe(snapshot)
     expect(
-      resumeAssistantTurnFromLive(createTurn({ runFinished: true }), createTurn({ isBrainThinking: true }))
-        .isBrainThinking
+      resumeAssistantTurnFromLive(
+        createTurn({ runFinished: true }),
+        createTurn({ isBrainThinking: true })
+      ).isBrainThinking
     ).toBe(false)
   })
 
@@ -49,7 +49,7 @@ describe('resumeAssistantTurnFromLive', () => {
         {
           id: 'run-1:thinking',
           kind: 'thinking',
-          skillKey: 'generic',
+          toolsetKey: 'generic',
           iconKind: 'default',
           status: 'running',
           runningText: [],
@@ -61,9 +61,9 @@ describe('resumeAssistantTurnFromLive', () => {
           items: []
         },
         {
-          id: 'run-1:skill-a',
-          kind: 'skill',
-          skillKey: 'generic',
+          id: 'run-1:toolset-a',
+          kind: 'toolset',
+          toolsetKey: 'generic',
           iconKind: 'default',
           status: 'completed',
           runningText: [],
@@ -82,7 +82,7 @@ describe('resumeAssistantTurnFromLive', () => {
         {
           id: 'run-1:llm-retry',
           kind: 'retry',
-          skillKey: 'generic',
+          toolsetKey: 'generic',
           iconKind: 'retry',
           status: 'running',
           runningText: [],

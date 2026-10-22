@@ -6,7 +6,7 @@ import { createChatServiceTestRunner } from '../../../../harness/backend/aiServi
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
+  buildLoadToolsetsDecision,
   buildToolDecision,
   filterAiRunEventsByType
 } from '../testUtils'
@@ -88,8 +88,8 @@ describe('ai human mock-llm excel backend', () => {
                 if (!locator) throw new Error('Excel 引用缺少定位信息')
                 sheetName = locator[1]
                 range = locator[2]
-                return buildLearnSkillsDecision({
-                  skillIds: ['excel-read', 'excel-write'],
+                return buildLoadToolsetsDecision({
+                  toolsetIds: ['excel-read', 'excel-write'],
                   summary: '学习 Excel 读写能力'
                 })
               },

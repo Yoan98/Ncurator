@@ -111,7 +111,7 @@ export const projectProcessGroups = (input: {
           })
           const group = createDisplayProcessGroup({
             groupId: `${input.runId}:tool:${commandId}`,
-            kind: 'skill',
+            kind: 'toolset',
             display,
             status: 'running',
             createdAt,
@@ -252,7 +252,7 @@ export const projectProcessGroups = (input: {
           : undefined
       const group = createDisplayProcessGroup({
         groupId,
-        kind: 'skill',
+        kind: 'toolset',
         display,
         status,
         createdAt: existingGroup?.createdAt || createdAt,

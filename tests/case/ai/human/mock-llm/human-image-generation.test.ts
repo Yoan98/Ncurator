@@ -6,7 +6,7 @@ import { createAiServiceTestRunner } from '../../../../harness/backend/aiService
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
+  buildLoadToolsetsDecision,
   buildToolDecision,
   filterAiRunEventsByType
 } from '../testUtils'
@@ -32,8 +32,8 @@ describe('ai human mock-llm image generation backend', () => {
           llmScript: {
             'human.brain': [
               {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['image-generation'],
+                output: buildLoadToolsetsDecision({
+                  toolsetIds: ['image-generation'],
                   summary: '学习图片生成技能。'
                 })
               },

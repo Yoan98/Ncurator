@@ -1,7 +1,7 @@
 import { renderTerminalRunModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { renderTerminalReadModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { describe, expect, it } from 'vitest'
-import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
+import { TOOLSET_DEFINITIONS } from '../../../../src/main/services/ai/human/toolsets'
 import { TERMINAL_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
 import {
   TERMINAL_READ_SCHEMA,
@@ -13,11 +13,11 @@ import {
 } from '../../../../src/main/services/ai/human/tools/terminal/terminalToolStatus'
 
 describe('ai unit terminal tool contract', () => {
-  it('binds both tools to the terminal skill', () => {
+  it('binds both tools to the terminal toolset', () => {
     expect(TERMINAL_TOOL_SPECS.map((spec) => spec.name)).toEqual(['terminal_run', 'terminal_read'])
-    expect(SKILL_DEFINITIONS.terminal.toolNames).toEqual(['terminal_run', 'terminal_read'])
+    expect(TOOLSET_DEFINITIONS.terminal.toolNames).toEqual(['terminal_run', 'terminal_read'])
     TERMINAL_TOOL_SPECS.forEach((spec) => {
-      expect(spec.skillIds).toEqual(['terminal'])
+      expect(spec.toolsetIds).toEqual(['terminal'])
       expect(spec.familyId).toBe('terminal')
       expect(typeof spec.modelResult.renderSuccess).toBe('function')
     })

@@ -27,7 +27,7 @@ export const createTerminalRunToolSpec = (
 ): TerminalRunToolSpec => ({
   name: 'terminal_run',
   familyId: 'terminal',
-  skillIds: ['terminal'],
+  toolsetIds: ['terminal'],
   inputSchema: TERMINAL_RUN_SCHEMA,
   promptSpec: {
     name: 'terminal_run',
@@ -48,7 +48,7 @@ export const createTerminalRunToolSpec = (
 export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
   name: 'terminal_read',
   familyId: 'terminal',
-  skillIds: ['terminal'],
+  toolsetIds: ['terminal'],
   inputSchema: TERMINAL_READ_SCHEMA,
   promptSpec: {
     name: 'terminal_read',

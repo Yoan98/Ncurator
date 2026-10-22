@@ -42,7 +42,7 @@ const createStubAiRunContext = (): AiRunContext =>
 
 const createRuntimeCache = (): HumanRuntimeCache => ({
   familyToolsets: {},
-  skillToolsets: {},
+  toolsetTools: {},
   toolCallCount: 0
 })
 
@@ -52,7 +52,7 @@ describe('ai unit human tool executor error', () => {
       ctx: createStubAiRunContext(),
       cache: createRuntimeCache(),
       taskId: 'task-tool-error',
-      learnedSkillIds: [],
+      loadedToolsetIds: [],
       toolName: 'terminal_run',
       args: {}
     })

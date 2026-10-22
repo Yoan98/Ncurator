@@ -34,9 +34,23 @@ export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
     .describe('本次分配的子agent列表')
 })
 
-export const LEARN_SKILL_SCHEMA = z.object({
-  skillIds: z.array(z.string().min(1)).min(1).describe('要加载的技能 ID 列表')
-})
+export const LOAD_TOOLSET_SCHEMA = z
+  .object({
+    toolsetIds: z
+      .array(z.string().min(1))
+      .min(1)
+      .describe('要加载的已注册工具组 ID 列表，不接受用户技能 ID')
+  })
+  .strict()
+
+export const LOAD_SKILL_SCHEMA = z
+  .object({
+    skillIds: z
+      .array(z.string().min(1))
+      .min(1)
+      .describe('当前伙伴启用的用户技能 ID 列表（user: 前缀），只加载说明，不加载工具组')
+  })
+  .strict()
 
 export const UPDATE_PLAN_SCHEMA = z.object({
   plan: z.array(humanPlanItemSchema).min(1).describe('任务计划条目')
@@ -77,7 +91,7 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
 export type AskUserQuestionInput = z.infer<typeof ASK_USER_QUESTION_SCHEMA>
 
 export type {
-  LearnSkillOutput,
+  LoadToolsetOutput,
   ReadImageItem,
   ReadImageOutput,
   UpdatePlanOutput

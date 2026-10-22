@@ -19,7 +19,7 @@ import {
 } from '../../../../harness/backend/aiLiveTestData'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
+  buildLoadToolsetsDecision,
   filterAiRunEventsByType
 } from '../testUtils'
 
@@ -212,8 +212,8 @@ describe('ai human mock-llm backend', () => {
           structuredOutputScript: {
             'human.brain': [
               {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['pdf-read'],
+                output: buildLoadToolsetsDecision({
+                  toolsetIds: ['pdf-read'],
                   summary: '补齐 PDF 阅读能力。'
                 })
               },
@@ -241,7 +241,7 @@ describe('ai human mock-llm backend', () => {
                     action: 'hand',
                     calls: [
                       { toolName: 'read_image', args: { paths: [pageImagePath] } },
-                      { toolName: 'learn_skill', args: { skillIds: ['ppt-read'] } },
+                      { toolName: 'load_toolset', args: { toolsetIds: ['ppt-read'] } },
                       { toolName: 'read_image', args: { paths: [pageImagePath] } }
                     ]
                   }

@@ -21,7 +21,7 @@
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖列表打开/焦点刷新、右键行内新建和确认移到回收站，以及删除后禁止自动保存重建。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；用户行为见 `WB-WPS-001`。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
-- image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
+- image generation apply case 需要真实模型先加载外置 `image-generation` 工具包、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；必须在无进程级远程调试口下完成。同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 使用正文由 JavaScript 渲染的真实本地页面，验证冻结网页后台进程连接浏览器并取得正文，不设置本地地址绕过抓取的测试配置。两类 case 均验证结果只回模型、不自动展开右侧面板，对齐 `WB-CORE-007-AC4`；正式包从系统真实入口启动，规则见 `doc/test.md`。
 - Workbench 附件链路不限制文件扩展名、大小、数量或目录大小；点击 `+` 直接打开可选择文件或目录的系统选择器，拖放接受文件与目录并保留源绝对路径，目录不递归扫描；附件卡片采用紧凑内边距，文件夹、音频和视频分别使用对应图标；图片保持灯箱预览，支持右侧文件预览的文档打开资源 Tab，文件夹打开系统文件管理器，音视频和其他不支持右侧预览的文件定位到系统文件所在位置；粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
@@ -373,7 +373,7 @@ pnpm test:update:e2e
 
 - 测试类型：e2e / live；suite `run`，group `subagent`；serviceMode `real`。
 - What：同一持久子会话中断后新执行首次请求的前缀与真实缓存，以及子内部连续调用和父派发收口缓存。
-- Why：SQLite 转录、恢复技能/checkpoint 和续接追加不能改写既有模型前缀。
+- Why：SQLite 转录、恢复工具包/checkpoint 和续接追加不能改写既有模型前缀。
 - How：发布时通过 `--target package` 在隔离安装的国内候选包执行；源码执行仅用于开发排查。真实 UI 配置模型、派发两项任务，复制现有排期/口径/备注/财务跟进 fixture 到临时资料目录，待续接任务依次核对排期、主负责人和财务执行动作。主伙伴只派发与汇总，不提前探测网页，完整转达各子任务的文件与网页核对要求。一个完成，另一个读完后进入真实待加载网页；同时取得子任务执行 `browser_use` 与页面请求证据后，通过 UI 停止并要求查询、续接原子会话，不能把其他网络访问当作子任务已进入待加载状态。相同模型/工作区短间隔续接，不填充提示或伪造输出/usage。真实本地页面只作输入，observer/只读 IPC 只取证。
 - Oracle：对齐 `WB-SUBAGENT-001-AC10`。同 agentId、不同 childRunId；原任务/历史事实保留，最终交付正确且输入不变，完成清理子日志。每个完成的子任务及续接主任务至少有一对连续请求，逐对核对已有消息与工具前缀，并确认实际缓存复用；允许一轮调用多个读取工具。 每份资料从模型请求的工具消息正文取证，不再次 JSON 序列化，避免 Windows 路径转义影响匹配；证据须含完整或工作目录相对路径及真实正文锚点，允许通过文本工具或终端读取；交付仍须包含全部来源路径。比较中断前末次带完整 usage 请求与续接首次请求的工具及已有消息前缀，实际 cachedInputTokens 超过该子会话首次请求的 inputTokens，证明复用包含新增历史；前缀变化、usage 缺失或仅公共前缀命中失败。复用率为续接 cachedInputTokens / 中断前 inputTokens，85%为评估参考，记录首轮/末轮输入规模区分公共前缀和历史复用，不要求所有短请求达 85%。保留请求差异、主子关联、截图、usage 和人工评估。重启持久性由恢复 E2E 验证。
 
@@ -390,9 +390,9 @@ pnpm test:update:e2e
 
 - 测试类型：`e2e`
 - What：智能模式真实发送后，验证 run 用时、过程记录折叠、Thought / Activity 过程层渲染与最终 markdown 收口（过程流主 case）。
-- Why：重构后过程层是用户扫进度的主界面；需覆盖 Activity 折叠 header、展开平铺、学习/工具统一渲染，以及最终回答，而不是只断言“有过程块”。
+- Why：重构后过程层是用户扫进度的主界面；需覆盖 Activity 折叠 header、展开平铺、加载/工具统一渲染，以及最终回答，而不是只断言“有过程块”。
 - How：真实文件地址内准备带唯一事实的文件；先创建伙伴；用户通过 UI 发送自然语言总结请求，并附带读取工作区内一个不存在文本文件的请求，使真实只读工具返回一次失败；run 运行期间检查已处理时间出现并递增，完成后检查固定用时、默认收起和最终回答可见；展开过程记录与全部 Activity 面板并采集 header / body 文案。
-- Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；用户与 assistant 消息不展示头像，用户消息右对齐气泡，assistant 过程流/最终输出与 composer 内容 rail 对齐，最终 markdown 无独立背景卡片，对齐 `WB-COMPOSER-009-AC1`、`WB-COMPOSER-009-AC2`、`WB-COMPOSER-009-AC3`、`WB-COMPOSER-009-AC4`。运行中过程流可见；“让俺想想”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“让俺想想”，对齐 `WB-COMPOSER-003-AC3`。若本轮碰巧出现自动重试，仍不得与“让俺想想”同时出现；强制打出重试行、单行就地更新与 429 退避由 `llm-retry-process-row` 覆盖，对齐 `WB-COMPOSER-015`。决策层（Thought）短摘要可见且不暴露原始长推理，以正常正文色（#37352F）展示，运行中与完成后保持相同强调度，未超出单行时不展示折叠图标，超出单行时单行省略，hover 时展示展开图标且垂直居中于单行文本，展开后常驻浅灰卡片背景、折叠按钮居顶对齐第一行并在内部滚动，对齐 `WB-COMPOSER-003-AC5`、`WB-COMPOSER-009-AC10`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」），根据单一动作或混合工具精准呈现对应专属语义图标（询问用户使用困惑表情图标；浏览器打开/查看/操作/提取/截图/滚动/标签、网页抓取/搜索、图片读取/生成或工作流闪电图标；截取页面并读取图片的成对视觉动作统一呈现为照片图标，不退化为闪电；浏览器操作不产生审批卡片与展开行审核绿勾）；展开行为带对象的工具原句且不含冒号强调；若含 `read_image`：展开行含「读取图片」文案且按入参 `paths` 展示可点击缩略图（`workbench-read-image-thumb-*`），点击后打开与附件相同的 `ImageLightbox`；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`、`WB-BLOCKER-001-AC8`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用顿号 `、` 拼接（两侧无空格）；>3 类 summary 为「已完成 n 项」。若事件含 `learn_skill`：展开行文案含“正在学习 / 已学会”，且不作为独立学习层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。文件名、query、命令、URL 和技能名不使用粗体或冒号强调，对齐 `WB-COMPOSER-009-AC7`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试行由 `llm-retry-process-row` 覆盖；`WB-COMPOSER-014-AC3` 的截断提示和半截回答上下文边界、`WB-COMPOSER-014-AC4` 的计划进度环交互没有专门 UI 断言，见自动化覆盖边界。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。仅切换伙伴或新建干净对话时不得凭空出现“正在 / 已检索知识库”，对齐 `WB-COMPOSER-009-AC12`。
+- Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；用户与 assistant 消息不展示头像，用户消息右对齐气泡，assistant 过程流/最终输出与 composer 内容 rail 对齐，最终 markdown 无独立背景卡片，对齐 `WB-COMPOSER-009-AC1`、`WB-COMPOSER-009-AC2`、`WB-COMPOSER-009-AC3`、`WB-COMPOSER-009-AC4`。运行中过程流可见；“让俺想想”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“让俺想想”，对齐 `WB-COMPOSER-003-AC3`。若本轮碰巧出现自动重试，仍不得与“让俺想想”同时出现；强制打出重试行、单行就地更新与 429 退避由 `llm-retry-process-row` 覆盖，对齐 `WB-COMPOSER-015`。决策层（Thought）短摘要可见且不暴露原始长推理，以正常正文色（#37352F）展示，运行中与完成后保持相同强调度，未超出单行时不展示折叠图标，超出单行时单行省略，hover 时展示展开图标且垂直居中于单行文本，展开后常驻浅灰卡片背景、折叠按钮居顶对齐第一行并在内部滚动，对齐 `WB-COMPOSER-003-AC5`、`WB-COMPOSER-009-AC10`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」），根据单一动作或混合工具精准呈现对应专属语义图标（询问用户使用困惑表情图标；浏览器打开/查看/操作/提取/截图/滚动/标签、网页抓取/搜索、图片读取/生成或工作流闪电图标；截取页面并读取图片的成对视觉动作统一呈现为照片图标，不退化为闪电；浏览器操作不产生审批卡片与展开行审核绿勾）；展开行为带对象的工具原句且不含冒号强调；若含 `read_image`：展开行含「读取图片」文案且按入参 `paths` 展示可点击缩略图（`workbench-read-image-thumb-*`），点击后打开与附件相同的 `ImageLightbox`；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`、`WB-BLOCKER-001-AC8`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用顿号 `、` 拼接（两侧无空格）；>3 类 summary 为「已完成 n 项」。若事件含 `load_toolset` / `load_skill`：展开行文案含“正在加载 / 已加载”，且不作为独立加载层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。文件名、query、命令、URL 和工具包或说明技能名不使用粗体或冒号强调，对齐 `WB-COMPOSER-009-AC7`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试行由 `llm-retry-process-row` 覆盖；`WB-COMPOSER-014-AC3` 的截断提示和半截回答上下文边界、`WB-COMPOSER-014-AC4` 的计划进度环交互没有专门 UI 断言，见自动化覆盖边界。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。仅切换伙伴或新建干净对话时不得凭空出现“正在 / 已检索知识库”，对齐 `WB-COMPOSER-009-AC12`。
 
 - Oracle：run 开始后过程内容出现前也显示「已处理」计时和分隔线，且运行至少 1 秒后用时递增；不足一分钟只显示秒数，不出现「0分钟」。完成后用时固定，且不足一分钟只显示秒数；运行中计时和 Thought 内容使用正常正文色；完成后「用时」文字及展开/收起箭头为中性灰色（#9B9A97），文字 13px、箭头 14px，Thought 保持正常正文色；Activity header 与展开面板内容保持灰色层级，已完成过程不整体降低透明度；过程默认收起。展开过程后 Thought / Activity 可见，再次收起不影响最终回答。对齐 `WB-COMPOSER-016-AC1` 至 `WB-COMPOSER-016-AC3`。
 - Oracle：任何工具失败或部分失败时 Activity header 保持中性灰色层级（流光期间可使用正文色），header 失败文案可以保留；展开后具体失败工具行显示红色提示。
@@ -443,10 +443,10 @@ pnpm test:update:e2e
 #### `session-skill-memory-persistence`
 
 - 测试类型：`e2e`
-- What：同一伙伴的多轮 AI run 能复用已学习的技能并继续上一轮任务主线。
-- Why：续做不能丢失已有上下文，也不能每轮重复学习同一技能。
+- What：同一伙伴的多轮 AI run 能复用已加载的工具包并继续上一轮任务主线。
+- Why：续做不能丢失已有上下文，也不能每轮重复加载同一工具包。
 - How：通过真实 Workbench UI 完成两轮请求，检查两轮 human steps、工具选择和最终结果。
-- Oracle：第一轮学习 `docx-read` 技能；第二轮不重复 learning 且能使用该技能继续读取文档；两轮结果均完成，对齐 `WB-SESSION-005-AC1`、`WB-SESSION-005-AC2`。同一伙伴续做不自动丢掉还没压缩的历史原文，对齐 `WB-SESSION-005-AC3`。
+- Oracle：第一轮加载 `docx-read` 工具包；第二轮不重复 toolset_loading 且能使用该工具包继续读取文档；两轮结果均完成，对齐 `WB-SESSION-005-AC1`、`WB-SESSION-005-AC2`。同一伙伴续做不自动丢掉还没压缩的历史原文，对齐 `WB-SESSION-005-AC3`。
 
 #### `approval-batch-flow`
 
@@ -537,7 +537,7 @@ pnpm test:update:e2e
 
 - 测试类型：`e2e / live`
 - What：真实 AI 根据用户请求生成 PNG 图片，用户可以从修改入口预览并回退删除该图片。
-- Why：工具级转码成功不能证明真实模型会使用图片生成技能，也不能证明最终图片能进入 Workbench 的预览和回退闭环。
+- Why：工具级转码成功不能证明真实模型会使用图片生成工具包，也不能证明最终图片能进入 Workbench 的预览和回退闭环。
 - How：通过真实 Workbench UI 请求 AI 在文件地址内生成指定文件名的简单 PNG；等待 run 完成后打开修改入口，检查图片预览，再执行统一回退确认。
 - Oracle：真实调用 `image_generate` 且输入只有 `outputPath/svg`，正式文件具有 PNG 签名，对齐 `WB-IMAGE-001-AC1`、`WB-IMAGE-001-AC2`；assistant 修改入口、右侧预览和新建文件回退删除对齐 `WB-APPLY-002-AC7`、`WB-APPLY-003-AC7`。自动创建/更新由 AI `image-generate-format-create-update-contract` 覆盖 `WB-IMAGE-001-AC3`，失败无副作用由 `image-generate-safety-and-boundary-contract` 覆盖 `WB-IMAGE-001-AC4`。
 
@@ -855,3 +855,11 @@ pnpm test:update:e2e
 | `ST-VIEW-001-AC5`                                                           | 部分覆盖：`scheduled-task-partner-deletion` 没有定时视图下删除弹窗可见与可操作的独立 Oracle。                                                                                                                                                                                                                                             |
 | `ST-LIST-001-AC1/AC3`                                                       | 部分覆盖：`scheduled-task-config-lifecycle` 检查创建后列表、摘要与入口；重开初始化及无任务空态没有明确断言。                                                                                                                                                                                                                              |
 | `ST-SWITCH-001-AC2`                                                         | 部分覆盖：`scheduled-task-config-lifecycle` 检查开关值；关闭后等待到点不触发尚无 E2E。                                                                                                                                                                                                                                                    |
+
+### 共享用户技能覆盖边界
+
+- `WB-SKILL-001-AC1/AC6`：真实 UI 导航、取消/关闭/重复点击和删除弹窗仍需 E2E 验证，本次不声称完成界面验收。
+- `WB-SKILL-001-AC2`：`unit/storage/user-skills.test.ts` 验证真实 SQLite、完整文件复制、未知 YAML/资源字节保留、源目录删除、同名冲突、路径和文件类型守卫；这是后端证据，不代替原生目录选择器 UI。
+- `WB-SKILL-001-AC3`：上述 Unit 验证按伙伴绑定、重开数据库和删除伙伴后的共享资源保留；UI 异步切换仍属真实 E2E 缺口。
+- `WB-SKILL-001-AC4/AC5`：`unit/ai/user-skill-runtime.test.ts` 验证独立加载入口、说明和预注册工具包隔离、重复加载、恢复/压缩后重新校验以及稳定目录。非实时模型验证不证明实际模型质量或供应商缓存命中率。
+- live AI 与真实 UI E2E 未包含在此变更的运行验证中；需使用维护者单独配置和授权的模型凭证与桌面环境。

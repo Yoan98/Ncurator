@@ -1,7 +1,7 @@
 import type { JsonObject } from '../../../../../../shared/types'
 import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabilities'
 import type { z } from 'zod/v4'
-import type { RuntimeSkillId } from '../../types'
+import type { RuntimeToolsetId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import {
   docxCommentsRevisionsSchema,
@@ -36,13 +36,13 @@ const writeMeta = createStaticExecutionMetaResolver({
 type DocxToolSpec<
   TArgs extends JsonObject = JsonObject,
   TName extends RuntimeToolName = RuntimeToolName,
-  TSkillId extends RuntimeSkillId = RuntimeSkillId
-> = HumanToolSpec<TArgs, TName, TSkillId> & { activityActionType: string }
+  TToolsetId extends RuntimeToolsetId = RuntimeToolsetId
+> = HumanToolSpec<TArgs, TName, TToolsetId> & { activityActionType: string }
 
 export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   name: 'docx_read_outline',
   familyId: 'docx',
-  skillIds: ['docx-read'],
+  toolsetIds: ['docx-read'],
   inputSchema: docxOutlineSchema,
   promptSpec: {
     name: 'docx_read_outline',
@@ -58,7 +58,7 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
 export const DOCX_SEARCH_TOOL_SPEC = {
   name: 'docx_search',
   familyId: 'docx',
-  skillIds: ['docx-read'],
+  toolsetIds: ['docx-read'],
   inputSchema: docxSearchSchema,
   promptSpec: {
     name: 'docx_search',
@@ -74,7 +74,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
 export const DOCX_READ_NODES_TOOL_SPEC = {
   name: 'docx_read_nodes',
   familyId: 'docx',
-  skillIds: ['docx-read'],
+  toolsetIds: ['docx-read'],
   inputSchema: docxReadNodesSchema,
   promptSpec: {
     name: 'docx_read_nodes',
@@ -90,17 +90,17 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
 const defineMutationSpec = <
   TName extends RuntimeToolName,
   TSchema extends z.ZodType,
-  TSkillId extends RuntimeSkillId
+  TToolsetId extends RuntimeToolsetId
 >(input: {
   name: TName
-  skillId: TSkillId
+  toolsetId: TToolsetId
   schema: TSchema
   description: string
   modelResult: HumanToolSpec['modelResult']
 }) => ({
   name: input.name,
   familyId: 'docx' as const,
-  skillIds: [input.skillId],
+  toolsetIds: [input.toolsetId],
   inputSchema: input.schema,
   promptSpec: { name: input.name, description: input.description },
   resolveExecutionMeta: writeMeta,
@@ -110,7 +110,7 @@ const defineMutationSpec = <
 
 export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_content_edit',
-  skillId: 'docx-write',
+  toolsetId: 'docx-write',
   schema: docxContentEditSchema,
   description:
     '创建 DOCX，或对正文节点执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一。',
@@ -119,7 +119,7 @@ export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineMutationSpec({
 
 export const DOCX_FORMAT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_format',
-  skillId: 'docx-write',
+  toolsetId: 'docx-write',
   schema: docxFormatSchema,
   description: '修改已有内容的显示格式：局部文字、段落、命名样式、编号和 section。',
   modelResult: { renderSuccess: renderDocxMutationModelResult }
@@ -127,7 +127,7 @@ export const DOCX_FORMAT_TOOL_SPEC = defineMutationSpec({
 
 export const DOCX_TABLE_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_table_edit',
-  skillId: 'docx-write',
+  toolsetId: 'docx-write',
   schema: docxTableEditSchema,
   description: '修改表格结构（行列、合并拆分）以及表、行、单元格外观。',
   modelResult: { renderSuccess: renderDocxMutationModelResult }
@@ -135,7 +135,7 @@ export const DOCX_TABLE_EDIT_TOOL_SPEC = defineMutationSpec({
 
 export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineMutationSpec({
   name: 'docx_comments_revisions',
-  skillId: 'docx-write',
+  toolsetId: 'docx-write',
   schema: docxCommentsRevisionsSchema,
   description: '新增、修改、回复或删除批注；开关修订模式；接受或拒绝修订。',
   modelResult: { renderSuccess: renderDocxMutationModelResult }

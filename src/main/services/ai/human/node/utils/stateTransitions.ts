@@ -6,10 +6,7 @@ import type {
   HumanDispatchItem
 } from '../../types'
 import type { MarkdownLinkAccessEntry } from '../../../../../../shared/types'
-import {
-  emitLatestHumanStepForState,
-  emitTailHumanStepsForState
-} from './stateTransitionEvents'
+import { emitLatestHumanStepForState, emitTailHumanStepsForState } from './stateTransitionEvents'
 import {
   applyBrainDecisionState,
   buildHumanResult,
@@ -23,10 +20,8 @@ import { peekDispatchGroup } from '../dispatch'
 
 export type { HumanTraceItemInput } from './stateTransitionState'
 
-export const returnToBrain = (
-  state: HumanState,
-  overrides: HumanStateOverrides = {}
-): HumanState => returnToBrainState(state, overrides)
+export const returnToBrain = (state: HumanState, overrides: HumanStateOverrides = {}): HumanState =>
+  returnToBrainState(state, overrides)
 
 export const returnToDispatch = (
   state: HumanState,
@@ -46,7 +41,7 @@ export const returnToBrainAfterTrace = (input: {
   cache: HumanRuntimeCache
   state: HumanState
   traceItems: HumanTraceItemInput[]
-  stage: 'human_learning' | 'human_hand'
+  stage: 'human_toolset_loading' | 'human_skill_loading' | 'human_hand'
   overrides?: HumanStateOverrides<'trace'>
 }): HumanState => {
   const nextState = returnToBrainAfterTraceState({

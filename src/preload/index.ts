@@ -328,6 +328,12 @@ const api: DesktopApi = {
   confirmDialogShow: (payload) => ipcRenderer.invoke('confirm-dialog-show', payload),
   confirmDialogClose: (dialogId) => ipcRenderer.invoke('confirm-dialog-close', dialogId),
   partnerMessageList: (partnerId: string) => ipcRenderer.invoke('chat-message-list', partnerId),
+  userSkillsList: () => ipcRenderer.invoke('user-skills-list'),
+  userSkillsImport: () => ipcRenderer.invoke('user-skills-import'),
+  userSkillsCreate: (input) => ipcRenderer.invoke('user-skills-create', input),
+  userSkillsDelete: (id) => ipcRenderer.invoke('user-skills-delete', id),
+  userSkillsGetEnabled: (partnerId) => ipcRenderer.invoke('user-skills-get-enabled', partnerId),
+  userSkillsSetEnabled: (input) => ipcRenderer.invoke('user-skills-set-enabled', input),
   scheduledTaskList: () => {
     emitE2EIpcCall('scheduledTaskList')
     return ipcRenderer.invoke('scheduled-task-list')

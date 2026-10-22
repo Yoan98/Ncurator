@@ -1020,12 +1020,12 @@ export const renderReadImageModelResult: ModelResultRenderer = ({ data }) => {
   ])
 }
 
-export const renderLearnSkillModelResult: ModelResultRenderer = ({ args }) => {
-  const requested = Array.isArray(args.skillIds)
-    ? args.skillIds.filter((item): item is string => typeof item === 'string')
+export const renderLoadToolsetModelResult: ModelResultRenderer = ({ args }) => {
+  const requested = Array.isArray(args.toolsetIds)
+    ? args.toolsetIds.filter((item): item is string => typeof item === 'string')
     : []
   return renderPlainConfirmation(
-    `Skill loaded successfully: ${requested.join(', ') || 'requested skill'}.`
+    `Toolset loaded successfully: ${requested.join(', ') || 'requested toolset'}.`
   )
 }
 

@@ -3,14 +3,15 @@ import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import {
   renderAskUserQuestionModelResult,
-  renderLearnSkillModelResult,
+  renderLoadToolsetModelResult,
   renderPlanUpdateModelResult,
   renderReadImageModelResult
 } from '../../shared/modelToolResultRenderers'
 import {
   DELEGATE_TO_SUBAGENT_SCHEMA,
   LIST_AGENT_SCHEMA,
-  LEARN_SKILL_SCHEMA,
+  LOAD_TOOLSET_SCHEMA,
+  LOAD_SKILL_SCHEMA,
   READ_IMAGE_SCHEMA,
   UPDATE_PLAN_SCHEMA,
   ASK_USER_QUESTION_SCHEMA
@@ -23,7 +24,7 @@ export const ASK_USER_QUESTION_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'ask_user_question',
   familyId: 'agent-control',
-  skillIds: ['agent-control'],
+  toolsetIds: ['agent-control'],
   inputSchema: ASK_USER_QUESTION_SCHEMA,
   promptSpec: {
     name: 'ask_user_question',
@@ -37,24 +38,44 @@ export const ASK_USER_QUESTION_TOOL_SPEC: HumanToolSpec<
   modelResult: { renderSuccess: renderAskUserQuestionModelResult }
 }
 
-export const LEARN_SKILL_TOOL_SPEC: HumanToolSpec<
-  z.infer<typeof LEARN_SKILL_SCHEMA>,
-  'learn_skill',
+export const LOAD_TOOLSET_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof LOAD_TOOLSET_SCHEMA>,
+  'load_toolset',
   'agent-control'
 > = {
-  name: 'learn_skill',
+  name: 'load_toolset',
   familyId: 'agent-control',
-  skillIds: ['agent-control'],
-  inputSchema: LEARN_SKILL_SCHEMA,
+  toolsetIds: ['agent-control'],
+  inputSchema: LOAD_TOOLSET_SCHEMA,
   promptSpec: {
-    name: 'learn_skill',
-    description: '加载指定技能。'
+    name: 'load_toolset',
+    description: '加载已注册的工具组，使其工具可用；不加载用户技能说明。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
     defaultResourceKey: 'agent-control'
   }),
-  modelResult: { renderSuccess: renderLearnSkillModelResult }
+  modelResult: { renderSuccess: renderLoadToolsetModelResult }
+}
+
+export const LOAD_SKILL_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof LOAD_SKILL_SCHEMA>,
+  'load_skill',
+  'agent-control'
+> = {
+  name: 'load_skill',
+  familyId: 'agent-control',
+  toolsetIds: ['agent-control'],
+  inputSchema: LOAD_SKILL_SCHEMA,
+  promptSpec: {
+    name: 'load_skill',
+    description: '加载当前伙伴启用的用户技能说明与资源基址；不注册工具、不执行脚本、不增加权限。'
+  },
+  resolveExecutionMeta: createStaticExecutionMetaResolver({
+    mutability: 'read_only',
+    defaultResourceKey: 'agent-control'
+  }),
+  modelResult: { renderSuccess: () => 'User instruction loading completed.' }
 }
 
 export const UPDATE_PLAN_TOOL_SPEC: HumanToolSpec<
@@ -64,7 +85,7 @@ export const UPDATE_PLAN_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'update_plan',
   familyId: 'agent-control',
-  skillIds: ['agent-control'],
+  toolsetIds: ['agent-control'],
   inputSchema: UPDATE_PLAN_SCHEMA,
   promptSpec: {
     name: 'update_plan',
@@ -84,7 +105,7 @@ export const READ_IMAGE_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'read_image',
   familyId: 'agent-control',
-  skillIds: ['agent-control'],
+  toolsetIds: ['agent-control'],
   inputSchema: READ_IMAGE_SCHEMA,
   promptSpec: {
     name: 'read_image',
@@ -104,7 +125,7 @@ export const DELEGATE_TO_SUBAGENT_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'delegate_to_subagent',
   familyId: 'agent-control',
-  skillIds: ['agent-control'],
+  toolsetIds: ['agent-control'],
   inputSchema: DELEGATE_TO_SUBAGENT_SCHEMA,
   promptSpec: {
     name: 'delegate_to_subagent',
@@ -124,7 +145,7 @@ export const LIST_AGENT_TOOL_SPEC: HumanToolSpec<
 > = {
   name: 'list_agent',
   familyId: 'agent-control',
-  skillIds: ['agent-control'],
+  toolsetIds: ['agent-control'],
   inputSchema: LIST_AGENT_SCHEMA,
   promptSpec: {
     name: 'list_agent',
@@ -140,7 +161,8 @@ export const LIST_AGENT_TOOL_SPEC: HumanToolSpec<
 export const AGENT_CONTROL_TOOL_SPECS = [
   DELEGATE_TO_SUBAGENT_TOOL_SPEC,
   LIST_AGENT_TOOL_SPEC,
-  LEARN_SKILL_TOOL_SPEC,
+  LOAD_TOOLSET_TOOL_SPEC,
+  LOAD_SKILL_TOOL_SPEC,
   UPDATE_PLAN_TOOL_SPEC,
   READ_IMAGE_TOOL_SPEC,
   ASK_USER_QUESTION_TOOL_SPEC

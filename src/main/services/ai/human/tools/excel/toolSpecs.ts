@@ -1,7 +1,7 @@
 import { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../shared/types'
 import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabilities'
-import type { RuntimeSkillId } from '../../types'
+import type { RuntimeToolsetId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import { excelEditSchema, excelReadSchema } from './toolSchemas'
@@ -13,8 +13,8 @@ import {
 type ExcelSpec<
   TArgs extends JsonObject,
   TName extends RuntimeToolName,
-  TSkill extends RuntimeSkillId
-> = HumanToolSpec<TArgs, TName, TSkill>
+  TToolset extends RuntimeToolsetId
+> = HumanToolSpec<TArgs, TName, TToolset>
 
 const readMeta = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -30,7 +30,7 @@ const writeMeta = createStaticExecutionMetaResolver({
 export const EXCEL_READ_TOOL_SPEC = {
   name: 'excel_read',
   familyId: 'excel',
-  skillIds: ['excel-read'],
+  toolsetIds: ['excel-read'],
   inputSchema: excelReadSchema,
   promptSpec: {
     name: 'excel_read',
@@ -43,7 +43,7 @@ export const EXCEL_READ_TOOL_SPEC = {
 export const EXCEL_EDIT_TOOL_SPEC = {
   name: 'excel_edit',
   familyId: 'excel',
-  skillIds: ['excel-write'],
+  toolsetIds: ['excel-write'],
   inputSchema: excelEditSchema,
   promptSpec: {
     name: 'excel_edit',

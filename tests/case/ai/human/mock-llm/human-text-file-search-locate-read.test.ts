@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { buildCompleteTaskDecision, buildLearnSkillsDecision } from '../testUtils'
+import { buildCompleteTaskDecision, buildLoadToolsetsDecision } from '../testUtils'
 
 describe('ai human mock-llm text-file search', () => {
   it('human-text-file-search-locate-read', async () => {
@@ -31,8 +31,8 @@ describe('ai human mock-llm text-file search', () => {
           structuredOutputScript: {
             'human.brain': [
               {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['text-file'],
+                output: buildLoadToolsetsDecision({
+                  toolsetIds: ['text-file'],
                   summary: '学习文本读取能力'
                 })
               },

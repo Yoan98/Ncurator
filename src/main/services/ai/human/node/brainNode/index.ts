@@ -1,3 +1,4 @@
+import { refreshUserSkillContext } from '../../userSkillContext'
 import { randomUUID } from 'node:crypto'
 import { SystemMessage } from '@langchain/core/messages'
 import { getToolCalls } from '../../../../../utils/aiCapabilityUtils'
@@ -8,10 +9,10 @@ import { isContentSafetyError } from '../../../utils/runFailure'
 import { normalizeRoundThought } from '../../memory/thoughtMemory'
 import { buildBrainSystemPrompt } from '../../prompts/brain'
 import { projectBrainMessagesFromLog } from '../../memory/brainMessageProjection'
-import { assertExternalLearnedSkillIds } from '../../skills'
+import { assertExternalLoadedToolsetIds } from '../../toolsets'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyBrainDispatchTransition, returnToBrain } from '../utils/stateTransitions'
-import { buildAvailableTools } from '../learningNode/skillLoader'
+import { buildAvailableTools } from '../toolsetLoadingNode/toolsetLoader'
 import {
   createDeliveryGuidanceItem,
   mergeDeliveryGuidanceItems
@@ -59,7 +60,7 @@ export const createBrainNode = (input: {
         }
       }
     }
-    assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
+    assertExternalLoadedToolsetIds(state.toolsets.loadedToolsetIds)
     input.cache.currentState = state
 
     let messages = input.cache.messages
@@ -79,12 +80,14 @@ export const createBrainNode = (input: {
       input.cache.currentUserMessageIndex = brainProjection.currentUserMessageIndex + 1
     }
 
+    state = await refreshUserSkillContext({ ...input, state })
+
     const tools = buildAvailableTools({
       cache: input.cache,
       ctx: input.ctx,
       runId: input.ctx.runId,
       taskId: state.task.taskId,
-      learnedSkillIds: state.skills.learnedSkillIds
+      loadedToolsetIds: state.toolsets.loadedToolsetIds
     })
 
     const schemaByToolName = new Map<
@@ -311,9 +314,9 @@ export const createBrainNode = (input: {
       }
 
       // 在进入 hand 节点前，用工具自身的 schema 自行校验参数，避免 LangChain 内部校验
-      // 抛出只有路径、没有字段与期望值的 terse 错误。learn_skill/update_plan 由各自
+      // 抛出只有路径、没有字段与期望值的 terse 错误。update_plan 由其
       // 节点负责校验，这里跳过 schema，但仍统一做嵌套 JSON 字符串展开。
-      const NODE_OWNED_TOOL_NAMES = new Set(['learn_skill', 'update_plan'])
+      const NODE_OWNED_TOOL_NAMES = new Set(['update_plan'])
       const schemaInvalidCalls: Array<{ id: string; name: string; errorMessage: string }> = []
       const executableCalls: Parameters<typeof buildDispatchQueue>[0] = []
       for (const call of dispatchableCalls) {
