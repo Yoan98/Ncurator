@@ -17,6 +17,7 @@ prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` 
 - electron-builder 以 `release-stage/app` 为唯一应用输入，开发工作区不直接进入安装包。
 - 安装包包含构建后的应用、生产依赖与运行资源，排除开发和测试资料、`.env`、私钥、Source Map 及其他平台文件。`app.asar` 与 `VITE_*` 可由用户读取，不作为凭证保护手段。
 - 生产依赖按追踪结果裁剪，并验证关键读写路径；追踪触达待裁剪目录时构建失败，避免误删运行依赖。
+- 依赖内的运行时代码目录按精确路径保留，包括 ExcelJS 的 `lib/doc` 与 YAML 的 `dist/doc`；staging 校验 YAML 解析及序列化，实际安装包审计检查其关键运行时文件，不能按目录名将其当普通文档删除。
 - Windows x64 在 ONNX Runtime 与 Jieba 原生模块旁各自部署 VC++ 运行库，不要求用户预装系统运行库；安装包审计检查两处实际解包的二进制与 DLL，staging 实际加载 Jieba 默认词典并验证中文分词。
 - 网页抓取 sidecar 保留 Playwright 驱动 JS，复用 Electron 提供的 Node 与浏览器，不重复打包这些运行时。构建、缓存复用和打包后检查 sidecar 能否实际启动。
 - 候选 bundle 绑定 Tag、commit、fragment、安装包、更新文件与哈希，测试和发布消费同一份可校验产物。

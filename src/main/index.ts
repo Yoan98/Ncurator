@@ -24,6 +24,7 @@ import { AppUpdateService } from './services/update/AppUpdateService'
 import { APP_ID, APP_QUIT_CHANNEL, APP_STARTUP_GET_STATUS_CHANNEL } from '../shared/constants'
 import type { AiLlmIoRecord, AppStartupStatus } from '../shared/types'
 import { getModelsPath, syncUserDataPathFromElectron } from './utils/paths'
+import { EmbeddingModelService } from './services/vector/EmbeddingModelService'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 import { SystemNotificationService } from './services/SystemNotificationService'
@@ -369,6 +370,22 @@ if (!singleInstanceLock) {
     appStartupStatus = { mode: 'normal', ...getAppRuntime() }
     initializeAppMenu()
     embeddingRuntimeClient.setThreadBudget(resolveOrtThreadBudget(appSettings.knowledgeIndexSpeed))
+    const embeddingModelService = new EmbeddingModelService({
+      settingsStore: storageService.embeddingSettings,
+      documentsStore: storageService.documents,
+      embeddingService,
+      createLocalExecutor: async () =>
+        new EmbeddingRuntimeClient({
+          entryPath: fileURLToPath(new URL('./embeddingRuntimeProcess.js', import.meta.url)),
+          modelsPath: getModelsPath(),
+          modelName: DEFAULT_EMBEDDING_MODEL_NAME,
+          threadBudget: resolveOrtThreadBudget(
+            (await storageService.appSettings.get()).knowledgeIndexSpeed
+          ),
+          errorLogService
+        })
+    })
+    await embeddingModelService.initialize()
 
     const mainWindow = createWindow()
     mainWindow.webContents.on('render-process-gone', (_event, details) => {
@@ -418,6 +435,7 @@ if (!singleInstanceLock) {
     registerHandlers({
       ingestionService,
       embeddingService,
+      embeddingModelService,
       storageService,
       modelService,
       vectorModelDownloadService,
@@ -472,7 +490,9 @@ if (!singleInstanceLock) {
     })
     shutdownCoordinator.register({
       name: 'embedding-service',
-      dispose: () => embeddingService.close()
+      dispose: async () => {
+        await embeddingModelService.close()
+      }
     })
     shutdownCoordinator.register({
       name: 'web-crawler',

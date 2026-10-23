@@ -1,6 +1,6 @@
 import * as arrow from 'apache-arrow'
 import {
-  DocumentRecord,
+  DocumentRecord as SharedDocumentRecord,
   DocumentImportStatus,
   WebSourceIdentityKind,
   WebSourceIndexStatus,
@@ -141,7 +141,6 @@ import {
   WorkbenchUiStateSaveRequest
 } from '../../shared/types'
 export type {
-  DocumentRecord,
   DocumentImportStatus,
   WebSourceIdentityKind,
   WebSourceIndexStatus,
@@ -280,6 +279,12 @@ export type {
   WorkspaceDirectoryListResponse,
   WorkbenchUiStateResponse,
   WorkbenchUiStateSaveRequest
+}
+
+export type DocumentRecord = SharedDocumentRecord & {
+  embedding_identity?: string
+  embedding_dim?: number
+  embedding_error?: string
 }
 
 /**

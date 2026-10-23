@@ -87,6 +87,16 @@
       "id": "exceljs-workbook-runtime",
       "package": "exceljs",
       "path": "lib/doc/workbook.js"
+    },
+    {
+      "id": "yaml-directives-runtime",
+      "package": "yaml",
+      "path": "dist/doc/directives.js"
+    },
+    {
+      "id": "yaml-document-runtime",
+      "package": "yaml",
+      "path": "dist/doc/Document.js"
     }
   ]
 }

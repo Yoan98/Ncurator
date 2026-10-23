@@ -328,24 +328,27 @@ DOCX 应用记录表；当前应用/回退接口投影 `ai_file_change`，不再
 
 索引文档元数据。
 
-| 字段                    | 类型    | 说明                  |
-| ----------------------- | ------- | --------------------- |
-| `id`                    | TEXT PK | 文档 id               |
-| `workspace_id`          | TEXT    | 文件地址 id；网页可空 |
-| `name`                  | TEXT    | 文档名                |
-| `source_type`           | TEXT    | `file` / `web`        |
-| `file_path`             | TEXT    | 文件路径              |
-| `import_status`         | INTEGER | 导入状态              |
-| `content_hash`          | TEXT    | 内容哈希              |
-| `active_generation_id`  | TEXT    | 当前有效 generation   |
-| `created_at`            | INTEGER | 创建时间              |
-| `updated_at`            | INTEGER | 更新时间              |
-| `last_error`            | TEXT    | 最近错误              |
-| `source_id`             | TEXT    | 来源 id               |
-| `source_url`            | TEXT    | 来源 URL              |
-| `source_title`          | TEXT    | 来源标题              |
-| `normalized_source_url` | TEXT    | 规范化 URL            |
-| `fetched_at`            | INTEGER | 抓取时间              |
+| 字段                    | 类型             | 说明                                                                  |
+| ----------------------- | ---------------- | --------------------------------------------------------------------- |
+| `id`                    | TEXT PK          | 文档 id                                                               |
+| `workspace_id`          | TEXT             | 文件地址 id；网页可空                                                 |
+| `name`                  | TEXT             | 文档名                                                                |
+| `source_type`           | TEXT             | `file` / `web`                                                        |
+| `file_path`             | TEXT             | 文件路径                                                              |
+| `import_status`         | INTEGER          | 导入状态                                                              |
+| `content_hash`          | TEXT             | 内容哈希                                                              |
+| `active_generation_id`  | TEXT             | 当前有效 generation                                                   |
+| `embedding_identity`    | TEXT NOT NULL    | 有效 chunk 的模型身份，默认 `local:jinaai/jina-embeddings-v2-base-zh` |
+| `embedding_dim`         | INTEGER NOT NULL | 有效向量维度，默认 768；合法空资料为 0，不创建向量表                  |
+| `embedding_error`       | TEXT             | 重嵌错误，可空；不替代普通导入的 `last_error`                         |
+| `created_at`            | INTEGER          | 创建时间                                                              |
+| `updated_at`            | INTEGER          | 更新时间                                                              |
+| `last_error`            | TEXT             | 最近错误                                                              |
+| `source_id`             | TEXT             | 来源 id                                                               |
+| `source_url`            | TEXT             | 来源 URL                                                              |
+| `source_title`          | TEXT             | 来源标题                                                              |
+| `normalized_source_url` | TEXT             | 规范化 URL                                                            |
+| `fetched_at`            | INTEGER          | 抓取时间                                                              |
 
 ### `web_source`
 
@@ -386,22 +389,33 @@ DOCX 应用记录表；当前应用/回退接口投影 `ai_file_change`，不再
 | `base_url`     | TEXT    | 接口地址   |
 | `api_key`      | TEXT    | API Key    |
 
+### `embedding_settings`
+
+向量模型设置单例，由 Main 读写。已保存 Key 不进入 Renderer 的读取或操作响应。
+
+| 字段            | 类型          | 说明                                                                                     |
+| --------------- | ------------- | ---------------------------------------------------------------------------------------- |
+| `id`            | TEXT PK       | 固定 `singleton`，由 CHECK 约束                                                          |
+| `settings_json` | TEXT NOT NULL | `EmbeddingModelSettings` JSON，包含 `activeModelId`、`remoteModels` 及可选 `indexPaused` |
+
+`remoteModels` 每项保存 `id`、`name`、`baseUrl`、`apiKey`、`modelName`、`maxInputTokens`。`maxInputTokens` 是官方单段最大输入 tokens，未填写或旧配置缺少字段时使用 512，由程序自动扣除预留并切分正文。API Key 随配置保存在 SQLite；返回列表用 `hasApiKey` 替代 `apiKey`。无单例记录时默认选择本地 Jina，远程列表为空且不暂停。
+
 ## LanceDB
 
-### `vector_chunk`
+### `vector_chunk` / `vector_chunk_<identity_hash>_<dim>`
 
-可重建的知识库向量块。检索时库内只留最新 generation。
+可重建的完整知识库块表族。本地 Jina 身份 `local:jinaai/jina-embeddings-v2-base-zh` 且维度为 768 时使用 `vector_chunk`，其余使用身份字符串的完整 SHA-256 十六进制哈希与正整数维度组成动态表名。所有表字段一致，只有向量固定长度取各表的维度；每张表均保存正文及 FTS 索引。有效向量表与 generation 由 SQLite `document` 标记决定。全文查询可使用同一有效 generation 的正文副本并去重，避免迁移期间遗漏；模型不匹配的向量不进入语义检索。
 
-| 字段            | 类型                        | 说明                    |
-| --------------- | --------------------------- | ----------------------- |
-| `id`            | Utf8                        | chunk id                |
-| `document_id`   | Utf8                        | 文档 id                 |
-| `workspace_id`  | Utf8                        | 文件地址 id；网页可空串 |
-| `generation_id` | Utf8                        | 写入世代，只用于清理    |
-| `chunk_index`   | Int32                       | 文档内顺序              |
-| `document_name` | Utf8                        | 文档名                  |
-| `source_type`   | Utf8                        | `file` / `web`          |
-| `text`          | Utf8                        | 正文，FTS 索引列        |
-| `vector`        | FixedSizeList(768, Float32) | 嵌入向量                |
-| `metadata`      | Struct `{ page: Int32 }`    | 页码等元数据            |
-| `created_at`    | Int64                       | 创建时间                |
+| 字段            | 类型                        | 说明                             |
+| --------------- | --------------------------- | -------------------------------- |
+| `id`            | Utf8                        | chunk id                         |
+| `document_id`   | Utf8                        | 文档 id                          |
+| `workspace_id`  | Utf8                        | 文件地址 id；网页可空串          |
+| `generation_id` | Utf8                        | 写入世代，用于有效版本筛选及清理 |
+| `chunk_index`   | Int32                       | 文档内顺序                       |
+| `document_name` | Utf8                        | 文档名                           |
+| `source_type`   | Utf8                        | `file` / `web`                   |
+| `text`          | Utf8                        | 正文，FTS 索引列                 |
+| `vector`        | FixedSizeList(dim, Float32) | 嵌入向量；本地 Jina 表为 768 维  |
+| `metadata`      | Struct `{ page: Int32 }`    | 页码等元数据                     |
+| `created_at`    | Int64                       | 创建时间                         |

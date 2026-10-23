@@ -118,7 +118,7 @@ describe('SQLite migration contract', () => {
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
-    expect(migrationRows.at(-1)).toEqual({ version: 19, name: 'user_skills' })
+    expect(migrationRows.at(-1)).toEqual({ version: 20, name: 'embedding_models' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -280,6 +280,10 @@ describe('SQLite migration contract', () => {
     prepared.exec('DROP TABLE IF EXISTS app_settings')
     prepared.exec('DROP TABLE open_with_preferences')
     prepared.exec('DROP TABLE partner_user_skill; DROP TABLE user_skill;')
+    prepared.exec(`DROP TABLE embedding_settings;
+      ALTER TABLE document DROP COLUMN embedding_identity;
+      ALTER TABLE document DROP COLUMN embedding_dim;
+      ALTER TABLE document DROP COLUMN embedding_error;`)
     prepared.exec('ALTER TABLE ai_run DROP COLUMN pending_messages_json')
     prepared
       .prepare(

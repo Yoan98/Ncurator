@@ -163,8 +163,9 @@ export const buildKbCapabilityTools = (input: {
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
-          await ctx.assertKbAvailable()
           const prepared = resolveSearchArgs(args)
+          const queryIdentity = ctx.embeddingService.getIndexIdentity()
+          await ctx.assertKbAvailable({ requireEmbedding: prepared.strategy !== 'keyword' })
           if (!prepared.queryText) {
             throw new Error('知识库搜索需要提供查询文本。')
           }
@@ -193,14 +194,25 @@ export const buildKbCapabilityTools = (input: {
                 prepared.requestedDocumentIds || undefined
               )
             }
-            const { data: vec } = await ctx.embeddingService.embed(prepared.queryText)
+            const identity = ctx.embeddingService.getIndexIdentity()
+            const { data: vec, modelIdentity } = await ctx.embeddingService.embed(
+              prepared.queryText
+            )
+            if (
+              modelIdentity !== identity ||
+              ctx.embeddingService.getIndexIdentity() !== identity
+            ) {
+              throw new Error('向量模型已切换，请重新检索。')
+            }
+            ctx.documentsStore.assertEmbeddingDimension(identity, vec.length)
             if (prepared.strategy === 'semantic') {
               return await ctx.documentsStore.vectorSearch(
                 vec,
                 prepared.limit,
                 prepared.filter,
                 prepared.workspaceId,
-                prepared.requestedDocumentIds || undefined
+                prepared.requestedDocumentIds || undefined,
+                identity
               )
             }
             return await ctx.documentsStore.hybridSearch(
@@ -209,14 +221,30 @@ export const buildKbCapabilityTools = (input: {
               prepared.limit,
               prepared.filter,
               prepared.workspaceId,
-              prepared.requestedDocumentIds || undefined
+              prepared.requestedDocumentIds || undefined,
+              identity
             )
           })()
           const enrichedRows = await enrichSearchRowsWithSourceLocation(ctx, rows)
           const normalized = enrichedRows.map((row) => normalizeForIpc(mapKbSearchItem(row)))
+          const semanticCoverage = await ctx.documentsStore.getEmbeddingCoverage(
+            ctx.embeddingService.getIndexIdentity(),
+            {
+              workspaceId: prepared.workspaceId,
+              sourceType: prepared.filter,
+              documentIds: prepared.requestedDocumentIds || undefined
+            }
+          )
+          if (
+            prepared.strategy !== 'keyword' &&
+            queryIdentity !== ctx.embeddingService.getIndexIdentity()
+          ) {
+            throw new Error('向量模型已切换，请重新检索。')
+          }
           const payload = {
             items: normalized,
-            total: normalized.length
+            total: normalized.length,
+            ...(semanticCoverage.completed < semanticCoverage.total ? { semanticCoverage } : {})
           }
           session.succeed(
             undefined,
@@ -258,7 +286,7 @@ export const buildKbCapabilityTools = (input: {
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
-          await ctx.assertKbAvailable()
+          await ctx.assertKbAvailable({ requireEmbedding: false })
           const workspaceId = String(ctx.workspace?.workspaceId || '').trim() || undefined
           const sourceNameQuery = String(args.sourceNameQuery || '').trim() || undefined
           const page = Math.max(1, Number(args.page ?? 1))

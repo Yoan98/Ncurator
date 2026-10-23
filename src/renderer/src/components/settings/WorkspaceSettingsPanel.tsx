@@ -72,6 +72,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [selectedTabKey, setSelectedTabKey] = useState<'files' | 'web'>('files')
   const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null)
   const [hasVectorModel, setHasVectorModel] = useState<boolean | null>(null)
+  const [vectorModelStatus, setVectorModelStatus] = useState('')
+  const [vectorModelError, setVectorModelError] = useState('')
   const [webSourceCount, setWebSourceCount] = useState(0)
   const [filePrepareCancelling, setFilePrepareCancelling] = useState(false)
   const [fileCancelModalOpen, setFileCancelModalOpen] = useState(false)
@@ -217,10 +219,41 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }, [loadWorkspaces])
 
   useEffect(() => {
-    void window.api
-      .getModels()
-      .then((models) => setHasVectorModel(models.some((model) => model.isDownloaded)))
-      .catch(() => setHasVectorModel(false))
+    let disposed = false
+    let timer: ReturnType<typeof setTimeout>
+    const refresh = async (): Promise<void> => {
+      try {
+        const snapshot = await window.api.embeddingModelsGet()
+        const remote = snapshot.remoteModels.find((model) => model.id === snapshot.activeModelId)
+        const models = remote ? [] : await window.api.getModels()
+        const local = models.find((model) => `local:${model.id}` === snapshot.activeModelId)
+        if (disposed) return
+        setHasVectorModel(Boolean(remote || local?.isDownloaded))
+        setVectorModelError('')
+        setVectorModelStatus(
+          remote
+            ? t(($) => $.settings.embedding.selectedRemote, { name: remote.name })
+            : local
+              ? local.isDownloaded
+                ? t(($) => $.settings.embedding.selectedLocal, { name: local.name })
+                : t(($) => $.settings.embedding.selectedLocalMissing, { name: local.name })
+              : t(($) => $.settings.embedding.selectionMissing)
+        )
+      } catch (error) {
+        if (disposed) return
+        setHasVectorModel(false)
+        setVectorModelError(
+          `${t(($) => $.settings.embedding.loadFailed)} ${normalizeUserFacingError(error instanceof Error ? error.message : String(error))}`
+        )
+      } finally {
+        if (!disposed) timer = setTimeout(() => void refresh(), 2000)
+      }
+    }
+    void refresh()
+    return () => {
+      disposed = true
+      clearTimeout(timer)
+    }
   }, [])
 
   useEffect(() => {
@@ -504,7 +537,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const handleWorkspacePrepareAll = async (): Promise<void> => {
     if (hasVectorModel !== true) {
       setFilePrepareHeld(false)
-      message.warning(t(($) => $.settings.installAVectorModelBeforeUpdatingTheIndex))
+      message.warning(vectorModelError || t(($) => $.settings.embedding.requirement))
       return
     }
     const heldAt = beginPrepareHeld(setFilePrepareHeld)
@@ -550,7 +583,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       return
     }
     if (hasVectorModel !== true) {
-      message.warning(t(($) => $.settings.installAVectorModelBeforeUpdatingTheIndex))
+      message.warning(vectorModelError || t(($) => $.settings.embedding.requirement))
       return
     }
     beginPrepareHeld(setFilePrepareHeld)
@@ -619,7 +652,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
     hasVectorModel === null
       ? t(($) => $.settings.checkingVectorModelStatus)
       : vectorModelMissing
-        ? ''
+        ? vectorModelError || vectorModelStatus
         : actionableIndexCount === 0
           ? t(($) => $.settings.noIndexesNeedUpdating)
           : filePrepareRunning
@@ -628,10 +661,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
       <div className="text-[13px] font-medium text-[#37352F]">
-        {t(($) => $.settings.installAVectorModelFirst)}
+        {t(($) => $.settings.embedding.configure)}
       </div>
       <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-        {t(($) => $.settings.installAVectorModelBeforeUpdatingTheIndex2)}
+        {vectorModelError || vectorModelStatus}
+        <p className="mt-1">{t(($) => $.settings.embedding.requirement)}</p>
       </div>
       <Button
         type="link"
@@ -639,7 +673,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         className="mt-2 !h-auto !p-0 !text-[#2F3437]"
         onClick={() => navigate('/settings/vector')}
       >
-        {t(($) => $.settings.install)}
+        {t(($) => $.settings.embedding.configure)}
       </Button>
     </div>
   )
@@ -726,6 +760,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             </div>
                           </div>
                           <KnowledgeIndexSpeedControl prepareRunning={filePrepareRunning} />
+                          {vectorModelError || vectorModelStatus ? (
+                            <div
+                              role={vectorModelError ? 'alert' : 'status'}
+                              className={`mt-3 break-words text-[12px] ${vectorModelError ? 'text-[#B3261E]' : 'text-[#787774]'}`}
+                            >
+                              {vectorModelError || vectorModelStatus}
+                            </div>
+                          ) : null}
                           <div className="mt-4 flex flex-col gap-2">
                             <Tooltip
                               title={t(
@@ -743,7 +785,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               </Button>
                             </Tooltip>
                             <div className="relative min-w-0">
-                              <Tooltip title={workspacePrepareTooltip}>
+                              <Tooltip
+                                title={[
+                                  workspacePrepareTooltip,
+                                  !vectorModelMissing ? vectorModelStatus : ''
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              >
                                 <Button
                                   type="primary"
                                   icon={<HiCircleStack className="h-4 w-4" />}
@@ -900,6 +949,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                   <WebSourcesSettingsPanel
                     embedded
                     hasVectorModel={hasVectorModel}
+                    vectorModelStatus={vectorModelError || vectorModelStatus}
                     onVectorModelSettingsOpen={() => navigate('/settings/vector')}
                     onSummaryChange={(summary) => setWebSourceCount(summary.web_count)}
                   />

@@ -1,6 +1,7 @@
 import * as lancedb from '@lancedb/lancedb'
 import fs from 'fs'
 import * as arrow from 'apache-arrow'
+import { createHash } from 'node:crypto'
 import { getLanceDbPath } from '../../../utils/paths'
 import type { TableConfig } from '../../../types/store'
 import type { AppErrorLogService } from '../../logging/AppErrorLogService'
@@ -16,6 +17,11 @@ export const LANCE_TABLES = {
   CHUNK: 'vector_chunk'
 } as const
 
+export const DEFAULT_EMBEDDING_IDENTITY = 'local:jinaai/jina-embeddings-v2-base-zh'
+export const DEFAULT_EMBEDDING_DIMENSION = 768
+
+const DYNAMIC_CHUNK_TABLE_PATTERN = /^vector_chunk_[a-f0-9]{64}_([1-9]\d*)$/
+
 export class LanceDbCore {
   private db: lancedb.Connection | null = null
   private readonly dbPath: string
@@ -23,6 +29,7 @@ export class LanceDbCore {
   private tableNamesCache: Set<string> | null = null
   private tableCache = new Map<string, lancedb.Table>()
   private tableWriteQueues = new Map<string, Promise<unknown>>()
+  private chunkTableInitializations = new Map<string, Promise<void>>()
 
   public constructor(
     dbPath?: string,
@@ -63,6 +70,7 @@ export class LanceDbCore {
     this.tableNamesCache = null
     this.tableCache.clear()
     this.tableWriteQueues.clear()
+    this.chunkTableInitializations.clear()
     this.db = null
     this.status = LanceDbCoreStatus.UNINITIALIZED
   }
@@ -87,6 +95,57 @@ export class LanceDbCore {
     const wrapped = this.createSerializedTable(tableName, table)
     this.tableCache.set(tableName, wrapped)
     return wrapped
+  }
+
+  public getChunkTableName(embeddingIdentity: string, dimension: number): string {
+    if (!embeddingIdentity.trim()) throw new Error('Embedding identity must not be empty')
+    if (!Number.isSafeInteger(dimension) || dimension <= 0) {
+      throw new Error('Embedding dimension must be a positive integer')
+    }
+    if (
+      embeddingIdentity === DEFAULT_EMBEDDING_IDENTITY &&
+      dimension === DEFAULT_EMBEDDING_DIMENSION
+    ) {
+      return LANCE_TABLES.CHUNK
+    }
+    const hash = createHash('sha256').update(embeddingIdentity).digest('hex')
+    return `${LANCE_TABLES.CHUNK}_${hash}_${dimension}`
+  }
+
+  public async listChunkTableNames(): Promise<string[]> {
+    this.assertReady()
+    const names = await this.getTableNames()
+    return [...names]
+      .filter((name) => name === LANCE_TABLES.CHUNK || DYNAMIC_CHUNK_TABLE_PATTERN.test(name))
+      .sort()
+  }
+
+  /**
+   * 模型身份与维度共同确定表，历史本地模型继续使用原表。并发首次写入共享初始化任务。
+   *
+   * Model identity and dimension determine the table, preserving the legacy local table.
+   * Concurrent first writes share the same initialization task.
+   */
+  public async openChunkTable(
+    embeddingIdentity = DEFAULT_EMBEDDING_IDENTITY,
+    dimension = DEFAULT_EMBEDDING_DIMENSION,
+    create = false
+  ): Promise<lancedb.Table | null> {
+    this.assertReady()
+    const name = this.getChunkTableName(embeddingIdentity, dimension)
+    if (!create) return (await this.tableExists(name)) ? this.openTable(name) : null
+    let initialization = this.chunkTableInitializations.get(name)
+    if (!initialization) {
+      initialization = this.ensureTable(this.getChunkTableConfig(name, dimension))
+      this.chunkTableInitializations.set(name, initialization)
+    }
+    try {
+      await initialization
+    } catch (error) {
+      this.chunkTableInitializations.delete(name)
+      throw error
+    }
+    return this.openTable(name)
   }
 
   public async ensureLanceScalarIndexes(name: string, columns: string[]): Promise<void> {
@@ -115,7 +174,11 @@ export class LanceDbCore {
   }
 
   public async optimizeTables(names: string[]): Promise<void> {
-    for (const name of names) {
+    const expandedNames = new Set(names)
+    if (expandedNames.has(LANCE_TABLES.CHUNK)) {
+      for (const name of await this.listChunkTableNames()) expandedNames.add(name)
+    }
+    for (const name of expandedNames) {
       const table = await this.openTable(name)
       await table.optimize({ cleanupOlderThan: new Date(), deleteUnverified: true })
     }
@@ -257,9 +320,12 @@ export class LanceDbCore {
 
   private async ensureTables(): Promise<void> {
     if (!this.db) throw new Error('Database connection not established')
-    const tableConfigs = this.getTableConfigs()
-    for (const config of tableConfigs) {
-      await this.ensureTable(config)
+    await this.ensureTable(
+      this.getChunkTableConfig(LANCE_TABLES.CHUNK, DEFAULT_EMBEDDING_DIMENSION)
+    )
+    for (const name of await this.getTableNames()) {
+      const match = DYNAMIC_CHUNK_TABLE_PATTERN.exec(name)
+      if (match) await this.ensureTable(this.getChunkTableConfig(name, Number(match[1])))
     }
   }
 
@@ -274,6 +340,14 @@ export class LanceDbCore {
 
     const table = await this.db.openTable(config.name)
     await this.assertTableSchemaMatches(config, table)
+
+    if (config.ftsIndexConfig) {
+      const indices = await table.listIndices()
+      const column = config.ftsIndexConfig.column
+      if (!indices.some((index) => index.columns.includes(column))) {
+        await table.createIndex(column, config.ftsIndexConfig.options)
+      }
+    }
 
     if (config.scalarIndexColumns && config.scalarIndexColumns.length > 0) {
       await this.createMissingLanceScalarIndexes(table, config.scalarIndexColumns)
@@ -319,7 +393,7 @@ export class LanceDbCore {
         `LanceDB table schema mismatch: ${config.name}`,
         `current=[${currentFields.join(', ')}]`,
         `expected=[${nextFields.join(', ')}]`,
-        '当前试验阶段不做自动迁移，也不会自动删表。请手动删除本地 LanceDB 数据库后重建。'
+        'Existing data was preserved. Check the table schema before rebuilding its index.'
       ].join(' ')
     )
     this.logError(error, 'schema-mismatch', config.name)
@@ -344,41 +418,36 @@ export class LanceDbCore {
     }
   }
 
-  private getTableConfigs(): TableConfig[] {
-    return [
-      {
-        name: LANCE_TABLES.CHUNK,
-        schema: new arrow.Schema([
-          new arrow.Field(
-            'vector',
-            new arrow.FixedSizeList(768, new arrow.Field('item', new arrow.Float32()))
-          ),
-          new arrow.Field('text', new arrow.Utf8()),
-          new arrow.Field('id', new arrow.Utf8()),
-          new arrow.Field('document_id', new arrow.Utf8()),
-          new arrow.Field('workspace_id', new arrow.Utf8()),
-          new arrow.Field('generation_id', new arrow.Utf8()),
-          new arrow.Field('chunk_index', new arrow.Int32()),
-          new arrow.Field('document_name', new arrow.Utf8()),
-          new arrow.Field('source_type', new arrow.Utf8()),
-          new arrow.Field(
-            'metadata',
-            new arrow.Struct([new arrow.Field('page', new arrow.Int32())])
-          ),
-          new arrow.Field('created_at', new arrow.Int64())
-        ]),
-        ftsIndexConfig: {
-          column: 'text',
-          options: {
-            config: lancedb.Index.fts({
-              baseTokenizer: 'ngram',
-              ngramMinLength: 2,
-              ngramMaxLength: 3
-            })
-          }
+  private getChunkTableConfig(name: string, dimension: number): TableConfig {
+    return {
+      name,
+      schema: new arrow.Schema([
+        new arrow.Field(
+          'vector',
+          new arrow.FixedSizeList(dimension, new arrow.Field('item', new arrow.Float32()))
+        ),
+        new arrow.Field('text', new arrow.Utf8()),
+        new arrow.Field('id', new arrow.Utf8()),
+        new arrow.Field('document_id', new arrow.Utf8()),
+        new arrow.Field('workspace_id', new arrow.Utf8()),
+        new arrow.Field('generation_id', new arrow.Utf8()),
+        new arrow.Field('chunk_index', new arrow.Int32()),
+        new arrow.Field('document_name', new arrow.Utf8()),
+        new arrow.Field('source_type', new arrow.Utf8()),
+        new arrow.Field('metadata', new arrow.Struct([new arrow.Field('page', new arrow.Int32())])),
+        new arrow.Field('created_at', new arrow.Int64())
+      ]),
+      ftsIndexConfig: {
+        column: 'text',
+        options: {
+          config: lancedb.Index.fts({
+            baseTokenizer: 'ngram',
+            ngramMinLength: 2,
+            ngramMaxLength: 3
+          })
         }
       }
-    ]
+    }
   }
 
   private logError(error: Error | string, operation: string, table?: string): void {
