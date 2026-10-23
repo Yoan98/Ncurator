@@ -70,6 +70,12 @@ export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDire
     }
   }
 
+  const yaml = loadStageModule(stageRequire, stageNodeModules, 'yaml')
+  const yamlRoundTrip = yaml.parse(yaml.stringify({ embedding: { model: 'runtime-smoke' } }))
+  if (yamlRoundTrip?.embedding?.model !== 'runtime-smoke') {
+    throw new Error('YAML staged runtime round trip failed')
+  }
+
   const { Jieba } = loadStageModule(stageRequire, stageNodeModules, '@node-rs/jieba')
   const { dict } = loadStageModule(stageRequire, stageNodeModules, '@node-rs/jieba/dict')
   const jiebaTokens = Jieba.withDict(dict).cutForSearch('中文分词', true)
@@ -194,6 +200,7 @@ export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDire
   return {
     packages: report.packages.length,
     requiredFiles: report.requiredFiles.length,
+    yamlRoundTrip: true,
     jiebaTokens: jiebaTokens.length,
     docxDocuments: docxDocuments.length,
     pdfDocuments: pdfDocuments.length,
