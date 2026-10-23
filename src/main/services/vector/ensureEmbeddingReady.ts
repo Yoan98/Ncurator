@@ -8,11 +8,13 @@ export const ensureEmbeddingReady = async (input: {
   embeddingService: EmbeddingService
   modelService?: ModelService
 }): Promise<void> => {
-  const modelService = input.modelService || ModelService.getInstance()
   const repoId = input.embeddingService.getModelName()
 
-  if (!modelService.isModelDownloaded(repoId)) {
-    throw new Error(EMBEDDING_MODEL_NOT_INSTALLED_ERROR)
+  if (!input.embeddingService.isRemote()) {
+    const modelService = input.modelService || ModelService.getInstance()
+    if (!modelService.isModelDownloaded(repoId)) {
+      throw new Error(EMBEDDING_MODEL_NOT_INSTALLED_ERROR)
+    }
   }
 
   await input.embeddingService.initialize()

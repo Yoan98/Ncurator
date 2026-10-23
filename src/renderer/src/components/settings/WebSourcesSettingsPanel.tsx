@@ -26,6 +26,7 @@ import { beginPrepareHeld, endPrepareHeld } from './prepareHeld'
 type WebSourcesSettingsPanelProps = {
   embedded?: boolean
   hasVectorModel: boolean | null
+  vectorModelStatus: string
   onVectorModelSettingsOpen: () => void
   onSummaryChange?: (summary: WebSourceListResponse['summary']) => void
 }
@@ -49,6 +50,7 @@ const HELD_WEB_PREPARE_JOB: WorkspaceIndexJobRecord = {
 
 const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   hasVectorModel,
+  vectorModelStatus,
   onVectorModelSettingsOpen,
   onSummaryChange
 }) => {
@@ -187,7 +189,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   const handlePrepareWebSources = async (): Promise<void> => {
     if (hasVectorModel !== true) {
       setWebPrepareHeld(false)
-      message.warning(t(($) => $.settings.installAVectorModelBeforeUpdatingTheIndex))
+      message.warning(vectorModelStatus || t(($) => $.settings.embedding.requirement))
       return
     }
 
@@ -220,7 +222,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       return
     }
     if (hasVectorModel !== true) {
-      message.warning(t(($) => $.settings.installAVectorModelBeforeUpdatingTheIndex))
+      message.warning(vectorModelStatus || t(($) => $.settings.embedding.requirement))
       return
     }
     beginPrepareHeld(setWebPrepareHeld)
@@ -301,7 +303,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     hasVectorModel === null
       ? t(($) => $.settings.checkingVectorModelStatus)
       : vectorModelMissing
-        ? ''
+        ? vectorModelStatus
         : webPrepareRunning
           ? t(($) => $.settings.stopThisIndexUpdateAndKeepCompletedItems)
           : actionableWebIndexCount === 0
@@ -310,10 +312,11 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
       <div className="text-[13px] font-medium text-[#37352F]">
-        {t(($) => $.settings.installAVectorModelFirst)}
+        {t(($) => $.settings.embedding.configure)}
       </div>
       <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-        {t(($) => $.settings.aVectorModelIsRequiredToIndexWorkspaceContent)}
+        {vectorModelStatus}
+        <p className="mt-1">{t(($) => $.settings.embedding.requirement)}</p>
       </div>
       <Button
         type="link"
@@ -321,7 +324,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
         className="mt-2 !h-auto !p-0 !text-[#2F3437]"
         onClick={onVectorModelSettingsOpen}
       >
-        {t(($) => $.settings.install)}
+        {t(($) => $.settings.embedding.configure)}
       </Button>
     </div>
   )
@@ -386,6 +389,14 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
           </div>
 
           <KnowledgeIndexSpeedControl prepareRunning={webPrepareRunning} />
+          {vectorModelStatus ? (
+            <div
+              role={hasVectorModel === false ? 'alert' : 'status'}
+              className={`mt-3 break-words text-[12px] ${hasVectorModel === false ? 'text-[#B3261E]' : 'text-[#787774]'}`}
+            >
+              {vectorModelStatus}
+            </div>
+          ) : null}
           <div className="mt-4 flex flex-col gap-2">
             <Button
               icon={<HiArrowPath className="h-4 w-4" />}
@@ -397,7 +408,11 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               {t(($) => $.common.checkForUpdates)}
             </Button>
             <div className="relative min-w-0">
-              <Tooltip title={webPrepareTooltip}>
+              <Tooltip
+                title={[webPrepareTooltip, !vectorModelMissing ? vectorModelStatus : '']
+                  .filter(Boolean)
+                  .join(' · ')}
+              >
                 <Button
                   type="primary"
                   icon={<HiCircleStack className="h-4 w-4" />}

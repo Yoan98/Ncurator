@@ -217,6 +217,10 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     this.closing = false
   }
 
+  public async cancelPending(): Promise<void> {
+    await this.close()
+  }
+
   public async close(): Promise<void> {
     this.closing = true
     const child = this.process

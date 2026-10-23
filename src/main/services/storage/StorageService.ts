@@ -1,4 +1,5 @@
 import { UserSkillStore } from './domains/UserSkillStore'
+import { EmbeddingSettingsStore } from './domains/EmbeddingSettingsStore'
 import { OpenWithPreferenceStore } from './domains/OpenWithPreferenceStore'
 import path from 'node:path'
 import { AiFileChangeStore } from './domains/AiFileChangeStore'
@@ -24,6 +25,7 @@ export class StorageService {
   private static instance: StorageService
 
   public readonly userSkill: UserSkillStore
+  public readonly embeddingSettings: EmbeddingSettingsStore
   public readonly sqlite: SqliteCore
   public readonly vector: LanceDbCore
   public readonly documents: DocumentsStore
@@ -56,6 +58,7 @@ export class StorageService {
       (input.dbPath ? path.join(path.dirname(input.dbPath), 'app.sqlite') : undefined)
     this.sqlite = new SqliteCore(sqlitePath)
     this.userSkill = new UserSkillStore(this.sqlite)
+    this.embeddingSettings = new EmbeddingSettingsStore(this.sqlite)
     this.vector = new LanceDbCore(input.vectorPath || input.dbPath, input.errorLogService)
     this.documents = new DocumentsStore(this.sqlite, this.vector)
     this.webSource = new WebSourceStore(this.sqlite)
