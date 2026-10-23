@@ -20,9 +20,16 @@ Include the app version, operating system, model provider, reproduction steps, a
 
 ## Development and validation
 
-See the [English README](./README.en.md#run-from-source) for setup. Follow [AGENTS.md](./AGENTS.md) and the [documentation guidelines](./doc/doc-guidelines.md); these engineering documents are currently in Chinese.
+Follow [AGENTS.md](./AGENTS.md) and the [documentation guidelines](./doc/doc-guidelines.md). See the [architecture documentation](./doc/architecture.md) for the system design. These engineering documents are currently in Chinese.
 
 Use Node.js 22, pnpm 9.12.2, and Python 3.12. Install macOS Command Line Tools or Windows C++ Build Tools if native modules require compilation. First launch prepares native modules and builds the web crawling sidecar as needed, requiring a network connection. For desktop UI work, start with `pnpm dev:no-sidecar` if the sidecar is unnecessary.
+
+After cloning your fork, install dependencies and start the app from the project directory:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
 | Command                          | Purpose                                                                            |
 | -------------------------------- | ---------------------------------------------------------------------------------- |
@@ -41,6 +48,22 @@ Run checks appropriate to the change and record the commands and results in the 
 Keep `.env-example` free of real credentials. Do not commit production shared secrets, model keys, signing certificates, user databases, or test logs. Normal development requires neither COS / R2 upload access nor official service keys. See the [release guide](./doc/deploy/release.md) for official publishing.
 
 ## Opening a Pull Request
+
+```mermaid
+flowchart TB
+    subgraph contributor["Contributor"]
+        direction LR
+        A["1. Fork the repo<br/>Sync main"] --- B["2. Branch from main<br/>feat/xxx or bugfix/xxx"]
+        B --- C["3. Develop and test<br/>Squash into one commit"]
+        C --- D["4. Open a PR to dev"]
+    end
+    subgraph maintainer["Maintainer"]
+        direction LR
+        E["5. Review and<br/>merge into dev"] --- F["6. Test on dev"]
+        F --- G["7. Cherry-pick to main<br/>after tests pass"]
+    end
+    contributor --- maintainer
+```
 
 1. Fork this repository and clone your fork locally.
 2. Before starting each change, open your fork on GitHub, select `main`, and click `Sync fork → Update branch` to sync the original repository's latest `main`.

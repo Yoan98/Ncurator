@@ -84,18 +84,9 @@ WPS 联动需启用加载项，改动定位需将 WPS 设为默认打开方式�
 - 问题、需求与提问：[Issues](https://github.com/Yoan98/Ncurator/issues)
 - 代码、测试与文档贡献：[贡献指南](./CONTRIBUTING.md)
 
-## 从源码运行
+### 开发环境
 
 建议使用 Node.js 22、pnpm 9.12.2、Python 3.12。
-
-```bash
-git clone https://github.com/Yoan98/Ncurator.git
-cd Ncurator
-pnpm install --frozen-lockfile
-pnpm dev
-```
-
-环境准备、构建与验证见[贡献指南](./CONTRIBUTING.md#开发与验证)，系统设计见[架构文档](./doc/architecture.md)。
 
 ## 浏览器插件
 

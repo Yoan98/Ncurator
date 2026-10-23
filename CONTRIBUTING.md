@@ -20,9 +20,16 @@
 
 ## 开发与验证
 
-开发环境与启动步骤见[中文 README](./README.md#从源码运行)。项目协作规则见 [AGENTS.md](./AGENTS.md)，文档修改遵循[文档准则](./doc/doc-guidelines.md)。
+项目协作规则见 [AGENTS.md](./AGENTS.md)，文档修改遵循[文档准则](./doc/doc-guidelines.md)，系统设计见[架构文档](./doc/architecture.md)。
 
 使用 Node.js 22、pnpm 9.12.2、Python 3.12；原生模块需要本地编译时，安装 macOS Command Line Tools 或 Windows C++ Build Tools。首次启动会准备原生模块，并按需构建网页抓取 sidecar，需要联网。只开发桌面界面时可先使用 `pnpm dev:no-sidecar`。
+
+克隆自己的 Fork 后，在项目目录安装依赖并启动：
+
+```bash
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
 | 命令                             | 用途                                                 |
 | -------------------------------- | ---------------------------------------------------- |
@@ -41,6 +48,22 @@
 `.env-example` 只放变量名和非敏感示例。生产共享密钥、模型 Key、签名证书、用户数据库及测试日志均不应提交。普通开发不需要 COS / R2 上传权限或官方服务密钥；官方发布流程见[发布文档](./doc/deploy/release.md)。
 
 ## 提交 Pull Request
+
+```mermaid
+flowchart TB
+    subgraph contributor["贡献者"]
+        direction LR
+        A["1. Fork 仓库<br/>同步 main"] --- B["2. 从 main 切分支<br/>feat/xxx 或 bugfix/xxx"]
+        B --- C["3. 开发验证<br/>整理为一个 commit"]
+        C --- D["4. 向 dev 提 PR"]
+    end
+    subgraph maintainer["维护者"]
+        direction LR
+        E["5. 初审并合入 dev"] --- F["6. 在 dev 测试"]
+        F --- G["7. 通过后<br/>cherry-pick 到 main"]
+    end
+    contributor --- maintainer
+```
 
 1. Fork 本仓库，并将自己的 Fork 克隆到本地。
 2. 每次开发前，在 GitHub 打开自己的 Fork，切换到 `main`，点击 `Sync fork → Update branch`，同步原仓库最新的 `main`。

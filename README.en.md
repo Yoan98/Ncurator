@@ -86,18 +86,9 @@ Current progress and planned work. Join the discussion and help shape what comes
 - Bugs, feature requests, and questions: [Issues](https://github.com/Yoan98/Ncurator/issues)
 - Code, tests, and documentation: [Contribution guide](./CONTRIBUTING.en.md)
 
-## Run from source
+### Development environment
 
 Recommended: Node.js 22, pnpm 9.12.2, and Python 3.12.
-
-```bash
-git clone https://github.com/Yoan98/Ncurator.git
-cd Ncurator
-pnpm install --frozen-lockfile
-pnpm dev
-```
-
-See the [contribution guide](./CONTRIBUTING.en.md#development-and-validation) for setup, builds, and validation, and [architecture documentation](./doc/architecture.md) for the system design.
 
 ## Browser extension
 
