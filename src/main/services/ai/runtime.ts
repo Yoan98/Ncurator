@@ -164,6 +164,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         : deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,
     scheduledTaskService: deps.scheduledTaskService,
+    userSkillService: deps.userSkillService,
     appendMessageLog,
     loadMessageLog,
     resolveDocxOpenTarget: async (sourcePath) =>

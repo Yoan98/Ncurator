@@ -1,4 +1,5 @@
 import { OpenWithPreferenceStore } from '../../../../src/main/services/storage/domains/OpenWithPreferenceStore'
+import { projectMessageLogRecords } from '../../../../src/main/services/ai/human/memory/transcript'
 import { ChatMessageLogStore } from '../../../../src/main/services/storage/domains/ChatMessageLogStore'
 import { AiSubagentStore } from '../../../../src/main/services/storage/domains/AiSubagentStore'
 import fs from 'node:fs/promises'
@@ -246,6 +247,78 @@ describe('sqlite storage core and stores', () => {
     if (tempDir) await fs.rm(tempDir, { recursive: true, force: true })
   })
 
+  it('roundtrips legacy loader annotations without reviving or erasing independent current snapshots', async () => {
+    const insertRawEntry = (seq: number, entryJson: string) =>
+      sqlite
+        .prepare(
+          `
+        INSERT INTO chat_session_message_log
+          (id, partner_id, subagent_id, run_id, seq, entry_json, created_at)
+        VALUES (?, 'partner-1', NULL, 'restore-run', ?, ?, ?)
+      `
+        )
+        .run(`raw-log-${seq}`, seq, entryJson, seq)
+    const legacyEntry = JSON.stringify({
+      kind: 'annotation',
+      eventType: 'skill_state_updated',
+      payload: { learnedSkillIds: ['docx-read', 'user:stale'] }
+    })
+    insertRawEntry(1, legacyEntry)
+    const logs = new ChatMessageLogStore(sqlite)
+    const historicalRecords = await logs.list('partner-1')
+    expect(historicalRecords).toHaveLength(1)
+    expect(() => projectMessageLogRecords(historicalRecords)).not.toThrow()
+    expect(projectMessageLogRecords(historicalRecords)).toMatchObject({
+      loadedToolsetIds: [],
+      loadedSkillIds: []
+    })
+
+    await logs.appendBatch({
+      partnerId: 'partner-1',
+      runId: 'restore-run',
+      entries: [
+        {
+          kind: 'annotation',
+          eventType: 'toolset_state_updated',
+          payload: { loadedToolsetIds: ['docx-read'] }
+        },
+        {
+          kind: 'annotation',
+          eventType: 'skill_state_updated',
+          payload: { loadedSkillIds: ['user:current'] }
+        }
+      ]
+    })
+    // Old/invalid records after valid snapshots cannot erase or cross-populate their state.
+    insertRawEntry(4, legacyEntry)
+    insertRawEntry(
+      5,
+      JSON.stringify({
+        kind: 'annotation',
+        eventType: 'skill_state_updated',
+        payload: { loadedSkillIds: 'user:stale' }
+      })
+    )
+    insertRawEntry(
+      6,
+      JSON.stringify({
+        kind: 'annotation',
+        eventType: 'toolset_state_updated',
+        payload: { loadedToolsetIds: null }
+      })
+    )
+    sqlite.close()
+    sqlite.initialize()
+    const restoredRecords = await new ChatMessageLogStore(sqlite).list('partner-1')
+    expect(restoredRecords.map(({ seq }) => seq)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(restoredRecords[3].entry).toEqual(JSON.parse(legacyEntry))
+    expect(() => projectMessageLogRecords(restoredRecords)).not.toThrow()
+    expect(projectMessageLogRecords(restoredRecords)).toMatchObject({
+      loadedToolsetIds: ['docx-read'],
+      loadedSkillIds: ['user:current']
+    })
+  })
+
   it('persists extension application preferences across reopening SQLite', () => {
     const preferences = new OpenWithPreferenceStore(sqlite)
     preferences.set('.docx', 'wps')
@@ -288,7 +361,8 @@ describe('sqlite storage core and stores', () => {
       { version: 15, name: 'ai_run_pending_messages' },
       { version: 16, name: 'subagent_sessions' },
       { version: 17, name: 'open_with_preferences' },
-      { version: 18, name: 'app_language_and_service_route' }
+      { version: 18, name: 'app_language_and_service_route' },
+      { version: 19, name: 'user_skills' }
     ])
 
     const legacyTables = sqlite

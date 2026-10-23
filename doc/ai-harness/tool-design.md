@@ -9,7 +9,7 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 3. **Schema 即契约** — 参数扁平、语义必填、字段带 describe；校验失败返回可修复错误，不做语义猜测。模型偶发把嵌套 object/array 再编码成 JSON 字符串时，brain 在 schema 校验前经统一的 `normalizeToolCallArgs` 展开（全工具单一入口），不改变业务校验语义。
 4. **结果双通道** — 结构化结果是真相；面向模型的文本是投影，不承担 ID / 锚点解析职责。工具级成败只放在 `ToolCallResult.ok`（由返回 payload 是否含 `error` 推导）；工具 `return` 的领域 payload **不得**再带 `ok` / `success`。
 5. **原子与可预期** — 一次调用一个 operation；成功或整次失败；同类输入语义稳定。
-6. **描述声明边界，不教流程** — skill / tool 描述只说明能做什么、不能做什么；组合策略由模型自主决定。
+6. **描述声明边界，不教流程** — toolset / tool 描述只说明能做什么、不能做什么；组合策略由模型自主决定。
 7. **工具简单可理解** — 作者语言贴近模型对领域的心智模型，所用即所想。
 8. **写回只给新锚点，验证靠再读** — 写工具只返回继续写所需的 id；对错由后续 read 确认，不返回变更清单或整页 readback。
 9. **非必要字段不要设计** — 结构化 output 不回显入参已有字段（如 `sourcePath`）；只保留模型继续决策所需的最小字段。
@@ -20,19 +20,22 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 
 | 层                                            | 写什么                               | 不写什么                                   |
 | --------------------------------------------- | ------------------------------------ | ------------------------------------------ |
-| `skill.description`                           | 该 skill 覆盖的能力域                | 工具调用顺序、跨工具编排                   |
+| `toolset.description` | 该工具包覆盖的能力域 | 工具调用顺序、跨工具编排 |
+| Skill 的 `name` / `description` | 用户说明适用场景，供按需发现 | 不自动注册工具或扩大权限 |
 | `tool promptSpec.description`                 | 单工具能力边界与限制                 | 字段表、JSON 结构、跨工具下一步、先 A 后 B |
 | `inputSchema` 字段 `.describe()`              | 参数语义、单位、缺省、格式、数量上限 | —                                          |
 | `toolSchemas` / `outputTypes.ts` 输出 TS 类型 | 结构化结果字段语义（内部真相）       | 不在 `promptSpec` 重复；不暴露给模型       |
 
 模型可见契约 = `promptSpec` + `inputSchema`（经 LangChain bindTools 暴露）。内部 TS 输出类型供执行层与契约测试，不经 prompt 暴露。
 
+用户共享 Skill 是说明文件资产，不是 `HumanToolSpec` 或注册工具包。`load_toolset({ toolsetIds: string[] })` 只启用预注册工具包，`load_skill({ skillIds: string[] })` 只加载当前伙伴绑定的 `user:<uuid>` 说明。两者不互相兼容 ID，工具预算和 FIFO 淘汰仅针对工具包。用户说明不能新增工具、自动执行脚本、加载依赖或扩大权限。目录只暴露当前伙伴启用项的稳定元数据。加载反馈持久化 ID / 状态；正文和资源基址仅投递到每轮重建的当前说明区，不重复写入历史 tool 消息，避免压缩或恢复复活失效指令。当前绑定重校验、64 KiB 正文总预算、恢复和缓存取舍见 [Human Harness](human-harness.md#72-load_toolset-流程)。
+
 ---
 
 ## 3. HumanToolSpec 结构
 
 ```text
-Skill（builtin / external）
+Toolset（builtin / external）
   └─ Tool（HumanToolSpec）
        ├─ inputSchema                  参数校验 + 模型可见输入契约
        ├─ toolSchemas / outputTypes    结构化真相（TS + 契约测试）
@@ -44,7 +47,7 @@ Skill（builtin / external）
 HumanToolSpec = {
   name,                    // RuntimeToolName
   familyId,                // AiToolFamilyId
-  skillIds[],              // 归属 skill
+  toolsetIds[],              // 归属工具包
   inputSchema,             // zod
   promptSpec,              // { name, description }
   modelResult: {
@@ -81,7 +84,7 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 | 工具          | brain schema 校验       | 校验方                          |
 | ------------- | ----------------------- | ------------------------------- |
-| `learn_skill` | **跳过**                | `learning` 节点                 |
+| `load_toolset` / `load_skill` | `inputSchema.safeParse`（strict） | brain；节点只处理各自类型的有效 ID |
 | `update_plan` | **跳过**                | `plan` 节点                     |
 | 其余          | `inputSchema.safeParse` | brain → 失败写 ToolMessage 反馈 |
 
@@ -124,10 +127,11 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 | 工具                | 渲染要点                                                                                                                 |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `learn_skill`       | 由 `learning` 节点直接写 ToolMessage（loaded / duplicate / unknown / evicted 摘要），不走 `buildModelToolResultDelivery` |
+| `load_toolset` | 由 `toolset_loading` 节点直接写 ToolMessage（loaded / duplicate / unknown / evicted 摘要），不走 `buildModelToolResultDelivery` |
+| `load_skill` | 由 `skill_loading` 节点记录 ID / 状态，当前正文由 System 说明区提供，不写入历史 tool 消息 |
 | `update_plan`       | 由 `plan` 节点直接写 ToolMessage（计划项列表 `[status] title`），不走 `buildModelToolResultDelivery`                     |
 | `read_image`        | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness 第 3.5 节）                                                   |
-| `ask_user_question` | 用户协作结果使用问题／选项 ID 与用户文字，不依赖显示编号 |
+| `ask_user_question` | 用户协作结果使用问题／选项 ID 与用户文字，不依赖显示编号                                                                 |
 
 ### 6.2 写工具输出
 

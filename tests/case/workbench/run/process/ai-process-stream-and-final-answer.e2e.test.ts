@@ -379,7 +379,7 @@ describe('workbench run e2e', () => {
           const allItemTexts = panels.flatMap((panel) => panel.itemTexts)
           const allSummaryTexts = panels.map((panel) => panel.summaryText)
           const hasTools = result.visibleToolNames.length > 0
-          const hasLearnSkill = result.visibleToolNames.includes('learn_skill')
+          const hasLoadToolset = result.visibleToolNames.includes('load_toolset')
           const hasDocxTool = result.visibleToolNames.some((name) => name.startsWith('docx_'))
           const headerRulesOk = panels.every((panel) =>
             isShortActivityHeader(panel.summaryText, panel.itemTexts.length)
@@ -404,8 +404,8 @@ describe('workbench run e2e', () => {
                   panel.hasChevronAffordances &&
                   panel.summaryTruncates
               ))
-          const learnSkillCopyOk =
-            !hasLearnSkill ||
+          const loadToolsetCopyOk =
+            !hasLoadToolset ||
             allItemTexts.some((text) => /已学会|正在学习/u.test(text)) ||
             allSummaryTexts.some((text) => /已学会|正在学习|已完成\s*\d+\s*项|技能/u.test(text))
           const docxCopyOk =
@@ -446,7 +446,7 @@ describe('workbench run e2e', () => {
               result.failedTextReadCount > 0 &&
               result.successfulTextReadCount > 0 &&
               noColonItemLabels &&
-              learnSkillCopyOk &&
+              loadToolsetCopyOk &&
               docxCopyOk,
             {
               name: 'workbench-ai-process-activity-render-real',

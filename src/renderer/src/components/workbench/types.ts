@@ -5,7 +5,7 @@ import type {
   AiRunEvent,
   AiFileChangeStatus,
   IpcJsonObject,
-  RuntimeSkillId,
+  RuntimeToolsetId,
   UserQuestion,
   AskUserQuestionAnswer
 } from '../../../../shared/types'
@@ -81,7 +81,7 @@ export type AssistantProcessIconKind =
   | 'document'
   | 'edit'
   | 'retry'
-  | 'learning'
+  | 'toolset_loading'
   | 'compaction'
   | 'eye'
   | 'camera'
@@ -94,13 +94,13 @@ export type AssistantProcessIconKind =
 
 export type AssistantProcessGroupKind =
   | 'thinking'
-  | 'skill'
+  | 'toolset'
   | 'retry'
   | 'compaction'
-  | 'learning'
+  | 'toolset_loading'
   | 'finalizing'
 
-export type AssistantProcessSkillKey =
+export type AssistantProcessToolsetKey =
   | 'docx-read'
   | 'docx-edit'
   | 'file-read'
@@ -117,7 +117,7 @@ export type AssistantProcessSkillKey =
   | 'browser'
   | 'image-generation'
   | 'image-read'
-  | 'learning'
+  | 'toolset_loading'
   | 'generic'
 
 export type AssistantProcessGroupItem = {
@@ -162,7 +162,7 @@ export type AssistantProcessGroup = {
   toolName?: AssistantToolName
   id: string
   kind: AssistantProcessGroupKind
-  skillKey: AssistantProcessSkillKey
+  toolsetKey: AssistantProcessToolsetKey
   iconKind: AssistantProcessIconKind
   status: AssistantProcessStatus
   runningText: AssistantRichTextSegment[]
@@ -172,7 +172,7 @@ export type AssistantProcessGroup = {
   items: AssistantProcessGroupItem[]
   createdAt: number
   sourceEventType: AssistantProcessSourceEventType
-  skillId?: RuntimeSkillId
+  toolsetId?: RuntimeToolsetId
 }
 
 export type AssistantProcessThought = {

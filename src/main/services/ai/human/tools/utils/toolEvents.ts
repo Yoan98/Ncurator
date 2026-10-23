@@ -32,7 +32,7 @@ export const emitToolCallStarted = (input: {
   taskId?: string
   toolName: string
   args: IpcJsonObject
-  stage?: 'human_hand' | 'human_learning' | 'human_plan'
+  stage?: 'human_hand' | 'human_toolset_loading' | 'human_skill_loading' | 'human_plan'
   toolCallId?: string
 }): string => {
   const toolCallId = input.toolCallId || randomUUID()
@@ -64,7 +64,7 @@ export const emitToolCallResult = (input: {
   toolName: string
   result?: AiToolCallResult
   error?: string
-  stage?: 'human_hand' | 'human_learning' | 'human_plan'
+  stage?: 'human_hand' | 'human_toolset_loading' | 'human_skill_loading' | 'human_plan'
   draftRef?: DraftRef
 }): void => {
   emitToolProcessCompleted({
@@ -101,7 +101,7 @@ export const createToolEventEmitter = (input: {
   runId: string
   taskId?: string
   toolCallId?: string
-  stage?: 'human_hand' | 'human_learning' | 'human_plan'
+  stage?: 'human_hand' | 'human_toolset_loading' | 'human_skill_loading' | 'human_plan'
   resolveDraftRef?: (draftDocId: string) => DraftRef | undefined
 }) => ({
   emitStarted: (toolName: string, args: IpcJsonObject): string =>

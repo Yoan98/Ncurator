@@ -89,7 +89,7 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   }${getLayerIconClassName(iconKind)} ${className || ''}`
   const iconProps = { className: iconClassName, 'data-process-icon-kind': iconKind }
   const icon =
-    iconKind === 'learning' ? (
+    iconKind === 'toolset_loading' ? (
       <HiOutlineAcademicCap {...iconProps} />
     ) : iconKind === 'compaction' ? (
       <HiOutlineArchiveBox {...iconProps} />
@@ -404,7 +404,7 @@ const buildAssistantTimeline = (input: {
       thought
     })),
     ...input.groups
-      .filter((group) => group.kind !== 'finalizing' && group.kind !== 'learning')
+      .filter((group) => group.kind !== 'finalizing' && group.kind !== 'toolset_loading')
       .map((group) => ({
         kind: 'group' as const,
         id: group.id,
@@ -586,7 +586,7 @@ const AssistantActivityGroupView: React.FC<{
   const summaryGroups = groups
     .map((group) => ({
       id: group.id,
-      skillKey: group.skillKey,
+      toolsetKey: group.toolsetKey,
       status: group.status,
       items: group.items
         .filter((item) => item.terminalReviewState !== 'not_executed')

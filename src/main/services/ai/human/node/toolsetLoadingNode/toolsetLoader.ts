@@ -3,8 +3,8 @@ import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiRunContext } from '../../../types'
 import type { AiToolFamilyId, ToolFamilyBuildInput } from '../../tools/types'
 import { TOOL_FAMILY_DEFINITIONS } from '../../tools'
-import type { HumanRuntimeCache, RuntimeSkillId } from '../../types'
-import { getEffectiveLearnedSkillIds, getSkillDefinition } from '../../skills'
+import type { HumanRuntimeCache, RuntimeToolsetId } from '../../types'
+import { getEffectiveLoadedToolsetIds, getToolsetDefinition } from '../../toolsets'
 import { attachProviderToolDefinitions } from '../../tools/utils/toolSchemaSerialization'
 
 const TOOL_FAMILY_BUILDERS: Record<
@@ -46,17 +46,17 @@ const ensureFamilyTools = (input: {
   return built
 }
 
-export const ensureSkillTools = (input: {
+export const ensureToolsetTools = (input: {
   cache: HumanRuntimeCache
   ctx: AiRunContext
   runId: string
   taskId: string
-  skillId: RuntimeSkillId
+  toolsetId: RuntimeToolsetId
 }): StructuredToolInterface[] => {
-  const cached = input.cache.skillToolsets[input.skillId]
+  const cached = input.cache.toolsetTools[input.toolsetId]
   if (cached) return cached
 
-  const definition = getSkillDefinition(input.skillId)
+  const definition = getToolsetDefinition(input.toolsetId)
   const familyTools = ensureFamilyTools({
     cache: input.cache,
     ctx: input.ctx,
@@ -64,9 +64,9 @@ export const ensureSkillTools = (input: {
     taskId: input.taskId,
     familyId: definition.familyId
   })
-  const skillToolNames = new Set(definition.toolNames)
-  const built = familyTools.filter((tool) => skillToolNames.has(String(tool.name || '').trim()))
-  input.cache.skillToolsets[input.skillId] = built
+  const toolsetToolNames = new Set(definition.toolNames)
+  const built = familyTools.filter((tool) => toolsetToolNames.has(String(tool.name || '').trim()))
+  input.cache.toolsetTools[input.toolsetId] = built
   return built
 }
 
@@ -75,17 +75,17 @@ export const buildAvailableTools = (input: {
   ctx: AiRunContext
   runId: string
   taskId: string
-  learnedSkillIds: RuntimeSkillId[]
+  loadedToolsetIds: RuntimeToolsetId[]
 }): StructuredToolInterface[] => {
   const tools: StructuredToolInterface[] = []
   const seenNames = new Set<string>()
-  getEffectiveLearnedSkillIds(input.learnedSkillIds).forEach((skillId) => {
-    for (const tool of ensureSkillTools({
+  getEffectiveLoadedToolsetIds(input.loadedToolsetIds).forEach((toolsetId) => {
+    for (const tool of ensureToolsetTools({
       cache: input.cache,
       ctx: input.ctx,
       runId: input.runId,
       taskId: input.taskId,
-      skillId
+      toolsetId
     })) {
       const name = String(tool.name || '').trim()
       if (!name || seenNames.has(name)) continue

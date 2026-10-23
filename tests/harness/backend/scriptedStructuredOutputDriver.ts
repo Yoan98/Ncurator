@@ -38,14 +38,27 @@ const resolveDecisionToToolCalls = (output: JsonObject, callIndex: number): Scri
   }
   const nextAction = (output.nextAction || {}) as Record<string, unknown>
   const action = String(nextAction.action || '')
-  if (action === 'learning') {
-    const skillIds = Array.isArray(nextAction.wantLearnSkillIds)
-      ? nextAction.wantLearnSkillIds.filter((item): item is string => typeof item === 'string')
+  if (action === 'toolset_loading') {
+    const toolsetIds = Array.isArray(nextAction.wantLoadToolsetIds)
+      ? nextAction.wantLoadToolsetIds.filter((item): item is string => typeof item === 'string')
       : []
     return [
       {
-        id: `mock-${callIndex}-learn`,
-        name: 'learn_skill',
+        id: `mock-${callIndex}-toolset`,
+        name: 'load_toolset',
+        args: { toolsetIds },
+        type: 'tool_call'
+      }
+    ]
+  }
+  if (action === 'skill_loading') {
+    const skillIds = Array.isArray(nextAction.wantLoadSkillIds)
+      ? nextAction.wantLoadSkillIds.filter((item): item is string => typeof item === 'string')
+      : []
+    return [
+      {
+        id: `mock-${callIndex}-skill`,
+        name: 'load_skill',
         args: { skillIds },
         type: 'tool_call'
       }
@@ -83,9 +96,7 @@ const buildUserTextFromMessages = (messages: BaseMessage[]): string =>
     )
     .join('\n')
 
-const isErrorStep = (
-  step: ScriptedLlmStep
-): step is Extract<ScriptedLlmStep, { error: string }> =>
+const isErrorStep = (step: ScriptedLlmStep): step is Extract<ScriptedLlmStep, { error: string }> =>
   typeof step === 'object' && step !== null && 'error' in step
 
 const isObjectOutputStep = (
@@ -106,10 +117,7 @@ const isWaitForAbortStep = (
 const isDelayedErrorStep = (
   step: ScriptedLlmStep
 ): step is Extract<ScriptedLlmStep, { waitMs: number; thenError: string }> =>
-  typeof step === 'object' &&
-  step !== null &&
-  'waitMs' in step &&
-  'thenError' in step
+  typeof step === 'object' && step !== null && 'waitMs' in step && 'thenError' in step
 
 const estimateScriptedUsage = (input: {
   system: string
@@ -269,11 +277,13 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
           output: step.output,
           rawText,
           method: 'scripted',
-          usage: step.usage || estimateScriptedUsage({
-            system: input.system,
-            user: input.user,
-            rawText
-          }),
+          usage:
+            step.usage ||
+            estimateScriptedUsage({
+              system: input.system,
+              user: input.user,
+              rawText
+            }),
           streamed: input.streamingMode === 'force_stream'
         }
       }
@@ -292,16 +302,20 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
           output: resolved,
           rawText: step.text,
           method: 'scripted',
-          usage: step.usage || estimateScriptedUsage({
-            system: input.system,
-            user: input.user,
-            rawText: step.text
-          }),
+          usage:
+            step.usage ||
+            estimateScriptedUsage({
+              system: input.system,
+              user: input.user,
+              rawText: step.text
+            }),
           streamed: input.streamingMode === 'force_stream'
         }
       }
 
-      throw new Error(`invalid scripted structured step: caller=${payload.caller}; callIndex=${payload.callIndex}`)
+      throw new Error(
+        `invalid scripted structured step: caller=${payload.caller}; callIndex=${payload.callIndex}`
+      )
     },
 
     chatText: async (input): Promise<AiLlmTextDriverResult> => {
@@ -315,7 +329,8 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
 
       if (typeof step === 'function') {
         const resolved = await step(payload)
-        const output = typeof resolved === 'string' ? resolved : resolveTextFromObjectOutput(resolved)
+        const output =
+          typeof resolved === 'string' ? resolved : resolveTextFromObjectOutput(resolved)
         emitChunks(
           toChunkList({
             rawText: output,
@@ -379,7 +394,9 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
         }
       }
 
-      throw new Error(`invalid scripted text step: caller=${payload.caller}; callIndex=${payload.callIndex}`)
+      throw new Error(
+        `invalid scripted text step: caller=${payload.caller}; callIndex=${payload.callIndex}`
+      )
     },
 
     chatMessages: async (input): Promise<AiLlmTextDriverResult> => {
@@ -394,7 +411,8 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
 
       if (typeof step === 'function') {
         const resolved = await step(payload)
-        const output = typeof resolved === 'string' ? resolved : resolveTextFromObjectOutput(resolved)
+        const output =
+          typeof resolved === 'string' ? resolved : resolveTextFromObjectOutput(resolved)
         emitChunks(
           toChunkList({
             rawText: output,
@@ -458,7 +476,9 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
         }
       }
 
-      throw new Error(`invalid scripted messages step: caller=${payload.caller}; callIndex=${payload.callIndex}`)
+      throw new Error(
+        `invalid scripted messages step: caller=${payload.caller}; callIndex=${payload.callIndex}`
+      )
     },
 
     chatTools: async (input): Promise<AiLlmToolCallDriverResult> => {
@@ -513,7 +533,9 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
         const resolved = resolveStructuredOutput(step.text)
         return resolveMessage(resolved)
       }
-      throw new Error(`invalid scripted tools step: caller=${payload.caller}; callIndex=${payload.callIndex}`)
+      throw new Error(
+        `invalid scripted tools step: caller=${payload.caller}; callIndex=${payload.callIndex}`
+      )
     }
   }
 }

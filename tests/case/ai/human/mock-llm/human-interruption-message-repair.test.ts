@@ -6,7 +6,7 @@ import type { BackendTestRuntime } from '../../../../harness/backend/test-types'
 import { createScriptedStructuredOutputDriver } from '../../../../harness/backend/scriptedStructuredOutputDriver'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { AiRunDeps } from '../../../../../src/main/services/ai/types'
-import { buildCompleteTaskDecision, buildLearnSkillsDecision } from '../testUtils'
+import { buildCompleteTaskDecision, buildLoadToolsetsDecision } from '../testUtils'
 
 const ORDER_SESSION_ID = 'interruption-repair-order-session'
 const DANGLING_SESSION_ID = 'interruption-repair-dangling-session'
@@ -76,8 +76,8 @@ describe('ai human mock-llm backend', () => {
         const run1Driver = createScriptedStructuredOutputDriver({
           'human.brain': [
             {
-              output: buildLearnSkillsDecision({
-                skillIds: ['docx-read'],
+              output: buildLoadToolsetsDecision({
+                toolsetIds: ['docx-read'],
                 summary: '先学习 docx-read 技能。'
               })
             },
@@ -162,8 +162,8 @@ describe('ai human mock-llm backend', () => {
         const danglingRun1Driver = createScriptedStructuredOutputDriver({
           'human.brain': [
             {
-              output: buildLearnSkillsDecision({
-                skillIds: ['docx-read'],
+              output: buildLoadToolsetsDecision({
+                toolsetIds: ['docx-read'],
                 summary: '先学习 docx-read 技能再继续。'
               })
             }

@@ -10,6 +10,7 @@ import { App as AntdApp, Input, Modal, Tooltip } from 'antd'
 import {
   HiOutlineClipboardDocument,
   HiOutlineClock,
+  HiOutlineBookOpen,
   HiOutlinePencilSquare,
   HiOutlineQuestionMarkCircle,
   HiPhoto,
@@ -81,6 +82,7 @@ import {
 } from '../../../shared/workbench/messageTimeline'
 import { collectUserMessageTimeIds } from '../../../shared/workbench/messageTimeLabel'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
+import UserSkillsView from '../components/userSkills/UserSkillsView'
 import ScheduledTasksView from '../components/scheduledTasks/ScheduledTasksView'
 import ScheduledTaskCountChip from '../components/scheduledTasks/ScheduledTaskCountChip'
 import MessageActionCapsule from '../components/workbench/MessageActionCapsule'
@@ -166,7 +168,7 @@ import {
   isCurrentFileChangeRunScope,
   type FileChangeRunScope
 } from '../../../shared/aiFileChangeScope'
-import { workbenchSelectors } from '../testing/selectors'
+import { userSkillsSelectors, workbenchSelectors } from '../testing/selectors'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import brandIcon from '../../../../assets/brand/png/ncurator-logo-24.png'
 import PartnerAvatar, { PARTNER_AVATAR_COLOR_HEX } from '../components/workbench/PartnerAvatar'
@@ -953,7 +955,8 @@ const ChatPage: React.FC = () => {
   const [contentPanelCollapsed, setContentPanelCollapsed] = useState(true)
   const [contentPanelShellMounted, setContentPanelShellMounted] = useState(false)
   const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
-  const [scheduledTasksActive, setScheduledTasksActive] = useState(false)
+  const [workbenchView, setWorkbenchView] = useState<'chat' | 'scheduledTasks' | 'skills'>('chat')
+  const scheduledTasksActive = workbenchView === 'scheduledTasks'
   const [scheduledTaskEnabledCount, setScheduledTaskEnabledCount] = useState(0)
   const [browserPresentationEnabled, setBrowserPresentationEnabled] = useState(false)
   const [browserTransitionImage, setBrowserTransitionImage] = useState<{
@@ -1877,7 +1880,7 @@ const ChatPage: React.FC = () => {
   )
 
   const openScheduledTasks = useCallback((): void => {
-    setScheduledTasksActive(true)
+    setWorkbenchView('scheduledTasks')
   }, [])
 
   const refreshScheduledTaskEnabledCount = useCallback(async (): Promise<void> => {
@@ -2754,7 +2757,7 @@ const ChatPage: React.FC = () => {
     session: Partner,
     options?: { saveCurrentDraft?: boolean }
   ): Promise<void> => {
-    setScheduledTasksActive(false)
+    setWorkbenchView('chat')
     if (session.id === currentPartnerIdRef.current && !switchingPartnerId) return
 
     uiStateInteractionVersionRef.current += 1
@@ -4265,7 +4268,7 @@ const ChatPage: React.FC = () => {
   ])
 
   const openCreatePartnerModal = (): void => {
-    setScheduledTasksActive(false)
+    setWorkbenchView('chat')
     setEditingPartnerId(null)
     setCreatePartnerName('')
     setCreatePartnerShape('circle')
@@ -4864,7 +4867,7 @@ const ChatPage: React.FC = () => {
     partnerId: currentPartnerId || '',
     enabled:
       Boolean(currentPartnerId) &&
-      !scheduledTasksActive &&
+      workbenchView === 'chat' &&
       !pendingQuestion &&
       !pendingApprovalBatch,
     locked: Boolean(currentPartnerId) && submittingPartnerId === currentPartnerId,
@@ -5025,6 +5028,15 @@ const ChatPage: React.FC = () => {
               dataTestId={workbenchSelectors.scheduledTasksCountChip}
             />
           </button>
+          <button
+            type="button"
+            className={`nc-sidebar-nav-row ${workbenchView === 'skills' ? 'nc-sidebar-item-active' : ''}`}
+            onClick={() => setWorkbenchView('skills')}
+            data-testid={userSkillsSelectors.button}
+          >
+            <HiOutlineBookOpen className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
+            <span>{t(($) => $.userSkills.title)}</span>
+          </button>
         </div>
 
         <div
@@ -5082,7 +5094,9 @@ const ChatPage: React.FC = () => {
       </aside>
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
-        {scheduledTasksActive ? (
+        {workbenchView === 'skills' ? (
+          <UserSkillsView partners={partners} />
+        ) : scheduledTasksActive ? (
           <ScheduledTasksView
             onEnabledCountChange={setScheduledTaskEnabledCount}
             onAiCreate={async (partnerId) => {

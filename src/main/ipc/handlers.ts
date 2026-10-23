@@ -1,3 +1,5 @@
+import { UserSkillService } from '../services/skills/UserSkillService'
+import type { UserSkillCreateRequest, UserSkillSetEnabledRequest } from '../../shared/userSkills'
 import { AppSettingsError } from '../../shared/appErrors'
 import { mainText } from '../services/app/i18n'
 import { getAppRuntime, setServiceRoute } from '../services/app/AppRuntime'
@@ -356,7 +358,9 @@ export function registerHandlers(services: {
     isPartnerBusy: (partnerId) => chatRunService.hasActivePartnerRun(partnerId),
     beforeCleanup: (partnerId) => terminalSessionManager.closeByChatSession(partnerId)
   })
+  const userSkillService = new UserSkillService(storageService.userSkill)
   const chatRunService = new ChatRunService({
+    userSkillService,
     partnerStore,
     partnerCacheService,
     chatMessageLogStore,
@@ -3590,6 +3594,27 @@ export function registerHandlers(services: {
   )
 
   // === Scheduled Task Handlers ===
+
+  ipcMain.handle('user-skills-list', () => userSkillService.list())
+  ipcMain.handle('user-skills-import', async (event) => {
+    const options: OpenDialogOptions = { properties: ['openDirectory', 'dontAddToRecent'] }
+    const owner = BrowserWindow.fromWebContents(event.sender)
+    const result = owner
+      ? await dialog.showOpenDialog(owner, options)
+      : await dialog.showOpenDialog(options)
+    if (result.canceled || !result.filePaths.length) return null
+    return userSkillService.importFolder(result.filePaths[0])
+  })
+  ipcMain.handle('user-skills-create', (_event, request: UserSkillCreateRequest) =>
+    userSkillService.create(request?.content)
+  )
+  ipcMain.handle('user-skills-delete', (_event, id: string) => userSkillService.delete(id))
+  ipcMain.handle('user-skills-get-enabled', (_event, partnerId: string) =>
+    userSkillService.listEnabled(partnerId).map((skill) => skill.id)
+  )
+  ipcMain.handle('user-skills-set-enabled', (_event, request: UserSkillSetEnabledRequest) =>
+    userSkillService.setEnabled(request?.partnerId, request?.skillIds)
+  )
 
   ipcMain.handle('scheduled-task-list', async () => {
     try {

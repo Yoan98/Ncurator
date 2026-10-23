@@ -10,7 +10,7 @@ import {
 import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
+  buildLoadToolsetsDecision,
   buildToolDecision,
   readLatestToolResultDataFromEvents
 } from '../testUtils'
@@ -53,8 +53,8 @@ describe('AI runs independent of knowledge configuration', () => {
             }
             parentCalls += 1
             if (parentCalls === 1)
-              return buildLearnSkillsDecision({
-                skillIds: ['docx-read'],
+              return buildLoadToolsetsDecision({
+                toolsetIds: ['docx-read'],
                 summary: '学习原文读取能力'
               })
             if (parentCalls === 2)

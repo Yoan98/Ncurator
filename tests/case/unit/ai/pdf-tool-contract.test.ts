@@ -1,6 +1,6 @@
 import { renderToolResultDataText } from '../../../../src/main/services/ai/human/shared/toolResultRenderers'
 import { describe, expect, it } from 'vitest'
-import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
+import { TOOLSET_DEFINITIONS } from '../../../../src/main/services/ai/human/toolsets'
 import { PDF_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/pdf/toolSpecs'
 import {
   pdfOutlineSchema,
@@ -15,7 +15,9 @@ describe('ai unit PDF tool contract', () => {
       'pdf_search',
       'pdf_read_pages'
     ])
-    expect(SKILL_DEFINITIONS['pdf-read'].toolNames).toEqual(PDF_TOOL_SPECS.map((spec) => spec.name))
+    expect(TOOLSET_DEFINITIONS['pdf-read'].toolNames).toEqual(
+      PDF_TOOL_SPECS.map((spec) => spec.name)
+    )
   })
 
   it('keeps selection and search limits in schemas', () => {

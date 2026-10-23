@@ -1,7 +1,7 @@
 import type { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../shared/types'
 import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabilities'
-import type { RuntimeSkillId } from '../../types'
+import type { RuntimeToolsetId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import { pdfOutlineSchema, pdfReadPagesSchema, pdfSearchSchema } from './toolSchemas'
@@ -20,8 +20,8 @@ const PDF_READ_EXECUTION_META = createStaticExecutionMetaResolver({
 type PdfToolSpec<
   TArgs extends JsonObject = JsonObject,
   TName extends RuntimeToolName = RuntimeToolName,
-  TSkillId extends RuntimeSkillId = 'pdf-read'
-> = HumanToolSpec<TArgs, TName, TSkillId>
+  TToolsetId extends RuntimeToolsetId = 'pdf-read'
+> = HumanToolSpec<TArgs, TName, TToolsetId>
 
 export const PDF_OUTLINE_TOOL_SPEC: PdfToolSpec<
   z.infer<typeof pdfOutlineSchema>,
@@ -30,7 +30,7 @@ export const PDF_OUTLINE_TOOL_SPEC: PdfToolSpec<
 > = {
   name: 'pdf_outline',
   familyId: 'pdf',
-  skillIds: ['pdf-read'],
+  toolsetIds: ['pdf-read'],
   promptSpec: {
     name: 'pdf_outline',
     description: '返回 PDF 页数、文档元数据与书签提纲。'
@@ -47,7 +47,7 @@ export const PDF_SEARCH_TOOL_SPEC: PdfToolSpec<
 > = {
   name: 'pdf_search',
   familyId: 'pdf',
-  skillIds: ['pdf-read'],
+  toolsetIds: ['pdf-read'],
   promptSpec: {
     name: 'pdf_search',
     description: '在 PDF 文本层中按文字或正则搜索。'
@@ -64,7 +64,7 @@ export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
 > = {
   name: 'pdf_read_pages',
   familyId: 'pdf',
-  skillIds: ['pdf-read'],
+  toolsetIds: ['pdf-read'],
   promptSpec: {
     name: 'pdf_read_pages',
     description: '按页码读取 PDF 文本层与页面信息。'

@@ -108,7 +108,7 @@ describe('ai human live scheduled task', () => {
           result.run1.status === 'completed' &&
             result.run2.status === 'completed' &&
             result.run3.status === 'completed' &&
-            run1Names.includes('learn_skill') &&
+            run1Names.includes('load_toolset') &&
             run1Names.includes('scheduled_task_action') &&
             run1Names.includes('scheduled_task_list') &&
             run1Actions.some((input) => input.action === 'create') &&

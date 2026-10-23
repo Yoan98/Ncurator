@@ -96,7 +96,7 @@ export const emitToolProcessStarted = (input: {
     type: 'assistant_process_group_started',
     runId: input.runId,
     groupId: getToolProcessGroupId(input.runId, input.toolCallId),
-    kind: 'skill',
+    kind: 'toolset',
     display,
     createdAt: input.createdAt || Date.now()
   })

@@ -5,7 +5,8 @@ export type HumanDispatchTarget = HumanDispatchItem['target']
 
 const classifyToolCallTarget = (toolName: string): HumanDispatchTarget => {
   const normalized = String(toolName || '').trim()
-  if (normalized === 'learn_skill') return 'learning'
+  if (normalized === 'load_skill') return 'skill_loading'
+  if (normalized === 'load_toolset') return 'toolset_loading'
   if (normalized === 'update_plan') return 'plan'
   if (normalized === 'ask_user_question') return 'interaction'
   return 'hand'
@@ -38,13 +39,19 @@ const dispatchGroupToNextAction = (group: HumanDispatchItem[]): HumanNextAction 
         toolName: 'ask_user_question',
         args: first.args
       }
-    case 'learning': {
+    case 'skill_loading': {
       const skillIds = Array.isArray(first.args.skillIds)
         ? first.args.skillIds.filter((item): item is string => typeof item === 'string')
         : []
+      return { action: 'skill_loading', wantLoadSkillIds: skillIds, toolCallId: first.toolCallId }
+    }
+    case 'toolset_loading': {
+      const toolsetIds = Array.isArray(first.args.toolsetIds)
+        ? first.args.toolsetIds.filter((item): item is string => typeof item === 'string')
+        : []
       return {
-        action: 'learning',
-        wantLearnSkillIds: skillIds,
+        action: 'toolset_loading',
+        wantLoadToolsetIds: toolsetIds,
         toolCallId: first.toolCallId
       }
     }
@@ -84,7 +91,8 @@ export const peekDispatchGroup = (queue: HumanDispatchItem[]): DispatchPeek => {
   const target = queue[0]!.target
   let splitIndex = 1
   while (
-    target !== 'learning' &&
+    target !== 'toolset_loading' &&
+    target !== 'skill_loading' &&
     target !== 'interaction' &&
     splitIndex < queue.length &&
     queue[splitIndex]!.target === target

@@ -24,7 +24,7 @@ const createToolGroup = (
 ): AssistantExecutionGroup[] => [
   {
     id: `${toolName}-${index}`,
-    skillKey: 'generic',
+    toolsetKey: 'generic',
     status: options?.status || 'completed',
     items: [
       {
@@ -53,13 +53,13 @@ describe('assistant process icons and activity summary', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('ppt_read_outline'))).toBe('document')
     expect(resolveAssistantExecutionIcon(createToolGroup('ppt_search'))).toBe('search')
     expect(resolveAssistantExecutionIcon(createToolGroup('ppt_edit'))).toBe('edit')
-    expect(resolveAssistantExecutionIcon(createToolGroup('learn_skill'))).toBe('learning')
+    expect(resolveAssistantExecutionIcon(createToolGroup('load_toolset'))).toBe('toolset_loading')
     expect(resolveAssistantExecutionIcon(createToolGroup('ask_user_question'))).toBe('question')
   })
 
   it('joins up to three tool short texts with enumeration commas and drops param segments', () => {
     const groups = [
-      ...createToolGroup('learn_skill', 1, {
+      ...createToolGroup('load_toolset', 1, {
         completedText: [{ text: '已学会 ' }, { text: 'docx 阅读器' }],
         headerShortText: '已学会 docx 阅读器'
       }),
@@ -108,7 +108,7 @@ describe('assistant process icons and activity summary', () => {
 
   it('collapses more than three kinds into completed count', () => {
     const groups = createToolGroups([
-      'learn_skill',
+      'load_toolset',
       'web_search',
       'terminal_run',
       'text_file_read'
@@ -118,10 +118,7 @@ describe('assistant process icons and activity summary', () => {
 
   it('keeps single-tool header as action short text without args', () => {
     const groups = createToolGroup('terminal_run', 1, {
-      completedText: [
-        { text: '执行命令 ' },
-        { text: 'find /tmp -name "*.docx"', param: true }
-      ],
+      completedText: [{ text: '执行命令 ' }, { text: 'find /tmp -name "*.docx"', param: true }],
       headerShortText: '执行命令'
     })
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('执行命令')
@@ -133,7 +130,7 @@ describe('assistant process icons and activity summary', () => {
         buildAssistantExecutionSummaryText([
           {
             id: 'browser-observe',
-            skillKey: 'browser',
+            toolsetKey: 'browser',
             status: 'completed',
             items: [
               {
@@ -155,7 +152,7 @@ describe('assistant process icons and activity summary', () => {
         buildAssistantExecutionSummaryText([
           {
             id: 'docx-outline',
-            skillKey: 'docx-read',
+            toolsetKey: 'docx-read',
             status: 'completed',
             items: [
               {
@@ -178,12 +175,18 @@ describe('assistant process icons and activity summary', () => {
   it('resolves semantic icons for browser and web actions', () => {
     expect(
       resolveAssistantExecutionIcon(
-        createToolGroup('browser_use', 1, { input: { action: 'navigate' }, headerShortText: '打开网页' })
+        createToolGroup('browser_use', 1, {
+          input: { action: 'navigate' },
+          headerShortText: '打开网页'
+        })
       )
     ).toBe('web')
     expect(
       resolveAssistantExecutionIcon(
-        createToolGroup('browser_use', 1, { input: { action: 'observe' }, headerShortText: '查看页面' })
+        createToolGroup('browser_use', 1, {
+          input: { action: 'observe' },
+          headerShortText: '查看页面'
+        })
       )
     ).toBe('eye')
     expect(
@@ -193,22 +196,34 @@ describe('assistant process icons and activity summary', () => {
     ).toBe('browser')
     expect(
       resolveAssistantExecutionIcon(
-        createToolGroup('browser_use', 1, { input: { action: 'extract' }, headerShortText: '提取内容' })
+        createToolGroup('browser_use', 1, {
+          input: { action: 'extract' },
+          headerShortText: '提取内容'
+        })
       )
     ).toBe('extract')
     expect(
       resolveAssistantExecutionIcon(
-        createToolGroup('browser_use', 1, { input: { action: 'screenshot' }, headerShortText: '截取页面' })
+        createToolGroup('browser_use', 1, {
+          input: { action: 'screenshot' },
+          headerShortText: '截取页面'
+        })
       )
     ).toBe('camera')
     expect(
       resolveAssistantExecutionIcon(
-        createToolGroup('browser_use', 1, { input: { action: 'scroll' }, headerShortText: '滚动页面' })
+        createToolGroup('browser_use', 1, {
+          input: { action: 'scroll' },
+          headerShortText: '滚动页面'
+        })
       )
     ).toBe('scroll')
     expect(
       resolveAssistantExecutionIcon(
-        createToolGroup('browser_use', 1, { input: { action: 'list_tabs' }, headerShortText: '列出标签' })
+        createToolGroup('browser_use', 1, {
+          input: { action: 'list_tabs' },
+          headerShortText: '列出标签'
+        })
       )
     ).toBe('window')
     expect(

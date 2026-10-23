@@ -361,6 +361,7 @@ export type AiRunDeps = {
   chatToolsWrapper?: (real: AiRunContext['chatTools']) => AiRunContext['chatTools']
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
+  userSkillService?: import('./human/userSkills').UserSkillReader
   scheduledTaskService?: import('../scheduler/ScheduledTaskService').ScheduledTaskService
   humanRuntimeOverrides?: {
     graphRecursionLimit?: number
@@ -441,6 +442,7 @@ export type AiRunContext = {
   getLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
+  userSkillService?: import('./human/userSkills').UserSkillReader
   scheduledTaskService?: import('../scheduler/ScheduledTaskService').ScheduledTaskService
   appendMessageLog: (entries: ChatMessageLogEntry[], options?: { runId?: string }) => Promise<void>
   loadMessageLog: () => Promise<ChatMessageLogRecord[]>

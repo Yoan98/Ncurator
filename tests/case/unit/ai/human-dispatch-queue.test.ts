@@ -52,30 +52,66 @@ describe('human dispatch queue', () => {
     expect(completed.execution.pendingRound).toBeUndefined()
   })
 
-  it('dispatches consecutive learn_skill calls one at a time', () => {
+  it('dispatches consecutive load_toolset calls one at a time', () => {
     const baseState = createInitialHumanState({
-      taskId: 'learning-dispatch',
-      userInput: '学习两个技能'
+      taskId: 'toolset-loading-dispatch',
+      userInput: '加载两个工具组'
     })
     const queue = buildDispatchQueue([
-      { id: 'learn-1', name: 'learn_skill', args: { skillIds: ['docx-read'] } },
-      { id: 'learn-2', name: 'learn_skill', args: { skillIds: ['excel-read'] } }
+      { id: 'learn-1', name: 'load_toolset', args: { toolsetIds: ['docx-read'] } },
+      { id: 'learn-2', name: 'load_toolset', args: { toolsetIds: ['excel-read'] } }
     ])
     const first = advanceDispatchState({
       ...baseState,
       execution: { ...baseState.execution, stage: 'dispatch', pendingDispatch: queue }
     })
     expect(first.execution.pendingRound?.nextAction).toMatchObject({
-      action: 'learning',
+      action: 'toolset_loading',
       toolCallId: 'learn-1'
     })
     expect(first.execution.pendingDispatch?.map((item) => item.toolCallId)).toEqual(['learn-2'])
 
     const second = advanceDispatchState(returnToDispatch(first))
     expect(second.execution.pendingRound?.nextAction).toMatchObject({
-      action: 'learning',
+      action: 'toolset_loading',
       toolCallId: 'learn-2'
     })
     expect(second.execution.pendingDispatch).toBeUndefined()
+  })
+
+  it('routes instruction and registered-tool loaders independently and in request order', () => {
+    const initial = createInitialHumanState({
+      taskId: 'split-loaders',
+      userInput: 'Load both kinds'
+    })
+    const queue = buildDispatchQueue([
+      { id: 'skill-1', name: 'load_skill', args: { skillIds: ['user:a'] } },
+      { id: 'toolset-1', name: 'load_toolset', args: { toolsetIds: ['docx-read'] } },
+      { id: 'skill-2', name: 'load_skill', args: { skillIds: ['user:b'] } }
+    ])
+    let state = advanceDispatchState({
+      ...initial,
+      execution: { ...initial.execution, stage: 'dispatch', pendingDispatch: queue }
+    })
+    expect(state.execution.stage).toBe('skill_loading')
+    expect(state.execution.pendingRound?.nextAction).toEqual({
+      action: 'skill_loading',
+      wantLoadSkillIds: ['user:a'],
+      toolCallId: 'skill-1'
+    })
+    state = advanceDispatchState(returnToDispatch(state))
+    expect(state.execution.stage).toBe('toolset_loading')
+    expect(state.execution.pendingRound?.nextAction).toEqual({
+      action: 'toolset_loading',
+      wantLoadToolsetIds: ['docx-read'],
+      toolCallId: 'toolset-1'
+    })
+    state = advanceDispatchState(returnToDispatch(state))
+    expect(state.execution.pendingRound?.nextAction).toEqual({
+      action: 'skill_loading',
+      wantLoadSkillIds: ['user:b'],
+      toolCallId: 'skill-2'
+    })
+    expect(state.execution.pendingDispatch).toBeUndefined()
   })
 })

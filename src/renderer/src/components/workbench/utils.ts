@@ -7,7 +7,7 @@ import type {
   IpcJsonArray,
   IpcJsonObject,
   IpcJsonValue,
-  RuntimeSkillId
+  RuntimeToolsetId
 } from '../../../../shared/types'
 import { RUNTIME_TOOL_CATALOG, type RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 import {
@@ -23,7 +23,7 @@ import type {
   AssistantProcessGroupItem,
   AssistantProcessThought,
   AssistantProcessIconKind,
-  AssistantProcessSkillKey,
+  AssistantProcessToolsetKey,
   AssistantProcessStatus,
   AssistantRichTextSegment,
   AssistantToolName,
@@ -76,7 +76,7 @@ const text = (
 
 const sentence = (...segments: AssistantRichTextSegment[]): AssistantRichTextSegment[] => segments
 
-const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessSkillKey => {
+const getDisplayToolsetKey = (display: AssistantProcessDisplay): AssistantProcessToolsetKey => {
   if (display.kind === 'tool') return getToolUiKind(normalizeToolName(display.toolName))
   return 'generic'
 }
@@ -91,7 +91,7 @@ const getDisplayIconKind = (display: AssistantProcessDisplay): AssistantProcessI
       input: display.input
     })
   }
-  return getToolIconKind(getDisplaySkillKey(display))
+  return getToolIconKind(getDisplayToolsetKey(display))
 }
 
 const getToolItemText = (
@@ -134,7 +134,7 @@ const getDisplayGroupText = (
   if (display.kind === 'tool') {
     return getToolItemText(normalizeToolName(display.toolName), status, display.input)
   }
-  return getToolSummaryText(getDisplaySkillKey(display), status)
+  return getToolSummaryText(getDisplayToolsetKey(display), status)
 }
 
 const getDisplayItemText = (
@@ -157,7 +157,7 @@ export {
 const createProcessGroup = (input: {
   id: string
   kind: AssistantProcessGroup['kind']
-  skillKey: AssistantProcessSkillKey
+  toolsetKey: AssistantProcessToolsetKey
   iconKind: AssistantProcessIconKind
   status: AssistantProcessStatus
   runningText: AssistantRichTextSegment[]
@@ -167,11 +167,11 @@ const createProcessGroup = (input: {
   items?: AssistantProcessGroupItem[]
   createdAt: number
   sourceEventType: AssistantProcessGroup['sourceEventType']
-  skillId?: RuntimeSkillId
+  toolsetId?: RuntimeToolsetId
 }): AssistantProcessGroup => ({
   id: input.id,
   kind: input.kind,
-  skillKey: input.skillKey,
+  toolsetKey: input.toolsetKey,
   iconKind: input.iconKind,
   status: input.status,
   runningText: input.runningText,
@@ -181,7 +181,7 @@ const createProcessGroup = (input: {
   items: input.items || [],
   createdAt: input.createdAt,
   sourceEventType: input.sourceEventType,
-  skillId: input.skillId
+  toolsetId: input.toolsetId
 })
 
 const resolveGroupStatus = (items: AssistantProcessGroupItem[]): AssistantProcessStatus => {
@@ -210,12 +210,12 @@ export const createDisplayProcessGroup = (input: {
   createdAt: number
   sourceEventType: AssistantProcessGroup['sourceEventType']
 }): AssistantProcessGroup => {
-  const skillKey = getDisplaySkillKey(input.display)
+  const toolsetKey = getDisplayToolsetKey(input.display)
   return {
     ...createProcessGroup({
       id: input.groupId,
       kind: input.kind,
-      skillKey,
+      toolsetKey,
       iconKind: getDisplayIconKind(input.display),
       status: input.status,
       runningText: getDisplayGroupText(input.display, 'running'),
@@ -325,7 +325,11 @@ export const completeAssistantProcessGroups = (
 ): AssistantProcessGroup[] =>
   groups
     .filter((group) => {
-      if (group.kind === 'finalizing' || group.kind === 'learning' || group.kind === 'thinking') {
+      if (
+        group.kind === 'finalizing' ||
+        group.kind === 'toolset_loading' ||
+        group.kind === 'thinking'
+      ) {
         return false
       }
       // Successful retry is not a retained process row.
@@ -467,7 +471,7 @@ const upsertProcessItem = (
     ? current
     : upsertGroupFromDisplayEvent(current, {
         groupId,
-        kind: input.display.kind === 'tool' ? 'skill' : input.display.kind,
+        kind: input.display.kind === 'tool' ? 'toolset' : input.display.kind,
         display: input.display,
         status: 'running',
         createdAt: input.createdAt,
@@ -638,7 +642,7 @@ export const reduceAssistantProcessGroups = (
       current.find((item) => item.id === groupId) ||
       createDisplayProcessGroup({
         groupId,
-        kind: 'skill',
+        kind: 'toolset',
         display: { kind: 'tool', toolName: 'delegate_to_subagent', input: {} },
         status: 'running',
         createdAt: event.createdAt,
@@ -788,10 +792,10 @@ export const reduceAssistantProcessGroups = (
 
   if (event.type === 'assistant_process_group_started') {
     if (
-      event.kind === 'learning' ||
+      event.kind === 'toolset_loading' ||
       event.kind === 'finalizing' ||
       event.kind === 'thinking' ||
-      event.display.kind === 'learning' ||
+      event.display.kind === 'toolset_loading' ||
       event.display.kind === 'finalizing' ||
       event.display.kind === 'thinking'
     ) {
@@ -817,7 +821,8 @@ export const reduceAssistantProcessGroups = (
     if (event.groupId.endsWith(':finalizing')) {
       return current.filter((group) => group.id !== event.groupId)
     }
-    if (event.display?.kind === 'learning' || event.display?.kind === 'finalizing') return current
+    if (event.display?.kind === 'toolset_loading' || event.display?.kind === 'finalizing')
+      return current
     return completeProcessGroupById(current, event.groupId, 'completed', event.display)
   }
 
@@ -825,7 +830,8 @@ export const reduceAssistantProcessGroups = (
     if (event.groupId.endsWith(':thinking') || event.display?.kind === 'thinking') {
       return withoutThinkingGroups(current)
     }
-    if (event.display?.kind === 'learning' || event.display?.kind === 'finalizing') return current
+    if (event.display?.kind === 'toolset_loading' || event.display?.kind === 'finalizing')
+      return current
     return completeProcessGroupById(current, event.groupId, 'failed', event.display)
   }
 

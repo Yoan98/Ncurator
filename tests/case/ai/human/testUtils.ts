@@ -1,6 +1,6 @@
 import type {
   HumanRoundThought,
-  RuntimeSkillId
+  RuntimeToolsetId
 } from '../../../../src/main/services/ai/human/types'
 import type {
   AiArtifactRef,
@@ -29,14 +29,14 @@ const buildThoughtMetadata = (input: { summary: string }): HumanRoundThought => 
   text: input.summary
 })
 
-export const buildLearnSkillsDecision = (input: {
-  skillIds: RuntimeSkillId[]
+export const buildLoadToolsetsDecision = (input: {
+  toolsetIds: RuntimeToolsetId[]
   summary: string
 }): JsonObject => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
-    action: 'learning',
-    wantLearnSkillIds: input.skillIds
+    action: 'toolset_loading',
+    wantLoadToolsetIds: input.toolsetIds
   }
 })
 

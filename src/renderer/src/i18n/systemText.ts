@@ -27,28 +27,28 @@ export const localizeSystemText = (value: string): string => {
   for (const { key: templateKey, pattern } of patterns) {
     const match = pattern.exec(value)
     if (!match) continue
-    const translateSkillList = (text: string): string =>
+    const translateToolsetList = (text: string): string =>
       text
         .split('、')
         .map((part) => {
-          const skillKey = exact.get(part)
-          return skillKey
-            ? t(($) => $.system[skillKey], { value1: '', value2: '', value3: '', value4: '' })
+          const toolsetKey = exact.get(part)
+          return toolsetKey
+            ? t(($) => $.system[toolsetKey], { value1: '', value2: '', value3: '', value4: '' })
             : part
         })
         .join(', ')
-    const skillTemplate = [
-      'learning',
-      'learned',
-      'partiallyFailedToLearn',
-      'failedToLearn'
+    const toolsetTemplate = [
+      'loadingToolset',
+      'loadedToolset',
+      'partiallyFailedToLoadToolset',
+      'failedToLoadToolset'
     ].includes(templateKey)
     const values = Object.fromEntries(
       match
         .slice(1)
         .map((capture, index) => [
           `value${index + 1}`,
-          skillTemplate ? translateSkillList(capture) : capture
+          toolsetTemplate ? translateToolsetList(capture) : capture
         ])
     )
     return t(($) => $.system[templateKey], {

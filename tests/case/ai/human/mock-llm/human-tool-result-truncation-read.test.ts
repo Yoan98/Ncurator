@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { buildCompleteTaskDecision, buildLearnSkillsDecision } from '../testUtils'
+import { buildCompleteTaskDecision, buildLoadToolsetsDecision } from '../testUtils'
 
 const readNextStartLine = (user: string): number | undefined => {
   const value = user.match(/Use startLine=(\d+) to continue/u)?.[1]
@@ -38,8 +38,8 @@ describe('ai human mock-llm bounded text file reading', () => {
           structuredOutputScript: {
             'human.brain': [
               {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['text-file'],
+                output: buildLoadToolsetsDecision({
+                  toolsetIds: ['text-file'],
                   summary: '学习文本读取能力'
                 })
               },

@@ -118,7 +118,7 @@ describe('SQLite migration contract', () => {
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
-    expect(migrationRows.at(-1)).toEqual({ version: 18, name: 'app_language_and_service_route' })
+    expect(migrationRows.at(-1)).toEqual({ version: 19, name: 'user_skills' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -279,6 +279,7 @@ describe('SQLite migration contract', () => {
       CREATE UNIQUE INDEX idx_chat_session_message_log_partner_seq ON chat_session_message_log(partner_id, seq);`)
     prepared.exec('DROP TABLE IF EXISTS app_settings')
     prepared.exec('DROP TABLE open_with_preferences')
+    prepared.exec('DROP TABLE partner_user_skill; DROP TABLE user_skill;')
     prepared.exec('ALTER TABLE ai_run DROP COLUMN pending_messages_json')
     prepared
       .prepare(

@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest'
 import { createHandNode } from '../../../../../src/main/services/ai/human/node/handNode'
-import { ensureSkillTools } from '../../../../../src/main/services/ai/human/node/learningNode/skillLoader'
+import { ensureToolsetTools } from '../../../../../src/main/services/ai/human/node/toolsetLoadingNode/toolsetLoader'
 import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../../src/main/services/ai/human/state/schema'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -20,12 +20,12 @@ describe('ai tool hand backend', () => {
         const ctx = runtime.createAiRunContext()
         const cache = createHumanRuntimeCache()
 
-        ensureSkillTools({
+        ensureToolsetTools({
           cache,
           ctx,
           runId: runtime.runId,
           taskId: runtime.taskId,
-          skillId: 'docx-write'
+          toolsetId: 'docx-write'
         })
 
         const baseState = createInitialHumanState({
@@ -35,8 +35,8 @@ describe('ai tool hand backend', () => {
         const handNode = createHandNode({ ctx, cache })
         const state = await handNode({
           ...baseState,
-          skills: {
-            learnedSkillIds: ['docx-write']
+          toolsets: {
+            loadedToolsetIds: ['docx-write']
           },
           execution: {
             ...baseState.execution,

@@ -20,7 +20,7 @@ const userEntry = (content: string): ChatMessageLogEntry => ({
 })
 
 describe('ai unit conversation log messages', () => {
-  it.each(['learn_skill', 'update_plan', 'ask_user'])(
+  it.each(['load_skill', 'load_toolset', 'update_plan', 'ask_user'])(
     'defers images across split batches containing %s',
     (toolName) => {
       const entries: ChatMessageLogEntry[] = [
@@ -80,7 +80,7 @@ describe('ai unit conversation log messages', () => {
         content: '',
         toolCalls: [
           { id: 'image', name: 'read_image', args: {} },
-          { id: 'learn', name: 'learn_skill', args: {} }
+          { id: 'learn', name: 'load_toolset', args: {} }
         ]
       },
       {
@@ -117,8 +117,8 @@ describe('ai unit conversation log messages', () => {
         },
         {
           id: 'call-ok',
-          name: 'learn_skill',
-          args: { skillIds: ['docx-read'] }
+          name: 'load_toolset',
+          args: { toolsetIds: ['docx-read'] }
         }
       ]
     }
@@ -139,8 +139,8 @@ describe('ai unit conversation log messages', () => {
       },
       {
         id: 'call-ok',
-        name: 'learn_skill',
-        args: { skillIds: ['docx-read'] },
+        name: 'load_toolset',
+        args: { toolsetIds: ['docx-read'] },
         type: 'tool_call'
       }
     ])

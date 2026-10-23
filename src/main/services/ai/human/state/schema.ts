@@ -2,6 +2,7 @@ import { StateSchema } from '@langchain/langgraph'
 import {
   humanExecutionSchema,
   humanMemorySchema,
+  humanToolsetsSchema,
   humanSkillsSchema,
   humanStateContractSchema,
   humanTaskInputSchema,
@@ -32,8 +33,8 @@ export const createDefaultHumanMemory = (): HumanState['memory'] => ({
   compactions: []
 })
 
-export const createDefaultHumanSkills = (): HumanState['skills'] => ({
-  learnedSkillIds: []
+export const createDefaultHumanToolsets = (): HumanState['toolsets'] => ({
+  loadedToolsetIds: []
 })
 
 export const createDefaultHumanTrace = (): HumanState['trace'] => ({
@@ -42,12 +43,13 @@ export const createDefaultHumanTrace = (): HumanState['trace'] => ({
 
 export const createDefaultHumanStateFields = (): Pick<
   HumanState,
-  'task' | 'execution' | 'memory' | 'skills' | 'trace'
+  'task' | 'execution' | 'memory' | 'toolsets' | 'skills' | 'trace'
 > => ({
   task: createEmptyHumanTaskInput(),
   execution: createDefaultHumanExecution(),
   memory: createDefaultHumanMemory(),
-  skills: createDefaultHumanSkills(),
+  toolsets: createDefaultHumanToolsets(),
+  skills: { loadedSkillIds: [] },
   trace: createDefaultHumanTrace()
 })
 
@@ -61,7 +63,8 @@ export const createHumanRunStateSchema = () => {
     task: humanTaskInputSchema.default(createEmptyHumanTaskInput),
     execution: humanExecutionSchema.default(createDefaultHumanExecution),
     memory: humanMemorySchema.default(createDefaultHumanMemory),
-    skills: humanSkillsSchema.default(createDefaultHumanSkills),
+    toolsets: humanToolsetsSchema.default(createDefaultHumanToolsets),
+    skills: humanSkillsSchema.default(() => ({ loadedSkillIds: [] })),
     result: humanStateContractSchema.shape.result,
     trace: humanTraceSchema.default(createDefaultHumanTrace)
   })

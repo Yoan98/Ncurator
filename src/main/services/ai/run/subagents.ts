@@ -193,7 +193,7 @@ export const createSubagentDispatcher = (
                   // Tool cleanup may finish after cancellation or graph completion.
                   if (finished || controller.signal.aborted || deps.isCancelled()) return
                   // The thought event is public assistant text accompanying this round of tool calls.
-                  // Raw reasoning deltas, skill state and lifecycle remain local.
+                  // Raw reasoning deltas, toolset state and lifecycle remain local.
                   if (event.type === 'assistant_brain_stream_started') {
                     replaceStream = true
                     messageId = event.roundId

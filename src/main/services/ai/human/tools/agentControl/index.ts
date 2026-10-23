@@ -4,7 +4,8 @@ import {
   DELEGATE_TO_SUBAGENT_TOOL_SPEC,
   LIST_AGENT_TOOL_SPEC,
   ASK_USER_QUESTION_TOOL_SPEC,
-  LEARN_SKILL_TOOL_SPEC,
+  LOAD_TOOLSET_TOOL_SPEC,
+  LOAD_SKILL_TOOL_SPEC,
   READ_IMAGE_TOOL_SPEC,
   UPDATE_PLAN_TOOL_SPEC
 } from './toolSpecs'
@@ -18,10 +19,16 @@ import { isFreeModelWithoutVision } from '../../../../../../shared/messageLogVis
 export const agentControlToolFamily: ToolFamilyDefinition = {
   familyId: 'agent-control',
   buildTools: ({ ctx }) => {
-    const learnSkill = tool(async () => ({}), {
-      name: LEARN_SKILL_TOOL_SPEC.name,
-      description: LEARN_SKILL_TOOL_SPEC.promptSpec.description,
-      schema: LEARN_SKILL_TOOL_SPEC.inputSchema
+    const loadToolset = tool(async () => ({}), {
+      name: LOAD_TOOLSET_TOOL_SPEC.name,
+      description: LOAD_TOOLSET_TOOL_SPEC.promptSpec.description,
+      schema: LOAD_TOOLSET_TOOL_SPEC.inputSchema
+    })
+
+    const loadSkill = tool(async () => ({}), {
+      name: LOAD_SKILL_TOOL_SPEC.name,
+      description: LOAD_SKILL_TOOL_SPEC.promptSpec.description,
+      schema: LOAD_SKILL_TOOL_SPEC.inputSchema
     })
 
     const updatePlan = tool(async () => ({}), {
@@ -92,6 +99,6 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
       description: LIST_AGENT_TOOL_SPEC.promptSpec.description,
       schema: LIST_AGENT_TOOL_SPEC.inputSchema
     })
-    return [list, learnSkill, updatePlan, readImage, askUserQuestion, delegate]
+    return [list, loadToolset, loadSkill, updatePlan, readImage, askUserQuestion, delegate]
   }
 }

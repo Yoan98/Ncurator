@@ -32,7 +32,7 @@ const buildStateWithPlan = () => {
     userInput: '继续处理资料'
   })
   state.memory.plan = [{ title: '读取当前目录', status: 'done' }]
-  state.skills.learnedSkillIds = ['docx-read']
+  state.toolsets.loadedToolsetIds = ['docx-read']
   return state
 }
 

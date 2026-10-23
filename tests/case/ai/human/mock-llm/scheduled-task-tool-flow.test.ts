@@ -4,7 +4,7 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
+  buildLoadToolsetsDecision,
   buildToolDecision,
   filterAiRunEventsByType
 } from '../testUtils'
@@ -46,8 +46,8 @@ describe('ai human mock-llm scheduled task', () => {
           structuredOutputScript: {
             'human.brain': [
               {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['scheduled-tasks'],
+                output: buildLoadToolsetsDecision({
+                  toolsetIds: ['scheduled-tasks'],
                   summary: '学习定时任务能力'
                 })
               },
@@ -121,7 +121,7 @@ describe('ai human mock-llm scheduled task', () => {
         const task = result.tasks[0]
         runtime.assertThat(
           result.output.status === 'completed' &&
-            started.includes('learn_skill') &&
+            started.includes('load_toolset') &&
             started.filter((name) => name === 'scheduled_task_action').length === 2 &&
             started.filter((name) => name === 'scheduled_task_list').length === 2 &&
             task?.partnerId === 'scheduled-task-mock-partner' &&

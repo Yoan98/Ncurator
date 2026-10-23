@@ -1,3 +1,8 @@
+import type {
+  UserSkill,
+  UserSkillCreateRequest,
+  UserSkillSetEnabledRequest
+} from '../shared/userSkills'
 import type { AppSettingsErrorCode } from '../shared/appErrors'
 import type {
   GetFileReviewResponse,
@@ -247,6 +252,12 @@ export type DesktopApi = {
   confirmDialogShow: (payload: ConfirmDialogRequest) => Promise<ConfirmDialogResponse>
   confirmDialogClose: (dialogId: string) => Promise<void>
   partnerMessageList: (partnerId: string) => Promise<ChatMessage[]>
+  userSkillsList: () => Promise<UserSkill[]>
+  userSkillsImport: () => Promise<UserSkill | null>
+  userSkillsCreate: (input: UserSkillCreateRequest) => Promise<UserSkill>
+  userSkillsDelete: (id: string) => Promise<void>
+  userSkillsGetEnabled: (partnerId: string) => Promise<string[]>
+  userSkillsSetEnabled: (input: UserSkillSetEnabledRequest) => Promise<void>
   scheduledTaskList: () => Promise<ScheduledTask[]>
   scheduledTaskSave: (payload: ScheduledTaskSaveRequest) => Promise<ScheduledTaskMutationResponse>
   scheduledTaskDelete: (id: string) => Promise<ScheduledTaskMutationResponse>

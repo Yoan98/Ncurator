@@ -1147,19 +1147,24 @@ export type AiRunWarningCode =
   | 'approval_denied'
   | 'llm_usage_unavailable'
 export type RuntimeIssueCode = AiRunWarningCode
-export type RuntimeSkillId = RegisteredRuntimeSkillId
-export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_plan' | 'human_hand'
+export type RuntimeToolsetId = RegisteredRuntimeToolsetId
+export type AiRunEventStage =
+  | 'human_brain'
+  | 'human_skill_loading'
+  | 'human_toolset_loading'
+  | 'human_plan'
+  | 'human_hand'
 export type AssistantProcessDisplay =
   | { kind: 'thinking' }
-  | { kind: 'learning'; skillId: RuntimeSkillId }
+  | { kind: 'toolset_loading'; toolsetId: RuntimeToolsetId }
   | { kind: 'tool'; toolName: string; input: IpcJsonObject }
   | { kind: 'retry'; attempt: number; maxAttempts: number; message: string }
   | { kind: 'compaction' }
   | { kind: 'finalizing' }
 export type AssistantProcessKind =
   | 'thinking'
-  | 'skill'
-  | 'learning'
+  | 'toolset'
+  | 'toolset_loading'
   | 'retry'
   | 'compaction'
   | 'finalizing'
@@ -1268,7 +1273,12 @@ export type AiLlmIoRecord = {
   status: 'completed' | 'failed'
   reason?: string
 }
-export type HumanStepAction = 'brain_decision' | 'learn_skill' | 'call_tool' | 'deliver_result'
+export type HumanStepAction =
+  | 'brain_decision'
+  | 'load_toolset'
+  | 'load_skill'
+  | 'call_tool'
+  | 'deliver_result'
 export type HumanStepResultStatus = 'ok' | 'error'
 
 export type AppSettings = {
@@ -1932,11 +1942,11 @@ type AiRunEventPayload =
       taskId: string
       stepIndex: number
       action: HumanStepAction
-      skillId?: RuntimeSkillId
+      toolsetId?: RuntimeToolsetId
       toolName?: string
       publicNarrative: string
-      learnedSkillIds: RuntimeSkillId[]
-      effectiveSkillIds: RuntimeSkillId[]
+      loadedToolsetIds: RuntimeToolsetId[]
+      effectiveToolsetIds: RuntimeToolsetId[]
       availableToolNames: string[]
       resultStatus?: HumanStepResultStatus
       summary: string
@@ -2193,13 +2203,23 @@ export type ChatMessageLogAnnotationEntry =
     }
   | {
       kind: 'annotation'
-      eventType: 'learning_started' | 'learning_completed'
+      eventType: 'toolset_loading_started' | 'toolset_loading_completed'
+      payload: { toolsetId: string }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'skill_loading_started' | 'skill_loading_completed'
       payload: { skillId: string }
     }
   | {
       kind: 'annotation'
       eventType: 'skill_state_updated'
-      payload: { learnedSkillIds: string[] }
+      payload: { loadedSkillIds: string[] }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'toolset_state_updated'
+      payload: { loadedToolsetIds: string[] }
     }
   | {
       kind: 'annotation'
@@ -2297,4 +2317,4 @@ export type ChatMessageLogRecord = {
   createdAt: number
 }
 
-import type { RuntimeSkillId as RegisteredRuntimeSkillId } from './runtimeCapabilities'
+import type { RuntimeToolsetId as RegisteredRuntimeToolsetId } from './runtimeCapabilities'

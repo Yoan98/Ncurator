@@ -341,3 +341,15 @@ export const scheduledTaskSelectors = {
   busyCancelCapsule: 'scheduled-task-busy-cancel-capsule',
   busyCancelDismiss: 'scheduled-task-busy-cancel-dismiss'
 } as const
+
+export const userSkillsSelectors = {
+  button: 'user-skills-button',
+  view: 'user-skills-view',
+  import: 'user-skills-import',
+  create: 'user-skills-create',
+  partner: 'user-skills-partner',
+  content: 'user-skills-content',
+  itemPrefix: 'user-skill',
+  togglePrefix: 'user-skill-toggle',
+  deletePrefix: 'user-skill-delete'
+} as const
