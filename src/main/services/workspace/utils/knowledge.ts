@@ -161,11 +161,27 @@ export const buildWorkspaceKnowledgeVectors = async (input: {
   signal?: AbortSignal
 }): Promise<WorkspaceKnowledgeVectorBuildResult> => {
   const vectors: number[][] = []
+  const identity = input.embeddingService.getIndexIdentity()
+  let dimension: number | undefined
   const batches = createWorkspaceEmbeddingBatches(input.chunks)
   for (const batch of batches) {
     if (input.signal?.aborted) throw new IndexPrepareCancelledError()
     const embeddings = await input.embeddingService.embed(batch.map((chunk) => chunk.text))
+    if (
+      embeddings.modelIdentity !== identity ||
+      input.embeddingService.getIndexIdentity() !== identity
+    ) {
+      throw new Error('向量模型已切换，请重新生成索引。')
+    }
     const vectorSize = embeddings.dims[1]
+    dimension ??= vectorSize
+    if (
+      dimension !== vectorSize ||
+      embeddings.dims[0] !== batch.length ||
+      embeddings.data.length !== batch.length * vectorSize
+    ) {
+      throw new Error('向量模型返回的维度或数量发生变化，请重新生成索引。')
+    }
     vectors.push(
       ...batch.map((_, index) =>
         Array.from(embeddings.data.slice(index * vectorSize, (index + 1) * vectorSize))

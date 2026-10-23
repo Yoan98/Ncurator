@@ -184,6 +184,62 @@ export const en = {
       'Could not load the vector model runtime. Install Microsoft Visual C++ 2015–2022 Runtime and try again.'
   },
   settings: {
+    embedding: {
+      savedActive: 'Saved. The current model configuration is now in use.',
+      localModels: 'Local models',
+      remoteModels: 'Remote models',
+      addRemote: 'Add remote model',
+      editRemote: 'Edit remote model',
+      current: 'Currently using',
+      use: 'Use',
+      noRemote: 'No remote models configured',
+      name: 'Name',
+      baseUrl: 'Base URL',
+      modelName: 'Model name',
+      maxInputTokens: 'Maximum input length (tokens)',
+      defaultInputTokens: 'Default: {{tokens}}',
+      maxInputTokensHint:
+        'Optional. Leave blank to use {{default}} tokens, or enter the provider’s official maximum: an integer from {{min}} to {{max}}.',
+      invalidMaxInputTokens:
+        'Maximum input length must be an integer from {{min}} to {{max}} tokens.',
+      budgetHint:
+        'The app automatically reserves {{reservedTokens}} tokens, leaving {{contentTokenBudget}} tokens for content.',
+      lengthEstimateHint:
+        'Generic APIs use conservative length estimates for splitting, rather than exact model tokenizer counts. Actual service limits apply.',
+      apiKey: 'API key',
+      keyHint:
+        'Leave blank to keep the saved key. A new configuration must meet the provider’s key requirements.',
+      test: 'Test connection',
+      testSuccess: 'Connection succeeded · {{dimension}} dimensions',
+      saveHint: 'Saving does not switch models. Select Use in the list when ready.',
+      activeEditHint:
+        'Saving changes to the current model takes effect immediately and rebuilds its index.',
+      deleteTitle: 'Delete this remote model?',
+      switchBeforeDelete: 'Switch to another model before deleting the current model.',
+      required: 'Enter a name, base URL and model name.',
+      requestFailed: 'The operation failed. Please try again.',
+      loadFailed: 'Could not load the selected model and index status.',
+      indexTitle: 'Background indexing',
+      idle: 'Idle',
+      running: 'Running',
+      paused: 'Paused',
+      failed: 'Failed',
+      pause: 'Pause',
+      resume: 'Resume',
+      progress: '{{completed}} / {{total}} completed · {{pending}} pending · {{failed}} failed',
+      coverage:
+        'Coverage is incomplete for the current model. Search results may be incomplete until indexing finishes.',
+      selectionHint: 'Switching models rebuilds the index in the background.',
+      selectedRemote: 'Selected remote model: {{name}} · configured',
+      selectedLocal: 'Selected local model: {{name}} · downloaded',
+      selectedLocalMissing: 'Selected local model: {{name}} · download required',
+      selectionMissing:
+        'The selected model is unavailable. Select a configured remote model or download and select a local model.',
+      configure: 'Configure vector models',
+      requirement:
+        'Select a configured remote model or a downloaded local model before updating the index.',
+      saved: 'Saved. Select Use in the list to switch to this model.'
+    },
     openHelpWebsiteTitle: 'Open help on the website?',
     openHelpWebsiteDescription:
       'The help page will open on our official website in your default browser. Continue?',
@@ -424,7 +480,7 @@ export const en = {
       'Manage local paths, web sources, directory changes, and indexes.',
     vectorModels: 'Vector models',
     downloadLocalEmbeddingModelsForSearchAndKnowledgeRetrieval:
-      'Download local embedding models for search and knowledge retrieval.',
+      'Choose local or remote embedding models and manage configurations and index updates.',
     noRecordsYet: 'No records yet',
     indexing: 'Indexing',
     fetching: 'Fetching',

@@ -1,4 +1,10 @@
 import type {
+  EmbeddingModelsSnapshot,
+  EmbeddingModelMutationResponse,
+  EmbeddingModelTestResponse,
+  RemoteEmbeddingModelInput
+} from '../shared/embeddingModels'
+import type {
   UserSkill,
   UserSkillOption,
   UserSkillCreateRequest,
@@ -238,6 +244,14 @@ export type DesktopApi = {
   deleteModel: (repoId: string) => Promise<{ success: boolean; error?: string }>
   getModels: () => Promise<ModelInfo[]>
   getEmbeddingStatus: () => Promise<EmbeddingRuntimeSnapshot>
+  embeddingModelsGet: () => Promise<EmbeddingModelsSnapshot>
+  embeddingModelSave: (input: RemoteEmbeddingModelInput) => Promise<EmbeddingModelMutationResponse>
+  embeddingModelDelete: (id: string) => Promise<EmbeddingModelMutationResponse>
+  embeddingModelSelect: (id: string) => Promise<EmbeddingModelMutationResponse>
+  embeddingModelTest: (input: RemoteEmbeddingModelInput) => Promise<EmbeddingModelTestResponse>
+  embeddingIndexControl: (
+    action: 'pause' | 'resume' | 'retry'
+  ) => Promise<EmbeddingModelMutationResponse>
   readFile: (filePath: string) => Promise<Uint8Array>
   fileExists: (filePath: string) => Promise<boolean>
   writeTextFile: (payload: WriteTextFileRequest) => Promise<WriteTextFileResponse>

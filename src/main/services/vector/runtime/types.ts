@@ -3,6 +3,7 @@ import type { EmbeddingRuntimeProcessInfo } from '../../../../shared/types'
 export type EmbeddingResult = {
   data: Float32Array
   dims: [number, number]
+  modelIdentity?: string
 }
 
 export type EmbeddingThreadBudget = {
@@ -17,6 +18,7 @@ export type EmbeddingExecutor = {
   getRuntimeProcessInfo?: () => EmbeddingRuntimeProcessInfo
   restart?: () => Promise<void>
   close?: () => Promise<void>
+  cancelPending?: () => Promise<void>
 }
 
 export type EmbeddingRuntimeRequest =

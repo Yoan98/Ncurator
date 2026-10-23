@@ -295,6 +295,12 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('get-models')
   },
   getEmbeddingStatus: () => ipcRenderer.invoke('get-embedding-status'),
+  embeddingModelsGet: () => ipcRenderer.invoke('embedding-models-get'),
+  embeddingModelSave: (input) => ipcRenderer.invoke('embedding-model-save', input),
+  embeddingModelDelete: (id) => ipcRenderer.invoke('embedding-model-delete', id),
+  embeddingModelSelect: (id) => ipcRenderer.invoke('embedding-model-select', id),
+  embeddingModelTest: (input) => ipcRenderer.invoke('embedding-model-test', input),
+  embeddingIndexControl: (action) => ipcRenderer.invoke('embedding-index-control', action),
   readFile: (filePath: string): Promise<Uint8Array> => ipcRenderer.invoke('read-file', filePath),
   fileExists: (filePath: string): Promise<boolean> => ipcRenderer.invoke('file-exists', filePath),
   writeTextFile: (payload) => {
