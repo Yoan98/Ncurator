@@ -44,6 +44,7 @@ describe('workbench terminal e2e', () => {
         groups: ['process'],
         description: '真实 AI 启动持久终端 HTTP 服务、让出控制权并用浏览器验证页面。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

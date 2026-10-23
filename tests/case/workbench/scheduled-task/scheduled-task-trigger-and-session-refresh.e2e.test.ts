@@ -54,6 +54,7 @@ describe('workbench scheduled-task e2e', () => {
         groups: [],
         description: '创建未来分钟触发的定时任务后，向绑定伙伴追加消息并发送，不切换当前查看伙伴。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

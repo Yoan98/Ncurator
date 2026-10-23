@@ -21,6 +21,7 @@ describe('knowledge availability through real services', () => {
         domain: 'knowledge',
         suite: 'foundation',
         harnessMode: 'tool-real',
+      knowledge: 'cold',
         fixtures: [],
         runMode: 'single',
         description: '真实模型安装门禁、初始化失败、空库、全局网页、删除恢复及索引入口。',

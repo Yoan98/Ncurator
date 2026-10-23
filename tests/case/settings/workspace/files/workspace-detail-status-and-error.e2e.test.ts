@@ -22,6 +22,7 @@ describe('settings workspace e2e', () => {
         groups: ['files'],
         description: '文件 tab 持续展示需索引/失败摘要，并在索引失败后保留文件级错误状态。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {

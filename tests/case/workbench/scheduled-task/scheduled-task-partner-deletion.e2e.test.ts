@@ -31,6 +31,7 @@ describe('workbench scheduled-task e2e', () => {
         groups: [],
         description: '验证删除伙伴后任务保留、解绑停用，且可编辑重新绑定。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',

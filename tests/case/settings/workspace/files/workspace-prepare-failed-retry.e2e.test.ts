@@ -22,6 +22,7 @@ describe('settings workspace e2e', () => {
         groups: ['files'],
         description: '已有失败文件再次点击更新索引时，应被纳入本次处理范围。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {

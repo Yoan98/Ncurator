@@ -213,6 +213,7 @@ describe('workbench result e2e', () => {
         description:
           'opt-in：本机已授权的 WPS 打开目标 docx / xlsx / pptx 后，AI 写回/回退应先 close 再写盘再 open，窗口正文出现标记并在回退后恢复。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'exclusive',
         windowMode: 'visible',
@@ -424,6 +425,7 @@ describe('WPS audit navigation e2e', () => {
         groups: ['wps-office'],
         description: '真实审核区域点击冷启动和再次激活 WPS，并核对实际选区及不写盘边界。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'exclusive',
         windowMode: 'visible',

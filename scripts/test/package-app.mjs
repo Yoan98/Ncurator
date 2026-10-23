@@ -3,6 +3,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSy
 import { mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { extractFile, uncache } from '@electron/asar'
 import { resolveBundleInstaller } from '../release/artifact-bundle.mjs'
 import {
   PACKAGE_PRODUCT_NAME,
@@ -266,4 +267,29 @@ export const cleanupPackagedE2EApplication = (session, { log = () => {} } = {}) 
   const installRoot = session?.installedAppPath
   if (!installRoot) return { removed: false }
   return cleanupPackagedE2EInstall({ installRoot, log })
+}
+
+// Cache identity must come from the installed artifact, never the current source tree.
+export const readPackagedKnowledgeCacheIdentity = (
+  installedAppPath,
+  platform = process.platform
+) => {
+  const resources =
+    platform === 'darwin'
+      ? path.join(installedAppPath, 'Contents', 'Resources')
+      : path.join(installedAppPath, 'resources')
+  uncache(path.join(resources, 'app.asar'))
+  try {
+    const identity = JSON.parse(
+      extractFile(
+        path.join(resources, 'app.asar'),
+        'out/main/knowledge-cache-identity.json'
+      ).toString('utf8')
+    )
+    return /^[a-f0-9]{64}$/.test(identity.split) && /^[a-f0-9]{64}$/.test(identity.embedding)
+      ? identity
+      : null
+  } catch {
+    return null
+  }
 }

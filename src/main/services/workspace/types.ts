@@ -46,18 +46,32 @@ export type WorkspaceKnowledgeChunkInput = {
   metadata: { page: number }
 }
 
+export type WorkspaceKnowledgeSplitKey = {
+  contentHash: string
+  fileExt: string
+  sourceName: string
+}
+
+export type WorkspaceKnowledgeVectorKey = {
+  contentHash: string
+  fileExt: string
+  modelName: string
+  texts: string[]
+}
+
 export type WorkspaceKnowledgeCache = {
-  loadSplitSnapshot: (input: {
-    contentHash: string
-    fileExt: string
-  }) => Promise<WorkspaceKnowledgeSplitSnapshot | null>
-  saveSplitSnapshot: (snapshot: WorkspaceKnowledgeSplitSnapshot) => Promise<void>
-  loadVectorSnapshot: (input: {
-    contentHash: string
-    fileExt: string
-    modelName: string
-  }) => Promise<WorkspaceKnowledgeVectorSnapshot | null>
-  saveVectorSnapshot: (snapshot: WorkspaceKnowledgeVectorSnapshot) => Promise<void>
+  withLock: <T>(key: string, action: () => Promise<T>, signal?: AbortSignal) => Promise<T>
+  loadSplitSnapshot: (
+    input: WorkspaceKnowledgeSplitKey
+  ) => Promise<WorkspaceKnowledgeSplitSnapshot | null>
+  saveSplitSnapshot: (
+    snapshot: WorkspaceKnowledgeSplitSnapshot,
+    sourceName: string
+  ) => Promise<void>
+  loadVectorSnapshot: (
+    input: WorkspaceKnowledgeVectorKey
+  ) => Promise<WorkspaceKnowledgeVectorSnapshot | null>
+  saveVectorSnapshot: (snapshot: WorkspaceKnowledgeVectorSnapshot, texts: string[]) => Promise<void>
 }
 
 /** 网页正文源：已抓好的文本，无本地文件路径 */

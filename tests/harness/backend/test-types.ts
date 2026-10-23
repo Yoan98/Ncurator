@@ -252,12 +252,14 @@ export type BackendTestRuntime = {
 export type TestCaseDefinition<TResult> = {
   caseId: string
   harnessMode: BackendHarnessMode
+  knowledge?: 'none' | 'cached' | 'cold'
   testType?: Extract<TestType, 'backend'>
   domain: Extract<TestDomain, 'ai' | 'knowledge' | 'unit'>
   suite: string
   groups?: readonly string[]
   description: string
   fixtures: readonly string[]
+  outputFiles?: readonly string[]
   runMode: TestRunMode
   runtimeModelName?: string | null
   execute: (runtime: BackendTestRuntime) => Promise<TResult>

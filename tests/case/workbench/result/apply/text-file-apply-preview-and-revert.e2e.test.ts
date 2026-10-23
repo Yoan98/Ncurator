@@ -33,6 +33,7 @@ describe('workbench result e2e', () => {
         groups: ['apply'],
         description: '验证 Markdown 打开即编辑态、文本修改 diff 展示和按原始 bytes 回退。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         extraEnv: {
           NCURATOR_E2E_OPEN_WITH_NOOP: '1'

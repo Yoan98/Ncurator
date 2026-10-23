@@ -279,6 +279,7 @@ describe('workbench run e2e', () => {
         description:
           '真实 AI 使用 browser_use 操作本地网页（无进程级调试口），验证右侧浏览器面板、网页结果和最终回答闭环。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

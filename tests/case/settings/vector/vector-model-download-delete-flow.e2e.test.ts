@@ -25,6 +25,7 @@ describe('settings vector real download e2e', () => {
           description:
             '用户通过真实 Settings 页面下载产品列表中的向量模型，观察进度和页面恢复，再完成删除确认、取消与成功删除。',
           fixtures: [],
+          knowledge: 'cold',
           serviceMode: 'real',
           extraEnv: {
             NCURATOR_MODELS_PATH: modelsPath

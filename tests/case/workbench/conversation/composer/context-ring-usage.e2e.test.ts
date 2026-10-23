@@ -24,6 +24,7 @@ describe('workbench conversation e2e', () => {
         groups: ['composer'],
         description: '验证智能模式上下文圆圈会刷新并展示已用比例与 tokens。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

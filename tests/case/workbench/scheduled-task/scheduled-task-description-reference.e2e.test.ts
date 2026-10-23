@@ -52,6 +52,7 @@ describe('workbench scheduled-task e2e', () => {
         description:
           '验证通用 Composer 输入框中的行内 @ 引用可保存、回填并在立即执行时传给伙伴消息。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         windowMode: 'visible',
         execution: 'live',

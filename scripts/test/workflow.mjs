@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, realpathSync } from 'node:fs'
-import { cp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +12,11 @@ import {
   runE2EGates
 } from './e2e-results.mjs'
 import { spawn, spawnSync } from 'node:child_process'
-import { preparePackagedE2EApplication } from './package-app.mjs'
+import {
+  preparePackagedE2EApplication,
+  readPackagedKnowledgeCacheIdentity
+} from './package-app.mjs'
+import { createKnowledgeCacheIdentity } from '../build/runtime/knowledge-cache-identity.mjs'
 
 const ROOT = process.cwd()
 const require = createRequire(import.meta.url)
@@ -41,17 +45,10 @@ const LIVE_WORKERS = 3
 const RUNNER_DEADLINE_MS = 60 * 60 * 1000
 const DEADLINE_EXIT_CODE = 124
 const STALE_E2E_TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000
-const E2E_EXECUTION_CLASSES = new Set(['normal', 'live', 'exclusive', 'warmup'])
+const E2E_EXECUTION_CLASSES = new Set(['normal', 'live', 'exclusive'])
 const USE_WINDOWS_SHELL = process.platform === 'win32'
 const activeAsyncChildren = new Set()
 let stoppingActiveChildren = false
-const VECTOR_WARMUP_TEST_FILE = path.join(
-  TEST_CASES_ROOT,
-  'settings',
-  'workspace',
-  'files',
-  'workspace-prepare-refresh.e2e.test.ts'
-)
 const KNOWLEDGE_CACHE_ROOT = path.join(TESTS_ROOT, '.cache', 'workspace-knowledge')
 const EMPTY_KNOWLEDGE_CACHE_STATS = {
   splitCacheHits: 0,
@@ -114,7 +111,6 @@ const parseArgs = (argv) => {
     bundles: [],
     results: [],
     freshKnowledgeCache: false,
-    reuseKnowledgeCache: false,
     help: false,
     unknownArgs: [],
     invalidArgs: []
@@ -166,10 +162,6 @@ const parseArgs = (argv) => {
     }
     if (current === '--fresh-knowledge-cache') {
       parsed.freshKnowledgeCache = true
-      continue
-    }
-    if (current === '--reuse-knowledge-cache') {
-      parsed.reuseKnowledgeCache = true
       continue
     }
     if (current === '--help' || current === '-h') {
@@ -231,18 +223,16 @@ const readKnowledgeCacheStats = async (cachePath) => {
 }
 
 const prepareKnowledgeCache = async (input) => {
-  const cachePath = input.reuse
-    ? path.join(KNOWLEDGE_CACHE_ROOT, 'debug-reuse', input.namespace)
-    : path.join(KNOWLEDGE_CACHE_ROOT, input.namespace, input.buildFingerprint)
+  const cachePath = path.join(KNOWLEDGE_CACHE_ROOT, 'v3', `${process.platform}-${process.arch}`)
   if (input.fresh) await rm(cachePath, { recursive: true, force: true })
   await mkdir(cachePath, { recursive: true })
   return {
-    knowledgeCacheEnabled: true,
+    knowledgeCacheEnabled: input.enabled !== false,
     knowledgeCachePath: cachePath,
     knowledgeCacheNamespace: input.namespace,
     buildFingerprint: input.buildFingerprint,
     env: {
-      NCURATOR_WORKSPACE_KNOWLEDGE_CACHE: '1',
+      NCURATOR_WORKSPACE_KNOWLEDGE_CACHE: input.enabled === false ? '0' : '1',
       NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH: cachePath,
       NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE: input.namespace,
       NCURATOR_E2E_BUILD_FINGERPRINT: input.buildFingerprint
@@ -272,9 +262,9 @@ const toCaseId = (filePath) =>
 
 const readE2EExecutionClass = async (filePath) => {
   const source = await readFile(filePath, 'utf8')
-  const matches = [
-    ...source.matchAll(/\bexecution\s*:\s*['"](normal|live|exclusive|warmup)['"]/gu)
-  ].map((match) => match[1])
+  const matches = [...source.matchAll(/\bexecution\s*:\s*['"](normal|live|exclusive)['"]/gu)].map(
+    (match) => match[1]
+  )
   const declared = [...new Set(matches)]
   if (declared.length > 1) {
     throw new Error(`${path.relative(ROOT, filePath)} declares multiple E2E execution classes`)
@@ -291,21 +281,6 @@ const buildKnowledgeCacheCaseKey = (testFile) => {
   return `${toCaseId(testFile)}-${createHash('sha256').update(relativePath).digest('hex').slice(0, 12)}`
 }
 
-const buildCaseKnowledgeCacheEnv = async (env, testFile) => {
-  const basePath = String(env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
-  if (!basePath) return env
-  const caseKey = buildKnowledgeCacheCaseKey(testFile)
-  const casePath = path.join(basePath, 'cases', caseKey)
-  await mkdir(casePath, { recursive: true })
-  return {
-    ...env,
-    NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH: casePath,
-    NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE: `${String(
-      env.NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE || 'e2e'
-    )}/${caseKey}`
-  }
-}
-
 const buildDirectKnowledgeCacheEnv = async (env, testFile) => {
   const cachePath = String(env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
   if (!cachePath) return env
@@ -319,17 +294,6 @@ const buildDirectKnowledgeCacheEnv = async (env, testFile) => {
       env.NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE || 'e2e'
     )}/${caseKey}`
   }
-}
-
-const seedCaseKnowledgeCache = async (caseEnv, seedPath) => {
-  const casePath = String(caseEnv.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
-  if (!seedPath || !casePath || path.resolve(seedPath) === path.resolve(casePath)) return
-  await cp(seedPath, casePath, {
-    recursive: true,
-    force: false,
-    errorOnExist: false,
-    filter: (source) => path.basename(source) !== 'stats.json'
-  })
 }
 
 const fileContainsCaseId = async (filePath, caseId) => {
@@ -676,13 +640,9 @@ const runE2ETestFilesConcurrently = async (
   targets,
   testNamePattern,
   deadlineAt,
-  addKnowledgeWarmup = true,
   configPath = 'vitest.e2e.config.mts',
   { gateCaseIds = [], previousResults = [] } = {}
 ) => {
-  if (addKnowledgeWarmup && !testFiles.includes(VECTOR_WARMUP_TEST_FILE) && testFiles.length > 1) {
-    testFiles = [...testFiles, VECTOR_WARMUP_TEST_FILE]
-  }
   const fileTasks = await Promise.all(
     testFiles.map(async (testFile) => ({
       testFile,
@@ -694,17 +654,14 @@ const runE2ETestFilesConcurrently = async (
       fileTasks.map((task) => ({
         ...task,
         targetId: target.id,
-        env: target.env,
-        cacheMode: target.cacheMode
+        env: target.env
       }))
     )
     .map((task, index) => ({ ...task, index }))
   const runnableTasks = tasks
-  const warmupTasks = runnableTasks.filter((task) => task.execution === 'warmup')
   const gateTasks = runnableTasks.filter((task) => gateCaseIds.includes(toCaseId(task.testFile)))
   const concurrentTasks = runnableTasks.filter(
-    (task) =>
-      task.execution !== 'exclusive' && task.execution !== 'warmup' && !gateTasks.includes(task)
+    (task) => task.execution !== 'exclusive' && !gateTasks.includes(task)
   )
   const exclusiveTasks = runnableTasks.filter(
     (task) => task.execution === 'exclusive' && !gateTasks.includes(task)
@@ -714,7 +671,6 @@ const runE2ETestFilesConcurrently = async (
   let liveActive = 0
   let completed = 0
   const activeByTarget = new Map()
-  const warmupCacheByTarget = new Map()
 
   const recordDeadline = (task) => {
     exitCode = DEADLINE_EXIT_CODE
@@ -733,13 +689,13 @@ const runE2ETestFilesConcurrently = async (
     else results.push(taskResult)
   }
 
-  const runTask = async (task, seedPath = '') => {
+  const runTask = async (task) => {
     const relativeFile = path.relative(ROOT, task.testFile)
     completed += 1
     process.stdout.write(
       `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
     )
-    const pattern = task.execution === 'warmup' ? '' : testNamePattern
+    const pattern = testNamePattern
     const caseIds = readTestCaseIds(task.testFile, await readFile(task.testFile, 'utf8')).filter(
       (id) => !pattern || new RegExp(pattern, 'u').test(id)
     )
@@ -747,7 +703,6 @@ const runE2ETestFilesConcurrently = async (
       (test) => test.file === relativeFile && test.targetId === task.targetId
     )
     if (
-      task.execution !== 'warmup' &&
       previous &&
       passedPackageTest(previous, task.env.NCURATOR_E2E_ARTIFACT_SHA256) &&
       caseIds.length > 0 &&
@@ -758,16 +713,12 @@ const runE2ETestFilesConcurrently = async (
       return { code: 0 }
     }
     const startedAt = Date.now()
-    const caseEnv =
-      task.cacheMode === 'direct'
-        ? await buildDirectKnowledgeCacheEnv(task.env, task.testFile)
-        : await buildCaseKnowledgeCacheEnv(task.env, task.testFile)
-    if (task.cacheMode === 'warmup') await seedCaseKnowledgeCache(caseEnv, seedPath)
+    const caseEnv = await buildDirectKnowledgeCacheEnv(task.env, task.testFile)
     let code = await runVitest({
       configPath,
       testFiles: [task.testFile],
       env: caseEnv,
-      testNamePattern: task.execution === 'warmup' ? '' : testNamePattern,
+      testNamePattern,
       workers: 1,
       deadlineAt
     })
@@ -805,41 +756,7 @@ const runE2ETestFilesConcurrently = async (
     }
   }
 
-  for (let index = 0; index < warmupTasks.length; index += 1) {
-    const task = warmupTasks[index]
-    if (Date.now() >= deadlineAt) {
-      for (const remaining of warmupTasks.slice(index)) recordDeadline(remaining)
-      return {
-        exitCode,
-        results: results.sort((left, right) => left.index - right.index)
-      }
-    }
-    process.stdout.write(
-      `[test-workflow] vector warm-up ${String(index + 1)}/${String(warmupTasks.length)} must pass before parallel E2E starts\n`
-    )
-    const outcome = await runTask(task)
-    if (outcome.code !== 0) {
-      exitCode = outcome.code
-      process.stderr.write(
-        '[test-workflow] vector warm-up failed; parallel E2E will not start on a cold cache\n'
-      )
-      return {
-        exitCode,
-        results: results.sort((left, right) => left.index - right.index)
-      }
-    }
-    warmupCacheByTarget.set(task.targetId, outcome.cachePath)
-  }
-
-  if (warmupCacheByTarget.size > 0) {
-    process.stdout.write(
-      `[test-workflow] vector warm-up passed; isolated E2E caches will be seeded for ${String(warmupCacheByTarget.size)} target(s)\n`
-    )
-  }
-
-  const gateFailure = await runE2EGates(gateTasks, (task) =>
-    runTask(task, warmupCacheByTarget.get(task.targetId) || '')
-  )
+  const gateFailure = await runE2EGates(gateTasks, (task) => runTask(task))
   if (gateFailure) {
     process.stderr.write(
       `[release-cache-gate] ${toCaseId(gateFailure.task.testFile)} failed. Stop and report the cause; user decision is required before any correction, retry or further release work.\n`
@@ -864,7 +781,7 @@ const runE2ETestFilesConcurrently = async (
       if (task.execution === 'live') liveActive += 1
       activeByTarget.set(task.targetId, Number(activeByTarget.get(task.targetId) || 0) + 1)
       let running
-      running = runTask(task, warmupCacheByTarget.get(task.targetId)).finally(() => {
+      running = runTask(task).finally(() => {
         if (task.execution === 'live') liveActive -= 1
         activeByTarget.set(
           task.targetId,
@@ -886,7 +803,7 @@ const runE2ETestFilesConcurrently = async (
       for (const remaining of exclusiveTasks.slice(index)) recordDeadline(remaining)
       break
     }
-    await runTask(task, warmupCacheByTarget.get(task.targetId))
+    await runTask(task)
   }
 
   exitCode = results.reduce((code, result) => {
@@ -1009,11 +926,23 @@ const runTypeWorkflow = async (input) => {
     const knowledgeCache = await prepareKnowledgeCache({
       namespace: 'source',
       buildFingerprint,
-      fresh: input.freshKnowledgeCache,
-      reuse: input.reuseKnowledgeCache
+      fresh: input.freshKnowledgeCache
     })
     runtimeEnv = { ...runtimeEnv, ...knowledgeCache.env }
-    e2eTargets = [{ id: 'source', env: runtimeEnv, cacheMode: 'direct' }]
+    e2eTargets = [{ id: 'source', env: runtimeEnv }]
+  }
+
+  if (input.type === 'backend' && input.domain !== 'unit') {
+    const cache = await prepareKnowledgeCache({
+      namespace: 'backend',
+      buildFingerprint: '',
+      fresh: input.freshKnowledgeCache
+    })
+    runtimeEnv = {
+      ...runtimeEnv,
+      ...cache.env,
+      NCURATOR_KNOWLEDGE_IDENTITY: JSON.stringify(await createKnowledgeCacheIdentity(ROOT))
+    }
   }
 
   let exitCode = 0
@@ -1061,7 +990,6 @@ const runTypeWorkflow = async (input) => {
         e2eTargets,
         testNamePattern,
         input.deadlineAt,
-        !input.showcase,
         input.showcase ? 'vitest.showcase.config.mts' : 'vitest.e2e.config.mts',
         { gateCaseIds: input.gateCaseIds || [], previousResults: input.previousResults || [] }
       )
@@ -1093,7 +1021,6 @@ const USAGE = `NCurator 测试 runner
   --bundle <release-bundle.json>         正式包 bundle，可重复传入
   --result <path>                        bundle 结果路径，可重复传入
   --fresh-knowledge-cache                删除知识库缓存强制重建
-  --reuse-knowledge-cache                复用知识库缓存（调试用）
   -h, --help                             显示本帮助并退出
 
 注意:
@@ -1173,9 +1100,6 @@ export const runTestWorkflow = async (argv, options = {}) => {
   if (args.target !== 'package' && args.results.length > 0) {
     throw new Error('--result 只能与 --target package 一起使用')
   }
-  if (args.freshKnowledgeCache && args.reuseKnowledgeCache) {
-    throw new Error('--fresh-knowledge-cache 和 --reuse-knowledge-cache 不能同时使用')
-  }
 
   const architectureValidationCode = validateTestArchitecture()
   if (architectureValidationCode !== 0) process.exit(architectureValidationCode)
@@ -1203,7 +1127,6 @@ export const runTestWorkflow = async (argv, options = {}) => {
         const target = {
           id: session.releasePlatform,
           env: { ...session.env },
-          cacheMode: 'warmup',
           session,
           knowledgeCache: {
             knowledgeCacheEnabled: false,
@@ -1216,8 +1139,8 @@ export const runTestWorkflow = async (argv, options = {}) => {
         const knowledgeCache = await prepareKnowledgeCache({
           namespace: `package/${session.releasePlatform}`,
           buildFingerprint: session.artifactSha256,
-          fresh: args.freshKnowledgeCache,
-          reuse: args.reuseKnowledgeCache
+          enabled: Boolean(readPackagedKnowledgeCacheIdentity(session.installedAppPath)),
+          fresh: args.freshKnowledgeCache
         })
         target.env = { ...session.env, ...knowledgeCache.env }
         target.knowledgeCache = knowledgeCache
@@ -1237,11 +1160,7 @@ export const runTestWorkflow = async (argv, options = {}) => {
       const result = await runTypeWorkflow({
         ...args,
         type: 'e2e',
-        e2eTargets: packageTargets.map(({ id, env, cacheMode }) => ({
-          id,
-          env,
-          cacheMode
-        })),
+        e2eTargets: packageTargets.map(({ id, env }) => ({ id, env })),
         deadlineAt
       })
       exitCode = result.exitCode

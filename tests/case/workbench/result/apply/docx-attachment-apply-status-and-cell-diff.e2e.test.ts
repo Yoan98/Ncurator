@@ -48,6 +48,7 @@ describe('workbench result e2e', () => {
         description:
           '真实 AI 修改工作区内 DOCX 附件中的已有表格单元格后，验证审核 Diff 固定快照和预览模式监听真实资产文件。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

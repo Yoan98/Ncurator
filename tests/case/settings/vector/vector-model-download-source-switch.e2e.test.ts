@@ -102,6 +102,7 @@ describe('settings vector download source switch e2e', () => {
           description:
             '默认下载源失效时，用户通过“更换源下载”选择另一源完成模型安装，验证失败清理、弹窗标注失败源与换源重下的完整链路。',
           fixtures: [],
+          knowledge: 'cold',
           serviceMode: 'real',
           extraEnv: {
             NCURATOR_MODELS_PATH: modelsPath,

@@ -230,6 +230,7 @@ describe('workbench run e2e', () => {
         description:
           '真实 AI 总结 workspace 事实，验证 Thought/Activity 过程层渲染、工具平铺、header 规则与最终回答收口。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

@@ -37,6 +37,7 @@ describe('workbench AI question e2e', () => {
         groups: ['blocker'],
         description: '真实 Workbench 提问卡片、伙伴切换与刷新恢复、提交后 Activity 问答投影。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

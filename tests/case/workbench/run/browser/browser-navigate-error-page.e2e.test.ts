@@ -71,6 +71,7 @@ describe('workbench browser navigate e2e', () => {
         description:
           '本地页验证输入什么协议就打开什么：裸主机只补 https 失败不改 http，明确 http 能打开，明确 https 失败停在馆长统一错误页并展示 Chromium 错误码，加载中可见地址栏底线，AI navigate 成功/失败都带回 tabId。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'exclusive',
         windowMode: 'visible',

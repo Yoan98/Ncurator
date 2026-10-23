@@ -37,6 +37,7 @@ describe('workbench run e2e', () => {
         description:
           '真实模型读取资料过程中追加两条消息，验证单一主按钮切换、浅灰待处理态及安全边界后的 FIFO 续接。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

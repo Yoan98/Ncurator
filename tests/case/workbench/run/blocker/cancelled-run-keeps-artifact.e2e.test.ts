@@ -29,6 +29,7 @@ describe('workbench run e2e', () => {
         groups: ['blocker'],
         description: '文件修改落地后取消运行，仍保留文件卡片和审核模式。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

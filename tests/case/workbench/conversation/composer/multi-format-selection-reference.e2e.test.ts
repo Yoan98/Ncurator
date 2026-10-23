@@ -260,6 +260,7 @@ describe('workbench conversation e2e', () => {
         groups: ['composer'],
         description: '真实多格式选区引用、定位及混合发送。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         windowMode: 'visible',
         execution: 'exclusive',

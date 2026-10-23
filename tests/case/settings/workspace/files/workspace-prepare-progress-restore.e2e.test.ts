@@ -39,6 +39,7 @@ describe('settings workspace e2e', () => {
         groups: ['files'],
         description: '文件索引执行中离开并返回工作空间页后，应恢复持久化进度块和取消按钮状态。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {

@@ -101,7 +101,6 @@ const planCases = async (planName) => {
 
 const failures = []
 const summaries = []
-const warmupFiles = []
 
 for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
   const domainRoot = path.join(CASE_ROOT, domain)
@@ -121,15 +120,18 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
     if (rule.type === 'e2e' && !isE2E) failures.push(`${relativePath}: ${domain} 只允许 E2E 测试`)
     if (rule.type === 'backend' && isE2E)
       failures.push(`${relativePath}: ${domain} 只允许 backend 测试`)
+    for (const match of source.matchAll(/\bknowledge\s*:\s*['"]([^'"]+)['"]/gu)) {
+      if (!['none', 'cached', 'cold'].includes(match[1]))
+        failures.push(`${relativePath}: unsupported knowledge policy ${match[1]}`)
+    }
     if (isE2E) {
       const executionValues = [...source.matchAll(/\bexecution\s*:\s*['"]([^'"]+)['"]/gu)].map(
         (match) => match[1]
       )
       for (const execution of executionValues) {
-        if (!['normal', 'live', 'exclusive', 'warmup'].includes(execution)) {
+        if (!['normal', 'live', 'exclusive'].includes(execution)) {
           failures.push(`${relativePath}: unsupported E2E execution class ${execution}`)
         }
-        if (execution === 'warmup') warmupFiles.push(relativePath)
       }
       if (new Set(executionValues).size > 1) {
         failures.push(`${relativePath}: one E2E file cannot mix execution classes`)
@@ -334,12 +336,6 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
   } else {
     summaries.push(`${domain} ${String(files.length)} files`)
   }
-}
-
-if (warmupFiles.length !== 1) {
-  failures.push(
-    `E2E must declare exactly one vector warm-up file; found ${String(warmupFiles.length)}: ${warmupFiles.join(', ') || '(none)'}`
-  )
 }
 
 if (failures.length > 0) {

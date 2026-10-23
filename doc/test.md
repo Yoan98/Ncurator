@@ -155,10 +155,13 @@ runner 不负责：
 
 #### 调度与缓存
 
-- E2E 通过 `execution` 声明调度方式：默认 `normal`；真实 AI / 服务调用使用 `live`；需要桌面焦点、鼠标或原生对话框的用例使用 `exclusive`；向量冷启动预热用例使用 `warmup`。
-- 一次执行超过一个 E2E 文件时，runner 自动纳入唯一的 `warmup` 并先串行执行，不受 domain、suite、case 或测试名称筛选影响。预热共享 fixture 的索引供后续 case 复用；预热失败则停止后续执行。
+- E2E 的 `execution` 只控制调度：默认 `normal`；真实 AI / 服务调用为 `live`；需要桌面焦点或原生对话框为 `exclusive`。原有 Settings 索引 UI case 独立执行，不再作为批量测试的自动前置。
+- case 通过 `knowledge: 'none' | 'cached' | 'cold'` 声明知识库需求，默认 `none`；仅需直接读取文件的 Skill / 文档任务不预热知识库。需要真实索引的 case 声明 `cached`，模型安装/损坏、冷启动、线程预算与嵌入专项声明 `cold`。
+- 预热随已选 case 的真实索引请求按文件执行，统一检查并补齐缺失的解析/向量结果，无需另一份 fixture 清单。命中时直接复用，跨命令、跨日期有效；相同输入互斥并在锁内复查，原子发布已完成条目，失败后只补缺失部分。
+- 解析缓存由文件内容、扩展名、影响解析的名称信息及解析/切分依赖指纹决定；向量缓存由实际嵌入文本序列、模型资产和嵌入依赖指纹决定。构建时自动收集生产入口依赖及相关库版本；Main/Preload 整体构建哈希与日期仅为运行证据，不参与缓存有效性判断。
+- 各 case 保留独立工作区、SQLite、LanceDB、job 和权限；只复用纯计算结果，查询向量仍按真实检索计算。日志分别记录解析/向量命中、实际计算量与失效原因；模型初始化、索引写入和资料向量化分别取证。
 - backend 普通测试并发上限为 6；E2E 总并发上限为 3，其中 `live` 上限为 3；`exclusive` 用例串行独占。case 失败后不自动重跑，继续收集其余 case 的结果。
-- 源码 E2E 按构建指纹共享 split/vector 内容缓存，各 case 隔离统计文件；正式包 E2E 将预热缓存复制到各 case 的隔离目录。缓存重建与调试复用通过下述参数控制。
+- `--fresh-knowledge-cache` 强制本次冷缓存运行；缓存完整性与指纹始终校验，不提供绕过有效性校验的复用方式。source/package 使用各自实际构建携带的索引指纹；没有指纹的旧正式包禁用计算缓存，安全冷跑。
 
 #### 常用命令与参数
 
@@ -200,8 +203,7 @@ runner 支持的过滤参数：
 - `--runs`
 - `--target`，取值为 `source` 或 `package`，默认 `source`。
 - `--bundle`，正式包 E2E 必填，指向已构建候选包的 `release-bundle-*.json`。
-- `--fresh-knowledge-cache`，删除本次构建对应的知识库缓存，强制从零验证完整索引。
-- `--reuse-knowledge-cache`，人工调试时跨构建复用同一类缓存；不能和 `--fresh-knowledge-cache` 同时使用。
+- `--fresh-knowledge-cache`，清理当前平台的索引计算缓存，强制从零验证完整索引。
 - `--showcase`，执行 showcase 采集类别。
 - `--result`，showcase/发布流程用的结果输出路径。
 - `--help`（或 `-h`），打印 runner 用法后直接退出；传入未识别的参数会立即报错并退出（退出码 2），防止未知参数被静默忽略而误触发全量执行。

@@ -205,6 +205,7 @@ describe('workbench conversation e2e', () => {
         groups: ['composer'],
         description: '通过真实鼠标选区和键盘操作验证混合正文同步、定位及提交清理。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         windowMode: 'visible',
         execution: 'exclusive',

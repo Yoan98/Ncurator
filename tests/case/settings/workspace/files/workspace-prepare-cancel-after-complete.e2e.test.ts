@@ -29,6 +29,7 @@ describe('settings workspace e2e', () => {
         groups: ['files'],
         description: '运行中打开取消确认框，任务自然成功后关闭确认框并保留完成结果。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {

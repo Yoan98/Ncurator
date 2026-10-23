@@ -192,6 +192,7 @@ describe('settings workspace e2e', () => {
         groups: ['files'],
         description: '独立小目录两次真实更新索引，断言慢/高速嵌入进程的操作系统线程增量。',
         fixtures: [],
+        knowledge: 'cold',
         serviceMode: 'real',
         execution: 'exclusive',
         runMode: 'single',

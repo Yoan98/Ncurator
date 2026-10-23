@@ -38,7 +38,7 @@ import {
 } from './resourceScope'
 
 export type E2ETestRunMode = 'single' | 'repeatable'
-export type E2EExecutionClass = 'normal' | 'live' | 'exclusive' | 'warmup'
+export type E2EExecutionClass = 'normal' | 'live' | 'exclusive'
 
 type KnowledgeCacheStats = {
   splitCacheHits: number
@@ -162,6 +162,7 @@ export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   groups?: readonly string[]
   description: string
   fixtures: readonly string[]
+  knowledge?: 'none' | 'cached' | 'cold'
   execution?: E2EExecutionClass
   windowMode?: ElectronWindowMode
   extraEnv?: Readonly<Record<string, string>>
@@ -322,7 +323,13 @@ export const runE2ECase = async <TResult>(
   })
   const resolvedExtraEnv = await resolveE2EModelEnv({
     serviceMode: definition.serviceMode,
-    extraEnv: definition.extraEnv
+    extraEnv: {
+      ...definition.extraEnv,
+      NCURATOR_WORKSPACE_KNOWLEDGE_CACHE:
+        definition.knowledge === 'cached' && process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE === '1'
+          ? '1'
+          : '0'
+    }
   })
   const events: TestLogEvent[] = []
   const artifacts: TestArtifact[] = []
@@ -342,9 +349,7 @@ export const runE2ECase = async <TResult>(
   const knowledgeCacheStatsPath = String(
     process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_STATS_PATH || ''
   ).trim()
-  const knowledgeCacheEnabled =
-    String(process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE || '').trim() === '1' &&
-    Boolean(knowledgeCachePath)
+  const knowledgeCacheEnabled = definition.knowledge === 'cached' && Boolean(knowledgeCachePath)
   const knowledgeCacheBaseline = knowledgeCacheEnabled
     ? await readKnowledgeCacheStats(knowledgeCacheStatsPath || knowledgeCachePath)
     : { ...EMPTY_KNOWLEDGE_CACHE_STATS }
@@ -648,6 +653,7 @@ export const runE2ECase = async <TResult>(
       fixtures: definition.fixtures.map((fixturePath) => path.resolve(fixturePath)),
       serviceMode: definition.serviceMode,
       execution: definition.execution || 'normal',
+      knowledge: definition.knowledge || 'none',
       fixtureReason: definition.fixtureReason || null,
       windowMode: definition.windowMode || 'background',
       runMode: definition.runMode

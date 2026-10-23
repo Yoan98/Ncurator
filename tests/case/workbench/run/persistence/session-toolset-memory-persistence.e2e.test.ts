@@ -33,6 +33,7 @@ describe('workbench run e2e', () => {
         description:
           '真实 Workbench 同一会话的多轮 AI run 应共享已加载的 Word 工具组，后续 run 不需要重新 toolset_loading。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

@@ -49,6 +49,7 @@ describe('workbench result e2e', () => {
         description:
           '真实 AI 修改文件后，审核模式展开状态下折叠面板，切换伙伴再切回时面板必须保持折叠，异步记录刷新不得重新展开。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

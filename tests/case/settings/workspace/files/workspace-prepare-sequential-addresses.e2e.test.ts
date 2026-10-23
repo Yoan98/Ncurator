@@ -31,6 +31,7 @@ describe('settings workspace e2e', () => {
         groups: ['files'],
         description: '多个文件地址更新索引时，前一个地址终态后再启动下一个。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'exclusive',
         windowMode: 'visible',

@@ -116,6 +116,14 @@
 - How：向真实 Store 准备已完成、执行中、待处理和旧失败条目；控制器记住各条目原状态后接收取消，检查取消标志、AbortSignal 与真实回退结果。另以预置 cancelled job 调用生产 KB 工具检查不触发索引拦截，不将它视作完整索引取消过程。
 - Oracle：取消标志与 signal 生效；已完成保持 `indexed`，未完成回到 `needs_index` 或原 `failed` 并保留原错误，对齐 `SET-WORKSPACE-004-AC14` 及 `SET-WORKSPACE-004-AC16` 的条目回退部分；网页回到原 `needs_index / index_failed`，已完成保留，补充 `SET-WEB-004-AC12/AC13`；预置 cancelled job 不是 running，查询不触发索引拦截，补充 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。当前批后停止及顺序 helper 的取消契约由 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts` 补充 `SET-WORKSPACE-004-AC15/AC16`；成功 / 失败终态不改为取消的纯函数契约由 `tests/case/unit/workspace/files/workspace-index-job-progress.test.ts` 补充 `SET-WORKSPACE-004-AC17`。这些 Unit 不能代替完整索引取消、任务收口和 UI 确认竞态。
 
+#### `workspace-knowledge-cache-reuse`
+
+- 测试类型：backend；suite `foundation`。
+- What：真实解析和嵌入缓存跨隔离工作区复用；修改一份资料只重算必要内容，重命名更新锚点。
+- Why：避免无关代码或临时路径变化引起重复资料向量化，同时守住索引内容与当前输入一致。
+- How：生产解析器、嵌入 executor、缓存与真实 store；先冷跑小目录，再在新工作区复用；修改一份文件并更改文件名后重新索引。通过真实 index result 与日志核对命中和重算，不模拟 executor。
+- Oracle：第二次解析和向量全部命中；仅内容/名称变化的条目发生必要 miss；返回当前 workspace/document 绑定与名称，无过期源路径；源文件保护。Unit 补充依赖指纹、并发/取消与死亡进程锁回收、损坏缓存及安装包身份；索引 UI 用例可用 `--fresh-knowledge-cache` 验证冷跑。
+
 ## 5. 覆盖边界
 
 - foundation 登记功能场景，不评价召回优劣；Settings E2E 与本域 backend 分别提供 UI 闭环和底层线程证据。

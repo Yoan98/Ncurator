@@ -695,7 +695,9 @@ export const waitForFileIndexJobIdle = async (
     }
     lastRunningJob = response.job
     if (Date.now() >= deadline) {
-      throw new Error('file index job did not become idle')
+      throw new Error(
+        `file index job did not become idle: ${response.job.processed_count}/${response.job.total_count}; ${response.job.message}; ${response.job.last_error || ''}`
+      )
     }
     await page.waitForTimeout(500)
   }

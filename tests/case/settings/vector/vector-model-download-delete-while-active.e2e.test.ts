@@ -25,6 +25,7 @@ describe('settings vector real download e2e', () => {
           description:
             '用户在真实下载过程中删除向量模型：下载被取消、已下载文件被移除、页面回到可下载状态且不提示失败。',
           fixtures: [],
+          knowledge: 'cold',
           serviceMode: 'real',
           extraEnv: {
             NCURATOR_MODELS_PATH: modelsPath

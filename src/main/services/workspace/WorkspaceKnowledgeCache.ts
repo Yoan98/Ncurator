@@ -1,246 +1,238 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rmdir, stat, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { SPLITTER_BIG_CHUNK_SETTING, SPLITTER_MINI_CHUNK_SIZE } from '../../utils/constant'
-import { getUserDataPath } from '../../utils/paths'
+import { setTimeout } from 'node:timers/promises'
+import { getUserDataPath } from '../../utils/userDataPath'
+import { writeJsonAtomically } from '../../utils/writeJsonAtomically'
+import { getModelAssetIdentity } from '../vector/runtime/modelAssetIdentity'
+import { IndexPrepareCancelledError } from './WorkspaceIndexPrepareController'
 import type {
   WorkspaceKnowledgeCache,
+  WorkspaceKnowledgeSplitKey,
+  WorkspaceKnowledgeVectorKey,
   WorkspaceKnowledgeSplitSnapshot,
   WorkspaceKnowledgeVectorSnapshot
 } from './types'
 
-const WORKSPACE_KNOWLEDGE_CACHE_SCHEMA_VERSION = 2
-
-type WorkspaceKnowledgeCacheStats = {
+declare const __NCURATOR_KNOWLEDGE_IDENTITY__: { split: string; embedding: string } | undefined
+const SCHEMA = 3
+const digest = (value: object): string =>
+  createHash('sha256').update(JSON.stringify(value)).digest('hex')
+type PipelineIdentity = { split: string; embedding: string }
+type CacheStats = {
   splitCacheHits: number
   splitCacheMisses: number
   vectorCacheHits: number
   vectorCacheMisses: number
 }
-
-const EMPTY_CACHE_STATS: WorkspaceKnowledgeCacheStats = {
+const emptyStats = (): CacheStats => ({
   splitCacheHits: 0,
   splitCacheMisses: 0,
   vectorCacheHits: 0,
   vectorCacheMisses: 0
-}
+})
 
-type PersistedWorkspaceSplitCache = {
-  schemaVersion: number
-  splitter: {
-    big: typeof SPLITTER_BIG_CHUNK_SETTING
-    mini: typeof SPLITTER_MINI_CHUNK_SIZE
-  }
-  snapshot: WorkspaceKnowledgeSplitSnapshot
-}
-
-type PersistedWorkspaceVectorCache = {
-  schemaVersion: number
-  splitCacheKey: string
-  snapshot: WorkspaceKnowledgeVectorSnapshot
-}
-
-const isWorkspaceKnowledgeCacheEnabled = (): boolean =>
-  String(process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE || '').trim() === '1'
-
-const resolveWorkspaceKnowledgeCacheRoot = (): string => {
-  const explicitPath = String(process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
-  if (explicitPath) return path.resolve(explicitPath)
-  return path.join(getUserDataPath(), 'workspace-knowledge-cache')
-}
-
-const resolveWorkspaceKnowledgeCacheStatsPath = (cacheRoot: string): string => {
-  const explicitPath = String(
-    process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_STATS_PATH || ''
-  ).trim()
-  return explicitPath ? path.resolve(explicitPath) : path.join(cacheRoot, 'stats.json')
-}
-
-const buildSplitCacheKey = (input: { contentHash: string; fileExt: string }): string =>
-  createHash('sha256')
-    .update(
-      JSON.stringify({
-        schemaVersion: WORKSPACE_KNOWLEDGE_CACHE_SCHEMA_VERSION,
-        contentHash: input.contentHash,
-        fileExt: input.fileExt,
-        splitter: {
-          big: SPLITTER_BIG_CHUNK_SETTING,
-          mini: SPLITTER_MINI_CHUNK_SIZE
-        }
-      })
-    )
-    .digest('hex')
-
-const buildVectorCacheKey = (input: { splitCacheKey: string; modelName: string }): string =>
-  createHash('sha256')
-    .update(
-      JSON.stringify({
-        schemaVersion: WORKSPACE_KNOWLEDGE_CACHE_SCHEMA_VERSION,
-        splitCacheKey: input.splitCacheKey,
-        modelName: input.modelName
-      })
-    )
-    .digest('hex')
-
-const writeCacheSnapshot = async (filePath: string, payload: string): Promise<void> => {
-  await mkdir(path.dirname(filePath), { recursive: true })
-  const tempPath = `${filePath}.${String(process.pid)}.${randomUUID()}.tmp`
-  await writeFile(tempPath, payload, 'utf8')
-  try {
-    await rename(tempPath, filePath)
-  } catch (error) {
-    await rm(tempPath, { force: true })
+// Locks are process-owned: a killed warm-up is reclaimed without expiring a slow,
+// healthy embedding operation. Every caller rechecks the entry inside the lock.
+const locked = async <T>(
+  directory: string,
+  action: () => Promise<T>,
+  signal?: AbortSignal
+): Promise<T> => {
+  await mkdir(path.dirname(directory), { recursive: true })
+  const owner = `${process.pid}-${randomUUID()}`
+  const started = Date.now()
+  for (;;) {
+    if (signal?.aborted) throw new IndexPrepareCancelledError()
     try {
-      await readFile(filePath, 'utf8')
-    } catch {
-      throw error
+      await mkdir(directory)
+      await writeFile(path.join(directory, owner), '')
+      break
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      const owners = await readdir(directory).catch(() => [])
+      for (const previous of owners) {
+        const pid = Number(previous.split('-')[0])
+        if (!Number.isSafeInteger(pid) || pid <= 0) continue
+        try {
+          process.kill(pid, 0)
+        } catch (probeError) {
+          if ((probeError as NodeJS.ErrnoException).code !== 'ESRCH') continue
+          // Only the contender that removed this specific dead owner can reclaim
+          // its directory. Others cannot remove a newly acquired lock.
+          try {
+            await unlink(path.join(directory, previous))
+            await rmdir(directory)
+          } catch {
+            /* reclaimed by another contender */
+          }
+        }
+      }
+      if (owners.length === 0) {
+        const info = await stat(directory).catch(() => null)
+        if (info && Date.now() - info.mtimeMs > 5_000) await rmdir(directory).catch(() => {})
+      }
+      if (Date.now() - started > 900_000)
+        throw new Error(`Timed out waiting for knowledge computation lock: ${directory}`)
+      await setTimeout(100)
     }
+  }
+  try {
+    return await action()
+  } finally {
+    await unlink(path.join(directory, owner))
+    await rmdir(directory)
   }
 }
 
 class PersistentWorkspaceKnowledgeCache implements WorkspaceKnowledgeCache {
   private readonly statsPath: string
-  private stats: WorkspaceKnowledgeCacheStats = { ...EMPTY_CACHE_STATS }
-  private statsInitialization: Promise<void> | null = null
-  private statsWriteQueue: Promise<void> = Promise.resolve()
-  private statsWriteSequence = 0
-
-  public constructor(private readonly cacheRoot: string) {
-    this.statsPath = resolveWorkspaceKnowledgeCacheStatsPath(cacheRoot)
+  public constructor(
+    private readonly root: string,
+    private readonly pipeline: PipelineIdentity
+  ) {
+    this.statsPath =
+      process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_STATS_PATH || path.join(root, 'stats.json')
   }
-
-  private async initializeStats(): Promise<void> {
-    if (!this.statsInitialization) {
-      this.statsInitialization = (async () => {
-        try {
-          const parsed = JSON.parse(
-            await readFile(this.statsPath, 'utf8')
-          ) as Partial<WorkspaceKnowledgeCacheStats>
-          this.stats = {
-            splitCacheHits: Number(parsed.splitCacheHits || 0),
-            splitCacheMisses: Number(parsed.splitCacheMisses || 0),
-            vectorCacheHits: Number(parsed.vectorCacheHits || 0),
-            vectorCacheMisses: Number(parsed.vectorCacheMisses || 0)
-          }
-        } catch {
-          this.stats = { ...EMPTY_CACHE_STATS }
-        }
-      })()
-    }
-    await this.statsInitialization
-  }
-
-  private async recordStat(key: keyof WorkspaceKnowledgeCacheStats): Promise<void> {
-    await this.initializeStats()
-    this.stats[key] += 1
-    this.statsWriteSequence += 1
-    const tempPath = `${this.statsPath}.${String(process.pid)}.${String(this.statsWriteSequence)}.tmp`
-    this.statsWriteQueue = this.statsWriteQueue.then(async () => {
-      await mkdir(path.dirname(this.statsPath), { recursive: true })
-      await writeFile(tempPath, `${JSON.stringify(this.stats, null, 2)}\n`, 'utf8')
-      await rename(tempPath, this.statsPath)
-    })
-    await this.statsWriteQueue
-  }
-
-  public async loadSplitSnapshot(input: {
-    contentHash: string
-    fileExt: string
-  }): Promise<WorkspaceKnowledgeSplitSnapshot | null> {
-    const cacheFilePath = path.join(this.cacheRoot, 'splits', `${buildSplitCacheKey(input)}.json`)
-    try {
-      const file = JSON.parse(await readFile(cacheFilePath, 'utf8')) as PersistedWorkspaceSplitCache
-      if (file.schemaVersion !== WORKSPACE_KNOWLEDGE_CACHE_SCHEMA_VERSION) {
-        await this.recordStat('splitCacheMisses')
-        return null
+  private async record(key: keyof CacheStats): Promise<void> {
+    await locked(`${this.statsPath}.lock`, async () => {
+      const previous = await readFile(this.statsPath, 'utf8')
+        .then((raw) => JSON.parse(raw) as Partial<CacheStats> | null)
+        .catch(() => null)
+      const stats = emptyStats()
+      for (const field of Object.keys(stats) as Array<keyof CacheStats>) {
+        const value = Number(previous?.[field])
+        stats[field] = Number.isFinite(value) && value >= 0 ? value : 0
       }
-      await this.recordStat('splitCacheHits')
-      return file.snapshot
-    } catch {
-      await this.recordStat('splitCacheMisses')
-      return null
-    }
-  }
-
-  public async saveSplitSnapshot(snapshot: WorkspaceKnowledgeSplitSnapshot): Promise<void> {
-    const cacheFilePath = path.join(
-      this.cacheRoot,
-      'splits',
-      `${buildSplitCacheKey({
-        contentHash: snapshot.contentHash,
-        fileExt: snapshot.fileExt
-      })}.json`
-    )
-    const payload: PersistedWorkspaceSplitCache = {
-      schemaVersion: WORKSPACE_KNOWLEDGE_CACHE_SCHEMA_VERSION,
-      splitter: {
-        big: SPLITTER_BIG_CHUNK_SETTING,
-        mini: SPLITTER_MINI_CHUNK_SIZE
-      },
-      snapshot
-    }
-    await writeCacheSnapshot(cacheFilePath, JSON.stringify(payload))
-  }
-
-  public async loadVectorSnapshot(input: {
-    contentHash: string
-    fileExt: string
-    modelName: string
-  }): Promise<WorkspaceKnowledgeVectorSnapshot | null> {
-    const splitCacheKey = buildSplitCacheKey({
-      contentHash: input.contentHash,
-      fileExt: input.fileExt
+      stats[key] += 1
+      await writeJsonAtomically(this.statsPath, stats)
     })
-    const cacheFilePath = path.join(
-      this.cacheRoot,
-      'vectors',
-      `${buildVectorCacheKey({
-        splitCacheKey,
-        modelName: input.modelName
-      })}.json`
+  }
+  public withLock<T>(key: string, action: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    return locked(
+      path.join(this.root, 'locks', `${digest({ key, pipeline: this.pipeline })}.lock`),
+      action,
+      signal
     )
+  }
+  private splitKey(input: WorkspaceKnowledgeSplitKey): string {
+    return digest({ schema: SCHEMA, pipeline: this.pipeline.split, ...input })
+  }
+  private async vectorKey(
+    input: Pick<WorkspaceKnowledgeVectorKey, 'texts' | 'modelName'>
+  ): Promise<string> {
+    return digest({
+      schema: SCHEMA,
+      pipeline: this.pipeline.embedding,
+      modelName: input.modelName,
+      modelAssets: await getModelAssetIdentity(input.modelName),
+      texts: input.texts
+    })
+  }
+  private async load<T extends object>(kind: string, key: string): Promise<T | null> {
     try {
       const file = JSON.parse(
-        await readFile(cacheFilePath, 'utf8')
-      ) as PersistedWorkspaceVectorCache
-      if (
-        file.schemaVersion !== WORKSPACE_KNOWLEDGE_CACHE_SCHEMA_VERSION ||
-        file.splitCacheKey !== splitCacheKey
-      ) {
-        await this.recordStat('vectorCacheMisses')
-        return null
+        await readFile(path.join(this.root, kind, `${key}.json`), 'utf8')
+      ) as {
+        key: string
+        checksum: string
+        payload: T
       }
-      await this.recordStat('vectorCacheHits')
-      return file.snapshot
-    } catch {
-      await this.recordStat('vectorCacheMisses')
+      if (file.key === key && digest(file.payload) === file.checksum) return file.payload
+      console.info(`[knowledge-cache] ${kind} miss key=${key.slice(0, 12)} reason=integrity`)
+      return null
+    } catch (error) {
+      console.info(
+        `[knowledge-cache] ${kind} miss key=${key.slice(0, 12)} reason=${(error as NodeJS.ErrnoException).code === 'ENOENT' ? 'not-found' : 'unreadable'}`
+      )
       return null
     }
   }
-
-  public async saveVectorSnapshot(snapshot: WorkspaceKnowledgeVectorSnapshot): Promise<void> {
-    const splitCacheKey = buildSplitCacheKey({
-      contentHash: snapshot.contentHash,
-      fileExt: snapshot.fileExt
+  private async save(kind: string, key: string, payload: object): Promise<void> {
+    await writeJsonAtomically(path.join(this.root, kind, `${key}.json`), {
+      key,
+      checksum: digest(payload),
+      payload
     })
-    const cacheFilePath = path.join(
-      this.cacheRoot,
-      'vectors',
-      `${buildVectorCacheKey({
-        splitCacheKey,
-        modelName: snapshot.modelName
-      })}.json`
+  }
+  public async loadSplitSnapshot(
+    input: WorkspaceKnowledgeSplitKey
+  ): Promise<WorkspaceKnowledgeSplitSnapshot | null> {
+    const snapshot = await this.load<WorkspaceKnowledgeSplitSnapshot>(
+      'splits',
+      this.splitKey(input)
     )
-    const payload: PersistedWorkspaceVectorCache = {
-      schemaVersion: WORKSPACE_KNOWLEDGE_CACHE_SCHEMA_VERSION,
-      splitCacheKey,
+    const valid =
+      snapshot?.contentHash === input.contentHash &&
+      snapshot.fileExt === input.fileExt &&
+      Array.isArray(snapshot.chunks) &&
+      snapshot.chunks.every(
+        (chunk) => typeof chunk.text === 'string' && Number.isFinite(chunk.page)
+      )
+    await this.record(valid ? 'splitCacheHits' : 'splitCacheMisses')
+    return valid ? snapshot : null
+  }
+  public saveSplitSnapshot(
+    snapshot: WorkspaceKnowledgeSplitSnapshot,
+    sourceName: string
+  ): Promise<void> {
+    return this.save(
+      'splits',
+      this.splitKey({ contentHash: snapshot.contentHash, fileExt: snapshot.fileExt, sourceName }),
       snapshot
-    }
-    await writeCacheSnapshot(cacheFilePath, JSON.stringify(payload))
+    )
+  }
+  public async loadVectorSnapshot(
+    input: WorkspaceKnowledgeVectorKey
+  ): Promise<WorkspaceKnowledgeVectorSnapshot | null> {
+    const payload = await this.load<{ vectors: number[][] }>('vectors', await this.vectorKey(input))
+    const vectors = payload?.vectors
+    const valid =
+      Array.isArray(vectors) &&
+      vectors.length === input.texts.length &&
+      vectors.every(
+        (vector) =>
+          Array.isArray(vector) &&
+          vector.length > 0 &&
+          vector.length === vectors[0].length &&
+          vector.every(Number.isFinite)
+      )
+    await this.record(valid ? 'vectorCacheHits' : 'vectorCacheMisses')
+    return valid
+      ? {
+          contentHash: input.contentHash,
+          fileExt: input.fileExt,
+          modelName: input.modelName,
+          vectors
+        }
+      : null
+  }
+  public async saveVectorSnapshot(
+    snapshot: WorkspaceKnowledgeVectorSnapshot,
+    texts: string[]
+  ): Promise<void> {
+    await this.save('vectors', await this.vectorKey({ modelName: snapshot.modelName, texts }), {
+      vectors: snapshot.vectors
+    })
   }
 }
 
-export const createWorkspaceKnowledgeCache = (): WorkspaceKnowledgeCache | null => {
-  if (!isWorkspaceKnowledgeCacheEnabled()) return null
-  return new PersistentWorkspaceKnowledgeCache(resolveWorkspaceKnowledgeCacheRoot())
+export const createWorkspaceKnowledgeCache = (options?: {
+  root: string
+  pipeline: PipelineIdentity
+}): WorkspaceKnowledgeCache | null => {
+  if (!options && process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE !== '1') return null
+  const pipeline =
+    options?.pipeline ??
+    (typeof __NCURATOR_KNOWLEDGE_IDENTITY__ !== 'undefined'
+      ? __NCURATOR_KNOWLEDGE_IDENTITY__
+      : (JSON.parse(process.env.NCURATOR_KNOWLEDGE_IDENTITY || 'null') as PipelineIdentity | null))
+  // Older packages have no baked identity; safely recompute instead of borrowing source identity.
+  if (!pipeline?.split || !pipeline.embedding) return null
+  return new PersistentWorkspaceKnowledgeCache(
+    options?.root ||
+      process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH ||
+      path.join(getUserDataPath(), 'workspace-knowledge-cache'),
+    pipeline
+  )
 }

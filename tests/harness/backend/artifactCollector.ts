@@ -27,6 +27,7 @@ export const collectBackendRunArtifacts = async (input: {
   runId: string
   workspaceRoot: string
   runtimeEventsPath: string
+  outputFiles?: readonly string[]
   fileChangeRecords?: readonly AiFileChangeRecord[]
 }): Promise<TestArtifact[]> => {
   const artifactsDir = resolveRunArtifactsDir({
@@ -89,5 +90,24 @@ export const collectBackendRunArtifacts = async (input: {
     }
   }
 
+  for (const relative of input.outputFiles || []) {
+    const source = path.resolve(input.workspaceRoot, relative)
+    const within = path.relative(input.workspaceRoot, source)
+    if (within.startsWith('..') || path.isAbsolute(within))
+      throw new Error(`Output escapes workspace: ${relative}`)
+    const target = path.join(artifactsDir, 'outputs', within)
+    try {
+      await mkdir(path.dirname(target), { recursive: true })
+      await cp(source, target)
+      collected.push({
+        id: `output-${relative}`,
+        kind: 'other',
+        path: path.posix.join('artifacts', 'outputs', within.split(path.sep).join('/')),
+        fileName: path.basename(relative)
+      })
+    } catch {
+      /* failed runs still archive every output that exists */
+    }
+  }
   return collected
 }

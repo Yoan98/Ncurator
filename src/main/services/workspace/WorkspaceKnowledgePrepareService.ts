@@ -75,6 +75,19 @@ export class WorkspaceKnowledgePrepareService {
     input: WorkspaceKnowledgeIndexInput
   ): Promise<WorkspaceKnowledgeIndexResult> {
     this.throwIfAborted(input.signal)
+    if (!input.cache) return this.indexLocalFileUnlocked(input)
+    const contentHash = await this.computeContentHash(input.filePath)
+    return input.cache.withLock(
+      `file:${contentHash}:${path.basename(input.filePath)}`,
+      () => this.indexLocalFileUnlocked(input),
+      input.signal
+    )
+  }
+
+  private async indexLocalFileUnlocked(
+    input: WorkspaceKnowledgeIndexInput
+  ): Promise<WorkspaceKnowledgeIndexResult> {
+    this.throwIfAborted(input.signal)
     if (!isSupportedLocalFilePath(input.filePath)) {
       throw new Error(`Unsupported file type: ${input.filePath}`)
     }
@@ -89,13 +102,10 @@ export class WorkspaceKnowledgePrepareService {
       this.throwIfAborted(input.signal)
       const fileExt = path.extname(input.filePath).toLowerCase()
       const cachedSplit = input.cache
-        ? await input.cache.loadSplitSnapshot({ contentHash, fileExt })
-        : null
-      const cachedVectors = input.cache
-        ? await input.cache.loadVectorSnapshot({
+        ? await input.cache.loadSplitSnapshot({
             contentHash,
             fileExt,
-            modelName: this.deps.embeddingService.getModelName()
+            sourceName: path.basename(input.filePath)
           })
         : null
       const preparedSource = await this.prepareSource({
@@ -103,6 +113,21 @@ export class WorkspaceKnowledgePrepareService {
         filePath: input.filePath,
         cachedSplit
       })
+      this.throwIfAborted(input.signal)
+      if (input.cache && !this.isUsableCachedSplit(cachedSplit, preparedSource)) {
+        await input.cache.saveSplitSnapshot(
+          preparedSource.splitSnapshot,
+          path.basename(input.filePath)
+        )
+      }
+      const cachedVectors = input.cache
+        ? await input.cache.loadVectorSnapshot({
+            contentHash,
+            fileExt,
+            modelName: this.deps.embeddingService.getModelName(),
+            texts: preparedSource.splitSnapshot.chunks.map((chunk) => chunk.text)
+          })
+        : null
       this.throwIfAborted(input.signal)
       const indexedDocument = await this.buildPreparedDocument({
         preparedSource,
@@ -119,7 +144,6 @@ export class WorkspaceKnowledgePrepareService {
       await this.persistCacheSnapshots({
         indexedDocument,
         cache: input.cache,
-        usedCachedSplit,
         usedCachedVectors
       })
       this.throwIfAborted(input.signal)
@@ -150,6 +174,18 @@ export class WorkspaceKnowledgePrepareService {
     input: WorkspaceKnowledgeWebInput
   ): Promise<WorkspaceKnowledgeIndexResult> {
     this.throwIfAborted(input.signal)
+    if (!input.cache) return this.indexWebTextUnlocked(input)
+    return input.cache.withLock(
+      `web:${input.contentHash}:${input.documentName}:${input.sourceUrl}`,
+      () => this.indexWebTextUnlocked(input),
+      input.signal
+    )
+  }
+
+  private async indexWebTextUnlocked(
+    input: WorkspaceKnowledgeWebInput
+  ): Promise<WorkspaceKnowledgeIndexResult> {
+    this.throwIfAborted(input.signal)
     await ensureEmbeddingReady({ embeddingService: this.deps.embeddingService })
     this.throwIfAborted(input.signal)
     const stopAbort = this.listenForAbort(input.signal, () => {
@@ -159,13 +195,10 @@ export class WorkspaceKnowledgePrepareService {
       const contentHash = input.contentHash
       const fileExt = '.html'
       const cachedSplit = input.cache
-        ? await input.cache.loadSplitSnapshot({ contentHash, fileExt })
-        : null
-      const cachedVectors = input.cache
-        ? await input.cache.loadVectorSnapshot({
+        ? await input.cache.loadSplitSnapshot({
             contentHash,
             fileExt,
-            modelName: this.deps.embeddingService.getModelName()
+            sourceName: `${input.documentName}\n${input.sourceUrl}`
           })
         : null
       const preparedSource = await this.prepareSource({
@@ -176,6 +209,21 @@ export class WorkspaceKnowledgePrepareService {
         contentHash,
         cachedSplit
       })
+      this.throwIfAborted(input.signal)
+      if (input.cache && !this.isUsableCachedSplit(cachedSplit, preparedSource)) {
+        await input.cache.saveSplitSnapshot(
+          preparedSource.splitSnapshot,
+          `${input.documentName}\n${input.sourceUrl}`
+        )
+      }
+      const cachedVectors = input.cache
+        ? await input.cache.loadVectorSnapshot({
+            contentHash,
+            fileExt,
+            modelName: this.deps.embeddingService.getModelName(),
+            texts: preparedSource.splitSnapshot.chunks.map((chunk) => chunk.text)
+          })
+        : null
       this.throwIfAborted(input.signal)
       const indexedDocument = await this.buildPreparedDocument({
         preparedSource,
@@ -192,7 +240,6 @@ export class WorkspaceKnowledgePrepareService {
       await this.persistCacheSnapshots({
         indexedDocument,
         cache: input.cache,
-        usedCachedSplit,
         usedCachedVectors
       })
       this.throwIfAborted(input.signal)
@@ -296,15 +343,14 @@ export class WorkspaceKnowledgePrepareService {
   private async persistCacheSnapshots(input: {
     indexedDocument: WorkspaceKnowledgePreparedDocument
     cache?: WorkspaceKnowledgeIndexInput['cache']
-    usedCachedSplit: boolean
     usedCachedVectors: boolean
   }): Promise<void> {
     if (!input.cache) return
-    if (!input.usedCachedSplit) {
-      await input.cache.saveSplitSnapshot(input.indexedDocument.splitSnapshot)
-    }
     if (!input.usedCachedVectors) {
-      await input.cache.saveVectorSnapshot(input.indexedDocument.vectorSnapshot)
+      await input.cache.saveVectorSnapshot(
+        input.indexedDocument.vectorSnapshot,
+        input.indexedDocument.splitSnapshot.chunks.map((chunk) => chunk.text)
+      )
     }
   }
 
@@ -323,6 +369,11 @@ export class WorkspaceKnowledgePrepareService {
     signal?: AbortSignal
   }): Promise<WorkspaceKnowledgeIndexResult> {
     const indexedDocument = input.indexedDocument
+    if (process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE === '1') {
+      console.info(
+        `[workspace-knowledge] ${input.documentName}: split=${input.usedCachedSplit ? 'hit' : 'computed'} vectors=${input.usedCachedVectors ? 'hit' : 'computed'} chunks=${indexedDocument.chunkCount}`
+      )
+    }
 
     const now = Date.now()
     const newGenerationId = uuidv4()

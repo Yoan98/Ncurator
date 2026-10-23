@@ -32,6 +32,7 @@ describe('workbench result e2e', () => {
         groups: ['apply'],
         description: '真实 AI 更新已有 PNG 后，验证图片预览和回退恢复原始 bytes。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

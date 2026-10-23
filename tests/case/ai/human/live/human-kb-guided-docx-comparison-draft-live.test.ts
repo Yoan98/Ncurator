@@ -44,6 +44,7 @@ describe('ai human live backend', () => {
   it('human-kb-guided-docx-comparison-draft-live', async () => {
     await runBackendCase({
       caseId: 'human-kb-guided-docx-comparison-draft-live',
+      knowledge: 'cached',
       harnessMode: 'live',
       domain: 'ai',
       suite: 'human',

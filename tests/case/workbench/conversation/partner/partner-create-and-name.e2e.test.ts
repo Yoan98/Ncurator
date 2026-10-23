@@ -34,6 +34,7 @@ describe('workbench conversation e2e', () => {
         description:
           '真实 UI 无伙伴时展示空态；通过创建弹窗填写名称和形象后，侧栏标题就是名称，发消息不改名。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

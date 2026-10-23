@@ -922,6 +922,7 @@ describe('workbench run e2e', () => {
         description:
           '同一真实 Workbench E2E case 通过多轮运行验证只读查询、终端审核、审批卡决策和完全访问流程。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

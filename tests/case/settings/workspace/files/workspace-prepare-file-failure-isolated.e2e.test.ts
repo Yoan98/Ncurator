@@ -24,6 +24,7 @@ describe('settings workspace e2e', () => {
         description:
           '单个文件索引失败不应导致 Settings 页面或 Electron 应用退出，并应留下文件级失败状态。',
         fixtures: ['tests/fixtures/workspace/sample-edit.docx'],
+        knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {

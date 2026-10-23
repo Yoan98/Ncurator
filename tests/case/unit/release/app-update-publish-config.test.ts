@@ -189,7 +189,7 @@ describe('app update publish config', () => {
     expect(storageConfig).toContain('download.guanzhangai.cn')
   })
 
-  it('shares source caches directly and warms packaged E2E before parallel workers', async () => {
+  it('shares computation caches without adding unrelated E2E cases', async () => {
     const [testWorkflow, architectureValidator, warmupCase, macRelease] = await Promise.all([
       readFile(path.resolve('scripts/test/workflow.mjs'), 'utf8'),
       readFile(path.resolve('scripts/test/validate-test-architecture.mjs'), 'utf8'),
@@ -200,18 +200,11 @@ describe('app update publish config', () => {
       readFile(path.resolve('scripts/release/macos.mjs'), 'utf8')
     ])
 
-    expect(testWorkflow).toContain("task.execution === 'warmup'")
-    expect(testWorkflow).toContain("cacheMode: 'direct'")
-    expect(testWorkflow).toContain("cacheMode: 'warmup'")
-    expect(testWorkflow).toContain("task.execution !== 'exclusive' && task.execution !== 'warmup'")
-    expect(testWorkflow).toContain('VECTOR_WARMUP_TEST_FILE')
-    expect(testWorkflow).toContain('testFiles = [...testFiles, VECTOR_WARMUP_TEST_FILE]')
-    expect(testWorkflow).toContain("task.execution === 'warmup' ? '' : testNamePattern")
+    expect(testWorkflow).not.toContain('VECTOR_WARMUP_TEST_FILE')
+    expect(testWorkflow).not.toContain('seedCaseKnowledgeCache')
+    expect(testWorkflow).not.toContain('--reuse-knowledge-cache')
     expect(testWorkflow).toContain('buildDirectKnowledgeCacheEnv')
     expect(testWorkflow).toContain('NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_STATS_PATH')
-    expect(testWorkflow).toContain('vector warm-up failed; parallel E2E will not start')
-    expect(testWorkflow).toContain('seedCaseKnowledgeCache')
-    expect(testWorkflow).toContain("path.basename(source) !== 'stats.json'")
     expect(testWorkflow).not.toContain('macos-x64')
     expect(testWorkflow).toContain('const LIVE_WORKERS = 3')
     expect(testWorkflow).not.toContain('LIVE_BACKEND_RETRIES')
@@ -226,8 +219,8 @@ describe('app update publish config', () => {
     expect(testWorkflow).toContain("spawnSync('taskkill.exe'")
     expect(testWorkflow).toContain("input.type === 'e2e' && input.target === 'package'")
     expect(testWorkflow).toContain("prepareBetterSqliteNative('node')")
-    expect(architectureValidator).toContain('warmupFiles.length !== 1')
-    expect(warmupCase).toContain("execution: 'warmup'")
+    expect(architectureValidator).toContain('unsupported knowledge policy')
+    expect(warmupCase).toContain("knowledge: 'cached'")
   })
 
   it('keeps LangSmith tracing opt-in by default', async () => {

@@ -1,18 +1,33 @@
 import { resolve } from 'path'
-import { defineConfig } from 'electron-vite'
+import { defineConfig, type UserConfig } from 'electron-vite'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { loadEnv } from 'vite'
+import { createKnowledgeCacheIdentity } from './scripts/build/runtime/knowledge-cache-identity.mjs'
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(async ({ mode }): Promise<UserConfig> => {
+  const knowledgeIdentity = await createKnowledgeCacheIdentity()
   const env = loadEnv(mode, process.cwd(), '')
   const desktopAppSecret =
     env.NCURATOR_APP_SECRET_DESKTOP || process.env.NCURATOR_APP_SECRET_DESKTOP || ''
 
   return {
     main: {
+      plugins: [
+        {
+          name: 'knowledge-cache-identity',
+          generateBundle() {
+            this.emitFile({
+              type: 'asset',
+              fileName: 'knowledge-cache-identity.json',
+              source: JSON.stringify(knowledgeIdentity)
+            })
+          }
+        }
+      ],
       define: {
-        'process.env.NCURATOR_APP_SECRET_DESKTOP': JSON.stringify(desktopAppSecret)
+        'process.env.NCURATOR_APP_SECRET_DESKTOP': JSON.stringify(desktopAppSecret),
+        __NCURATOR_KNOWLEDGE_IDENTITY__: JSON.stringify(knowledgeIdentity)
       },
       build: {
         minify: 'esbuild',

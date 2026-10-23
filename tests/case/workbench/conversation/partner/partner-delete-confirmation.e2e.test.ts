@@ -29,6 +29,7 @@ describe('workbench conversation e2e', () => {
         groups: ['partner'],
         description: '验证原生删除确认覆盖内置浏览器，取消不影响网页运行，确认后删除伙伴。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'exclusive',
         windowMode: 'visible',

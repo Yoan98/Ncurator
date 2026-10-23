@@ -27,6 +27,7 @@ describe('workbench conversation e2e', () => {
         groups: ['timeline'],
         description: '有消息后时间轴展示今天节点，点击后跳到当天最早一条消息。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

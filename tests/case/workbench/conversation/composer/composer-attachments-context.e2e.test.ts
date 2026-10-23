@@ -132,6 +132,7 @@ describe('workbench conversation e2e', () => {
         groups: ['composer'],
         description: '验证文件与文件夹作为路径附件、无文件大小限制、附件卡片操作和发送后横向滚动。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'exclusive',
         windowMode: 'visible',

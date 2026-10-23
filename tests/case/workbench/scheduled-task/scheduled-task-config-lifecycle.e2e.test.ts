@@ -46,6 +46,7 @@ describe('workbench scheduled-task e2e', () => {
         description:
           '验证定时任务创建和编辑抽屉的标题关闭、未保存确认、字段顺序、描述滚动、伙伴列表及完整任务闭环。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',

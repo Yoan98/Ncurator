@@ -61,6 +61,7 @@ describe('knowledge foundation', () => {
   it('index-speed-thread-budget', async () => {
     await runBackendCase({
       caseId: 'index-speed-thread-budget',
+      knowledge: 'cold',
       harnessMode: 'tool-real',
       domain: 'knowledge',
       suite: 'foundation',

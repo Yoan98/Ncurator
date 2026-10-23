@@ -122,6 +122,8 @@ const buildStats = (
 export const runBackendCase = async <TResult>(
   definition: TestCaseDefinition<TResult>
 ): Promise<void> => {
+  const originalCacheEnabled = process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE
+  process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE = definition.knowledge === 'cached' ? '1' : '0'
   const liveConfig = definition.harnessMode === 'live' ? loadLiveLlmConfigFromEnv() : null
   const runtimeModelName = liveConfig?.model_name || definition.runtimeModelName || null
   const startedAtMs = Date.now()
@@ -209,7 +211,8 @@ export const runBackendCase = async <TResult>(
     data: {
       description: definition.description,
       fixtures: definition.fixtures.map((fixturePath) => path.resolve(fixturePath)),
-      runMode: definition.runMode
+      runMode: definition.runMode,
+      knowledge: definition.knowledge || 'none'
     }
   })
 
@@ -279,7 +282,8 @@ export const runBackendCase = async <TResult>(
           runId,
           workspaceRoot,
           runtimeEventsPath: streamingLogWriter.paths.runtimeEventsPath,
-          fileChangeRecords
+          fileChangeRecords,
+          outputFiles: definition.outputFiles
         })
       : []
     const emptySeedManifest: BackendSeedManifest = {
@@ -332,5 +336,7 @@ export const runBackendCase = async <TResult>(
     if (workspaceRoot) {
       await cleanupWorkspace(workspaceRoot)
     }
+    if (originalCacheEnabled === undefined) delete process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE
+    else process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE = originalCacheEnabled
   }
 }

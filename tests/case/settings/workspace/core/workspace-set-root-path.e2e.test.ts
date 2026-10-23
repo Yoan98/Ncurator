@@ -27,6 +27,7 @@ describe('settings workspace e2e', () => {
         groups: ['core'],
         description: '添加目录、子路径拒绝提示、父路径自动替换与扫描后可索引数刷新。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'exclusive',
         windowMode: 'visible',

@@ -33,6 +33,7 @@ describe('workbench result e2e', () => {
         groups: ['apply'],
         description: '真实 AI 修改真实 docx 后，验证 assistant 修改入口、右侧预览和干净回退。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         extraEnv: {
           NCURATOR_E2E_OPEN_WITH_NOOP: '1'

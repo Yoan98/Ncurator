@@ -82,6 +82,10 @@ describe('workbench skills live', () => {
             { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, first, 1)
+          const firstContent = await fs.readFile(
+            path.join(setup.workspace.rootPath, 'report-one.json'),
+            'utf8'
+          )
           await openSkills(page)
           await page.getByTestId(`${selectors.editPrefix}-${skill.id}`).click()
           const body = await page.getByTestId(selectors.content).inputValue()
@@ -96,7 +100,7 @@ describe('workbench skills live', () => {
           const secondAt = Date.now()
           await sendWorkbenchMessage(
             page,
-            `继续按周报归档规范另存 ${path.join(setup.workspace.rootPath, 'report-two.json')}。事实：完成方案初稿；外部联调仍在等待；下周确认排期。`
+            `继续按周报归档规范另存 ${path.join(setup.workspace.rootPath, 'report-two.json')}，保留 report-one.json 原文件内容不变。事实：完成方案初稿；外部联调仍在等待；下周确认排期。`
           )
           const second = await waitForWorkbenchAiRunCompletion(
             runtime,
@@ -117,6 +121,9 @@ describe('workbench skills live', () => {
           return {
             reportOne,
             reportTwo,
+            firstContentPreserved:
+              firstContent ===
+              (await fs.readFile(path.join(setup.workspace.rootPath, 'report-one.json'), 'utf8')),
             loaded: first.events.some(
               (event) => event.type === 'tool_call_started' && event.toolName === 'load_skill'
             ),
@@ -137,7 +144,8 @@ describe('workbench skills live', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.loaded &&
+            result.firstContentPreserved &&
+              result.loaded &&
               result.originalPrompt &&
               result.updatedPrompt &&
               result.resourceRead &&

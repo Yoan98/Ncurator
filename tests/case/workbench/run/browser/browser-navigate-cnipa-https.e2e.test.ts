@@ -25,6 +25,7 @@ describe('workbench browser cnipa e2e', () => {
         description:
           '公网专利公布公告明确 https 不改 http；打不开或超时时停在馆长统一错误页，而不是白屏。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'exclusive',
         windowMode: 'visible',

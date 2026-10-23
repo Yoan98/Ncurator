@@ -46,6 +46,7 @@ describe('workbench run e2e', () => {
         groups: ['persistence'],
         description: '真实模型触发一次 Graph 运行上限后，在同一会话继续并恢复原任务。',
         fixtures: ['tests/fixtures/workspace'],
+        knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',

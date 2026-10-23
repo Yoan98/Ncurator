@@ -34,6 +34,7 @@ describe('settings workspace e2e', () => {
         groups: ['files'],
         description: '更新索引进行中可取消，停止后按钮恢复且仍有未完成文件。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {

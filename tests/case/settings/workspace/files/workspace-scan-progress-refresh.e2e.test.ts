@@ -34,6 +34,7 @@ describe('settings workspace e2e', () => {
         groups: ['files'],
         description: '点击检查更新后，页面展示执行中状态，并在完成后刷新目录树和索引摘要。',
         fixtures: [],
+        knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
