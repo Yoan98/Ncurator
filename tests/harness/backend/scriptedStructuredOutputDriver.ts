@@ -52,14 +52,14 @@ const resolveDecisionToToolCalls = (output: JsonObject, callIndex: number): Scri
     ]
   }
   if (action === 'skill_loading') {
-    const skillIds = Array.isArray(nextAction.wantLoadSkillIds)
-      ? nextAction.wantLoadSkillIds.filter((item): item is string => typeof item === 'string')
+    const skillNames = Array.isArray(nextAction.wantLoadSkillNames)
+      ? nextAction.wantLoadSkillNames.filter((item): item is string => typeof item === 'string')
       : []
     return [
       {
         id: `mock-${callIndex}-skill`,
         name: 'load_skill',
-        args: { skillIds },
+        args: { skillNames },
         type: 'tool_call'
       }
     ]

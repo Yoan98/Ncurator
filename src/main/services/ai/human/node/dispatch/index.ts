@@ -40,10 +40,14 @@ const dispatchGroupToNextAction = (group: HumanDispatchItem[]): HumanNextAction 
         args: first.args
       }
     case 'skill_loading': {
-      const skillIds = Array.isArray(first.args.skillIds)
-        ? first.args.skillIds.filter((item): item is string => typeof item === 'string')
+      const skillNames = Array.isArray(first.args.skillNames)
+        ? first.args.skillNames.filter((item): item is string => typeof item === 'string')
         : []
-      return { action: 'skill_loading', wantLoadSkillIds: skillIds, toolCallId: first.toolCallId }
+      return {
+        action: 'skill_loading',
+        wantLoadSkillNames: skillNames,
+        toolCallId: first.toolCallId
+      }
     }
     case 'toolset_loading': {
       const toolsetIds = Array.isArray(first.args.toolsetIds)

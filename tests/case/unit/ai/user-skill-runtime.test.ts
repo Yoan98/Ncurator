@@ -5,11 +5,11 @@ import type { UserSkill } from '../../../../src/shared/userSkills'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import {
   loadCurrentUserSkills,
-  MAX_USER_SKILL_CONTEXT_BYTES,
-  renderUserSkillCatalog,
+  renderUserSkills,
   type UserSkillReader
 } from '../../../../src/main/services/ai/human/userSkills'
 import { refreshUserSkillContext } from '../../../../src/main/services/ai/human/userSkillContext'
+import { MAX_USER_SKILL_BODY_BYTES } from '../../../../src/shared/userSkills'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../../../../src/main/services/ai/human/constants'
 import { EXTERNAL_RUNTIME_TOOLSET_IDS } from '../../../../src/main/services/ai/human/toolsets'
 import { createHumanGraphRunner } from '../../../../src/main/services/ai/human/graph/humanGraph'
@@ -26,7 +26,7 @@ import {
 const skill = (id: string): UserSkill => ({
   id,
   name: id.slice(5),
-  description: `Description ${id}`,
+  description: `Description ${id.slice(5)}`,
   directoryName: id.slice(5),
   createdAt: 123
 })
@@ -70,7 +70,7 @@ const fixture = () => {
         ...previous.execution,
         pendingRound: {
           thought: { text: 'load instructions' },
-          nextAction: { action: 'skill_loading', wantLoadSkillIds: ids, toolCallId: 'skill-a' }
+          nextAction: { action: 'skill_loading', wantLoadSkillNames: ids, toolCallId: 'skill-a' }
         }
       }
     })
@@ -165,44 +165,46 @@ const graphFixture = (steps: Array<{ name: string; args: Record<string, string[]
 describe('user instruction skill runtime', () => {
   it('exposes separate strict string-array loader schemas and scopes the instruction catalog', () => {
     const f = fixture()
-    expect(LOAD_SKILL_SCHEMA.parse({ skillIds: ['user:a'] })).toEqual({ skillIds: ['user:a'] })
+    expect(LOAD_SKILL_SCHEMA.parse({ skillNames: ['a'] })).toEqual({ skillNames: ['a'] })
     expect(LOAD_TOOLSET_SCHEMA.parse({ toolsetIds: ['docx-read'] })).toEqual({
       toolsetIds: ['docx-read']
     })
     expect(LOAD_SKILL_SCHEMA.safeParse({ toolsetIds: ['docx-read'] }).success).toBe(false)
-    expect(LOAD_TOOLSET_SCHEMA.safeParse({ skillIds: ['user:a'] }).success).toBe(false)
+    expect(LOAD_TOOLSET_SCHEMA.safeParse({ skillNames: ['a'] }).success).toBe(false)
+    expect(LOAD_SKILL_SCHEMA.safeParse({ skillIds: ['user:a'] }).success).toBe(false)
     expect(
-      LOAD_SKILL_SCHEMA.safeParse({ skillIds: ['user:a'], toolsetIds: ['docx-read'] }).success
+      LOAD_SKILL_SCHEMA.safeParse({ skillNames: ['a'], toolsetIds: ['docx-read'] }).success
     ).toBe(false)
     expect(
-      LOAD_TOOLSET_SCHEMA.safeParse({ toolsetIds: ['docx-read'], skillIds: ['user:a'] }).success
+      LOAD_TOOLSET_SCHEMA.safeParse({ toolsetIds: ['docx-read'], skillNames: ['a'] }).success
     ).toBe(false)
-    const catalog = renderUserSkillCatalog(f.ctx)
-    expect(catalog.indexOf('user:a')).toBeLessThan(catalog.indexOf('user:b'))
+    const catalog = renderUserSkills(f.ctx)
+    expect(catalog.indexOf('- a：')).toBeLessThan(catalog.indexOf('- b：'))
+    expect(catalog).not.toContain('user:')
     expect(catalog).not.toContain('createdAt')
     expect(catalog).not.toContain('directoryName')
     expect(catalog).not.toContain('BODY_A')
     f.enabled.delete('user:b')
     f.enabled.set('user:b', 'BODY_B')
-    expect(renderUserSkillCatalog(f.ctx)).toBe(catalog)
-    expect(renderUserSkillCatalog({ ...f.ctx, partnerId: 'another-partner' })).toBe('')
+    expect(renderUserSkills(f.ctx)).toBe(catalog)
+    expect(renderUserSkills({ ...f.ctx, partnerId: 'another-partner' })).toBe('')
   })
 
   it('loads instructions without registering tools and deduplicates repeated loading', async () => {
     const f = fixture()
-    let state = await f.loadSkills(['user:a', 'user:a', 'user:missing'])
+    let state = await f.loadSkills(['a', 'a', 'missing'])
     expect(state.toolsets.loadedToolsetIds).toEqual([])
     expect(state.skills.loadedSkillIds).toEqual(['user:a'])
     expect(state.execution.lastSkillLoadingOutcome).toMatchObject({
-      loadedSkillIds: ['user:a'],
-      unavailableSkillIds: ['user:missing']
+      loadedSkillNames: ['a'],
+      unavailableSkills: [{ name: 'missing', error: 'Skill is not available' }]
     })
     expect(f.cache.familyToolsets).toEqual({})
     expect(f.cache.toolsetTools).toEqual({})
-    state = await f.loadSkills(['user:a'], state)
+    state = await f.loadSkills(['a'], state)
     expect(state.execution.lastSkillLoadingOutcome).toMatchObject({
-      loadedSkillIds: [],
-      skippedDuplicateSkillIds: ['user:a']
+      loadedSkillNames: [],
+      skippedDuplicateSkillNames: ['a']
     })
     state = await refreshUserSkillContext({ ...f, state })
     const firstPrompt = String(f.cache.messages![0].content)
@@ -211,16 +213,27 @@ describe('user instruction skill runtime', () => {
     expect(firstPrompt.split('BODY_A')).toHaveLength(2)
     expect(firstPrompt).toContain('/skills/a')
     expect(JSON.stringify(f.log)).not.toContain('BODY_A')
+    state = await f.loadSkills(['b'], state)
+    state = await f.loadSkills(['a'], state)
+    await refreshUserSkillContext({ ...f, state })
+    const orderedPrompt = String(f.cache.messages![0].content)
+    expect(state.skills.loadedSkillIds).toEqual(['user:a', 'user:b'])
+    expect(orderedPrompt.indexOf('BODY_A')).toBeLessThan(orderedPrompt.indexOf('BODY_B'))
+    expect(orderedPrompt.indexOf('当前运行环境：')).toBeLessThan(
+      orderedPrompt.indexOf('工具组目录：')
+    )
+    expect(orderedPrompt.indexOf('工具组目录：')).toBeLessThan(orderedPrompt.indexOf('技能：'))
+    expect(orderedPrompt).not.toContain('user:')
   })
 
   it('rejects cross-kind IDs while preserving independent state and tool budgets', async () => {
     const f = fixture()
-    let state = await f.loadSkills(['docx-read', 'user:a'])
+    let state = await f.loadSkills(['docx-read', 'a'])
     expect(state.toolsets.loadedToolsetIds).toEqual([])
     expect(state.skills.loadedSkillIds).toEqual(['user:a'])
     expect(state.execution.lastSkillLoadingOutcome).toMatchObject({
-      loadedSkillIds: ['user:a'],
-      unavailableSkillIds: ['docx-read']
+      loadedSkillNames: ['a'],
+      unavailableSkills: [{ name: 'docx-read', error: 'Skill is not available' }]
     })
     expect(f.cache.toolsetTools).toEqual({})
     state = await f.loadToolsets(['user:b', 'docx-read'], state)
@@ -256,8 +269,8 @@ describe('user instruction skill runtime', () => {
     const f = fixture()
     const skillState = await f.loadSkills(['docx-read'])
     expect(skillState.execution.lastSkillLoadingOutcome).toMatchObject({
-      loadedSkillIds: [],
-      unavailableSkillIds: ['docx-read']
+      loadedSkillNames: [],
+      unavailableSkills: [{ name: 'docx-read', error: 'Skill is not available' }]
     })
     const toolsetState = await f.loadToolsets(['user:a'], skillState)
     expect(toolsetState.execution.lastToolsetLoadingOutcome).toMatchObject({
@@ -273,7 +286,7 @@ describe('user instruction skill runtime', () => {
   it('revalidates edited, disabled and deleted instructions and persists only skill revocation', async () => {
     const f = fixture()
     let state = await f.loadToolsets(['docx-read'])
-    state = await f.loadSkills(['user:a'], state)
+    state = await f.loadSkills(['a'], state)
     state = await refreshUserSkillContext({ ...f, state })
     f.enabled.set('user:a', 'UPDATED_BODY')
     state = await refreshUserSkillContext({ ...f, state })
@@ -354,7 +367,7 @@ describe('user instruction skill runtime', () => {
   it('restores IDs after compaction without stale bodies or another partner instructions', async () => {
     const f = fixture()
     const toolsetState = await f.loadToolsets(['docx-read'])
-    await f.loadSkills(['user:a', 'user:b'], toolsetState)
+    await f.loadSkills(['a', 'b'], toolsetState)
     const records = f.log.map((entry, i) => ({ seq: i + 1, entry })) as ChatMessageLogRecord[]
     const projection = projectMessageLogRecords(records)
     f.enabled.delete('user:b')
@@ -380,8 +393,8 @@ describe('user instruction skill runtime', () => {
   it('runs both real graph loaders, restore and compaction with independent tools and stable skill prompts', async () => {
     const { enabled, records, calls, compactionInputs, ctx, run } = graphFixture([
       { name: 'load_toolset', args: { toolsetIds: ['docx-read'] } },
-      { name: 'load_skill', args: { skillIds: ['user:a'] } },
-      { name: 'load_skill', args: { skillIds: ['user:a'] } }
+      { name: 'load_skill', args: { skillNames: ['a'] } },
+      { name: 'load_skill', args: { skillNames: ['a'] } }
     ])
 
     expect((await run(1)).status).toBe('completed')
@@ -482,14 +495,13 @@ describe('user instruction skill runtime', () => {
     expect(snapshotCount()).toBe(2)
   })
 
-  it('bounds total instruction bytes and ignores missing or unbound IDs without execution', () => {
+  it('rejects oversized restored instructions instead of silently discarding later skills', () => {
     const f = fixture()
-    f.enabled.set('user:a', 'x'.repeat(MAX_USER_SKILL_CONTEXT_BYTES))
-    expect(
-      loadCurrentUserSkills(f.ctx, ['user:a', 'user:a', 'user:b', 'user:missing']).map(
-        ({ skill }) => skill.id
-      )
-    ).toEqual(['user:a'])
+    f.enabled.set('user:a', 'x'.repeat(MAX_USER_SKILL_BODY_BYTES))
+    expect(() => loadCurrentUserSkills(f.ctx, ['user:a', 'user:b'])).toThrow(/64 KiB/)
+    expect(loadCurrentUserSkills(f.ctx, ['user:a']).map(({ skill }) => skill.id)).toEqual([
+      'user:a'
+    ])
     expect(loadCurrentUserSkills({ ...f.ctx, userSkillService: undefined }, ['user:a'])).toEqual([])
   })
 })

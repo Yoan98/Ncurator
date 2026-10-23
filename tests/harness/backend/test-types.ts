@@ -209,6 +209,7 @@ export type CreateAiRunContextInput = {
   chatToolsWrapper?: AiRunDeps['chatToolsWrapper']
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
+  userSkillService?: AiRunDeps['userSkillService']
   scheduledTaskService?: ScheduledTaskService
 }
 

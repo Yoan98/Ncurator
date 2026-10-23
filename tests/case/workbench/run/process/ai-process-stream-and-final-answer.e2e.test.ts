@@ -406,8 +406,8 @@ describe('workbench run e2e', () => {
               ))
           const loadToolsetCopyOk =
             !hasLoadToolset ||
-            allItemTexts.some((text) => /已学会|正在学习/u.test(text)) ||
-            allSummaryTexts.some((text) => /已学会|正在学习|已完成\s*\d+\s*项|技能/u.test(text))
+            allItemTexts.some((text) => /已加载|正在加载/u.test(text)) ||
+            allSummaryTexts.some((text) => /已加载|正在加载|已完成\s*\d+\s*项|工具组/u.test(text))
           const docxCopyOk =
             !hasDocxTool ||
             allItemTexts.some((text) => text.includes('Word 文档')) ||

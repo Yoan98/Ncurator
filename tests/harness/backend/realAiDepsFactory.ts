@@ -306,6 +306,7 @@ export const createRealAiDepsFactory = async (input: {
         chatToolsWrapper: contextInput.chatToolsWrapper,
         browserUseService: contextInput.browserUseService,
         webCrawlerService: contextInput.webCrawlerService,
+        userSkillService: contextInput.userSkillService,
         scheduledTaskService: contextInput.scheduledTaskService
       }
     )

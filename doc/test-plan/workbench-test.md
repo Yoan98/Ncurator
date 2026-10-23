@@ -41,6 +41,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 2. `run`
 3. `result`
 4. `scheduled-task`
+5. `skills`
 
 领域规则：
 
@@ -82,6 +83,7 @@ tests/case/workbench/
     apply/
     wps-office/        # 正式 E2E：真开 WPS；发版按影响范围或全量测试
   scheduled-task/
+  skills/
 ```
 
 测试命令：
@@ -793,6 +795,44 @@ pnpm test:update:e2e
 - How：真实 UI 创建伙伴与两个独立命名任务，使用真实模型进入 waiting_human 并等待真实到点。只读确认未提交、顺延和提示保留；切回伙伴时问答卡片替换 Composer，提示暂不显示。任务列表确认立即执行时仍被占用限制拒绝；通过问答卡片提交回答，检查 Composer 恢复后提示含任务名。等待原 run 结束后关闭第一条提示，切换回来查看另一条提示并确认立即执行。不注入状态、不改系统时间。
 - Oracle：忙碌到点不新增任务消息、下一周期顺延，对齐 `ST-RUN-001-AC3`；问答期间隐藏胶囊、提交回答恢复 Composer 后显示含任务名的胶囊，关闭只消除提示，主操作先确认，对齐 `ST-RUN-005-AC1/AC2/AC3`；仍忙碌时拒绝执行，空闲后只启动一次，对齐 `ST-RUN-004-AC2/AC3`。
 
+### 5.5 `skills`
+
+新增 suite `skills`，全部通过真实 UI、IPC、SQLite 和文件系统完成，不通过写 IPC、模拟选择器或伪造模型改变结果。目录导入使用现有 macOS / Windows 原生目录选择器自动化。只读 IPC 和文件读取用于取证。
+
+#### `user-skill-create-edit`
+
+- 测试类型：e2e。
+- What：文本技能创建、编辑、重命名、取消和删除闭环。
+- Why：用户手写规范能持久化，修改不丢失伙伴配置。
+- How：UI 创建两个伙伴，创建技能并绑定，编辑名称与正文，重开视图；验证未保存关闭、名称冲突与删除取消/确认。
+- Oracle：`WB-SKILL-001-AC1/AC3/AC6`；文件与元数据一致，内部 ID 与绑定不变，失败输入保留。
+
+#### `user-skill-import-replace`
+
+- 测试类型：e2e / exclusive。
+- What：完整目录导入、同名替换与取消。
+- Why：用户可以升级外部技能，资源与权限保持有效。
+- How：只读 fixture 复制到隔离临时目录，通过真实选择器导入两个同名版本；先取消再确认替换，读取文件取证。
+- Oracle：`WB-SKILL-001-AC2/AC3`；未知 YAML、资源字节与执行位保留，取消无变化，替换保留 ID 与绑定，删除源目录仍可用。
+
+#### `user-skill-partner-budget`
+
+- 测试类型：e2e / exclusive。
+- What：伙伴隔离和启用、编辑、替换时的预算拦截。
+- Why：所有启用说明均可容纳，不依赖运行时遗忘。
+- How：UI 创建接近上限的真实规范，为不同伙伴配置组合；分别尝试超限启用、编辑和目录替换，再停用释放额度。
+- Oracle：`WB-SKILL-001-AC3/AC7`；显示用量，超限列出伙伴，失败不改文件或绑定。
+
+#### `user-skill-use-live`
+
+- 测试类型：e2e / live；group `live`，原生目录选择要求 `execution: exclusive`。
+- What：用户配置技能后真实 AI 使用规范与相对资源，编辑后使用新规则。
+- Why：服务单测不能证明 UI 到模型闭环。
+- How：UI 导入、启用周报规范，用户只提供业务事实并请求生成文件；编辑规范后再发任务，记录真实请求、工具与产物。
+- Oracle：`WB-SKILL-001-AC4/AC5`；按名称调用 `load_skill`，正文和资源确实进入模型，产物满足业务规则且第二轮采用新规则；不逐字断言最终回答。
+
+权限、原子回滚、预算精确边界与损坏配置停用由 Unit 补充；缓存命中率由现有缓存专项验证。
+
 ## 6. 自动化覆盖边界
 
 - `WB-COMPOSER-001-AC6`：`reference-mention-keyboard` 自动检查空对话的长文本粘贴、连续换行后的末行可见、内部滚动、工具栏可见和清空后高度恢复；已有消息、窄窗口自动换行及附件组合仍做界面专项验收。
@@ -855,11 +895,3 @@ pnpm test:update:e2e
 | `ST-VIEW-001-AC5`                                                           | 部分覆盖：`scheduled-task-partner-deletion` 没有定时视图下删除弹窗可见与可操作的独立 Oracle。                                                                                                                                                                                                                                             |
 | `ST-LIST-001-AC1/AC3`                                                       | 部分覆盖：`scheduled-task-config-lifecycle` 检查创建后列表、摘要与入口；重开初始化及无任务空态没有明确断言。                                                                                                                                                                                                                              |
 | `ST-SWITCH-001-AC2`                                                         | 部分覆盖：`scheduled-task-config-lifecycle` 检查开关值；关闭后等待到点不触发尚无 E2E。                                                                                                                                                                                                                                                    |
-
-### 共享用户技能覆盖边界
-
-- `WB-SKILL-001-AC1/AC6`：真实 UI 导航、取消/关闭/重复点击和删除弹窗仍需 E2E 验证，本次不声称完成界面验收。
-- `WB-SKILL-001-AC2`：`unit/storage/user-skills.test.ts` 验证真实 SQLite、完整文件复制、未知 YAML/资源字节保留、源目录删除、同名冲突、路径和文件类型守卫；这是后端证据，不代替原生目录选择器 UI。
-- `WB-SKILL-001-AC3`：上述 Unit 验证按伙伴绑定、重开数据库和删除伙伴后的共享资源保留；UI 异步切换仍属真实 E2E 缺口。
-- `WB-SKILL-001-AC4/AC5`：`unit/ai/user-skill-runtime.test.ts` 验证独立加载入口、说明和预注册工具包隔离、重复加载、恢复/压缩后重新校验以及稳定目录。非实时模型验证不证明实际模型质量或供应商缓存命中率。
-- live AI 与真实 UI E2E 未包含在此变更的运行验证中；需使用维护者单独配置和授权的模型凭证与桌面环境。

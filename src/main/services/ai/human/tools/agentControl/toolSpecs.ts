@@ -4,6 +4,7 @@ import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import {
   renderAskUserQuestionModelResult,
   renderLoadToolsetModelResult,
+  renderLoadSkillModelResult,
   renderPlanUpdateModelResult,
   renderReadImageModelResult
 } from '../../shared/modelToolResultRenderers'
@@ -49,7 +50,7 @@ export const LOAD_TOOLSET_TOOL_SPEC: HumanToolSpec<
   inputSchema: LOAD_TOOLSET_SCHEMA,
   promptSpec: {
     name: 'load_toolset',
-    description: '加载已注册的工具组，使其工具可用；不加载用户技能说明。'
+    description: '加载工具包，使其工具可用。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
@@ -69,13 +70,15 @@ export const LOAD_SKILL_TOOL_SPEC: HumanToolSpec<
   inputSchema: LOAD_SKILL_SCHEMA,
   promptSpec: {
     name: 'load_skill',
-    description: '加载当前伙伴启用的用户技能说明与资源基址；不注册工具、不执行脚本、不增加权限。'
+    description: '加载技能说明和资源目录。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
     defaultResourceKey: 'agent-control'
   }),
-  modelResult: { renderSuccess: () => 'User instruction loading completed.' }
+  modelResult: {
+    renderSuccess: renderLoadSkillModelResult
+  }
 }
 
 export const UPDATE_PLAN_TOOL_SPEC: HumanToolSpec<

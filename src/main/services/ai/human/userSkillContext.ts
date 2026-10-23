@@ -2,7 +2,7 @@ import { isSystemMessage, SystemMessage } from '@langchain/core/messages'
 import type { AiRunContext } from '../types'
 import type { HumanRuntimeCache, HumanState } from './types'
 import { buildBrainSystemPrompt } from './prompts/brain'
-import { loadCurrentUserSkills, renderLoadedUserSkills } from './userSkills'
+import { loadCurrentUserSkills } from './userSkills'
 
 /** Rebuild, rather than append, the sole instruction snapshot before budget checks and inference.
  * Bodies never enter the transcript/compaction, so restoring IDs always reads current bindings/files.
@@ -27,9 +27,7 @@ export const refreshUserSkillContext = async (input: {
   }
   if (input.cache.messages?.[0] && isSystemMessage(input.cache.messages[0])) {
     input.cache.messages[0] = new SystemMessage(
-      [buildBrainSystemPrompt({ ctx: input.ctx }), renderLoadedUserSkills(loaded)]
-        .filter(Boolean)
-        .join('\n\n')
+      buildBrainSystemPrompt({ ctx: input.ctx, loadedSkills: loaded })
     )
   }
   input.cache.currentState = state

@@ -76,10 +76,10 @@ export const toolCallResultSchema = z.discriminatedUnion('ok', [
 export const handCallsSchema = z.array(toolCallParamSchema)
 
 export const humanSkillLoadingOutcomeSchema = z.object({
-  requestedSkillIds: z.array(z.string().min(1)),
-  loadedSkillIds: z.array(z.string().startsWith('user:')),
-  skippedDuplicateSkillIds: z.array(z.string().startsWith('user:')),
-  unavailableSkillIds: z.array(z.string().min(1))
+  requestedSkillNames: z.array(z.string().min(1)),
+  loadedSkillNames: z.array(z.string().min(1)),
+  skippedDuplicateSkillNames: z.array(z.string().min(1)),
+  unavailableSkills: z.array(z.object({ name: z.string(), error: z.string() }))
 })
 
 export const humanToolsetLoadingOutcomeSchema = z.object({
@@ -122,7 +122,7 @@ export const humanNextActionSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('skill_loading'),
-    wantLoadSkillIds: z.array(z.string().min(1)).min(1),
+    wantLoadSkillNames: z.array(z.string().min(1)).min(1),
     toolCallId: z.string().min(1)
   }),
   z.object({

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { reduceAssistantProcessGroups } from '../../../harness/core/assistantProcessGroups'
 import {
+  isAssistantActivityToolGroup,
   shouldActivityHeaderShimmer,
   shouldShowAssistantThinkingIndicator,
   isBrainThinkingOpenInLog
@@ -21,9 +23,7 @@ describe('shouldShowAssistantThinkingIndicator', () => {
       })
     ).toBe(false)
 
-    expect(
-      shouldShowAssistantThinkingIndicator({})
-    ).toBe(false)
+    expect(shouldShowAssistantThinkingIndicator({})).toBe(false)
   })
 
   it('hides when run has finished even if brain thinking flag is true', () => {
@@ -93,9 +93,7 @@ describe('shouldActivityHeaderShimmer', () => {
 
 describe('isBrainThinkingOpenInLog', () => {
   it('returns true when thinking_started is open and run is active', () => {
-    const records = [
-      { entry: { kind: 'annotation', eventType: 'thinking_started' } }
-    ]
+    const records = [{ entry: { kind: 'annotation', eventType: 'thinking_started' } }]
     expect(isBrainThinkingOpenInLog(records, false)).toBe(true)
   })
 
@@ -108,9 +106,28 @@ describe('isBrainThinkingOpenInLog', () => {
   })
 
   it('returns false when runFinished is true even with unclosed thinking_started', () => {
-    const records = [
-      { entry: { kind: 'annotation', eventType: 'thinking_started' } }
-    ]
+    const records = [{ entry: { kind: 'annotation', eventType: 'thinking_started' } }]
     expect(isBrainThinkingOpenInLog(records, true)).toBe(false)
   })
+})
+
+describe('activity grouping after toolset naming', () => {
+  it.each(['load_skill', 'load_toolset', 'text_file_read'])(
+    'groups production %s events into Activity',
+    (toolName) => {
+      const groups = reduceAssistantProcessGroups([], {
+        type: 'assistant_process_group_started',
+        runId: 'run-activity',
+        groupId: 'group-tool',
+        kind: 'toolset',
+        display: { kind: 'tool', toolName, input: {} },
+        createdAt: 1
+      })
+      expect(groups).toHaveLength(1)
+      expect(isAssistantActivityToolGroup(groups[0])).toBe(true)
+      expect(isAssistantActivityToolGroup({ ...groups[0], sourceEventType: 'thinking' })).toBe(
+        false
+      )
+    }
+  )
 })

@@ -36,6 +36,7 @@ export const createAiServiceTestRunner = async (
   const deps: AiRunDeps = {
     defaultStreamingMode: options.streamingModeOverride,
     llmStore: runtime.llmStore,
+    userSkillService: options.userSkillService,
     partnerStore: runtime.partnerStore,
     chatMessageLogStore: runtime.storageService.chatMessageLog,
     subagentStore: runtime.storageService.subagent,
@@ -85,6 +86,7 @@ export const createChatServiceTestRunner = async (
   const io: AiLlmIoRecord[] = []
   const files = new AiFileChangeService(runtime.storageService.aiFileChange)
   const service = new ChatRunService({
+    userSkillService: options.userSkillService,
     partnerStore: runtime.partnerStore,
     chatMessageLogStore: runtime.storageService.chatMessageLog,
     subagentStore: runtime.storageService.subagent,

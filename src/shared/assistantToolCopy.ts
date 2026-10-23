@@ -277,15 +277,15 @@ const TOOL_ITEM_RENDERERS = {
   ask_user_question: () => toolCopy('询问用户', sentence(text('等待用户确认关键信息'))),
   image_generate: (input) =>
     toolCopy('生成图片', sentence(text('生成图片 '), param(readToolFileLabel(input)))),
-  load_skill: (_input, status) =>
-    toolCopy(
-      status === 'running'
-        ? '正在加载用户技能说明'
-        : status === 'completed'
-          ? '已加载用户技能说明'
-          : '用户技能说明加载失败',
-      sentence(text('用户技能说明'))
-    ),
+  load_skill: (input, status) => {
+    const names = input && 'skillNames' in input ? input.skillNames : undefined
+    const label = Array.isArray(names)
+      ? names.filter((name): name is string => typeof name === 'string').join('、')
+      : ''
+    const action =
+      status === 'running' ? '正在加载' : status === 'completed' ? '已加载' : '加载失败'
+    return toolCopy(`${action}技能`, sentence(text(`${action}技能 ${label}`.trim())))
+  },
   load_toolset: (input, status) => {
     const toolsetName = readLoadToolsetNames(input)
     if (status === 'running') {

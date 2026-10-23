@@ -1148,6 +1148,14 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - How：在临时 workspace 的 `preview-site` 中创建带唯一标记的页面，为用户提供一个随机空闲端口；用户只描述启动预览、真实访问确认标记、确认服务收到请求、用完关闭的诉求，不指定工具或命令。由真实模型自主决策。
 - Oracle：任务 `completed`；页面标记出现在最终交付或真实工具结果中；服务在模型完成后不可达（由模型关闭，框架不在会话结束时强杀拆出去的后台进程）。路径满足其一即可：① 出现 `command_still_running`/`terminal_command_yielded` 且随后有成功的 `terminal_read` 或 wait-like 终端命令；② 出现 wait-like 终端命令（`sleep` / `Start-Sleep` / `time.sleep` / `ping -c|-n` / `timeout` 等跨平台等待语义）。
 
+#### `human-user-skill-live`
+
+- 测试类型：backend / live；suite `human`，group `live`。
+- What：真实模型按名称发现、加载并使用说明与相对资源，跨 run 恢复。
+- Why：专项验证说明型 Skill 的实际效果与生产接入。
+- How：真实 SQLite、UserSkillService、文件与生产 AiRunService；将周报规范及独有业务规则资源复制到隔离目录并启用，使用真实模型处理自然语言业务事实，连续执行两轮。准备输入不透露工具名或资源内答案，不使用模拟依赖。
+- Oracle：任务完成；`load_skill` 使用 `skillNames`；实际主模型请求包含正文和资源，结构化产物符合独有规则，第二轮恢复相同有效说明；记录真实 usage，缓存供应商指标仍由缓存专项验收。
+
 ## 5. 覆盖边界
 
 - 本域 backend 验证工具与 human 执行；Workbench 交互、真实页面和系统应用行为由对应 E2E／人工检查验证。

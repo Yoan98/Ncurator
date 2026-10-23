@@ -2,6 +2,11 @@
  * 生成 doc/ai-tool-prompt-audit.md（按需生成，不入库）
  * 运行：pnpm doc:ai-tool-prompt-audit
  */
+import {
+  buildBrainSystemPrompt,
+  buildBrainUserMessageForInput
+} from '../../src/main/services/ai/human/prompts/brain'
+import { parseSkillMarkdown } from '../../src/main/services/skills/UserSkillService'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -479,7 +484,16 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
     { path: 'outputPath?', description: '保存路径' }
   ],
   load_toolset: [{ path: 'args.toolsetIds', description: '加载的工具包 ID' }],
-  load_skill: [{ path: 'args.skillIds', description: '当前伙伴启用的说明技能 ID' }],
+  load_skill: [
+    {
+      path: 'loadedSkillNames / skippedDuplicateSkillNames',
+      description: '新加载与已加载技能名称'
+    },
+    {
+      path: 'unavailableSkills[]',
+      description: 'name / error：不可用技能及原因；正文不写入历史反馈'
+    }
+  ],
   update_plan: [{ path: '—', description: '固定文案，不读 data' }],
   read_image: [
     { path: 'error?', description: '失败原因；免费目录明确无视觉能力时说明模型限制' },
@@ -1413,7 +1427,18 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
       data: {}
     }
   ],
-  load_skill: [{ label: '说明加载', input: { skillIds: ['user:example'] }, ok: true, data: {} }],
+  load_skill: [
+    {
+      label: '说明加载',
+      input: { skillNames: ['weekly-report'] },
+      ok: true,
+      data: {
+        loadedSkillNames: ['weekly-report'],
+        skippedDuplicateSkillNames: [],
+        unavailableSkills: []
+      }
+    }
+  ],
   update_plan: [{ label: '成功', ok: true, data: {} }],
   read_image: [
     {
@@ -1543,6 +1568,87 @@ const renderToolSection = (toolName: string): string => {
   return lines.join('\n')
 }
 
+const renderSkillPromptExample = (): string => {
+  const directory = path.join(ROOT, 'tests/fixtures/workspace/skills/weekly-report')
+  const parsed = parseSkillMarkdown(fs.readFileSync(path.join(directory, 'SKILL.md'), 'utf8'))
+  const skill = {
+    id: 'user:example',
+    name: parsed.name,
+    description: parsed.description,
+    directoryName: parsed.name,
+    createdAt: 0
+  }
+  const loaded = { skill, body: parsed.body, resourceBase: directory }
+  const ctx = {
+    partnerId: 'prompt-example',
+    partnerName: '周报助手',
+    platform: 'macos' as const,
+    userSkillService: { listEnabled: () => [skill], loadEnabled: () => loaded }
+  }
+  const user = buildBrainUserMessageForInput({
+    userInput: '按周报规范整理本周进展。事实：完成客户访谈；外部联调延期；下周提交方案。',
+    preference: 'default',
+    referenceScope: { selectedReferences: [], attachments: [] },
+    workspaceRoots: ['/workspace/project'],
+    runStartedAt: Date.parse('2026-10-23T01:00:00Z')
+  })
+  const before = buildBrainSystemPrompt({ ctx })
+  const after = buildBrainSystemPrompt({ ctx, loadedSkills: [loaded] })
+  const messages = [
+    { role: 'system', content: after },
+    { role: 'user', content: user },
+    {
+      role: 'assistant',
+      content: '',
+      toolCalls: [
+        {
+          id: 'call-skill',
+          name: 'load_skill',
+          arguments: JSON.stringify({ skillNames: [skill.name] })
+        }
+      ]
+    },
+    { role: 'tool', toolCallId: 'call-skill', content: `Loaded: ${skill.name}.` }
+  ]
+  const exampleRoot = path.join(ROOT, '.codex-tmp/skill-prompt-example')
+  fs.mkdirSync(exampleRoot, { recursive: true })
+  fs.writeFileSync(
+    path.join(exampleRoot, 'example-notes.txt'),
+    '示例通过当前生产提示词组装函数与周报 fixture 生成，未调用模型。actual-model-* 文件来自真实 AI live 请求（如已执行）。\n'
+  )
+  fs.writeFileSync(
+    path.join(exampleRoot, 'loader-descriptions.json'),
+    JSON.stringify(
+      ['load_toolset', 'load_skill'].map((name) => getToolSpec(name)?.promptSpec),
+      null,
+      2
+    )
+  )
+  fs.writeFileSync(path.join(exampleRoot, 'system-before-load.txt'), before)
+  fs.writeFileSync(path.join(exampleRoot, 'system-after-load.txt'), after)
+  fs.writeFileSync(
+    path.join(exampleRoot, 'messages-after-load.json'),
+    JSON.stringify(messages, null, 2)
+  )
+  fs.writeFileSync(
+    path.join(exampleRoot, 'messages-before-load.json'),
+    JSON.stringify(
+      messages
+        .slice(0, 2)
+        .map((message, index) => (index === 0 ? { ...message, content: before } : message)),
+      null,
+      2
+    )
+  )
+  return [
+    '# Skill 加载后的完整提示词示例',
+    '示例通过生产提示词组装函数生成；技能来自周报 fixture。正文只投递在首条 System，历史工具结果仅记录名称和加载状态。',
+    mdCode('text', after),
+    '## 消息数组',
+    mdCode('json', JSON.stringify(messages, null, 2))
+  ].join('\n\n')
+}
+
 const buildDocument = (): string => {
   const lines: string[] = []
   lines.push('# Toolset / Tool 契约审计')
@@ -1561,6 +1667,7 @@ const buildDocument = (): string => {
     }
   }
 
+  lines.push(renderSkillPromptExample())
   return lines.join('\n')
 }
 

@@ -12,7 +12,7 @@ export type AssistantThinkingWaitThought = {
 }
 
 export const isAssistantActivityToolGroup = (group: AssistantThinkingWaitGroup): boolean =>
-  group.kind === 'skill' && group.sourceEventType !== 'thinking'
+  group.kind === 'toolset' && group.sourceEventType !== 'thinking'
 
 export type AssistantThinkingIndicatorInput = {
   isBrainThinking?: boolean

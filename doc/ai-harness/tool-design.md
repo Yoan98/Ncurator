@@ -28,7 +28,7 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 
 模型可见契约 = `promptSpec` + `inputSchema`（经 LangChain bindTools 暴露）。内部 TS 输出类型供执行层与契约测试，不经 prompt 暴露。
 
-用户共享 Skill 是说明文件资产，不是 `HumanToolSpec` 或注册工具包。`load_toolset({ toolsetIds: string[] })` 只启用预注册工具包，`load_skill({ skillIds: string[] })` 只加载当前伙伴绑定的 `user:<uuid>` 说明。两者不互相兼容 ID，工具预算和 FIFO 淘汰仅针对工具包。用户说明不能新增工具、自动执行脚本、加载依赖或扩大权限。目录只暴露当前伙伴启用项的稳定元数据。加载反馈持久化 ID / 状态；正文和资源基址仅投递到每轮重建的当前说明区，不重复写入历史 tool 消息，避免压缩或恢复复活失效指令。当前绑定重校验、64 KiB 正文总预算、恢复和缓存取舍见 [Human Harness](human-harness.md#72-load_toolset-流程)。
+用户共享 Skill 是说明文件资产，不是 `HumanToolSpec` 或注册工具包。`load_toolset({ toolsetIds: string[] })` 只启用预注册工具包，`load_skill({ skillNames: string[] })` 按唯一名称加载当前有效绑定的说明，内部稳定 ID 仅用于存储和恢复。两个入口分别解析工具包 ID 和技能名称，工具预算和 FIFO 淘汰仅针对工具包。用户说明不能新增工具、自动执行脚本、加载依赖或扩大权限。模型目录仅展示名称与简介，已加载正文使用带 name / resourceBase 元数据的独立 skill 块，统一排在 System 末尾的工具组之后。加载反馈持久化名称 / 状态；正文和资源基址仅投递到每轮重建的当前说明区，不重复写入历史 tool 消息，避免压缩或恢复复活失效指令。当前绑定重校验、64 KiB 正文总预算、恢复和缓存取舍见 [Human Harness](human-harness.md#72-load_toolset-流程)。
 
 ---
 
@@ -84,7 +84,7 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 | 工具          | brain schema 校验       | 校验方                          |
 | ------------- | ----------------------- | ------------------------------- |
-| `load_toolset` / `load_skill` | `inputSchema.safeParse`（strict） | brain；节点只处理各自类型的有效 ID |
+| `load_toolset` / `load_skill` | `inputSchema.safeParse`（strict） | brain；节点分别解析工具组 ID 与技能名称 |
 | `update_plan` | **跳过**                | `plan` 节点                     |
 | 其余          | `inputSchema.safeParse` | brain → 失败写 ToolMessage 反馈 |
 
@@ -128,7 +128,7 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 | 工具                | 渲染要点                                                                                                                 |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `load_toolset` | 由 `toolset_loading` 节点直接写 ToolMessage（loaded / duplicate / unknown / evicted 摘要），不走 `buildModelToolResultDelivery` |
-| `load_skill` | 由 `skill_loading` 节点记录 ID / 状态，当前正文由 System 说明区提供，不写入历史 tool 消息 |
+| `load_skill` | 由 `skill_loading` 节点反馈名称 / 状态，当前正文由 System 说明区提供，不写入历史 tool 消息 |
 | `update_plan`       | 由 `plan` 节点直接写 ToolMessage（计划项列表 `[status] title`），不走 `buildModelToolResultDelivery`                     |
 | `read_image`        | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness 第 3.5 节）                                                   |
 | `ask_user_question` | 用户协作结果使用问题／选项 ID 与用户文字，不依赖显示编号                                                                 |

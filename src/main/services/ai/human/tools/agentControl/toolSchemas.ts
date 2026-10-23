@@ -36,19 +36,13 @@ export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
 
 export const LOAD_TOOLSET_SCHEMA = z
   .object({
-    toolsetIds: z
-      .array(z.string().min(1))
-      .min(1)
-      .describe('要加载的已注册工具组 ID 列表，不接受用户技能 ID')
+    toolsetIds: z.array(z.string().min(1)).min(1).describe('要加载的工具组 ID 列表')
   })
   .strict()
 
 export const LOAD_SKILL_SCHEMA = z
   .object({
-    skillIds: z
-      .array(z.string().min(1))
-      .min(1)
-      .describe('当前伙伴启用的用户技能 ID 列表（user: 前缀），只加载说明，不加载工具组')
+    skillNames: z.array(z.string().min(1)).min(1).describe('要加载的技能名称列表')
   })
   .strict()
 

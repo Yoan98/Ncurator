@@ -85,9 +85,9 @@ describe('human dispatch queue', () => {
       userInput: 'Load both kinds'
     })
     const queue = buildDispatchQueue([
-      { id: 'skill-1', name: 'load_skill', args: { skillIds: ['user:a'] } },
+      { id: 'skill-1', name: 'load_skill', args: { skillNames: ['a'] } },
       { id: 'toolset-1', name: 'load_toolset', args: { toolsetIds: ['docx-read'] } },
-      { id: 'skill-2', name: 'load_skill', args: { skillIds: ['user:b'] } }
+      { id: 'skill-2', name: 'load_skill', args: { skillNames: ['b'] } }
     ])
     let state = advanceDispatchState({
       ...initial,
@@ -96,7 +96,7 @@ describe('human dispatch queue', () => {
     expect(state.execution.stage).toBe('skill_loading')
     expect(state.execution.pendingRound?.nextAction).toEqual({
       action: 'skill_loading',
-      wantLoadSkillIds: ['user:a'],
+      wantLoadSkillNames: ['a'],
       toolCallId: 'skill-1'
     })
     state = advanceDispatchState(returnToDispatch(state))
@@ -109,7 +109,7 @@ describe('human dispatch queue', () => {
     state = advanceDispatchState(returnToDispatch(state))
     expect(state.execution.pendingRound?.nextAction).toEqual({
       action: 'skill_loading',
-      wantLoadSkillIds: ['user:b'],
+      wantLoadSkillNames: ['b'],
       toolCallId: 'skill-2'
     })
     expect(state.execution.pendingDispatch).toBeUndefined()

@@ -41,6 +41,20 @@ export class UserSkillStore {
       .run(skill.id, skill.name, skill.description, skill.directoryName, skill.createdAt)
   }
 
+  public update(skill: UserSkill): void {
+    this.sqlite
+      .prepare('UPDATE user_skill SET name = ?, description = ?, directory_name = ? WHERE id = ?')
+      .run(skill.name, skill.description, skill.directoryName, skill.id)
+  }
+
+  public listBoundPartners(skillId: string): Array<{ id: string; name: string }> {
+    return this.sqlite
+      .prepare(
+        'SELECT p.id, p.name FROM partner p JOIN partner_user_skill b ON b.partner_id = p.id WHERE b.skill_id = ? ORDER BY p.name, p.id'
+      )
+      .all(skillId) as Array<{ id: string; name: string }>
+  }
+
   public delete(id: string): void {
     this.sqlite.prepare('DELETE FROM user_skill WHERE id = ?').run(id)
   }

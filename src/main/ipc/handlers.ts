@@ -1,5 +1,10 @@
 import { UserSkillService } from '../services/skills/UserSkillService'
-import type { UserSkillCreateRequest, UserSkillSetEnabledRequest } from '../../shared/userSkills'
+import type {
+  UserSkillCreateRequest,
+  UserSkillSetEnabledRequest,
+  UserSkillUpdateRequest,
+  UserSkillImportCommitRequest
+} from '../../shared/userSkills'
 import { AppSettingsError } from '../../shared/appErrors'
 import { mainText } from '../services/app/i18n'
 import { getAppRuntime, setServiceRoute } from '../services/app/AppRuntime'
@@ -3595,6 +3600,7 @@ export function registerHandlers(services: {
 
   // === Scheduled Task Handlers ===
 
+  const skillImportOwners = new Set<number>()
   ipcMain.handle('user-skills-list', () => userSkillService.list())
   ipcMain.handle('user-skills-import', async (event) => {
     const options: OpenDialogOptions = { properties: ['openDirectory', 'dontAddToRecent'] }
@@ -3603,14 +3609,32 @@ export function registerHandlers(services: {
       ? await dialog.showOpenDialog(owner, options)
       : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths.length) return null
-    return userSkillService.importFolder(result.filePaths[0])
+    if (!skillImportOwners.has(event.sender.id)) {
+      const ownerId = event.sender.id
+      skillImportOwners.add(ownerId)
+      event.sender.once('destroyed', () => {
+        userSkillService.cancelImportsForOwner(ownerId)
+        skillImportOwners.delete(ownerId)
+      })
+    }
+    return userSkillService.prepareImport(result.filePaths[0], event.sender.id)
   })
   ipcMain.handle('user-skills-create', (_event, request: UserSkillCreateRequest) =>
-    userSkillService.create(request?.content)
+    userSkillService.create(request)
+  )
+  ipcMain.handle('user-skills-get', (_event, id: string) => userSkillService.getDocument(id))
+  ipcMain.handle('user-skills-update', (_event, request: UserSkillUpdateRequest) =>
+    userSkillService.update(request)
+  )
+  ipcMain.handle('user-skills-commit-import', (event, request: UserSkillImportCommitRequest) =>
+    userSkillService.commitImport(request, event.sender.id)
+  )
+  ipcMain.handle('user-skills-cancel-import', (event, token: string) =>
+    userSkillService.cancelImport(token, event.sender.id)
   )
   ipcMain.handle('user-skills-delete', (_event, id: string) => userSkillService.delete(id))
   ipcMain.handle('user-skills-get-enabled', (_event, partnerId: string) =>
-    userSkillService.listEnabled(partnerId).map((skill) => skill.id)
+    userSkillService.getSelection(partnerId)
   )
   ipcMain.handle('user-skills-set-enabled', (_event, request: UserSkillSetEnabledRequest) =>
     userSkillService.setEnabled(request?.partnerId, request?.skillIds)

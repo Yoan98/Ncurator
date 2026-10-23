@@ -1020,6 +1020,26 @@ export const renderReadImageModelResult: ModelResultRenderer = ({ data }) => {
   ])
 }
 
+export const renderLoadSkillModelResult: ModelResultRenderer = ({ data }) => {
+  const outcome = isObject(data) ? data : {}
+  const names = (key: string): string[] =>
+    Array.isArray(outcome[key])
+      ? outcome[key].filter((value): value is string => typeof value === 'string')
+      : []
+  const loaded = names('loadedSkillNames')
+  const duplicates = names('skippedDuplicateSkillNames')
+  const unavailable = Array.isArray(outcome.unavailableSkills)
+    ? outcome.unavailableSkills.filter(isObject)
+    : []
+  return [
+    loaded.length ? `Loaded: ${loaded.join(', ')}.` : '',
+    duplicates.length ? `Already loaded: ${duplicates.join(', ')}.` : '',
+    ...unavailable.map((item) => `Unavailable ${readString(item.name)}: ${readString(item.error)}.`)
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
 export const renderLoadToolsetModelResult: ModelResultRenderer = ({ args }) => {
   const requested = Array.isArray(args.toolsetIds)
     ? args.toolsetIds.filter((item): item is string => typeof item === 'string')

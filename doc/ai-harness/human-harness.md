@@ -788,11 +788,13 @@ brain 返回 load_toolset
 
 #### 用户共享说明技能
 
-`load_toolset({ toolsetIds: string[] })` 只加载预注册工具包；`load_skill({ skillIds: string[] })` 只加载当前伙伴启用的用户说明。`user:<uuid>` 不进入 `RuntimeToolsetId`、tool registry 或工具预算，两类加载请求不能互换 ID。目录只列当前伙伴启用项，按稳定 ID 排序，仅含 ID、name、description。
+`load_toolset({ toolsetIds: string[] })` 只加载预注册工具包；`load_skill({ skillNames: string[] })` 只加载当前伙伴启用的用户说明。`user:<uuid>` 不进入 `RuntimeToolsetId`、tool registry 或工具预算，两类加载请求不能互换参数。模型只使用唯一名称，内部稳定 ID 用于绑定、编辑、重命名与恢复。目录只列当前伙伴启用项，按名称排序，仅含名称与适用场景。
 
-- `load_skill` 经 `skill_loading` 节点调用 `UserSkillService.loadEnabled`，校验当前伙伴绑定与文件安全，读取正文及 `resourceBase`；运行态单独保存 `skills.loadedSkillIds`。多个正文的 UTF-8 总量上限为 64 KiB，超出部分不加载。
-- `load_skill` 的持久化 tool 反馈只保存加载结果、ID 与说明正文的投递位置，不保存正文。正文和资源基址由下一次 budget / brain 前重建的唯一当前 System 说明区提供；这不是历史 ToolMessage 正文返回。内容仅是用户任务指导，不改变系统规则、审批或资源权限，不自动执行脚本、安装依赖或注册工具。
-- `toolset_state_updated.payload.loadedToolsetIds` 与 `skill_state_updated.payload.loadedSkillIds` 分别保存两类 ID 的完整快照；恢复时各自投影；不支持的旧格式或 malformed 快照跳过，不清空后续有效快照，也不妨碍读取会话历史；旧工具包选择需要按需重新加载。每次 budget / brain 前重新读取当前启用绑定和文件，覆盖而非追加说明区；编辑即时更新，停用、删除、丢失或不安全的文件从运行态剔除，并写入新的 Skill ID 快照。
+
+
+- `load_skill` 经 `skill_loading` 节点调用 `UserSkillService.loadEnabled`，校验当前伙伴绑定与文件安全，读取正文及 `resourceBase`；运行态单独保存 `skills.loadedSkillIds`。正文 UTF-8 合计上限为 64 KiB，在伙伴配置和共享资产修改时预检；运行时超限明确报错，不进行遗忘或静默舍弃。
+- `load_skill` 的持久化 tool 反馈只保存技能名称、加载结果及失败原因，不保存正文或内部 ID。正文和资源基址由下一次 budget / brain 前重建的唯一当前 System 说明区提供；这不是历史 ToolMessage 正文返回。内容仅是用户任务指导，不改变系统规则、审批或资源权限，不自动执行脚本、安装依赖或注册工具。
+- `toolset_state_updated.payload.loadedToolsetIds` 与 `skill_state_updated.payload.loadedSkillIds` 分别保存两类 ID 的完整快照；恢复时各自投影；不支持的旧格式或 malformed 快照跳过，不清空后续有效快照，也不妨碍读取会话历史；旧工具包选择需要按需重新加载。每次 budget / brain 前重新读取当前启用绑定和文件，覆盖而非追加说明区；编辑即时更新；停用或删除时从运行态剔除，并写入新的 Skill ID 快照；文件丢失、不安全或正文超限时明确报错。
 - 正文不进入 transcript，因此 compaction 不会复制旧说明。显式开启的 `NCURATOR_E2E_OBSERVER` / 测试 `recordLlmIo` 仍可捕获实际模型请求（包括当前说明正文）；该调试记录不是会话恢复数据源。重复加载、compaction 和 resume 都只重建一份当前有效正文；被剔除的 ID 即使随后重新启用，也要再次加载。当前启用关系才是授权依据，历史反馈不能恢复已失效权限。
 - 取舍：首次加载新正文、启用目录变化或已加载文件变化会修改第一条 SystemMessage；变化点之后的会话前缀不能保证复用，不等同于在消息数组尾部追加。绑定、文件和加载顺序不变时投影保持稳定。确定性测试不证明真实供应商缓存命中率。下游文件与终端操作仍执行原有权限检查，资源基址不扩展工作区。
 

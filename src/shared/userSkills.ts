@@ -7,5 +7,23 @@ export type UserSkill = {
   createdAt: number
 }
 
-export type UserSkillCreateRequest = { content: string }
+export const MAX_USER_SKILL_BODY_BYTES = 64 * 1024
+
+export type UserSkillDraft = { name: string; description: string; body: string }
+export type UserSkillDocument = UserSkill & { body: string }
+export type UserSkillCreateRequest = UserSkillDraft
+export type UserSkillUpdateRequest = UserSkillDraft & { id: string }
+export type UserSkillImportPreview = {
+  token: string
+  name: string
+  description: string
+  conflict: UserSkill | null
+}
+export type UserSkillImportCommitRequest = { token: string; replaceExisting: boolean }
+export type UserSkillSelection = {
+  skillIds: string[]
+  bodyBytes: number
+  maxBodyBytes: number
+  unavailableSkillNames: string[]
+}
 export type UserSkillSetEnabledRequest = { partnerId: string; skillIds: string[] }

@@ -349,6 +349,12 @@ export const userSkillsSelectors = {
   create: 'user-skills-create',
   partner: 'user-skills-partner',
   content: 'user-skills-content',
+  name: 'user-skills-name',
+  description: 'user-skills-description',
+  editor: 'user-skills-editor',
+  replace: 'user-skills-replace',
+  budget: 'user-skills-budget',
+  editPrefix: 'user-skill-edit',
   itemPrefix: 'user-skill',
   togglePrefix: 'user-skill-toggle',
   deletePrefix: 'user-skill-delete'

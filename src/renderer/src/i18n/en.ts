@@ -1,26 +1,47 @@
 export const en = {
   userSkills: {
+    nameConflict: 'A skill with this name already exists. Choose another name.',
+    invalidName:
+      'Use 1–64 lowercase letters, digits or single hyphens, excluding reserved filenames.',
+    invalidDescription: 'When to use is required and must be at most 1024 characters.',
+    emptyBody: 'Instructions cannot be empty.',
+    fileTooLarge: 'The complete SKILL.md exceeds 32 KiB. Shorten the instructions.',
+    overBudget: 'Enabled instructions exceed 64 KiB. Select fewer skills.',
+    affectedPartners:
+      'Saving would exceed 64 KiB for: {{names}}. Adjust their enabled skills first.',
+    importExpired: 'This import is no longer valid. Select the folder again.',
     title: 'Skills',
-    description: 'Manage reusable skill files and choose which skills each partner may load.',
+    description: 'Manage reusable instructions and choose skills for each partner.',
     safety:
-      'Imported folders are copied into the app, not linked to the original. Scripts are never run automatically. Importing or creating a skill does not enable it: select a partner and explicitly enable each skill.',
+      'Import copies the complete folder. Scripts do not run automatically. New skills must be enabled for each partner.',
     partner: 'Enable for partner',
-    choosePartner: 'Select a partner',
+    choosePartner: 'Choose a partner',
     import: 'Import folder',
-    create: 'Create SKILL.md',
+    create: 'Create skill',
+    edit: 'Edit skill',
+    editTitle: 'Edit {{name}}',
     refresh: 'Refresh skills',
     delete: 'Delete',
-    deleteTitle: 'Delete “{{name}}”?',
+    deleteTitle: 'Delete {{name}}?',
     deleteDescription:
-      'This deletes the app-owned copy and removes its bindings from all partners. The original imported folder is not changed.',
-    empty: 'Import a skill folder or create SKILL.md to get started.',
+      'Deletes the app copy and all partner bindings. The original folder is unaffected.',
+    empty: 'Import a folder or create instructions to get started.',
     contentHelp:
-      'Include YAML frontmatter with name and description, followed by Markdown instructions. New skills remain disabled until you bind them to a partner.',
+      'Use lowercase letters, numbers and single hyphens for the name. Markdown is supported. The app manages YAML; the complete SKILL.md must fit within 32 KiB.',
     discardTitle: 'Discard your changes?',
     discard: 'Discard',
     enable: 'Enable {{name}} for the selected partner',
-    bindingFailed: 'Could not load this partner’s skills. Refresh to retry.',
-    loadFailed: 'Could not load skills. Refresh to retry.'
+    bindingFailed: 'Could not load partner skills. Refresh to retry.',
+    loadFailed: 'Could not load skills. Refresh to retry.',
+    name: 'Name',
+    whenToUse: 'When to use',
+    body: 'Instructions',
+    budget: 'Enabled instructions {{used}} / {{limit}} KiB',
+    unavailable: 'Unavailable skill files; edit, replace or disable: {{names}}',
+    replaceTitle: 'Replace {{name}}?',
+    replace: 'Replace',
+    replaceDescription:
+      'Replace the app copy with the selected folder while keeping all partner bindings.'
   },
   preferences: {
     today: 'Today',
@@ -1044,6 +1065,12 @@ export const en = {
     excelPreviewFailed2: 'Excel preview failed:'
   },
   system: {
+    loadingSkill: 'Loading skill',
+    loadedSkill: 'Loaded skill',
+    failedToLoadSkill: 'Skill loading failed',
+    loadingNamedSkill: 'Loading skill {{value1}}',
+    loadedNamedSkill: 'Loaded skill {{value1}}',
+    failedToLoadNamedSkill: 'Failed to load skill {{value1}}',
     onlyHttpUrls: 'Only HTTP and HTTPS URLs are supported.',
     confirmWindowMissing: 'The confirmation window is unavailable.',
     scheduleUnavailable: 'The scheduled task service could not start.',
