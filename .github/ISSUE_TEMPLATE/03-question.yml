@@ -1,0 +1,26 @@
+name: Question
+description: Ask a usage question or discuss how NCurator works.
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the user guide and existing issues first. You may write in Chinese or English.
+        Remove API keys, personal information, and other sensitive data from any attachments.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: Describe what you would like to understand or accomplish.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Include the app version, operating system, and AI model or provider if relevant.
+  - type: textarea
+    id: attempted-solutions
+    attributes:
+      label: What have you tried?
+      description: Share any steps you have taken or documentation you have checked.

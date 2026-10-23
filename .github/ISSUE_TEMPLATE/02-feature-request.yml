@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a new feature or an improvement.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues before suggesting a feature. You may write in Chinese or English.
+        For larger changes, discuss the scope with a maintainer before starting development.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Describe the task or problem you would like NCurator to help with.
+    validations:
+      required: true
+  - type: textarea
+    id: desired-behavior
+    attributes:
+      label: Desired behavior
+      description: Explain how the feature or improvement would work for you.
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Alternatives and additional context
+      description: Include any workarounds, examples, or references that would help.

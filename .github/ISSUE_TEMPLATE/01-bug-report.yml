@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a bug or unexpected behavior.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues before reporting a bug. You may write in Chinese or English.
+        Remove API keys, personal information, and other sensitive data from screenshots and logs.
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      placeholder: The version shown in Settings
+    validations:
+      required: true
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating system
+      description: Include the operating system version.
+      placeholder: Windows 11 or macOS 15
+    validations:
+      required: true
+  - type: input
+    id: model-provider
+    attributes:
+      label: AI model and provider
+      description: Include this if the issue involves an AI model or service.
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior and any error messages.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to reproduce
+      description: Explain how to reproduce the issue.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: Describe what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: supporting-material
+    attributes:
+      label: Screenshots and logs
+      description: Add relevant screenshots or logs with sensitive data removed.

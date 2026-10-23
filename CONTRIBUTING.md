@@ -4,7 +4,17 @@
 
 ## 讨论与反馈
 
-欢迎通过 [Issues](https://github.com/Yoan98/Ncurator/issues) 报告问题、提出需求。社区与联系入口统一见 [README](./README.md#参与项目)。
+欢迎通过 [Issues](https://github.com/Yoan98/Ncurator/issues) 报告问题、提出需求或提问。社区与联系入口统一见 [README](./README.md#参与项目)。
+
+提交前请先搜索已有 Issue，并优先在[创建入口](https://github.com/Yoan98/Ncurator/issues/new/choose)选择对应模板：
+
+| 英文模板          | 标签          | 用途                   |
+| ----------------- | ------------- | ---------------------- |
+| `Bug report`      | `bug`         | 缺陷、异常行为         |
+| `Feature request` | `enhancement` | 新功能、需求、功能改进 |
+| `Question`        | `question`    | 使用咨询、问题讨论     |
+
+模板名称、说明和字段提示统一使用英文，填写内容允许中文或英文。模板会自动添加对应的英文标签；也可以选择 `Blank issue` 直接提交，由维护者补充标签。
 
 报告问题时说明应用版本、操作系统、模型服务商、复现步骤、预期与实际结果。截图和日志请移除 API Key、个人资料及其他敏感内容。较大的功能或架构改动，建议先开 Issue 对齐范围。
 
@@ -32,11 +42,25 @@
 
 ## 提交 Pull Request
 
-1. Fork 仓库，从主分支创建自己的工作分支。
-2. 说明解决的问题、最终行为、验证结果及已知限制；界面变化附截图。
-3. 使用 `git commit --signoff` 提交，在提交信息中加入 `Signed-off-by` 确认。
-4. 优先合并dev分支进行测试
+1. Fork 本仓库，并将自己的 Fork 克隆到本地。
+2. 每次开发前，在 GitHub 打开自己的 Fork，切换到 `main`，点击 `Sync fork → Update branch`，同步原仓库最新的 `main`。
+3. 在本地更新 `main`，从最新 `main` 创建工作分支：新功能使用 `feat/xxx`，问题修复使用 `bugfix/xxx`。
+4. 一个 PR 聚焦一项改动，完成对应验证并同步相关文档。使用 `git commit --signoff` 提交，在提交信息中保留 `Signed-off-by`；提交信息使用 `feat: ...`、`fix: ...`、`docs: ...` 等格式。提交 PR 前尽量将改动整理为一个 commit，方便审核和 cherry-pick。
+5. 将工作分支推送到自己的 Fork，向 `Yoan98/Ncurator` 的 **`dev` 分支**提交 PR。填写 PR 模板，说明关联 Issue、解决的问题、最终行为、验证命令与结果及已知限制；界面变化附截图。
+6. 维护者初审代码，贡献者按反馈修改。评审期间可以继续提交修改，最终合入 `dev` 时保持一个完整 commit，并保留作者信息和 `Signed-off-by`。
+7. 维护者在 `dev` 上进行集成验证和测试，通过后将对应 commit cherry-pick 到 `main`。
 
+已克隆自己的 Fork 后，每次新建功能分支可执行：
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c feat/xxx
+```
+
+问题修复将 `feat/xxx` 换成 `bugfix/xxx`。这里的 `origin` 指自己的 Fork，先完成上述 GitHub 同步，再更新本地 `main`。GitHub 操作详见[同步 Fork](https://docs.github.com/en/pull-requests/how-tos/work-with-forks/syncing-a-fork)。
+
+第三方代码、依赖、图片等材料需注明来源和许可证。
 
 ## 贡献许可
 

@@ -39,13 +39,13 @@ Both distributions include Simplified Chinese and English interfaces. Choose a l
 
 ## Capabilities
 
-| Capability              | What it does                                                                                          |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| 📄 Office documents     | Read, create, and edit DOCX, PPTX, XLSX, and plain text; read PDFs                                        |
-| 🧠 Local knowledge base | Index local folders and web material, retrieve content, and cite sources                               |
+| Capability              | What it does                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| 📄 Office documents     | Read, create, and edit DOCX, PPTX, XLSX, and plain text; read PDFs                                      |
+| 🧠 Local knowledge base | Index local folders and web material, retrieve content, and cite sources                                |
 | 🔍 Web search           | Search the web, read page content, and use the built-in browser                                         |
-| 💻 Local terminal       | Run local commands and scripts for data processing and task automation                                 |
-| ✍️ Change review        | Preview results, inspect changes, and revert supported file edits                                      |
+| 💻 Local terminal       | Run local commands and scripts for data processing and task automation                                  |
+| ✍️ Change review        | Preview results, inspect changes, and revert supported file edits                                       |
 | 🔗 WPS integration      | Click an AI change to open the document at that location in WPS; auto-refresh after AI edits or reverts |
 | ⏰ Scheduled tasks      | Run tasks on a schedule using a partner's material and model configuration                              |
 
@@ -61,23 +61,30 @@ See the [website](https://www.ncurator.com/en) for demos and real task examples.
 
 ## Roadmap
 
-Join the discussion and help shape these plans:
+Current progress and planned work. Join the discussion and help shape what comes next:
 
-| Direction                    | Planned work                                                       |
-| ---------------------------- | ------------------------------------------------------------------ |
-| 🔤 English knowledge base    | English embedding models and indexing                              |
-| 🧩 Skill integration         | Connect and manage custom and third-party Skills                   |
-| 🔌 Integration ecosystem     | Connect WeCom, email services, and other workplace platforms        |
-| 📱 Mobile web access         | Connect to your computer from a phone browser to use NCurator remotely |
-| 🧭 Browser data import       | Import data from your browser, starting with bookmarks and history |
-| 🖼️ Multimodal knowledge base | Parse, index, and retrieve images and audio with source references |
-| 🧠 Partner memory            | Build long-term memory                                             |
+| Direction                    | Description                                                                                                   | Status       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------ |
+| 🔤 English knowledge base    | English embedding models and indexing                                                                         | ⏳ Planned   |
+| 🧩 Skill integration         | Connect and manage custom and third-party Skills. Implemented by [@AntonyLang](https://github.com/AntonyLang) | ✅ Completed |
+| 📥 One-click Skill import    | Import Skills from WorkBuddy and Doubao Work (豆包工作) into NCurator in one click                            | ⏳ Planned   |
+| 🔌 Integration ecosystem     | Connect WeCom, email services, and other workplace platforms                                                  | ⏳ Planned   |
+| 📱 Mobile web access         | Connect to your computer from a phone browser to use NCurator remotely                                        | ⏳ Planned   |
+| 🧭 Browser data import       | Import data from your browser, starting with bookmarks and history                                            | ⏳ Planned   |
+| 🖼️ Multimodal knowledge base | Parse, index, and retrieve images and audio with source references                                            | ⏳ Planned   |
+| 🧠 Partner memory            | Build long-term memory                                                                                        | ⏳ Planned   |
 
 ## Get involved
 
-**QQ group: 891209383.** Interested in future iterations? Join us to discuss features, share ideas, and contribute to development, testing, or documentation. The group primarily uses Chinese.
+### Contact
 
-Follow [@Yoan_Huang on X](https://x.com/Yoan_Huang) for updates. Report bugs and ideas in [Issues](https://github.com/Yoan98/Ncurator/issues), and read the [contribution guide](./CONTRIBUTING.en.md) before opening a PR.
+- QQ group: **891209383** (Chinese)
+- X: [@Yoan_Huang](https://x.com/Yoan_Huang)
+
+### Feedback and contributions
+
+- Bugs, feature requests, and questions: [Issues](https://github.com/Yoan98/Ncurator/issues)
+- Code, tests, and documentation: [Contribution guide](./CONTRIBUTING.en.md)
 
 ## Run from source
 
@@ -105,3 +112,9 @@ Licensed under [AGPL-3.0-only](./LICENSE). Commercial use is permitted subject t
 ### Mac installation issues
 
 If macOS reports that the app is damaged or cannot be opened, see the [Mac installation troubleshooting guide](https://www.ncurator.com/en/manual#mac-download).
+
+## Contributors
+
+Thank you to everyone who contributes code, documentation, testing, and feedback to NCurator! The image below shows the repository's code contributors. Click it to see the full list.
+
+[![Contributors](https://contrib.rocks/image?repo=Yoan98/Ncurator)](https://github.com/Yoan98/Ncurator/graphs/contributors)

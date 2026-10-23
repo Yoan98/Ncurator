@@ -4,7 +4,17 @@
 
 ## Discussion and feedback
 
-Report bugs and propose features through [Issues](https://github.com/Yoan98/Ncurator/issues). Community and contact information is maintained in the [README](./README.en.md#get-involved).
+Report bugs, propose features, or ask questions through [Issues](https://github.com/Yoan98/Ncurator/issues). Community and contact information is maintained in the [README](./README.en.md#get-involved).
+
+Search existing issues first, then choose the matching template in the [issue chooser](https://github.com/Yoan98/Ncurator/issues/new/choose) when possible:
+
+| English template  | Label         | Purpose                                  |
+| ----------------- | ------------- | ---------------------------------------- |
+| `Bug report`      | `bug`         | Bugs and unexpected behavior             |
+| `Feature request` | `enhancement` | New features, requests, and improvements |
+| `Question`        | `question`    | Usage questions and discussion           |
+
+Template names, descriptions, and field prompts are in English. You may write your responses in Chinese or English. Templates add the corresponding English label automatically. You can also choose `Blank issue`; a maintainer will add the appropriate label.
 
 Include the app version, operating system, model provider, reproduction steps, and expected and actual behavior. Remove API keys, personal material, and other sensitive information from screenshots and logs. Discuss larger features or architecture changes in an Issue first.
 
@@ -32,10 +42,23 @@ Keep `.env-example` free of real credentials. Do not commit production shared se
 
 ## Opening a Pull Request
 
-1. Fork the repository and create a branch from the main branch.
-2. Keep the change focused and include relevant documentation and validation.
-3. Describe the problem, resulting behavior, validation, and limitations. Add screenshots for UI changes.
-4. Use `git commit --signoff` to add a `Signed-off-by` confirmation to your commit messages.
+1. Fork this repository and clone your fork locally.
+2. Before starting each change, open your fork on GitHub, select `main`, and click `Sync fork → Update branch` to sync the original repository's latest `main`.
+3. Update your local `main` and create a working branch from the latest `main`: use `feat/xxx` for new features and `bugfix/xxx` for bug fixes.
+4. Keep each PR focused on one change, run the relevant checks, and update related documentation. Use `git commit --signoff` and retain the `Signed-off-by` confirmation. Use commit messages such as `feat: ...`, `fix: ...`, or `docs: ...`. Aim to squash your changes into one commit before opening the PR to make review and cherry-picking easier.
+5. Push your working branch to your fork and open a PR targeting **`dev` in `Yoan98/Ncurator`**. Complete the PR template with related issues, the problem, resulting behavior, validation commands and results, and known limitations. Add screenshots for UI changes.
+6. A maintainer reviews the code, and you address the feedback. You may add commits during review. Keep the final change as one complete commit when merging into `dev`, preserving authorship and `Signed-off-by` confirmations.
+7. The maintainer runs integration checks and tests on `dev`, then cherry-picks the validated commit to `main`.
+
+After cloning your fork, start each new feature branch with:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c feat/xxx
+```
+
+For a bug fix, replace `feat/xxx` with `bugfix/xxx`. Here, `origin` is your fork. Sync your fork on GitHub as described above before updating your local `main`. See GitHub's [fork syncing guide](https://docs.github.com/en/pull-requests/how-tos/work-with-forks/syncing-a-fork).
 
 Identify the sources and licenses of third-party code, dependencies, images, and other assets.
 
