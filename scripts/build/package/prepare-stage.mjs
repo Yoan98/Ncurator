@@ -10,6 +10,7 @@ import { verifyStagedRuntime } from '../runtime/verify-stage.mjs'
 import { obfuscatePackageMain, verifyPackageMainObfuscation } from './obfuscation.mjs'
 import { pruneRuntimePackages } from './prune-runtime.mjs'
 import { installWindowsVcRuntime } from './vc-runtime.mjs'
+import { isRuntimeDocPath } from './content-policy.mjs'
 import {
   assertNodePtyNativeReleaseReady,
   prepareNodePtyNativeRelease
@@ -305,7 +306,7 @@ const pruneNodeModules = (runtimeTrace) => {
   const nodeModules = path.join(STAGE_DIR, 'node_modules')
   const targetPrebuildDirectory = `${process.platform}-${process.arch}`
   const isRequiredRuntimeDirectory = (directory) =>
-    path.relative(nodeModules, directory) === path.join('exceljs', 'lib', 'doc')
+    isRuntimeDocPath(path.relative(STAGE_DIR, directory))
   const supportsCurrentTarget = (values, current) => {
     if (!Array.isArray(values) || values.length === 0) return true
     const normalized = values.map((value) => String(value).trim()).filter(Boolean)

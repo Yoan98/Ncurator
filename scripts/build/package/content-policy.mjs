@@ -126,8 +126,12 @@ const isLegalNotice = (name) =>
   /^(?:license|licence|notice|copying)(?:[._-].*)?$/u.test(name) ||
   /^(?:apache2?|bsd|mit)$/u.test(name)
 
-const isExcelJsRuntimeDocPath = (segments) =>
-  segments.slice(0, 4).join('/') === 'node_modules/exceljs/lib/doc'
+export const isRuntimeDocPath = (relativePath) => {
+  const segments = normalizeRelativePath(relativePath).toLowerCase().split('/')
+  return ['node_modules/exceljs/lib/doc', 'node_modules/yaml/dist/doc'].includes(
+    segments.slice(0, 4).join('/')
+  )
+}
 
 export const assertSafePackagePaths = (paths) => {
   const violations = []
@@ -202,8 +206,7 @@ export const assertSafePackagePaths = (paths) => {
     }
     const forbiddenSegment = lowerSegments.find(
       (segment) =>
-        FORBIDDEN_SEGMENTS.has(segment) &&
-        !(segment === 'doc' && isExcelJsRuntimeDocPath(lowerSegments))
+        FORBIDDEN_SEGMENTS.has(segment) && !(segment === 'doc' && isRuntimeDocPath(relativePath))
     )
     if (forbiddenSegment) {
       violations.push(`${relativePath}: forbidden directory ${forbiddenSegment}`)
