@@ -65,7 +65,7 @@ const PARTNER_SELECT_COLUMNS =
 export class PartnerStore {
   public constructor(private readonly sqlite: SqliteCore) {}
 
-  public async savePartner(partner: Partner): Promise<void> {
+  public savePartner(partner: Partner): void {
     const name = partner.name.trim()
     if (!name) throw new Error('请填写伙伴名称')
     const rows = this.sqlite.prepare('SELECT id, name FROM partner').all() as Array<{

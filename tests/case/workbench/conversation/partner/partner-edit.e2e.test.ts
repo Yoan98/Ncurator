@@ -23,7 +23,7 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['partner'],
-        description: '验证侧栏编辑入口复用创建弹窗，保存后更新名称与形象且不新建伙伴。',
+        description: '验证侧栏编辑入口复用创建抽屉，保存后更新名称与形象且不新建伙伴。',
         fixtures: [],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -51,19 +51,26 @@ describe('workbench conversation e2e', () => {
 
           const nameInput = getWorkbenchLocator(page, workbenchSelectors.createPartnerNameInput)
           await nameInput.waitFor({ state: 'visible' })
-          const modal = nameInput.locator('xpath=ancestor::div[contains(@class,"ant-modal")]')
-          const modalTitle = ((await modal.locator('.ant-modal-title').textContent()) || '').trim()
+          const modal = page.getByRole('dialog').filter({ has: nameInput })
+          const modalTitle = ((await modal.locator('.ant-drawer-title').textContent()) || '').trim()
           const prefilledName = await nameInput.inputValue()
+          const nameLabelVisible = await modal
+            .locator('.nc-configuration-field-label')
+            .filter({ hasText: '名称' })
+            .isVisible()
           await nameInput.fill(UPDATED_NAME)
           await modal.getByRole('button', { name: 'pill' }).click()
-          await modal.locator('.ant-modal-footer .ant-btn-primary').click()
+          await modal.locator('.nc-config-footer .ant-btn-primary').click()
           await waitForVisiblePartnerRow(page, UPDATED_NAME)
 
           const updated = await page.evaluate(async (partnerId) => {
             const partners = await window.api.partnerList()
             return {
               count: partners.length,
-              partner: partners.filter((item) => item.id === partnerId).map(({id, name, avatar_shape}) => ({id, name, avatar_shape}))[0] || null
+              partner:
+                partners
+                  .filter((item) => item.id === partnerId)
+                  .map(({ id, name, avatar_shape }) => ({ id, name, avatar_shape }))[0] || null
             }
           }, created.id)
           const listText = (
@@ -73,6 +80,7 @@ describe('workbench conversation e2e', () => {
           return {
             modalTitle,
             prefilledName,
+            nameLabelVisible,
             updated,
             listText
           }
@@ -81,6 +89,7 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             result.modalTitle === '编辑伙伴' &&
               result.prefilledName === ORIGINAL_NAME &&
+              result.nameLabelVisible &&
               result.updated.count === 1 &&
               result.updated.partner?.name === UPDATED_NAME &&
               result.updated.partner.avatar_shape === 'pill' &&
@@ -88,7 +97,7 @@ describe('workbench conversation e2e', () => {
               !result.listText.includes(ORIGINAL_NAME),
             {
               name: 'workbench-partner-edit',
-              message: '编辑弹窗应预填原值，保存后仍是同一伙伴且侧栏显示新名称。',
+              message: '编辑抽屉应预填原值，保存后仍是同一伙伴且侧栏显示新名称。',
               data: result
             }
           )

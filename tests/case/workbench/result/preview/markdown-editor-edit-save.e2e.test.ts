@@ -53,23 +53,28 @@ describe('workbench result e2e', () => {
         domain: 'workbench',
         suite: 'result',
         groups: ['preview'],
-        description: 'Markdown 打开即即时渲染编辑、无工具栏，输入自动落盘，空闲外部改动重载、编辑中外部改动被自动覆盖；编辑区撑满面板无灰色残留、标题前无 H1/H2 标记、拉宽窗口不白屏。',
-        fixtures: ['tests/fixtures/workspace'],
+        description:
+          'Markdown 打开即即时渲染编辑、无工具栏，输入自动落盘，空闲外部改动重载、编辑中外部改动被自动覆盖；编辑区撑满面板无灰色残留、标题前无 H1/H2 标记、拉宽窗口不白屏。',
+        fixtures: [],
         serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
+          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID, 'empty')
           const firstPath = path.join(workspace.rootPath, 'edit-first.md')
           const emptyPath = path.join(workspace.rootPath, 'edit-empty.md')
-          await fs.writeFile(firstPath, '# First Title\n\noriginal markdown content\n\n[example](https://example.com)\n\n- item one\n- item two')
+          await fs.writeFile(
+            firstPath,
+            '# First Title\n\noriginal markdown content\n\n[example](https://example.com)\n\n- item one\n- item two'
+          )
           await fs.writeFile(emptyPath, '')
 
           const workspaceName = `Workbench ${CASE_ID}`
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName,
-            rootPath: workspace.rootPath
+            rootPath: workspace.rootPath,
+            prepareFiles: false
           })
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, workspaceName)
@@ -84,7 +89,10 @@ describe('workbench result e2e', () => {
           const editor = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
           await editor.waitFor({ state: 'visible', timeout: 30_000 })
 
-          const toolbarVisible = await editor.locator('.vditor-toolbar').isVisible().catch(() => false)
+          const toolbarVisible = await editor
+            .locator('.vditor-toolbar')
+            .isVisible()
+            .catch(() => false)
           const paragraph = editor.getByText('original markdown content', { exact: true })
           await paragraph.waitFor({ state: 'visible', timeout: 30_000 })
           const editorText = (await editor.textContent()) || ''
@@ -111,7 +119,10 @@ describe('workbench result e2e', () => {
             )
           }
 
-          await fs.writeFile(firstPath, '# First Title\n\nidle external content\n\n[example](https://example.com)')
+          await fs.writeFile(
+            firstPath,
+            '# First Title\n\nidle external content\n\n[example](https://example.com)'
+          )
           await editor
             .getByText('idle external content', { exact: true })
             .waitFor({ timeout: 15_000 })

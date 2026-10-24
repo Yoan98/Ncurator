@@ -1653,7 +1653,7 @@ textarea,
 }
 
 @media (max-width: 760px) {
-  .scheduled-task-config-drawer .ant-drawer-content-wrapper {
+  .nc-configuration-drawer .ant-drawer-content-wrapper {
     width: 100vw !important;
   }
 }
@@ -1828,12 +1828,12 @@ textarea,
   box-shadow: 0 1px 2px rgba(15, 15, 15, 0.06);
 }
 
-.workbench-context-ring {
+.nc-usage-ring {
   position: relative;
   background: #f4f4f2;
 }
 
-.workbench-context-ring::after {
+.nc-usage-ring::after {
   content: '';
   position: absolute;
   inset: 3.5px;
@@ -1842,19 +1842,19 @@ textarea,
   z-index: 0;
 }
 
-.workbench-context-ring svg {
+.nc-usage-ring svg {
   position: relative;
   z-index: 1;
 }
 
-.workbench-context-ring-track,
-.workbench-context-ring-progress {
+.nc-usage-ring-track,
+.nc-usage-ring-progress {
   transition:
     stroke-dashoffset 260ms ease,
     stroke 160ms ease;
 }
 
-.workbench-context-ring:hover .workbench-context-ring-progress {
+.nc-usage-ring:hover .nc-usage-ring-progress {
   stroke-width: 2;
 }
 
@@ -2605,4 +2605,86 @@ mark {
   gap: 6px;
   padding: 0 12px;
   cursor: pointer;
+}
+
+.nc-view-toolbar .ant-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.nc-view-toolbar .ant-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.nc-config-footer .ant-btn {
+  height: 32px;
+  border-radius: 6px;
+}
+.nc-compact-form-modal .ant-modal-footer .ant-btn {
+  height: 32px;
+}
+.nc-configuration-drawer input.ant-input {
+  height: 32px;
+  font-size: 13px;
+}
+.nc-configuration-drawer .ant-drawer-extra .ant-btn {
+  height: 28px;
+  font-size: 12px;
+}
+.nc-configuration-drawer .ant-drawer-extra svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Document-style configuration fields share one quiet underline and focus treatment. */
+.nc-document-form .ant-input,
+.nc-document-form .ant-picker,
+.nc-document-form .ant-select:not(.ant-select-customize-input) .ant-select-selector,
+.nc-document-form .nc-document-editor {
+  border: 0 !important;
+  border-bottom: 1px solid #eeeeec !important;
+  border-radius: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.nc-document-form .ant-input:hover,
+.nc-document-form .ant-picker:hover,
+.nc-document-form .ant-select:hover .ant-select-selector {
+  border-bottom-color: #d8d7d3 !important;
+}
+.nc-document-form .ant-input:focus,
+.nc-document-form .ant-picker-focused,
+.nc-document-form .ant-select-focused .ant-select-selector,
+.nc-document-form .nc-document-editor:focus {
+  border-bottom-color: #0b6bcb !important;
+  box-shadow: 0 1px 0 #0b6bcb !important;
+  outline: none;
+}
+.nc-document-form input.nc-document-title.ant-input {
+  height: auto;
+  min-height: 45px;
+  padding-top: 0;
+  padding-bottom: 8px;
+  font-size: 25px;
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: -0.3px;
+}
+.nc-document-form textarea.nc-document-description.ant-input {
+  padding-top: 0;
+  padding-bottom: 10px;
+  resize: none;
+  color: #787774;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.nc-skill-authoring {
+  border-bottom: 1px solid #eeeeec;
+}
+.nc-skill-authoring:focus-within {
+  border-bottom-color: #0b6bcb;
+  box-shadow: 0 1px 0 #0b6bcb;
 }

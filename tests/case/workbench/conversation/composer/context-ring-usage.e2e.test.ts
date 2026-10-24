@@ -23,8 +23,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['composer'],
         description: '验证智能模式上下文圆圈会刷新并展示已用比例与 tokens。',
-        fixtures: ['tests/fixtures/workspace'],
-        knowledge: 'cached',
+        fixtures: [],
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',
@@ -32,7 +31,8 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
-            caseId: CASE_ID
+            caseId: CASE_ID,
+            workspaceContents: 'empty'
           })
           const partner = (await page.evaluate(() => window.api.partnerList())).find(
             (item) => item.name === setup.workspaceName

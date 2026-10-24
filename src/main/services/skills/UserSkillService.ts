@@ -5,17 +5,19 @@ import { parseDocument, isMap } from 'yaml'
 import {
   MAX_USER_SKILL_BODY_BYTES,
   type UserSkill,
+  type UserSkillOption,
   type UserSkillDraft,
   type UserSkillDocument,
   type UserSkillSelection,
   type UserSkillUpdateRequest,
   type UserSkillImportPreview,
-  type UserSkillImportCommitRequest
+  type UserSkillImportCommitRequest,
+  type UserSkillSource,
+  type UserSkillResourcePreview
 } from '../../../shared/userSkills'
 import { getUserDataPath } from '../../utils/userDataPath'
 import type { UserSkillStore } from '../storage/domains/UserSkillStore'
 
-export const MAX_SKILL_MARKDOWN_BYTES = 32 * 1024
 const MAX_FILE_BYTES = 16 * 1024 * 1024
 const MAX_DIRECTORY_BYTES = 64 * 1024 * 1024
 const MAX_ENTRIES = 1000
@@ -26,12 +28,7 @@ const RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
 export const parseSkillMarkdown = (
   content: string
 ): { name: string; description: string; body: string } => {
-  if (
-    typeof content !== 'string' ||
-    Buffer.byteLength(content, 'utf8') > MAX_SKILL_MARKDOWN_BYTES
-  ) {
-    throw new Error('SKILL.md must be at most 32 KiB')
-  }
+  if (typeof content !== 'string') throw new Error('Invalid SKILL.md content')
   const match = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(content)
   if (!match) throw new Error('SKILL.md requires YAML frontmatter with name and description')
   const document = parseDocument(match[1], { uniqueKeys: true })
@@ -56,7 +53,7 @@ export const parseSkillMarkdown = (
   return { name, description: description.trim(), body: match[2] }
 }
 
-const readRegularFile = (filename: string, limit: number): Buffer => {
+const readRegularFile = (filename: string, limit = Infinity): Buffer => {
   const before = fs.lstatSync(filename)
   if (!before.isFile() || before.isSymbolicLink())
     throw new Error('Skill files must be regular files, not symbolic links')
@@ -81,7 +78,7 @@ const readRegularFile = (filename: string, limit: number): Buffer => {
   }
 }
 
-type PendingImport = { stage: string; owner: number; conflictId: string | null; expiresAt: number }
+type PendingImport = { stage: string; owner: number; expiresAt: number }
 
 const markdownParts = (content: string) => {
   const parsed = parseSkillMarkdown(content)
@@ -97,6 +94,15 @@ const buildMarkdown = (draft: UserSkillDraft, original?: string): string => {
     typeof draft.body !== 'string'
   )
     throw new Error('Invalid skill form')
+  if (original) {
+    const parsed = parseSkillMarkdown(original)
+    if (
+      draft.name.trim() === parsed.name &&
+      draft.description.trim() === parsed.description &&
+      draft.body === parsed.body
+    )
+      return original
+  }
   const document = original ? markdownParts(original).document : parseDocument('{}')
   document.set('name', draft.name.trim())
   document.set('description', draft.description.trim())
@@ -135,15 +141,22 @@ export class UserSkillService {
 
   private content(skill: UserSkill): string {
     this.ensureRoot()
-    return readRegularFile(
-      path.join(this.directory(skill), 'SKILL.md'),
-      MAX_SKILL_MARKDOWN_BYTES
-    ).toString('utf8')
+    return readRegularFile(path.join(this.directory(skill), 'SKILL.md')).toString('utf8')
   }
 
   public list(): UserSkill[] {
     return this.store.list()
   }
+  public listOptions(): UserSkillOption[] {
+    return this.list().map((skill) => {
+      try {
+        return { ...skill, bodyBytes: Buffer.byteLength(this.read(skill).body, 'utf8') }
+      } catch {
+        return { ...skill, bodyBytes: null }
+      }
+    })
+  }
+
   public listEnabled(partnerId: string): UserSkill[] {
     return this.store.listEnabled(partnerId)
   }
@@ -152,7 +165,88 @@ export class UserSkillService {
     const skill = this.store.get(id)
     if (!skill) throw new Error('Skill not found')
     const parsed = parseSkillMarkdown(this.content(skill))
-    return { ...skill, name: parsed.name, description: parsed.description, body: parsed.body }
+    return { ...skill, ...parsed, resources: this.resources(this.directory(skill)) }
+  }
+
+  private resources(directory: string): string[] {
+    const result: string[] = []
+    let count = 0
+    const walk = (folder: string, prefix: string): void => {
+      for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+        if (++count > MAX_ENTRIES)
+          throw new Error('A skill folder may contain at most 1000 entries')
+        const relative = prefix + entry.name
+        const filename = path.join(folder, entry.name)
+        if (entry.isSymbolicLink()) throw new Error('Skill folders cannot contain symbolic links')
+        if (entry.isDirectory()) walk(filename, relative + '/')
+        else if (entry.isFile()) {
+          if (relative !== 'SKILL.md') result.push(relative)
+        } else throw new Error('Skill folders may contain only regular files and directories')
+      }
+    }
+    walk(directory, '')
+    return result.sort()
+  }
+
+  private pendingImport(token: string, owner: number): PendingImport {
+    const pending = this.imports.get(token)
+    if (!pending || pending.owner !== owner || pending.expiresAt < Date.now())
+      throw new Error('Skill import expired; select the folder again')
+    this.ensureRoot()
+    if (
+      fs.lstatSync(pending.stage).isSymbolicLink() ||
+      path.dirname(fs.realpathSync(pending.stage)) !== fs.realpathSync(this.root)
+    )
+      throw new Error('Skill directory is outside managed storage')
+    return pending
+  }
+
+  public resourceDirectory(source: UserSkillSource, owner = 0): string {
+    if ('token' in source) return this.pendingImport(source.token, owner).stage
+    const skill = this.store.get(source.id)
+    if (!skill) throw new Error('Skill not found')
+    this.ensureRoot()
+    return this.directory(skill)
+  }
+
+  public previewResource(
+    source: UserSkillSource,
+    relative: string,
+    owner = 0
+  ): UserSkillResourcePreview {
+    const directory = this.resourceDirectory(source, owner)
+    if (
+      typeof relative !== 'string' ||
+      !relative ||
+      relative.includes('\\') ||
+      relative.split('/').some((part) => !part || part === '.' || part === '..') ||
+      path.isAbsolute(relative) ||
+      path.win32.isAbsolute(relative)
+    )
+      throw new Error('Invalid skill resource path')
+    let filename = directory
+    for (const segment of relative.split('/')) {
+      filename = path.join(filename, segment)
+      if (fs.lstatSync(filename).isSymbolicLink())
+        throw new Error('Skill folders cannot contain symbolic links')
+    }
+    if (!fs.realpathSync(filename).startsWith(fs.realpathSync(directory) + path.sep))
+      throw new Error('Skill resource is outside managed storage')
+    const content = readRegularFile(filename, MAX_FILE_BYTES)
+    const mime = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp'
+    }[path.extname(filename).toLowerCase()]
+    if (mime) return { image: `data:${mime};base64,${content.toString('base64')}` }
+    if (content.length > 256 * 1024 || content.includes(0)) return null
+    try {
+      return { text: new TextDecoder('utf-8', { fatal: true }).decode(content) }
+    } catch {
+      return null
+    }
   }
 
   private read(skill: UserSkill): { skill: UserSkill; body: string; resourceBase: string } {
@@ -240,7 +334,7 @@ export class UserSkillService {
 
   private publish(stage: string, existing?: UserSkill): UserSkill {
     const parsed = parseSkillMarkdown(
-      readRegularFile(path.join(stage, 'SKILL.md'), MAX_SKILL_MARKDOWN_BYTES).toString('utf8')
+      readRegularFile(path.join(stage, 'SKILL.md')).toString('utf8')
     )
     this.assertNameAvailable(parsed.name, existing)
     if (existing) this.checkBoundBudgets(existing.id, parsed.body)
@@ -342,8 +436,9 @@ export class UserSkillService {
           fs.mkdirSync(toPath)
           copyDirectory(fromPath, toPath)
         } else if (entry.isFile()) {
-          const bytes = readRegularFile(fromPath, MAX_FILE_BYTES)
-          total += bytes.length
+          const instructions = fromPath === path.join(sourceRoot, 'SKILL.md')
+          const bytes = readRegularFile(fromPath, instructions ? undefined : MAX_FILE_BYTES)
+          if (!instructions) total += bytes.length
           if (total > MAX_DIRECTORY_BYTES)
             throw new Error('A skill folder may contain at most 64 MiB')
           const mode = fs.lstatSync(fromPath).mode & 0o777
@@ -367,17 +462,22 @@ export class UserSkillService {
     const stage = this.copyFolder(source)
     try {
       const parsed = parseSkillMarkdown(
-        readRegularFile(path.join(stage, 'SKILL.md'), MAX_SKILL_MARKDOWN_BYTES).toString('utf8')
+        readRegularFile(path.join(stage, 'SKILL.md')).toString('utf8')
       )
-      const conflict = this.list().find((item) => item.name === parsed.name) ?? null
       const token = randomUUID()
+      const resources = this.resources(stage)
       this.imports.set(token, {
         stage,
         owner,
-        conflictId: conflict?.id ?? null,
         expiresAt: Date.now() + 15 * 60_000
       })
-      return { token, name: parsed.name, description: parsed.description, conflict }
+      return {
+        token,
+        name: parsed.name,
+        description: parsed.description,
+        body: parsed.body,
+        resources
+      }
     } catch (error) {
       fs.rmSync(stage, { recursive: true, force: true })
       throw error
@@ -385,19 +485,19 @@ export class UserSkillService {
   }
 
   public commitImport(request: UserSkillImportCommitRequest, owner = 0): UserSkill {
-    const pending = this.imports.get(request?.token)
-    if (!pending || pending.owner !== owner || pending.expiresAt < Date.now())
-      throw new Error('Skill import expired; select the folder again')
-    const parsed = parseSkillMarkdown(
-      readRegularFile(path.join(pending.stage, 'SKILL.md'), MAX_SKILL_MARKDOWN_BYTES).toString(
-        'utf8'
-      )
-    )
-    const existing = this.list().find((item) => item.name === parsed.name)
-    if ((existing?.id ?? null) !== pending.conflictId)
+    const pending = this.pendingImport(request?.token, owner)
+    const existing = request.replaceId ? this.store.get(request.replaceId) : undefined
+    if (request.replaceId && !existing)
       throw new Error('Skill changed during import; select the folder again')
-    if (existing && request.replaceExisting !== true)
-      throw new Error('Confirm replacing the existing skill')
+    const filename = path.join(pending.stage, 'SKILL.md')
+    const content = buildMarkdown(request, readRegularFile(filename).toString('utf8'))
+    const parsed = parseSkillMarkdown(content)
+    this.assertNameAvailable(parsed.name, existing)
+    if (existing) this.checkBoundBudgets(existing.id, parsed.body)
+    const mode = fs.statSync(filename).mode & 0o777
+    fs.unlinkSync(filename)
+    fs.writeFileSync(filename, content, { flag: 'wx', mode })
+    if (process.platform !== 'win32') fs.chmodSync(filename, mode)
     const skill = this.publish(pending.stage, existing)
     this.cancelImport(request.token, owner)
     return skill

@@ -422,6 +422,32 @@ import AppKit
 import ApplicationServices
 import Foundation
 
+var eventProcessId: pid_t = 0
+func children(_ element: AXUIElement) -> [AXUIElement] {
+  var value: CFTypeRef?
+  AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value)
+  return value as? [AXUIElement] ?? []
+}
+func sheet(_ element: AXUIElement, _ depth: Int = 0) -> AXUIElement? {
+  var role: CFTypeRef?
+  AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
+  if role as? String == "AXSheet" { return element }
+  if depth > 4 { return nil }
+  for child in children(element) {
+    if let found = sheet(child, depth + 1) { return found }
+  }
+  return nil
+}
+func panelProcess(_ element: AXUIElement, _ owner: pid_t, _ depth: Int = 0) -> pid_t? {
+  var pid: pid_t = 0
+  AXUIElementGetPid(element, &pid)
+  if pid != 0 && pid != owner { return pid }
+  if depth > 12 { return nil }
+  for child in children(element) {
+    if let found = panelProcess(child, owner, depth + 1) { return found }
+  }
+  return nil
+}
 func postKey(_ keyCode: CGKeyCode, _ flags: CGEventFlags = []) {
   let source = CGEventSource(stateID: .hidSystemState)
   guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
@@ -430,8 +456,8 @@ func postKey(_ keyCode: CGKeyCode, _ flags: CGEventFlags = []) {
   }
   keyDown.flags = flags
   keyUp.flags = flags
-  keyDown.post(tap: .cghidEventTap)
-  keyUp.post(tap: .cghidEventTap)
+  keyDown.postToPid(eventProcessId)
+  keyUp.postToPid(eventProcessId)
 }
 
 let targetPath = CommandLine.arguments[1]
@@ -448,12 +474,22 @@ if let app = targetApp {
 }
 
 Thread.sleep(forTimeInterval: 0.25)
-NSPasteboard.general.clearContents()
-NSPasteboard.general.setString(targetPath, forType: .string)
+guard let nativePanel = sheet(AXUIElementCreateApplication(processId)) else {
+  fatalError("No native directory panel belongs to the target process")
+}
+// macOS hosts the panel in an XPC process; send keys to that panel, never globally.
+eventProcessId = panelProcess(nativePanel, processId) ?? processId
 
 postKey(5, [.maskCommand, .maskShift])
 Thread.sleep(forTimeInterval: 0.6)
-postKey(9, [.maskCommand])
+let characters = Array(targetPath.utf16)
+for offset in stride(from: 0, to: characters.count, by: 20) {
+  let chunk = Array(characters[offset..<min(offset + 20, characters.count)])
+  if let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true) {
+    event.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
+    event.postToPid(eventProcessId)
+  }
+}
 Thread.sleep(forTimeInterval: 0.15)
 postKey(36)
 Thread.sleep(forTimeInterval: 0.8)
@@ -461,7 +497,7 @@ postKey(36)
 Thread.sleep(forTimeInterval: 0.15)
 
 let afterFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
-print("frontmost-before=\\(beforeFrontmost); frontmost-after=\\(afterFrontmost); target-app=\\(targetApp?.localizedName ?? "none")")
+print("frontmost-before=\\(beforeFrontmost); frontmost-after=\\(afterFrontmost); target-app=\\(targetApp?.localizedName ?? "none"); panel-pid=\\(eventProcessId)")
 `
 
 type NativeDirectoryDialogStrategy =
@@ -1083,8 +1119,17 @@ export const createPartnerThroughWorkbenchUi = async (
   await nameInput.waitFor({ state: 'visible' })
   await nameInput.click()
   await nameInput.fill(partnerName)
+  await page.waitForFunction(
+    (id) =>
+      document.querySelector<HTMLButtonElement>(
+        `[data-testid="${id}"] .nc-config-footer .ant-btn-primary`
+      )?.disabled === false,
+    workbenchSelectors.createPartnerModal
+  )
   await nameInput.press('Enter')
-  await getWorkbenchLocator(page, workbenchSelectors.createPartnerModal).waitFor({ state: 'hidden' })
+  await getWorkbenchLocator(page, workbenchSelectors.createPartnerModal).waitFor({
+    state: 'hidden'
+  })
   await waitForVisiblePartnerRow(page, partnerName)
   await dismissWorkbenchLlmConfigMissingNotification(page)
   return partnerName
@@ -1566,7 +1611,7 @@ export const openScheduledTasksView = async (page: Page): Promise<void> => {
 
 export const waitForScheduledTaskDrawerClosed = async (page: Page): Promise<void> => {
   await page.waitForFunction(() => {
-    const root = document.querySelector('.scheduled-task-config-drawer')
+    const root = document.querySelector('.nc-configuration-drawer')
     if (!root) return true
     return (
       !root.classList.contains('ant-drawer-open') &&

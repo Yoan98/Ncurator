@@ -83,6 +83,11 @@ import {
 import { collectUserMessageTimeIds } from '../../../shared/workbench/messageTimeLabel'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import UserSkillsView from '../components/userSkills/UserSkillsView'
+import PartnerSkillPicker from '../components/userSkills/PartnerSkillPicker'
+import { usePartnerSkillDraft } from '../components/userSkills/usePartnerSkillDraft'
+import { skillError } from '../components/userSkills/skillErrors'
+import ConfigurationDrawer from '../components/workbench/ConfigurationDrawer'
+import ConfigurationFieldLabel from '../components/workbench/ConfigurationFieldLabel'
 import ScheduledTasksView from '../components/scheduledTasks/ScheduledTasksView'
 import ScheduledTaskCountChip from '../components/scheduledTasks/ScheduledTaskCountChip'
 import MessageActionCapsule from '../components/workbench/MessageActionCapsule'
@@ -901,6 +906,8 @@ const ChatPage: React.FC = () => {
   const [createPartnerShape, setCreatePartnerShape] = useState<PartnerAvatarShape>('circle')
   const [createPartnerColor, setCreatePartnerColor] = useState<PartnerAvatarColor>('blue')
   const [createPartnerSubmitting, setCreatePartnerSubmitting] = useState(false)
+  const partnerSkills = usePartnerSkillDraft(createPartnerOpen, editingPartnerId)
+  const originalPartnerForm = useRef('')
   const [busyCancelTask, setBusyCancelTask] = useState<ScheduledTask | null>(null)
   const [activeTimelineDayStart, setActiveTimelineDayStart] = useState<number | null>(null)
   const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>('default')
@@ -4212,7 +4219,7 @@ const ChatPage: React.FC = () => {
       message.warning(t(($) => $.workbench.enterAPartnerName))
       return
     }
-    if (createPartnerSubmitting) return
+    if (createPartnerSubmitting || partnerSkills.loading || partnerSkills.error) return
     setCreatePartnerSubmitting(true)
     try {
       if (editingPartnerId) {
@@ -4220,10 +4227,13 @@ const ChatPage: React.FC = () => {
           id: editingPartnerId,
           name,
           avatar_shape: createPartnerShape,
-          avatar_color: createPartnerColor
+          avatar_color: createPartnerColor,
+          skillIds: partnerSkills.ids
         })
         if (!response.success || !response.partner) {
-          emitErrorMessage(response.error || t(($) => $.workbench.couldNotSaveThePartner))
+          emitErrorMessage(
+            skillError(response.error || t(($) => $.workbench.couldNotSaveThePartner))
+          )
           return
         }
         setCreatePartnerOpen(false)
@@ -4235,10 +4245,13 @@ const ChatPage: React.FC = () => {
       const response = await window.api.partnerCreate({
         name,
         avatar_shape: createPartnerShape,
-        avatar_color: createPartnerColor
+        avatar_color: createPartnerColor,
+        skillIds: partnerSkills.ids
       })
       if (!response.success || !response.partner) {
-        emitErrorMessage(response.error || t(($) => $.workbench.couldNotCreateThePartner))
+        emitErrorMessage(
+          skillError(response.error || t(($) => $.workbench.couldNotCreateThePartner))
+        )
         return
       }
       setCreatePartnerOpen(false)
@@ -4261,6 +4274,9 @@ const ChatPage: React.FC = () => {
     createPartnerName,
     createPartnerShape,
     createPartnerSubmitting,
+    partnerSkills.ids,
+    partnerSkills.loading,
+    partnerSkills.error,
     editingPartnerId,
     emitErrorMessage,
     loadPartners,
@@ -4270,6 +4286,7 @@ const ChatPage: React.FC = () => {
   const openCreatePartnerModal = (): void => {
     setWorkbenchView('chat')
     setEditingPartnerId(null)
+    originalPartnerForm.current = JSON.stringify(['', 'circle', 'blue'])
     setCreatePartnerName('')
     setCreatePartnerShape('circle')
     setCreatePartnerColor('blue')
@@ -4281,6 +4298,11 @@ const ChatPage: React.FC = () => {
     partner: PartnerListItem
   ): void => {
     event.stopPropagation()
+    originalPartnerForm.current = JSON.stringify([
+      partner.name,
+      partner.avatar_shape,
+      partner.avatar_color
+    ])
     setEditingPartnerId(partner.id)
     setCreatePartnerName(partner.name)
     setCreatePartnerShape(partner.avatar_shape)
@@ -5095,7 +5117,7 @@ const ChatPage: React.FC = () => {
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
         {workbenchView === 'skills' ? (
-          <UserSkillsView partners={partners} />
+          <UserSkillsView />
         ) : scheduledTasksActive ? (
           <ScheduledTasksView
             onEnabledCountChange={setScheduledTaskEnabledCount}
@@ -5569,28 +5591,38 @@ const ChatPage: React.FC = () => {
           }}
           onError={emitErrorMessage}
         />
-        <Modal
+        <ConfigurationDrawer
           open={createPartnerOpen}
           title={
             editingPartnerId
               ? t(($) => $.workbench.editPartner)
               : t(($) => $.workbench.createPartner)
           }
-          okText={editingPartnerId ? t(($) => $.common.save) : t(($) => $.workbench.create)}
-          cancelText={t(($) => $.common.cancel)}
-          confirmLoading={createPartnerSubmitting}
-          onOk={() => void submitPartnerForm()}
-          onCancel={() => {
-            if (createPartnerSubmitting) return
+          saveText={editingPartnerId ? t(($) => $.common.save) : t(($) => $.workbench.create)}
+          busy={createPartnerSubmitting}
+          disabled={
+            partnerSkills.loading || Boolean(partnerSkills.error) || !createPartnerName.trim()
+          }
+          dirty={
+            partnerSkills.dirty ||
+            JSON.stringify([createPartnerName, createPartnerShape, createPartnerColor]) !==
+              originalPartnerForm.current
+          }
+          onSave={() => void submitPartnerForm()}
+          onClose={() => {
             setCreatePartnerOpen(false)
             setEditingPartnerId(null)
           }}
-          data-testid={workbenchSelectors.createPartnerModal}
+          testId={workbenchSelectors.createPartnerModal}
         >
-          <div className="space-y-4">
-            <div>
-              <div className="mb-2 text-[13px] text-[#787774]">{t(($) => $.workbench.name2)}</div>
+          <div className="space-y-5">
+            <label className="flex flex-col gap-1.5">
+              <ConfigurationFieldLabel required>
+                {t(($) => $.workbench.name2)}
+              </ConfigurationFieldLabel>
               <Input
+                className="nc-document-title"
+                aria-label={t(($) => $.workbench.name2)}
                 value={createPartnerName}
                 onChange={(event) => setCreatePartnerName(event.target.value)}
                 placeholder={t(($) => $.workbench.giveThisPartnerAName)}
@@ -5598,7 +5630,7 @@ const ChatPage: React.FC = () => {
                 onPressEnter={() => void submitPartnerForm()}
                 data-testid={workbenchSelectors.createPartnerNameInput}
               />
-            </div>
+            </label>
             <div className="flex items-center gap-3">
               <PartnerAvatar
                 shape={createPartnerShape}
@@ -5613,7 +5645,9 @@ const ChatPage: React.FC = () => {
               </div>
             </div>
             <div>
-              <div className="mb-2 text-[13px] text-[#787774]">{t(($) => $.workbench.shape)}</div>
+              <div className="mb-1.5">
+                <ConfigurationFieldLabel>{t(($) => $.workbench.shape)}</ConfigurationFieldLabel>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {PARTNER_AVATAR_SHAPES.map((shape) => (
                   <button
@@ -5637,7 +5671,9 @@ const ChatPage: React.FC = () => {
               </div>
             </div>
             <div>
-              <div className="mb-2 text-[13px] text-[#787774]">{t(($) => $.workbench.color)}</div>
+              <div className="mb-1.5">
+                <ConfigurationFieldLabel>{t(($) => $.workbench.color)}</ConfigurationFieldLabel>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {PARTNER_AVATAR_COLORS.map((color) => (
                   <button
@@ -5653,8 +5689,9 @@ const ChatPage: React.FC = () => {
                 ))}
               </div>
             </div>
+            <PartnerSkillPicker draft={partnerSkills} disabled={createPartnerSubmitting} />
           </div>
-        </Modal>
+        </ConfigurationDrawer>
         <FullAccessConfirmModal
           open={fullAccessConfirmOpen}
           onConfirm={handleConfirmFullAccess}

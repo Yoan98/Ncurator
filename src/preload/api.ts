@@ -1,12 +1,14 @@
 import type {
   UserSkill,
+  UserSkillOption,
   UserSkillCreateRequest,
   UserSkillDocument,
   UserSkillUpdateRequest,
   UserSkillImportPreview,
   UserSkillImportCommitRequest,
   UserSkillSelection,
-  UserSkillSetEnabledRequest
+  UserSkillSource,
+  UserSkillResourcePreview
 } from '../shared/userSkills'
 import type { AppSettingsErrorCode } from '../shared/appErrors'
 import type {
@@ -257,16 +259,20 @@ export type DesktopApi = {
   confirmDialogShow: (payload: ConfirmDialogRequest) => Promise<ConfirmDialogResponse>
   confirmDialogClose: (dialogId: string) => Promise<void>
   partnerMessageList: (partnerId: string) => Promise<ChatMessage[]>
-  userSkillsList: () => Promise<UserSkill[]>
+  userSkillsList: () => Promise<UserSkillOption[]>
   userSkillsImport: () => Promise<UserSkillImportPreview | null>
   userSkillsCommitImport: (input: UserSkillImportCommitRequest) => Promise<UserSkill>
   userSkillsCancelImport: (token: string) => Promise<void>
   userSkillsGet: (id: string) => Promise<UserSkillDocument>
+  userSkillsPreviewResource: (
+    source: UserSkillSource,
+    relative: string
+  ) => Promise<UserSkillResourcePreview>
+  userSkillsOpenFolder: (source: UserSkillSource) => Promise<string>
   userSkillsUpdate: (input: UserSkillUpdateRequest) => Promise<UserSkill>
   userSkillsCreate: (input: UserSkillCreateRequest) => Promise<UserSkill>
   userSkillsDelete: (id: string) => Promise<void>
   userSkillsGetEnabled: (partnerId: string) => Promise<UserSkillSelection>
-  userSkillsSetEnabled: (input: UserSkillSetEnabledRequest) => Promise<void>
   scheduledTaskList: () => Promise<ScheduledTask[]>
   scheduledTaskSave: (payload: ScheduledTaskSaveRequest) => Promise<ScheduledTaskMutationResponse>
   scheduledTaskDelete: (id: string) => Promise<ScheduledTaskMutationResponse>

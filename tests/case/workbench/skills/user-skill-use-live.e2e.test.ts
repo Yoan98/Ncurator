@@ -4,6 +4,7 @@ import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   selectors,
+  fillSkillContent,
   openSkills,
   copySkillFixture,
   importSkillFolder,
@@ -88,13 +89,12 @@ describe('workbench skills live', () => {
           )
           await openSkills(page)
           await page.getByTestId(`${selectors.editPrefix}-${skill.id}`).click()
-          const body = await page.getByTestId(selectors.content).inputValue()
-          await page
-            .getByTestId(selectors.content)
-            .fill(
-              body +
-                '\n本规范更新：输出的 ruleVersion 固定改为 NC-SKILL-REPORT-EDITED，其他字段仍遵循资源规则。\n'
-            )
+          const { body } = await page.evaluate((id) => window.api.userSkillsGet(id), skill.id)
+          await fillSkillContent(
+            page,
+            body +
+              '\n本规范更新：输出的 ruleVersion 固定改为 NC-SKILL-REPORT-EDITED，其他字段仍遵循资源规则。\n'
+          )
           await saveSkill(page)
           await page.getByTestId(`${workbenchSelectors.sessionItemPrefix}-${partnerId}`).click()
           const secondAt = Date.now()

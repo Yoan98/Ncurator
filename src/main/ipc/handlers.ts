@@ -1,9 +1,9 @@
 import { UserSkillService } from '../services/skills/UserSkillService'
 import type {
   UserSkillCreateRequest,
-  UserSkillSetEnabledRequest,
   UserSkillUpdateRequest,
-  UserSkillImportCommitRequest
+  UserSkillImportCommitRequest,
+  UserSkillSource
 } from '../../shared/userSkills'
 import { AppSettingsError } from '../../shared/appErrors'
 import { mainText } from '../services/app/i18n'
@@ -3190,7 +3190,10 @@ export function registerHandlers(services: {
           pinned: false,
           pinned_at: null
         }
-        await partnerStore.savePartner(partner)
+        storageService.sqlite.transaction(() => {
+          partnerStore.savePartner(partner)
+          userSkillService.setEnabled(partner.id, payload.skillIds)
+        })
         await workbenchUiStore.savePartnerState(partner.id, createEmptyPartnerUiState())
         return { success: true, partner }
       } catch (e: unknown) {
@@ -3216,7 +3219,10 @@ export function registerHandlers(services: {
           avatar_shape: payload.avatar_shape,
           avatar_color: payload.avatar_color
         }
-        await partnerStore.savePartner(partner)
+        storageService.sqlite.transaction(() => {
+          partnerStore.savePartner(partner)
+          userSkillService.setEnabled(partner.id, payload.skillIds)
+        })
         return { success: true, partner }
       } catch (e: unknown) {
         console.error('[PARTNER-UPDATE] Error:', e)
@@ -3601,7 +3607,7 @@ export function registerHandlers(services: {
   // === Scheduled Task Handlers ===
 
   const skillImportOwners = new Set<number>()
-  ipcMain.handle('user-skills-list', () => userSkillService.list())
+  ipcMain.handle('user-skills-list', () => userSkillService.listOptions())
   ipcMain.handle('user-skills-import', async (event) => {
     const options: OpenDialogOptions = { properties: ['openDirectory', 'dontAddToRecent'] }
     const owner = BrowserWindow.fromWebContents(event.sender)
@@ -3623,6 +3629,14 @@ export function registerHandlers(services: {
     userSkillService.create(request)
   )
   ipcMain.handle('user-skills-get', (_event, id: string) => userSkillService.getDocument(id))
+  ipcMain.handle(
+    'user-skills-preview-resource',
+    (event, source: UserSkillSource, relative: string) =>
+      userSkillService.previewResource(source, relative, event.sender.id)
+  )
+  ipcMain.handle('user-skills-open-folder', (event, source: UserSkillSource) =>
+    shell.openPath(userSkillService.resourceDirectory(source, event.sender.id))
+  )
   ipcMain.handle('user-skills-update', (_event, request: UserSkillUpdateRequest) =>
     userSkillService.update(request)
   )
@@ -3635,9 +3649,6 @@ export function registerHandlers(services: {
   ipcMain.handle('user-skills-delete', (_event, id: string) => userSkillService.delete(id))
   ipcMain.handle('user-skills-get-enabled', (_event, partnerId: string) =>
     userSkillService.getSelection(partnerId)
-  )
-  ipcMain.handle('user-skills-set-enabled', (_event, request: UserSkillSetEnabledRequest) =>
-    userSkillService.setEnabled(request?.partnerId, request?.skillIds)
   )
 
   ipcMain.handle('scheduled-task-list', async () => {

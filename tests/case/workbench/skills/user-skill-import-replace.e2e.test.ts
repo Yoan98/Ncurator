@@ -7,6 +7,10 @@ import {
   setupSkillPartners,
   copySkillFixture,
   importSkillFolder,
+  previewSkillFolder,
+  discardSkill,
+  saveSkill,
+  listSkills,
   findSkill,
   choosePartner,
   enableSkill
@@ -31,11 +35,37 @@ describe('workbench skills', () => {
         execute: async (runtime) => {
           await setupSkillPartners(runtime.page)
           const source = await copySkillFixture(runtime)
-          await importSkillFolder(runtime, source)
+          await previewSkillFolder(runtime, source)
+          const previewOnly = (await listSkills(runtime.page)).length === 0
+          await runtime.page
+            .getByTestId(selectors.resources)
+            .getByRole('button', { name: /附带文件/ })
+            .click()
+          await runtime.page.getByRole('button', { name: /rules.json/ }).click()
+          await runtime.page
+            .getByTestId(selectors.resourcePreview)
+            .locator('.ant-modal-content')
+            .waitFor({ state: 'visible' })
+          const resourcePreviewed = (
+            await runtime.page.getByTestId(selectors.resourcePreview).innerText()
+          ).includes('NC-SKILL-REPORT-314')
+          await runtime.page
+            .getByTestId(selectors.resourcePreview)
+            .getByRole('button', { name: /关\s*闭/, exact: true })
+            .last()
+            .click()
+          await discardSkill(runtime.page)
+          const stagingCleared = !(await fs.readdir(path.join(runtime.userDataDir, 'skills'))).some(
+            (name) => name.startsWith('.import-')
+          )
+          await previewSkillFolder(runtime, source)
+          await runtime.page.getByTestId(selectors.description).fill('在同一表单编辑导入的规范。')
+          await saveSkill(runtime.page)
           await runtime.page.waitForFunction(async () =>
             (await window.api.userSkillsList()).some((item) => item.name === 'weekly-report')
           )
           const original = await findSkill(runtime.page, 'weekly-report')
+          const importedDraftEdited = original.description === '在同一表单编辑导入的规范。'
           const partnerId = await choosePartner(runtime.page, '技能伙伴 A')
           await enableSkill(runtime.page, original.id, partnerId)
           const managed = path.join(runtime.userDataDir, 'skills', 'weekly-report')
@@ -46,7 +76,10 @@ describe('workbench skills', () => {
             .getByTestId(selectors.replace)
             .getByRole('button', { name: /取\s*消/ })
             .click()
-          await runtime.page.getByTestId(selectors.replace).waitFor({ state: 'hidden' })
+          await runtime.page
+            .getByTestId(selectors.replace)
+            .locator('.ant-modal-content')
+            .waitFor({ state: 'hidden' })
           const cancelPreserved =
             (await fs.readFile(path.join(managed, 'SKILL.md'), 'utf8')) === before
           await importSkillFolder(runtime, source)
@@ -54,7 +87,10 @@ describe('workbench skills', () => {
             .getByTestId(selectors.replace)
             .getByRole('button', { name: /替\s*换/ })
             .click()
-          await runtime.page.getByTestId(selectors.replace).waitFor({ state: 'hidden' })
+          await runtime.page
+            .getByTestId(selectors.replace)
+            .locator('.ant-modal-content')
+            .waitFor({ state: 'hidden' })
           await fs.rm(source, { recursive: true })
           const after = await findSkill(runtime.page, 'weekly-report')
           const binding = await runtime.page.evaluate(
@@ -65,6 +101,10 @@ describe('workbench skills', () => {
           const resource = await fs.readFile(path.join(managed, 'references', 'rules.json'), 'utf8')
           const mode = (await fs.stat(path.join(managed, 'scripts', 'check.sh'))).mode & 0o777
           return {
+            previewOnly,
+            resourcePreviewed,
+            importedDraftEdited,
+            stagingCleared,
             cancelPreserved,
             stableId: original.id === after.id,
             bound: binding.skillIds.includes(after.id),
@@ -75,7 +115,11 @@ describe('workbench skills', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.cancelPreserved &&
+            result.previewOnly &&
+              result.resourcePreviewed &&
+              result.importedDraftEdited &&
+              result.stagingCleared &&
+              result.cancelPreserved &&
               result.stableId &&
               result.bound &&
               result.content.includes('新增替换规范') &&

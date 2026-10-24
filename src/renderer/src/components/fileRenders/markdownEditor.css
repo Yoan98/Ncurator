@@ -38,12 +38,12 @@
 
 /* IR 模式标题前的 H1/H2/... 标签（Vditor 默认 ::before content:'H1'...'H6'）隐藏，
    标题回归 Vditor 默认排版，不加任何额外样式。 */
-.vditor .vditor-ir .vditor-reset > h1::before,
-.vditor .vditor-ir .vditor-reset > h2::before,
-.vditor .vditor-ir .vditor-reset > h3::before,
-.vditor .vditor-ir .vditor-reset > h4::before,
-.vditor .vditor-ir .vditor-reset > h5::before,
-.vditor .vditor-ir .vditor-reset > h6::before {
+.nc-markdown-reader .vditor-ir .vditor-reset > h1::before,
+.nc-markdown-reader .vditor-ir .vditor-reset > h2::before,
+.nc-markdown-reader .vditor-ir .vditor-reset > h3::before,
+.nc-markdown-reader .vditor-ir .vditor-reset > h4::before,
+.nc-markdown-reader .vditor-ir .vditor-reset > h5::before,
+.nc-markdown-reader .vditor-ir .vditor-reset > h6::before {
   content: none;
 }
 
@@ -87,13 +87,47 @@
   background: #f7f7f5;
 }
 
-.vditor .vditor-toolbar {
+.nc-markdown-reader .vditor-toolbar,
+.nc-markdown-author .vditor-toolbar:empty {
   display: none;
 }
 
 /* IR 模式下标题前的 `#`/`##` 标记（展开/聚焦标题时出现）常驻隐藏，
    仅隐藏标题标记，保留链接等其它源标记以支持行内编辑。 */
-.vditor .vditor-ir .vditor-ir__node .vditor-ir__marker--heading,
-.vditor .vditor-ir .vditor-ir__node--expand .vditor-ir__marker--heading {
+.nc-markdown-reader .vditor-ir .vditor-ir__node .vditor-ir__marker--heading,
+.nc-markdown-reader .vditor-ir .vditor-ir__node--expand .vditor-ir__marker--heading {
   display: none !important;
+}
+
+.nc-markdown-author.vditor .vditor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 4px 0 7px;
+  border-bottom: 1px solid #eeeeec;
+  box-shadow: none;
+}
+
+.nc-markdown-author .vditor-toolbar__item {
+  padding: 0 3px;
+}
+.nc-markdown-author .vditor-toolbar__item button {
+  height: 28px;
+  width: 28px;
+  color: #787774;
+}
+.nc-markdown-author .vditor-toolbar__item svg {
+  height: 15px;
+  width: 15px;
+}
+.nc-markdown-author .vditor-reset {
+  padding: 20px 4px 36px 30px;
+}
+.nc-markdown-author .vditor-ir h1::before,
+.nc-markdown-author .vditor-ir h2::before,
+.nc-markdown-author .vditor-ir h3::before,
+.nc-markdown-author .vditor-ir h4::before,
+.nc-markdown-author .vditor-ir h5::before,
+.nc-markdown-author .vditor-ir h6::before {
+  font-size: 11px;
+  color: #91918e;
 }

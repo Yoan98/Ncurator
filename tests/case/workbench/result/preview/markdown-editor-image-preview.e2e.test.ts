@@ -47,13 +47,13 @@ describe('workbench result e2e', () => {
         groups: ['preview'],
         description:
           'Markdown 相对路径本地图可显示并双击进入 ImageLightbox；失效图双击 toast 且不打开 Vditor 白底预览；磁盘源路径不被改写。',
-        fixtures: ['tests/fixtures/workspace'],
+        fixtures: [],
         serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
+          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID, 'empty')
           const mediaDir = path.join(workspace.rootPath, 'media')
           await fs.mkdir(mediaDir, { recursive: true })
           await fs.writeFile(path.join(mediaDir, 'preview-ok.png'), PNG_1X1)
@@ -77,7 +77,8 @@ describe('workbench result e2e', () => {
           const workspaceName = `Workbench ${CASE_ID}`
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName,
-            rootPath: workspace.rootPath
+            rootPath: workspace.rootPath,
+            prepareFiles: false
           })
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, workspaceName)
@@ -99,7 +100,9 @@ describe('workbench result e2e', () => {
               const img = document.querySelector(
                 '[data-testid="workbench-markdown-editor"] img[alt="ok"]'
               ) as HTMLImageElement | null
-              return Boolean(img && img.complete && img.naturalWidth > 0 && img.src.startsWith('blob:'))
+              return Boolean(
+                img && img.complete && img.naturalWidth > 0 && img.src.startsWith('blob:')
+              )
             },
             undefined,
             { timeout: 20_000 }

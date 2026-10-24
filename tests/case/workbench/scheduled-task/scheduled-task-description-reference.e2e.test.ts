@@ -1,4 +1,6 @@
 import { describe, it } from 'vitest'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import type { ChatMessage, PartnerListItem, ScheduledTask } from '../../../../src/shared/types'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
@@ -51,8 +53,7 @@ describe('workbench scheduled-task e2e', () => {
         groups: [],
         description:
           '验证通用 Composer 输入框中的行内 @ 引用可保存、回填并在立即执行时传给伙伴消息。',
-        fixtures: ['tests/fixtures/workspace'],
-        knowledge: 'cached',
+        fixtures: ['tests/fixtures/workspace/sample-edit.docx'],
         serviceMode: 'real',
         windowMode: 'visible',
         execution: 'live',
@@ -62,7 +63,14 @@ describe('workbench scheduled-task e2e', () => {
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
             workspaceName: `Workbench ${CASE_ID}`,
-            createPartner: false
+            createPartner: false,
+            workspaceContents: 'empty',
+            prepareWorkspace: async (rootPath) => {
+              await fs.copyFile(
+                path.resolve('tests/fixtures/workspace/sample-edit.docx'),
+                path.join(rootPath, 'sample-edit.docx')
+              )
+            }
           })
           await createPartnerThroughWorkbenchUi(page, PARTNER_NAME)
           await selectWorkbenchModel(page, setup.env.modelName)
@@ -73,6 +81,28 @@ describe('workbench scheduled-task e2e', () => {
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await selectScheduledTaskPartner(page, partner.id)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill(TASK_NAME)
+          const noReferenceButton =
+            (await page
+              .getByTestId(scheduledTaskSelectors.formDescription)
+              .getByRole('button', { name: /引用/ })
+              .count()) === 0
+          const windowHandle = await runtime.electronApp.browserWindow(page)
+          const originalBounds = await windowHandle.evaluate((window) => ({
+            size: window.getSize(),
+            minimum: window.getMinimumSize()
+          }))
+          await windowHandle.evaluate((window) => {
+            window.setMinimumSize(0, 0)
+            window.setSize(1400, 560)
+          })
+          await page.waitForFunction(() => window.innerHeight <= 560)
+          await page.getByTestId(scheduledTaskSelectors.formContent).evaluate((content) => {
+            const editor = content.querySelector(
+              '[data-testid="scheduled-task-form-description-input"]'
+            )!
+            content.scrollTop +=
+              editor.getBoundingClientRect().top - content.getBoundingClientRect().top - 12
+          })
           await setWorkbenchInput(page, '@', scheduledTaskSelectors.formDescriptionInput)
           const mentionPanelText = await waitForWorkbenchMentionPanelText(
             page,
@@ -94,12 +124,17 @@ describe('workbench scheduled-task e2e', () => {
             const editorRect = editor.getBoundingClientRect()
             const contentRect = content.getBoundingClientRect()
             return {
+              notEnoughAbove: panelRect.height > editorRect.top - contentRect.top,
               placement: panel.getAttribute('data-placement'),
               belowEditor: panelRect.top >= editorRect.bottom,
               insideContent:
                 panelRect.top >= contentRect.top && panelRect.bottom <= contentRect.bottom
             }
           })
+          await windowHandle.evaluate((window, bounds) => {
+            window.setSize(bounds.size[0], bounds.size[1])
+            window.setMinimumSize(bounds.minimum[0], bounds.minimum[1])
+          }, originalBounds)
           await setWorkbenchInput(page, '', scheduledTaskSelectors.formDescriptionInput)
           await setWorkbenchInput(
             page,
@@ -219,6 +254,7 @@ describe('workbench scheduled-task e2e', () => {
           )
 
           return {
+            noReferenceButton,
             mentionPanelText,
             mentionPanelPlacement,
             editorTokens,
@@ -236,7 +272,9 @@ describe('workbench scheduled-task e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.mentionPanelText.length > 0 &&
+            result.noReferenceButton &&
+              result.mentionPanelText.length > 0 &&
+              result.mentionPanelPlacement.notEnoughAbove &&
               result.mentionPanelPlacement.placement === 'below' &&
               result.mentionPanelPlacement.belowEditor &&
               result.mentionPanelPlacement.insideContent &&

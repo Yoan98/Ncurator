@@ -2,6 +2,8 @@ import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   selectors,
+  fillSkillContent,
+  readSkillContent,
   setupSkillPartners,
   createSkill,
   findSkill,
@@ -23,7 +25,7 @@ describe('workbench skills', () => {
         domain: 'workbench',
         suite: 'skills',
         groups: [],
-        description: '真实弹窗创建编辑与重命名保留伙伴绑定，取消、冲突、持久性与删除确认。',
+        description: '真实抽屉创建编辑与重命名保留伙伴绑定，取消、冲突、持久性与删除确认。',
         fixtures: [],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -44,7 +46,107 @@ describe('workbench skills', () => {
           const original = await findSkill(page, 'weekly-report')
           const partnerId = await choosePartner(page, '技能伙伴 A')
           await enableSkill(page, original.id, partnerId)
+          const toolbar = await page.getByTestId(selectors.topbar).evaluate((element) => ({
+            height: element.getBoundingClientRect().height,
+            drag: getComputedStyle(element).getPropertyValue('-webkit-app-region'),
+            buttons: element.querySelectorAll('button').length
+          }))
           await page.getByTestId(`${selectors.editPrefix}-${original.id}`).click()
+          await page.getByTestId(selectors.content).locator('.vditor-ir pre').waitFor()
+          await page.getByTestId(selectors.name).focus()
+          await page.waitForFunction(
+            (id) =>
+              getComputedStyle(document.querySelector(`[data-testid="${id}"]`)!)
+                .borderBottomColor === 'rgb(11, 107, 203)',
+            selectors.name
+          )
+          const documentStyle = await page.getByTestId(selectors.name).evaluate((input) => {
+            const style = getComputedStyle(input)
+            return {
+              fontSize: style.fontSize,
+              top: style.borderTopWidth,
+              left: style.borderLeftWidth,
+              bottom: style.borderBottomColor
+            }
+          })
+          const formatToolbar = await page
+            .getByTestId(selectors.content)
+            .locator('.vditor-toolbar')
+            .isVisible()
+          const noTabs =
+            (await page.getByTestId(selectors.editor).locator('.ant-segmented').count()) === 0
+          await fillSkillContent(page, '')
+          await page.keyboard.type('/')
+          const slashMenu = page
+            .getByTestId(selectors.content)
+            .locator('.vditor-content > .vditor-hint')
+          await slashMenu.waitFor({ state: 'visible' })
+          await slashMenu.locator('button').first().click()
+          await page.keyboard.type('Slash heading')
+          const slashWorked =
+            (await page.getByTestId(selectors.content).locator('.vditor-ir h1').count()) > 0
+          const noSourceSwitch =
+            (await page
+              .getByTestId(selectors.editor)
+              .getByRole('button', { name: '源码', exact: true })
+              .count()) === 0
+          const fieldLabels = await page
+            .getByTestId(selectors.editor)
+            .locator('.nc-configuration-field-label')
+            .evaluateAll((labels) =>
+              labels.map((label) => ({
+                text: label.textContent?.replace('*', '').trim(),
+                visible: label.getBoundingClientRect().height > 0,
+                font: getComputedStyle(label).fontSize,
+                color: getComputedStyle(label).color
+              }))
+            )
+          const drawer = page.locator('.nc-configuration-drawer .ant-drawer-content-wrapper')
+          await page.waitForFunction(() =>
+            (() => {
+              const rect = document
+                .querySelector('.nc-configuration-drawer .ant-drawer-content-wrapper')
+                ?.getBoundingClientRect()
+              return Boolean(
+                rect && rect.width === 720 && Math.abs(rect.right - window.innerWidth) < 1
+              )
+            })()
+          )
+          await runtime.captureScreenshot({
+            name: 'skill-editor',
+            message: 'skill 编辑抽屉与 Markdown 编辑区。'
+          })
+          const windowHandle = await runtime.electronApp.browserWindow(page)
+          const originalBounds = await windowHandle.evaluate((window) => ({
+            size: window.getSize(),
+            minimum: window.getMinimumSize()
+          }))
+          await windowHandle.evaluate((window) => {
+            window.setMinimumSize(0, 0)
+            window.setSize(680, 800)
+          })
+          await page.waitForFunction(() => window.innerWidth <= 760)
+          await page.waitForFunction(
+            () =>
+              Math.abs(
+                (document
+                  .querySelector('.nc-configuration-drawer .ant-drawer-content-wrapper')
+                  ?.getBoundingClientRect().width ?? 0) - window.innerWidth
+              ) < 1
+          )
+          const narrowLayout = await drawer.evaluate((element) => ({
+            width: element.getBoundingClientRect().width,
+            viewport: window.innerWidth,
+            overflow: element.scrollWidth > element.clientWidth
+          }))
+          await runtime.captureScreenshot({
+            name: 'skill-editor-narrow',
+            message: '窄窗口中的 skill 编辑抽屉。'
+          })
+          await windowHandle.evaluate((window, bounds) => {
+            window.setSize(bounds.size[0], bounds.size[1])
+            window.setMinimumSize(bounds.minimum[0], bounds.minimum[1])
+          }, originalBounds)
           await fillSkill(page, {
             name: 'reserved-name',
             description: '更新规范',
@@ -52,15 +154,17 @@ describe('workbench skills', () => {
           })
           await page
             .getByTestId(selectors.editor)
-            .locator('.ant-modal-footer .ant-btn-primary')
+            .locator('.nc-config-footer .ant-btn-primary')
             .click()
-          await page.locator('.ant-message-notice').filter({ hasText: '已存在同名技能' }).waitFor()
-          const failureKeptInput =
-            (await page.getByTestId(selectors.content).inputValue()) === '正文草稿'
+          await page
+            .locator('.ant-message-notice')
+            .filter({ hasText: '已存在同名 skill' })
+            .waitFor()
+          const failureKeptInput = (await readSkillContent(page)).includes('正文草稿')
           await fillSkill(page, {
             name: 'report-guide',
             description: '更新规范',
-            body: '# 更新规范\n风险注明影响。'
+            body: '# 更新规范\n\n- 风险注明影响。\n\n```text\n保留代码示例\n```\n'
           })
           await saveSkill(page)
           const renamed = await findSkill(page, 'report-guide')
@@ -69,7 +173,7 @@ describe('workbench skills', () => {
             partnerId
           )
           await page.getByTestId(`${selectors.editPrefix}-${renamed.id}`).click()
-          await page.getByTestId(selectors.content).fill('未保存正文')
+          await fillSkillContent(page, '未保存正文')
           await page.keyboard.press('Escape')
           await page.getByRole('button', { name: '放弃修改', exact: true }).click()
           await page.getByTestId(selectors.editor).waitFor({ state: 'hidden' })
@@ -95,6 +199,14 @@ describe('workbench skills', () => {
             persisted.id
           )
           return {
+            toolbar,
+            documentStyle,
+            formatToolbar,
+            noTabs,
+            slashWorked,
+            noSourceSwitch,
+            fieldLabels,
+            narrowLayout,
             failureKeptInput,
             stableId: original.id === renamed.id && renamed.id === persisted.id,
             bindingKept: binding.skillIds.includes(original.id),
@@ -104,10 +216,33 @@ describe('workbench skills', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.failureKeptInput &&
+            result.toolbar.height === 44 &&
+              result.toolbar.drag === 'drag' &&
+              result.toolbar.buttons === 1 &&
+              result.documentStyle.fontSize === '25px' &&
+              result.documentStyle.top === '0px' &&
+              result.documentStyle.left === '0px' &&
+              result.formatToolbar &&
+              result.noTabs &&
+              result.slashWorked &&
+              result.noSourceSwitch &&
+              ['名称', '描述', '内容'].every((text) =>
+                result.fieldLabels.some(
+                  (label) =>
+                    label.text === text &&
+                    label.visible &&
+                    label.font === '13px' &&
+                    label.color === 'rgb(55, 53, 47)'
+                )
+              ) &&
+              Math.abs(result.narrowLayout.width - result.narrowLayout.viewport) < 1 &&
+              !result.narrowLayout.overflow &&
+              result.failureKeptInput &&
               result.stableId &&
               result.bindingKept &&
-              result.savedBody.includes('风险注明影响') &&
+              result.savedBody.includes('# 更新规范') &&
+              result.savedBody.includes('- 风险注明影响') &&
+              result.savedBody.includes('```text') &&
               !result.savedBody.includes('未保存') &&
               result.cancelledDeletion,
             {

@@ -9,7 +9,8 @@ import {
   openScheduledTasksView,
   scheduledTaskSelectors,
   setupWorkbenchWithTempWorkspace,
-  workbenchSelectors
+  workbenchSelectors,
+  waitForScheduledTaskDrawerClosed
 } from '../../../harness/e2e/workbench'
 
 const approxCssPx = (value: string, expected: number, tolerance = 1): boolean => {
@@ -55,6 +56,49 @@ describe('workbench scheduled-task e2e', () => {
           ).isDisabled()
           await page.locator('.ant-modal .ant-btn-default').click()
           await createPartnerThroughWorkbenchUi(page, TARGET_PARTNER_NAME)
+          await openScheduledTasksView(page)
+          const toolbarButtons = await Promise.all(
+            [scheduledTaskSelectors.addButton, scheduledTaskSelectors.aiAddButton].map((id) =>
+              page.getByTestId(id).evaluate((element) => ({
+                height: element.getBoundingClientRect().height,
+                fontSize: getComputedStyle(element).fontSize
+              }))
+            )
+          )
+          const listHasNoExtraSpace = async (id: string): Promise<boolean> =>
+            page.getByTestId(id).evaluate((element) => {
+              const row = element.querySelector<HTMLElement>('button')
+              const style = getComputedStyle(element)
+              return Boolean(
+                row &&
+                Math.abs(
+                  element.clientHeight -
+                    row.offsetHeight -
+                    parseFloat(style.paddingTop) -
+                    parseFloat(style.paddingBottom)
+                ) <= 1
+              )
+            })
+          await page.getByTestId(scheduledTaskSelectors.addButton).click()
+          const manualListCompact = await listHasNoExtraSpace(scheduledTaskSelectors.formPartner)
+          const footerHeight = await page
+            .getByTestId(scheduledTaskSelectors.formSave)
+            .evaluate((element) => (element as HTMLButtonElement).offsetHeight)
+          await page.getByTestId(scheduledTaskSelectors.formCancel).click()
+          await waitForScheduledTaskDrawerClosed(page)
+          await page.getByTestId(scheduledTaskSelectors.aiAddButton).click()
+          const aiListCompact = await listHasNoExtraSpace(scheduledTaskSelectors.aiPartner)
+          const aiFooterHeight = await page
+            .getByTestId(scheduledTaskSelectors.aiConfirm)
+            .evaluate((element) => (element as HTMLButtonElement).offsetHeight)
+          await page.waitForFunction(
+            () => !document.querySelector('.ant-zoom-appear-active, .ant-zoom-enter-active')
+          )
+          await runtime.captureScreenshot({
+            name: 'scheduled-task-one-partner',
+            message: '定时任务单伙伴选择列表与按钮尺寸。'
+          })
+          await page.locator('.ant-modal .ant-btn-default').click()
           await createPartnerThroughWorkbenchUi(page, '草稿切换伙伴')
           for (let index = 0; index < 8; index += 1) {
             await createPartnerThroughWorkbenchUi(page, `AI 列表滚动伙伴${index + 1}`)
@@ -79,7 +123,9 @@ describe('workbench scheduled-task e2e', () => {
               ...element.querySelectorAll('button[data-testid]')
             ].filter((option) => {
               const optionRect = option.getBoundingClientRect()
-              return optionRect.top >= listRect.top + 1 && optionRect.bottom <= listRect.bottom - 1
+              return (
+                optionRect.top >= listRect.top - 0.5 && optionRect.bottom <= listRect.bottom + 0.5
+              )
             }).length
             return {
               maxHeight: style.maxHeight,
@@ -142,6 +188,11 @@ describe('workbench scheduled-task e2e', () => {
           const draftPersisted = await readVisibleDraft()
 
           return {
+            toolbarButtons,
+            manualListCompact,
+            aiListCompact,
+            footerHeight,
+            aiFooterHeight,
             emptyPartnerStateVisible,
             emptyPartnerConfirmDisabled,
             partnerListScroll,
@@ -157,7 +208,14 @@ describe('workbench scheduled-task e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.emptyPartnerStateVisible &&
+            result.toolbarButtons.every(
+              (button) => button.height === 28 && button.fontSize === '12px'
+            ) &&
+              result.manualListCompact &&
+              result.aiListCompact &&
+              result.footerHeight === 32 &&
+              result.aiFooterHeight === 32 &&
+              result.emptyPartnerStateVisible &&
               result.emptyPartnerConfirmDisabled &&
               approxCssPx(result.partnerListScroll.maxHeight, 208) &&
               result.partnerListScroll.overflowY === 'auto' &&

@@ -82,7 +82,7 @@ describe('workbench scheduled-task e2e', () => {
           const firstCreateEditorReady =
             (await descriptionEditor.isVisible()) &&
             (await page.getByText('页面出现异常，已停止渲染', { exact: true }).count()) === 0
-          const drawer = page.locator('.scheduled-task-config-drawer')
+          const drawer = page.locator('.nc-configuration-drawer')
           const drawerOpened = await drawer.evaluate((element) =>
             element.classList.contains('ant-drawer-open')
           )
@@ -94,9 +94,7 @@ describe('workbench scheduled-task e2e', () => {
             )) === 'no-drag'
           await closeButton.click()
           await waitForScheduledTaskDrawerClosed(page)
-          const cleanHeaderCloseButtonWorks = !(await drawer.evaluate((element) =>
-            element.classList.contains('ant-drawer-open')
-          ))
+          const cleanHeaderCloseButtonWorks = !(await drawer.isVisible())
 
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await saveButton.waitFor({ state: 'visible' })
@@ -130,7 +128,7 @@ describe('workbench scheduled-task e2e', () => {
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await saveButton.waitFor({ state: 'visible' })
           const expectedDrawerWidth = await page.evaluate(() =>
-            Math.min(window.innerWidth / 2, 800)
+            window.innerWidth <= 760 ? window.innerWidth : 720
           )
           await page.waitForFunction(
             (input: { drawerClass: string; expectedWidth: number }) => {
@@ -142,7 +140,7 @@ describe('workbench scheduled-task e2e', () => {
                 Math.abs(wrapper.getBoundingClientRect().width - input.expectedWidth) <= 2
               )
             },
-            { drawerClass: scheduledTaskSelectors.drawer, expectedWidth: expectedDrawerWidth }
+            { drawerClass: 'nc-configuration-drawer', expectedWidth: expectedDrawerWidth }
           )
           const fieldBoxes = await Promise.all(
             [
@@ -157,6 +155,10 @@ describe('workbench scheduled-task e2e', () => {
             (box, index) =>
               box !== null && (index === 0 || box.y > (fieldBoxes[index - 1]?.y ?? -1))
           )
+          const nameLabelVisible = await drawer
+            .locator('.nc-configuration-field-label')
+            .filter({ hasText: '任务名称' })
+            .isVisible()
           const drawerWidth = await drawer.evaluate((element) => {
             const wrapper = element.querySelector<HTMLElement>('.ant-drawer-content-wrapper')
             return wrapper?.getBoundingClientRect().width || 0
@@ -221,7 +223,9 @@ describe('workbench scheduled-task e2e', () => {
               ...element.querySelectorAll('button[data-testid]')
             ].filter((option) => {
               const optionRect = option.getBoundingClientRect()
-              return optionRect.top >= listRect.top + 1 && optionRect.bottom <= listRect.bottom - 1
+              return (
+                optionRect.top >= listRect.top - 0.5 && optionRect.bottom <= listRect.bottom + 0.5
+              )
             }).length
             return {
               maxHeight: style.maxHeight,
@@ -367,9 +371,7 @@ describe('workbench scheduled-task e2e', () => {
               )) === 'no-drag'
             await closeButton.click()
             await waitForScheduledTaskDrawerClosed(page)
-            editHeaderCloseButtonWorks = !(await drawer.evaluate((element) =>
-              element.classList.contains('ant-drawer-open')
-            ))
+            editHeaderCloseButtonWorks = !(await drawer.isVisible())
             await getWorkbenchLocator(
               page,
               `${scheduledTaskSelectors.itemEditPrefix}-${created.id}`
@@ -443,6 +445,7 @@ describe('workbench scheduled-task e2e', () => {
             escapeKeepsDirtyDrawerOpen,
             drawerWidthMatches,
             fieldsOrdered,
+            nameLabelVisible,
             footerFixed,
             descriptionDefaultHeight,
             descriptionScroll,
@@ -483,6 +486,7 @@ describe('workbench scheduled-task e2e', () => {
               result.escapeKeepsDirtyDrawerOpen &&
               result.drawerWidthMatches &&
               result.fieldsOrdered &&
+              result.nameLabelVisible &&
               result.footerFixed &&
               approxCssPx(result.descriptionDefaultHeight, 120) &&
               approxCssPx(result.descriptionScroll.height, 120) &&

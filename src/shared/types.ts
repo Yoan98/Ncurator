@@ -762,6 +762,7 @@ export interface PartnerListItem extends Partner {
 }
 
 export type PartnerCreateRequest = {
+  skillIds: string[]
   name: string
   avatar_shape: PartnerAvatarShape
   avatar_color: PartnerAvatarColor
@@ -774,6 +775,7 @@ export type PartnerCreateResponse = {
 }
 
 export type PartnerUpdateRequest = {
+  skillIds: string[]
   id: string
   name: string
   avatar_shape: PartnerAvatarShape

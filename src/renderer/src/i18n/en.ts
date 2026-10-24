@@ -1,22 +1,30 @@
 export const en = {
   userSkills: {
+    importConfirm: 'Import',
+    selectionSummary: '{{count}} selected',
+    selectionHelp: 'Configure the skills available to this partner.',
+    totalPercent: 'Selected content uses {{percent}}% of the total allowance',
+    itemPercent: '{{percent}}% of the partner’s total allowance',
+    budgetTitle: 'Partner skill instruction capacity',
+    budgetHelp: 'Used {{used}} KB / Maximum 64 KB',
+    nearBudget: 'You have selected a lot of content. Keep only the skills this partner needs.',
+    incompleteUsage:
+      'Some selected files are unavailable, so usage is incomplete. Deselect them before saving.',
+    search: 'Search skills',
+    noOptions: 'No skills yet. Create or import a skill to select it here.',
+    noSearchResults: 'No matching skills.',
+    unavailableOption: 'File unavailable. Deselect it to remove the binding.',
+
     nameConflict: 'A skill with this name already exists. Choose another name.',
     invalidName:
       'Use 1–64 lowercase letters, digits or single hyphens, excluding reserved filenames.',
     invalidDescription: 'When to use is required and must be at most 1024 characters.',
     emptyBody: 'Instructions cannot be empty.',
-    fileTooLarge: 'The complete SKILL.md exceeds 32 KiB. Shorten the instructions.',
-    overBudget: 'Enabled instructions exceed 64 KiB. Select fewer skills.',
+    overBudget: 'Selected skill content is too long. Deselect some skills before saving.',
     affectedPartners:
-      'Saving would exceed 64 KiB for: {{names}}. Adjust their enabled skills first.',
+      'Saving would exceed the skill allowance for: {{names}}. Select fewer skills for these partners first.',
     importExpired: 'This import is no longer valid. Select the folder again.',
-    title: 'Skills',
-    description: 'Manage reusable instructions and choose skills for each partner.',
-    safety:
-      'Import copies the complete folder. Scripts do not run automatically. New skills must be enabled for each partner.',
-    partner: 'Enable for partner',
-    choosePartner: 'Choose a partner',
-    import: 'Import folder',
+    title: 'skill',
     create: 'Create skill',
     edit: 'Edit skill',
     editTitle: 'Edit {{name}}',
@@ -25,19 +33,20 @@ export const en = {
     deleteTitle: 'Delete {{name}}?',
     deleteDescription:
       'Deletes the app copy and all partner bindings. The original folder is unaffected.',
-    empty: 'Import a folder or create instructions to get started.',
-    contentHelp:
-      'Use lowercase letters, numbers and single hyphens for the name. Markdown is supported. The app manages YAML; the complete SKILL.md must fit within 32 KiB.',
-    discardTitle: 'Discard your changes?',
-    discard: 'Discard',
-    enable: 'Enable {{name}} for the selected partner',
-    bindingFailed: 'Could not load partner skills. Refresh to retry.',
-    loadFailed: 'Could not load skills. Refresh to retry.',
+    empty: 'Create your first skill.',
+    namePlaceholder: 'Skill name, e.g. weekly-report',
+    descriptionPlaceholder: 'What this skill does and when to use it',
+    contentPlaceholder:
+      'Write steps, rules and examples. Markdown is supported. Type / to insert headings, lists or code blocks.',
+    resources: 'Supporting files · {{count}}',
+    openFolder: 'Open folder',
+    previewUnavailable: 'Preview is unavailable for this file. Open its folder to view it.',
+    importDraftTitle: 'Replace the current draft?',
+    importDraftDescription:
+      'Import replaces the current content and supporting files. Changes take effect when saved.',
     name: 'Name',
-    whenToUse: 'When to use',
-    body: 'Instructions',
-    budget: 'Enabled instructions {{used}} / {{limit}} KiB',
-    unavailable: 'Unavailable skill files; edit, replace or disable: {{names}}',
+    descriptionLabel: 'Description',
+    body: 'Content',
     replaceTitle: 'Replace {{name}}?',
     replace: 'Replace',
     replaceDescription:
@@ -80,6 +89,8 @@ export const en = {
     loadFailed: 'Could not load settings'
   },
   common: {
+    discardTitle: 'Discard your changes?',
+    discard: 'Discard',
     starting: 'Starting',
     anErrorOccurredRenderingHasStopped: 'An error occurred. Rendering has stopped.',
     retry: 'Retry',

@@ -1,5 +1,6 @@
 import { t, getRendererRuntime } from '../../i18n'
 import FileIcon from '../FileIcon'
+import UsageRing from '../UsageRing'
 import React, {
   useCallback,
   useContext,
@@ -850,11 +851,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     0,
     Math.min(100, Math.round((contextUsage?.ratio || 0) * 100))
   )
-  const contextUsageVisiblePercent = contextUsage
-    ? Math.max(contextUsage.usedContextTokens > 0 ? 1 : 0, contextUsagePercent)
-    : 0
-  const contextUsageStroke =
-    contextUsagePercent >= 90 ? '#B3261E' : contextUsagePercent >= 70 ? '#B26A00' : '#787774'
   const contextUsageTitle = contextUsage
     ? t(($) => $.workbench.used, { value1: contextUsagePercent })
     : t(($) => $.workbench.contextUsageUnavailable)
@@ -1175,37 +1171,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
 
           <div className="flex min-w-0 items-center gap-2">
-            <Tooltip title={contextUsageTooltip}>
-              <div
-                className="workbench-context-ring relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-                aria-label={contextUsageTitle}
-                data-testid={workbenchSelectors.contextRing}
-              >
-                <svg className="h-4 w-4 -rotate-90" viewBox="0 0 16 16">
-                  <circle
-                    className="workbench-context-ring-track"
-                    cx="8"
-                    cy="8"
-                    r="6.5"
-                    fill="none"
-                    stroke="#E8E7E4"
-                    strokeWidth="1.5"
-                  />
-                  <circle
-                    className="workbench-context-ring-progress"
-                    cx="8"
-                    cy="8"
-                    r="6.5"
-                    fill="none"
-                    stroke={contextUsageStroke}
-                    strokeWidth="1.5"
-                    strokeDasharray={`${2 * Math.PI * 6.5}`}
-                    strokeDashoffset={`${2 * Math.PI * 6.5 * (1 - contextUsageVisiblePercent / 100)}`}
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </div>
-            </Tooltip>
+            <UsageRing
+              ratio={contextUsage?.ratio ?? null}
+              label={contextUsageTitle}
+              tooltip={contextUsageTooltip}
+              testId={workbenchSelectors.contextRing}
+            />
 
             <WorkbenchModelSelector
               configs={modelConfigs}

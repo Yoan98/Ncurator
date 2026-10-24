@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
+import { workbenchSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   selectors,
@@ -11,7 +12,8 @@ import {
   enableSkill,
   fillSkill,
   copySkillFixture,
-  importSkillFolder
+  importSkillFolder,
+  discardSkill
 } from '../../../harness/e2e/userSkills'
 
 const CASE_ID = 'user-skill-partner-budget'
@@ -34,10 +36,12 @@ describe('workbench skills', () => {
           const { page } = runtime
           await setupSkillPartners(page)
           for (const [name, size] of [
-            ['weekly-report', 28],
-            ['second', 28],
+            ['weekly-report', 40],
+            ['second', 16],
             ['small', 6],
-            ['excess', 12]
+            ['excess', 12],
+            ['search-alpha', 1],
+            ['search-beta', 1]
           ] as const)
             await createSkill(page, {
               name,
@@ -49,11 +53,52 @@ describe('workbench skills', () => {
             small = await findSkill(page, 'small'),
             excess = await findSkill(page, 'excess')
           const a = await choosePartner(page, '技能伙伴 A')
+          const search = page.getByPlaceholder('搜索 skill', { exact: true })
+          await search.fill('search-alpha')
+          const searchWorks =
+            (await page
+              .getByTestId(selectors.partner)
+              .locator('[data-testid^="' + selectors.togglePrefix + '-"]')
+              .count()) === 1
+          await search.clear()
           for (const skill of [main, second, small]) await enableSkill(page, skill.id, a)
-          await page.getByTestId(`${selectors.togglePrefix}-${excess.id}`).click()
-          await page.locator('.ant-message-notice').filter({ hasText: '64 KiB' }).waitFor()
+          await choosePartner(page, '技能伙伴 A')
+          const ring = page.getByTestId(selectors.budgetRing)
+          const usageShown =
+            (await ring.getAttribute('aria-label'))?.includes('96.9%') &&
+            (await ring.innerText()) === '' &&
+            (await ring.locator('svg circle').count()) === 2
+          const longContentStored =
+            (await page.evaluate((id) => window.api.userSkillsGet(id), main.id)).body.length >
+            32 * 1024
+          const itemShareShown =
+            (await page.getByTestId(`${selectors.percentPrefix}-${main.id}`).innerText()) ===
+            '62.5%'
+          await ring.hover()
+          const tooltip = page.getByRole('tooltip')
+          await tooltip.waitFor({ state: 'visible' })
+          const budgetHelp = await tooltip.innerText()
+          const budgetHelpShown =
+            budgetHelp.includes('伙伴 skill 正文容量') &&
+            budgetHelp.includes('已用 62.0 KB / 最大 64 KB') &&
+            !budgetHelp.includes('32 KB')
+          await page
+            .getByTestId(`${selectors.togglePrefix}-${excess.id}`)
+            .getByRole('checkbox')
+            .check()
+          await page.getByTestId(workbenchSelectors.createPartnerNameInput).fill('超限修改不应保存')
+          await page
+            .getByTestId(workbenchSelectors.createPartnerModal)
+            .locator('.nc-config-footer .ant-btn-primary')
+            .click()
+          await page.locator('.ant-message-notice').filter({ hasText: '请取消部分选择' }).waitFor()
           const selected = await page.evaluate((id) => window.api.userSkillsGetEnabled(id), a)
-          const usageShown = (await page.getByTestId(selectors.budget).innerText()).includes('62.0')
+          const oldNamePreserved = await page.evaluate(
+            async (id) =>
+              (await window.api.partnerList()).find((item) => item.id === id)?.name ===
+              '技能伙伴 A',
+            a
+          )
           const b = await choosePartner(page, '技能伙伴 B')
           const isolated =
             (await page.evaluate((id) => window.api.userSkillsGetEnabled(id), b)).skillIds
@@ -63,11 +108,11 @@ describe('workbench skills', () => {
           await fillSkill(page, {
             name: 'weekly-report',
             description: '预算规范',
-            body: 'y'.repeat(31 * 1024)
+            body: 'y'.repeat(43 * 1024)
           })
           await page
             .getByTestId(selectors.editor)
-            .locator('.ant-modal-footer .ant-btn-primary')
+            .locator('.nc-config-footer .ant-btn-primary')
             .click()
           await page.locator('.ant-message-notice').filter({ hasText: '技能伙伴 A' }).waitFor()
           const affectedNotice = await page
@@ -76,15 +121,16 @@ describe('workbench skills', () => {
             .last()
             .innerText()
           const allPartnersReported = affectedNotice.includes('技能伙伴 B')
-          const editKept =
-            (await page.evaluate((id) => window.api.userSkillsGet(id), main.id)).body.length ===
-            28 * 1024
+          const editKept = (
+            await page.evaluate((id) => window.api.userSkillsGet(id), main.id)
+          ).body.startsWith('x'.repeat(40 * 1024))
           await page.keyboard.press('Escape')
           await page.getByRole('button', { name: '放弃修改', exact: true }).click()
+          await page.getByTestId(selectors.editor).waitFor({ state: 'hidden' })
           const source = await copySkillFixture(runtime)
           await fs.writeFile(
             path.join(source, 'SKILL.md'),
-            `---\nname: weekly-report\ndescription: replacement\n---\n${'z'.repeat(31 * 1024)}`
+            `---\nname: weekly-report\ndescription: replacement\n---\n${'z'.repeat(43 * 1024)}`
           )
           await importSkillFolder(runtime, source)
           await page
@@ -96,19 +142,25 @@ describe('workbench skills', () => {
             .filter({ hasText: '技能伙伴 A' })
             .last()
             .waitFor()
-          const replaceKept =
-            (await page.evaluate((id) => window.api.userSkillsGet(id), main.id)).body.length ===
-            28 * 1024
+          const replaceKept = (
+            await page.evaluate((id) => window.api.userSkillsGet(id), main.id)
+          ).body.startsWith('x'.repeat(40 * 1024))
           await page
             .getByTestId(selectors.replace)
             .getByRole('button', { name: /取\s*消/ })
             .click()
+          await discardSkill(page)
           await choosePartner(page, '技能伙伴 A')
           await enableSkill(page, second.id, a, false)
           return {
+            searchWorks,
             isolated,
+            oldNamePreserved,
             allPartnersReported,
             usageShown,
+            longContentStored,
+            itemShareShown,
+            budgetHelpShown,
             editKept,
             replaceKept,
             excessRejected: !selected.skillIds.includes(excess.id)

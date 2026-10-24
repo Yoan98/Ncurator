@@ -70,7 +70,7 @@ describe('ai human user skill live', () => {
           )
           const skills = SKILL_NAMES.map((name) => {
             const preview = service.prepareImport(path.join(runtime.workspaceRoot, 'skills', name))
-            return service.commitImport({ token: preview.token, replaceExisting: false })
+            return service.commitImport({ ...preview, replaceId: null })
           })
           service.setEnabled(
             partnerId,

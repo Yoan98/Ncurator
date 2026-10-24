@@ -1,10 +1,8 @@
 import { t } from '../../i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
 import {
   App as AntdApp,
   Button,
-  Drawer,
   Empty,
   Input,
   Modal,
@@ -32,6 +30,9 @@ import type {
 import { scheduledTaskSelectors } from '../../testing/selectors'
 import ScheduledTaskCountChip from './ScheduledTaskCountChip'
 import PartnerAvatar from '../workbench/PartnerAvatar'
+import ConfigurationDrawer from '../workbench/ConfigurationDrawer'
+import ConfigurationFieldLabel from '../workbench/ConfigurationFieldLabel'
+import ViewToolbar from '../workbench/ViewToolbar'
 import ComposerInputEditor from '../workbench/composer/ComposerInputEditor'
 
 const WEEKDAY_OPTIONS = [
@@ -97,15 +98,6 @@ const scheduleLabel = (task: ScheduledTask): string => {
 const countEnabledTasks = (tasks: ScheduledTask[]): number =>
   tasks.reduce((count, task) => count + (task.enabled ? 1 : 0), 0)
 
-const RequiredFieldLabel = ({ children }: { children: string }) => (
-  <span className="text-[13px] text-[#37352F]">
-    <span className="mr-1 text-[#ff4d4f]" aria-hidden>
-      *
-    </span>
-    {children}
-  </span>
-)
-
 const PartnerOptionList = ({
   partners,
   value,
@@ -117,10 +109,7 @@ const PartnerOptionList = ({
   onChange: (partnerId: string) => void
   dataTestId: string
 }) => (
-  <div
-    className="max-h-[208px] min-h-[72px] overflow-y-auto rounded-[8px] border border-[#E5E4E0] bg-white p-1"
-    data-testid={dataTestId}
-  >
+  <div className="max-h-[208px] overflow-y-auto bg-white" data-testid={dataTestId}>
     {partners.length === 0 ? (
       <div className="flex h-[72px] items-center justify-center text-[13px] text-[#91918E]">
         {t(($) => $.common.noPartnersYet)}
@@ -389,45 +378,41 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid={scheduledTaskSelectors.view}>
-      <div
-        className="flex h-[44px] shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4"
-        style={{ WebkitAppRegion: 'drag' } as CSSProperties}
-      >
-        <div className="flex items-center gap-2">
+      <ViewToolbar
+        title={t(($) => $.common.scheduledTasks)}
+        icon={
           <HiOutlineClock
             className={`h-4 w-4 ${enabledCount > 0 ? 'text-[#2F5F8F]' : 'text-[#787774]'}`}
           />
-          <span className="text-[13px] font-medium text-[#37352F]">
-            {t(($) => $.common.scheduledTasks)}
-          </span>
+        }
+        badge={
           <ScheduledTaskCountChip
             enabledCount={enabledCount}
             dataTestId={scheduledTaskSelectors.countChip}
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="default"
-            size="small"
-            icon={<HiOutlinePlus />}
-            onClick={openCreate}
-            data-testid={scheduledTaskSelectors.addButton}
-          >
-            {t(($) => $.scheduledTasks.createManually)}
-          </Button>
-          <Button
-            type="primary"
-            size="small"
-            data-testid={scheduledTaskSelectors.aiAddButton}
-            onClick={() => {
-              setAiPartnerId(partners[0]?.id || '')
-              setAiCreateOpen(true)
-            }}
-          >
-            {t(($) => $.scheduledTasks.createWithAi)}
-          </Button>
-        </div>
-      </div>
+        }
+      >
+        <Button
+          type="default"
+          size="small"
+          icon={<HiOutlinePlus />}
+          onClick={openCreate}
+          data-testid={scheduledTaskSelectors.addButton}
+        >
+          {t(($) => $.scheduledTasks.createManually)}
+        </Button>
+        <Button
+          type="primary"
+          size="small"
+          data-testid={scheduledTaskSelectors.aiAddButton}
+          onClick={() => {
+            setAiPartnerId(partners[0]?.id || '')
+            setAiCreateOpen(true)
+          }}
+        >
+          {t(($) => $.scheduledTasks.createWithAi)}
+        </Button>
+      </ViewToolbar>
 
       <div className="flex min-h-0 flex-1 flex-col">
         {loading ? (
@@ -502,148 +487,131 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
         )}
       </div>
 
-      <Drawer
+      <ConfigurationDrawer
         open={formOpen}
         title={
           form.id
             ? t(($) => $.scheduledTasks.editScheduledTask)
             : t(($) => $.scheduledTasks.newScheduledTask)
         }
-        placement="right"
-        width="min(50vw, 800px)"
-        closable
-        maskClosable={false}
+        width={720}
+        busy={saving}
         onClose={requestCloseForm}
-        rootClassName="scheduled-task-config-drawer"
-        styles={{ body: { padding: 0 } }}
+        onSave={() => void handleSave()}
+        bodyTestId={scheduledTaskSelectors.formContent}
+        footerTestId={scheduledTaskSelectors.formFooter}
+        saveTestId={scheduledTaskSelectors.formSave}
+        cancelTestId={scheduledTaskSelectors.formCancel}
       >
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="space-y-5">
+          <label className="flex flex-col gap-1.5">
+            <ConfigurationFieldLabel required>
+              {t(($) => $.scheduledTasks.taskName)}
+            </ConfigurationFieldLabel>
+            <Input
+              className="nc-document-title"
+              aria-label={t(($) => $.scheduledTasks.taskName)}
+              value={form.name}
+              placeholder={t(($) => $.scheduledTasks.forExampleDailyBriefing)}
+              data-testid={scheduledTaskSelectors.formName}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            />
+          </label>
+
           <div
-            className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5"
-            data-testid={scheduledTaskSelectors.formContent}
+            className="flex flex-col gap-1.5"
+            data-testid={scheduledTaskSelectors.formDescription}
           >
-            <label className="flex flex-col gap-1.5">
-              <RequiredFieldLabel>{t(($) => $.scheduledTasks.taskName)}</RequiredFieldLabel>
-              <Input
-                value={form.name}
-                placeholder={t(($) => $.scheduledTasks.forExampleDailyBriefing)}
-                data-testid={scheduledTaskSelectors.formName}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, name: event.target.value }))
+            <ConfigurationFieldLabel required>
+              {t(($) => $.scheduledTasks.taskDescription)}
+            </ConfigurationFieldLabel>
+            <ComposerInputEditor
+              value={{
+                input: form.description,
+                contentNodes: form.contentNodes,
+                selectedReferences: form.selectedReferences
+              }}
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  description: value.input,
+                  contentNodes: value.contentNodes,
+                  selectedReferences: value.selectedReferences
+                }))
+              }
+              placeholder={t(($) => $.scheduledTasks.describeWhatThePartnerShouldDoUseToReference)}
+              dataTestId={scheduledTaskSelectors.formDescriptionInput}
+              editorClassName="nc-document-editor h-[120px] overflow-y-auto"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <ConfigurationFieldLabel required>{t(($) => $.common.partner)}</ConfigurationFieldLabel>
+            <PartnerOptionList
+              partners={partners}
+              value={form.partnerId}
+              dataTestId={scheduledTaskSelectors.formPartner}
+              onChange={(partnerId) => setForm((current) => ({ ...current, partnerId }))}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <ConfigurationFieldLabel required>
+              {t(($) => $.scheduledTasks.schedule)}
+            </ConfigurationFieldLabel>
+            <Segmented
+              value={form.scheduleType}
+              options={SCHEDULE_TYPE_OPTIONS}
+              data-testid={scheduledTaskSelectors.formScheduleType}
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  scheduleType: value as ScheduledTaskScheduleType
+                }))
+              }
+            />
+            {form.scheduleType === 'weekly' ? (
+              <Select
+                value={form.weekday ?? undefined}
+                className="w-full"
+                placeholder={t(($) => $.scheduledTasks.selectWeekday)}
+                options={WEEKDAY_OPTIONS}
+                data-testid={scheduledTaskSelectors.formWeekday}
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, weekday: normalizeWeekday(value) }))
                 }
               />
-            </label>
+            ) : null}
+          </div>
 
-            <div
-              className="flex flex-col gap-1.5"
-              data-testid={scheduledTaskSelectors.formDescription}
-            >
-              <RequiredFieldLabel>{t(($) => $.scheduledTasks.taskDescription)}</RequiredFieldLabel>
-              <ComposerInputEditor
-                value={{
-                  input: form.description,
-                  contentNodes: form.contentNodes,
-                  selectedReferences: form.selectedReferences
-                }}
-                onChange={(value) =>
+          <label className="flex flex-col gap-2">
+            <ConfigurationFieldLabel required>
+              {t(($) => $.scheduledTasks.executionTime)}
+            </ConfigurationFieldLabel>
+            <span data-testid={scheduledTaskSelectors.formTime}>
+              <TimePicker
+                className="w-full"
+                format="HH:mm"
+                value={dayjs(form.timeOfDay, 'HH:mm')}
+                allowClear={false}
+                minuteStep={1}
+                onChange={(time) =>
                   setForm((current) => ({
                     ...current,
-                    description: value.input,
-                    contentNodes: value.contentNodes,
-                    selectedReferences: value.selectedReferences
-                  }))
-                }
-                placeholder={t(
-                  ($) => $.scheduledTasks.describeWhatThePartnerShouldDoUseToReference
-                )}
-                dataTestId={scheduledTaskSelectors.formDescriptionInput}
-                editorClassName="h-[120px] overflow-y-auto"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <RequiredFieldLabel>{t(($) => $.common.partner)}</RequiredFieldLabel>
-              <PartnerOptionList
-                partners={partners}
-                value={form.partnerId}
-                dataTestId={scheduledTaskSelectors.formPartner}
-                onChange={(partnerId) => setForm((current) => ({ ...current, partnerId }))}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <RequiredFieldLabel>{t(($) => $.scheduledTasks.schedule)}</RequiredFieldLabel>
-              <Segmented
-                value={form.scheduleType}
-                options={SCHEDULE_TYPE_OPTIONS}
-                data-testid={scheduledTaskSelectors.formScheduleType}
-                onChange={(value) =>
-                  setForm((current) => ({
-                    ...current,
-                    scheduleType: value as ScheduledTaskScheduleType
+                    timeOfDay: time ? time.format('HH:mm') : ''
                   }))
                 }
               />
-              {form.scheduleType === 'weekly' ? (
-                <Select
-                  value={form.weekday ?? undefined}
-                  className="w-full"
-                  placeholder={t(($) => $.scheduledTasks.selectWeekday)}
-                  options={WEEKDAY_OPTIONS}
-                  data-testid={scheduledTaskSelectors.formWeekday}
-                  onChange={(value) =>
-                    setForm((current) => ({ ...current, weekday: normalizeWeekday(value) }))
-                  }
-                />
-              ) : null}
-            </div>
-
-            <label className="flex flex-col gap-2">
-              <RequiredFieldLabel>{t(($) => $.scheduledTasks.executionTime)}</RequiredFieldLabel>
-              <span data-testid={scheduledTaskSelectors.formTime}>
-                <TimePicker
-                  className="w-full"
-                  format="HH:mm"
-                  value={dayjs(form.timeOfDay, 'HH:mm')}
-                  allowClear={false}
-                  minuteStep={1}
-                  onChange={(time) =>
-                    setForm((current) => ({
-                      ...current,
-                      timeOfDay: time ? time.format('HH:mm') : ''
-                    }))
-                  }
-                />
-              </span>
-            </label>
-          </div>
-          <div
-            className="flex shrink-0 justify-end gap-2 border-t border-[#EEEEEC] bg-white px-6 py-4"
-            data-testid={scheduledTaskSelectors.formFooter}
-          >
-            <Button
-              data-testid={scheduledTaskSelectors.formCancel}
-              onClick={requestCloseForm}
-              disabled={saving}
-            >
-              {t(($) => $.common.cancel)}
-            </Button>
-            <Button
-              type="primary"
-              data-testid={scheduledTaskSelectors.formSave}
-              loading={saving}
-              onClick={() => void handleSave()}
-            >
-              {t(($) => $.common.save)}
-            </Button>
-          </div>
+            </span>
+          </label>
         </div>
-      </Drawer>
+      </ConfigurationDrawer>
       <Modal
         open={aiCreateOpen}
         title={t(($) => $.common.selectPartner)}
         okText={t(($) => $.scheduledTasks.startCreatingWithAi)}
         cancelText={t(($) => $.common.cancel)}
+        className="nc-compact-form-modal"
         okButtonProps={{
           disabled: !partners.some((partner) => partner.id === aiPartnerId),
           'data-testid': scheduledTaskSelectors.aiConfirm

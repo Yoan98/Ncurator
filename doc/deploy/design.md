@@ -15,6 +15,7 @@ prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` 
 `pnpm run build` 生成并审计 `release-stage/app`，包括 native 与 sidecar 准备、类型检查、应用构建、生产依赖追踪、关键读写路径验证和 Main 混淆。`build:win` / `build:mac:release:arm64` 随后调用 electron-builder 打包，并审计实际的 `win-unpacked` / `.app`；macOS 另做签名与启动验证。
 
 - electron-builder 以 `release-stage/app` 为唯一应用输入，开发工作区不直接进入安装包。
+- Vite 配置统一准备 Vditor 离线资源，开发、源码 E2E 和正式构建使用相同本地资源入口。
 - 安装包包含构建后的应用、生产依赖与运行资源，排除开发和测试资料、`.env`、私钥、Source Map 及其他平台文件。`app.asar` 与 `VITE_*` 可由用户读取，不作为凭证保护手段。
 - 生产依赖按追踪结果裁剪，并验证关键读写路径；追踪触达待裁剪目录时构建失败，避免误删运行依赖。
 - Windows x64 在 ONNX Runtime 与 Jieba 原生模块旁各自部署 VC++ 运行库，不要求用户预装系统运行库；安装包审计检查两处实际解包的二进制与 DLL，staging 实际加载 Jieba 默认词典并验证中文分词。
