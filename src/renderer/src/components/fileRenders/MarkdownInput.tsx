@@ -28,10 +28,15 @@ export default function MarkdownInput(props: {
   })
   useEffect(() => {
     if (!root.current) return
+    // Vditor loads Lute asynchronously and can finish after effect cleanup. Each
+    // instance owns a separate node so a stale init/destroy cannot erase its successor.
+    const host = document.createElement('div')
+    host.className = `h-full w-full ${props.authoring ? 'nc-markdown-author' : 'nc-markdown-reader'}`
+    root.current.appendChild(host)
     let active = true
     let initialized = false
     current.current.onRoot?.(root.current)
-    const instance = new Vditor(root.current, {
+    const instance = new Vditor(host, {
       mode: 'ir',
       lang: getRendererRuntime().locale === 'zh-CN' ? 'zh_CN' : 'en_US',
       i18n: vditorI18n,
@@ -119,6 +124,7 @@ export default function MarkdownInput(props: {
       ready.current = false
       editor.current = null
       current.current.onRoot?.(null)
+      host.remove()
       try {
         if (initialized) instance.destroy()
       } catch (error) {
@@ -151,7 +157,7 @@ export default function MarkdownInput(props: {
     <div
       ref={root}
       data-testid={props.testId}
-      className={`h-full w-full overflow-hidden bg-white ${props.authoring ? 'nc-markdown-author' : 'nc-markdown-reader'}`}
+      className="h-full w-full overflow-hidden bg-white"
       onInputCapture={(event) => {
         if ((event.nativeEvent as InputEvent).isComposing) return
         // Read after Vditor normalizes the DOM, without waiting for its undo debounce.

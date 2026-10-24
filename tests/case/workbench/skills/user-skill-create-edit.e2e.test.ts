@@ -181,6 +181,36 @@ describe('workbench skills', () => {
           const restarted = await runtime.restartApp()
           await openSkills(restarted.page)
           const persisted = await findSkill(restarted.page, 'report-guide')
+          const reserved = await findSkill(restarted.page, 'reserved-name')
+          const reopenedEditors: {
+            name: string
+            body: string
+            toolbar: boolean
+            editable: boolean
+          }[] = []
+          // The first Markdown editor in the new renderer is an existing skill,
+          // followed by closing and opening different skills without a warm-up editor.
+          for (const skill of [persisted, reserved, persisted]) {
+            await restarted.page.getByTestId(`${selectors.editPrefix}-${skill.id}`).click()
+            const content = restarted.page.getByTestId(selectors.content)
+            const input = content.locator('.vditor-ir pre[contenteditable="true"]:visible')
+            await input.waitFor()
+            const name = await restarted.page.getByTestId(selectors.name).inputValue()
+            const body = await readSkillContent(restarted.page)
+            await input.click()
+            await restarted.page.keyboard.press('ControlOrMeta+End')
+            await restarted.page.keyboard.type('temporary-edit')
+            const editable = (await readSkillContent(restarted.page)).includes('temporary-edit')
+            reopenedEditors.push({
+              name,
+              body,
+              toolbar: await content.locator('.vditor-toolbar').isVisible(),
+              editable
+            })
+            await restarted.page.getByTestId(selectors.cancel).click()
+            await restarted.page.getByRole('button', { name: '放弃修改', exact: true }).click()
+            await restarted.page.getByTestId(selectors.editor).waitFor({ state: 'hidden' })
+          }
           await restarted.page.getByTestId(`${selectors.deletePrefix}-${persisted.id}`).click()
           await restarted.page
             .locator('.ant-modal-confirm')
@@ -211,6 +241,7 @@ describe('workbench skills', () => {
             stableId: original.id === renamed.id && renamed.id === persisted.id,
             bindingKept: binding.skillIds.includes(original.id),
             savedBody: saved.body,
+            reopenedEditors,
             cancelledDeletion
           }
         },
@@ -244,6 +275,14 @@ describe('workbench skills', () => {
               result.savedBody.includes('- 风险注明影响') &&
               result.savedBody.includes('```text') &&
               !result.savedBody.includes('未保存') &&
+              result.reopenedEditors.every(
+                (editor, index) =>
+                  editor.toolbar &&
+                  editor.editable &&
+                  editor.name === (index === 1 ? 'reserved-name' : 'report-guide') &&
+                  editor.body.includes(index === 1 ? '保留。' : '保留代码示例') &&
+                  !editor.body.includes('temporary-edit')
+              ) &&
               result.cancelledDeletion,
             {
               name: 'skill-editor-lifecycle',

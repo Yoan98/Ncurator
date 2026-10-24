@@ -141,9 +141,14 @@ describe('workbench result e2e', () => {
           await openWorkspaceFile(page, fileFilter, 'edit-empty.md')
           const emptyEditor = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
           await emptyEditor.waitFor({ state: 'visible', timeout: 30_000 })
-          const emptyEditorHasVditor = await emptyEditor
-            .evaluate((el) => (el as HTMLElement).classList.contains('vditor'))
-            .catch(() => false)
+          const emptyInput = emptyEditor.locator('.vditor-ir > pre[contenteditable="true"]')
+          await emptyInput.waitFor({ state: 'visible' })
+          await emptyInput.click()
+          await page.keyboard.type('Written into an empty Markdown file')
+          const emptyEditorEditable = await waitForDiskIncludes(
+            emptyPath,
+            'Written into an empty Markdown file'
+          )
 
           const layoutProbe = await (async () => {
             await openWorkspaceFile(page, fileFilter, 'edit-first.md')
@@ -219,7 +224,7 @@ describe('workbench result e2e', () => {
             linkOpenExternalCalled,
             idleReloaded,
             editingOverwroteExternal,
-            emptyEditorHasVditor,
+            emptyEditorEditable,
             layoutFillsPanel: layoutProbe.fillsPanel.fills,
             layoutEditorWidth: layoutProbe.fillsPanel.editorW,
             layoutParentWidth: layoutProbe.fillsPanel.parentW,
@@ -243,7 +248,7 @@ describe('workbench result e2e', () => {
               result.linkOpenExternalCalled &&
               result.idleReloaded &&
               result.editingOverwroteExternal &&
-              result.emptyEditorHasVditor &&
+              result.emptyEditorEditable &&
               result.layoutFillsPanel &&
               result.headingMarkerHidden &&
               result.headingLabelHidden &&

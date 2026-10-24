@@ -56,7 +56,10 @@ export const fillSkillContent = async (page: Page, body: string): Promise<void> 
   await page.waitForTimeout(250)
 }
 export const readSkillContent = async (page: Page): Promise<string> => {
-  return await page.getByTestId(selectors.content).locator('.vditor-ir pre').innerText()
+  return await page
+    .getByTestId(selectors.content)
+    .locator('.vditor-ir > pre.vditor-reset')
+    .innerText()
 }
 export const choosePartner = async (page: Page, name: string): Promise<string> => {
   const form = page.getByTestId(workbenchSelectors.createPartnerModal)
