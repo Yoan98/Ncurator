@@ -5355,6 +5355,7 @@ const ChatPage: React.FC = () => {
                                 </div>
                               ) : null}
                               <WorkbenchComposer
+                                partnerName={currentPartner?.name}
                                 aiPreference={composerAiPreference}
                                 onAiPreferenceChange={handleAiPreferenceChange}
                                 executionPermission={composerExecutionPermission}

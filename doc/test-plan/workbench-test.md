@@ -154,8 +154,8 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：侧栏编辑入口复用创建抽屉，保存后更新名称与形象。
 - Why：伙伴名称和形象应可改，且不能误建成新伙伴或清掉对话。
-- How：通过真实右侧表单创建伙伴，再悬停点击编辑，修改名称和外形后保存；只读查询确认 id 和总数。
-- Oracle：抽屉为「编辑伙伴」并预填原值；保存后仍是同一伙伴 id，侧栏显示新名称，对齐 `WB-SESSION-012`。
+- How：通过真实右侧表单创建伙伴，检查空输入提示使用该伙伴名称；再悬停点击编辑，修改名称和外形后保存，检查空输入提示同步新名称；只读查询确认 id 和总数。
+- Oracle：抽屉为「编辑伙伴」并预填原值；保存后仍是同一伙伴 id，侧栏显示新名称，对齐 `WB-SESSION-012`；创建和改名后的 Composer 空输入提示均使用当前伙伴名称，对齐 `WB-COMPOSER-001-AC4` 的伙伴名称部分。
 
 #### `workbench-help-entry`
 
@@ -872,7 +872,7 @@ pnpm test:update:e2e
 | `WB-SESSION-008-AC5/AC6`                                                    | 部分覆盖：现有偏好/面板用例未对删除 UI 快照及失效模型、引用、附件修复逐项断言。                                                                                                                                                                                                                                                           |
 | `WB-SESSION-009-AC1/AC3/AC4`                                                | 部分覆盖：`partner-pin-toggle` 验证取消后图钉不常驻；图标样式、取消后区域排序及重启持久化待补。                                                                                                                                                                                                                                           |
 | `WB-SESSION-012-AC1/AC2`                                                    | 部分覆盖：`partner-edit` 验证名称回填、伙伴数量、新形象和侧栏；形象初始回填、顶栏及消息保留缺少独立断言。                                                                                                                                                                                                                                 |
-| `WB-COMPOSER-001-AC2/AC3/AC4`                                               | 部分覆盖：`send-guard-and-preferences` 检查无伙伴空态与无模型提示，`queue-message-during-run` 验证运行中追加；空白发送和占位见 `multi-format-selection-reference`、`reference-mention-keyboard`。提交去重、全部禁用原因及改名后占位 / 自称待补。                                                                                          |
+| `WB-COMPOSER-001-AC2/AC3/AC4`                                               | 部分覆盖：`send-guard-and-preferences` 检查无伙伴空态与无模型提示，`queue-message-during-run` 验证运行中追加；空白发送和占位见 `multi-format-selection-reference`、`reference-mention-keyboard`，`partner-edit` 检查创建及改名后的伙伴名称占位。提交去重、全部禁用原因及改名后 AI 自称待补。                                              |
 | `WB-COMPOSER-007-AC6/AC7/AC11/AC15`                                         | 部分覆盖：`model-selector-and-provider-error` 走自定义与免费目录；失效快照回退、付费目录、入口图标及偏好实际影响资料边界待补。                                                                                                                                                                                                            |
 | `WB-COMPOSER-017-AC1/AC2/AC3/AC5/AC6/AC7`                                   | 部分覆盖：`queue-message-during-run` 检查单一按钮、两条浅灰追加消息、续接输入和固定用时；最终回答期追加、异常保留、悬空工具修复与校验竞态未完整验证。                                                                                                                                                                                     |
 | `WB-COMPOSER-010-AC1/AC3/AC4/AC5/AC6`                                       | 部分覆盖：`composer-attachments-context` 核对多格式附件、路径与无预解析、图标、预览及横滑证据；无伙伴添加、任意数量/大小边界和系统目录原生拖放未全部自动化，原生目录拖放需人工验收。                                                                                                                                                      |

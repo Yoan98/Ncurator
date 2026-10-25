@@ -37,6 +37,12 @@ describe('workbench conversation e2e', () => {
           )
           if (!created) throw new Error('created partner missing')
           await waitForVisiblePartnerRow(page, ORIGINAL_NAME)
+          const originalPlaceholder = page.getByText(
+            `输入你想让${ORIGINAL_NAME}做的事情或者@文件`,
+            { exact: true }
+          )
+          await originalPlaceholder.waitFor({ state: 'visible' })
+          const placeholderBeforeRename = await originalPlaceholder.textContent()
 
           const partnerItem = getWorkbenchLocator(
             page,
@@ -62,6 +68,11 @@ describe('workbench conversation e2e', () => {
           await modal.getByRole('button', { name: 'pill' }).click()
           await modal.locator('.nc-config-footer .ant-btn-primary').click()
           await waitForVisiblePartnerRow(page, UPDATED_NAME)
+          const updatedPlaceholder = page.getByText(`输入你想让${UPDATED_NAME}做的事情或者@文件`, {
+            exact: true
+          })
+          await updatedPlaceholder.waitFor({ state: 'visible' })
+          const placeholderAfterRename = await updatedPlaceholder.textContent()
 
           const updated = await page.evaluate(async (partnerId) => {
             const partners = await window.api.partnerList()
@@ -81,6 +92,8 @@ describe('workbench conversation e2e', () => {
             modalTitle,
             prefilledName,
             nameLabelVisible,
+            placeholderBeforeRename,
+            placeholderAfterRename,
             updated,
             listText
           }
@@ -90,6 +103,8 @@ describe('workbench conversation e2e', () => {
             result.modalTitle === '编辑伙伴' &&
               result.prefilledName === ORIGINAL_NAME &&
               result.nameLabelVisible &&
+              result.placeholderBeforeRename?.includes(ORIGINAL_NAME) &&
+              result.placeholderAfterRename?.includes(UPDATED_NAME) &&
               result.updated.count === 1 &&
               result.updated.partner?.name === UPDATED_NAME &&
               result.updated.partner.avatar_shape === 'pill' &&
