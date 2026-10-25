@@ -333,12 +333,15 @@ const TOOL_ITEM_RENDERERS: Record<RuntimeToolName, ToolItemRenderer> = {
     return loadingCopy(label || 'skill', input)
   },
   load_toolset: (input) => loadingCopy(readLoadToolsetNames(input), input),
-  skill_sync: (input) => {
+  skill_config: (input) => {
     const data = input as Record<string, IpcJsonValue> | undefined
     const name = typeof data?.name === 'string' ? data.name : 'Skill'
-    return data?.action === 'status'
-      ? toolCopy('查看 Skill 启用状态', sentence(text('查看 Skill 启用状态')))
-      : toolCopy(`同步 ${name}`, sentence(text(`同步 ${name}`)))
+    return data?.enabled === undefined
+      ? toolCopy('查看 skill 配置', sentence(text('查看 skill 配置')))
+      : toolCopy(
+          `${data.enabled === true ? '启用' : '停用'} ${name}`,
+          sentence(text(`${data.enabled === true ? '启用' : '停用'} ${name}`))
+        )
   },
   list_agent: () => toolCopy('查看子任务', sentence(text('查看子任务'))),
   delegate_to_subagent: () => toolCopy('分头处理', sentence(text('分头处理'))),

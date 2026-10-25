@@ -73,16 +73,18 @@ describe('assistant process icons and activity summary', () => {
     ).toContain('missing：Unavailable')
     expect(resolveAssistantExecutionIcon(createToolGroup('load_skill'))).toBe('skill_loading')
     expect(
-      getAssistantToolItemCopy('load_toolset', 'completed', { toolsetNames: ['skill-management'] })
+      getAssistantToolItemCopy('load_toolset', 'completed', { toolsetNames: ['docx-read'] })
         .headerShort
-    ).toBe('加载 skill 管理')
+    ).toBe('加载 docx 阅读器')
     expect(
-      getAssistantToolItemCopy('skill_sync', 'completed', { action: 'sync', name: 'weekly-report' })
-        .headerShort
-    ).toBe('同步 weekly-report')
-    expect(
-      getAssistantToolItemCopy('skill_sync', 'completed', { action: 'status' }).headerShort
-    ).toBe('查看 Skill 启用状态')
+      getAssistantToolItemCopy('skill_config', 'completed', {
+        name: 'weekly-report',
+        enabled: true
+      }).headerShort
+    ).toBe('启用 weekly-report')
+    expect(getAssistantToolItemCopy('skill_config', 'completed', {}).headerShort).toBe(
+      '查看 skill 配置'
+    )
   })
   it('uses semantic icons for single-tool activities', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('docx_read_outline'))).toBe('document')

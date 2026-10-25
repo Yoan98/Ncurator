@@ -264,7 +264,7 @@ export type DesktopApi = {
   userSkillsImport: () => Promise<UserSkillImportPreview | null>
   userSkillsCommitImport: (input: UserSkillImportCommitRequest) => Promise<UserSkill>
   userSkillsCancelImport: (token: string) => Promise<void>
-  userSkillsGet: (id: string) => Promise<UserSkillDocument>
+  userSkillsGet: (name: string) => Promise<UserSkillDocument>
   userSkillsPreviewResource: (
     source: UserSkillSource,
     relative: string
@@ -272,7 +272,7 @@ export type DesktopApi = {
   userSkillsOpenFolder: (source: UserSkillSource) => Promise<string>
   userSkillsUpdate: (input: UserSkillUpdateRequest) => Promise<UserSkill>
   userSkillsCreate: (input: UserSkillCreateRequest) => Promise<UserSkill>
-  userSkillsDelete: (id: string) => Promise<void>
+  userSkillsDelete: (name: string) => Promise<void>
   userSkillsGetEnabled: (partnerId: string) => Promise<UserSkillSelection>
   scheduledTaskList: () => Promise<ScheduledTask[]>
   scheduledTaskSave: (payload: ScheduledTaskSaveRequest) => Promise<ScheduledTaskMutationResponse>

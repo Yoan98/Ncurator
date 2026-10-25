@@ -10,7 +10,6 @@ import { textFileToolFamily } from './textFile'
 import { webToolFamily } from './web'
 import { agentControlToolFamily } from './agentControl'
 import { scheduledTasksToolFamily } from './scheduledTasks'
-import { skillManagementToolFamily } from './skills'
 
 export const kbToolFamily: ToolFamilyDefinition = {
   familyId: 'kb',
@@ -28,8 +27,7 @@ export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinitio
   web: webToolFamily,
   'image-generation': imageGenerationToolFamily,
   'agent-control': agentControlToolFamily,
-  'scheduled-tasks': scheduledTasksToolFamily,
-  'skill-management': skillManagementToolFamily
+  'scheduled-tasks': scheduledTasksToolFamily
 }
 
 export const getToolFamilyDefinition = (familyId: AiToolFamilyId): ToolFamilyDefinition =>

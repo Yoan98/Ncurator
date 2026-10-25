@@ -24,7 +24,7 @@ export const renderLocalContextText = (
     `操作系统：${{ macos: 'macOS', windows: 'Windows', linux: 'Linux' }[ctx.platform]}`,
     `临时脚本目录：${getPartnerScriptsRootDir(ctx.partnerId)}`,
     `运行资源目录：${getPartnerAssetsRootDir(ctx.partnerId)}`,
-    `Skill 目录：${ctx.userSkillService?.getRootDirectory?.() ?? getSkillRootDirectory()}`,
+    `Skill 目录：${ctx.userSkillService?.getRootDirectory() ?? getSkillRootDirectory()}`,
     'Skill 结构：每个 Skill 一个同名目录，包含 SKILL.md；可选子目录 scripts/、references/、assets/。',
     'SKILL.md 示例：',
     '---',

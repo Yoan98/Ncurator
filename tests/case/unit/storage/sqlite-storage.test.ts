@@ -270,7 +270,7 @@ describe('sqlite storage core and stores', () => {
     expect(() => projectMessageLogRecords(historicalRecords)).not.toThrow()
     expect(projectMessageLogRecords(historicalRecords)).toMatchObject({
       loadedToolsetIds: [],
-      loadedSkillIds: []
+      loadedSkillNames: []
     })
 
     await logs.appendBatch({
@@ -285,7 +285,7 @@ describe('sqlite storage core and stores', () => {
         {
           kind: 'annotation',
           eventType: 'skill_state_updated',
-          payload: { loadedSkillIds: ['user:current'] }
+          payload: { loadedSkillNames: ['user:current'] }
         }
       ]
     })
@@ -296,7 +296,7 @@ describe('sqlite storage core and stores', () => {
       JSON.stringify({
         kind: 'annotation',
         eventType: 'skill_state_updated',
-        payload: { loadedSkillIds: 'user:stale' }
+        payload: { loadedSkillNames: 'user:stale' }
       })
     )
     insertRawEntry(
@@ -315,7 +315,7 @@ describe('sqlite storage core and stores', () => {
     expect(() => projectMessageLogRecords(restoredRecords)).not.toThrow()
     expect(projectMessageLogRecords(restoredRecords)).toMatchObject({
       loadedToolsetIds: ['docx-read'],
-      loadedSkillIds: ['user:current']
+      loadedSkillNames: ['user:current']
     })
   })
 
@@ -362,7 +362,8 @@ describe('sqlite storage core and stores', () => {
       { version: 16, name: 'subagent_sessions' },
       { version: 17, name: 'open_with_preferences' },
       { version: 18, name: 'app_language_and_service_route' },
-      { version: 19, name: 'user_skills' }
+      { version: 19, name: 'user_skills' },
+      { version: 20, name: 'skill_name_bindings' }
     ])
 
     const legacyTables = sqlite
@@ -630,13 +631,13 @@ describe('sqlite storage core and stores', () => {
   })
 
   it('rejects duplicate partner names on create and rename while allowing the current name', async () => {
-    await expect(
+    expect(() =>
       partnerStore.savePartner({ ...createPartner('partner-2'), name: ' Test partner ' })
-    ).rejects.toThrow('伙伴名称已存在')
+    ).toThrow('伙伴名称已存在')
     await partnerStore.savePartner(createPartner('partner-2'))
-    await expect(
+    expect(() =>
       partnerStore.savePartner({ ...createPartner('partner-2'), name: 'Test partner' })
-    ).rejects.toThrow('伙伴名称已存在')
+    ).toThrow('伙伴名称已存在')
     await partnerStore.savePartner({ ...createPartner(), name: ' test partner ' })
     expect((await partnerStore.getPartner('partner-1'))?.name).toBe('test partner')
     expect((await partnerStore.listPartners()).length).toBe(2)

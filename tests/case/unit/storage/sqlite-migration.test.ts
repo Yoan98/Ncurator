@@ -1,3 +1,4 @@
+import { userSkillsMigration } from '../../../../src/main/services/storage/sqlite/migrations/019_user_skills'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -118,13 +119,41 @@ describe('SQLite migration contract', () => {
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
-    expect(migrationRows.at(-1)).toEqual({ version: 19, name: 'user_skills' })
+    expect(migrationRows.at(-1)).toEqual({ version: 20, name: 'skill_name_bindings' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
     expect(integrity).toEqual([{ quick_check: 'ok' }])
     expect(foreignKeys).toEqual([])
     expect(schemaSignature(upgradedPath)).toEqual(schemaSignature(freshPath))
+  })
+
+  it('converts existing ID bindings to names, drops the asset index and leaves files unchanged', async () => {
+    const databasePath = await createDatabasePath()
+    const prepared = new SqliteCore(databasePath)
+    prepared.initialize()
+    prepared.exec('DROP TABLE partner_user_skill')
+    prepared.exec(userSkillsMigration.sql!)
+    prepared.prepare('DELETE FROM schema_migrations WHERE version = 20').run()
+    prepared.exec(`INSERT INTO partner (id,name,avatar_shape,avatar_color,created_at,updated_at,last_viewed_at) VALUES ('a','A','circle','blue',1,1,1),('b','B','circle','blue',1,1,1);
+      INSERT INTO user_skill VALUES ('user:old','weekly-report','Reports','weekly-report',1);
+      INSERT INTO partner_user_skill VALUES ('a','user:old'),('b','user:old');`)
+    const directory = path.join(path.dirname(databasePath), 'skills/weekly-report')
+    await fs.mkdir(directory, { recursive: true })
+    const content = '---\nname: weekly-report\ndescription: Reports\n---\nKeep bytes'
+    await fs.writeFile(path.join(directory, 'SKILL.md'), content)
+    prepared.close()
+    const upgraded = new SqliteCore(databasePath)
+    upgraded.initialize()
+    expect(upgraded.prepare('SELECT * FROM partner_user_skill ORDER BY partner_id').all()).toEqual([
+      { partner_id: 'a', skill_name: 'weekly-report' },
+      { partner_id: 'b', skill_name: 'weekly-report' }
+    ])
+    expect(
+      upgraded.prepare("SELECT name FROM sqlite_master WHERE name = 'user_skill'").get()
+    ).toBeUndefined()
+    expect(await fs.readFile(path.join(directory, 'SKILL.md'), 'utf8')).toBe(content)
+    upgraded.close()
   })
 
   it('records a pending v10 afterCommit hook and runs it only once', async () => {
@@ -279,7 +308,7 @@ describe('SQLite migration contract', () => {
       CREATE UNIQUE INDEX idx_chat_session_message_log_partner_seq ON chat_session_message_log(partner_id, seq);`)
     prepared.exec('DROP TABLE IF EXISTS app_settings')
     prepared.exec('DROP TABLE open_with_preferences')
-    prepared.exec('DROP TABLE partner_user_skill; DROP TABLE user_skill;')
+    prepared.exec('DROP TABLE partner_user_skill;')
     prepared.exec('ALTER TABLE ai_run DROP COLUMN pending_messages_json')
     prepared
       .prepare(

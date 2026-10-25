@@ -6,13 +6,9 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { executeToolCall } from '../../../../../src/main/services/ai/human/node/handNode/toolExecutor'
 import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
-import {
-  buildLoadToolsetsDecision,
-  buildToolDecision,
-  buildCompleteTaskDecision
-} from '../testUtils'
+import { buildToolDecision, buildCompleteTaskDecision } from '../testUtils'
 
-describe('Skill synchronization production flow', () => {
+describe('Skill file discovery production flow', () => {
   it(
     'skill-management-tool-flow',
     async () =>
@@ -26,7 +22,7 @@ describe('Skill synchronization production flow', () => {
         runMode: 'single',
         knowledge: 'none',
         description:
-          '空库从真实文件工具创建，按名称查询、同步、加载、更新与停用；模型 System 使用实际根目录。',
+          '空目录从真实文件工具创建，自动发现、查询、配置、加载、更新与停用；模型 System 使用实际根目录。',
         execute: async (runtime) => {
           const partnerId = 'skill-flow'
           await runtime.partnerStore.savePartner({
@@ -41,7 +37,7 @@ describe('Skill synchronization production flow', () => {
             pinned_at: null
           })
           const service = new UserSkillService(
-            runtime.storageService.userSkill,
+            runtime.storageService.partnerSkills,
             path.join(runtime.workspaceRoot, 'skills')
           )
           const filename = path.join(service.getRootDirectory(), 'report/SKILL.md')
@@ -56,23 +52,17 @@ describe('Skill synchronization production flow', () => {
             llmScript: {
               'human.brain': [
                 {
-                  output: buildLoadToolsetsDecision({
-                    toolsetNames: ['skill-management'],
-                    summary: '加载管理工具'
-                  })
-                },
-                {
                   output: decision('text_file_edit', {
                     action: 'create',
                     sourcePath: filename,
                     content: markdown('RULE-ORIGINAL')
                   })
                 },
-                { output: decision('skill_sync', { action: 'status' }) },
+                { output: decision('skill_config', {}) },
                 {
-                  output: decision('skill_sync', { action: 'sync', name: 'report', enabled: true })
+                  output: decision('skill_config', { name: 'report', enabled: true })
                 },
-                { output: decision('skill_sync', { action: 'status', name: 'report' }) },
+                { output: decision('skill_config', { name: 'report' }) },
                 { output: decision('load_skill', { skillNames: ['report'] }) },
                 {
                   output: decision('text_file_edit', {
@@ -81,9 +71,9 @@ describe('Skill synchronization production flow', () => {
                     content: markdown('RULE-UPDATED')
                   })
                 },
-                { output: decision('skill_sync', { action: 'sync', name: 'report' }) },
+                { output: decision('skill_config', { name: 'report' }) },
                 {
-                  output: decision('skill_sync', { action: 'sync', name: 'report', enabled: false })
+                  output: decision('skill_config', { name: 'report', enabled: false })
                 },
                 {
                   output: buildCompleteTaskDecision({
@@ -104,10 +94,10 @@ describe('Skill synchronization production flow', () => {
               },
               cache: createHumanRuntimeCache(),
               taskId: runtime.taskId,
-              loadedToolsetIds: ['skill-management'],
-              toolCallId: 'child-sync',
-              toolName: 'skill_sync',
-              args: { action: 'status' }
+              loadedToolsetIds: [],
+              toolCallId: 'child-config',
+              toolName: 'skill_config',
+              args: {}
             })
           } catch (error) {
             childError = error instanceof Error ? error.message : String(error)
@@ -133,8 +123,8 @@ describe('Skill synchronization production flow', () => {
               !result.enabled.length &&
               result.childError.includes('子任务不能使用'),
             {
-              name: 'real-file-and-sync-flow',
-              message: '真实文件工具和同步工具完成主链，子任务执行层拒绝管理。'
+              name: 'real-file-and-config-flow',
+              message: '真实文件工具、自动发现与内置配置完成主链，子任务执行层拒绝管理。'
             }
           )
           runtime.assertThat(
@@ -142,9 +132,9 @@ describe('Skill synchronization production flow', () => {
               result.systems[0].includes('<本机信息与文件约定>') &&
               !result.systems[0].includes('runtime_paths.') &&
               !result.systems[0].includes('共享 Skill 目录') &&
-              !result.systems[5]?.includes('\\nRULE-ORIGINAL') &&
-              result.systems[6]?.includes('RULE-ORIGINAL') === true &&
-              result.systems[7]?.includes('RULE-UPDATED') === true &&
+              !result.systems[4]?.includes('\\nRULE-ORIGINAL') &&
+              result.systems[5]?.includes('RULE-ORIGINAL') === true &&
+              result.systems[6]?.includes('RULE-UPDATED') === true &&
               !result.systems.at(-1)?.includes('RULE-UPDATED'),
             {
               name: 'directory-and-current-instructions',
@@ -155,12 +145,12 @@ describe('Skill synchronization production flow', () => {
             result.events.some(
               (event) =>
                 event.type === 'tool_call_result' &&
-                event.toolName === 'skill_sync' &&
-                JSON.stringify(event.result?.data) === '[]'
+                event.toolName === 'skill_config' &&
+                JSON.stringify(event.result?.data) === '[{"name":"report","enabled":false}]'
             ),
             {
-              name: 'status-before-registration',
-              message: '尚未同步的文件不产生数据库登记或绑定。'
+              name: 'discovered-before-configuration',
+              message: '文件自动发现且默认未启用，无需专门管理工具包。'
             }
           )
         }

@@ -6,7 +6,7 @@ const CHILD_DENIED_TOOLS = new Set([
   'ask_user_question',
   'scheduled_task_list',
   'scheduled_task_action',
-  'skill_sync'
+  'skill_config'
 ])
 export const isToolAllowed = (ctx: Pick<AiRunContext, 'isSubagent'>, toolName: string): boolean =>
   !ctx.isSubagent || !CHILD_DENIED_TOOLS.has(toolName)

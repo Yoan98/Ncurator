@@ -3,12 +3,14 @@ import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import {
   renderAskUserQuestionModelResult,
+  renderSkillConfigModelResult,
   renderLoadToolsetModelResult,
   renderLoadSkillModelResult,
   renderPlanUpdateModelResult,
   renderReadImageModelResult
 } from '../../shared/modelToolResultRenderers'
 import {
+  SKILL_CONFIG_SCHEMA,
   DELEGATE_TO_SUBAGENT_SCHEMA,
   LIST_AGENT_SCHEMA,
   LOAD_TOOLSET_SCHEMA,
@@ -161,11 +163,33 @@ export const LIST_AGENT_TOOL_SPEC: HumanToolSpec<
   modelResult: { renderSuccess: ({ data }) => JSON.stringify(data) }
 }
 
+export const SKILL_CONFIG_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof SKILL_CONFIG_SCHEMA>,
+  'skill_config',
+  'agent-control'
+> = {
+  name: 'skill_config',
+  familyId: 'agent-control',
+  toolsetIds: ['agent-control'],
+  inputSchema: SKILL_CONFIG_SCHEMA,
+  promptSpec: { name: 'skill_config', description: '查询或配置当前伙伴的 Skill 启用状态。' },
+  resolveExecutionMeta: (args) => ({
+    mutability: args.enabled === undefined ? 'read_only' : 'mutating',
+    resourceKey: 'skill-config'
+  }),
+  modelResult: {
+    renderSuccess: renderSkillConfigModelResult,
+    renderError: ({ data }) =>
+      `Error: ${data && typeof data === 'object' && !Array.isArray(data) && typeof data.error === 'string' ? data.error : 'Skill configuration failed'}`
+  }
+}
+
 export const AGENT_CONTROL_TOOL_SPECS = [
   DELEGATE_TO_SUBAGENT_TOOL_SPEC,
   LIST_AGENT_TOOL_SPEC,
   LOAD_TOOLSET_TOOL_SPEC,
   LOAD_SKILL_TOOL_SPEC,
+  SKILL_CONFIG_TOOL_SPEC,
   UPDATE_PLAN_TOOL_SPEC,
   READ_IMAGE_TOOL_SPEC,
   ASK_USER_QUESTION_TOOL_SPEC

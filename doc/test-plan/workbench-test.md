@@ -807,7 +807,7 @@ pnpm test:update:e2e
 - What：统一顶栏、右侧表单、Markdown 创建编辑与重命名、冲突、取消和持久性。
 - Why：文本类 skill 应易于编写，界面遵循工作台配置规范。
 - How：UI 创建两个 skill，检查 44px 拖拽区、页头入口和右侧定位；检查名称、描述、内容 label 可见且样式一致，输入聚焦只有底线，无标签页和源码切换；使用格式工具及 `/` 菜单编写标题、列表及代码块，保存后重开；测试重名失败保留草稿、未保存关闭、窄窗、重启和删除。重启后首次操作直接编辑已有 skill，再连续关闭并打开不同 skill，检查工具栏、已保存正文与输入可用性。开发服务器启动后，可用 `ELECTRON_RENDERER_URL` 指向真实开发页面执行同一用例，覆盖 React StrictMode 重复初始化；仍使用 runner 的隔离数据目录和真实产品链路。
-- Oracle：`WB-SKILL-001-AC1/AC3/AC6`；无旧说明/伙伴选择/导入独立按钮；首次编辑和连续重开不空白、不串正文，Markdown、稳定 ID 与绑定正确，取消不写盘。
+- Oracle：`WB-SKILL-001-AC1/AC3/AC6`；无旧说明/伙伴选择/导入独立按钮；首次编辑和连续重开不空白、不串正文，Markdown、名称与绑定正确，取消不写盘。
 
 #### `user-skill-import-replace`
 
@@ -815,7 +815,7 @@ pnpm test:update:e2e
 - What：统一创建入口内选择本地导入、预览、确认和替换。
 - Why：导入也是创建方式，选择目录不能自动发布。
 - How：通过表单顶栏导入与真实目录选择器选两个同名版本；检查同一表单可编辑导入内容，展开附带文件并预览；确认/取消及替换未保存草稿确认，读取真实资源和权限取证。
-- Oracle：`WB-SKILL-001-AC2/AC3`；确认前不落库，取消不变，未知 YAML/资源/执行位保留，替换保留 ID 和绑定，源目录删除后仍可用。
+- Oracle：`WB-SKILL-001-AC2/AC3`；确认前不发布到正式目录，取消不变，未知 YAML/资源/执行位保留，同名替换保留名称和伙伴选择，源目录删除后仍可用。
 
 #### `user-skill-partner-budget`
 
@@ -837,7 +837,7 @@ pnpm test:update:e2e
 
 - 测试类型：e2e / live；skills / live；knowledge none。
 - What：自然语言创建并启用、更新以及停用 skill 后的页面与配置闭环。
-- Why：AI 发布后的列表、资源、容量和过程呈现必须与真实持久化一致。
+- Why：AI 创建后的列表、资源、容量和过程呈现必须与真实持久化一致。
 - How：真实 UI 建立伙伴与模型配置，通过聊天要求创建含资源的规范并启用；到管理页打开正文、资源，再聊天更新并核对页面同步，最后停用并打开伙伴配置核对。以真实文本和工具事件核对连续动作合并为 Activity、收起/展开箭头与加载名称；单一类型显示对应扳手/厚书，混合为流程图标，刷新后历史一致；不写 IPC、伪造事件或模型结果。
 - Oracle：名称、正文、资源和启停与文件/绑定一致，容量刷新且未保存草稿不被覆盖；两类加载参与 Activity 合并，名称、箭头和单类/混合图标规则在历史与实时一致。对应 `WB-SKILL-002-AC1/AC2/AC4/AC5/AC6`；部分失败的状态分支由共享投影 Unit 与真实 backend 补充。
 
@@ -845,7 +845,7 @@ pnpm test:update:e2e
 
 ## 6. 自动化覆盖边界
 
-- `WB-SKILL-002-AC3`：服务与工具层由 `skill-sync-and-current-partner-binding`、`user-skills` Unit 验证最终预算和回滚；`user-skill-partner-budget` 提供界面超限拒绝证据，AI 触发失败后的全部界面组合需人工验收。
+- `WB-SKILL-002-AC3`：服务与工具层由 `skill-config-and-current-partner-binding`、`user-skills` Unit 验证最终预算和回滚；`user-skill-partner-budget` 提供界面超限拒绝证据，AI 触发失败后的全部界面组合需人工验收。
 
 - `WB-COMPOSER-001-AC6`：`reference-mention-keyboard` 自动检查空对话的长文本粘贴、连续换行后的末行可见、内部滚动、工具栏可见和清空后高度恢复；已有消息、窄窗口自动换行及附件组合仍做界面专项验收。
 - `WB-WPS-001-AC6/AC7`：真实 WPS 导航、多个实例和未保存内容保护需要已授权的 macOS／Windows 逐机验收；协议 Unit 不能替代真实选区证据。后续编辑通过原文、对象身份或单元格上下文定位，歧义时仅打开并说明，不使用未确认的旧坐标。

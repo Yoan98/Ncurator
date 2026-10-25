@@ -70,7 +70,7 @@ describe('skill management UI live', () => {
           await wait(at)
           await openSkills(page)
           const skill = await findSkill(page, 'workbench-note')
-          await page.getByTestId(`${selectors.editPrefix}-${skill.id}`).click()
+          await page.getByTestId(`${selectors.editPrefix}-${skill.name}`).click()
           const firstBody = await readSkillContent(page)
           const resourceVisible = await page.getByTestId(selectors.resources).isVisible()
           await page.getByTestId(selectors.cancel).click()
@@ -84,12 +84,12 @@ describe('skill management UI live', () => {
             `请更新原有 workbench-note：标题改为“复核结论”，保留原有其他规则和附带文件。再实际加载更新后的规范，将“完成接口文档；尚未联调”整理为 ${path.join(setup.workspace.rootPath, 'memo.md')}。`
           )
           await openSkills(page)
-          await page.getByTestId(`${selectors.editPrefix}-${skill.id}`).click()
+          await page.getByTestId(`${selectors.editPrefix}-${skill.name}`).click()
           await fillSkillContent(page, '未保存的手动草稿')
           await wait(at)
           const draftPreserved = (await readSkillContent(page)).includes('未保存的手动草稿')
           const notice = await page.getByTestId(selectors.editor).getByRole('status').isVisible()
-          const latest = await page.evaluate((id) => window.api.userSkillsGet(id), skill.id)
+          const latest = await page.evaluate((id) => window.api.userSkillsGet(id), skill.name)
           await page.getByTestId(selectors.cancel).click()
           await page.getByRole('button', { name: '放弃修改', exact: true }).click()
           await page.getByTestId(selectors.editor).waitFor({ state: 'hidden' })
@@ -176,7 +176,7 @@ describe('skill management UI live', () => {
             .filter(([, name]) => ['load_toolset', 'load_skill'].includes(name))
             .map(([id]) => id)
           const loadingMerged =
-            loadingIds.length >= 2 &&
+            loadingIds.length >= 1 &&
             loadingIds.every((id) => groupByItem.has(id)) &&
             [...expectedGroups.values()].every((groups) => groups.size === 1)
           const categoryIconsCorrect = activities.every((activity) => {
@@ -194,7 +194,7 @@ describe('skill management UI live', () => {
           await wait(at)
           await choosePartner(page, '规范管理伙伴')
           const checked = await page
-            .getByTestId(`${selectors.togglePrefix}-${skill.id}`)
+            .getByTestId(`${selectors.togglePrefix}-${skill.name}`)
             .getByRole('checkbox')
             .isChecked()
           const memo = await fs.readFile(path.join(setup.workspace.rootPath, 'memo.md'), 'utf8')
@@ -214,7 +214,7 @@ describe('skill management UI live', () => {
             expanded,
             checked,
             memo,
-            id: skill.id
+            name: skill.name
           }
         },
         assert: async (result, runtime) => {
@@ -223,7 +223,7 @@ describe('skill management UI live', () => {
               result.resourceVisible &&
               result.draftPreserved &&
               result.notice &&
-              result.latest.id === result.id &&
+              result.latest.name === result.name &&
               result.latest.body.includes('复核结论') &&
               result.latest.resources.includes('references/rules.md') &&
               !result.checked &&
@@ -242,7 +242,11 @@ describe('skill management UI live', () => {
               result.closedArrow !== result.expandedArrow &&
               JSON.stringify(result.activities) === JSON.stringify(result.restored) &&
               result.activities.some((activity) =>
-                activity.items.some((item) => item.text.includes('加载 skill 管理'))
+                activity.items.some(
+                  (item) =>
+                    item.text.includes('启用 workbench-note') ||
+                    item.text.includes('停用 workbench-note')
+                )
               ) &&
               result.activities.some((activity) =>
                 activity.items.some((item) => item.text.includes('加载 workbench-note'))

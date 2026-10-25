@@ -22,7 +22,7 @@ import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/huma
 import { buildImageGenerationCapabilityTools } from '../../../src/main/services/ai/human/tools/imageGeneration'
 import { agentControlToolFamily } from '../../../src/main/services/ai/human/tools/agentControl'
 import { scheduledTasksToolFamily } from '../../../src/main/services/ai/human/tools/scheduledTasks'
-import { skillManagementToolFamily } from '../../../src/main/services/ai/human/tools/skills'
+import { buildSkillConfigTool } from '../../../src/main/services/ai/human/tools/agentControl/skillConfig'
 import { buildPdfCapabilityTools } from '../../../src/main/services/ai/human/tools/pdf'
 import { buildPptCapabilityTools } from '../../../src/main/services/ai/human/tools/ppt'
 import { buildExcelCapabilityTools } from '../../../src/main/services/ai/human/tools/excel'
@@ -372,18 +372,20 @@ export const createScheduledTaskToolHarness = (
   }
 }
 
-export const createSkillManagementToolHarness = (
+export const createSkillConfigToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput
 ) => {
   const ctx = createAlignedAiRunContext(runtime, contextInput)
-  const tools = skillManagementToolFamily.buildTools({
-    ctx,
-    cache: createHumanRuntimeCache(),
-    runId: ctx.runId,
-    partnerId: ctx.partnerId,
-    taskId: runtime.taskId
-  })
+  const tools = [
+    buildSkillConfigTool({
+      ctx,
+      cache: createHumanRuntimeCache(),
+      runId: ctx.runId,
+      partnerId: ctx.partnerId,
+      taskId: runtime.taskId
+    })
+  ]
   return { ...createToolInvoker(tools as readonly ToolLike[]), ctx }
 }
 

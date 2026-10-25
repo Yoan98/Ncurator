@@ -116,7 +116,7 @@ export type MessageLogProjection = {
   messages: BaseMessage[]
   plan: ChatMessageLogPlanItem[]
   loadedToolsetIds: string[]
-  loadedSkillIds: string[]
+  loadedSkillNames: string[]
   compactionCheckpoint?: {
     compactBlockId: string
     throughSeq: number
@@ -188,7 +188,7 @@ export const projectMessageLogRecords = (records: ChatMessageLogRecord[]): Messa
   })
   let plan: ChatMessageLogPlanItem[] = []
   let loadedToolsetIds: string[] = []
-  let loadedSkillIds: string[] = []
+  let loadedSkillNames: string[] = []
   for (const record of ordered) {
     const entry = record.entry
     if (entry.kind === 'annotation' && entry.eventType === 'plan_updated') {
@@ -202,8 +202,8 @@ export const projectMessageLogRecords = (records: ChatMessageLogRecord[]): Messa
         )
       }
     } else if (entry.kind === 'annotation' && entry.eventType === 'skill_state_updated') {
-      if (Array.isArray(entry.payload?.loadedSkillIds)) {
-        loadedSkillIds = entry.payload.loadedSkillIds.filter(
+      if (Array.isArray(entry.payload?.loadedSkillNames)) {
+        loadedSkillNames = entry.payload.loadedSkillNames.filter(
           (id): id is string => typeof id === 'string'
         )
       }
@@ -214,7 +214,7 @@ export const projectMessageLogRecords = (records: ChatMessageLogRecord[]): Messa
     messages: repairInterruptedToolCalls(messages, ordered),
     plan,
     loadedToolsetIds,
-    loadedSkillIds,
+    loadedSkillNames,
     compactionCheckpoint: floor.compactionCheckpoint,
     historyFloorSeq: floor.historyFloorSeq
   }

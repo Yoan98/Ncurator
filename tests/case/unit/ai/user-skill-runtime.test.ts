@@ -23,27 +23,22 @@ import {
   LOAD_TOOLSET_SCHEMA
 } from '../../../../src/main/services/ai/human/tools/agentControl/toolSchemas'
 
-const skill = (id: string): UserSkill => ({
-  id,
-  name: id.slice(5),
-  description: `Description ${id.slice(5)}`,
-  directoryName: id.slice(5),
-  createdAt: 123
-})
+const skill = (name: string): UserSkill => ({ name, description: `Description ${name}` })
 
 // Unit-only reader seam; both production loaders, graph, prompts and log projection are exercised.
 const fixture = () => {
   const enabled = new Map<string, string>([
-    ['user:b', 'BODY_B'],
-    ['user:a', 'BODY_A']
+    ['b', 'BODY_B'],
+    ['a', 'BODY_A']
   ])
   const log: ChatMessageLogEntry[] = []
-  const reader: UserSkillReader = {
+  const reader: UserSkillReader & { getRootDirectory: () => string } = {
+    getRootDirectory: () => '/skills',
     listEnabled: (partnerId) => (partnerId === 'partner-a' ? [...enabled.keys()].map(skill) : []),
     loadEnabled: (partnerId, id) => {
       const body = enabled.get(id)
       if (partnerId !== 'partner-a' || body === undefined) throw new Error('not enabled')
-      return { skill: skill(id), body, resourceBase: `/skills/${id.slice(5)}` }
+      return { skill: skill(id), body, resourceBase: `/skills/${id}` }
     }
   }
   const ctx = {
@@ -178,7 +173,7 @@ describe('user instruction skill runtime', () => {
     expect(LOAD_TOOLSET_SCHEMA.safeParse({ toolsetNames: [''] }).success).toBe(false)
     expect(LOAD_SKILL_SCHEMA.safeParse({ toolsetNames: ['docx-read'] }).success).toBe(false)
     expect(LOAD_TOOLSET_SCHEMA.safeParse({ skillNames: ['a'] }).success).toBe(false)
-    expect(LOAD_SKILL_SCHEMA.safeParse({ skillIds: ['user:a'] }).success).toBe(false)
+    expect(LOAD_SKILL_SCHEMA.safeParse({ skillNames: ['user:a'] }).success).toBe(false)
     expect(
       LOAD_SKILL_SCHEMA.safeParse({ skillNames: ['a'], toolsetNames: ['docx-read'] }).success
     ).toBe(false)
@@ -191,8 +186,8 @@ describe('user instruction skill runtime', () => {
     expect(catalog).not.toContain('createdAt')
     expect(catalog).not.toContain('directoryName')
     expect(catalog).not.toContain('BODY_A')
-    f.enabled.delete('user:b')
-    f.enabled.set('user:b', 'BODY_B')
+    f.enabled.delete('b')
+    f.enabled.set('b', 'BODY_B')
     expect(renderUserSkills(f.ctx)).toBe(catalog)
     expect(renderUserSkills({ ...f.ctx, partnerId: 'another-partner' })).toBe('')
   })
@@ -201,7 +196,7 @@ describe('user instruction skill runtime', () => {
     const f = fixture()
     let state = await f.loadSkills(['a', 'a', 'missing'])
     expect(state.toolsets.loadedToolsetIds).toEqual([])
-    expect(state.skills.loadedSkillIds).toEqual(['user:a'])
+    expect(state.skills.loadedSkillNames).toEqual(['a'])
     expect(state.execution.lastSkillLoadingOutcome).toMatchObject({
       loadedSkillNames: ['a'],
       unavailableSkills: [{ name: 'missing', error: 'Skill is not available' }]
@@ -224,7 +219,7 @@ describe('user instruction skill runtime', () => {
     state = await f.loadSkills(['a'], state)
     await refreshUserSkillContext({ ...f, state })
     const orderedPrompt = String(f.cache.messages![0].content)
-    expect(state.skills.loadedSkillIds).toEqual(['user:a', 'user:b'])
+    expect(state.skills.loadedSkillNames).toEqual(['a', 'b'])
     expect(orderedPrompt.indexOf('BODY_A')).toBeLessThan(orderedPrompt.indexOf('BODY_B'))
     expect(orderedPrompt.indexOf('<本机信息与文件约定>')).toBeLessThan(
       orderedPrompt.indexOf('工具组目录：')
@@ -237,30 +232,30 @@ describe('user instruction skill runtime', () => {
     const f = fixture()
     let state = await f.loadSkills(['docx-read', 'a'])
     expect(state.toolsets.loadedToolsetIds).toEqual([])
-    expect(state.skills.loadedSkillIds).toEqual(['user:a'])
+    expect(state.skills.loadedSkillNames).toEqual(['a'])
     expect(state.execution.lastSkillLoadingOutcome).toMatchObject({
       loadedSkillNames: ['a'],
       unavailableSkills: [{ name: 'docx-read', error: 'Skill is not available' }]
     })
     expect(f.cache.toolsetTools).toEqual({})
-    state = await f.loadToolsets(['user:b', 'docx-read'], state)
+    state = await f.loadToolsets(['b', 'docx-read'], state)
     expect(state.toolsets.loadedToolsetIds).toEqual(['docx-read'])
-    expect(state.skills.loadedSkillIds).toEqual(['user:a'])
+    expect(state.skills.loadedSkillNames).toEqual(['a'])
     expect(state.execution.lastToolsetLoadingOutcome).toMatchObject({
       loadedToolsetIds: ['docx-read'],
-      skippedUnknownToolsetNames: ['user:b']
+      skippedUnknownToolsetNames: ['b']
     })
     expect(Object.keys(f.cache.toolsetTools)).toEqual(['docx-read'])
     const projection = projectMessageLogRecords(
       f.log.map((entry, i) => ({ seq: i + 1, entry })) as ChatMessageLogRecord[]
     )
     expect(projection.loadedToolsetIds).toEqual(['docx-read'])
-    expect(projection.loadedSkillIds).toEqual(['user:a'])
+    expect(projection.loadedSkillNames).toEqual(['a'])
     expect(f.log).toContainEqual(
       expect.objectContaining({
         kind: 'annotation',
         eventType: 'skill_state_updated',
-        payload: { loadedSkillIds: ['user:a'] }
+        payload: { loadedSkillNames: ['a'] }
       })
     )
     expect(f.log).toContainEqual(
@@ -279,12 +274,12 @@ describe('user instruction skill runtime', () => {
       loadedSkillNames: [],
       unavailableSkills: [{ name: 'docx-read', error: 'Skill is not available' }]
     })
-    const toolsetState = await f.loadToolsets(['user:a'], skillState)
+    const toolsetState = await f.loadToolsets(['a'], skillState)
     expect(toolsetState.execution.lastToolsetLoadingOutcome).toMatchObject({
       loadedToolsetIds: [],
-      skippedUnknownToolsetNames: ['user:a']
+      skippedUnknownToolsetNames: ['a']
     })
-    expect(toolsetState.skills.loadedSkillIds).toEqual([])
+    expect(toolsetState.skills.loadedSkillNames).toEqual([])
     expect(toolsetState.toolsets.loadedToolsetIds).toEqual([])
     expect(f.cache.toolsetTools).toEqual({})
     expect(String(f.cache.messages![0].content)).not.toContain('BODY_A')
@@ -295,21 +290,21 @@ describe('user instruction skill runtime', () => {
     let state = await f.loadToolsets(['docx-read'])
     state = await f.loadSkills(['a'], state)
     state = await refreshUserSkillContext({ ...f, state })
-    f.enabled.set('user:a', 'UPDATED_BODY')
+    f.enabled.set('a', 'UPDATED_BODY')
     state = await refreshUserSkillContext({ ...f, state })
     expect(String(f.cache.messages![0].content)).toContain('UPDATED_BODY')
     expect(String(f.cache.messages![0].content)).not.toContain('BODY_A')
-    f.enabled.delete('user:a')
+    f.enabled.delete('a')
     state = await refreshUserSkillContext({ ...f, state })
-    expect(state.skills.loadedSkillIds).toEqual([])
+    expect(state.skills.loadedSkillNames).toEqual([])
     expect(state.toolsets.loadedToolsetIds).toEqual(['docx-read'])
     expect(Object.keys(f.cache.toolsetTools)).toEqual(['docx-read'])
     expect(String(f.cache.messages![0].content)).not.toContain('UPDATED_BODY')
     expect(f.log.at(-1)).toMatchObject({
       eventType: 'skill_state_updated',
-      payload: { loadedSkillIds: [] }
+      payload: { loadedSkillNames: [] }
     })
-    f.enabled.set('user:a', 'RE_ENABLED')
+    f.enabled.set('a', 'RE_ENABLED')
     await refreshUserSkillContext({ ...f, state })
     expect(String(f.cache.messages![0].content)).not.toContain('RE_ENABLED')
   })
@@ -330,7 +325,7 @@ describe('user instruction skill runtime', () => {
         entry: {
           kind: 'annotation',
           eventType: 'skill_state_updated',
-          payload: { loadedSkillIds: 'user:stale' }
+          payload: { loadedSkillNames: 'user:stale' }
         }
       },
       {
@@ -344,7 +339,7 @@ describe('user instruction skill runtime', () => {
     ] as ChatMessageLogRecord[]
     expect(() => projectMessageLogRecords(records)).not.toThrow()
     expect(projectMessageLogRecords(records)).toMatchObject({
-      loadedSkillIds: [],
+      loadedSkillNames: [],
       loadedToolsetIds: []
     })
     records.push(
@@ -361,13 +356,13 @@ describe('user instruction skill runtime', () => {
         entry: {
           kind: 'annotation',
           eventType: 'skill_state_updated',
-          payload: { loadedSkillIds: ['user:a'] }
+          payload: { loadedSkillNames: ['a'] }
         }
       } as ChatMessageLogRecord
     )
     expect(projectMessageLogRecords(records)).toMatchObject({
       loadedToolsetIds: ['docx-read'],
-      loadedSkillIds: ['user:a']
+      loadedSkillNames: ['a']
     })
   })
 
@@ -377,24 +372,22 @@ describe('user instruction skill runtime', () => {
     await f.loadSkills(['a', 'b'], toolsetState)
     const records = f.log.map((entry, i) => ({ seq: i + 1, entry })) as ChatMessageLogRecord[]
     const projection = projectMessageLogRecords(records)
-    f.enabled.delete('user:b')
-    f.enabled.set('user:a', 'CURRENT_BODY')
+    f.enabled.delete('b')
+    f.enabled.set('a', 'CURRENT_BODY')
     f.cache.messages = [new SystemMessage('rebuilt'), new HumanMessage('compacted summary')]
     const restored = await refreshUserSkillContext({
       ...f,
       state: {
         ...f.state,
         toolsets: { loadedToolsetIds: projection.loadedToolsetIds },
-        skills: { loadedSkillIds: projection.loadedSkillIds }
+        skills: { loadedSkillNames: projection.loadedSkillNames }
       }
     })
-    expect(restored.skills.loadedSkillIds).toEqual(['user:a'])
+    expect(restored.skills.loadedSkillNames).toEqual(['a'])
     expect(restored.toolsets.loadedToolsetIds).toEqual(['docx-read'])
     expect(String(f.cache.messages![0].content)).toContain('CURRENT_BODY')
     expect(String(f.cache.messages![0].content)).not.toContain('BODY_B')
-    expect(loadCurrentUserSkills({ ...f.ctx, partnerId: 'another-partner' }, ['user:a'])).toEqual(
-      []
-    )
+    expect(loadCurrentUserSkills({ ...f.ctx, partnerId: 'another-partner' }, ['a'])).toEqual([])
   })
 
   it('rejects legacy toolset arguments before loading and accepts a corrected name request', async () => {
@@ -444,11 +437,11 @@ describe('user instruction skill runtime', () => {
     const loadedTools = calls[1].tools
     expect(projectMessageLogRecords(records)).toMatchObject({
       loadedToolsetIds: ['docx-read'],
-      loadedSkillIds: ['user:a']
+      loadedSkillNames: ['a']
     })
 
     // A new graph has no runtime cache: restore each kind's IDs and reread current instructions.
-    enabled.set('user:a', 'EDITED_BODY')
+    enabled.set('a', 'EDITED_BODY')
     expect((await run(2)).status).toBe('completed')
     expect(calls.at(-1)!.text).toContain('EDITED_BODY')
     expect(calls.at(-1)!.text).not.toContain('BODY_A')
@@ -474,10 +467,10 @@ describe('user instruction skill runtime', () => {
     expect(calls.at(-1)!.tools).toEqual(loadedTools)
     expect(projectMessageLogRecords(records)).toMatchObject({
       loadedToolsetIds: ['docx-read'],
-      loadedSkillIds: ['user:a']
+      loadedSkillNames: ['a']
     })
 
-    enabled.delete('user:a')
+    enabled.delete('a')
     expect((await run(4)).status).toBe('completed')
     expect(calls.at(-1)!.text).not.toContain('BODY_A')
     expect(calls.at(-1)!.text).not.toContain('EDITED_BODY')
@@ -486,7 +479,7 @@ describe('user instruction skill runtime', () => {
     expect(JSON.stringify(records)).not.toContain('EDITED_BODY')
     expect(projectMessageLogRecords(records)).toMatchObject({
       loadedToolsetIds: ['docx-read'],
-      loadedSkillIds: []
+      loadedSkillNames: []
     })
   })
 
@@ -501,7 +494,7 @@ describe('user instruction skill runtime', () => {
       {
         kind: 'annotation',
         eventType: 'skill_state_updated',
-        payload: { loadedSkillIds: ['user:a'] }
+        payload: { loadedSkillNames: ['a'] }
       }
     ])
     expect((await run(1)).status).toBe('completed')
@@ -511,7 +504,7 @@ describe('user instruction skill runtime', () => {
     expect(projection.loadedToolsetIds).toEqual(
       EXTERNAL_RUNTIME_TOOLSET_IDS.slice(-projection.loadedToolsetIds.length)
     )
-    expect(projection.loadedSkillIds).toEqual(['user:a'])
+    expect(projection.loadedSkillNames).toEqual(['a'])
     expect(calls[0].system.split('BODY_A')).toHaveLength(2)
     const snapshotCount = () =>
       records.filter(
@@ -520,19 +513,17 @@ describe('user instruction skill runtime', () => {
     expect(snapshotCount()).toBe(2)
     expect((await run(2)).status).toBe('completed')
     expect(calls[1].tools).toEqual(calls[0].tools)
-    expect(projectMessageLogRecords(records).loadedSkillIds).toEqual(['user:a'])
+    expect(projectMessageLogRecords(records).loadedSkillNames).toEqual(['a'])
     expect(snapshotCount()).toBe(2)
   })
 
   it('rejects oversized restored instructions instead of silently discarding later skills', () => {
     const f = fixture()
-    f.enabled.set('user:a', 'x'.repeat(MAX_USER_SKILL_BODY_BYTES))
-    expect(() => loadCurrentUserSkills(f.ctx, ['user:a', 'user:b'])).toThrow(/64 KiB/)
-    expect(() => loadCurrentUserSkills(f.ctx, ['user:a'])).toThrow(/64 KiB/)
-    f.enabled.delete('user:b')
-    expect(loadCurrentUserSkills(f.ctx, ['user:a']).map(({ skill }) => skill.id)).toEqual([
-      'user:a'
-    ])
-    expect(loadCurrentUserSkills({ ...f.ctx, userSkillService: undefined }, ['user:a'])).toEqual([])
+    f.enabled.set('a', 'x'.repeat(MAX_USER_SKILL_BODY_BYTES))
+    expect(() => loadCurrentUserSkills(f.ctx, ['a', 'b'])).toThrow(/64 KiB/)
+    expect(() => loadCurrentUserSkills(f.ctx, ['a'])).toThrow(/64 KiB/)
+    f.enabled.delete('b')
+    expect(loadCurrentUserSkills(f.ctx, ['a']).map(({ skill }) => skill.name)).toEqual(['a'])
+    expect(loadCurrentUserSkills({ ...f.ctx, userSkillService: undefined }, ['a'])).toEqual([])
   })
 })

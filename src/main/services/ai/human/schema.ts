@@ -230,7 +230,12 @@ export const humanMemorySchema = z.object({
 })
 
 export const humanSkillsSchema = z.object({
-  loadedSkillIds: z.array(z.string().startsWith('user:'))
+  loadedSkillNames: z.array(
+    z
+      .string()
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .max(64)
+  )
 })
 
 export const humanToolsetsSchema = z.object({

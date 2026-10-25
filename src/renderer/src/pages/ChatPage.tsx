@@ -4228,7 +4228,7 @@ const ChatPage: React.FC = () => {
           name,
           avatar_shape: createPartnerShape,
           avatar_color: createPartnerColor,
-          skillIds: partnerSkills.ids
+          skillNames: partnerSkills.names
         })
         if (!response.success || !response.partner) {
           emitErrorMessage(
@@ -4246,7 +4246,7 @@ const ChatPage: React.FC = () => {
         name,
         avatar_shape: createPartnerShape,
         avatar_color: createPartnerColor,
-        skillIds: partnerSkills.ids
+        skillNames: partnerSkills.names
       })
       if (!response.success || !response.partner) {
         emitErrorMessage(
@@ -4274,7 +4274,7 @@ const ChatPage: React.FC = () => {
     createPartnerName,
     createPartnerShape,
     createPartnerSubmitting,
-    partnerSkills.ids,
+    partnerSkills.names,
     partnerSkills.loading,
     partnerSkills.error,
     editingPartnerId,

@@ -21,7 +21,7 @@ export default function PartnerSkillPicker({
     return value > 0 && value < 0.1 ? '<0.1' : String(Math.round(value * 10) / 10)
   }
   const unavailable = draft.options.some(
-    (option) => draft.ids.includes(option.id) && option.bodyBytes === null
+    (option) => draft.names.includes(option.name) && option.bodyBytes === null
   )
   const visible = useMemo(
     () =>
@@ -49,7 +49,7 @@ export default function PartnerSkillPicker({
           className="flex items-center gap-2 text-[12px] text-[#787774]"
           data-testid={selectors.budget}
         >
-          <span>{t(($) => $.userSkills.selectionSummary, { count: draft.ids.length })}</span>
+          <span>{t(($) => $.userSkills.selectionSummary, { count: draft.names.length })}</span>
           <UsageRing
             ratio={unavailable ? null : draft.bytes / MAX_USER_SKILL_BODY_BYTES}
             label={
@@ -103,21 +103,21 @@ export default function PartnerSkillPicker({
               </p>
             ) : (
               visible.map((option) => {
-                const checked = draft.ids.includes(option.id)
+                const checked = draft.names.includes(option.name)
                 return (
                   <label
-                    key={option.id}
+                    key={option.name}
                     className={`flex cursor-pointer items-start gap-2.5 rounded-[4px] border-b border-[#EEEEEC] px-2 py-3 hover:bg-[#F4F4F2] ${checked ? 'bg-[#EDF3F8]' : ''}`}
-                    data-testid={`${selectors.togglePrefix}-${option.id}`}
+                    data-testid={`${selectors.togglePrefix}-${option.name}`}
                   >
                     <Checkbox
                       checked={checked}
                       disabled={disabled || (option.bodyBytes === null && !checked)}
                       onChange={(event) =>
-                        draft.setIds(
+                        draft.setNames(
                           event.target.checked
-                            ? [...draft.ids, option.id]
-                            : draft.ids.filter((id) => id !== option.id)
+                            ? [...draft.names, option.name]
+                            : draft.names.filter((id) => id !== option.name)
                         )
                       }
                     />
@@ -134,7 +134,7 @@ export default function PartnerSkillPicker({
                     </span>
                     <span
                       className="shrink-0 pt-0.5 text-[12px] tabular-nums text-[#787774]"
-                      data-testid={`${selectors.percentPrefix}-${option.id}`}
+                      data-testid={`${selectors.percentPrefix}-${option.name}`}
                       aria-label={
                         option.bodyBytes === null
                           ? t(($) => $.userSkills.unavailableOption)

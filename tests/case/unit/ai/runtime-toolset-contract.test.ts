@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import { buildModelToolResultDelivery } from '../../../../src/main/services/ai/human/shared/modelToolResult'
-import { SKILL_SYNC_SCHEMA } from '../../../../src/main/services/ai/human/tools/skills/toolSchemas'
+import { SKILL_CONFIG_SCHEMA } from '../../../../src/main/services/ai/human/tools/agentControl/toolSchemas'
 import { isToolAllowed } from '../../../../src/main/services/ai/run/toolPolicy'
 import {
   getEffectiveLoadedToolsetIds,
@@ -16,26 +16,25 @@ import {
 
 describe('ai unit runtime toolset contract', () => {
   it('keeps skill management minimal and restricted to the main partner', () => {
-    expect(getToolsetDefinition('skill-management').toolNames).toEqual(['skill_sync'])
-    for (const input of [
-      { action: 'status' },
-      { action: 'status', name: 'weekly-report' },
-      { action: 'sync', name: 'weekly-report' },
-      { action: 'sync', name: 'weekly-report', enabled: false }
-    ])
-      expect(SKILL_SYNC_SCHEMA.safeParse(input).success).toBe(true)
+    expect(getToolsetDefinition('agent-control').toolNames).toContain('skill_config')
     for (const input of [
       {},
-      { action: 'sync' },
-      { action: 'status', enabled: false },
-      { action: 'sync', name: '../escape' },
-      { action: 'sync', name: 'x', previousName: 'y' },
-      { action: 'sync', name: 'x', partnerId: 'other' },
-      { action: 'sync', name: 'x', sourcePath: '/draft' }
+      { name: 'weekly-report' },
+      { name: 'weekly-report', enabled: true },
+      { name: 'weekly-report', enabled: false }
     ])
-      expect(SKILL_SYNC_SCHEMA.safeParse(input).success).toBe(false)
-    expect(isToolAllowed({ isSubagent: true }, 'skill_sync')).toBe(false)
-    expect(isToolAllowed({ isSubagent: false }, 'skill_sync')).toBe(true)
+      expect(SKILL_CONFIG_SCHEMA.safeParse(input).success).toBe(true)
+    for (const input of [
+      { enabled: false },
+      { name: '../escape' },
+      { name: 'x', action: 'sync' },
+      { name: 'x', id: 'old' },
+      { name: 'x', partnerId: 'other' },
+      { name: 'x', sourcePath: '/draft' }
+    ])
+      expect(SKILL_CONFIG_SCHEMA.safeParse(input).success).toBe(false)
+    expect(isToolAllowed({ isSubagent: true }, 'skill_config')).toBe(false)
+    expect(isToolAllowed({ isSubagent: false }, 'skill_config')).toBe(true)
   })
 
   it('delivers the affected Chinese partner names and validation reason to the model', async () => {
@@ -43,8 +42,8 @@ describe('ai unit runtime toolset contract', () => {
     const delivered = await buildModelToolResultDelivery({
       ctx: { platform: 'macos' } as AiRunContext,
       toolCallId: 'sync-budget-error',
-      args: { action: 'sync', name: 'weekly-report', enabled: true },
-      result: { toolName: 'skill_sync', ok: false, data: { error } }
+      args: { name: 'weekly-report', enabled: true },
+      result: { toolName: 'skill_config', ok: false, data: { error } }
     })
     expect(delivered).toEqual({ ok: false, content: `Error: ${error}` })
   })
@@ -66,8 +65,7 @@ describe('ai unit runtime toolset contract', () => {
       'excel-read',
       'excel-write',
       'image-generation',
-      'scheduled-tasks',
-      'skill-management'
+      'scheduled-tasks'
     ])
   })
 

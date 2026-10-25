@@ -14,8 +14,8 @@ export const createSkillLoadingNode = (input: { ctx: AiRunContext; cache: HumanR
     const action = state.execution.pendingRound?.nextAction
     if (!action || action.action !== 'skill_loading') return returnToDispatch(state)
     const requestedSkillNames = [...new Set(action.wantLoadSkillNames)]
-    const previousIds = state.skills.loadedSkillIds
-    const current = loadCurrentUserSkills(input.ctx, previousIds)
+    const previousNames = state.skills.loadedSkillNames
+    const current = loadCurrentUserSkills(input.ctx, previousNames)
     const enabled = input.ctx.userSkillService?.listEnabled(input.ctx.partnerId) ?? []
     const newlyLoaded: LoadedUserSkill[] = []
     const skippedDuplicateSkillNames: string[] = []
@@ -34,12 +34,12 @@ export const createSkillLoadingNode = (input: { ctx: AiRunContext; cache: HumanR
         unavailableSkills.push({ name, error: 'Skill is not available' })
         continue
       }
-      if (current.some((item) => item.skill.id === skill.id)) {
+      if (current.some((item) => item.skill.name === skill.name)) {
         skippedDuplicateSkillNames.push(name)
         continue
       }
       try {
-        newlyLoaded.push(input.ctx.userSkillService.loadEnabled(input.ctx.partnerId, skill.id))
+        newlyLoaded.push(input.ctx.userSkillService.loadEnabled(input.ctx.partnerId, skill.name))
       } catch (error) {
         unavailableSkills.push({
           name,
@@ -61,15 +61,15 @@ export const createSkillLoadingNode = (input: { ctx: AiRunContext; cache: HumanR
       )
       newlyLoaded.length = 0
     }
-    const loadedSkillNames = newlyLoaded.map((item) => item.skill.name)
-    const loadedSkillIds = [...current, ...newlyLoaded].map((item) => item.skill.id)
+    const newlyLoadedSkillNames = newlyLoaded.map((item) => item.skill.name)
+    const loadedSkillNames = [...current, ...newlyLoaded].map((item) => item.skill.name)
     const outcome = {
       requestedSkillNames,
-      loadedSkillNames,
+      loadedSkillNames: newlyLoadedSkillNames,
       skippedDuplicateSkillNames,
       unavailableSkills
     }
-    const ok = loadedSkillNames.length + skippedDuplicateSkillNames.length > 0
+    const ok = newlyLoadedSkillNames.length + skippedDuplicateSkillNames.length > 0
     const content = renderLoadSkillModelResult({
       toolName: 'load_skill',
       args: { skillNames: requestedSkillNames },
@@ -79,7 +79,7 @@ export const createSkillLoadingNode = (input: { ctx: AiRunContext; cache: HumanR
       newlyLoaded.map(({ skill }) => ({
         kind: 'annotation' as const,
         eventType: 'skill_loading_started' as const,
-        payload: { skillId: skill.id }
+        payload: { skillName: skill.name }
       }))
     )
     await appendToolFeedback({
@@ -94,14 +94,14 @@ export const createSkillLoadingNode = (input: { ctx: AiRunContext; cache: HumanR
       ...newlyLoaded.map(({ skill }) => ({
         kind: 'annotation' as const,
         eventType: 'skill_loading_completed' as const,
-        payload: { skillId: skill.id }
+        payload: { skillName: skill.name }
       })),
-      ...(JSON.stringify(previousIds) !== JSON.stringify(loadedSkillIds)
+      ...(JSON.stringify(previousNames) !== JSON.stringify(loadedSkillNames)
         ? [
             {
               kind: 'annotation' as const,
               eventType: 'skill_state_updated' as const,
-              payload: { loadedSkillIds }
+              payload: { loadedSkillNames }
             }
           ]
         : [])
@@ -129,7 +129,7 @@ export const createSkillLoadingNode = (input: { ctx: AiRunContext; cache: HumanR
         }
       ],
       stage: 'human_skill_loading',
-      overrides: { skills: { loadedSkillIds }, execution: { lastSkillLoadingOutcome: outcome } }
+      overrides: { skills: { loadedSkillNames }, execution: { lastSkillLoadingOutcome: outcome } }
     })
   }
 }

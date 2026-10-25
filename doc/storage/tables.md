@@ -62,26 +62,16 @@ Workbench 伙伴。
 | `updated_at`     | INTEGER | 更新时间       |
 | `last_viewed_at` | INTEGER | 最近查看时间   |
 
-### `user_skill`
-
-共享 Skill 文件夹索引，不存正文。
-
-| 字段             | 类型                 | 说明                              |
-| ---------------- | -------------------- | --------------------------------- |
-| `id`             | TEXT PK              | 稳定 `user:` 命名空间 ID          |
-| `name`           | TEXT UNIQUE NOT NULL | 标准 Skill 名称                   |
-| `description`    | TEXT NOT NULL        | 目录提示描述                      |
-| `directory_name` | TEXT UNIQUE NOT NULL | `userData/skills/` 下的受管目录名 |
-| `created_at`     | INTEGER NOT NULL     | 创建时间                          |
-
 ### `partner_user_skill`
 
-| 字段         | 类型          | 说明                                    |
-| ------------ | ------------- | --------------------------------------- |
-| `partner_id` | TEXT NOT NULL | `partner(id)` 外键，删除伙伴级联绑定    |
-| `skill_id`   | TEXT NOT NULL | `user_skill(id)` 外键，删除资产级联绑定 |
+仅保存伙伴对目录 Skill 的启用选择；名称、描述和内容均读取文件。
 
-复合主键 `(partner_id, skill_id)` 防止重复绑定；`skill_id` 有独立索引。
+| 字段         | 类型          | 说明                                 |
+| ------------ | ------------- | ------------------------------------ |
+| `partner_id` | TEXT NOT NULL | `partner(id)` 外键，删除伙伴级联配置 |
+| `skill_name` | TEXT NOT NULL | `userData/skills/{name}/` 的名称     |
+
+复合主键 `(partner_id, skill_name)` 防止重复选择，名称有独立索引；目录缺失不自动删除选择。
 
 ### `partner_ui_state`
 

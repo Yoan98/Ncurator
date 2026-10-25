@@ -24,6 +24,7 @@ import { openWithPreferencesMigration } from './migrations/017_open_with_prefere
 import { appLanguageAndServiceRouteMigration } from './migrations/018_app_language_and_service_route'
 
 import { userSkillsMigration } from './migrations/019_user_skills'
+import { skillNameBindingsMigration } from './migrations/020_skill_name_bindings'
 
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
@@ -47,10 +48,11 @@ const MIGRATIONS: readonly Migration[] = [
   subagentSessionsMigration,
   openWithPreferencesMigration,
   appLanguageAndServiceRouteMigration,
-  userSkillsMigration
+  userSkillsMigration,
+  skillNameBindingsMigration
 ]
 
-export const CURRENT_SCHEMA_VERSION = 19
+export const CURRENT_SCHEMA_VERSION = 20
 
 const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
   [2, new Set(['workspace_change_sets'])]

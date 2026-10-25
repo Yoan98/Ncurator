@@ -1,3 +1,4 @@
+import { buildSkillConfigTool } from './skillConfig'
 import { tool } from '@langchain/core/tools'
 import type { ToolFamilyDefinition } from '../types'
 import {
@@ -15,10 +16,11 @@ import { prepareImagesForMainModel } from './readImage'
 import { FreeModelCatalogService } from '../../../../llm/FreeModelCatalogService'
 import { isFreeModelWithoutVision } from '../../../../../../shared/messageLogVisionContext'
 
-// 学习、计划和提问由各自节点处理；图片读取和子任务派发在公共 hand 工具链执行。
+// 加载、计划和提问由各自节点处理；图片读取和子任务派发在公共 hand 工具链执行。
 export const agentControlToolFamily: ToolFamilyDefinition = {
   familyId: 'agent-control',
-  buildTools: ({ ctx }) => {
+  buildTools: (input) => {
+    const { ctx } = input
     const loadToolset = tool(async () => ({}), {
       name: LOAD_TOOLSET_TOOL_SPEC.name,
       description: LOAD_TOOLSET_TOOL_SPEC.promptSpec.description,
@@ -99,6 +101,15 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
       description: LIST_AGENT_TOOL_SPEC.promptSpec.description,
       schema: LIST_AGENT_TOOL_SPEC.inputSchema
     })
-    return [list, loadToolset, loadSkill, updatePlan, readImage, askUserQuestion, delegate]
+    return [
+      list,
+      loadToolset,
+      loadSkill,
+      buildSkillConfigTool(input),
+      updatePlan,
+      readImage,
+      askUserQuestion,
+      delegate
+    ]
   }
 }

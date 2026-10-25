@@ -4,24 +4,30 @@ import type { AiRunContext } from '../types'
 
 export type UserSkillReader = Pick<UserSkillService, 'listEnabled' | 'loadEnabled'>
 export type UserSkillAccess = UserSkillReader &
-  Partial<Pick<UserSkillService, 'getRootDirectory' | 'statusForPartner' | 'syncForPartner'>>
+  Pick<UserSkillService, 'getRootDirectory'> &
+  Partial<Pick<UserSkillService, 'statusForPartner' | 'configureForPartner'>>
 export type LoadedUserSkill = ReturnType<UserSkillReader['loadEnabled']>
 
-export const isUserSkillId = (id: string): boolean => id.startsWith('user:')
+export const isSkillName = (name: string): boolean =>
+  /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) && name.length <= 64
 
 export const loadCurrentUserSkills = (
   ctx: Pick<AiRunContext, 'partnerId' | 'userSkillService'>,
-  ids: readonly string[]
+  names: readonly string[]
 ): LoadedUserSkill[] => {
   if (!ctx.userSkillService) return []
   const enabled = ctx.userSkillService.listEnabled(ctx.partnerId)
-  const requested = [...new Set(ids)].filter((id) => enabled.some((skill) => skill.id === id))
+  const requested = [...new Set(names)].filter((name) =>
+    enabled.some((skill) => skill.name === name)
+  )
   if (!requested.length) return []
-  const current = enabled.map((skill) => ctx.userSkillService!.loadEnabled(ctx.partnerId, skill.id))
+  const current = enabled.map((skill) =>
+    ctx.userSkillService!.loadEnabled(ctx.partnerId, skill.name)
+  )
   const bytes = current.reduce((sum, item) => sum + Buffer.byteLength(item.body, 'utf8'), 0)
   if (bytes > MAX_USER_SKILL_BODY_BYTES)
     throw new Error('Skill instructions exceed 64 KiB; adjust the enabled skills before continuing')
-  const loaded = requested.map((id) => current.find((item) => item.skill.id === id)!)
+  const loaded = requested.map((name) => current.find((item) => item.skill.name === name)!)
   return loaded
 }
 
@@ -32,7 +38,9 @@ export const renderUserSkills = (
   ctx: Pick<AiRunContext, 'partnerId' | 'userSkillService'>,
   loaded: readonly LoadedUserSkill[] = []
 ): string => {
-  const skills = ctx.userSkillService?.listEnabled(ctx.partnerId) || []
+  const skills = (ctx.userSkillService?.listEnabled(ctx.partnerId) || []).filter(
+    (skill) => skill.description
+  )
   if (!skills.length) return ''
   return [
     '技能：',

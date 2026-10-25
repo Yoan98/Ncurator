@@ -264,10 +264,10 @@ const extractUnionExamples = (schema: z.ZodType): Array<{ label: string; input: 
 }
 
 const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: JsonObject }>> = {
-  skill_sync: [
-    { label: 'status', input: { action: 'status' } },
-    { label: 'sync-and-enable', input: { action: 'sync', name: 'weekly-report', enabled: true } },
-    { label: 'disable', input: { action: 'sync', name: 'weekly-report', enabled: false } }
+  skill_config: [
+    { label: 'status', input: {} },
+    { label: 'enable', input: { name: 'weekly-report', enabled: true } },
+    { label: 'disable', input: { name: 'weekly-report', enabled: false } }
   ],
   web_search: [
     { label: 'search', input: { type: 'search', query: 'typescript tutorial' } },
@@ -347,10 +347,9 @@ const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: Json
 
 /** renderer 实际读取的字段 */
 const OUTPUT_FIELDS: Record<string, OutField[]> = {
-  skill_sync: [
-    { path: '[].name / [].enabled', description: '只读状态：已登记 Skill 对当前伙伴的启用配置' },
-    { path: 'name / enabled', description: '同步后的名称及当前伙伴启用配置' },
-    { path: 'warning?', description: '损坏目录已停用但未同步时的明确说明' },
+  skill_config: [
+    { path: '[].name / [].enabled', description: '只读配置：已发现 Skill 对当前伙伴的启用配置' },
+    { path: 'name / enabled', description: '修改后的名称及当前伙伴启用配置' },
     { path: 'filePath', description: '超长状态清单的真实工具结果文件' }
   ],
   terminal_run: [
@@ -515,36 +514,35 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
 }
 
 const OUTPUT_CASES: Record<string, OutputCase[]> = {
-  skill_sync: [
+  skill_config: [
     {
       label: '全部启用状态',
       ok: true,
-      input: { action: 'status' },
+      input: {},
       data: [
         { name: 'weekly-report', enabled: true },
         { name: 'project-review', enabled: false }
       ]
     },
     {
-      label: '同步并启用',
+      label: '启用',
       ok: true,
-      input: { action: 'sync', name: 'weekly-report', enabled: true },
+      input: { name: 'weekly-report', enabled: true },
       data: { name: 'weekly-report', enabled: true }
     },
     {
       label: '停用损坏目录',
       ok: true,
-      input: { action: 'sync', name: 'weekly-report', enabled: false },
+      input: { name: 'weekly-report', enabled: false },
       data: {
         name: 'weekly-report',
-        enabled: false,
-        warning: 'Skill disabled; directory was not synced: SKILL.md is invalid'
+        enabled: false
       }
     },
     {
       label: '预算拒绝',
       ok: false,
-      input: { action: 'sync', name: 'weekly-report', enabled: true },
+      input: { name: 'weekly-report', enabled: true },
       data: { error: 'Skill instructions exceed 64 KiB for: 周报伙伴' }
     }
   ],
@@ -1616,18 +1614,19 @@ const renderSkillPromptExample = (): string => {
   const directory = path.join(ROOT, 'tests/fixtures/workspace/skills/weekly-report')
   const parsed = parseSkillMarkdown(fs.readFileSync(path.join(directory, 'SKILL.md'), 'utf8'))
   const skill = {
-    id: 'user:example',
     name: parsed.name,
-    description: parsed.description,
-    directoryName: parsed.name,
-    createdAt: 0
+    description: parsed.description
   }
   const loaded = { skill, body: parsed.body, resourceBase: directory }
   const ctx = {
     partnerId: 'prompt-example',
     partnerName: '周报助手',
     platform: 'macos' as const,
-    userSkillService: { listEnabled: () => [skill], loadEnabled: () => loaded }
+    userSkillService: {
+      getRootDirectory: () => path.dirname(directory),
+      listEnabled: () => [skill],
+      loadEnabled: () => loaded
+    }
   }
   const user = buildBrainUserMessageForInput({
     userInput: '按周报规范整理本周进展。事实：完成客户访谈；外部联调延期；下周提交方案。',

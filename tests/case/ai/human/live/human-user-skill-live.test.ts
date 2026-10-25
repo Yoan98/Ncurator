@@ -65,16 +65,16 @@ describe('ai human user skill live', () => {
             pinned_at: null
           })
           const service = new UserSkillService(
-            runtime.storageService.userSkill,
+            runtime.storageService.partnerSkills,
             path.join(runtime.workspaceRoot, '.ncurator-test', 'skill-assets')
           )
           const skills = SKILL_NAMES.map((name) => {
             const preview = service.prepareImport(path.join(runtime.workspaceRoot, 'skills', name))
-            return service.commitImport({ ...preview, replaceId: null })
+            return service.commitImport({ ...preview, replaceName: null })
           })
           service.setEnabled(
             partnerId,
-            skills.map((skill) => skill.id)
+            skills.map((skill) => skill.name)
           )
           await fs.rm(path.join(runtime.workspaceRoot, 'skills'), { recursive: true })
           const sources = await Promise.all(
@@ -97,9 +97,9 @@ describe('ai human user skill live', () => {
             OUTPUTS.slice(0, 2).map((file) => fs.readFile(path.join(runtime.workspaceRoot, file)))
           )
           const riskSkill = skills.find((skill) => skill.name === 'risk-actions')!
-          const document = service.getDocument(riskSkill.id)
+          const document = service.getDocument(riskSkill.name)
           service.update({
-            id: riskSkill.id,
+            originalName: riskSkill.name,
             name: document.name,
             description: document.description,
             body: `${document.body}\n${UPDATED_RULE}\n`

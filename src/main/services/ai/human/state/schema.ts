@@ -49,7 +49,7 @@ export const createDefaultHumanStateFields = (): Pick<
   execution: createDefaultHumanExecution(),
   memory: createDefaultHumanMemory(),
   toolsets: createDefaultHumanToolsets(),
-  skills: { loadedSkillIds: [] },
+  skills: { loadedSkillNames: [] },
   trace: createDefaultHumanTrace()
 })
 
@@ -64,7 +64,7 @@ export const createHumanRunStateSchema = () => {
     execution: humanExecutionSchema.default(createDefaultHumanExecution),
     memory: humanMemorySchema.default(createDefaultHumanMemory),
     toolsets: humanToolsetsSchema.default(createDefaultHumanToolsets),
-    skills: humanSkillsSchema.default(() => ({ loadedSkillIds: [] })),
+    skills: humanSkillsSchema.default(() => ({ loadedSkillNames: [] })),
     result: humanStateContractSchema.shape.result,
     trace: humanTraceSchema.default(createDefaultHumanTrace)
   })

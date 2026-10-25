@@ -1,4 +1,4 @@
-import { UserSkillStore } from './domains/UserSkillStore'
+import { PartnerSkillStore } from './domains/PartnerSkillStore'
 import { OpenWithPreferenceStore } from './domains/OpenWithPreferenceStore'
 import path from 'node:path'
 import { AiFileChangeStore } from './domains/AiFileChangeStore'
@@ -23,7 +23,7 @@ import type { AppErrorLogService } from '../logging/AppErrorLogService'
 export class StorageService {
   private static instance: StorageService
 
-  public readonly userSkill: UserSkillStore
+  public readonly partnerSkills: PartnerSkillStore
   public readonly sqlite: SqliteCore
   public readonly vector: LanceDbCore
   public readonly documents: DocumentsStore
@@ -55,7 +55,7 @@ export class StorageService {
       input.sqlitePath ||
       (input.dbPath ? path.join(path.dirname(input.dbPath), 'app.sqlite') : undefined)
     this.sqlite = new SqliteCore(sqlitePath)
-    this.userSkill = new UserSkillStore(this.sqlite)
+    this.partnerSkills = new PartnerSkillStore(this.sqlite)
     this.vector = new LanceDbCore(input.vectorPath || input.dbPath, input.errorLogService)
     this.documents = new DocumentsStore(this.sqlite, this.vector)
     this.webSource = new WebSourceStore(this.sqlite)

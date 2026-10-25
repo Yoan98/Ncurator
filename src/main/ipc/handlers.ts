@@ -11,7 +11,7 @@ import { getAppRuntime, setServiceRoute } from '../services/app/AppRuntime'
 import { FileReviewService } from '../services/ai/fileChanges/FileReviewService'
 import { isWpsApplication, type OpenFileReviewLocationRequest } from '../../shared/fileReview'
 import { notifyWpsFileOpened } from '../services/wps/officeFileWriteNotify'
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { SystemNotificationService } from '../services/SystemNotificationService'
 import type { TelemetryService } from '../services/telemetry/TelemetryService'
 import type { AppErrorLogService } from '../services/logging/AppErrorLogService'
@@ -363,11 +363,13 @@ export function registerHandlers(services: {
     isPartnerBusy: (partnerId) => chatRunService.hasActivePartnerRun(partnerId),
     beforeCleanup: (partnerId) => terminalSessionManager.closeByChatSession(partnerId)
   })
-  const userSkillService = new UserSkillService(storageService.userSkill, undefined, () => {
+  const userSkillService = new UserSkillService(storageService.partnerSkills, undefined, () => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send('user-skills-changed')
     }
   })
+  userSkillService.startWatching()
+  app.once('will-quit', () => userSkillService.dispose())
   const chatRunService = new ChatRunService({
     userSkillService,
     partnerStore,
@@ -3196,7 +3198,7 @@ export function registerHandlers(services: {
         }
         storageService.sqlite.transaction(() => {
           partnerStore.savePartner(partner)
-          userSkillService.setEnabled(partner.id, payload.skillIds)
+          userSkillService.setEnabled(partner.id, payload.skillNames)
         })
         await workbenchUiStore.savePartnerState(partner.id, createEmptyPartnerUiState())
         return { success: true, partner }
@@ -3225,7 +3227,7 @@ export function registerHandlers(services: {
         }
         storageService.sqlite.transaction(() => {
           partnerStore.savePartner(partner)
-          userSkillService.setEnabled(partner.id, payload.skillIds)
+          userSkillService.setEnabled(partner.id, payload.skillNames)
         })
         return { success: true, partner }
       } catch (e: unknown) {
@@ -3632,7 +3634,7 @@ export function registerHandlers(services: {
   ipcMain.handle('user-skills-create', (_event, request: UserSkillCreateRequest) =>
     userSkillService.create(request)
   )
-  ipcMain.handle('user-skills-get', (_event, id: string) => userSkillService.getDocument(id))
+  ipcMain.handle('user-skills-get', (_event, name: string) => userSkillService.getDocument(name))
   ipcMain.handle(
     'user-skills-preview-resource',
     (event, source: UserSkillSource, relative: string) =>
@@ -3650,7 +3652,7 @@ export function registerHandlers(services: {
   ipcMain.handle('user-skills-cancel-import', (event, token: string) =>
     userSkillService.cancelImport(token, event.sender.id)
   )
-  ipcMain.handle('user-skills-delete', (_event, id: string) => userSkillService.delete(id))
+  ipcMain.handle('user-skills-delete', (_event, name: string) => userSkillService.delete(name))
   ipcMain.handle('user-skills-get-enabled', (_event, partnerId: string) =>
     userSkillService.getSelection(partnerId)
   )

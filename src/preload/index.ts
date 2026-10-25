@@ -337,13 +337,13 @@ const api: DesktopApi = {
   userSkillsImport: () => ipcRenderer.invoke('user-skills-import'),
   userSkillsCommitImport: (input) => ipcRenderer.invoke('user-skills-commit-import', input),
   userSkillsCancelImport: (token) => ipcRenderer.invoke('user-skills-cancel-import', token),
-  userSkillsGet: (id) => ipcRenderer.invoke('user-skills-get', id),
+  userSkillsGet: (name) => ipcRenderer.invoke('user-skills-get', name),
   userSkillsPreviewResource: (source, relative) =>
     ipcRenderer.invoke('user-skills-preview-resource', source, relative),
   userSkillsOpenFolder: (source) => ipcRenderer.invoke('user-skills-open-folder', source),
   userSkillsUpdate: (input) => ipcRenderer.invoke('user-skills-update', input),
   userSkillsCreate: (input) => ipcRenderer.invoke('user-skills-create', input),
-  userSkillsDelete: (id) => ipcRenderer.invoke('user-skills-delete', id),
+  userSkillsDelete: (name) => ipcRenderer.invoke('user-skills-delete', name),
   userSkillsGetEnabled: (partnerId) => ipcRenderer.invoke('user-skills-get-enabled', partnerId),
   scheduledTaskList: () => {
     emitE2EIpcCall('scheduledTaskList')

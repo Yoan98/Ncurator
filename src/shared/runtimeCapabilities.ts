@@ -9,8 +9,7 @@ export const AI_TOOL_FAMILY_IDS = [
   'web',
   'image-generation',
   'agent-control',
-  'scheduled-tasks',
-  'skill-management'
+  'scheduled-tasks'
 ] as const
 
 export type RuntimeToolFamilyId = (typeof AI_TOOL_FAMILY_IDS)[number]
@@ -56,7 +55,7 @@ export const RUNTIME_TOOL_CATALOG = {
   ask_user_question: { familyId: 'agent-control', toolsetId: 'agent-control' },
   scheduled_task_list: { familyId: 'scheduled-tasks', toolsetId: 'scheduled-tasks' },
   scheduled_task_action: { familyId: 'scheduled-tasks', toolsetId: 'scheduled-tasks' },
-  skill_sync: { familyId: 'skill-management', toolsetId: 'skill-management' }
+  skill_config: { familyId: 'agent-control', toolsetId: 'agent-control' }
 } as const satisfies Record<string, RuntimeToolCatalogEntry>
 
 export type RuntimeToolName = keyof typeof RUNTIME_TOOL_CATALOG
@@ -83,8 +82,7 @@ const RUNTIME_TOOLSET_DISPLAY_NAMES = {
   'excel-write': 'Excel 编辑器',
   'image-generation': '图片生成',
   'agent-control': '任务控制',
-  'scheduled-tasks': '定时任务',
-  'skill-management': 'skill 管理'
+  'scheduled-tasks': '定时任务'
 } as const satisfies Record<RuntimeToolsetId, string>
 
 export const getRuntimeToolsetDisplayName = (toolsetId: string): string | undefined =>

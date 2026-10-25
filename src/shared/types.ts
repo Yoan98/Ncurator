@@ -762,7 +762,7 @@ export interface PartnerListItem extends Partner {
 }
 
 export type PartnerCreateRequest = {
-  skillIds: string[]
+  skillNames: string[]
   name: string
   avatar_shape: PartnerAvatarShape
   avatar_color: PartnerAvatarColor
@@ -775,7 +775,7 @@ export type PartnerCreateResponse = {
 }
 
 export type PartnerUpdateRequest = {
-  skillIds: string[]
+  skillNames: string[]
   id: string
   name: string
   avatar_shape: PartnerAvatarShape
@@ -2211,12 +2211,12 @@ export type ChatMessageLogAnnotationEntry =
   | {
       kind: 'annotation'
       eventType: 'skill_loading_started' | 'skill_loading_completed'
-      payload: { skillId: string }
+      payload: { skillName: string }
     }
   | {
       kind: 'annotation'
       eventType: 'skill_state_updated'
-      payload: { loadedSkillIds: string[] }
+      payload: { loadedSkillNames: string[] }
     }
   | {
       kind: 'annotation'

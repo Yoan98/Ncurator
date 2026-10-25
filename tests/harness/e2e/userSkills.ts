@@ -108,7 +108,7 @@ export const enableSkill = async (
   await form.waitFor({ state: 'hidden' })
   await page.waitForFunction(
     async ({ partnerId, id, enabled }) =>
-      (await window.api.userSkillsGetEnabled(partnerId)).skillIds.includes(id) === enabled,
+      (await window.api.userSkillsGetEnabled(partnerId)).skillNames.includes(id) === enabled,
     { partnerId, id, enabled }
   )
   await openSkills(page)

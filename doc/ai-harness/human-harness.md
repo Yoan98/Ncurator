@@ -144,7 +144,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `toolset_loading_started` / `toolset_loading_completed` | `{ toolsetId }`                                                                                                           | UI 过程层                                                                                                                                                                   |
 | `skill_loading_started` / `skill_loading_completed`     | `{ skillId }`                                                                                                             | 说明技能加载过程状态，不授予工具权限                                                                                                                                        |
 | `toolset_state_updated`                                 | `{ loadedToolsetIds: string[] }`                                                                                          | 同 run 只驱动 bindTools；新 run 从图启动扫描该伙伴剩余 log 最新一条                                                                                                         |
-| `skill_state_updated`                                   | `{ loadedSkillIds: string[] }`                                                                                            | 恢复用户说明 ID；每次推理前仍校验当前伙伴绑定和文件，不保存正文                                                                                                             |
+| `skill_state_updated`                                   | `{ loadedSkillNames: string[] }`                                                                                          | 恢复用户说明名称；每次推理前仍校验当前伙伴绑定和文件，不保存正文                                                                                                            |
 | `plan_updated`                                          | `{ plan: [{ title, status }] }`                                                                                           | UI 计划条；新 run 从图启动扫描该伙伴剩余 log 最新一条                                                                                                                       |
 | `compaction_checkpoint`                                 | `{ compactBlockId, throughSeq, sourceMessageCount, summary }`                                                             | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User                                                                           |
 | `finalizing_started`                                    | `{}`                                                                                                                      | 投影时**清空** plan                                                                                                                                                         |
@@ -752,12 +752,12 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 
 ### 7.1 概念
 
-| 概念              | 含义                                                                           |
-| ----------------- | ------------------------------------------------------------------------------ |
-| **Toolset**       | 能力包；`builtin` 默认可 bind；`external` 需 `load_toolset` 后才进入 bindTools |
-| **Skill**         | 用户说明文件资产；按伙伴启用并经 `load_skill` 加载，不注册工具                 |
-| **Tool**          | 具体执行入口；归属一个或多个 toolset                                           |
-| **agent-control** | 内置 toolset，承载 `load_toolset`、`load_skill`、`update_plan`、`read_image`   |
+| 概念              | 含义                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| **Toolset**       | 能力包；`builtin` 默认可 bind；`external` 需 `load_toolset` 后才进入 bindTools               |
+| **Skill**         | 用户说明文件资产；按伙伴启用并经 `load_skill` 加载，不注册工具                               |
+| **Tool**          | 具体执行入口；归属一个或多个 toolset                                                         |
+| **agent-control** | 内置 toolset，承载 `load_toolset`、`load_skill`、`skill_config`、`update_plan`、`read_image` |
 
 toolset / tool 的 prompt **只声明边界**，不写固定调用顺序（细节见 `tool-design.md` 第 1 节）。
 
@@ -785,12 +785,12 @@ brain 返回 load_toolset
 
 #### 用户共享说明技能
 
-`load_toolset({ toolsetNames: string[] })` 只加载预注册工具包；`load_skill({ skillNames: string[] })` 只加载当前伙伴启用的用户说明。`user:<uuid>` 不进入 `RuntimeToolsetId`、tool registry 或工具预算，两类加载请求不能互换参数。模型按名称选择用户说明，内部稳定 ID 用于绑定、编辑、重命名与恢复。技能目录只列当前伙伴启用项，按名称排序，仅含名称与适用场景。
+`load_toolset({ toolsetNames: string[] })` 只加载预注册工具包；`load_skill({ skillNames: string[] })` 只加载当前伙伴启用的用户说明。用户 Skill 不进入 `RuntimeToolsetId`、tool registry 或工具预算，两类加载请求不能互换参数。模型按名称选择用户说明，目录是唯一内容来源，配置、加载及恢复均按名称。技能目录只列当前伙伴启用项，按名称排序，仅含名称与适用场景。
 
-- `load_skill` 经 `skill_loading` 节点调用 `UserSkillService.loadEnabled`，校验当前伙伴绑定与文件安全，读取正文及 `resourceBase`；运行态单独保存 `skills.loadedSkillIds`。正文 UTF-8 合计上限为 64 KiB，在伙伴配置和共享资产修改时预检；运行时超限明确报错，不进行遗忘或静默舍弃。
+- `load_skill` 经 `skill_loading` 节点调用 `UserSkillService.loadEnabled`，校验当前伙伴绑定与文件安全，读取正文及 `resourceBase`；运行态单独保存 `skills.loadedSkillNames`。正文 UTF-8 合计上限为 64 KiB，在伙伴配置和共享资产修改时预检；运行时超限明确报错，不进行遗忘或静默舍弃。
 - `load_skill` 的持久化 tool 反馈只保存技能名称、加载结果及失败原因，不保存正文或内部 ID。正文和资源基址由下一次 budget / brain 前重建的唯一当前 System 说明区提供；这不是历史 ToolMessage 正文返回。内容仅是用户任务指导，不改变系统规则、审批或资源权限，不自动执行脚本、安装依赖或注册工具。
-- `toolset_state_updated.payload.loadedToolsetIds` 与 `skill_state_updated.payload.loadedSkillIds` 分别保存两类 ID 的完整快照；恢复时各自投影；不支持的旧格式或 malformed 快照跳过，不清空后续有效快照，也不妨碍读取会话历史；旧工具包选择需要按需重新加载。每次 budget / brain 前重新读取当前启用绑定和文件，覆盖而非追加说明区；编辑即时更新；停用或删除时从运行态剔除，并写入新的 Skill ID 快照；文件丢失、不安全或正文超限时明确报错。
-- 正文不进入 transcript，因此 compaction 不会复制旧说明。显式开启的 `NCURATOR_E2E_OBSERVER` / 测试 `recordLlmIo` 仍可捕获实际模型请求（包括当前说明正文）；该调试记录不是会话恢复数据源。重复加载、compaction 和 resume 都只重建一份当前有效正文；被剔除的 ID 即使随后重新启用，也要再次加载。当前启用关系才是授权依据，历史反馈不能恢复已失效权限。
+- `toolset_state_updated.payload.loadedToolsetIds` 与 `skill_state_updated.payload.loadedSkillNames` 分别保存工具包 ID 与 Skill 名称的完整快照；恢复时各自投影；不支持的旧格式或 malformed 快照跳过，不清空后续有效快照，也不妨碍读取会话历史；旧工具包选择需要按需重新加载。每次 budget / brain 前重新读取当前启用绑定和文件，覆盖而非追加说明区；编辑即时更新；停用或删除时从运行态剔除，并写入新的 Skill 名称快照；文件丢失、不安全或正文超限时明确报错。
+- 正文不进入 transcript，因此 compaction 不会复制旧说明。显式开启的 `NCURATOR_E2E_OBSERVER` / 测试 `recordLlmIo` 仍可捕获实际模型请求（包括当前说明正文）；该调试记录不是会话恢复数据源。重复加载、compaction 和 resume 都只重建一份当前有效正文；被剔除的名称即使随后重新启用，也要再次加载。当前启用关系才是授权依据，历史反馈不能恢复已失效权限。
 - 取舍：首次加载新正文、启用目录变化或已加载文件变化会修改第一条 SystemMessage；变化点之后的会话前缀不能保证复用，不等同于在消息数组尾部追加。绑定、文件和加载顺序不变时投影保持稳定。确定性测试不证明真实供应商缓存命中率。下游文件与终端操作仍执行原有权限检查，资源基址不扩展工作区。
 
 ### 7.3 update_plan 流程

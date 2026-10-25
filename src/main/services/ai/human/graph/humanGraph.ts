@@ -24,7 +24,7 @@ import {
   listBuiltinToolsetDefinitions
 } from '../toolsets'
 import { fitToolsetIdsToToolBudget } from '../node/toolsetLoadingNode/toolBudget'
-import { isUserSkillId } from '../userSkills'
+import { isSkillName } from '../userSkills'
 import { classifyThrownErrorToAiRunFailure } from '../../utils/runFailure'
 import { applyDeliverySideEffects } from '../node/brainNode/finalizeDelivery'
 
@@ -160,7 +160,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           compactions: []
         },
         toolsets: { loadedToolsetIds },
-        skills: { loadedSkillIds: logProjection.loadedSkillIds.filter(isUserSkillId) }
+        skills: { loadedSkillNames: logProjection.loadedSkillNames.filter(isSkillName) }
       }
       cache.currentState = initialState
       cache.currentUserLogAppended =

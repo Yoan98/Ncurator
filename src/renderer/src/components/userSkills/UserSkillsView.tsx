@@ -8,7 +8,7 @@ import {
   HiOutlinePencilSquare
 } from 'react-icons/hi2'
 import type {
-  UserSkill,
+  UserSkillOption,
   UserSkillDraft,
   UserSkillImportPreview
 } from '../../../../shared/userSkills'
@@ -25,7 +25,7 @@ const emptyDraft = (): UserSkillDraft => ({ name: '', description: '', body: '' 
 
 export default function UserSkillsView() {
   const { message, modal } = App.useApp()
-  const [skills, setSkills] = useState<UserSkill[]>([])
+  const [skills, setSkills] = useState<UserSkillOption[]>([])
   const [loading, setLoading] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)
   const [revision, setRevision] = useState(0)
@@ -33,16 +33,16 @@ export default function UserSkillsView() {
   const busyRef = useRef(false)
   const [open, setOpen] = useState(false)
   const [externalChanged, setExternalChanged] = useState(false)
-  const [editingId, setEditingId] = useState<string>()
-  const editorState = useRef({ open, editingId })
+  const [editingName, setEditingName] = useState<string>()
+  const editorState = useRef({ open, editingName })
   useEffect(() => {
-    editorState.current = { open, editingId }
-  }, [open, editingId])
+    editorState.current = { open, editingName }
+  }, [open, editingName])
   useEffect(
     () =>
       window.api.onUserSkillsChanged(() => {
         setRevision((value) => value + 1)
-        if (editorState.current.open && editorState.current.editingId) setExternalChanged(true)
+        if (editorState.current.open && editorState.current.editingName) setExternalChanged(true)
       }),
     []
   )
@@ -50,7 +50,7 @@ export default function UserSkillsView() {
   const original = useRef<UserSkillDraft>(emptyDraft())
   const [preview, setPreview] = useState<UserSkillImportPreview | null>(null)
   const token = useRef<string | null>(null)
-  const [replacing, setReplacing] = useState<UserSkill | null>(null)
+  const [replacing, setReplacing] = useState<UserSkillOption | null>(null)
   const [resources, setResources] = useState<string[]>([])
   const mounted = useRef(true)
   useEffect(() => {
@@ -107,15 +107,15 @@ export default function UserSkillsView() {
       setOpen(false)
     })
   }
-  const edit = (skill?: UserSkill): void => {
+  const edit = (skill?: UserSkillOption): void => {
     void mutate(async () => {
       const value = skill
-        ? await window.api.userSkillsGet(skill.id)
+        ? await window.api.userSkillsGet(skill.name)
         : { ...emptyDraft(), resources: [] }
       const next = { name: value.name, description: value.description, body: value.body }
       original.current = next
       setDraft(next)
-      setEditingId(skill?.id)
+      setEditingName(skill?.name)
       setExternalChanged(false)
       setResources(value.resources)
       setOpen(true)
@@ -150,10 +150,10 @@ export default function UserSkillsView() {
       onOk: selectFolder
     })
   }
-  const publish = async (replaceId: string | null): Promise<void> => {
+  const publish = async (replaceName: string | null): Promise<void> => {
     if (preview)
-      await window.api.userSkillsCommitImport({ token: preview.token, replaceId, ...draft })
-    else if (editingId) await window.api.userSkillsUpdate({ id: editingId, ...draft })
+      await window.api.userSkillsCommitImport({ token: preview.token, replaceName, ...draft })
+    else if (editingName) await window.api.userSkillsUpdate({ originalName: editingName, ...draft })
     else await window.api.userSkillsCreate(draft)
     await cancelPending()
     setOpen(false)
@@ -161,7 +161,7 @@ export default function UserSkillsView() {
   }
   const save = (): void => {
     void mutate(async () => {
-      if (preview && !editingId) {
+      if (preview && !editingName) {
         const conflict = (await window.api.userSkillsList()).find(
           (skill) => skill.name === draft.name.trim()
         )
@@ -170,10 +170,10 @@ export default function UserSkillsView() {
           return
         }
       }
-      await publish(editingId ?? null)
+      await publish(editingName ?? null)
     })
   }
-  const remove = (skill: UserSkill): void => {
+  const remove = (skill: UserSkillOption): void => {
     modal.confirm({
       title: t(($) => $.userSkills.deleteTitle, { name: skill.name }),
       content: t(($) => $.userSkills.deleteDescription),
@@ -182,7 +182,7 @@ export default function UserSkillsView() {
       cancelText: t(($) => $.common.cancel),
       onOk: async () => {
         try {
-          await window.api.userSkillsDelete(skill.id)
+          await window.api.userSkillsDelete(skill.name)
           setRevision((value) => value + 1)
         } catch (error) {
           void message.error(skillError(error))
@@ -228,16 +228,16 @@ export default function UserSkillsView() {
           <div className="divide-y divide-[#EEEEEC]">
             {skills.map((skill) => (
               <div
-                key={skill.id}
+                key={skill.name}
                 className="flex items-center gap-3 py-3"
-                data-testid={`${selectors.itemPrefix}-${skill.id}`}
+                data-testid={`${selectors.itemPrefix}-${skill.name}`}
               >
                 <div className="min-w-0 flex-1">
                   <div className="break-words text-[14px] font-medium text-[#37352F]">
                     {skill.name}
                   </div>
                   <div className="mt-1 break-words text-[13px] text-[#787774]">
-                    {skill.description}
+                    {skill.error ? skillError(skill.error) : skill.description}
                   </div>
                 </div>
                 <Button
@@ -246,7 +246,7 @@ export default function UserSkillsView() {
                   icon={<HiOutlinePencilSquare />}
                   onClick={() => edit(skill)}
                   aria-label={t(($) => $.userSkills.editTitle, { name: skill.name })}
-                  data-testid={`${selectors.editPrefix}-${skill.id}`}
+                  data-testid={`${selectors.editPrefix}-${skill.name}`}
                 />
                 <Button
                   type="text"
@@ -255,7 +255,7 @@ export default function UserSkillsView() {
                   icon={<HiOutlineTrash />}
                   onClick={() => remove(skill)}
                   aria-label={t(($) => $.userSkills.deleteTitle, { name: skill.name })}
-                  data-testid={`${selectors.deletePrefix}-${skill.id}`}
+                  data-testid={`${selectors.deletePrefix}-${skill.name}`}
                 />
               </div>
             ))}
@@ -264,7 +264,7 @@ export default function UserSkillsView() {
       </div>
       <ConfigurationDrawer
         open={open}
-        title={editingId ? t(($) => $.userSkills.edit) : t(($) => $.userSkills.create)}
+        title={editingName ? t(($) => $.userSkills.edit) : t(($) => $.userSkills.create)}
         width={720}
         busy={busy}
         dirty={dirty}
@@ -283,7 +283,7 @@ export default function UserSkillsView() {
         onClose={close}
         onSave={save}
         disabled={!draft.name.trim() || !draft.description.trim() || !draft.body.trim()}
-        saveText={editingId ? t(($) => $.common.save) : t(($) => $.workbench.create)}
+        saveText={editingName ? t(($) => $.common.save) : t(($) => $.workbench.create)}
         testId={selectors.editor}
         saveTestId={selectors.save}
         cancelTestId={selectors.cancel}
@@ -332,9 +332,9 @@ export default function UserSkillsView() {
             </label>
           </div>
           <SkillResources
-            key={preview?.token ?? editingId ?? 'new'}
+            key={preview?.token ?? editingName ?? 'new'}
             resources={resources}
-            source={preview ? { token: preview.token } : editingId ? { id: editingId } : null}
+            source={preview ? { token: preview.token } : editingName ? { name: editingName } : null}
             disabled={busy}
           />
           <div>
@@ -365,7 +365,7 @@ export default function UserSkillsView() {
           if (!busy) setReplacing(null)
         }}
         onOk={() => {
-          if (replacing) void mutate(() => publish(replacing.id))
+          if (replacing) void mutate(() => publish(replacing.name))
         }}
         okText={t(($) => $.userSkills.replace)}
         cancelText={t(($) => $.common.cancel)}

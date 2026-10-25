@@ -61,7 +61,7 @@ describe('workbench skills', () => {
               .locator('[data-testid^="' + selectors.togglePrefix + '-"]')
               .count()) === 1
           await search.clear()
-          for (const skill of [main, second, small]) await enableSkill(page, skill.id, a)
+          for (const skill of [main, second, small]) await enableSkill(page, skill.name, a)
           await choosePartner(page, '技能伙伴 A')
           const ring = page.getByTestId(selectors.budgetRing)
           const usageShown =
@@ -69,10 +69,10 @@ describe('workbench skills', () => {
             (await ring.innerText()) === '' &&
             (await ring.locator('svg circle').count()) === 2
           const longContentStored =
-            (await page.evaluate((id) => window.api.userSkillsGet(id), main.id)).body.length >
+            (await page.evaluate((id) => window.api.userSkillsGet(id), main.name)).body.length >
             32 * 1024
           const itemShareShown =
-            (await page.getByTestId(`${selectors.percentPrefix}-${main.id}`).innerText()) ===
+            (await page.getByTestId(`${selectors.percentPrefix}-${main.name}`).innerText()) ===
             '62.5%'
           await ring.hover()
           const tooltip = page.getByRole('tooltip')
@@ -83,7 +83,7 @@ describe('workbench skills', () => {
             budgetHelp.includes('已用 62.0 KB / 最大 64 KB') &&
             !budgetHelp.includes('32 KB')
           await page
-            .getByTestId(`${selectors.togglePrefix}-${excess.id}`)
+            .getByTestId(`${selectors.togglePrefix}-${excess.name}`)
             .getByRole('checkbox')
             .check()
           await page.getByTestId(workbenchSelectors.createPartnerNameInput).fill('超限修改不应保存')
@@ -101,10 +101,10 @@ describe('workbench skills', () => {
           )
           const b = await choosePartner(page, '技能伙伴 B')
           const isolated =
-            (await page.evaluate((id) => window.api.userSkillsGetEnabled(id), b)).skillIds
+            (await page.evaluate((id) => window.api.userSkillsGetEnabled(id), b)).skillNames
               .length === 0
-          for (const skill of [main, second, small]) await enableSkill(page, skill.id, b)
-          await page.getByTestId(`${selectors.editPrefix}-${main.id}`).click()
+          for (const skill of [main, second, small]) await enableSkill(page, skill.name, b)
+          await page.getByTestId(`${selectors.editPrefix}-${main.name}`).click()
           await fillSkill(page, {
             name: 'weekly-report',
             description: '预算规范',
@@ -122,7 +122,7 @@ describe('workbench skills', () => {
             .innerText()
           const allPartnersReported = affectedNotice.includes('技能伙伴 B')
           const editKept = (
-            await page.evaluate((id) => window.api.userSkillsGet(id), main.id)
+            await page.evaluate((id) => window.api.userSkillsGet(id), main.name)
           ).body.startsWith('x'.repeat(40 * 1024))
           await page.keyboard.press('Escape')
           await page.getByRole('button', { name: '放弃修改', exact: true }).click()
@@ -143,7 +143,7 @@ describe('workbench skills', () => {
             .last()
             .waitFor()
           const replaceKept = (
-            await page.evaluate((id) => window.api.userSkillsGet(id), main.id)
+            await page.evaluate((id) => window.api.userSkillsGet(id), main.name)
           ).body.startsWith('x'.repeat(40 * 1024))
           await page
             .getByTestId(selectors.replace)
@@ -151,7 +151,7 @@ describe('workbench skills', () => {
             .click()
           await discardSkill(page)
           await choosePartner(page, '技能伙伴 A')
-          await enableSkill(page, second.id, a, false)
+          await enableSkill(page, second.name, a, false)
           return {
             searchWorks,
             isolated,
@@ -163,7 +163,7 @@ describe('workbench skills', () => {
             budgetHelpShown,
             editKept,
             replaceKept,
-            excessRejected: !selected.skillIds.includes(excess.id)
+            excessRejected: !selected.skillNames.includes(excess.name)
           }
         },
         assert: async (result, runtime) => {

@@ -5,12 +5,12 @@ import { skillError } from './skillErrors'
 
 export function usePartnerSkillDraft(open: boolean, partnerId: string | null) {
   const [options, setOptions] = useState<UserSkillOption[]>([])
-  const [ids, setIds] = useState<string[]>([])
+  const [names, setNames] = useState<string[]>([])
   const [initial, setInitial] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [externalChanged, setExternalChanged] = useState(false)
-  const dirty = [...ids].sort().join() !== [...initial].sort().join()
+  const dirty = [...names].sort().join() !== [...initial].sort().join()
   const dirtyRef = useRef(dirty)
   useEffect(() => {
     dirtyRef.current = dirty
@@ -20,7 +20,7 @@ export function usePartnerSkillDraft(open: boolean, partnerId: string | null) {
     let active = true
     setLoading(true)
     setError('')
-    setIds([])
+    setNames([])
     setInitial([])
     setExternalChanged(false)
     const load = (refresh = false): void => {
@@ -28,14 +28,19 @@ export function usePartnerSkillDraft(open: boolean, partnerId: string | null) {
         window.api.userSkillsList(),
         partnerId
           ? window.api.userSkillsGetEnabled(partnerId)
-          : Promise.resolve({ skillIds: [] as string[] })
+          : Promise.resolve({ skillNames: [] as string[] })
       ])
         .then(([items, selection]) => {
           if (active) {
-            setOptions(items)
+            setOptions([
+              ...items,
+              ...selection.skillNames
+                .filter((name) => !items.some((item) => item.name === name))
+                .map((name) => ({ name, description: '', bodyBytes: null }))
+            ])
             if (!refresh || !dirtyRef.current) {
-              setIds(selection.skillIds)
-              setInitial(selection.skillIds)
+              setNames(selection.skillNames)
+              setInitial(selection.skillNames)
             } else setExternalChanged(true)
           }
         })
@@ -54,12 +59,12 @@ export function usePartnerSkillDraft(open: boolean, partnerId: string | null) {
     }
   }, [open, partnerId])
   const bytes = options
-    .filter((option) => ids.includes(option.id))
+    .filter((option) => names.includes(option.name))
     .reduce((sum, option) => sum + (option.bodyBytes ?? 0), 0)
   return {
     options,
-    ids,
-    setIds,
+    names,
+    setNames,
     loading,
     error,
     externalChanged,

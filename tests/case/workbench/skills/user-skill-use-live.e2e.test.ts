@@ -67,7 +67,7 @@ describe('workbench skills live', () => {
           await selectWorkbenchModel(page, setup.env.modelName)
           await openSkills(page)
           const partnerId = await choosePartner(page, '技能归档伙伴')
-          await enableSkill(page, skill.id, partnerId)
+          await enableSkill(page, skill.name, partnerId)
           await fs.rm(source, { recursive: true })
           await page.getByTestId(`${workbenchSelectors.sessionItemPrefix}-${partnerId}`).click()
           const firstAt = Date.now()
@@ -88,8 +88,8 @@ describe('workbench skills live', () => {
             'utf8'
           )
           await openSkills(page)
-          await page.getByTestId(`${selectors.editPrefix}-${skill.id}`).click()
-          const { body } = await page.evaluate((id) => window.api.userSkillsGet(id), skill.id)
+          await page.getByTestId(`${selectors.editPrefix}-${skill.name}`).click()
+          const { body } = await page.evaluate((id) => window.api.userSkillsGet(id), skill.name)
           await fillSkillContent(
             page,
             body +

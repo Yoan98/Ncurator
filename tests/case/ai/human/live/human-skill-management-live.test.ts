@@ -59,12 +59,12 @@ describe('skill management quality live', () => {
               pinned_at: null
             })
           const service = new UserSkillService(
-            runtime.storageService.userSkill,
+            runtime.storageService.partnerSkills,
             path.join(runtime.workspaceRoot, '.managed-skills')
           )
-          const snapshot = async (id: string) => {
-            const directory = service.resourceDirectory({ id })
-            const document = service.getDocument(id)
+          const snapshot = async (name: string) => {
+            const directory = service.resourceDirectory({ name })
+            const document = service.getDocument(name)
             return Promise.all(
               ['SKILL.md', ...document.resources].map(async (file) => {
                 const filename = path.join(directory, file)
@@ -85,8 +85,8 @@ describe('skill management quality live', () => {
             description: '仅用于会议纪要',
             body: '# 会议纪要\n只在整理会议纪要时使用。'
           })
-          service.setEnabled('skill-manager', [other.id])
-          service.setEnabled('unrelated-partner', [other.id])
+          service.setEnabled('skill-manager', [other.name])
+          service.setEnabled('unrelated-partner', [other.name])
           const notes = path.join(runtime.workspaceRoot, '客户周报要求.md')
           await fs.writeFile(
             notes,
@@ -127,14 +127,14 @@ describe('skill management quality live', () => {
           }
           const first = await run(
             1,
-            '请参考工作目录中的真实客户项目资料和客户周报要求.md，先核对已有 skill 的启用情况，再整理一个可复用的客户周报 skill，并为你自己启用。需要包含规范、参考资料、周报模板，以及能按责任人和风险等级汇总CSV事项数量的脚本。请实际保存规范及资源并完成登记，保留业务原件；这轮先完成规范沉淀，不生成本周正式交付。'
+            '请参考工作目录中的真实客户项目资料和客户周报要求.md，先核对已有 skill 的启用情况，再整理一个可复用的客户周报 skill，并为你自己启用。需要包含规范、参考资料、周报模板，以及能按责任人和风险等级汇总CSV事项数量的脚本。请实际保存规范及资源，保留业务原件；这轮先完成规范沉淀，不生成本周正式交付。'
           )
-          const managed = service.list().filter((item) => item.id !== other.id)
+          const managed = service.list().filter((item) => item.name !== other.name)
           if (managed.length !== 1)
             throw new Error(`Expected one newly authored skill, received ${managed.length}`)
           const skill = managed[0]
-          const initialDocument = service.getDocument(skill.id)
-          const initialFiles = await snapshot(skill.id)
+          const initialDocument = service.getDocument(skill.name)
+          const initialFiles = await snapshot(skill.name)
           const second = await run(
             2,
             '请按刚建立的客户周报规范，结合工作目录项目资料及本周事实.csv，生成可对外审阅的交付/客户周报-v1.md和内部跟进用的交付/行动清单-v1.csv。实际使用规范的模板、参考资料及汇总脚本核对统计，不把未验收写成已验收，内部事项不要混入客户版本。'
@@ -152,14 +152,14 @@ describe('skill management quality live', () => {
             3,
             '请修改刚才的原有周报skill：内部行动清单增加复核人、验收证据两列，证据缺失必须标明待取得，其他规范保持。再结合本周补充事实.csv更新本周交付，另存交付/客户周报-v2.md和交付/行动清单-v2.csv，保留v1和业务原件。复核人及证据按补充事实填写，仍要实际使用资源和汇总脚本。'
           )
-          const updated = service.getDocument(skill.id)
-          const updatedFiles = await snapshot(skill.id)
+          const updated = service.getDocument(skill.name)
+          const updatedFiles = await snapshot(skill.name)
           const fourth = await run(
             4,
             '暂停你对刚建立的客户周报skill的启用，保留该 skill 及其内容，不修改其他skill和其他伙伴的配置。查询确认已停用。'
           )
           const events = [...first.events, ...second.events, ...third.events, ...fourth.events]
-          const finalFiles = await snapshot(skill.id)
+          const finalFiles = await snapshot(skill.name)
           const reports = await Promise.all(
             [OUTPUTS[0], OUTPUTS[2]].map((file) =>
               fs.readFile(path.join(runtime.workspaceRoot, file), 'utf8')
@@ -180,9 +180,9 @@ describe('skill management quality live', () => {
             reports,
             tables,
             events,
-            enabled: service.listEnabled('skill-manager').map((item) => item.id),
-            otherPartner: service.listEnabled('unrelated-partner').map((item) => item.id),
-            other: other.id,
+            enabled: service.listEnabled('skill-manager').map((item) => item.name),
+            otherPartner: service.listEnabled('unrelated-partner').map((item) => item.name),
+            other: other.name,
             sourcePreserved:
               (
                 await Promise.all(
@@ -218,7 +218,7 @@ describe('skill management quality live', () => {
             result.initialDocument.resources.some((file) => file.startsWith('scripts/')) &&
               result.initialDocument.resources.some((file) => file.startsWith('references/')) &&
               result.initialDocument.resources.some((file) => file.startsWith('assets/')) &&
-              result.updated.id === result.skill.id &&
+              result.updated.name === result.skill.name &&
               result.updatedFiles.some((file) => file.content?.includes('复核人')) &&
               result.updatedFiles.some((file) => file.content?.includes('验收证据')),
             {

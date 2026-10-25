@@ -67,7 +67,7 @@ describe('workbench skills', () => {
           const original = await findSkill(runtime.page, 'weekly-report')
           const importedDraftEdited = original.description === '在同一表单编辑导入的规范。'
           const partnerId = await choosePartner(runtime.page, '技能伙伴 A')
-          await enableSkill(runtime.page, original.id, partnerId)
+          await enableSkill(runtime.page, original.name, partnerId)
           const managed = path.join(runtime.userDataDir, 'skills', 'weekly-report')
           const before = await fs.readFile(path.join(managed, 'SKILL.md'), 'utf8')
           await fs.appendFile(path.join(source, 'SKILL.md'), '\n新增替换规范。\n')
@@ -106,8 +106,8 @@ describe('workbench skills', () => {
             importedDraftEdited,
             stagingCleared,
             cancelPreserved,
-            stableId: original.id === after.id,
-            bound: binding.skillIds.includes(after.id),
+            namePreserved: original.name === after.name,
+            bound: binding.skillNames.includes(after.name),
             content,
             resource,
             executable: process.platform === 'win32' || (mode & 0o111) !== 0
@@ -120,7 +120,7 @@ describe('workbench skills', () => {
               result.importedDraftEdited &&
               result.stagingCleared &&
               result.cancelPreserved &&
-              result.stableId &&
+              result.namePreserved &&
               result.bound &&
               result.content.includes('新增替换规范') &&
               result.content.includes('preserve-this-field') &&

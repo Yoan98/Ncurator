@@ -45,13 +45,13 @@ describe('workbench skills', () => {
           })
           const original = await findSkill(page, 'weekly-report')
           const partnerId = await choosePartner(page, '技能伙伴 A')
-          await enableSkill(page, original.id, partnerId)
+          await enableSkill(page, original.name, partnerId)
           const toolbar = await page.getByTestId(selectors.topbar).evaluate((element) => ({
             height: element.getBoundingClientRect().height,
             drag: getComputedStyle(element).getPropertyValue('-webkit-app-region'),
             buttons: element.querySelectorAll('button').length
           }))
-          await page.getByTestId(`${selectors.editPrefix}-${original.id}`).click()
+          await page.getByTestId(`${selectors.editPrefix}-${original.name}`).click()
           await page.getByTestId(selectors.content).locator('.vditor-ir pre').waitFor()
           await page.getByTestId(selectors.name).focus()
           await page.waitForFunction(
@@ -172,12 +172,12 @@ describe('workbench skills', () => {
             (id) => window.api.userSkillsGetEnabled(id),
             partnerId
           )
-          await page.getByTestId(`${selectors.editPrefix}-${renamed.id}`).click()
+          await page.getByTestId(`${selectors.editPrefix}-${renamed.name}`).click()
           await fillSkillContent(page, '未保存正文')
           await page.keyboard.press('Escape')
           await page.getByRole('button', { name: '放弃修改', exact: true }).click()
           await page.getByTestId(selectors.editor).waitFor({ state: 'hidden' })
-          const saved = await page.evaluate((id) => window.api.userSkillsGet(id), renamed.id)
+          const saved = await page.evaluate((id) => window.api.userSkillsGet(id), renamed.name)
           const restarted = await runtime.restartApp()
           await openSkills(restarted.page)
           const persisted = await findSkill(restarted.page, 'report-guide')
@@ -191,7 +191,7 @@ describe('workbench skills', () => {
           // The first Markdown editor in the new renderer is an existing skill,
           // followed by closing and opening different skills without a warm-up editor.
           for (const skill of [persisted, reserved, persisted]) {
-            await restarted.page.getByTestId(`${selectors.editPrefix}-${skill.id}`).click()
+            await restarted.page.getByTestId(`${selectors.editPrefix}-${skill.name}`).click()
             const content = restarted.page.getByTestId(selectors.content)
             const input = content.locator('.vditor-ir pre[contenteditable="true"]:visible')
             await input.waitFor()
@@ -211,22 +211,22 @@ describe('workbench skills', () => {
             await restarted.page.getByRole('button', { name: '放弃修改', exact: true }).click()
             await restarted.page.getByTestId(selectors.editor).waitFor({ state: 'hidden' })
           }
-          await restarted.page.getByTestId(`${selectors.deletePrefix}-${persisted.id}`).click()
+          await restarted.page.getByTestId(`${selectors.deletePrefix}-${persisted.name}`).click()
           await restarted.page
             .locator('.ant-modal-confirm')
             .getByRole('button', { name: /取\s*消/ })
             .click()
           const cancelledDeletion = (await listSkills(restarted.page)).some(
-            (item) => item.id === persisted.id
+            (item) => item.name === persisted.name
           )
-          await restarted.page.getByTestId(`${selectors.deletePrefix}-${persisted.id}`).click()
+          await restarted.page.getByTestId(`${selectors.deletePrefix}-${persisted.name}`).click()
           await restarted.page
             .locator('.ant-modal-confirm')
             .getByRole('button', { name: /删\s*除/ })
             .click()
           await restarted.page.waitForFunction(
-            async (id) => !(await window.api.userSkillsList()).some((item) => item.id === id),
-            persisted.id
+            async (id) => !(await window.api.userSkillsList()).some((item) => item.name === id),
+            persisted.name
           )
           return {
             toolbar,
@@ -238,8 +238,8 @@ describe('workbench skills', () => {
             fieldLabels,
             narrowLayout,
             failureKeptInput,
-            stableId: original.id === renamed.id && renamed.id === persisted.id,
-            bindingKept: binding.skillIds.includes(original.id),
+            namePreserved: renamed.name === 'report-guide' && renamed.name === persisted.name,
+            bindingKept: binding.skillNames.includes(renamed.name),
             savedBody: saved.body,
             reopenedEditors,
             cancelledDeletion
@@ -269,7 +269,7 @@ describe('workbench skills', () => {
               Math.abs(result.narrowLayout.width - result.narrowLayout.viewport) < 1 &&
               !result.narrowLayout.overflow &&
               result.failureKeptInput &&
-              result.stableId &&
+              result.namePreserved &&
               result.bindingKept &&
               result.savedBody.includes('# 更新规范') &&
               result.savedBody.includes('- 风险注明影响') &&

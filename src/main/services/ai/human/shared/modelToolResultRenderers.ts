@@ -49,6 +49,22 @@ export const renderGenericModelError: ModelResultRenderer = ({ toolName, data })
   return `Error: ${toolName} failed. Check the tool arguments and try again.`
 }
 
+export const renderSkillConfigModelResult: ModelResultRenderer = ({ data }) => {
+  if (Array.isArray(data))
+    return data.length
+      ? data
+          .filter(isObject)
+          .map(
+            (item) => `- ${readString(item.name)}：${item.enabled === true ? '已启用' : '未启用'}`
+          )
+          .join('\n')
+      : '没有可配置的 Skill。'
+  const output = isObject(data) ? data : {}
+  if (typeof output.filePath === 'string')
+    return `完整 Skill 配置清单：${output.filePath}\n可使用 text_file_read 读取。`
+  return `已为当前伙伴${output.enabled === true ? '启用' : '停用'} ${readString(output.name)}。`
+}
+
 const readBoolean = (value: JsonValue | undefined): boolean | undefined =>
   typeof value === 'boolean' ? value : undefined
 
