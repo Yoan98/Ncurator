@@ -99,7 +99,7 @@ LanceDB fragment 是一次或多次写入形成的数据片段，不等于一行
 
 ### 用户 Skill 文件与伙伴配置
 
-`userData/skills/{name}/` 是 Skill 唯一内容来源，与 `userData/partners/` 同级；每个同名目录包含 SKILL.md 及可选 scripts/、references/、assets/ 等普通资源。名称、描述、正文与资源从目录读取，不存 SQLite 索引或内部 Skill ID。`partner_user_skill` 只保存伙伴 ID 与 Skill 名称，伙伴属性和选择在同一事务保存；删除伙伴只删除配置，不删除 Skill 文件。
+`userData/skills/{name}/` 是 Skill 唯一内容来源，与 `userData/partners/` 同级；每个同名目录包含 SKILL.md 及可选 scripts/、references/、assets/ 等普通资源。名称、描述、正文与资源从目录读取，不存 SQLite 索引或内部 Skill ID。`partner_user_skill` 只保存伙伴 ID 与 Skill 名称，伙伴属性和选择在同一事务保存；模型批量配置按最终选择校验预算并在同一事务提交，任一项失败整批不变；删除伙伴只删除配置，不删除 Skill 文件。
 
 启动及目录变化时自动发现，文件监听去抖后统一通知界面；进入页面、查询、配置和推理前读取最新目录，不依赖监听先到达。监听不写伙伴配置；临时目录不展示，非法目录标为异常。缺失的已选名称保留在配置中并允许取消。仅使用内存快照判断变化，不持久化重复索引，不做向量化。
 

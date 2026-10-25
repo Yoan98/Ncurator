@@ -65,7 +65,6 @@ describe('shared user Skill files and partner bindings', () => {
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE name = 'user_skill'").get()
     ).toBeUndefined()
-    expect(() => service.statusForPartner('alice', 'missing')).toThrow(/not found/)
   })
 
   it('configures freshly created directories without rewriting or executing files', async () => {
@@ -80,17 +79,15 @@ describe('shared user Skill files and partner bindings', () => {
     const raw = fs.readFileSync(path.join(directory, 'SKILL.md'), 'utf8')
     service.create({ name: 'other', description: 'Other', body: 'Keep' })
     service.setEnabled('alice', ['other'])
-    expect(service.configureForPartner('alice', 'example', true)).toEqual({
-      name: 'example',
-      enabled: true
-    })
+    service.configureForPartner('alice', [{ name: 'example', enabled: true }])
+    expect(store.listEnabled('alice')).toEqual(['example', 'other'])
     service.setEnabled('bob', ['example'])
     expect(fs.readFileSync(path.join(directory, 'SKILL.md'), 'utf8')).toBe(raw)
     expect(fs.existsSync(path.join(root, 'unexpected-execution'))).toBe(false)
     if (process.platform !== 'win32') expect(fs.statSync(script).mode & 0o777).toBe(0o751)
     write('example', 'Updated', 'New description')
     expect(service.getDocument('example').description).toBe('New description')
-    service.configureForPartner('alice', 'example', false)
+    service.configureForPartner('alice', [{ name: 'example', enabled: false }])
     expect(store.listEnabled('alice')).toEqual(['other'])
     expect(store.listEnabled('bob')).toEqual(['example'])
     expect(service.getDocument('example').resources).toEqual(['scripts/run.sh'])
@@ -100,14 +97,16 @@ describe('shared user Skill files and partner bindings', () => {
 
   it('checks complete configuration budgets and preserves direct edits on rejection', () => {
     write('target', 'x'.repeat(40 * 1024))
-    service.configureForPartner('alice', 'target', true)
+    service.configureForPartner('alice', [{ name: 'target', enabled: true }])
     service.create({ name: 'other', description: 'Other', body: 'x'.repeat(20 * 1024) })
     service.setEnabled('alice', ['target', 'other'])
     service.setEnabled('bob', ['target', 'other'])
     write('target', 'x'.repeat(50 * 1024), 'Changed')
-    expect(() => service.configureForPartner('alice', 'target', true)).toThrow(/64 KiB/)
+    expect(() => service.configureForPartner('alice', [{ name: 'target', enabled: true }])).toThrow(
+      /64 KiB/
+    )
     expect(service.getDocument('target').body.length).toBeGreaterThan(50 * 1024)
-    service.configureForPartner('alice', 'target', false)
+    service.configureForPartner('alice', [{ name: 'target', enabled: false }])
     expect(store.listEnabled('alice')).toEqual(['other'])
     expect(store.listEnabled('bob')).toEqual(['other', 'target'])
   })
@@ -120,9 +119,9 @@ describe('shared user Skill files and partner bindings', () => {
       throw new Error('database failure')
     })
     try {
-      expect(() => service.configureForPartner('alice', 'example', true)).toThrow(
-        'database failure'
-      )
+      expect(() =>
+        service.configureForPartner('alice', [{ name: 'example', enabled: true }])
+      ).toThrow('database failure')
     } finally {
       fail.mockRestore()
     }
@@ -134,17 +133,89 @@ describe('shared user Skill files and partner bindings', () => {
 
   it('reports missing configured names and permits disabling broken files', () => {
     const directory = write()
-    service.configureForPartner('alice', 'example', true)
+    service.configureForPartner('alice', [{ name: 'example', enabled: true }])
     fs.writeFileSync(path.join(directory, 'SKILL.md'), 'invalid')
     expect(service.list()).toEqual([])
     expect(service.listOptions()[0].error).toContain('frontmatter')
-    expect(() => service.configureForPartner('alice', 'example', true)).toThrow(/frontmatter/)
+    expect(() =>
+      service.configureForPartner('alice', [{ name: 'example', enabled: true }])
+    ).toThrow(/frontmatter/)
     fs.rmSync(directory, { recursive: true })
     expect(service.statusForPartner('alice')).toEqual([{ name: 'example', enabled: true }])
     expect(service.getSelection('alice').unavailableSkillNames).toEqual(['example'])
-    service.configureForPartner('alice', 'example', false)
+    service.configureForPartner('alice', [{ name: 'example', enabled: false }])
     expect(service.statusForPartner('alice')).toEqual([])
-    expect(() => service.configureForPartner('alice', '../escape', true)).toThrow(/name/)
+    expect(() =>
+      service.configureForPartner('alice', [{ name: '../escape', enabled: true }])
+    ).toThrow(/name/)
+  })
+
+  it('applies a batch against the final budget and preserves unspecified choices and partners', () => {
+    write('old', 'x'.repeat(40 * 1024))
+    write('new', 'x'.repeat(60 * 1024))
+    write('keep', 'Keep')
+    service.setEnabled('alice', ['old', 'keep'])
+    service.setEnabled('bob', ['old'])
+    service.configureForPartner('alice', [
+      { name: 'new', enabled: true },
+      { name: 'old', enabled: false }
+    ])
+    expect(store.listEnabled('alice')).toEqual(['keep', 'new'])
+    expect(store.listEnabled('bob')).toEqual(['old'])
+    expect(() =>
+      service.configureForPartner('alice', [
+        { name: 'new', enabled: false },
+        { name: 'old', enabled: true },
+        { name: 'missing', enabled: true }
+      ])
+    ).toThrow()
+    expect(store.listEnabled('alice')).toEqual(['keep', 'new'])
+    expect(() => service.configureForPartner('alice', [{ name: 'old', enabled: true }])).toThrow(
+      /64 KiB/
+    )
+    expect(store.listEnabled('alice')).toEqual(['keep', 'new'])
+  })
+
+  it('rejects empty and duplicate changes and releases broken assets in a disable-only batch', () => {
+    write('one')
+    write('two')
+    write('keep')
+    service.setEnabled('alice', ['one', 'two', 'keep'])
+    expect(() => service.configureForPartner('alice', [])).toThrow()
+    expect(() =>
+      service.configureForPartner('alice', [
+        { name: 'one', enabled: true },
+        { name: 'one', enabled: false }
+      ])
+    ).toThrow(/Duplicate/)
+    fs.rmSync(service.getRootDirectory(), { recursive: true })
+    service.configureForPartner('alice', [
+      { name: 'one', enabled: false },
+      { name: 'two', enabled: false }
+    ])
+    expect(store.listEnabled('alice')).toEqual(['keep'])
+  })
+
+  it('rolls back partial database writes for an entire batch without sending a notification', async () => {
+    write('old')
+    write('one')
+    write('two')
+    service.setEnabled('alice', ['old'])
+    await Promise.resolve()
+    const notify = vi.fn()
+    service = new UserSkillService(store, path.join(root, 'skills'), notify)
+    db.exec(`CREATE TRIGGER reject_two BEFORE INSERT ON partner_user_skill
+      WHEN NEW.skill_name = 'two' BEGIN SELECT RAISE(ABORT, 'database failure'); END`)
+    expect(() =>
+      service.configureForPartner('alice', [
+        { name: 'old', enabled: false },
+        { name: 'one', enabled: true },
+        { name: 'two', enabled: true }
+      ])
+    ).toThrow(/database failure/)
+    expect(store.listEnabled('alice')).toEqual(['old'])
+    await Promise.resolve()
+    expect(notify).not.toHaveBeenCalled()
   })
 
   it('automatically notifies directory, body and nested resource changes without configuration writes', async () => {
@@ -200,14 +271,14 @@ describe('shared user Skill files and partner bindings', () => {
 
   it('does not infer a rename from external directory changes', () => {
     const directory = write()
-    service.configureForPartner('alice', 'example', true)
+    service.configureForPartner('alice', [{ name: 'example', enabled: true }])
     fs.renameSync(directory, path.join(service.getRootDirectory(), 'renamed'))
     write('renamed')
     expect(service.statusForPartner('alice')).toEqual([
       { name: 'example', enabled: true },
       { name: 'renamed', enabled: false }
     ])
-    service.configureForPartner('alice', 'example', false)
+    service.configureForPartner('alice', [{ name: 'example', enabled: false }])
     expect(store.listEnabled('alice')).toEqual([])
   })
 

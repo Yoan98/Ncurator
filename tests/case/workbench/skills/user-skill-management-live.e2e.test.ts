@@ -176,7 +176,7 @@ describe('skill management UI live', () => {
             .filter(([, name]) => ['load_toolset', 'load_skill'].includes(name))
             .map(([id]) => id)
           const loadingMerged =
-            loadingIds.length >= 1 &&
+            loadingIds.length >= 2 &&
             loadingIds.every((id) => groupByItem.has(id)) &&
             [...expectedGroups.values()].every((groups) => groups.size === 1)
           const categoryIconsCorrect = activities.every((activity) => {
@@ -242,14 +242,13 @@ describe('skill management UI live', () => {
               result.closedArrow !== result.expandedArrow &&
               JSON.stringify(result.activities) === JSON.stringify(result.restored) &&
               result.activities.some((activity) =>
-                activity.items.some(
-                  (item) =>
-                    item.text.includes('启用 workbench-note') ||
-                    item.text.includes('停用 workbench-note')
-                )
+                activity.items.some((item) => item.text.includes('更新 skill 配置'))
               ) &&
               result.activities.some((activity) =>
                 activity.items.some((item) => item.text.includes('加载 workbench-note'))
+              ) &&
+              result.activities.some((activity) =>
+                activity.items.some((item) => item.text.includes('加载 skill 管理'))
               ),
             {
               name: 'activity-boundaries-arrows-and-restore',

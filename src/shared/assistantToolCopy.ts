@@ -334,14 +334,11 @@ const TOOL_ITEM_RENDERERS: Record<RuntimeToolName, ToolItemRenderer> = {
   },
   load_toolset: (input) => loadingCopy(readLoadToolsetNames(input), input),
   skill_config: (input) => {
-    const data = input as Record<string, IpcJsonValue> | undefined
-    const name = typeof data?.name === 'string' ? data.name : 'Skill'
-    return data?.enabled === undefined
-      ? toolCopy('查看 skill 配置', sentence(text('查看 skill 配置')))
-      : toolCopy(
-          `${data.enabled === true ? '启用' : '停用'} ${name}`,
-          sentence(text(`${data.enabled === true ? '启用' : '停用'} ${name}`))
-        )
+    const label =
+      input && 'action' in input && input.action === 'update'
+        ? '更新 skill 配置'
+        : '查看 skill 配置'
+    return toolCopy(label, sentence(text(label)))
   },
   list_agent: () => toolCopy('查看子任务', sentence(text('查看子任务'))),
   delegate_to_subagent: () => toolCopy('分头处理', sentence(text('分头处理'))),

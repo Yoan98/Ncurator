@@ -6,7 +6,11 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { createAiServiceTestRunner } from '../../../../harness/backend/aiServiceHarness'
 import { executeToolCall } from '../../../../../src/main/services/ai/human/node/handNode/toolExecutor'
 import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
-import { buildToolDecision, buildCompleteTaskDecision } from '../testUtils'
+import {
+  buildToolDecision,
+  buildCompleteTaskDecision,
+  buildLoadToolsetsDecision
+} from '../testUtils'
 
 describe('Skill file discovery production flow', () => {
   it(
@@ -52,17 +56,26 @@ describe('Skill file discovery production flow', () => {
             llmScript: {
               'human.brain': [
                 {
+                  output: buildLoadToolsetsDecision({
+                    toolsetNames: ['skill-management'],
+                    summary: '配置规范'
+                  })
+                },
+                {
                   output: decision('text_file_edit', {
                     action: 'create',
                     sourcePath: filename,
                     content: markdown('RULE-ORIGINAL')
                   })
                 },
-                { output: decision('skill_config', {}) },
+                { output: decision('skill_config', { action: 'list' }) },
                 {
-                  output: decision('skill_config', { name: 'report', enabled: true })
+                  output: decision('skill_config', {
+                    action: 'update',
+                    skills: [{ name: 'report', enabled: true }]
+                  })
                 },
-                { output: decision('skill_config', { name: 'report' }) },
+                { output: decision('skill_config', { action: 'list' }) },
                 { output: decision('load_skill', { skillNames: ['report'] }) },
                 {
                   output: decision('text_file_edit', {
@@ -71,9 +84,12 @@ describe('Skill file discovery production flow', () => {
                     content: markdown('RULE-UPDATED')
                   })
                 },
-                { output: decision('skill_config', { name: 'report' }) },
+                { output: decision('skill_config', { action: 'list' }) },
                 {
-                  output: decision('skill_config', { name: 'report', enabled: false })
+                  output: decision('skill_config', {
+                    action: 'update',
+                    skills: [{ name: 'report', enabled: false }]
+                  })
                 },
                 {
                   output: buildCompleteTaskDecision({
@@ -94,10 +110,10 @@ describe('Skill file discovery production flow', () => {
               },
               cache: createHumanRuntimeCache(),
               taskId: runtime.taskId,
-              loadedToolsetIds: [],
+              loadedToolsetIds: ['skill-management'],
               toolCallId: 'child-config',
               toolName: 'skill_config',
-              args: {}
+              args: { action: 'list' }
             })
           } catch (error) {
             childError = error instanceof Error ? error.message : String(error)
@@ -111,6 +127,8 @@ describe('Skill file discovery production flow', () => {
                 item.requestWire?.messages.filter((message) => message.role === 'system')
               )
             ),
+            initialTools: JSON.stringify(runner.io[0].requestWire?.tools),
+            loadedTools: JSON.stringify(runner.io[1].requestWire?.tools),
             skills: service.list(),
             enabled: service.listEnabled(partnerId),
             events: runner.events
@@ -124,7 +142,7 @@ describe('Skill file discovery production flow', () => {
               result.childError.includes('子任务不能使用'),
             {
               name: 'real-file-and-config-flow',
-              message: '真实文件工具、自动发现与内置配置完成主链，子任务执行层拒绝管理。'
+              message: '真实文件工具、自动发现与按需配置完成主链，子任务执行层拒绝管理。'
             }
           )
           runtime.assertThat(
@@ -132,13 +150,21 @@ describe('Skill file discovery production flow', () => {
               result.systems[0].includes('<本机信息与文件约定>') &&
               !result.systems[0].includes('runtime_paths.') &&
               !result.systems[0].includes('共享 Skill 目录') &&
-              !result.systems[4]?.includes('\\nRULE-ORIGINAL') &&
-              result.systems[5]?.includes('RULE-ORIGINAL') === true &&
-              result.systems[6]?.includes('RULE-UPDATED') === true &&
+              !result.systems[5]?.includes('\\nRULE-ORIGINAL') &&
+              result.systems[6]?.includes('RULE-ORIGINAL') === true &&
+              result.systems[7]?.includes('RULE-UPDATED') === true &&
               !result.systems.at(-1)?.includes('RULE-UPDATED'),
             {
               name: 'directory-and-current-instructions',
               message: '空库提供真实根目录与格式，查询不激活，文件变更及停用更新有效说明。'
+            }
+          )
+          runtime.assertThat(
+            !result.initialTools.includes('skill_config') &&
+              result.loadedTools.includes('skill_config'),
+            {
+              name: 'on-demand-config-tool',
+              message: '初始模型无配置工具，加载 skill-management 后绑定其严格 schema。'
             }
           )
           runtime.assertThat(
@@ -150,7 +176,7 @@ describe('Skill file discovery production flow', () => {
             ),
             {
               name: 'discovered-before-configuration',
-              message: '文件自动发现且默认未启用，无需专门管理工具包。'
+              message: '文件自动发现且默认未启用，管理工具按需加载。'
             }
           )
         }

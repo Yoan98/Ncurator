@@ -77,14 +77,19 @@ describe('assistant process icons and activity summary', () => {
         .headerShort
     ).toBe('加载 docx 阅读器')
     expect(
-      getAssistantToolItemCopy('skill_config', 'completed', {
-        name: 'weekly-report',
-        enabled: true
+      getAssistantToolItemCopy('load_toolset', 'completed', {
+        toolsetNames: ['skill-management']
       }).headerShort
-    ).toBe('启用 weekly-report')
-    expect(getAssistantToolItemCopy('skill_config', 'completed', {}).headerShort).toBe(
-      '查看 skill 配置'
-    )
+    ).toBe('加载 skill 管理')
+    expect(
+      getAssistantToolItemCopy('skill_config', 'completed', {
+        action: 'update',
+        skills: [{ name: 'weekly-report', enabled: true }]
+      }).headerShort
+    ).toBe('更新 skill 配置')
+    expect(
+      getAssistantToolItemCopy('skill_config', 'completed', { action: 'list' }).headerShort
+    ).toBe('查看 skill 配置')
   })
   it('uses semantic icons for single-tool activities', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('docx_read_outline'))).toBe('document')

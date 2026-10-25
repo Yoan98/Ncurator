@@ -241,36 +241,41 @@ export class UserSkillService {
     })
   }
 
-  public statusForPartner(partnerId: string, name?: string): SkillStatus[] {
+  public statusForPartner(partnerId: string): SkillStatus[] {
     this.store.partnerName(partnerId)
-    if (name !== undefined) this.assertName(name)
     const enabled = new Set(this.store.listEnabled(partnerId))
-    const names = [
-      ...new Set([...this.listOptions().map((skill) => skill.name), ...enabled])
-    ].sort()
-    if (name !== undefined && !names.includes(name)) throw new Error('Skill not found')
-    return names
-      .filter((value) => name === undefined || value === name)
-      .map((value) => ({ name: value, enabled: enabled.has(value) }))
+    return [...new Set([...this.listOptions().map((skill) => skill.name), ...enabled])]
+      .sort()
+      .map((name) => ({ name, enabled: enabled.has(name) }))
   }
 
-  public configureForPartner(partnerId: string, name: string, enabled: boolean): SkillStatus {
-    this.assertName(name)
+  public configureForPartner(partnerId: string, skills: SkillStatus[]): void {
+    if (skills.length === 0 || skills.length > 1000)
+      throw new Error('Provide between 1 and 1000 Skill changes')
+    const changedNames = new Set<string>()
+    for (const skill of skills) {
+      this.assertName(skill.name)
+      if (changedNames.has(skill.name)) throw new Error(`Duplicate Skill name: ${skill.name}`)
+      changedNames.add(skill.name)
+    }
     this.store.transaction(() => {
       this.store.partnerName(partnerId)
-      const previous = this.store.listEnabled(partnerId)
-      if (enabled) this.getDocument(name)
-      else if (!previous.includes(name) && !this.listOptions().some((skill) => skill.name === name))
-        throw new Error('Skill not found')
-      const names = previous.filter((value) => value !== name)
-      if (enabled) names.push(name)
-      if (enabled) this.setEnabled(partnerId, names)
-      else {
-        this.store.setEnabled(partnerId, names)
-        this.changed()
+      const names = new Set(this.store.listEnabled(partnerId))
+      const available = new Set(this.listOptions().map((skill) => skill.name))
+      for (const { name, enabled } of skills) {
+        if (enabled) names.add(name)
+        else {
+          if (!names.has(name) && !available.has(name)) throw new Error(`Skill not found: ${name}`)
+          names.delete(name)
+        }
       }
+      const selection = [...names]
+      if (selection.length > 1000) throw new Error('Invalid partner skill selection')
+      // Validate the final selection once; disabling broken assets must remain possible.
+      if (skills.some((skill) => skill.enabled)) this.validateSelectionBudget(selection)
+      this.store.setEnabled(partnerId, selection)
     })
-    return { name, enabled }
+    this.changed()
   }
 
   private inspectDirectory(directory: string): ReturnType<typeof parseSkillMarkdown> {
@@ -414,16 +419,18 @@ export class UserSkillService {
     const previous = new Set(this.store.listEnabled(partnerId))
     // Removing broken choices must not depend on any retained files being readable.
     const removesOnly = names.length < previous.size && names.every((name) => previous.has(name))
-    if (!removesOnly) {
-      const bytes = names.reduce(
-        (sum, name) => sum + Buffer.byteLength(this.getDocument(name).body, 'utf8'),
-        0
-      )
-      if (bytes > MAX_USER_SKILL_BODY_BYTES)
-        throw new Error(`Skill instructions exceed 64 KiB (${bytes} bytes)`)
-    }
+    if (!removesOnly) this.validateSelectionBudget(names)
     this.store.setEnabled(partnerId, names)
     this.changed()
+  }
+
+  private validateSelectionBudget(names: string[]): void {
+    const bytes = names.reduce(
+      (sum, name) => sum + Buffer.byteLength(this.getDocument(name).body, 'utf8'),
+      0
+    )
+    if (bytes > MAX_USER_SKILL_BODY_BYTES)
+      throw new Error(`Skill instructions exceed 64 KiB (${bytes} bytes)`)
   }
 
   private checkBoundBudgets(name: string, body: string, finalName = name): void {

@@ -485,11 +485,15 @@ describe('user instruction skill runtime', () => {
 
   it('prunes restored registered tools in FIFO order without touching instructions or repeating snapshots', async () => {
     const { records, calls, ctx, run } = graphFixture()
+    const ordered = [
+      'skill-management',
+      ...EXTERNAL_RUNTIME_TOOLSET_IDS.filter((id) => id !== 'skill-management')
+    ]
     await ctx.appendMessageLog([
       {
         kind: 'annotation',
         eventType: 'toolset_state_updated',
-        payload: { loadedToolsetIds: [...EXTERNAL_RUNTIME_TOOLSET_IDS] }
+        payload: { loadedToolsetIds: ordered }
       },
       {
         kind: 'annotation',
@@ -501,9 +505,8 @@ describe('user instruction skill runtime', () => {
     const projection = projectMessageLogRecords(records)
     expect(calls[0].tools.length).toBeLessThanOrEqual(HUMAN_MAX_ACTIVE_TOOLS)
     expect(projection.loadedToolsetIds.length).toBeLessThan(EXTERNAL_RUNTIME_TOOLSET_IDS.length)
-    expect(projection.loadedToolsetIds).toEqual(
-      EXTERNAL_RUNTIME_TOOLSET_IDS.slice(-projection.loadedToolsetIds.length)
-    )
+    expect(projection.loadedToolsetIds).toEqual(ordered.slice(-projection.loadedToolsetIds.length))
+    expect(calls[0].tools).not.toContain('skill_config')
     expect(projection.loadedSkillNames).toEqual(['a'])
     expect(calls[0].system.split('BODY_A')).toHaveLength(2)
     const snapshotCount = () =>
@@ -515,6 +518,17 @@ describe('user instruction skill runtime', () => {
     expect(calls[1].tools).toEqual(calls[0].tools)
     expect(projectMessageLogRecords(records).loadedSkillNames).toEqual(['a'])
     expect(snapshotCount()).toBe(2)
+    await ctx.appendMessageLog([
+      {
+        kind: 'annotation',
+        eventType: 'toolset_state_updated',
+        payload: { loadedToolsetIds: ['skill-management'] }
+      }
+    ])
+    expect((await run(3)).status).toBe('completed')
+    expect(calls[2].tools).toContain('skill_config')
+    expect(projectMessageLogRecords(records).loadedSkillNames).toEqual(['a'])
+    expect(calls[2].system.split('BODY_A')).toHaveLength(2)
   })
 
   it('rejects oversized restored instructions instead of silently discarding later skills', () => {

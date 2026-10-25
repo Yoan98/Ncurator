@@ -95,13 +95,3 @@ export type {
   ReadImageOutput,
   UpdatePlanOutput
 } from './outputTypes'
-
-export const SKILL_CONFIG_SCHEMA = z
-  .strictObject({
-    name: skillNameSchema.optional().describe('Skill 名称；省略时查询全部'),
-    enabled: z.boolean().optional().describe('是否为当前伙伴启用；省略时只查询配置状态')
-  })
-  .superRefine((input, ctx) => {
-    if (input.enabled !== undefined && input.name === undefined)
-      ctx.addIssue({ code: 'custom', message: 'Changing enabled requires name' })
-  })

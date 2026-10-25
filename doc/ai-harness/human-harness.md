@@ -757,7 +757,9 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 | **Toolset**       | 能力包；`builtin` 默认可 bind；`external` 需 `load_toolset` 后才进入 bindTools               |
 | **Skill**         | 用户说明文件资产；按伙伴启用并经 `load_skill` 加载，不注册工具                               |
 | **Tool**          | 具体执行入口；归属一个或多个 toolset                                                         |
-| **agent-control** | 内置 toolset，承载 `load_toolset`、`load_skill`、`skill_config`、`update_plan`、`read_image` |
+| **agent-control** | 内置 toolset，承载 `load_toolset`、`load_skill`、`update_plan`、`read_image` |
+
+`skill-management` 是按需加载的外部工具包，仅提供主伙伴的 `skill_config` 列表查询及批量启停；工具包加载/淘汰与 Skill 绑定、正文加载状态独立。
 
 toolset / tool 的 prompt **只声明边界**，不写固定调用顺序（细节见 `tool-design.md` 第 1 节）。
 

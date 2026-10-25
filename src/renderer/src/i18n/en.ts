@@ -1080,9 +1080,8 @@ export const en = {
     excelPreviewFailed2: 'Excel preview failed:'
   },
   system: {
-    enableSkillName: 'Enable {{value1}}',
-    disableSkillName: 'Disable {{value1}}',
     querySkillStatus: 'View skill configuration',
+    updateSkillStatus: 'Update skill configuration',
     loadName: 'Load {{value1}}',
     skillManagement: 'Skill management',
     loadingSkill: 'Loading skill',

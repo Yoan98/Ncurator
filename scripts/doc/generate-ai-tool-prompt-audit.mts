@@ -265,9 +265,17 @@ const extractUnionExamples = (schema: z.ZodType): Array<{ label: string; input: 
 
 const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: JsonObject }>> = {
   skill_config: [
-    { label: 'status', input: {} },
-    { label: 'enable', input: { name: 'weekly-report', enabled: true } },
-    { label: 'disable', input: { name: 'weekly-report', enabled: false } }
+    { label: 'list', input: { action: 'list' } },
+    {
+      label: 'update',
+      input: {
+        action: 'update',
+        skills: [
+          { name: 'weekly-report', enabled: true },
+          { name: 'writing-style', enabled: false }
+        ]
+      }
+    }
   ],
   web_search: [
     { label: 'search', input: { type: 'search', query: 'typescript tutorial' } },
@@ -349,7 +357,7 @@ const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: Json
 const OUTPUT_FIELDS: Record<string, OutField[]> = {
   skill_config: [
     { path: '[].name / [].enabled', description: '只读配置：已发现 Skill 对当前伙伴的启用配置' },
-    { path: 'name / enabled', description: '修改后的名称及当前伙伴启用配置' },
+    { path: '{}', description: '批量修改成功，无额外字段' },
     { path: 'filePath', description: '超长状态清单的真实工具结果文件' }
   ],
   terminal_run: [
@@ -518,31 +526,29 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
     {
       label: '全部启用状态',
       ok: true,
-      input: {},
+      input: { action: 'list' },
       data: [
         { name: 'weekly-report', enabled: true },
         { name: 'project-review', enabled: false }
       ]
     },
+    { label: '空列表', ok: true, input: { action: 'list' }, data: [] },
     {
-      label: '启用',
+      label: '批量更新',
       ok: true,
-      input: { name: 'weekly-report', enabled: true },
-      data: { name: 'weekly-report', enabled: true }
+      input: {
+        action: 'update',
+        skills: [
+          { name: 'weekly-report', enabled: true },
+          { name: 'writing-style', enabled: false }
+        ]
+      },
+      data: {}
     },
     {
-      label: '停用损坏目录',
-      ok: true,
-      input: { name: 'weekly-report', enabled: false },
-      data: {
-        name: 'weekly-report',
-        enabled: false
-      }
-    },
-    {
-      label: '预算拒绝',
+      label: '预算拒绝，整批不变',
       ok: false,
-      input: { name: 'weekly-report', enabled: true },
+      input: { action: 'update', skills: [{ name: 'weekly-report', enabled: true }] },
       data: { error: 'Skill instructions exceed 64 KiB for: 周报伙伴' }
     }
   ],

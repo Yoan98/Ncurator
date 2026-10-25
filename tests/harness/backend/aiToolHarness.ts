@@ -22,7 +22,7 @@ import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/huma
 import { buildImageGenerationCapabilityTools } from '../../../src/main/services/ai/human/tools/imageGeneration'
 import { agentControlToolFamily } from '../../../src/main/services/ai/human/tools/agentControl'
 import { scheduledTasksToolFamily } from '../../../src/main/services/ai/human/tools/scheduledTasks'
-import { buildSkillConfigTool } from '../../../src/main/services/ai/human/tools/agentControl/skillConfig'
+import { skillManagementToolFamily } from '../../../src/main/services/ai/human/tools/skillManagement'
 import { buildPdfCapabilityTools } from '../../../src/main/services/ai/human/tools/pdf'
 import { buildPptCapabilityTools } from '../../../src/main/services/ai/human/tools/ppt'
 import { buildExcelCapabilityTools } from '../../../src/main/services/ai/human/tools/excel'
@@ -378,7 +378,7 @@ export const createSkillConfigToolHarness = (
 ) => {
   const ctx = createAlignedAiRunContext(runtime, contextInput)
   const tools = [
-    buildSkillConfigTool({
+    ...skillManagementToolFamily.buildTools({
       ctx,
       cache: createHumanRuntimeCache(),
       runId: ctx.runId,

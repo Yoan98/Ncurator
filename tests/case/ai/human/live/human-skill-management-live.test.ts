@@ -223,7 +223,32 @@ describe('skill management quality live', () => {
               result.updatedFiles.some((file) => file.content?.includes('验收证据')),
             {
               name: 'authored-and-updated-resources',
-              message: 'AI 创建完整可复用目录，并在原 ID 上更新规则。'
+              message: 'AI 创建完整可复用目录，并按原名称更新规则。'
+            }
+          )
+          runtime.assertThat(
+            result.events.some(
+              (event) =>
+                event.type === 'tool_call_started' &&
+                event.toolName === 'load_toolset' &&
+                JSON.stringify(event.input).includes('skill-management')
+            ) &&
+              result.events.some(
+                (event) =>
+                  event.type === 'tool_call_started' &&
+                  event.toolName === 'skill_config' &&
+                  event.input?.action === 'list'
+              ) &&
+              result.events.some(
+                (event) =>
+                  event.type === 'tool_call_started' &&
+                  event.toolName === 'skill_config' &&
+                  event.input?.action === 'update' &&
+                  Array.isArray(event.input.skills)
+              ),
+            {
+              name: 'on-demand-skill-management',
+              message: '模型自主加载管理工具包，使用列表与批量更新契约。'
             }
           )
           const scripts = result.initialDocument.resources.filter((file) =>

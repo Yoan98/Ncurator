@@ -1017,9 +1017,8 @@ export const zh = {
     excelPreviewFailed2: 'Excel 预览失败：'
   },
   system: {
-    enableSkillName: '启用 {{value1}}',
-    disableSkillName: '停用 {{value1}}',
     querySkillStatus: '查看 skill 配置',
+    updateSkillStatus: '更新 skill 配置',
     loadName: '加载 {{value1}}',
     skillManagement: 'skill 管理',
     loadingSkill: '正在加载技能',

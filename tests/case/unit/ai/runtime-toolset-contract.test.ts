@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import { buildModelToolResultDelivery } from '../../../../src/main/services/ai/human/shared/modelToolResult'
-import { SKILL_CONFIG_SCHEMA } from '../../../../src/main/services/ai/human/tools/agentControl/toolSchemas'
+import { SKILL_CONFIG_SCHEMA } from '../../../../src/main/services/ai/human/tools/skillManagement/toolSchemas'
 import { isToolAllowed } from '../../../../src/main/services/ai/run/toolPolicy'
 import {
   getEffectiveLoadedToolsetIds,
@@ -16,21 +16,40 @@ import {
 
 describe('ai unit runtime toolset contract', () => {
   it('keeps skill management minimal and restricted to the main partner', () => {
-    expect(getToolsetDefinition('agent-control').toolNames).toContain('skill_config')
+    expect(getToolsetDefinition('agent-control').toolNames).not.toContain('skill_config')
+    expect(getToolsetDefinition('skill-management')).toMatchObject({
+      source: 'external',
+      toolNames: ['skill_config'],
+      countsTowardToolBudget: true
+    })
+    for (const input of [
+      { action: 'list' },
+      { action: 'update', skills: [{ name: 'weekly-report', enabled: true }] },
+      {
+        action: 'update',
+        skills: [
+          { name: 'weekly-report', enabled: false },
+          { name: 'writing-style', enabled: true }
+        ]
+      }
+    ])
+      expect(SKILL_CONFIG_SCHEMA.safeParse(input).success).toBe(true)
     for (const input of [
       {},
       { name: 'weekly-report' },
       { name: 'weekly-report', enabled: true },
-      { name: 'weekly-report', enabled: false }
-    ])
-      expect(SKILL_CONFIG_SCHEMA.safeParse(input).success).toBe(true)
-    for (const input of [
-      { enabled: false },
-      { name: '../escape' },
-      { name: 'x', action: 'sync' },
-      { name: 'x', id: 'old' },
-      { name: 'x', partnerId: 'other' },
-      { name: 'x', sourcePath: '/draft' }
+      { action: 'list', name: 'weekly-report' },
+      { action: 'update', skills: [] },
+      { action: 'update', skills: [{ name: '../escape', enabled: true }] },
+      { action: 'update', skills: [{ name: 'weekly-report' }] },
+      { action: 'update', skills: [{ name: 'weekly-report', enabled: true, partnerId: 'other' }] },
+      {
+        action: 'update',
+        skills: [
+          { name: 'weekly-report', enabled: false },
+          { name: 'weekly-report', enabled: true }
+        ]
+      }
     ])
       expect(SKILL_CONFIG_SCHEMA.safeParse(input).success).toBe(false)
     expect(isToolAllowed({ isSubagent: true }, 'skill_config')).toBe(false)
@@ -42,10 +61,35 @@ describe('ai unit runtime toolset contract', () => {
     const delivered = await buildModelToolResultDelivery({
       ctx: { platform: 'macos' } as AiRunContext,
       toolCallId: 'sync-budget-error',
-      args: { name: 'weekly-report', enabled: true },
+      args: { action: 'update', skills: [{ name: 'weekly-report', enabled: true }] },
       result: { toolName: 'skill_config', ok: false, data: { error } }
     })
     expect(delivered).toEqual({ ok: false, content: `Error: ${error}` })
+  })
+
+  it('renders list entries without a heading and mutation as a plain confirmation', async () => {
+    const ctx = { platform: 'macos' } as AiRunContext
+    const list = await buildModelToolResultDelivery({
+      ctx,
+      toolCallId: 'list',
+      args: { action: 'list' },
+      result: {
+        toolName: 'skill_config',
+        ok: true,
+        data: [
+          { name: 'weekly-report', enabled: true },
+          { name: 'writing-style', enabled: false }
+        ]
+      }
+    })
+    expect(list.content).toBe('- weekly-report：已启用\n- writing-style：未启用')
+    const updated = await buildModelToolResultDelivery({
+      ctx,
+      toolCallId: 'update',
+      args: { action: 'update', skills: [{ name: 'weekly-report', enabled: true }] },
+      result: { toolName: 'skill_config', ok: true, data: {} }
+    })
+    expect(updated.content).toBe('修改成功。')
   })
 
   it('exposes builtin toolsets', () => {
@@ -65,7 +109,8 @@ describe('ai unit runtime toolset contract', () => {
       'excel-read',
       'excel-write',
       'image-generation',
-      'scheduled-tasks'
+      'scheduled-tasks',
+      'skill-management'
     ])
   })
 
