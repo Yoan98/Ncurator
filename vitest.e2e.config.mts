@@ -3,7 +3,12 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     include: ['tests/case/**/*.e2e.test.ts', 'tests/case/**/*.e2e.test.tsx'],
-    exclude: ['tests/harness/**', 'tests/fixtures/**', 'tests/logs/**'],
+    exclude: [
+      'tests/harness/**',
+      'tests/fixtures/**',
+      'tests/logs/**',
+      'tests/case/workbench/conversation/provider-matrix/**'
+    ],
     environment: 'node',
     globals: true,
     fileParallelism: true,

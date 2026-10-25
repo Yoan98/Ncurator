@@ -14,8 +14,89 @@ import {
   readTestCaseIds,
   runE2EGates
 } from '../../../../scripts/test/e2e-results.mjs'
+import { findTestFiles } from '../../../../scripts/test/workflow.mjs'
+
+const providerMatrixFile = path.resolve(
+  'tests/case/workbench/conversation/provider-matrix/live-preset-provider-smoke.e2e.test.ts'
+)
+
+const defaultScope = {
+  domain: '',
+  suite: '',
+  groups: [] as string[],
+  excludeGroups: [] as string[],
+  caseIds: [] as string[],
+  type: 'e2e',
+  target: 'source'
+}
 
 describe('release regression selection', () => {
+  it.each([
+    { name: 'full workflow', scope: { type: '' } },
+    { name: 'source E2E', scope: {} },
+    { name: 'package E2E', scope: { target: 'package' } },
+    { name: 'Workbench', scope: { domain: 'workbench' } },
+    { name: 'conversation suite', scope: { domain: 'workbench', suite: 'conversation' } }
+  ])('excludes the provider matrix from $name discovery', async ({ scope }) => {
+    const files = await findTestFiles({ ...defaultScope, ...scope })
+    expect(files.length).toBeGreaterThan(0)
+    expect(files).not.toContain(providerMatrixFile)
+  })
+
+  it('does not enable the provider matrix through a group filter', async () => {
+    expect(
+      await findTestFiles({
+        ...defaultScope,
+        domain: 'workbench',
+        suite: 'conversation',
+        groups: ['provider-matrix']
+      })
+    ).toEqual([])
+  })
+
+  it.each(['source', 'package'])(
+    'enables the provider matrix by exact case for %s',
+    async (target) => {
+      expect(
+        await findTestFiles({
+          ...defaultScope,
+          target,
+          caseIds: ['live-preset-provider-smoke']
+        })
+      ).toEqual([providerMatrixFile])
+      expect(await findTestFiles({ ...defaultScope, target, caseIds: ['live-preset'] })).toEqual([])
+    }
+  )
+
+  it('keeps other explicitly selected cases alongside the provider matrix', async () => {
+    const caseIds = ['live-preset-provider-smoke', 'model-selector-and-provider-error']
+    const selection = readRegressionSelection([
+      '--test-only',
+      '--case',
+      caseIds[0],
+      '--case',
+      caseIds[1]
+    ])
+    const files = await findTestFiles({ ...defaultScope, caseIds: selection.state.cases })
+    expect(files).toEqual(
+      [
+        providerMatrixFile,
+        path.resolve(
+          'tests/case/workbench/conversation/composer/model-selector-and-provider-error.e2e.test.ts'
+        )
+      ].sort()
+    )
+    expect(
+      await findTestFiles({
+        ...defaultScope,
+        domain: 'workbench',
+        suite: 'conversation',
+        excludeGroups: ['provider-matrix'],
+        caseIds: [caseIds[0]]
+      })
+    ).toEqual([])
+  })
+
   it('executes CLI entry points through a directory alias instead of silently exiting', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'ncurator-release-entry-'))
     const alias = path.join(root, 'repository')
@@ -167,7 +248,7 @@ describe('release regression selection', () => {
     })
   })
 
-  it('allows opt-in groups to be selected for release impact assessment', () => {
+  it('preserves group filters without opting in to the provider matrix', () => {
     expect(
       readRegressionSelection([
         '--test-only',

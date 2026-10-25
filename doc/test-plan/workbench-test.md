@@ -5,7 +5,7 @@
 - 本计划定义 Workbench 用户可见交互的测试范围，并对齐 [workbench.md](../prd/workbench.md) 的 `WB-*` 需求和验收编号。
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
 - Workbench UI E2E 测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。依赖资料时通过设置页添加文件地址，普通发送不要求资料目录。
-- 涉及 AI 的 Workbench UI E2E 使用真实模型，共享 live 配置见 [测试规范](../test.md)。通过 Settings「推荐」类型准备当前目标服务商；全服务商冒烟见 `live-preset-provider-smoke`。
+- 涉及 AI 的 Workbench UI E2E 使用真实模型，共享 live 配置见 [测试规范](../test.md)。内置目标通过 Settings「推荐」类型准备；`custom` 目标通过「自定义」类型准备地址与 Key，并在 Composer 自定义模型列表选择指定型号；全内置服务商冒烟见 `live-preset-provider-smoke`。
 - case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
 - 多语言发布回归只使用国内候选包：英文界面在同一国内包内通过设置并重启验证；国际官方服务通过手动切换线路联调。国际包不重复安装、UI 或升级回归，发行配置及更新入口由共用 backend Unit 检查。
@@ -16,7 +16,7 @@
 - Workbench UI E2E 测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；需要文件资料时通过 Settings UI 添加文件地址、检查更新和更新索引。前置是创建伙伴；文件地址按场景添加，不作为通用发送门禁。
 - Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。现有用例的执行缺口见第 6 节。
 - Workbench e2e 按 `knowledge: none / cached / cold` 声明索引需求，默认 none。需要真实索引时复用生产 split/vector 计算缓存并隔离本用例统计；不自动追加 UI 预热用例，不复用存储和 UI 状态。缓存身份、按需预热与清理规则遵循 [测试规范](../test.md)。
-- Workbench 模型选择 helper 优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选；未命中再按展示名；仍未命中则进入「自定义模型」按名称搜索。
+- Workbench 模型选择 helper 在 `custom` live 配置下直接进入「自定义模型」按名称搜索，避免同名预设或免费模型改变测试入口；内置目标优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选，未命中再按展示名，仍未命中则进入「自定义模型」按名称搜索。
 - Workbench UI E2E 测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖列表打开/焦点刷新、右键行内新建和确认移到回收站，以及删除后禁止自动保存重建。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；用户行为见 `WB-WPS-001`。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
@@ -72,7 +72,7 @@ tests/case/workbench/
     message/
     scope/
     prefix-cache/      # 跨 run 前缀缓存
-    provider-matrix/   # 正式 E2E：发版按影响范围或全量测试
+    provider-matrix/   # 独立连通性冒烟，仅专用命令或显式 --case 执行
   run/
     process/
     blocker/
@@ -89,7 +89,7 @@ tests/case/workbench/
 测试命令：
 
 - `pnpm test:workbench:e2e`
-- `pnpm test:workbench:provider-matrix`（全服务商冒烟，可单独执行；发版按影响范围或全量测试）
+- `pnpm test:workbench:provider-matrix`（独立全服务商冒烟；执行隔离规则见[测试规范](../test.md#32-runner-与常用命令)）
 - `pnpm test:workbench:wps-office`（本机已授权 WPS，可单独执行；发版按影响范围或全量测试）
 
 自动更新模拟（聚合入口，不证明真实安装成功）：
@@ -239,11 +239,11 @@ pnpm test:update:e2e
 
 #### `live-preset-provider-smoke`
 
-- 测试类型：`e2e / live`（路径 `conversation/provider-matrix/`，可单独执行）
+- 测试类型：`e2e / live`（路径 `conversation/provider-matrix/`，独立连通性检查；仅专用命令或显式 `--case live-preset-provider-smoke` 执行）
 - What：对 `.env` 中已填写 `AI_LIVE_KEY_*` 的每个内置服务商，经真实 Settings「推荐」配置 + Composer 预设 option（稳定调用名 testid）选模，各发一句「你好」；免费目录非空时，再选择一个免费型号完成真实调用。
 - Why：日常全量 live 只跑 `AI_LIVE_PROVIDER`/`AI_LIVE_MODEL` 选定目标；需要 smoke 覆盖已配置服务商，以及正式包中的免费模型官网调用与鉴权链路。
-- How：读取 `listConfiguredLiveLlmTargets()`，默认测试模型须在当前推荐目录中；为每个目标走 Settings UI 创建推荐服务商；创建伙伴后依次点预设 option（不得走自定义搜索兜底）并发送「你好」，等待 run 完成。随后通过只读 `freeModelsGet` 取得公开目录；目录非空时点击对应免费 option 并发送「你好」，观测真实完成事件与回答，记录型号、标签与截图；目录为空时明确记录该覆盖缺口。
-- Oracle：每个已配置 Key 的服务商都有非空最终回答；未配置 Key 的服务商不参与、不失败。免费目录非空时，所选免费型号必须真实完成且回答非空，不能因免费通道失败而跳过，对齐 `WB-COMPOSER-007-AC4/AC14` 的调用边界；目录为空只证明已配置服务商连通性。
+- How：通过专用命令或显式 case 选择独立执行，不随日常或全量回归运行。读取 `listConfiguredLiveLlmTargets()`，默认测试模型须在当前推荐目录中；为每个目标走 Settings UI 创建推荐服务商；创建伙伴后依次点预设 option（不得走自定义搜索兜底）并发送「你好」，等待 run 完成。随后通过只读 `freeModelsGet` 取得公开目录；目录非空时点击对应免费 option 并发送「你好」，观测真实完成事件与回答，记录型号、标签与截图；目录为空时明确记录该覆盖缺口。
+- Oracle：每个已配置 Key 的服务商都有非空最终回答；未配置 Key 的服务商不参与、不失败。免费目录非空时，所选免费型号必须真实完成且回答非空，不能因免费通道失败而跳过；目录为空只证明已配置服务商连通性。本检查提供外部服务连通性证据，PRD 功能行为由常规功能用例覆盖。
 
 #### `prefix-cache-retain-live`
 

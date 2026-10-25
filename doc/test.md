@@ -126,7 +126,7 @@ backend `ai/human/live` 与 Workbench AI E2E 共用：
 
 - Key 池：`AI_LIVE_KEY_<PROVIDER>`，服务商为 `DEEPSEEK`／`DASHSCOPE`／`MIMO`／`ZHIPU`。
 - `AI_LIVE_PROVIDER` 可选，默认 `dashscope`。
-- `AI_LIVE_MODEL` 可选，默认该服务商的测试模型；通义为 `qwen3.8-flash`。
+- `AI_LIVE_MODEL` 可选。
 - baseUrl／providerKind 由产品 registry 推导；领域计划定义如何通过真实 executor 或 Settings UI 准备服务配置。
 
 统一入口默认是 `scripts/test/workflow.mjs`。
@@ -180,12 +180,13 @@ runner 不负责：
   - `pnpm test:unit:ai`
   - `pnpm test:terminal`：直接 `vitest` 运行终端相关 unit 文件。
 - E2E（源码 / 正式包）
-  - `pnpm test:e2e:source`：构建当前源码并运行 `tests/case/**` 中的全部 E2E。
+  - `pnpm test:e2e:source`：构建当前源码并运行常规全量 E2E；独立执行范围见本节。
   - `pnpm test:e2e:package --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行所选正式 E2E。安装落在本机 `NCurator-E2E` 目录；Windows 可能覆盖本机已安装的正式包。测完删除 E2E 安装目录及指向它的入口。
 - Settings
   - `pnpm test:settings:e2e`
 - Workbench
   - `pnpm test:workbench:e2e`
+  - `pnpm test:workbench:provider-matrix`：独立执行全内置服务商与免费模型连通性冒烟。
 - Showcase
   - `pnpm test:showcase`：独立执行官网样例采集。
 - 更新

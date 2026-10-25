@@ -23,6 +23,12 @@ const require = createRequire(import.meta.url)
 const TESTS_ROOT = path.join(ROOT, 'tests')
 const TEST_CASES_ROOT = path.join(TESTS_ROOT, 'case')
 const SHOWCASE_ROOT = path.join(TEST_CASES_ROOT, 'showcase')
+const PROVIDER_MATRIX_ROOT = path.join(
+  TEST_CASES_ROOT,
+  'workbench',
+  'conversation',
+  'provider-matrix'
+)
 const resolveLocalBin = (name) =>
   path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name)
 const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
@@ -307,7 +313,7 @@ const fileDeclaresCaseId = async (filePath, caseId) => {
   return source.includes(`caseId: '${caseId}'`) || source.includes(`caseId: "${caseId}"`)
 }
 
-const findTestFiles = async (input) => {
+export const findTestFiles = async (input) => {
   const scopeDir = resolveScopeDir(input)
   try {
     const scopeStat = await stat(scopeDir)
@@ -319,6 +325,11 @@ const findTestFiles = async (input) => {
   const allFiles = await walk(scopeDir)
   const candidates = allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
+    .filter(
+      (filePath) =>
+        !filePath.startsWith(`${PROVIDER_MATRIX_ROOT}${path.sep}`) ||
+        input.caseIds.includes('live-preset-provider-smoke')
+    )
     .filter((filePath) => {
       if (input.excludeGroups.length === 0) return true
       const root = input.showcase ? SHOWCASE_ROOT : TEST_CASES_ROOT
@@ -715,7 +726,9 @@ const runE2ETestFilesConcurrently = async (
     const startedAt = Date.now()
     const caseEnv = await buildDirectKnowledgeCacheEnv(task.env, task.testFile)
     let code = await runVitest({
-      configPath,
+      configPath: task.testFile.startsWith(`${PROVIDER_MATRIX_ROOT}${path.sep}`)
+        ? 'vitest.provider-matrix.config.mts'
+        : configPath,
       testFiles: [task.testFile],
       env: caseEnv,
       testNamePattern,
@@ -1025,6 +1038,7 @@ const USAGE = `NCurator 测试 runner
 
 注意:
   不带任何过滤参数会执行全量测试（含 live 真实模型调用），会消耗真实 API 额度。
+  服务商矩阵默认排除，通过 pnpm test:workbench:provider-matrix 或 --case live-preset-provider-smoke 显式执行。
   请使用 --domain/--suite/--case 缩小范围；未知参数会导致立即报错退出。
 `
 

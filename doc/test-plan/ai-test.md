@@ -23,7 +23,7 @@
 ### 2.2 `human`
 
 - `mock-llm`：在 non-live 下验证 `AiRunService -> human` 入口与主链；只允许固定 LLM 输入输出，必须真实走 `createAiRunContext -> human graph -> toolset_loading / hand -> store / apply / artifact`；禁止 `humanReasonOverrides`、`toolExecutionOverrides`、手工串 node、fake tool/store/docx apply service。要通过不同 case 把关键节点与关键边都跑到。
-- `live`：验证真实模型下的真实业务执行；必须走真实 LLM executor、真实 KB、真实工具与 apply / artifact；禁止 scripted driver、`chatStructuredOverride`、fixture store override。用户输入不得包含内部工具名或固定调用顺序。至少保留 1 条简单与 1 条复杂回归 case；全内置服务商连通性由 Workbench `live-preset-provider-smoke` 覆盖。质量评估按各场景 Oracle 人工复核并写入运行结论，不回填本计划。共享 live 环境变量与断言规则见 [测试规范](../test.md)。
+- `live`：验证真实模型下的真实业务执行；必须走真实 LLM executor、真实 KB、真实工具与 apply / artifact；禁止 scripted driver、`chatStructuredOverride`、fixture store override。用户输入不得包含内部工具名或固定调用顺序。至少保留 1 条简单与 1 条复杂回归 case；全内置服务商连通性由 Workbench 独立命令 `pnpm test:workbench:provider-matrix` 的 `live-preset-provider-smoke` 覆盖。质量评估按各场景 Oracle 人工复核并写入运行结论，不回填本计划。共享 live 环境变量与断言规则见 [测试规范](../test.md)。
 
 ## 3. 领域特有规则
 

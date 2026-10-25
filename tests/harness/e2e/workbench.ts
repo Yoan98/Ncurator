@@ -30,6 +30,7 @@ import { resolveLiveLlmTarget, type LiveLlmTarget } from '../core/liveProviders'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
+  createModelConfigThroughSettingsUi,
   createPresetModelConfigThroughSettingsUi,
   getWorkspaceIndexCounts,
   getSettingsLocator,
@@ -579,9 +580,9 @@ export const loadWorkbenchLiveModelEnv = (): WorkbenchLiveModelEnv => {
     const detail = error instanceof Error ? error.message : String(error)
     throw new Error(
       [
-        'Workbench formal AI e2e 缺少内置服务商 live 配置。',
-        '请设置 AI_LIVE_KEY_<PROVIDER>（如 AI_LIVE_KEY_DASHSCOPE），',
-        '可选 AI_LIVE_PROVIDER / AI_LIVE_MODEL（默认 dashscope + qwen3.8-flash）。',
+        'Workbench formal AI e2e 的 live 模型配置无效。',
+        '内置服务商设置 AI_LIVE_KEY_<PROVIDER>；自定义入口设置 AI_LIVE_PROVIDER=custom、',
+        'AI_LIVE_BASE_URL、AI_LIVE_API_KEY 和 AI_LIVE_MODEL。',
         detail
       ].join('\n')
     )
@@ -675,6 +676,14 @@ export const configureLiveModelThroughSettingsUi = async (
   page: Page,
   env: WorkbenchLiveModelEnv = loadWorkbenchLiveModelEnv()
 ): Promise<void> => {
+  if (env.providerId === 'custom') {
+    await createModelConfigThroughSettingsUi(page, {
+      name: env.label,
+      baseUrl: env.baseUrl,
+      apiKey: env.apiKey
+    })
+    return
+  }
   await createPresetModelConfigThroughSettingsUi(page, {
     providerId: env.providerId,
     apiKey: env.apiKey
@@ -1527,7 +1536,9 @@ export const selectWorkbenchModel = async (
   const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
   await menu.waitFor({ state: 'visible' })
 
-  if (!selection?.preferCustom) {
+  const preferCustom =
+    selection?.preferCustom ?? loadWorkbenchLiveModelEnv().providerId === 'custom'
+  if (!preferCustom) {
     const byPresetId = menu.getByTestId(
       `${workbenchSelectors.modelSelectPresetOptionPrefix}-${modelName}`
     )
