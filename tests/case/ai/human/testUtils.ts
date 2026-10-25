@@ -30,13 +30,13 @@ const buildThoughtMetadata = (input: { summary: string }): HumanRoundThought => 
 })
 
 export const buildLoadToolsetsDecision = (input: {
-  toolsetIds: RuntimeToolsetId[]
+  toolsetNames: RuntimeToolsetId[]
   summary: string
 }): JsonObject => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'toolset_loading',
-    wantLoadToolsetIds: input.toolsetIds
+    wantLoadToolsetNames: input.toolsetNames
   }
 })
 

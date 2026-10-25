@@ -54,15 +54,15 @@ const renderPreferenceText = (preference: AiRunContext['preference']): string =>
   return ''
 }
 
-const renderToolsetLine = (toolsetId: string, description: string, toolCount: number): string =>
-  `- ${toolsetId}（${toolCount} 个工具）：${description}`
+const renderToolsetLine = (toolsetName: string, description: string, toolCount: number): string =>
+  `- ${toolsetName}（${toolCount} 个工具）：${description}`
 
 const renderToolsetCatalog = (platform: AiRuntimePlatform): string => {
   void platform
   const builtin = listBuiltinToolsetDefinitions()
   const external = listExternalToolsetDefinitions()
   return `
-toolset 是预注册的工具组。内置工具组始终可用；外部工具组需要先调用 load_toolset 加载后才能使用。当前最多同时激活 ${HUMAN_MAX_ACTIVE_TOOLS} 个工具，加载新工具组超出上限时系统按最早加载顺序淘汰旧的外部工具组。
+toolset 是预注册的工具组，目录中每项以稳定名称开头。内置工具组始终可用；外部工具组通过 load_toolset 的 toolsetNames 参数按目录中的名称加载后才能使用。当前最多同时激活 ${HUMAN_MAX_ACTIVE_TOOLS} 个工具，加载新工具组超出上限时系统按最早加载顺序淘汰旧的外部工具组。
 
 始终可用的内置工具组：
 ${builtin.map((toolset) => renderToolsetLine(toolset.toolsetId, toolset.description, toolset.toolNames.length)).join('\n')}

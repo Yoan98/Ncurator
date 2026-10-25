@@ -77,7 +77,7 @@ describe('ai human mock-llm backend', () => {
           'human.brain': [
             {
               output: buildLoadToolsetsDecision({
-                toolsetIds: ['docx-read'],
+                toolsetNames: ['docx-read'],
                 summary: '先学习 docx-read 技能。'
               })
             },
@@ -163,7 +163,7 @@ describe('ai human mock-llm backend', () => {
           'human.brain': [
             {
               output: buildLoadToolsetsDecision({
-                toolsetIds: ['docx-read'],
+                toolsetNames: ['docx-read'],
                 summary: '先学习 docx-read 技能再继续。'
               })
             }

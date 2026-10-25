@@ -751,8 +751,8 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend`
 - What：`human` 在 mock-llm 模式下能稳定走通真实 `brain -> toolset_loading -> hand -> brain 交付` 主链路。
 - Why：`human` graph 的最小真实闭环，后续所有复杂样例都建立在这条主链路之上。
-- How：通过 scripted structured output 先加载一个真实 external toolset（例如 `docx-read`），再直接执行一次 builtin terminal 工具 `terminal_run(pwd)`，最后由 `brain` 无工具调用输出最终交付。
-- Oracle：`human_brain`、`human_toolset_loading`、`human_hand` 三个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实最终交付。
+- How：通过 scripted structured output 使用 `toolsetNames` 加载一个真实 external toolset（例如 `docx-read`），再直接执行一次 builtin terminal 工具 `terminal_run(pwd)`，最后由 `brain` 无工具调用输出最终交付。
+- Oracle：`human_brain`、`human_toolset_loading`、`human_hand` 三个 stage 都真实出现，加载开始与结果事件使用 `toolsetNames`，且至少有一次真实 terminal 工具结果与一次真实最终交付。strict 参数边界、旧参数拒绝、目录发现及加载后工具可用性由既有 `unit/ai/user-skill-runtime` 补充验证。
 
 ##### `learning-tool-budget-tracking`
 
@@ -760,7 +760,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：真实 `toolset_loading` 会持续记录当前 active tool 数，并在预算未超限时保留当前已加载 toolset 集。
 - Why：`toolset_loading` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，回归 case 需要先守住基础统计与状态可见性。
 - How：通过 scripted structured output 先加载 `docx-read`，重新加载习 `docx-write`，最后故意请求 builtin toolset（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_toolset_loading` 事件中的 `loadedToolsetIds`、`availableToolNames` 与 summary，并确认 builtin toolset 请求被过滤（toolset_loading 返回「加载失败，请求中没有可加载的工具包。」工具结果）。
-- Oracle：任务最终完成；最后一轮真实 `human_toolset_loading` 事件中只保留 external toolset，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 toolset 淘汰文案；builtin toolset 始终计入 active tool 上限统计，但请求 builtin toolset id 不会进入 `loadedToolsetIds`。
+- Oracle：任务最终完成；最后一轮真实 `human_toolset_loading` 事件中只保留 external toolset，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 toolset 淘汰文案；builtin toolset 始终计入 active tool 上限统计，但请求 builtin toolset 名称不会进入 `loadedToolsetIds`。
 
 ##### `tool-failure-recovery`
 

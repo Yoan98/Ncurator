@@ -39,14 +39,14 @@ const appendLoadToolsetMessage = async (input: {
 const emitLoadToolsetProcessStarted = (input: {
   ctx: AiRunContext
   toolCallId: string
-  toolsetIds: string[]
+  toolsetNames: string[]
 }): void => {
   emitToolCallStarted({
     ctx: input.ctx,
     runId: input.ctx.runId,
     toolCallId: input.toolCallId,
     toolName: 'load_toolset',
-    args: { toolsetIds: input.toolsetIds },
+    args: { toolsetNames: input.toolsetNames },
     stage: 'human_toolset_loading'
   })
 }
@@ -54,7 +54,7 @@ const emitLoadToolsetProcessStarted = (input: {
 const emitLoadToolsetProcessCompleted = (input: {
   ctx: AiRunContext
   toolCallId: string
-  toolsetIds: string[]
+  toolsetNames: string[]
   ok: boolean
   error?: string
 }): void => {
@@ -67,7 +67,7 @@ const emitLoadToolsetProcessCompleted = (input: {
       toolName: 'load_toolset',
       ok: input.ok,
       data: input.ok
-        ? { toolsetIds: input.toolsetIds }
+        ? { toolsetNames: input.toolsetNames }
         : { error: input.error || 'load_toolset failed' }
     },
     error: input.error,
@@ -106,17 +106,17 @@ const buildLoadSummary = (input: {
 }
 
 const buildToolsetLoadingOutcome = (input: {
-  requestedToolsetIds: string[]
+  requestedToolsetNames: string[]
   loadedToolsetIds: HumanToolsetLoadingOutcome['loadedToolsetIds']
   skippedDuplicateToolsetIds: HumanToolsetLoadingOutcome['skippedDuplicateToolsetIds']
-  skippedUnknownToolsetIds: string[]
+  skippedUnknownToolsetNames: string[]
   evictedToolsetIds: HumanToolsetLoadingOutcome['evictedToolsetIds']
   activeToolCount: number
 }): HumanToolsetLoadingOutcome => ({
-  requestedToolsetIds: input.requestedToolsetIds,
+  requestedToolsetNames: input.requestedToolsetNames,
   loadedToolsetIds: input.loadedToolsetIds,
   skippedDuplicateToolsetIds: input.skippedDuplicateToolsetIds,
-  skippedUnknownToolsetIds: input.skippedUnknownToolsetIds,
+  skippedUnknownToolsetNames: input.skippedUnknownToolsetNames,
   evictedToolsetIds: input.evictedToolsetIds,
   activeToolCount: input.activeToolCount
 })
@@ -124,7 +124,7 @@ const buildToolsetLoadingOutcome = (input: {
 const renderToolsetLoadingResult = (outcome: HumanToolsetLoadingOutcome): string => {
   const loaded = outcome.loadedToolsetIds
   const duplicates = outcome.skippedDuplicateToolsetIds
-  const unknown = outcome.skippedUnknownToolsetIds
+  const unknown = outcome.skippedUnknownToolsetNames
   if (loaded.length > 0) {
     const details = [
       `loaded=${loaded.join(', ')}`,
@@ -140,10 +140,10 @@ const renderToolsetLoadingResult = (outcome: HumanToolsetLoadingOutcome): string
     return `No new toolset was loaded. Already loaded: ${duplicates.join(', ')}.`
   }
   if (unknown.length > 0 && duplicates.length === 0) {
-    return `Error: Unknown toolset IDs: ${unknown.join(', ')}.`
+    return `Error: Unknown toolset names: ${unknown.join(', ')}.`
   }
   if (duplicates.length > 0 || unknown.length > 0) {
-    return `No new toolset was loaded.${duplicates.length > 0 ? ` Already loaded: ${duplicates.join(', ')}.` : ''}${unknown.length > 0 ? ` Unknown toolset IDs: ${unknown.join(', ')}.` : ''}`
+    return `No new toolset was loaded.${duplicates.length > 0 ? ` Already loaded: ${duplicates.join(', ')}.` : ''}${unknown.length > 0 ? ` Unknown toolset names: ${unknown.join(', ')}.` : ''}`
   }
   return 'Error: The toolset request did not contain any loadable toolset.'
 }
@@ -165,27 +165,26 @@ export const createToolsetLoadingNode = (input: {
       return returnToDispatch(state)
     }
 
-    const rawRequestedToolsetIds = pendingRound.nextAction.wantLoadToolsetIds
+    const rawRequestedToolsetNames = pendingRound.nextAction.wantLoadToolsetNames
     const loadToolCallId = pendingRound.nextAction.toolCallId
-    const directRequestedToolsetIds = dedupeInOrder(
-      Array.isArray(rawRequestedToolsetIds)
-        ? rawRequestedToolsetIds.filter(
+    const requestedToolsetNames = dedupeInOrder(
+      Array.isArray(rawRequestedToolsetNames)
+        ? rawRequestedToolsetNames.filter(
             (item): item is string => typeof item === 'string' && item.trim().length > 0
           )
         : []
     )
-    const requestedToolsetIds = directRequestedToolsetIds
     const effectiveLoadedToolsetIds = getEffectiveLoadedToolsetIds(state.toolsets.loadedToolsetIds)
-    const duplicateToolsetIds = requestedToolsetIds.filter(
+    const duplicateToolsetIds = requestedToolsetNames.filter(
       (toolsetId): toolsetId is HumanToolsetLoadingOutcome['skippedDuplicateToolsetIds'][number] =>
         hasToolsetDefinition(toolsetId) &&
         isLoadableToolsetId(toolsetId) &&
         effectiveLoadedToolsetIds.includes(toolsetId)
     )
-    const unknownToolsetIds = requestedToolsetIds.filter(
-      (toolsetId) => !hasToolsetDefinition(toolsetId)
+    const unknownToolsetNames = requestedToolsetNames.filter(
+      (toolsetName) => !hasToolsetDefinition(toolsetName)
     )
-    const newToolsetIds = requestedToolsetIds.filter(
+    const newToolsetIds = requestedToolsetNames.filter(
       (toolsetId): toolsetId is HumanToolsetLoadingOutcome['loadedToolsetIds'][number] =>
         isLoadableToolsetId(toolsetId) && !state.toolsets.loadedToolsetIds.includes(toolsetId)
     )
@@ -197,10 +196,10 @@ export const createToolsetLoadingNode = (input: {
         baseToolNames: budgetToolNames
       })
       const lastToolsetLoadingOutcome = buildToolsetLoadingOutcome({
-        requestedToolsetIds,
+        requestedToolsetNames,
         loadedToolsetIds: [],
         skippedDuplicateToolsetIds: duplicateToolsetIds,
-        skippedUnknownToolsetIds: unknownToolsetIds,
+        skippedUnknownToolsetNames: unknownToolsetNames,
         evictedToolsetIds: [],
         activeToolCount
       })
@@ -209,12 +208,12 @@ export const createToolsetLoadingNode = (input: {
       emitLoadToolsetProcessStarted({
         ctx: input.ctx,
         toolCallId: loadToolCallId,
-        toolsetIds: requestedToolsetIds
+        toolsetNames: requestedToolsetNames
       })
       emitLoadToolsetProcessCompleted({
         ctx: input.ctx,
         toolCallId: loadToolCallId,
-        toolsetIds: requestedToolsetIds,
+        toolsetNames: requestedToolsetNames,
         ok: true
       })
       await appendLoadToolsetMessage({
@@ -242,10 +241,10 @@ export const createToolsetLoadingNode = (input: {
     })
     if (!fittedLoadedToolsets.ok) {
       const lastToolsetLoadingOutcome = buildToolsetLoadingOutcome({
-        requestedToolsetIds,
+        requestedToolsetNames,
         loadedToolsetIds: [],
         skippedDuplicateToolsetIds: duplicateToolsetIds,
-        skippedUnknownToolsetIds: unknownToolsetIds,
+        skippedUnknownToolsetNames: unknownToolsetNames,
         evictedToolsetIds: [],
         activeToolCount: fittedLoadedToolsets.activeToolCount
       })
@@ -254,12 +253,12 @@ export const createToolsetLoadingNode = (input: {
       emitLoadToolsetProcessStarted({
         ctx: input.ctx,
         toolCallId: loadToolCallId,
-        toolsetIds: requestedToolsetIds
+        toolsetNames: requestedToolsetNames
       })
       emitLoadToolsetProcessCompleted({
         ctx: input.ctx,
         toolCallId: loadToolCallId,
-        toolsetIds: requestedToolsetIds,
+        toolsetNames: requestedToolsetNames,
         ok: false,
         error: 'Loading the requested toolsets would exceed the active tool limit.'
       })
@@ -282,7 +281,7 @@ export const createToolsetLoadingNode = (input: {
     emitLoadToolsetProcessStarted({
       ctx: input.ctx,
       toolCallId: loadToolCallId,
-      toolsetIds: requestedToolsetIds
+      toolsetNames: requestedToolsetNames
     })
     await input.ctx.appendMessageLog(
       newToolsetIds.map((toolsetId) => ({
@@ -303,10 +302,10 @@ export const createToolsetLoadingNode = (input: {
     })
     const loadedToolsetIds = fittedLoadedToolsets.loadedToolsetIds
     const lastToolsetLoadingOutcome = buildToolsetLoadingOutcome({
-      requestedToolsetIds,
+      requestedToolsetNames,
       loadedToolsetIds: newToolsetIds,
       skippedDuplicateToolsetIds: duplicateToolsetIds,
-      skippedUnknownToolsetIds: unknownToolsetIds,
+      skippedUnknownToolsetNames: unknownToolsetNames,
       evictedToolsetIds: fittedLoadedToolsets.evictedToolsetIds,
       activeToolCount: fittedLoadedToolsets.activeToolCount
     })
@@ -320,7 +319,7 @@ export const createToolsetLoadingNode = (input: {
     emitLoadToolsetProcessCompleted({
       ctx: input.ctx,
       toolCallId: loadToolCallId,
-      toolsetIds: requestedToolsetIds,
+      toolsetNames: requestedToolsetNames,
       ok: true
     })
     await input.ctx.appendMessageLog([

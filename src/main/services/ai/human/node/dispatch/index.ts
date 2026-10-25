@@ -50,12 +50,12 @@ const dispatchGroupToNextAction = (group: HumanDispatchItem[]): HumanNextAction 
       }
     }
     case 'toolset_loading': {
-      const toolsetIds = Array.isArray(first.args.toolsetIds)
-        ? first.args.toolsetIds.filter((item): item is string => typeof item === 'string')
+      const toolsetNames = Array.isArray(first.args.toolsetNames)
+        ? first.args.toolsetNames.filter((item): item is string => typeof item === 'string')
         : []
       return {
         action: 'toolset_loading',
-        wantLoadToolsetIds: toolsetIds,
+        wantLoadToolsetNames: toolsetNames,
         toolCallId: first.toolCallId
       }
     }

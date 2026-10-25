@@ -205,7 +205,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
     {
       "id": "call_01",
       "name": "load_toolset",
-      "args": { "toolsetIds": ["docx-read"] }
+      "args": { "toolsetNames": ["docx-read"] }
     }
   ]
 }
@@ -788,7 +788,7 @@ brain 返回 load_toolset
 
 #### 用户共享说明技能
 
-`load_toolset({ toolsetIds: string[] })` 只加载预注册工具包；`load_skill({ skillNames: string[] })` 只加载当前伙伴启用的用户说明。`user:<uuid>` 不进入 `RuntimeToolsetId`、tool registry 或工具预算，两类加载请求不能互换参数。模型只使用唯一名称，内部稳定 ID 用于绑定、编辑、重命名与恢复。目录只列当前伙伴启用项，按名称排序，仅含名称与适用场景。
+`load_toolset({ toolsetNames: string[] })` 只加载预注册工具包；`load_skill({ skillNames: string[] })` 只加载当前伙伴启用的用户说明。`user:<uuid>` 不进入 `RuntimeToolsetId`、tool registry 或工具预算，两类加载请求不能互换参数。模型按名称选择用户说明，内部稳定 ID 用于绑定、编辑、重命名与恢复。技能目录只列当前伙伴启用项，按名称排序，仅含名称与适用场景。
 
 
 

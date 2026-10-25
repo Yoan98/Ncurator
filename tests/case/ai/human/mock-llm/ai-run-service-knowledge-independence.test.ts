@@ -54,7 +54,7 @@ describe('AI runs independent of knowledge configuration', () => {
             parentCalls += 1
             if (parentCalls === 1)
               return buildLoadToolsetsDecision({
-                toolsetIds: ['docx-read'],
+                toolsetNames: ['docx-read'],
                 summary: '学习原文读取能力'
               })
             if (parentCalls === 2)

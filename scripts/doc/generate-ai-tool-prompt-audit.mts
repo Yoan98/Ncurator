@@ -483,7 +483,7 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
     { path: 'error?', description: '失败文案' },
     { path: 'outputPath?', description: '保存路径' }
   ],
-  load_toolset: [{ path: 'args.toolsetIds', description: '加载的工具包 ID' }],
+  load_toolset: [{ path: 'args.toolsetNames', description: '加载的工具包名称' }],
   load_skill: [
     {
       path: 'loadedSkillNames / skippedDuplicateSkillNames',
@@ -1422,7 +1422,7 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
   load_toolset: [
     {
       label: '成功',
-      input: { toolsetIds: ['docx-read', 'docx-write'] },
+      input: { toolsetNames: ['docx-read', 'docx-write'] },
       ok: true,
       data: {}
     }

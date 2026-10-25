@@ -39,7 +39,7 @@ describe('ai human mock-llm bounded text file reading', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['text-file'],
+                  toolsetNames: ['text-file'],
                   summary: '学习文本读取能力'
                 })
               },

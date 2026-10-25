@@ -1041,8 +1041,8 @@ export const renderLoadSkillModelResult: ModelResultRenderer = ({ data }) => {
 }
 
 export const renderLoadToolsetModelResult: ModelResultRenderer = ({ args }) => {
-  const requested = Array.isArray(args.toolsetIds)
-    ? args.toolsetIds.filter((item): item is string => typeof item === 'string')
+  const requested = Array.isArray(args.toolsetNames)
+    ? args.toolsetNames.filter((item): item is string => typeof item === 'string')
     : []
   return renderPlainConfirmation(
     `Toolset loaded successfully: ${requested.join(', ') || 'requested toolset'}.`

@@ -213,7 +213,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['pdf-read'],
+                  toolsetNames: ['pdf-read'],
                   summary: '补齐 PDF 阅读能力。'
                 })
               },
@@ -241,7 +241,7 @@ describe('ai human mock-llm backend', () => {
                     action: 'hand',
                     calls: [
                       { toolName: 'read_image', args: { paths: [pageImagePath] } },
-                      { toolName: 'load_toolset', args: { toolsetIds: ['ppt-read'] } },
+                      { toolName: 'load_toolset', args: { toolsetNames: ['ppt-read'] } },
                       { toolName: 'read_image', args: { paths: [pageImagePath] } }
                     ]
                   }

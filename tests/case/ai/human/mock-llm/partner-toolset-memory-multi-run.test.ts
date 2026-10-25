@@ -40,7 +40,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['docx-read', 'pdf-read'],
+                  toolsetNames: ['docx-read', 'pdf-read'],
                   summary: '学习 Word 和 PDF 阅读技能。'
                 })
               },
@@ -64,7 +64,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['excel-write'],
+                  toolsetNames: ['excel-write'],
                   summary: '补充 Excel 编辑技能。'
                 })
               },
@@ -85,7 +85,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['ppt-read', 'ppt-write'],
+                  toolsetNames: ['ppt-read', 'ppt-write'],
                   summary: '学习 PPT 阅读和编辑技能。'
                 })
               },
@@ -110,7 +110,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['excel-read', 'image-generation', 'docx-write'],
+                  toolsetNames: ['excel-read', 'image-generation', 'docx-write'],
                   summary: '补充 Excel 阅读与图片、Word 编辑技能并触发 FIFO 淘汰。'
                 })
               },
@@ -142,7 +142,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['docx-read'],
+                  toolsetNames: ['docx-read'],
                   summary: '被淘汰后重新学习 Word 阅读技能。'
                 })
               },

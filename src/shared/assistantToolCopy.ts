@@ -108,7 +108,7 @@ const getToolsetDisplayName = (toolsetId?: RuntimeToolsetId): string => {
 
 const readLoadToolsetNames = (input?: IpcJsonObject): string => {
   if (!input) return '新能力'
-  const raw = (input as Record<string, IpcJsonValue>).toolsetIds
+  const raw = (input as Record<string, IpcJsonValue>).toolsetNames
   if (!Array.isArray(raw)) return '新能力'
   const names = raw
     .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)

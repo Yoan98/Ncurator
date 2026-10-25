@@ -43,17 +43,17 @@ const createStubAiRunContext = (): AiRunContext =>
   }) as AiRunContext
 
 const buildToolsetLoadingDecision = (
-  toolsetIds: string[]
+  toolsetNames: string[]
 ): {
   thought: { text: string }
-  nextAction: { action: 'toolset_loading'; wantLoadToolsetIds: string[]; toolCallId: string }
+  nextAction: { action: 'toolset_loading'; wantLoadToolsetNames: string[]; toolCallId: string }
 } => ({
   thought: {
     text: '测试 toolset loading partial success'
   },
   nextAction: {
     action: 'toolset_loading' as const,
-    wantLoadToolsetIds: toolsetIds,
+    wantLoadToolsetNames: toolsetNames,
     toolCallId: 'learn-call-1'
   }
 })
@@ -82,7 +82,7 @@ describe('ai unit toolset loading partial success', () => {
     expect(nextState.execution.lastToolsetLoadingOutcome).toMatchObject({
       loadedToolsetIds: ['docx-write'],
       skippedDuplicateToolsetIds: ['docx-read'],
-      skippedUnknownToolsetIds: []
+      skippedUnknownToolsetNames: []
     })
     expect(nextState.toolsets.loadedToolsetIds).toEqual(['docx-read', 'docx-write'])
     expect(nextState.trace.steps.at(-1)).toMatchObject({
@@ -111,7 +111,7 @@ describe('ai unit toolset loading partial success', () => {
 
     expect(nextState.execution.lastToolsetLoadingOutcome).toMatchObject({
       loadedToolsetIds: ['docx-read'],
-      skippedUnknownToolsetIds: ['unknown-toolset']
+      skippedUnknownToolsetNames: ['unknown-toolset']
     })
     expect(nextState.toolsets.loadedToolsetIds).toEqual(['docx-read'])
     expect(nextState.trace.steps.at(-1)).toMatchObject({
@@ -139,10 +139,10 @@ describe('ai unit toolset loading partial success', () => {
 
     expect(nextState.execution.stage).toBe('dispatch')
     expect(nextState.execution.lastToolsetLoadingOutcome).toMatchObject({
-      requestedToolsetIds: ['terminal'],
+      requestedToolsetNames: ['terminal'],
       loadedToolsetIds: [],
       skippedDuplicateToolsetIds: [],
-      skippedUnknownToolsetIds: []
+      skippedUnknownToolsetNames: []
     })
     expect(nextState.toolsets.loadedToolsetIds).toEqual([])
   })
@@ -175,11 +175,11 @@ describe('ai unit toolset loading partial success', () => {
       humanNextActionSchema.parse({
         action: 'toolset_loading',
         toolCallId: 'call-toolset-loading-budget',
-        wantLoadToolsetIds: ['docx-read', 'docx-write', 'pdf-read', 'excel-write']
+        wantLoadToolsetNames: ['docx-read', 'docx-write', 'pdf-read', 'excel-write']
       })
     ).toMatchObject({
       action: 'toolset_loading',
-      wantLoadToolsetIds: ['docx-read', 'docx-write', 'pdf-read', 'excel-write']
+      wantLoadToolsetNames: ['docx-read', 'docx-write', 'pdf-read', 'excel-write']
     })
   })
 })

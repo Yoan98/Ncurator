@@ -39,14 +39,14 @@ const resolveDecisionToToolCalls = (output: JsonObject, callIndex: number): Scri
   const nextAction = (output.nextAction || {}) as Record<string, unknown>
   const action = String(nextAction.action || '')
   if (action === 'toolset_loading') {
-    const toolsetIds = Array.isArray(nextAction.wantLoadToolsetIds)
-      ? nextAction.wantLoadToolsetIds.filter((item): item is string => typeof item === 'string')
+    const toolsetNames = Array.isArray(nextAction.wantLoadToolsetNames)
+      ? nextAction.wantLoadToolsetNames.filter((item): item is string => typeof item === 'string')
       : []
     return [
       {
         id: `mock-${callIndex}-toolset`,
         name: 'load_toolset',
-        args: { toolsetIds },
+        args: { toolsetNames },
         type: 'tool_call'
       }
     ]

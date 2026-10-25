@@ -33,7 +33,7 @@ describe('ai human mock-llm image generation backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['image-generation'],
+                  toolsetNames: ['image-generation'],
                   summary: '学习图片生成技能。'
                 })
               },

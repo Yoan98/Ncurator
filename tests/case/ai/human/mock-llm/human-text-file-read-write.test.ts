@@ -31,7 +31,7 @@ describe('ai human mock-llm text backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['text-file'],
+                  toolsetNames: ['text-file'],
                   summary: '学习文本读写能力'
                 })
               },

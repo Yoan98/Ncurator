@@ -77,7 +77,7 @@ describe('ai human mock-llm ppt backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['ppt-read', 'ppt-write'],
+                  toolsetNames: ['ppt-read', 'ppt-write'],
                   summary: '学习 PPT 读写能力'
                 })
               },

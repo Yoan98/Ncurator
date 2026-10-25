@@ -47,7 +47,7 @@ describe('ai human mock-llm scheduled task', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['scheduled-tasks'],
+                  toolsetNames: ['scheduled-tasks'],
                   summary: '学习定时任务能力'
                 })
               },

@@ -27,7 +27,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['docx-read'],
+                  toolsetNames: ['docx-read'],
                   summary: '先学习 docx-read'
                 })
               },
@@ -63,7 +63,23 @@ describe('ai human mock-llm backend', () => {
       assert: async (result, runtime) => {
         const humanSteps = filterAiRunEventsByType(result.events, 'human_step')
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
+        const loadingStarted = filterAiRunEventsByType(result.events, 'tool_call_started').find(
+          (event) => event.toolName === 'load_toolset'
+        )
+        const loadingResult = toolResults.find((event) => event.toolName === 'load_toolset')
         const stageSet = new Set(humanSteps.map((event) => event.stage))
+
+        runtime.assertThat(
+          JSON.stringify(loadingStarted?.input) ===
+            JSON.stringify({ toolsetNames: ['docx-read'] }) &&
+            JSON.stringify(loadingResult?.result?.data) ===
+              JSON.stringify({ toolsetNames: ['docx-read'] }),
+          {
+            name: 'toolset-loading-events-use-names',
+            message: '工具组加载开始与结果事件应使用 toolsetNames。',
+            data: { input: loadingStarted?.input, result: loadingResult?.result }
+          }
+        )
 
         runtime.assertThat(
           result.output.status === 'completed' &&

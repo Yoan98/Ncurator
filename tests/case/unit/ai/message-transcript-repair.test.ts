@@ -32,7 +32,7 @@ describe('ai unit message transcript repair', () => {
       {
         kind: 'assistant',
         content: '先学习技能',
-        toolCalls: [{ id: 'call-1', name: 'load_toolset', args: { toolsetIds: ['docx-read'] } }]
+        toolCalls: [{ id: 'call-1', name: 'load_toolset', args: { toolsetNames: ['docx-read'] } }]
       },
       {
         kind: 'tool',

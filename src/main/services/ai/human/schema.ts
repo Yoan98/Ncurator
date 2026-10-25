@@ -83,10 +83,10 @@ export const humanSkillLoadingOutcomeSchema = z.object({
 })
 
 export const humanToolsetLoadingOutcomeSchema = z.object({
-  requestedToolsetIds: z.array(z.string().min(1)),
+  requestedToolsetNames: z.array(z.string().min(1)),
   loadedToolsetIds: z.array(runtimeToolsetIdSchema),
   skippedDuplicateToolsetIds: z.array(runtimeToolsetIdSchema),
-  skippedUnknownToolsetIds: z.array(z.string().min(1)),
+  skippedUnknownToolsetNames: z.array(z.string().min(1)),
   evictedToolsetIds: z.array(runtimeToolsetIdSchema),
   activeToolCount: z.number().int().min(0)
 })
@@ -127,7 +127,7 @@ export const humanNextActionSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('toolset_loading'),
-    wantLoadToolsetIds: z.array(z.string().min(1)).min(1),
+    wantLoadToolsetNames: z.array(z.string().min(1)).min(1),
     toolCallId: z.string().min(1)
   }),
   z.object({

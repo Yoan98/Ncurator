@@ -25,19 +25,19 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['docx-read'],
+                  toolsetNames: ['docx-read'],
                   summary: '先学习 docx-read'
                 })
               },
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['docx-write'],
+                  toolsetNames: ['docx-write'],
                   summary: '再学习 DOCX 写入技能'
                 })
               },
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetIds: ['terminal', 'kb-retrieval'],
+                  toolsetNames: ['terminal', 'kb-retrieval'],
                   summary: '故意请求 builtin toolset'
                 })
               },

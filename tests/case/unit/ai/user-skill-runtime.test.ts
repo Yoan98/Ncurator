@@ -74,7 +74,7 @@ const fixture = () => {
         }
       }
     })
-  const loadToolsets = (ids: string[], previous = state) =>
+  const loadToolsets = (names: string[], previous = state) =>
     createToolsetLoadingNode({ ctx, cache })({
       ...previous,
       execution: {
@@ -83,7 +83,7 @@ const fixture = () => {
           thought: { text: 'load registered tools' },
           nextAction: {
             action: 'toolset_loading',
-            wantLoadToolsetIds: ids,
+            wantLoadToolsetNames: names,
             toolCallId: 'toolset-a'
           }
         }
@@ -166,17 +166,24 @@ describe('user instruction skill runtime', () => {
   it('exposes separate strict string-array loader schemas and scopes the instruction catalog', () => {
     const f = fixture()
     expect(LOAD_SKILL_SCHEMA.parse({ skillNames: ['a'] })).toEqual({ skillNames: ['a'] })
-    expect(LOAD_TOOLSET_SCHEMA.parse({ toolsetIds: ['docx-read'] })).toEqual({
-      toolsetIds: ['docx-read']
+    expect(LOAD_TOOLSET_SCHEMA.parse({ toolsetNames: ['docx-read'] })).toEqual({
+      toolsetNames: ['docx-read']
     })
-    expect(LOAD_SKILL_SCHEMA.safeParse({ toolsetIds: ['docx-read'] }).success).toBe(false)
+    expect(LOAD_TOOLSET_SCHEMA.safeParse({ toolsetIds: ['docx-read'] }).success).toBe(false)
+    expect(
+      LOAD_TOOLSET_SCHEMA.safeParse({ toolsetNames: ['docx-read'], toolsetIds: ['docx-read'] })
+        .success
+    ).toBe(false)
+    expect(LOAD_TOOLSET_SCHEMA.safeParse({ toolsetNames: [] }).success).toBe(false)
+    expect(LOAD_TOOLSET_SCHEMA.safeParse({ toolsetNames: [''] }).success).toBe(false)
+    expect(LOAD_SKILL_SCHEMA.safeParse({ toolsetNames: ['docx-read'] }).success).toBe(false)
     expect(LOAD_TOOLSET_SCHEMA.safeParse({ skillNames: ['a'] }).success).toBe(false)
     expect(LOAD_SKILL_SCHEMA.safeParse({ skillIds: ['user:a'] }).success).toBe(false)
     expect(
-      LOAD_SKILL_SCHEMA.safeParse({ skillNames: ['a'], toolsetIds: ['docx-read'] }).success
+      LOAD_SKILL_SCHEMA.safeParse({ skillNames: ['a'], toolsetNames: ['docx-read'] }).success
     ).toBe(false)
     expect(
-      LOAD_TOOLSET_SCHEMA.safeParse({ toolsetIds: ['docx-read'], skillNames: ['a'] }).success
+      LOAD_TOOLSET_SCHEMA.safeParse({ toolsetNames: ['docx-read'], skillNames: ['a'] }).success
     ).toBe(false)
     const catalog = renderUserSkills(f.ctx)
     expect(catalog.indexOf('- a：')).toBeLessThan(catalog.indexOf('- b：'))
@@ -241,7 +248,7 @@ describe('user instruction skill runtime', () => {
     expect(state.skills.loadedSkillIds).toEqual(['user:a'])
     expect(state.execution.lastToolsetLoadingOutcome).toMatchObject({
       loadedToolsetIds: ['docx-read'],
-      skippedUnknownToolsetIds: ['user:b']
+      skippedUnknownToolsetNames: ['user:b']
     })
     expect(Object.keys(f.cache.toolsetTools)).toEqual(['docx-read'])
     const projection = projectMessageLogRecords(
@@ -275,7 +282,7 @@ describe('user instruction skill runtime', () => {
     const toolsetState = await f.loadToolsets(['user:a'], skillState)
     expect(toolsetState.execution.lastToolsetLoadingOutcome).toMatchObject({
       loadedToolsetIds: [],
-      skippedUnknownToolsetIds: ['user:a']
+      skippedUnknownToolsetNames: ['user:a']
     })
     expect(toolsetState.skills.loadedSkillIds).toEqual([])
     expect(toolsetState.toolsets.loadedToolsetIds).toEqual([])
@@ -390,15 +397,37 @@ describe('user instruction skill runtime', () => {
     )
   })
 
+  it('rejects legacy toolset arguments before loading and accepts a corrected name request', async () => {
+    const { calls, records, run } = graphFixture([
+      { name: 'load_toolset', args: { toolsetIds: ['docx-read'] } },
+      { name: 'load_toolset', args: { toolsetNames: ['docx-read'] } }
+    ])
+
+    expect((await run(1)).status).toBe('completed')
+    expect(calls).toHaveLength(3)
+    expect(calls[0].tools).not.toContain('docx_read_outline')
+    expect(calls[1].tools).not.toContain('docx_read_outline')
+    expect(calls[1].text).toContain('toolsetNames')
+    expect(calls[2].tools).toContain('docx_read_outline')
+    const feedback = records.flatMap(({ entry }) =>
+      entry.kind === 'tool' && entry.toolName === 'load_toolset' ? [entry] : []
+    )
+    expect(feedback).toHaveLength(2)
+    expect(feedback[0].ok).toBe(false)
+    expect(feedback[1].ok).toBe(true)
+    expect(projectMessageLogRecords(records).loadedToolsetIds).toEqual(['docx-read'])
+  })
+
   it('runs both real graph loaders, restore and compaction with independent tools and stable skill prompts', async () => {
     const { enabled, records, calls, compactionInputs, ctx, run } = graphFixture([
-      { name: 'load_toolset', args: { toolsetIds: ['docx-read'] } },
+      { name: 'load_toolset', args: { toolsetNames: ['docx-read'] } },
       { name: 'load_skill', args: { skillNames: ['a'] } },
       { name: 'load_skill', args: { skillNames: ['a'] } }
     ])
 
     expect((await run(1)).status).toBe('completed')
     expect(calls).toHaveLength(4)
+    expect(calls[0].system).toContain('docx-read')
     expect(calls[0].tools).not.toContain('docx_read_outline')
     expect(calls[1].tools).toContain('docx_read_outline')
     expect(calls[1].text).not.toContain('BODY_A')

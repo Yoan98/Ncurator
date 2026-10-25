@@ -36,7 +36,7 @@ export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
 
 export const LOAD_TOOLSET_SCHEMA = z
   .object({
-    toolsetIds: z.array(z.string().min(1)).min(1).describe('要加载的工具组 ID 列表')
+    toolsetNames: z.array(z.string().min(1)).min(1).describe('要加载的工具组名称列表')
   })
   .strict()
 

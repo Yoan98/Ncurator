@@ -89,7 +89,7 @@ describe('ai human mock-llm excel backend', () => {
                 sheetName = locator[1]
                 range = locator[2]
                 return buildLoadToolsetsDecision({
-                  toolsetIds: ['excel-read', 'excel-write'],
+                  toolsetNames: ['excel-read', 'excel-write'],
                   summary: '学习 Excel 读写能力'
                 })
               },

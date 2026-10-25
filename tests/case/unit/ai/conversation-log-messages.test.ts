@@ -118,7 +118,7 @@ describe('ai unit conversation log messages', () => {
         {
           id: 'call-ok',
           name: 'load_toolset',
-          args: { toolsetIds: ['docx-read'] }
+          args: { toolsetNames: ['docx-read'] }
         }
       ]
     }
@@ -140,7 +140,7 @@ describe('ai unit conversation log messages', () => {
       {
         id: 'call-ok',
         name: 'load_toolset',
-        args: { toolsetIds: ['docx-read'] },
+        args: { toolsetNames: ['docx-read'] },
         type: 'tool_call'
       }
     ])

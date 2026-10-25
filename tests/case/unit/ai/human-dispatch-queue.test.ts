@@ -58,8 +58,8 @@ describe('human dispatch queue', () => {
       userInput: '加载两个工具组'
     })
     const queue = buildDispatchQueue([
-      { id: 'learn-1', name: 'load_toolset', args: { toolsetIds: ['docx-read'] } },
-      { id: 'learn-2', name: 'load_toolset', args: { toolsetIds: ['excel-read'] } }
+      { id: 'learn-1', name: 'load_toolset', args: { toolsetNames: ['docx-read'] } },
+      { id: 'learn-2', name: 'load_toolset', args: { toolsetNames: ['excel-read'] } }
     ])
     const first = advanceDispatchState({
       ...baseState,
@@ -86,7 +86,7 @@ describe('human dispatch queue', () => {
     })
     const queue = buildDispatchQueue([
       { id: 'skill-1', name: 'load_skill', args: { skillNames: ['a'] } },
-      { id: 'toolset-1', name: 'load_toolset', args: { toolsetIds: ['docx-read'] } },
+      { id: 'toolset-1', name: 'load_toolset', args: { toolsetNames: ['docx-read'] } },
       { id: 'skill-2', name: 'load_skill', args: { skillNames: ['b'] } }
     ])
     let state = advanceDispatchState({
@@ -103,7 +103,7 @@ describe('human dispatch queue', () => {
     expect(state.execution.stage).toBe('toolset_loading')
     expect(state.execution.pendingRound?.nextAction).toEqual({
       action: 'toolset_loading',
-      wantLoadToolsetIds: ['docx-read'],
+      wantLoadToolsetNames: ['docx-read'],
       toolCallId: 'toolset-1'
     })
     state = advanceDispatchState(returnToDispatch(state))

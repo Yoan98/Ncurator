@@ -824,7 +824,7 @@ describe('temporary subagents through production AiRunService', () => {
                 const parentStep = ++parentCall
                 if (parentStep === 1)
                   return buildLoadToolsetsDecision({
-                    toolsetIds: ['docx-read'],
+                    toolsetNames: ['docx-read'],
                     summary: '查看文档'
                   })
                 if (parentStep === 2)
@@ -859,7 +859,7 @@ describe('temporary subagents through production AiRunService', () => {
               }
               if (count === 2)
                 return buildLoadToolsetsDecision({
-                  toolsetIds: ['docx-read', 'docx-write'],
+                  toolsetNames: ['docx-read', 'docx-write'],
                   summary: '文档编辑'
                 })
               if (count === 3)
