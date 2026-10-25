@@ -19,6 +19,18 @@ const toSkill = (row: SkillRow): UserSkill => ({
 export class UserSkillStore {
   public constructor(private readonly sqlite: SqliteCore) {}
 
+  public transaction<T>(operation: () => T): T {
+    return this.sqlite.transaction(operation)
+  }
+
+  public partnerName(id: string): string {
+    const row = this.sqlite.prepare('SELECT name FROM partner WHERE id = ?').get(id) as
+      | { name: string }
+      | undefined
+    if (!row) throw new Error('Partner not found')
+    return row.name
+  }
+
   public list(): UserSkill[] {
     return (
       this.sqlite.prepare('SELECT * FROM user_skill ORDER BY name, id').all() as SkillRow[]

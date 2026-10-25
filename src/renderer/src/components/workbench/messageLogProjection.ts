@@ -1,4 +1,5 @@
 import { t } from '../../i18n'
+import { getToolDisplayStatus } from '../../../../shared/assistantToolCopy'
 import type {
   AssistantProcessDisplay,
   ChatMessageLogEntry,
@@ -219,9 +220,12 @@ export const projectProcessGroups = (input: {
       const display: AssistantProcessDisplay = {
         kind: 'tool',
         toolName: entry.toolName,
-        input: toolArgsById.get(entry.toolCallId) || {}
+        input: entry.displayInput || toolArgsById.get(entry.toolCallId) || {}
       }
-      const status: AssistantProcessStatus = entry.ok ? 'completed' : 'failed'
+      const status: AssistantProcessStatus = getToolDisplayStatus(
+        display.input,
+        entry.ok ? 'completed' : 'failed'
+      )
       const createdAt = resolveCreatedAt(record)
       const item = createDisplayProcessItem({
         itemId: entry.toolCallId,

@@ -22,6 +22,7 @@ import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/huma
 import { buildImageGenerationCapabilityTools } from '../../../src/main/services/ai/human/tools/imageGeneration'
 import { agentControlToolFamily } from '../../../src/main/services/ai/human/tools/agentControl'
 import { scheduledTasksToolFamily } from '../../../src/main/services/ai/human/tools/scheduledTasks'
+import { skillManagementToolFamily } from '../../../src/main/services/ai/human/tools/skills'
 import { buildPdfCapabilityTools } from '../../../src/main/services/ai/human/tools/pdf'
 import { buildPptCapabilityTools } from '../../../src/main/services/ai/human/tools/ppt'
 import { buildExcelCapabilityTools } from '../../../src/main/services/ai/human/tools/excel'
@@ -369,6 +370,21 @@ export const createScheduledTaskToolHarness = (
     ),
     ctx
   }
+}
+
+export const createSkillManagementToolHarness = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput
+) => {
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
+  const tools = skillManagementToolFamily.buildTools({
+    ctx,
+    cache: createHumanRuntimeCache(),
+    runId: ctx.runId,
+    partnerId: ctx.partnerId,
+    taskId: runtime.taskId
+  })
+  return { ...createToolInvoker(tools as readonly ToolLike[]), ctx }
 }
 
 export type TestDocxHeadingLevel = 1 | 2 | 3

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SKILL_READ_SCHEMA,
+  SKILL_EDIT_SCHEMA
+} from '../../../../src/main/services/ai/human/tools/skills/toolSchemas'
+import { isToolAllowed } from '../../../../src/main/services/ai/run/toolPolicy'
+import {
   getEffectiveLoadedToolsetIds,
   getToolsetDefinition,
   listBuiltinToolsetDefinitions,
@@ -11,6 +16,31 @@ import {
 } from '../../../../src/main/services/ai/human/tools/scheduledTasks/toolSpecs'
 
 describe('ai unit runtime toolset contract', () => {
+  it('keeps skill management minimal and restricted to the main partner', () => {
+    expect(getToolsetDefinition('skill-management').toolNames).toEqual(['skill_read', 'skill_edit'])
+    for (const input of [{}, { id: 'id' }])
+      expect(SKILL_READ_SCHEMA.safeParse(input).success).toBe(true)
+    for (const input of [{ cursor: 'x' }, { id: '' }, { partnerId: 'other' }, { name: 'weekly' }])
+      expect(SKILL_READ_SCHEMA.safeParse(input).success).toBe(false)
+    for (const input of [
+      { sourcePath: '/draft' },
+      { id: 'id', enabled: false },
+      { id: 'id', sourcePath: '/draft', enabled: true }
+    ])
+      expect(SKILL_EDIT_SCHEMA.safeParse(input).success).toBe(true)
+    for (const input of [
+      {},
+      { id: 'id' },
+      { enabled: true },
+      { sourcePath: '/draft', partnerId: 'other' },
+      { sourcePath: '/draft', revision: 'x' }
+    ])
+      expect(SKILL_EDIT_SCHEMA.safeParse(input).success).toBe(false)
+    for (const name of ['skill_read', 'skill_edit']) {
+      expect(isToolAllowed({ isSubagent: true }, name)).toBe(false)
+      expect(isToolAllowed({ isSubagent: false }, name)).toBe(true)
+    }
+  })
   it('exposes builtin toolsets', () => {
     expect(listBuiltinToolsetDefinitions().map((definition) => definition.toolsetId)).toEqual([
       'terminal',
@@ -28,7 +58,8 @@ describe('ai unit runtime toolset contract', () => {
       'excel-read',
       'excel-write',
       'image-generation',
-      'scheduled-tasks'
+      'scheduled-tasks',
+      'skill-management'
     ])
   })
 

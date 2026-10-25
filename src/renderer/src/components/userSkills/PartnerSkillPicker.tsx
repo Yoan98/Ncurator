@@ -81,6 +81,11 @@ export default function PartnerSkillPicker({
         <div role="alert">{draft.error}</div>
       ) : (
         <>
+          {draft.externalChanged && (
+            <p role="status" className="text-xs text-[#787774]">
+              {t(($) => $.userSkills.selectionChanged)}
+            </p>
+          )}
           {draft.options.length > 5 && (
             <Input
               value={search}

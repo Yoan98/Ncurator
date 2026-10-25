@@ -20,8 +20,8 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 
 | 层                                            | 写什么                               | 不写什么                                   |
 | --------------------------------------------- | ------------------------------------ | ------------------------------------------ |
-| `toolset.description` | 该工具包覆盖的能力域 | 工具调用顺序、跨工具编排 |
-| Skill 的 `name` / `description` | 用户说明适用场景，供按需发现 | 不自动注册工具或扩大权限 |
+| `toolset.description`                         | 该工具包覆盖的能力域                 | 工具调用顺序、跨工具编排                   |
+| Skill 的 `name` / `description`               | 用户说明适用场景，供按需发现         | 不自动注册工具或扩大权限                   |
 | `tool promptSpec.description`                 | 单工具能力边界与限制                 | 字段表、JSON 结构、跨工具下一步、先 A 后 B |
 | `inputSchema` 字段 `.describe()`              | 参数语义、单位、缺省、格式、数量上限 | —                                          |
 | `toolSchemas` / `outputTypes.ts` 输出 TS 类型 | 结构化结果字段语义（内部真相）       | 不在 `promptSpec` 重复；不暴露给模型       |
@@ -31,6 +31,12 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 用户共享 Skill 是说明文件资产，不是 `HumanToolSpec` 或注册工具包。`load_toolset({ toolsetNames: string[] })` 按稳定名称启用预注册工具包，`load_skill({ skillNames: string[] })` 按唯一名称加载当前有效绑定的说明。两个入口均使用各自 System 目录提供的名称；工具包名称沿用 `docx-read` 等注册键，与内部工具包 ID 同值，不另建映射，也不使用 UI 显示名。内部 ID 用于缓存、状态和恢复，工具预算和 FIFO 淘汰仅针对工具包。用户说明不能新增工具、自动执行脚本、加载依赖或扩大权限。技能目录仅展示名称与简介，已加载正文使用带 name / resourceBase 元数据的独立 skill 块，统一排在 System 末尾的工具组之后。加载反馈持久化名称 / 状态；正文和资源基址仅投递到每轮重建的当前说明区，不重复写入历史 tool 消息，避免压缩或恢复复活失效指令。当前绑定重校验、64 KiB 正文总预算、恢复和缓存取舍见 [Human Harness](human-harness.md#72-load_toolset-流程)。
 
 ---
+
+### Skill 管理
+
+`skill-management` 是含两个工具的 external 工具包，计入工具预算，仅主伙伴可调用。`skill_read({ id? })` 列出共享资产或读取包含原始 YAML 的说明；反馈仅携带定位、内容及当前伙伴启用状态。长说明指向真实 `SKILL.md`，超长目录清单先复用工具结果文件落盘，均经现有文本读取工具继续，不增加分页参数或放宽公共反馈守卫。管理读取是资料，不进入已加载说明区。
+
+`skill_edit({ id?, sourcePath?, enabled? })` 无 ID 时发布新目录，有 ID 时替换完整目录或只调整当前伙伴绑定；不传启用状态时创建默认关闭、更新保持原状。模型通过已有文件/终端能力准备目录，工具负责解析、校验与原子发布。结果仅返回 ID 与名称，UI 使用解析后的名称，模型需要核验时再次读取。管理 ID 不改变 `load_skill` 按名称加载的契约。
 
 ## 3. HumanToolSpec 结构
 
@@ -82,11 +88,11 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 ### 4.2 节点自有校验
 
-| 工具          | brain schema 校验       | 校验方                          |
-| ------------- | ----------------------- | ------------------------------- |
+| 工具                          | brain schema 校验                 | 校验方                                  |
+| ----------------------------- | --------------------------------- | --------------------------------------- |
 | `load_toolset` / `load_skill` | `inputSchema.safeParse`（strict） | brain；节点分别解析工具组名称与技能名称 |
-| `update_plan` | **跳过**                | `plan` 节点                     |
-| 其余          | `inputSchema.safeParse` | brain → 失败写 ToolMessage 反馈 |
+| `update_plan`                 | **跳过**                          | `plan` 节点                             |
+| 其余                          | `inputSchema.safeParse`           | brain → 失败写 ToolMessage 反馈         |
 
 跳过 schema 的工具仍走 `normalizeToolCallArgs`。
 
@@ -125,13 +131,13 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 ### 6.1 控制类工具
 
-| 工具                | 渲染要点                                                                                                                 |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `load_toolset` | 由 `toolset_loading` 节点直接写 ToolMessage（loaded / duplicate / unknown / evicted 摘要），不走 `buildModelToolResultDelivery` |
-| `load_skill` | 由 `skill_loading` 节点反馈名称 / 状态，当前正文由 System 说明区提供，不写入历史 tool 消息 |
-| `update_plan`       | 由 `plan` 节点直接写 ToolMessage（计划项列表 `[status] title`），不走 `buildModelToolResultDelivery`                     |
-| `read_image`        | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness 第 3.5 节）                                                   |
-| `ask_user_question` | 用户协作结果使用问题／选项 ID 与用户文字，不依赖显示编号                                                                 |
+| 工具                | 渲染要点                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `load_toolset`      | 由 `toolset_loading` 节点直接写 ToolMessage（loaded / duplicate / unknown / evicted 摘要），不走 `buildModelToolResultDelivery` |
+| `load_skill`        | 由 `skill_loading` 节点反馈名称 / 状态，当前正文由 System 说明区提供，不写入历史 tool 消息                                      |
+| `update_plan`       | 由 `plan` 节点直接写 ToolMessage（计划项列表 `[status] title`），不走 `buildModelToolResultDelivery`                            |
+| `read_image`        | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness 第 3.5 节）                                                          |
+| `ask_user_question` | 用户协作结果使用问题／选项 ID 与用户文字，不依赖显示编号                                                                        |
 
 ### 6.2 写工具输出
 
@@ -159,7 +165,7 @@ hand 收到 call batch
 
 ### 7.1 子任务与审批
 
-主子共用工具链和审核，子任务的能力限制在执行层持续生效，不因学习技能而解除。人工决定返回原执行位置，待审操作在允许前不执行。子会话的派发、续接与生命周期见 [Human Harness](human-harness.md#17-子会话与派发)。
+主子共用工具链和审核，子任务的能力限制在执行层持续生效，不因加载工具包或 skill 而解除。人工决定返回原执行位置，待审操作在允许前不执行。子会话的派发、续接与生命周期见 [Human Harness](human-harness.md#17-子会话与派发)。
 
 子任务交付走公共 modelResult 和大小守卫；各工具参数由 schema 维护。
 

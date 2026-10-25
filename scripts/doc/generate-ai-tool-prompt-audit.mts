@@ -264,6 +264,21 @@ const extractUnionExamples = (schema: z.ZodType): Array<{ label: string; input: 
 }
 
 const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: JsonObject }>> = {
+  skill_read: [
+    { label: 'list', input: {} },
+    { label: 'get', input: { id: 'user:example' } }
+  ],
+  skill_edit: [
+    {
+      label: 'create-and-enable',
+      input: { sourcePath: '/workspace/draft/weekly-report', enabled: true }
+    },
+    {
+      label: 'update',
+      input: { id: 'user:example', sourcePath: '/workspace/draft/weekly-report' }
+    },
+    { label: 'disable', input: { id: 'user:example', enabled: false } }
+  ],
   web_search: [
     { label: 'search', input: { type: 'search', query: 'typescript tutorial' } },
     { label: 'fetch', input: { type: 'fetch', url: 'https://example.com/page' } }
@@ -342,6 +357,15 @@ const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: Json
 
 /** renderer 实际读取的字段 */
 const OUTPUT_FIELDS: Record<string, OutField[]> = {
+  skill_read: [
+    { path: 'skills[]', description: '列表项包含 id、name、description、enabled' },
+    {
+      path: 'id / path / content / enabled',
+      description: '详情包含稳定 ID、托管目录、原始 SKILL.md 与当前伙伴启用状态；长正文通过文件读取'
+    },
+    { path: 'filePath', description: '仅超长清单：完整工具结果文件' }
+  ],
+  skill_edit: [{ path: 'id / name', description: '保存后的稳定 ID 与名称' }],
   terminal_run: [
     { path: 'status', description: "'running' | 'succeeded' | 'failed' | 'cancelled'" },
     { path: 'terminalId', description: '终端会话 ID' },
@@ -504,6 +528,61 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
 }
 
 const OUTPUT_CASES: Record<string, OutputCase[]> = {
+  skill_read: [
+    {
+      label: '目录',
+      ok: true,
+      input: {},
+      data: {
+        skills: [
+          {
+            id: 'user:example',
+            name: 'weekly-report',
+            description: '撰写周报时使用。',
+            enabled: true
+          }
+        ]
+      }
+    },
+    {
+      label: '原文',
+      ok: true,
+      input: { id: 'user:example' },
+      data: {
+        id: 'user:example',
+        path: '/userData/skills/weekly-report',
+        enabled: true,
+        content:
+          '---\nname: weekly-report\ndescription: 撰写周报时使用。\n---\n# 周报规范\n只使用用户提供的事实。'
+      }
+    },
+    {
+      label: '长正文',
+      ok: true,
+      input: { id: 'user:example' },
+      data: { id: 'user:example', path: '/userData/skills/weekly-report', enabled: false }
+    }
+  ],
+  skill_edit: [
+    {
+      label: '创建并启用',
+      ok: true,
+      input: { sourcePath: '/workspace/draft/weekly-report', enabled: true },
+      data: { id: 'user:example', name: 'weekly-report' }
+    },
+    {
+      label: '只停用',
+      ok: true,
+      input: { id: 'user:example', enabled: false },
+      data: { id: 'user:example', name: 'weekly-report' }
+    },
+    {
+      label: '预算拒绝',
+      ok: false,
+      input: { sourcePath: '/workspace/draft/weekly-report', enabled: true },
+      data: { error: 'Skill instructions exceed 64 KiB for: 周报伙伴' }
+    }
+  ],
   terminal_run: [
     {
       label: '命令执行中（长命令让出控制权）',

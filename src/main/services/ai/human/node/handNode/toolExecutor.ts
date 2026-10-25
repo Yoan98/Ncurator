@@ -275,7 +275,7 @@ export const executeToolCall = async (input: {
           const result = normalizeToolCallResult(
             input.toolName,
             (await withActiveToolCall(
-              { toolName: input.toolName, toolCallId: input.toolCallId },
+              { toolName: input.toolName, toolCallId: input.toolCallId, args: input.args },
               () => tool.invoke(input.args)
             )) as JsonValue
           )
@@ -297,7 +297,7 @@ export const executeToolCall = async (input: {
 
   try {
     const result = await withActiveToolCall(
-      { toolName: input.toolName, toolCallId: input.toolCallId },
+      { toolName: input.toolName, toolCallId: input.toolCallId, args: input.args },
       () => tool.invoke(input.args)
     )
     return normalizeToolCallResult(input.toolName, result as JsonValue)

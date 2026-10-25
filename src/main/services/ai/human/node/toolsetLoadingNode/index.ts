@@ -20,19 +20,47 @@ import { returnToBrainAfterTrace, returnToDispatch } from '../utils/stateTransit
 import { emitToolCallResult, emitToolCallStarted } from '../../tools/utils/toolEvents'
 import { appendToolFeedback } from '../../shared/toolFeedback'
 
+const loadingDisplayData = (
+  names: string[],
+  outcome: HumanToolsetLoadingOutcome,
+  error?: string
+) => ({
+  toolsetNames: names,
+  loadingSuccessfulNames: [...outcome.loadedToolsetIds, ...outcome.skippedDuplicateToolsetIds],
+  loadingFailures: names
+    .filter(
+      (name) =>
+        outcome.skippedUnknownToolsetNames.includes(name) ||
+        (error && !outcome.skippedDuplicateToolsetIds.includes(name as RuntimeToolsetId))
+    )
+    .map((name) => ({
+      name,
+      error: outcome.skippedUnknownToolsetNames.includes(name) ? 'Toolset is not available' : error!
+    }))
+})
+
 const appendLoadToolsetMessage = async (input: {
   cache: HumanRuntimeCache
   ctx: AiRunContext
   toolCallId: string
   content: string
+  toolsetNames: string[]
+  outcome: HumanToolsetLoadingOutcome
+  error?: string
 }): Promise<void> => {
   await appendToolFeedback({
     cache: input.cache,
     ctx: input.ctx,
     toolCallId: input.toolCallId,
     toolName: 'load_toolset',
-    ok: true,
-    content: input.content
+    ok: !input.error,
+    errorMessage: input.error,
+    content: input.content,
+    displayInput: getToolDisplayInput(
+      'load_toolset',
+      { toolsetNames: input.toolsetNames },
+      loadingDisplayData(input.toolsetNames, input.outcome, input.error)
+    )
   })
 }
 
@@ -57,6 +85,7 @@ const emitLoadToolsetProcessCompleted = (input: {
   toolsetNames: string[]
   ok: boolean
   error?: string
+  outcome: HumanToolsetLoadingOutcome
 }): void => {
   emitToolCallResult({
     ctx: input.ctx,
@@ -67,8 +96,11 @@ const emitLoadToolsetProcessCompleted = (input: {
       toolName: 'load_toolset',
       ok: input.ok,
       data: input.ok
-        ? { toolsetNames: input.toolsetNames }
-        : { error: input.error || 'load_toolset failed' }
+        ? loadingDisplayData(input.toolsetNames, input.outcome)
+        : {
+            ...loadingDisplayData(input.toolsetNames, input.outcome, input.error),
+            error: input.error || 'load_toolset failed'
+          }
     },
     error: input.error,
     stage: 'human_toolset_loading'
@@ -214,13 +246,16 @@ export const createToolsetLoadingNode = (input: {
         ctx: input.ctx,
         toolCallId: loadToolCallId,
         toolsetNames: requestedToolsetNames,
+        outcome: lastToolsetLoadingOutcome,
         ok: true
       })
       await appendLoadToolsetMessage({
         cache: input.cache,
         ctx: input.ctx,
         toolCallId: loadToolCallId,
-        content: toolsetLoadingResult
+        content: toolsetLoadingResult,
+        toolsetNames: requestedToolsetNames,
+        outcome: lastToolsetLoadingOutcome
       })
       return returnToDispatch(state, {
         execution: {
@@ -259,6 +294,7 @@ export const createToolsetLoadingNode = (input: {
         ctx: input.ctx,
         toolCallId: loadToolCallId,
         toolsetNames: requestedToolsetNames,
+        outcome: lastToolsetLoadingOutcome,
         ok: false,
         error: 'Loading the requested toolsets would exceed the active tool limit.'
       })
@@ -266,7 +302,10 @@ export const createToolsetLoadingNode = (input: {
         cache: input.cache,
         ctx: input.ctx,
         toolCallId: loadToolCallId,
-        content: toolsetLoadingResult
+        content: toolsetLoadingResult,
+        toolsetNames: requestedToolsetNames,
+        outcome: lastToolsetLoadingOutcome,
+        error: toolsetLoadingResult.slice('Error: '.length)
       })
       return returnToDispatch(state, {
         execution: {
@@ -314,12 +353,15 @@ export const createToolsetLoadingNode = (input: {
       cache: input.cache,
       ctx: input.ctx,
       toolCallId: loadToolCallId,
-      content: toolsetLoadingResult
+      content: toolsetLoadingResult,
+      toolsetNames: requestedToolsetNames,
+      outcome: lastToolsetLoadingOutcome
     })
     emitLoadToolsetProcessCompleted({
       ctx: input.ctx,
       toolCallId: loadToolCallId,
       toolsetNames: requestedToolsetNames,
+      outcome: lastToolsetLoadingOutcome,
       ok: true
     })
     await input.ctx.appendMessageLog([
@@ -365,3 +407,4 @@ export const createToolsetLoadingNode = (input: {
     return nextState
   }
 }
+import { getToolDisplayInput } from '../../../../../../shared/assistantToolCopy'

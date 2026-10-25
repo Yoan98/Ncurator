@@ -82,6 +82,7 @@ export type AssistantProcessIconKind =
   | 'edit'
   | 'retry'
   | 'toolset_loading'
+  | 'skill_loading'
   | 'compaction'
   | 'eye'
   | 'camera'
@@ -118,6 +119,7 @@ export type AssistantProcessToolsetKey =
   | 'image-generation'
   | 'image-read'
   | 'toolset_loading'
+  | 'skill_loading'
   | 'generic'
 
 export type AssistantProcessGroupItem = {

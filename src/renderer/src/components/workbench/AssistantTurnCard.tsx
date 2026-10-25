@@ -3,14 +3,15 @@ import { t } from '../../i18n'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SubagentGroupView, { SubagentCloudProvider } from './SubagentGroupView'
 import { presentSubagentGroups } from './subagentPresentation'
-import { FaSpider } from 'react-icons/fa'
+import { FaSpider, FaBook } from 'react-icons/fa'
 import { PiBrowsers, PiEyes } from 'react-icons/pi'
 import { TbMoodConfuzed } from 'react-icons/tb'
 import {
   HiChevronDown,
   HiChevronRight,
   HiArrowPath,
-  HiOutlineAcademicCap,
+  HiOutlineWrench,
+  HiOutlineExclamationCircle,
   HiOutlineArchiveBox,
   HiOutlineArrowsUpDown,
   HiOutlineBolt,
@@ -75,6 +76,8 @@ const getProcessStatusClassName = (status: AssistantProcessGroup['status']): str
 }
 
 const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
+  if (iconKind === 'toolset_loading') return 'text-[#2F5F8F]'
+  if (iconKind === 'skill_loading') return 'text-[#8064A2]'
   if (iconKind === 'default') return 'text-[#9B9A97]'
   return 'text-[#787774]'
 }
@@ -90,7 +93,9 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   const iconProps = { className: iconClassName, 'data-process-icon-kind': iconKind }
   const icon =
     iconKind === 'toolset_loading' ? (
-      <HiOutlineAcademicCap {...iconProps} />
+      <HiOutlineWrench {...iconProps} />
+    ) : iconKind === 'skill_loading' ? (
+      <FaBook {...iconProps} />
     ) : iconKind === 'compaction' ? (
       <HiOutlineArchiveBox {...iconProps} />
     ) : iconKind === 'document' ? (
@@ -307,7 +312,11 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
   if (group.subagents?.length) return <SubagentGroupView group={group} />
   const isRunning = group.status === 'running'
   const groupText = getGroupText(group)
-  const shouldShowIcon = group.kind === 'compaction' || group.kind === 'retry'
+  const shouldShowIcon =
+    group.kind === 'compaction' ||
+    group.kind === 'retry' ||
+    group.iconKind === 'toolset_loading' ||
+    group.iconKind === 'skill_loading'
   return (
     <details
       className="group/process"
@@ -326,13 +335,28 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
           <span className={`min-w-0 truncate ${isRunning ? 'font-medium' : ''}`}>
             {renderSegments(groupText, { shimmer: isRunning })}
           </span>
+          {(group.iconKind === 'toolset_loading' || group.iconKind === 'skill_loading') &&
+          (group.status === 'failed' || group.status === 'partial_failed') ? (
+            <span className="inline-flex shrink-0 items-center gap-1 text-[12px] text-[#B3261E]">
+              <HiOutlineExclamationCircle className="h-3.5 w-3.5" />
+              {group.status === 'partial_failed'
+                ? t(($) => $.workbench.loadingPartiallyFailed)
+                : t(($) => $.common.failed)}
+            </span>
+          ) : null}
           {group.items.length > 0 ? (
             <HiChevronDown className="h-4 w-4 shrink-0 text-[#9B9A97] transition-transform duration-200 group-open/process:rotate-180" />
           ) : null}
         </span>
       </summary>
       {group.items.length > 0 ? (
-        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#37352F]">
+        <div
+          className={`mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#37352F] ${
+            group.iconKind === 'toolset_loading' || group.iconKind === 'skill_loading'
+              ? 'whitespace-pre-wrap'
+              : ''
+          }`}
+        >
           {group.items.map((item) => (
             <div
               key={item.id}
@@ -418,7 +442,9 @@ const buildAssistantTimeline = (input: {
     if (
       entry.kind === 'decision' ||
       entry.group.subagents?.length ||
-      !isActivityToolGroup(entry.group)
+      !isActivityToolGroup(entry.group) ||
+      entry.group.toolsetKey === 'toolset_loading' ||
+      entry.group.toolsetKey === 'skill_loading'
     ) {
       timeline.push(entry)
       continue

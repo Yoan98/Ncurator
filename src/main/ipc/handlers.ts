@@ -363,7 +363,11 @@ export function registerHandlers(services: {
     isPartnerBusy: (partnerId) => chatRunService.hasActivePartnerRun(partnerId),
     beforeCleanup: (partnerId) => terminalSessionManager.closeByChatSession(partnerId)
   })
-  const userSkillService = new UserSkillService(storageService.userSkill)
+  const userSkillService = new UserSkillService(storageService.userSkill, undefined, () => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send('user-skills-changed')
+    }
+  })
   const chatRunService = new ChatRunService({
     userSkillService,
     partnerStore,

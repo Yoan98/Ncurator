@@ -1,4 +1,4 @@
-import type { ChatMessageLogEntry } from '../../../../../shared/types'
+import type { ChatMessageLogEntry, JsonObject } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import type { HumanRuntimeCache } from '../types'
 import { appendLogEntriesToCache } from '../memory/conversationLogMessages'
@@ -9,6 +9,7 @@ export type ToolFeedbackInput = {
   ok: boolean
   errorMessage?: string
   content?: string
+  displayInput?: JsonObject
 }
 
 const buildContent = (input: ToolFeedbackInput): string => {
@@ -28,6 +29,7 @@ export const buildToolFeedback = (input: ToolFeedbackInput): ChatMessageLogEntry
     toolName: input.toolName,
     ok: input.ok,
     content,
+    displayInput: input.displayInput,
     error: input.ok ? undefined : input.errorMessage?.trim() || '未知错误'
   }
 }
@@ -40,6 +42,7 @@ export const appendToolFeedback = async (input: {
   ok: boolean
   errorMessage?: string
   content?: string
+  displayInput?: JsonObject
   additionalTranscriptEntries?: ChatMessageLogEntry[]
 }): Promise<void> => {
   const transcript = buildToolFeedback(input)

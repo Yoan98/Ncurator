@@ -32,7 +32,20 @@ export default function UserSkillsView() {
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const [open, setOpen] = useState(false)
+  const [externalChanged, setExternalChanged] = useState(false)
   const [editingId, setEditingId] = useState<string>()
+  const editorState = useRef({ open, editingId })
+  useEffect(() => {
+    editorState.current = { open, editingId }
+  }, [open, editingId])
+  useEffect(
+    () =>
+      window.api.onUserSkillsChanged(() => {
+        setRevision((value) => value + 1)
+        if (editorState.current.open && editorState.current.editingId) setExternalChanged(true)
+      }),
+    []
+  )
   const [draft, setDraft] = useState<UserSkillDraft>(emptyDraft)
   const original = useRef<UserSkillDraft>(emptyDraft())
   const [preview, setPreview] = useState<UserSkillImportPreview | null>(null)
@@ -103,6 +116,7 @@ export default function UserSkillsView() {
       original.current = next
       setDraft(next)
       setEditingId(skill?.id)
+      setExternalChanged(false)
       setResources(value.resources)
       setOpen(true)
     })
@@ -275,6 +289,11 @@ export default function UserSkillsView() {
         cancelTestId={selectors.cancel}
       >
         <div>
+          {externalChanged && (
+            <p role="status" className="mb-4 text-xs text-[#787774]">
+              {t(($) => $.userSkills.contentChanged)}
+            </p>
+          )}
           <div className="mb-4 space-y-4">
             <label className="flex flex-col gap-1.5">
               <ConfigurationFieldLabel required>

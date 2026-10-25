@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
+import { getToolDisplayInput } from '../../../../../../shared/assistantToolCopy'
 import type { AiToolCallResult, IpcJsonObject } from '../../../../../../shared/types'
 import type { AiEventDispatchContext } from '../../../types'
 import { emitToolProcessCompleted, emitToolProcessStarted } from '../../../events/processEvents'
@@ -13,6 +14,7 @@ type DraftRef = {
 type ActiveToolCallContext = {
   toolName: string
   toolCallId: string
+  args?: IpcJsonObject
 }
 
 const activeToolCallContext = new AsyncLocalStorage<ActiveToolCallContext>()
@@ -73,6 +75,11 @@ export const emitToolCallResult = (input: {
     toolCallId: input.toolCallId,
     toolName: input.toolName,
     ok: input.result?.ok !== false && !input.error,
+    displayInput: getToolDisplayInput(
+      input.toolName,
+      activeToolCallContext.getStore()?.args || {},
+      input.result?.data
+    ),
     error:
       input.error ||
       (input.result?.data &&

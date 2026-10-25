@@ -1,3 +1,4 @@
+import { getToolDisplayInput } from '../../../../../../shared/assistantToolCopy'
 import { randomUUID } from 'node:crypto'
 import type {
   ChatMessageImageRef,
@@ -111,6 +112,7 @@ const appendToolMessages = async (input: {
     toolName: string
     ok: boolean
     content: string
+    displayInput?: JsonObject
     error?: string
     images?: ChatMessageImageRef[]
   }>
@@ -120,6 +122,7 @@ const appendToolMessages = async (input: {
     toolName: string
     ok: boolean
     content: string
+    displayInput?: JsonObject
     error?: string
     images?: ChatMessageImageRef[]
   }> = []
@@ -138,6 +141,7 @@ const appendToolMessages = async (input: {
       toolName: call.toolName,
       ok: delivery.ok,
       content: delivery.content,
+      displayInput: getToolDisplayInput(call.toolName, call.args, result.data),
       error: delivery.ok
         ? undefined
         : !result.ok
@@ -154,6 +158,7 @@ const appendToolMessages = async (input: {
       toolName: entry.toolName,
       ok: entry.ok,
       content: entry.content,
+      displayInput: entry.displayInput,
       error: entry.error,
       images: entry.images
     }))
@@ -423,6 +428,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         toolName: entry.toolName,
         ok: entry.ok,
         content: entry.content,
+        displayInput: entry.displayInput,
         error: entry.error,
         images: entry.images
       }))

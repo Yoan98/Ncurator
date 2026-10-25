@@ -482,6 +482,9 @@ eventProcessId = panelProcess(nativePanel, processId) ?? processId
 
 postKey(5, [.maskCommand, .maskShift])
 Thread.sleep(forTimeInterval: 0.6)
+// Go to Folder can retain the previous path on repeated imports.
+postKey(0, [.maskCommand])
+Thread.sleep(forTimeInterval: 0.1)
 let characters = Array(targetPath.utf16)
 for offset in stride(from: 0, to: characters.count, by: 20) {
   let chunk = Array(characters[offset..<min(offset + 20, characters.count)])

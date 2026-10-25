@@ -3,6 +3,8 @@ import { MAX_USER_SKILL_BODY_BYTES } from '../../../../shared/userSkills'
 import type { AiRunContext } from '../types'
 
 export type UserSkillReader = Pick<UserSkillService, 'listEnabled' | 'loadEnabled'>
+export type UserSkillAccess = UserSkillReader &
+  Partial<Pick<UserSkillService, 'readForPartner' | 'editForPartner'>>
 export type LoadedUserSkill = ReturnType<UserSkillReader['loadEnabled']>
 
 export const isUserSkillId = (id: string): boolean => id.startsWith('user:')

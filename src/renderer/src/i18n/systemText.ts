@@ -41,7 +41,8 @@ export const localizeSystemText = (value: string): string => {
       'loadingToolset',
       'loadedToolset',
       'partiallyFailedToLoadToolset',
-      'failedToLoadToolset'
+      'failedToLoadToolset',
+      'loadName'
     ].includes(templateKey)
     const values = Object.fromEntries(
       match

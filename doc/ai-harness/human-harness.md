@@ -38,16 +38,16 @@ graph 从 `context_budget` 进入；当前 `user` 的写入分工见第 2.2 节�
 
 ### 1.2 节点职责
 
-| 节点 | 调模型 | 职责 |
-| --- | --- | --- |
-| `context_budget` | 否 | 判断预算、压缩与追加消息交接 |
-| `context_compaction` | 压缩模型 | 写 checkpoint，整段重建 runtime messages |
-| `brain` | 主模型 | 产生过程决策或交付，不刷新已发送 build user |
-| `dispatch` | 否 | 按顺序消费 tool_calls 并路由 |
-| `toolset_loading` | 否 | 加载工具包并更新可绑定集合 |
-| `skill_loading` | 否 | 校验伙伴启用的说明文件并记录当前加载 ID |
-| `plan` | 否 | 更新计划状态 |
-| `hand`／`human_interaction` | 否 | 执行工具或用户交互，追加结果及多模态投影 |
+| 节点                        | 调模型   | 职责                                        |
+| --------------------------- | -------- | ------------------------------------------- |
+| `context_budget`            | 否       | 判断预算、压缩与追加消息交接                |
+| `context_compaction`        | 压缩模型 | 写 checkpoint，整段重建 runtime messages    |
+| `brain`                     | 主模型   | 产生过程决策或交付，不刷新已发送 build user |
+| `dispatch`                  | 否       | 按顺序消费 tool_calls 并路由                |
+| `toolset_loading`           | 否       | 加载工具包并更新可绑定集合                  |
+| `skill_loading`             | 否       | 校验伙伴启用的说明文件并记录当前加载 ID     |
+| `plan`                      | 否       | 更新计划状态                                |
+| `hand`／`human_interaction` | 否       | 执行工具或用户交互，追加结果及多模态投影    |
 
 消息写入分工见第 2.2 节。正常交付由 brain 内的 finalizeDelivery 保存，它不是独立图节点；回答完成与主运行收尾是不同阶段，见第 8.2 节。
 
@@ -57,8 +57,8 @@ graph 从 `context_budget` 进入；当前 `user` 的写入分工见第 2.2 节�
 
 | `toolName`          | 目标节点            | 批处理                                 |
 | ------------------- | ------------------- | -------------------------------------- |
-| `load_toolset` | `toolset_loading` | 单次仅处理队首一条 |
-| `load_skill` | `skill_loading` | 单次仅处理队首一条 |
+| `load_toolset`      | `toolset_loading`   | 单次仅处理队首一条                     |
+| `load_skill`        | `skill_loading`     | 单次仅处理队首一条                     |
 | `ask_user_question` | `human_interaction` | 单次仅处理队首一条，回答后继续消费队列 |
 | `update_plan`       | `plan`              | 连续同类 call 合并一批                 |
 | 其余                | `hand`              | 连续同类 call 合并一批                 |
@@ -96,7 +96,7 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 
 ### 1.7 子会话与派发
 
-- 主子共用 `AiRunService.run`、human graph、审批、工具、预算、消息投影与 compaction。子工具禁止查询/派发子 agent、主动提问及定时任务管理；并发常量默认 2，其余 FIFO。
+- 主子共用 `AiRunService.run`、human graph、审批、工具、预算、消息投影与 compaction。子工具禁止查询/派发子 agent、主动提问、定时任务管理及 skill 管理；并发常量默认 2，其余 FIFO。
 - `ai_subagent` 只存身份、原任务和生命周期；完整 user/assistant/tool、计划、技能及压缩 checkpoint 使用同一 `chat_session_message_log`。SQLite transcript 在入口绑定 `{partnerId, subagentId?}`，graph 不区分读写实现。每个会话独立 seq，续接跨执行读取历史，复用 checkpoint 与原文 tail 后追加新 user。
 - agentId 为稳定会话 ID，childRunId 为本次执行 ID，ownerRunId 为本次父任务文件归属。派发支持创建与续接；续接校验伙伴归属并原子占用会话，活跃会话不能重复执行。具体参数由工具 schema 维护。
 - 子过程、结果及审批 annotation 保存到主日志用于 UI，执行前失败保留原始错误与输入。子完整日志不进入主上下文。派发工具汇集交付结果；公开流与完成快照共用消息标识，每轮及重试替换使用独立标识，保留开始、替换与结束；工具动作沿用附带公开消息标识，单纯状态更新不产生新消息。不转发内部推理；诊断关联 agentId 与父子执行。
@@ -129,32 +129,32 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 #### 四种 `kind`
 
-| `kind`       | 存什么                                        | 谁写                                                                                                            |
-| ------------ | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `kind`       | 存什么                                        | 谁写                                                                                                              |
+| ------------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `user`       | 发给模型的 build 全文 + `context`             | **`ChatRunService`**（主运行启动前）或 **`context_budget`**（尚无当前 user 的内部运行）                           |
-| `assistant`  | 文本 + `toolCalls[]`（交付另含 `linkAccess`） | **brain**（过程决策 / 截断 / 内容安全 fallback）或 **`finalizeDelivery`**（正常交付）；**同一轮交付正文不叠写** |
-| `tool`       | 工具反馈正文 + 可选 `images[]`                | **`brain`**（执行前拒绝）或 **`hand` / `plan` / `toolset_loading` / `skill_loading`**（执行结果；不写 assistant）                                                    |
-| `annotation` | 过程与状态事件                                | 见下表                                                                                                          |
+| `assistant`  | 文本 + `toolCalls[]`（交付另含 `linkAccess`） | **brain**（过程决策 / 截断 / 内容安全 fallback）或 **`finalizeDelivery`**（正常交付）；**同一轮交付正文不叠写**   |
+| `tool`       | 工具反馈正文 + 可选 `images[]`                | **`brain`**（执行前拒绝）或 **`hand` / `plan` / `toolset_loading` / `skill_loading`**（执行结果；不写 assistant） |
+| `annotation` | 过程与状态事件                                | 见下表                                                                                                            |
 
 #### `annotation` 事件
 
-| `eventType`                               | `payload`                                                                                                                 | 投影用途                                                                                                                                                                    |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `thinking_started` / `thinking_completed` | `{}`                                                                                                                      | UI 过程层                                                                                                                                                                   |
-| `toolset_loading_started` / `toolset_loading_completed` | `{ toolsetId }`                                                                                                             | UI 过程层                                                                                                                                                                   |
-| `skill_loading_started` / `skill_loading_completed` | `{ skillId }` | 说明技能加载过程状态，不授予工具权限 |
-| `toolset_state_updated`                     | `{ loadedToolsetIds: string[] }`                                                                                           | 同 run 只驱动 bindTools；新 run 从图启动扫描该伙伴剩余 log 最新一条                                                                                                         |
-| `skill_state_updated` | `{ loadedSkillIds: string[] }` | 恢复用户说明 ID；每次推理前仍校验当前伙伴绑定和文件，不保存正文 |
-| `plan_updated`                            | `{ plan: [{ title, status }] }`                                                                                           | UI 计划条；新 run 从图启动扫描该伙伴剩余 log 最新一条                                                                                                                       |
-| `compaction_checkpoint`                   | `{ compactBlockId, throughSeq, sourceMessageCount, summary }`                                                             | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User                                                                           |
-| `finalizing_started`                      | `{}`                                                                                                                      | 投影时**清空** plan                                                                                                                                                         |
-| `human_interaction_resolved`              | `{ interactionId, kind, result }`                                                                                         | UI Activity：在对应工具行下按顺序展示问题与答案                                                                                                                             |
-| `approval_requested` | `{ batchId, taskId, source?, items }` | 主日志内审批来源和原操作；不参与主模型上下文，不生成主工具项 |
-| `approval_decided` | `{ batchId, taskId, source?, decisions }` | 用户决定与下一批快照同事务提交；按批次关联原请求 |
-| `approval_cancelled` | `{ batchId, taskId, source?, reason }` | 停止或执行者取消记录，不伪造拒绝决定 |
-| `approval_batch_resolved`                 | `{ batchId, notExecutedToolCallIds?, items: [{ toolCallId, toolName, command, commandExplanation?, action, message? }] }` | 人工审批的同意、拒绝或指导结果按 `toolCallId` 投影到原工具项下的内嵌审核结果区域                                                                                            |
-| `terminal_review_started`                 | `{ reviewId, commandIds }`                                                                                                | 持久化 AI 终端审核开始；用 assistant toolCalls 中的同一 `toolCallId` 在 Activity 显示审核中                                                                                 |
-| `terminal_review_resolved`                | `{ reviewId, decisions: [{ commandId, decision, reason }] }`                                                              | `terminal_run` 副作用命中后的 AI 审核结论；按 `commandId` 投影到同一工具项下的内嵌审核结果区域；reason 记录逐项判断依据但不投影到 UI，命令编号对应 hand 批次中的 toolCallId |
+| `eventType`                                             | `payload`                                                                                                                 | 投影用途                                                                                                                                                                    |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `thinking_started` / `thinking_completed`               | `{}`                                                                                                                      | UI 过程层                                                                                                                                                                   |
+| `toolset_loading_started` / `toolset_loading_completed` | `{ toolsetId }`                                                                                                           | UI 过程层                                                                                                                                                                   |
+| `skill_loading_started` / `skill_loading_completed`     | `{ skillId }`                                                                                                             | 说明技能加载过程状态，不授予工具权限                                                                                                                                        |
+| `toolset_state_updated`                                 | `{ loadedToolsetIds: string[] }`                                                                                          | 同 run 只驱动 bindTools；新 run 从图启动扫描该伙伴剩余 log 最新一条                                                                                                         |
+| `skill_state_updated`                                   | `{ loadedSkillIds: string[] }`                                                                                            | 恢复用户说明 ID；每次推理前仍校验当前伙伴绑定和文件，不保存正文                                                                                                             |
+| `plan_updated`                                          | `{ plan: [{ title, status }] }`                                                                                           | UI 计划条；新 run 从图启动扫描该伙伴剩余 log 最新一条                                                                                                                       |
+| `compaction_checkpoint`                                 | `{ compactBlockId, throughSeq, sourceMessageCount, summary }`                                                             | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User                                                                           |
+| `finalizing_started`                                    | `{}`                                                                                                                      | 投影时**清空** plan                                                                                                                                                         |
+| `human_interaction_resolved`                            | `{ interactionId, kind, result }`                                                                                         | UI Activity：在对应工具行下按顺序展示问题与答案                                                                                                                             |
+| `approval_requested`                                    | `{ batchId, taskId, source?, items }`                                                                                     | 主日志内审批来源和原操作；不参与主模型上下文，不生成主工具项                                                                                                                |
+| `approval_decided`                                      | `{ batchId, taskId, source?, decisions }`                                                                                 | 用户决定与下一批快照同事务提交；按批次关联原请求                                                                                                                            |
+| `approval_cancelled`                                    | `{ batchId, taskId, source?, reason }`                                                                                    | 停止或执行者取消记录，不伪造拒绝决定                                                                                                                                        |
+| `approval_batch_resolved`                               | `{ batchId, notExecutedToolCallIds?, items: [{ toolCallId, toolName, command, commandExplanation?, action, message? }] }` | 人工审批的同意、拒绝或指导结果按 `toolCallId` 投影到原工具项下的内嵌审核结果区域                                                                                            |
+| `terminal_review_started`                               | `{ reviewId, commandIds }`                                                                                                | 持久化 AI 终端审核开始；用 assistant toolCalls 中的同一 `toolCallId` 在 Activity 显示审核中                                                                                 |
+| `terminal_review_resolved`                              | `{ reviewId, decisions: [{ commandId, decision, reason }] }`                                                              | `terminal_run` 副作用命中后的 AI 审核结论；按 `commandId` 投影到同一工具项下的内嵌审核结果区域；reason 记录逐项判断依据但不投影到 UI，命令编号对应 hand 批次中的 toolCallId |
 
 #### `entry_json` 示例
 
@@ -228,7 +228,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 }
 ```
 
-**`tool`** — 模型可见的工具结果文本；失败另存可选 `error` 原始原因供 UI 使用，不改变模型可见正文；图片只存 ref，不存 Base64。
+**`tool`** — 模型可见的工具结果文本；失败另存可选 `error` 原始原因供 UI 使用，不改变模型可见正文；图片只存 ref，不存 Base64。可选 `displayInput` 保存解析后的展示名称、加载成功项和逐项失败原因，供实时事件与历史 UI 使用；不进入模型消息，不复制说明正文或完整领域结果。
 
 ```json
 {
@@ -289,20 +289,20 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 按「谁产出事实，谁写」落库；**禁止**为对称在多个节点重复写同一语义正文（尤其正常交付不得 brain + `finalizeDelivery` 各写一条空 `toolCalls` 的 `assistant`，否则续跑会出现连续重复 AI）。
 
-| 节点 / 步骤              | 写入 `kind` / `eventType`                                                                      | 说明                                                                                                     |
-| ------------------------ | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `ChatRunService`         | `user`                                                                                         | 主运行启动前保存 build 全文、可读正文与 context；普通提交在返回接受成功前保存                             |
-| `context_budget`         | `user`                                                                                         | 当前 user 尚未保存时补写；已保存则复用，不重复写入                                                       |
-| `brain`（有 tool_calls） | `thinking_started` → `assistant`（含 `toolCalls`）→ `thinking_completed`                       | 固化主模型过程决策；须在 hand/plan/toolset_loading/skill_loading **之前**落库                                                 |
-| `brain`（正常交付）      | `thinking_started` → `thinking_completed`                                                      | **不**写 log `assistant`；Answer 草稿仅事件 / `partial_answer`                                           |
-| `brain`（截断）          | 半截 `assistant`                                                                               | `finish_reason=length`：先写再失败，可 resume                                                            |
-| `brain`（内容安全）      | `assistant`（`toolCalls: []`）                                                                 | fallback 交付；走 `completeDelivery`，**不**再经 `finalizeDelivery` 叠写                                 |
-| `dispatch` → `toolset_loading`  | `toolset_loading_started` → `tool`（`load_toolset`）→ `toolset_loading_completed` → **`toolset_state_updated`** | 成功写完整 `loadedToolsetIds`；重复加载 / 失败只写 `tool`                                                 |
-| `dispatch` → `skill_loading` | `skill_loading_started` → `tool`（`load_skill`）→ `skill_loading_completed` → `skill_state_updated` | 保存完整用户说明 ID 快照，正文在当前 System 说明区投递 |
-| `dispatch` → `plan`      | `tool`（`update_plan`）+ `plan_updated`                                                        | 参数合法时同批写；**不**写 assistant                                                                     |
-| `dispatch` → `hand`      | `tool`（+ 可选 `images[]`）                                                                    | 每个 call 一条；审批拒绝写失败 `tool`；**不**写 assistant                                                |
-| `context_compaction`     | `compaction_checkpoint`                                                                        | 书签 + 摘要正文；发给主模型时再合成 User                                                                 |
-| `finalizeDelivery`       | `finalizing_started` → `assistant`（`toolCalls: []` + `linkAccess`）                           | 正常交付正文的**唯一** writer（文件记录汇总与链接访问检查之后）；清空 plan 投影                                  |
+| 节点 / 步骤                    | 写入 `kind` / `eventType`                                                                                       | 说明                                                                            |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `ChatRunService`               | `user`                                                                                                          | 主运行启动前保存 build 全文、可读正文与 context；普通提交在返回接受成功前保存   |
+| `context_budget`               | `user`                                                                                                          | 当前 user 尚未保存时补写；已保存则复用，不重复写入                              |
+| `brain`（有 tool_calls）       | `thinking_started` → `assistant`（含 `toolCalls`）→ `thinking_completed`                                        | 固化主模型过程决策；须在 hand/plan/toolset_loading/skill_loading **之前**落库   |
+| `brain`（正常交付）            | `thinking_started` → `thinking_completed`                                                                       | **不**写 log `assistant`；Answer 草稿仅事件 / `partial_answer`                  |
+| `brain`（截断）                | 半截 `assistant`                                                                                                | `finish_reason=length`：先写再失败，可 resume                                   |
+| `brain`（内容安全）            | `assistant`（`toolCalls: []`）                                                                                  | fallback 交付；走 `completeDelivery`，**不**再经 `finalizeDelivery` 叠写        |
+| `dispatch` → `toolset_loading` | `toolset_loading_started` → `tool`（`load_toolset`）→ `toolset_loading_completed` → **`toolset_state_updated`** | 成功写完整 `loadedToolsetIds`；重复加载 / 失败只写 `tool`                       |
+| `dispatch` → `skill_loading`   | `skill_loading_started` → `tool`（`load_skill`）→ `skill_loading_completed` → `skill_state_updated`             | 保存完整用户说明 ID 快照，正文在当前 System 说明区投递                          |
+| `dispatch` → `plan`            | `tool`（`update_plan`）+ `plan_updated`                                                                         | 参数合法时同批写；**不**写 assistant                                            |
+| `dispatch` → `hand`            | `tool`（+ 可选 `images[]`）                                                                                     | 每个 call 一条；审批拒绝写失败 `tool`；**不**写 assistant                       |
+| `context_compaction`           | `compaction_checkpoint`                                                                                         | 书签 + 摘要正文；发给主模型时再合成 User                                        |
+| `finalizeDelivery`             | `finalizing_started` → `assistant`（`toolCalls: []` + `linkAccess`）                                            | 正常交付正文的**唯一** writer（文件记录汇总与链接访问检查之后）；清空 plan 投影 |
 
 ```text
 用户发送
@@ -436,7 +436,6 @@ flowchart TD
 </当前时间>
 ```
 
-
 ### 3.3 日志投影与输入快照
 
 新 run／resume 从日志构建消息；同 run 压缩后复用该投影，但不追加已保存的当前输入（第 5 节）。
@@ -451,15 +450,14 @@ flowchart TD
 
 **build 各块**
 
-| 块                | 来源                                                                                    |
-| ----------------- | --------------------------------------------------------------------------------------- |
-| `用户诉求`        | 当次用户正文的可读文本                                                                  |
-| `偏好`            | 当时 Composer；`default` 时整块省略                                                     |
-| `默认工作区`      | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
-| `用户引用的文档`  | 当次消息中的 `@` 引用与文档选区；空时整块省略                                            |
-| `用户添加的附件`  | 当次消息中的附件；空时整块省略                                                          |
-| `当前时间`        | 当时 run 的 `runStartedAt`（历史行不再改）                                              |
-
+| 块               | 来源                                                                                    |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| `用户诉求`       | 当次用户正文的可读文本                                                                  |
+| `偏好`           | 当时 Composer；`default` 时整块省略                                                     |
+| `默认工作区`     | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
+| `用户引用的文档` | 当次消息中的 `@` 引用与文档选区；空时整块省略                                           |
+| `用户添加的附件` | 当次消息中的附件；空时整块省略                                                          |
+| `当前时间`       | 当时 run 的 `runStartedAt`（历史行不再改）                                              |
 
 **运行态维护**
 
@@ -475,12 +473,12 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 
 #### 对话轮次（按 run 切分）
 
-| UI 元素       | log 来源                                                  | 规则                                                                     |
-| ------------- | --------------------------------------------------------- | ------------------------------------------------------------------------ |
-| 用户气泡      | log `user.input` 与 `context`                            | 还原可读正文与引用；不展示 `user.content`；Compact User 不当气泡          |
-| 助手气泡      | 该 run 最后一条交付 `assistant`（`toolCalls: []`）        | 经 `finalizeDelivery` 写入；展示 Markdown 正文                           |
-| 运行态 / 错误 | `ai_run`                                                  | `status`、`error`、`failure_code`、`failure_raw_message`、审批、流式草稿 |
-| 文件改动      | `ai_file_change`                                          | Workbench diff / 回退；不进对话正文                                      |
+| UI 元素       | log 来源                                           | 规则                                                                     |
+| ------------- | -------------------------------------------------- | ------------------------------------------------------------------------ |
+| 用户气泡      | log `user.input` 与 `context`                      | 还原可读正文与引用；不展示 `user.content`；Compact User 不当气泡         |
+| 助手气泡      | 该 run 最后一条交付 `assistant`（`toolCalls: []`） | 经 `finalizeDelivery` 写入；展示 Markdown 正文                           |
+| 运行态 / 错误 | `ai_run`                                           | `status`、`error`、`failure_code`、`failure_raw_message`、审批、流式草稿 |
+| 文件改动      | `ai_file_change`                                   | Workbench diff / 回退；不进对话正文                                      |
 
 同一伙伴多 run：按 `run_id` + `seq` 排序；resume 产生新 run，用户可见**多条** user 气泡，对应 brain 侧多条 build user（第 6 节）。
 
@@ -488,19 +486,18 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 
 `projectProcessGroups({ runId, records })` 扫描**该 run** 的 log 记录（使用 `seq` / `createdAt` 保证顺序与时间基）：
 
-| log 信号                                                     | UI 过程组                                                                                                                                                                                                        |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `thinking_started` … `thinking_completed` 之间的 `assistant` | Thought 文本流（`processThoughts`）                                                                                                                                                                              |
-| `compaction_checkpoint`                                      | compaction 组（单独成行）                                                                                                                                                                                        |
-| `terminal_review_started` / `terminal_review_resolved`       | 在审核结果出现前建立或更新同一 `terminal_run` Activity 项；以 `toolCallId` 与 assistant toolCalls、后续工具结果关联。AI 审核结果显示在该项下的内嵌区域；未结束的审核状态和结论刷新后仍可投影；reason 不投影到 UI |
-| `approval_batch_resolved`                                    | 按 `toolCallId` 将人工同意、拒绝或指导结果投影到同一工具项下的内嵌审核结果区域；不新增过程项                                                                                                                     |
-| `tool`（排除 `update_plan`；**含** `load_toolset` / `load_skill`）           | tool 组；展示 toolName + 入参 snapshot；两次 Thought 之间在 UI 合并为 Activity 面板                                                                                                                              |
-| `plan_updated`                                               | 计划条（非过程组；run snapshot 扫描 annotation）                                                                                                                                                                 |
-| `finalizing_started`                                         | 清空计划条（不渲染过程层）                                                                                                                                                                                       |
+| log 信号                                                                | UI 过程组                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `thinking_started` … `thinking_completed` 之间的 `assistant`            | Thought 文本流（`processThoughts`）                                                                                                                                                                              |
+| `compaction_checkpoint`                                                 | compaction 组（单独成行）                                                                                                                                                                                        |
+| `terminal_review_started` / `terminal_review_resolved`                  | 在审核结果出现前建立或更新同一 `terminal_run` Activity 项；以 `toolCallId` 与 assistant toolCalls、后续工具结果关联。AI 审核结果显示在该项下的内嵌区域；未结束的审核状态和结论刷新后仍可投影；reason 不投影到 UI |
+| `approval_batch_resolved`                                               | 按 `toolCallId` 将人工同意、拒绝或指导结果投影到同一工具项下的内嵌审核结果区域；不新增过程项                                                                                                                     |
+| `tool`（排除 `update_plan`；**含** `load_toolset` / `load_skill`）      | tool 组；展示 toolName + 入参 snapshot；两次 Thought 之间在 UI 合并为 Activity 面板                                                                                                                              |
+| `plan_updated`                                                          | 计划条（非过程组；run snapshot 扫描 annotation）                                                                                                                                                                 |
+| `finalizing_started`                                                    | 清空计划条（不渲染过程层）                                                                                                                                                                                       |
 | `toolset_loading_started/completed` / `skill_loading_started/completed` | 仅 harness / 状态注解；**不**投影为独立加载过程组                                                                                                                                                                |
 
 `update_plan` **不出** tool 过程组。`load_toolset` / `load_skill` 与其它工具一样进入 Activity。
-
 
 #### 流式与终态
 
@@ -557,12 +554,12 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ### 4.2 稳态下如何保持命中
 
-| 操作                          | 对前缀的影响                                                       |
-| ----------------------------- | ------------------------------------------------------------------ |
-| brain → hand → 再 brain       | 已发送段不变；tail 末尾 append；当前 build user 不变               |
+| 操作                           | 对前缀的影响                                                       |
+| ------------------------------ | ------------------------------------------------------------------ |
+| brain → hand → 再 brain        | 已发送段不变；tail 末尾 append；当前 build user 不变               |
 | `update_plan` / `load_toolset` | 只改 state + tool 结果 + bindTools；**不改** build user            |
-| `load_skill` | 不改 build user，但会更新首条 System 中的当前说明正文 |
-| **resume**                    | 历史段 **不变**（log content）；末尾 **append** 新 User（第 6 节） |
+| `load_skill`                   | 不改 build user，但会更新首条 System 中的当前说明正文              |
+| **resume**                     | 历史段 **不变**（log content）；末尾 **append** 新 User（第 6 节） |
 
 ### 4.3 打破前缀缓存的操作
 
@@ -743,7 +740,7 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 | ------------------------------------ | ----------------------------------------------------------------------------------- |
 | 多次 resume                          | 每次 append 新 build user 在末尾；首条 `User built₁` 保留原始用户诉求               |
 | `output_truncated` / `runtime_limit` | 可继续；半截 assistant 已在 log/tail                                                |
-| `input_too_long`                     | 不调 brain；已接受的主运行 user 保留，尚未写入的内部运行不补写                       |
+| `input_too_long`                     | 不调 brain；已接受的主运行 user 保留，尚未写入的内部运行不补写                      |
 | 编辑重发                             | 删除该 `runId` 的 `ai_run` 与全部 message log。已写入文件与 `ai_file_change` 不回滚 |
 | 伙伴隔离                             | 只读本伙伴 log                                                                      |
 | `partial_answer`                     | 仅 UI 草稿，不参与 resume                                                           |
@@ -755,12 +752,12 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 
 ### 7.1 概念
 
-| 概念              | 含义                                                                          |
-| ----------------- | ----------------------------------------------------------------------------- |
-| **Toolset**         | 能力包；`builtin` 默认可 bind；`external` 需 `load_toolset` 后才进入 bindTools |
-| **Skill** | 用户说明文件资产；按伙伴启用并经 `load_skill` 加载，不注册工具 |
-| **Tool**          | 具体执行入口；归属一个或多个 toolset                                            |
-| **agent-control** | 内置 toolset，承载 `load_toolset`、`load_skill`、`update_plan`、`read_image`                   |
+| 概念              | 含义                                                                           |
+| ----------------- | ------------------------------------------------------------------------------ |
+| **Toolset**       | 能力包；`builtin` 默认可 bind；`external` 需 `load_toolset` 后才进入 bindTools |
+| **Skill**         | 用户说明文件资产；按伙伴启用并经 `load_skill` 加载，不注册工具                 |
+| **Tool**          | 具体执行入口；归属一个或多个 toolset                                           |
+| **agent-control** | 内置 toolset，承载 `load_toolset`、`load_skill`、`update_plan`、`read_image`   |
 
 toolset / tool 的 prompt **只声明边界**，不写固定调用顺序（细节见 `tool-design.md` 第 1 节）。
 
@@ -780,17 +777,15 @@ brain 返回 load_toolset
 
 **active tool 上限**：`HUMAN_MAX_ACTIVE_TOOLS = 30`（含 builtin / agent-control 工具）。新 toolset 超限时 **FIFO 淘汰**最早加载的 external toolset，写 tool 反馈说明 `evicted=…`。恢复当前格式快照时同样按当前注册表和上限收敛，只有发生淘汰才持久化新的工具包快照；说明 Skill 不参与此预算。
 
-| 结果                  | log                            | brain                                        |
-| --------------------- | ------------------------------ | -------------------------------------------- |
-| 新 toolset 加载成功     | `tool` + `toolset_state_updated` | 下轮 bindTools 含新工具；**不改** build user |
-| 重复 / unknown / 超限 | 仅 `tool`                      | 工具包集合不变                                   |
-| 审批 / 取消           | 按 hand 规则                   | —                                            |
+| 结果                  | log                              | brain                                        |
+| --------------------- | -------------------------------- | -------------------------------------------- |
+| 新 toolset 加载成功   | `tool` + `toolset_state_updated` | 下轮 bindTools 含新工具；**不改** build user |
+| 重复 / unknown / 超限 | 仅 `tool`                        | 工具包集合不变                               |
+| 审批 / 取消           | 按 hand 规则                     | —                                            |
 
 #### 用户共享说明技能
 
 `load_toolset({ toolsetNames: string[] })` 只加载预注册工具包；`load_skill({ skillNames: string[] })` 只加载当前伙伴启用的用户说明。`user:<uuid>` 不进入 `RuntimeToolsetId`、tool registry 或工具预算，两类加载请求不能互换参数。模型按名称选择用户说明，内部稳定 ID 用于绑定、编辑、重命名与恢复。技能目录只列当前伙伴启用项，按名称排序，仅含名称与适用场景。
-
-
 
 - `load_skill` 经 `skill_loading` 节点调用 `UserSkillService.loadEnabled`，校验当前伙伴绑定与文件安全，读取正文及 `resourceBase`；运行态单独保存 `skills.loadedSkillIds`。正文 UTF-8 合计上限为 64 KiB，在伙伴配置和共享资产修改时预检；运行时超限明确报错，不进行遗忘或静默舍弃。
 - `load_skill` 的持久化 tool 反馈只保存技能名称、加载结果及失败原因，不保存正文或内部 ID。正文和资源基址由下一次 budget / brain 前重建的唯一当前 System 说明区提供；这不是历史 ToolMessage 正文返回。内容仅是用户任务指导，不改变系统规则、审批或资源权限，不自动执行脚本、安装依赖或注册工具。
@@ -822,7 +817,6 @@ brain 返回 update_plan
 - 始终包含全部 `builtin` toolset（`terminal`、`text-file`、`kb-retrieval`、`web-browsing`、`agent-control`）的全部 tool；
 - 加上 `state.toolsets.loadedToolsetIds` 对应 external toolset 的全部 tool；
 - 受 active tool 上限约束（第 7.2 节）；用户说明技能不参与 bindTools。
-
 
 ## 8. 交付与失败
 
@@ -868,16 +862,16 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 #### 失败码（互斥）
 
-| `failure_code`        | 短标题（气泡 / toast）                       | `rawMessage`     | 说明                                                 |
-| --------------------- | -------------------------------------------- | ---------------- | ---------------------------------------------------- |
-| `user_cancelled`      | 已取消                                       | 可空             | 用户停止；事件为 `run_cancelled`                     |
-| `process_interrupted` | 任务已中断，可继续对话推进                   | 可空             | 进程/重启打断                                        |
-| `llm_request_failed`  | 模型请求失败                                 | **必留原文**     | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案 |
-| `output_truncated`    | 模型输出达到长度限制，可发送「继续」接着完成 | 可选             | `finish_reason=length`                               |
+| `failure_code`        | 短标题（气泡 / toast）                       | `rawMessage`     | 说明                                                  |
+| --------------------- | -------------------------------------------- | ---------------- | ----------------------------------------------------- |
+| `user_cancelled`      | 已取消                                       | 可空             | 用户停止；事件为 `run_cancelled`                      |
+| `process_interrupted` | 任务已中断，可继续对话推进                   | 可空             | 进程/重启打断                                         |
+| `llm_request_failed`  | 模型请求失败                                 | **必留原文**     | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案  |
+| `output_truncated`    | 模型输出达到长度限制，可发送「继续」接着完成 | 可选             | `finish_reason=length`                                |
 | `input_too_long`      | 当前输入超过模型上下文限制，请缩短后重试     | 可空             | 当前 user alone 超窗；不调 brain，日志边界见第 6.5 节 |
-| `runtime_limit`       | 已达到运行上限，可继续对话推进               | 可空             | 图递归上限                                           |
-| `internal_error`      | 运行遇到内部错误                             | **必留 detail**  | 主动断言（如 compaction bookmark `undefined`）       |
-| `unexpected_error`    | 运行失败，请重试                             | **必留**异常原文 | 未知兜底                                             |
+| `runtime_limit`       | 已达到运行上限，可继续对话推进               | 可空             | 图递归上限                                            |
+| `internal_error`      | 运行遇到内部错误                             | **必留 detail**  | 主动断言（如 compaction bookmark `undefined`）        |
+| `unexpected_error`    | 运行失败，请重试                             | **必留**异常原文 | 未知兜底                                              |
 
 落库：真正失败时 `ai_run.error` = 短标题，`ai_run.failure_raw_message` = 原文；UI：气泡「失败：{title}」+「查看详情」展开 `rawMessage`（及 HTTP / providerCode）。`user_cancelled` 只保留 `cancelled` 状态和 `failure_code`，不写 `error`、不合成 `final_answer`，UI 不生成失败气泡或「已取消」正文；已有 answer 片段与 `ai_file_change` 保留。
 
@@ -916,12 +910,12 @@ classifyLlmRetry（llmRetry.ts）驱动 runLlmCallWithActivity，以 HTTP、prov
 
 ### 8.5 与存储的关系
 
-| 数据                          | run 失败后                                        |
-| ----------------------------- | ------------------------------------------------- |
-| `chat_session_message_log`    | append-only，已写行保留                           |
-| `ai_file_change`（`applied`） | 保留，Workbench 可预览/回退                       |
-| `ai_run.partial_answer`       | 仅 UI 草稿，丢弃不参与恢复                        |
-| 文件会话与审核 | 失败或取消仍触发主运行收尾；版本保留与恢复约束见存储设计 |
+| 数据                          | run 失败后                                               |
+| ----------------------------- | -------------------------------------------------------- |
+| `chat_session_message_log`    | append-only，已写行保留                                  |
+| `ai_file_change`（`applied`） | 保留，Workbench 可预览/回退                              |
+| `ai_run.partial_answer`       | 仅 UI 草稿，丢弃不参与恢复                               |
+| 文件会话与审核                | 失败或取消仍触发主运行收尾；版本保留与恢复约束见存储设计 |
 
 ---
 

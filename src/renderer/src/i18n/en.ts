@@ -1,5 +1,8 @@
 export const en = {
   userSkills: {
+    contentChanged:
+      'This skill was updated. Your draft is preserved; reopen to view the latest content.',
+    selectionChanged: 'Skills were updated. Your unsaved selections are preserved.',
     importConfirm: 'Import',
     selectionSummary: '{{count}} selected',
     selectionHelp: 'Configure the skills available to this partner.',
@@ -439,6 +442,7 @@ export const en = {
     userHelp: 'User help'
   },
   workbench: {
+    loadingPartiallyFailed: 'Partially failed',
     noEffectiveFileChange: 'No file content changes were detected.',
     next: 'Next',
     sendGuidance: 'Send guidance',
@@ -1076,6 +1080,13 @@ export const en = {
     excelPreviewFailed2: 'Excel preview failed:'
   },
   system: {
+    loadName: 'Load {{value1}}',
+    readSkill: 'Read skill',
+    createSkillName: 'Create {{value1}}',
+    updateSkillName: 'Update {{value1}}',
+    enableSkillName: 'Enable {{value1}}',
+    disableSkillName: 'Disable {{value1}}',
+    skillManagement: 'Skill management',
     loadingSkill: 'Loading skill',
     loadedSkill: 'Loaded skill',
     failedToLoadSkill: 'Skill loading failed',

@@ -329,6 +329,11 @@ const api: DesktopApi = {
   confirmDialogClose: (dialogId) => ipcRenderer.invoke('confirm-dialog-close', dialogId),
   partnerMessageList: (partnerId: string) => ipcRenderer.invoke('chat-message-list', partnerId),
   userSkillsList: () => ipcRenderer.invoke('user-skills-list'),
+  onUserSkillsChanged: (callback) => {
+    const handler = (): void => callback()
+    ipcRenderer.on('user-skills-changed', handler)
+    return () => ipcRenderer.removeListener('user-skills-changed', handler)
+  },
   userSkillsImport: () => ipcRenderer.invoke('user-skills-import'),
   userSkillsCommitImport: (input) => ipcRenderer.invoke('user-skills-commit-import', input),
   userSkillsCancelImport: (token) => ipcRenderer.invoke('user-skills-cancel-import', token),

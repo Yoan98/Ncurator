@@ -1,4 +1,5 @@
 import { MAX_USER_SKILL_BODY_BYTES } from '../../../../../../shared/userSkills'
+import { getToolDisplayInput } from '../../../../../../shared/assistantToolCopy'
 import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { loadCurrentUserSkills, type LoadedUserSkill } from '../../userSkills'
@@ -86,7 +87,8 @@ export const createSkillLoadingNode = (input: { ctx: AiRunContext; cache: HumanR
       toolCallId: action.toolCallId,
       toolName: 'load_skill',
       ok,
-      content
+      content,
+      displayInput: getToolDisplayInput('load_skill', { skillNames: requestedSkillNames }, outcome)
     })
     await input.ctx.appendMessageLog([
       ...newlyLoaded.map(({ skill }) => ({
@@ -111,7 +113,7 @@ export const createSkillLoadingNode = (input: { ctx: AiRunContext; cache: HumanR
       toolName: 'load_skill',
       result: ok
         ? { toolName: 'load_skill', ok: true, data: outcome }
-        : { toolName: 'load_skill', ok: false, data: { error: content } },
+        : { toolName: 'load_skill', ok: false, data: { ...outcome, error: content } },
       stage: 'human_skill_loading'
     })
     return returnToBrainAfterTrace({

@@ -80,6 +80,12 @@ const readRegularFile = (filename: string, limit = Infinity): Buffer => {
 
 type PendingImport = { stage: string; owner: number; expiresAt: number }
 
+export type SkillDirectoryEdit = { id?: string; sourcePath?: string; enabled?: boolean }
+export type SkillManagementRead =
+  | { skills: Array<{ id: string; name: string; description: string; enabled: boolean }> }
+  | { id: string; path: string; content: string; enabled: boolean }
+type SkillBinding = { partnerId: string; skillIds: string[] }
+
 const markdownParts = (content: string) => {
   const parsed = parseSkillMarkdown(content)
   const match = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content)!
@@ -117,7 +123,8 @@ export class UserSkillService {
 
   public constructor(
     private readonly store: UserSkillStore,
-    root = path.join(getUserDataPath(), 'skills')
+    root = path.join(getUserDataPath(), 'skills'),
+    private readonly onChanged: () => void = () => undefined
   ) {
     this.root = path.resolve(root)
   }
@@ -166,6 +173,74 @@ export class UserSkillService {
     if (!skill) throw new Error('Skill not found')
     const parsed = parseSkillMarkdown(this.content(skill))
     return { ...skill, ...parsed, resources: this.resources(this.directory(skill)) }
+  }
+
+  private changed(): void {
+    // Renderer observers run after the enclosing synchronous database transaction.
+    queueMicrotask(() => {
+      try {
+        this.onChanged()
+      } catch (error) {
+        console.error('[APP-ERROR] Skill change notification failed', error)
+      }
+    })
+  }
+
+  public readForPartner(partnerId: string, id?: string): SkillManagementRead {
+    const enabled = new Set(this.listEnabled(partnerId).map((skill) => skill.id))
+    if (!id) {
+      return {
+        skills: this.list().map(({ id, name, description }) => ({
+          id,
+          name,
+          description,
+          enabled: enabled.has(id)
+        }))
+      }
+    }
+    const skill = this.store.get(id)
+    if (!skill) throw new Error('Skill not found')
+    return {
+      id,
+      path: this.resourceDirectory({ id }),
+      content: this.content(skill),
+      enabled: enabled.has(id)
+    }
+  }
+
+  public editForPartner(
+    partnerId: string,
+    input: SkillDirectoryEdit
+  ): { id: string; name: string } {
+    this.store.partnerName(partnerId)
+    if (
+      (!input.id && !input.sourcePath) ||
+      (input.id && !input.sourcePath && input.enabled === undefined)
+    )
+      throw new Error(
+        'Provide a sourcePath to create, or an id with sourcePath or enabled to update'
+      )
+    const existing = input.id ? this.store.get(input.id) : undefined
+    if (input.id && !existing) throw new Error('Skill not found')
+    if (!input.sourcePath && existing) {
+      const selection = this.binding(partnerId, existing.id, input.enabled!)
+      this.setEnabled(partnerId, selection.skillIds)
+      return { id: existing.id, name: existing.name }
+    }
+    const stage = this.copyFolder(input.sourcePath!, true)
+    try {
+      const skill = this.publish(stage, existing, { partnerId, enabled: input.enabled })
+      return { id: skill.id, name: skill.name }
+    } finally {
+      fs.rmSync(stage, { recursive: true, force: true })
+    }
+  }
+
+  private binding(partnerId: string, id: string, enabled: boolean): SkillBinding {
+    const ids = this.listEnabled(partnerId)
+      .map((skill) => skill.id)
+      .filter((value) => value !== id)
+    return { partnerId, skillIds: enabled ? [...ids, id] : ids }
   }
 
   private resources(directory: string): string[] {
@@ -308,16 +383,30 @@ export class UserSkillService {
         throw new Error(`Skill instructions exceed 64 KiB (${bytes} bytes)`)
     }
     this.store.setEnabled(partnerId, ids)
+    this.changed()
   }
 
-  private checkBoundBudgets(id: string, body: string): void {
+  private checkBoundBudgets(id: string, body: string, binding?: SkillBinding): void {
     const affected: string[] = []
-    for (const partner of this.store.listBoundPartners(id)) {
-      const bytes = this.listEnabled(partner.id).reduce(
-        (sum, skill) =>
-          sum + Buffer.byteLength(skill.id === id ? body : this.read(skill).body, 'utf8'),
-        0
-      )
+    const partners = new Map(
+      this.store.listBoundPartners(id).map((partner) => [partner.id, partner])
+    )
+    if (binding)
+      partners.set(binding.partnerId, {
+        id: binding.partnerId,
+        name: this.store.partnerName(binding.partnerId)
+      })
+    for (const partner of partners.values()) {
+      const ids =
+        binding?.partnerId === partner.id
+          ? binding.skillIds
+          : this.listEnabled(partner.id).map((skill) => skill.id)
+      if (!ids.includes(id)) continue
+      const bytes = ids.reduce((sum, skillId) => {
+        const skill = skillId === id ? undefined : this.store.get(skillId)
+        if (skillId !== id && !skill) throw new Error('Skill not found')
+        return sum + Buffer.byteLength(skillId === id ? body : this.read(skill!).body, 'utf8')
+      }, 0)
       if (bytes > MAX_USER_SKILL_BODY_BYTES) affected.push(partner.name)
     }
     if (affected.length)
@@ -332,12 +421,15 @@ export class UserSkillService {
       throw new Error('A skill with this name already exists; no files were overwritten')
   }
 
-  private publish(stage: string, existing?: UserSkill): UserSkill {
+  private publish(
+    stage: string,
+    existing?: UserSkill,
+    configure?: { partnerId: string; enabled?: boolean }
+  ): UserSkill {
     const parsed = parseSkillMarkdown(
       readRegularFile(path.join(stage, 'SKILL.md')).toString('utf8')
     )
     this.assertNameAvailable(parsed.name, existing)
-    if (existing) this.checkBoundBudgets(existing.id, parsed.body)
     const skill: UserSkill = {
       id: existing?.id ?? `user:${randomUUID()}`,
       name: parsed.name,
@@ -345,6 +437,11 @@ export class UserSkillService {
       directoryName: parsed.name,
       createdAt: existing?.createdAt ?? Date.now()
     }
+    const selection =
+      configure?.enabled !== undefined
+        ? this.binding(configure.partnerId, skill.id, configure.enabled)
+        : undefined
+    this.checkBoundBudgets(skill.id, parsed.body, selection)
     const destination = path.join(this.root, skill.directoryName)
     const oldDirectory = existing ? this.directory(existing) : undefined
     const backup = existing ? fs.mkdtempSync(path.join(this.root, '.replace-')) : undefined
@@ -359,8 +456,11 @@ export class UserSkillService {
       }
       fs.renameSync(stage, destination)
       newMoved = true
-      if (existing) this.store.update(skill)
-      else this.store.insert(skill)
+      this.store.transaction(() => {
+        if (existing) this.store.update(skill)
+        else this.store.insert(skill)
+        if (selection) this.store.setEnabled(selection.partnerId, selection.skillIds)
+      })
       committed = true
     } catch (error) {
       if (newMoved) fs.renameSync(destination, stage)
@@ -371,6 +471,7 @@ export class UserSkillService {
       if (backup && (!previous || !fs.existsSync(previous) || committed))
         fs.rmSync(backup, { recursive: true, force: true })
     }
+    this.changed()
     return skill
   }
 
@@ -393,7 +494,7 @@ export class UserSkillService {
     const parsed = parseSkillMarkdown(content)
     this.assertNameAvailable(parsed.name, skill)
     this.checkBoundBudgets(skill.id, parsed.body)
-    const stage = this.copyFolder(this.directory(skill))
+    const stage = this.copyFolder(this.directory(skill), false)
     try {
       const filename = path.join(stage, 'SKILL.md')
       const mode = fs.statSync(filename).mode & 0o777
@@ -406,7 +507,7 @@ export class UserSkillService {
     }
   }
 
-  private copyFolder(source: string): string {
+  private copyFolder(source: string, externalOnly = true): string {
     if (typeof source !== 'string' || !path.isAbsolute(source))
       throw new Error('Choose an absolute skill folder path')
     const sourceRoot = path.resolve(source)
@@ -415,7 +516,11 @@ export class UserSkillService {
     const canonicalSource = fs.realpathSync(sourceRoot)
     this.ensureRoot()
     const managedRoot = fs.realpathSync(this.root)
-    if (managedRoot === canonicalSource || managedRoot.startsWith(canonicalSource + path.sep))
+    if (
+      managedRoot === canonicalSource ||
+      managedRoot.startsWith(canonicalSource + path.sep) ||
+      (externalOnly && canonicalSource.startsWith(managedRoot + path.sep))
+    )
       throw new Error('Cannot import a folder containing managed skill storage')
     const stage = fs.mkdtempSync(path.join(this.root, '.import-'))
     let count = 0
@@ -522,6 +627,7 @@ export class UserSkillService {
     const directory = path.join(this.root, skill.directoryName)
     if (!fs.existsSync(directory)) {
       this.store.delete(id)
+      this.changed()
       return
     }
     this.directory(skill)
@@ -539,5 +645,6 @@ export class UserSkillService {
       if (!this.store.get(id) || !fs.existsSync(moved))
         fs.rmSync(discarded, { recursive: true, force: true })
     }
+    this.changed()
   }
 }

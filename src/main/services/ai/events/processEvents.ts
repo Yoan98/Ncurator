@@ -118,21 +118,27 @@ export const emitToolProcessCompleted = (input: {
   toolName: string
   ok: boolean
   error?: string
+  displayInput?: IpcJsonObject
   completedAt?: number
 }): void => {
   const groupId = getToolProcessGroupId(input.runId, input.toolCallId)
+  const display: AssistantProcessDisplay | undefined = input.displayInput
+    ? { kind: 'tool', toolName: input.toolName, input: input.displayInput }
+    : undefined
   if (input.ok) {
     input.sendEvent({
       type: 'assistant_process_item_completed',
       runId: input.runId,
       groupId,
       itemId: input.toolCallId,
+      display,
       completedAt: input.completedAt || Date.now()
     })
     input.sendEvent({
       type: 'assistant_process_group_completed',
       runId: input.runId,
       groupId,
+      display,
       completedAt: input.completedAt || Date.now()
     })
     return
@@ -142,6 +148,7 @@ export const emitToolProcessCompleted = (input: {
     runId: input.runId,
     groupId,
     itemId: input.toolCallId,
+    display,
     error: input.error,
     failedAt: input.completedAt || Date.now()
   })
@@ -149,6 +156,7 @@ export const emitToolProcessCompleted = (input: {
     type: 'assistant_process_group_failed',
     runId: input.runId,
     groupId,
+    display,
     error: input.error,
     failedAt: input.completedAt || Date.now()
   })

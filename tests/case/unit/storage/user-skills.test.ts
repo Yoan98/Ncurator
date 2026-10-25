@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteCore'
 import { PartnerStore } from '../../../../src/main/services/storage/domains/PartnerStore'
 import { UserSkillStore } from '../../../../src/main/services/storage/domains/UserSkillStore'
@@ -39,6 +39,136 @@ afterEach(() => {
 })
 
 describe('shared user Skill files and partner bindings', () => {
+  it('publishes complete snapshots and configures only the current partner without executing scripts', async () => {
+    const changed = vi.fn()
+    service = new UserSkillService(store, path.join(root, 'skills'), changed)
+    const source = path.join(root, 'draft')
+    fs.mkdirSync(path.join(source, 'scripts'), { recursive: true })
+    fs.writeFileSync(path.join(source, 'SKILL.md'), markdown())
+    const script = path.join(source, 'scripts', 'run.sh')
+    fs.writeFileSync(script, `#!/bin/sh\ntouch '${path.join(root, 'unexpected-execution')}'\n`, {
+      mode: 0o751
+    })
+    const other = service.create({ name: 'other', description: 'Other', body: 'Keep' })
+    service.setEnabled('alice', [other.id])
+    const skill = service.editForPartner('alice', { sourcePath: source, enabled: true })
+    expect(service.listEnabled('alice').map((item) => item.id)).toEqual(
+      expect.arrayContaining([other.id, skill.id])
+    )
+    expect(service.listEnabled('bob')).toEqual([])
+    const detail = service.readForPartner('alice', skill.id)
+    expect(detail).toMatchObject({ id: skill.id, enabled: true, content: markdown() })
+    expect(fs.existsSync(path.join(root, 'unexpected-execution'))).toBe(false)
+    if (process.platform !== 'win32')
+      expect(
+        fs.statSync(path.join(root, 'skills', 'example', 'scripts', 'run.sh')).mode & 0o777
+      ).toBe(0o751)
+    service.setEnabled('bob', [skill.id])
+    fs.writeFileSync(path.join(source, 'SKILL.md'), markdown('renamed', 'New body'))
+    fs.rmSync(script)
+    expect(
+      service.editForPartner('alice', { id: skill.id, sourcePath: source, enabled: false })
+    ).toEqual({ id: skill.id, name: 'renamed' })
+    expect(service.listEnabled('alice').map((item) => item.id)).toEqual([other.id])
+    expect(service.listEnabled('bob').map((item) => item.id)).toEqual([skill.id])
+    expect(service.getDocument(skill.id).resources).toEqual([])
+    expect(service.readForPartner('bob', skill.id)).toMatchObject({
+      content: markdown('renamed', 'New body'),
+      enabled: true
+    })
+    expect(() =>
+      service.editForPartner('alice', { sourcePath: path.join(root, 'skills', 'renamed') })
+    ).toThrow(/managed/)
+    fs.rmSync(source, { recursive: true })
+    expect(service.getDocument(skill.id).body).toContain('New body')
+    await Promise.resolve()
+    expect(changed).toHaveBeenCalled()
+  })
+
+  it('validates final bindings and rolls back directory, metadata and selection on database failure', async () => {
+    const source = path.join(root, 'draft')
+    fs.mkdirSync(source)
+    fs.writeFileSync(path.join(source, 'SKILL.md'), markdown('target', 'x'.repeat(40 * 1024)))
+    const target = service.editForPartner('alice', { sourcePath: source, enabled: true })
+    const other = service.create({
+      name: 'other',
+      description: 'Other',
+      body: 'x'.repeat(20 * 1024)
+    })
+    service.setEnabled('alice', [target.id, other.id])
+    service.setEnabled('bob', [target.id, other.id])
+    fs.writeFileSync(path.join(source, 'SKILL.md'), markdown('target', 'x'.repeat(50 * 1024)))
+    expect(() => service.editForPartner('alice', { id: target.id, sourcePath: source })).toThrow(
+      /64 KiB/
+    )
+    expect(() =>
+      service.editForPartner('alice', { id: target.id, sourcePath: source, enabled: false })
+    ).toThrow(/bob/)
+    service.setEnabled('bob', [target.id])
+    // The changed body is no longer bound in the final state, so it must be allowed.
+    service.editForPartner('alice', { id: target.id, sourcePath: source, enabled: false })
+    expect(service.listEnabled('alice').map((item) => item.id)).toEqual([other.id])
+    expect(service.listEnabled('bob').map((item) => item.id)).toEqual([target.id])
+  })
+
+  it('restores all persistent state and sends no notification when binding persistence fails', async () => {
+    const notify = vi.fn()
+    service = new UserSkillService(store, path.join(root, 'skills'), notify)
+    const source = path.join(root, 'draft')
+    fs.mkdirSync(source)
+    fs.writeFileSync(path.join(source, 'SKILL.md'), markdown())
+    const original = service.editForPartner('alice', { sourcePath: source })
+    await Promise.resolve()
+    notify.mockClear()
+    fs.writeFileSync(path.join(source, 'SKILL.md'), markdown('renamed', 'Updated'))
+    const write = vi.spyOn(store, 'setEnabled').mockImplementation(() => {
+      throw new Error('database failure')
+    })
+    expect(() =>
+      service.editForPartner('alice', { id: original.id, sourcePath: source, enabled: true })
+    ).toThrow(/database failure/)
+    expect(service.getDocument(original.id)).toMatchObject({
+      name: 'example',
+      body: expect.stringContaining('Read references')
+    })
+    expect(service.listEnabled('alice')).toEqual([])
+    expect(fs.existsSync(path.join(root, 'skills', 'renamed'))).toBe(false)
+    expect(() => service.editForPartner('alice', { sourcePath: source, enabled: true })).toThrow(
+      /database failure/
+    )
+    expect(service.list()).toHaveLength(1)
+    await Promise.resolve()
+    expect(notify).not.toHaveBeenCalled()
+    write.mockRestore()
+  })
+  it('restores the previous directory and bindings when publishing the new directory fails', () => {
+    const original = service.create(parseSkillMarkdown(markdown()))
+    service.setEnabled('bob', [original.id])
+    const source = path.join(root, 'draft')
+    fs.mkdirSync(source)
+    fs.writeFileSync(path.join(source, 'SKILL.md'), markdown('renamed', 'Changed'))
+    const rename = fs.renameSync
+    const publish = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      if (String(to) === path.join(root, 'skills', 'renamed')) throw new Error('publish failure')
+      rename(from, to)
+    })
+    try {
+      expect(() =>
+        service.editForPartner('alice', {
+          id: original.id,
+          sourcePath: source,
+          enabled: true
+        })
+      ).toThrow('publish failure')
+    } finally {
+      publish.mockRestore()
+    }
+    expect(service.getDocument(original.id).name).toBe('example')
+    expect(service.listEnabled('alice')).toEqual([])
+    expect(service.listEnabled('bob')).toEqual([original])
+    expect(fs.readdirSync(path.join(root, 'skills'))).toEqual(['example'])
+  })
+
   it('creates a standard Skill, stores metadata only, and requires a partner binding', () => {
     const skill = service.create(parseSkillMarkdown(markdown()))
     expect(skill.id).toMatch(/^user:/)

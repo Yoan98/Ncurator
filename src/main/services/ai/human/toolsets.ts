@@ -111,6 +111,13 @@ export const RUNTIME_TOOLSET_CATALOG = {
     title: 'agent-control',
     description: '管理任务推进：加载工具组和用户技能说明、维护计划，并加载图片到主模型上下文。'
   },
+  'skill-management': {
+    familyId: 'skill-management',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: 'skill 管理',
+    description: '读取、创建和更新共享 skill 目录，并配置当前伙伴的启用状态。'
+  },
   'scheduled-tasks': {
     familyId: 'scheduled-tasks',
     source: 'external',

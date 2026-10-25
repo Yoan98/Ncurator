@@ -1,4 +1,4 @@
-import type { IpcJsonObject, IpcJsonValue, RuntimeToolsetId } from './types'
+import type { IpcJsonObject, IpcJsonValue, RuntimeToolsetId, JsonValue, JsonObject } from './types'
 import { getRuntimeToolsetDisplayName, type RuntimeToolName } from './runtimeCapabilities'
 import type {
   AssistantExecutionStatus,
@@ -102,17 +102,13 @@ const readDocxRangeLabel = (input?: IpcJsonObject): string => {
   return '内容'
 }
 
-const getToolsetDisplayName = (toolsetId?: RuntimeToolsetId): string => {
-  return toolsetId ? getRuntimeToolsetDisplayName(toolsetId) || '新能力' : '新能力'
-}
-
 const readLoadToolsetNames = (input?: IpcJsonObject): string => {
   if (!input) return '新能力'
   const raw = (input as Record<string, IpcJsonValue>).toolsetNames
   if (!Array.isArray(raw)) return '新能力'
   const names = raw
     .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-    .map((toolsetId) => getToolsetDisplayName(toolsetId as RuntimeToolsetId))
+    .map((toolsetId) => getRuntimeToolsetDisplayName(toolsetId as RuntimeToolsetId) || toolsetId)
   return names.length > 0 ? names.join('、') : '新能力'
 }
 
@@ -131,7 +127,61 @@ const toolCopy = (headerShort: string, detail: AssistantExecutionTextSegment[]):
   detail
 })
 
-const TOOL_ITEM_RENDERERS = {
+/** UI-only projection input; never changes model arguments or includes document bodies. */
+export const getToolDisplayInput = (
+  toolName: string,
+  args: IpcJsonObject,
+  data?: JsonValue
+): JsonObject | undefined => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined
+  if (toolName === 'skill_edit' && typeof data.name === 'string')
+    return { ...args, displayName: data.name }
+  if (toolName === 'load_skill' && Array.isArray(data.requestedSkillNames))
+    return {
+      ...args,
+      skillNames: data.requestedSkillNames,
+      loadingFailures: data.unavailableSkills || [],
+      loadingSuccessfulNames: [
+        ...(Array.isArray(data.loadedSkillNames) ? data.loadedSkillNames : []),
+        ...(Array.isArray(data.skippedDuplicateSkillNames) ? data.skippedDuplicateSkillNames : [])
+      ]
+    }
+  if (toolName === 'load_toolset' && Array.isArray(data.toolsetNames))
+    return {
+      ...args,
+      toolsetNames: data.toolsetNames,
+      loadingFailures: data.loadingFailures || [],
+      loadingSuccessfulNames: data.loadingSuccessfulNames || []
+    }
+  return undefined
+}
+
+export const getToolDisplayStatus = (
+  input: IpcJsonObject | undefined,
+  fallback: AssistantExecutionStatus
+): AssistantExecutionStatus => {
+  const failures = input && 'loadingFailures' in input ? input.loadingFailures : undefined
+  const success =
+    input && 'loadingSuccessfulNames' in input ? input.loadingSuccessfulNames : undefined
+  return fallback !== 'running' && Array.isArray(failures) && failures.length
+    ? Array.isArray(success) && success.length
+      ? 'partial_failed'
+      : 'failed'
+    : fallback
+}
+
+const loadingCopy = (name: string, input?: IpcJsonObject): ToolItemCopy => {
+  const failures = input && 'loadingFailures' in input ? input.loadingFailures : undefined
+  const detail = sentence(text(`加载 ${name}`))
+  if (Array.isArray(failures))
+    for (const failure of failures) {
+      if (failure && typeof failure === 'object' && !Array.isArray(failure))
+        detail.push(text(`\n${String(failure.name || '')}：${String(failure.error || '加载失败')}`))
+    }
+  return toolCopy(`加载 ${name}`, detail)
+}
+
+const TOOL_ITEM_RENDERERS: Record<RuntimeToolName, ToolItemRenderer> = {
   terminal_run: (input) =>
     toolCopy('执行命令', sentence(text('执行命令 '), param(readCommandLabel(input)))),
   terminal_read: (input) =>
@@ -277,46 +327,33 @@ const TOOL_ITEM_RENDERERS = {
   ask_user_question: () => toolCopy('询问用户', sentence(text('等待用户确认关键信息'))),
   image_generate: (input) =>
     toolCopy('生成图片', sentence(text('生成图片 '), param(readToolFileLabel(input)))),
-  load_skill: (input, status) => {
+  load_skill: (input) => {
     const names = input && 'skillNames' in input ? input.skillNames : undefined
     const label = Array.isArray(names)
       ? names.filter((name): name is string => typeof name === 'string').join('、')
       : ''
-    const action =
-      status === 'running' ? '正在加载' : status === 'completed' ? '已加载' : '加载失败'
-    return toolCopy(`${action}技能`, sentence(text(`${action}技能 ${label}`.trim())))
+    return loadingCopy(label || 'skill', input)
   },
-  load_toolset: (input, status) => {
-    const toolsetName = readLoadToolsetNames(input)
-    if (status === 'running') {
-      return toolCopy(
-        `正在加载工具组 ${toolsetName}`,
-        sentence(text('正在加载工具组 '), text(toolsetName))
-      )
-    }
-    if (status === 'completed') {
-      return toolCopy(
-        `已加载工具组 ${toolsetName}`,
-        sentence(text('已加载工具组 '), text(toolsetName))
-      )
-    }
-    if (status === 'partial_failed') {
-      return toolCopy(
-        `加载工具组 ${toolsetName} 有部分失败`,
-        sentence(text('加载工具组 '), text(toolsetName), text(' 有部分失败'))
-      )
-    }
-    return toolCopy(
-      `加载工具组 ${toolsetName} 失败了`,
-      sentence(text('加载工具组 '), text(toolsetName), text(' 失败了'))
-    )
+  load_toolset: (input) => loadingCopy(readLoadToolsetNames(input), input),
+  skill_read: () => toolCopy('读取 skill', sentence(text('读取 skill'))),
+  skill_edit: (input) => {
+    const data = input as Record<string, IpcJsonValue> | undefined
+    const action = data?.sourcePath
+      ? data.id
+        ? '更新'
+        : '创建'
+      : data?.enabled === false
+        ? '停用'
+        : '启用'
+    const name = typeof data?.displayName === 'string' ? data.displayName : 'skill'
+    return toolCopy(`${action} ${name}`, sentence(text(`${action} ${name}`)))
   },
   list_agent: () => toolCopy('查看子任务', sentence(text('查看子任务'))),
   delegate_to_subagent: () => toolCopy('分头处理', sentence(text('分头处理'))),
   update_plan: () => toolCopy('更新任务计划', sentence(text('更新任务计划'))),
   scheduled_task_list: () => toolCopy('查看定时任务', sentence(text('查看当前伙伴的定时任务'))),
   scheduled_task_action: () => toolCopy('操作定时任务', sentence(text('操作定时任务')))
-} satisfies Record<RuntimeToolName, ToolItemRenderer>
+}
 
 export const getAssistantToolItemCopy = (
   toolName: RuntimeToolName | 'unnamed',

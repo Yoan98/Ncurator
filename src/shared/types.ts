@@ -2305,6 +2305,8 @@ export type ChatMessageLogEntry =
       toolName: string
       ok: boolean
       content: string
+      /** UI projection only, excluded from model arguments and transcript content. */
+      displayInput?: JsonObject
       error?: string
       images?: ChatMessageImageRef[]
     }

@@ -15,6 +15,7 @@ export type AssistantExecutionIconKind =
   | 'edit'
   | 'retry'
   | 'toolset_loading'
+  | 'skill_loading'
   | 'compaction'
   | 'eye'
   | 'camera'
@@ -43,6 +44,7 @@ export type AssistantExecutionToolsetKey =
   | 'image-generation'
   | 'image-read'
   | 'toolset_loading'
+  | 'skill_loading'
   | 'generic'
 
 export type AssistantExecutionTextSegment = {
@@ -110,7 +112,9 @@ const TOOL_UI_KINDS = {
   browser_use: 'browser',
   image_generate: 'image-generation',
   load_toolset: 'toolset_loading',
-  load_skill: 'generic',
+  load_skill: 'skill_loading',
+  skill_read: 'generic',
+  skill_edit: 'generic',
   update_plan: 'generic',
   read_image: 'image-read',
   list_agent: 'generic',
@@ -144,6 +148,7 @@ export const getAssistantToolIconKind = (
   if (toolsetKey === 'browser') return 'browser'
   if (toolsetKey === 'image-generation' || toolsetKey === 'image-read') return 'image'
   if (toolsetKey === 'toolset_loading') return 'toolset_loading'
+  if (toolsetKey === 'skill_loading') return 'skill_loading'
   if (toolsetKey === 'terminal') return 'terminal'
   return 'default'
 }
@@ -298,10 +303,18 @@ export const getAssistantToolSummaryText = (
   }
   if (toolsetKey === 'toolset_loading') {
     return statusText(status, {
-      running: '正在加载工具组',
-      completed: '已加载工具组',
-      partial_failed: '部分工具组加载失败',
-      failed: '工具组加载失败'
+      running: '加载工具包',
+      completed: '加载工具包',
+      partial_failed: '部分工具包加载失败',
+      failed: '工具包加载失败'
+    })
+  }
+  if (toolsetKey === 'skill_loading') {
+    return statusText(status, {
+      running: '加载 skill',
+      completed: '加载 skill',
+      partial_failed: '部分 skill 加载失败',
+      failed: 'skill 加载失败'
     })
   }
   return statusText(status, {

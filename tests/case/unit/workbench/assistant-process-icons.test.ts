@@ -1,4 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import type { IpcJsonObject } from '../../../../src/shared/types'
+import {
+  getAssistantToolItemCopy,
+  getToolDisplayInput,
+  getToolDisplayStatus
+} from '../../../../src/shared/assistantToolCopy'
 import {
   buildAssistantExecutionSummaryText,
   resolveAssistantExecutionIcon,
@@ -19,7 +25,7 @@ const createToolGroup = (
     runningText?: Array<{ text: string; param?: boolean }>
     failedText?: Array<{ text: string; param?: boolean }>
     headerShortText?: string
-    input?: Record<string, unknown>
+    input?: IpcJsonObject
   }
 ): AssistantExecutionGroup[] => [
   {
@@ -35,7 +41,7 @@ const createToolGroup = (
         runningText: options?.runningText || [{ text: `正在执行 ${toolName}` }],
         failedText: options?.failedText || [{ text: `${toolName} 失败` }],
         headerShortText: options?.headerShortText,
-        input: options?.input as any
+        input: options?.input
       }
     ]
   }
@@ -45,6 +51,40 @@ const createToolGroups = (toolNames: ToolName[]): AssistantExecutionGroup[] =>
   toolNames.flatMap((toolName, index) => createToolGroup(toolName, index + 1))
 
 describe('assistant process icons and activity summary', () => {
+  it('separates loading categories and preserves names, partial failures and resolved management names', () => {
+    const skill = getToolDisplayInput(
+      'load_skill',
+      {},
+      {
+        requestedSkillNames: ['weekly-report', 'missing'],
+        loadedSkillNames: ['weekly-report'],
+        skippedDuplicateSkillNames: [],
+        unavailableSkills: [{ name: 'missing', error: 'Unavailable' }]
+      }
+    )
+    expect(getToolDisplayStatus(skill, 'completed')).toBe('partial_failed')
+    expect(getAssistantToolItemCopy('load_skill', 'partial_failed', skill).headerShort).toBe(
+      '加载 weekly-report、missing'
+    )
+    expect(
+      getAssistantToolItemCopy('load_skill', 'partial_failed', skill)
+        .detail.map((item) => item.text)
+        .join('')
+    ).toContain('missing：Unavailable')
+    expect(resolveAssistantExecutionIcon(createToolGroup('load_skill'))).toBe('skill_loading')
+    expect(
+      getAssistantToolItemCopy('load_toolset', 'completed', { toolsetNames: ['skill-management'] })
+        .headerShort
+    ).toBe('加载 skill 管理')
+    const updated = getToolDisplayInput(
+      'skill_edit',
+      { id: 'stable', sourcePath: '/draft' },
+      { id: 'stable', name: 'weekly-report' }
+    )
+    expect(getAssistantToolItemCopy('skill_edit', 'completed', updated).headerShort).toBe(
+      '更新 weekly-report'
+    )
+  })
   it('uses semantic icons for single-tool activities', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('docx_read_outline'))).toBe('document')
     expect(resolveAssistantExecutionIcon(createToolGroup('docx_content_edit'))).toBe('edit')
@@ -60,8 +100,8 @@ describe('assistant process icons and activity summary', () => {
   it('joins up to three tool short texts with enumeration commas and drops param segments', () => {
     const groups = [
       ...createToolGroup('load_toolset', 1, {
-        completedText: [{ text: '已学会 ' }, { text: 'docx 阅读器' }],
-        headerShortText: '已学会 docx 阅读器'
+        completedText: [{ text: '加载 ' }, { text: 'docx 阅读器' }],
+        headerShortText: '加载 docx 阅读器'
       }),
       ...createToolGroup('terminal_run', 2, {
         completedText: [{ text: '执行命令 ' }, { text: 'find /tmp -name "*.docx"', param: true }],
@@ -71,7 +111,7 @@ describe('assistant process icons and activity summary', () => {
 
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe(
-      '已学会 docx 阅读器、执行命令'
+      '加载 docx 阅读器、执行命令'
     )
   })
 

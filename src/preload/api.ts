@@ -260,6 +260,7 @@ export type DesktopApi = {
   confirmDialogClose: (dialogId: string) => Promise<void>
   partnerMessageList: (partnerId: string) => Promise<ChatMessage[]>
   userSkillsList: () => Promise<UserSkillOption[]>
+  onUserSkillsChanged: (callback: () => void) => () => void
   userSkillsImport: () => Promise<UserSkillImportPreview | null>
   userSkillsCommitImport: (input: UserSkillImportCommitRequest) => Promise<UserSkill>
   userSkillsCancelImport: (token: string) => Promise<void>
