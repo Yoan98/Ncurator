@@ -393,7 +393,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：智能模式真实发送后，验证 run 用时、过程记录折叠、Thought / Activity 过程层渲染与最终 markdown 收口（过程流主 case）。
 - Why：重构后过程层是用户扫进度的主界面；需覆盖 Activity 折叠 header、展开平铺、加载/工具统一渲染，以及最终回答，而不是只断言“有过程块”。
-- How：真实文件地址内准备带唯一事实的文件；先创建伙伴；用户通过 UI 发送自然语言总结请求，并附带读取工作区内一个不存在文本文件的请求，使真实只读工具返回一次失败；run 运行期间检查已处理时间出现并递增，完成后检查固定用时、默认收起和最终回答可见；展开过程记录与全部 Activity 面板并采集 header / body 文案。
+- How：真实文件地址内准备带唯一事实的文件；先创建伙伴；用户通过 UI 发送自然语言总结请求，并附带读取工作区内一个不存在文本文件的请求，使真实只读工具返回一次失败；run 运行期间检查已处理时间出现并递增，完成后检查固定用时、默认收起和最终回答可见；通过界面点击展开过程记录与全部 Activity 面板，采集 header / body 文案；加载项采用“加载 + 名称”的统一文案。成功正文读取可由文本或 Word 读取工具完成，不限定模型必须选择文本工具；缺失文本读取仍验证真实失败。
 - Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；用户与 assistant 消息不展示头像，用户消息右对齐气泡，assistant 过程流/最终输出与 composer 内容 rail 对齐，最终 markdown 无独立背景卡片，对齐 `WB-COMPOSER-009-AC1`、`WB-COMPOSER-009-AC2`、`WB-COMPOSER-009-AC3`、`WB-COMPOSER-009-AC4`。运行中过程流可见；“让俺想想”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“让俺想想”，对齐 `WB-COMPOSER-003-AC3`。若本轮碰巧出现自动重试，仍不得与“让俺想想”同时出现；强制打出重试行、单行就地更新与 429 退避由 `llm-retry-process-row` 覆盖，对齐 `WB-COMPOSER-015`。决策层（Thought）短摘要可见且不暴露原始长推理，以正常正文色（#37352F）展示，运行中与完成后保持相同强调度，未超出单行时不展示折叠图标，超出单行时单行省略，hover 时展示展开图标且垂直居中于单行文本，展开后常驻浅灰卡片背景、折叠按钮居顶对齐第一行并在内部滚动，对齐 `WB-COMPOSER-003-AC5`、`WB-COMPOSER-009-AC10`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」），根据单一动作或混合工具精准呈现对应专属语义图标（询问用户使用困惑表情图标；浏览器打开/查看/操作/提取/截图/滚动/标签、网页抓取/搜索、图片读取/生成或工作流闪电图标；截取页面并读取图片的成对视觉动作统一呈现为照片图标，不退化为闪电；浏览器操作不产生审批卡片与展开行审核绿勾）；展开行为带对象的工具原句且不含冒号强调；若含 `read_image`：展开行含「读取图片」文案且按入参 `paths` 展示可点击缩略图（`workbench-read-image-thumb-*`），点击后打开与附件相同的 `ImageLightbox`；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`、`WB-BLOCKER-001-AC8`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用顿号 `、` 拼接（两侧无空格）；>3 类 summary 为「已完成 n 项」。若事件含 `load_toolset` / `load_skill`：展开行文案含“正在加载 / 已加载”，且不作为独立加载层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。文件名、query、命令、URL 和工具包或说明技能名不使用粗体或冒号强调，对齐 `WB-COMPOSER-009-AC7`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试行由 `llm-retry-process-row` 覆盖；`WB-COMPOSER-014-AC3` 的截断提示和半截回答上下文边界、`WB-COMPOSER-014-AC4` 的计划进度环交互没有专门 UI 断言，见自动化覆盖边界。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。仅切换伙伴或新建干净对话时不得凭空出现“正在 / 已检索知识库”，对齐 `WB-COMPOSER-009-AC12`。
 
 - Oracle：run 开始后过程内容出现前也显示「已处理」计时和分隔线，且运行至少 1 秒后用时递增；不足一分钟只显示秒数，不出现「0分钟」。完成后用时固定，且不足一分钟只显示秒数；运行中计时和 Thought 内容使用正常正文色；完成后「用时」文字及展开/收起箭头为中性灰色（#9B9A97），文字 13px、箭头 14px，Thought 保持正常正文色；Activity header 与展开面板内容保持灰色层级，已完成过程不整体降低透明度；过程默认收起。展开过程后 Thought / Activity 可见，再次收起不影响最终回答。对齐 `WB-COMPOSER-016-AC1` 至 `WB-COMPOSER-016-AC3`。
@@ -838,14 +838,14 @@ pnpm test:update:e2e
 - 测试类型：e2e / live；skills / live；knowledge none。
 - What：自然语言创建并启用、更新以及停用 skill 后的页面与配置闭环。
 - Why：AI 发布后的列表、资源、容量和过程呈现必须与真实持久化一致。
-- How：真实 UI 建立伙伴与模型配置，通过聊天要求创建含资源的规范并启用；到管理页打开正文、资源，再聊天更新并核对页面同步，最后停用并打开伙伴配置核对。观察扳手/厚书、颜色、名称及刷新后的历史；不写 IPC、伪造事件或模型结果。
-- Oracle：名称、正文、资源和启停与文件/绑定一致，容量刷新且未保存草稿不被覆盖；两类加载分别显示名称和规定图标颜色，历史与实时一致。对应 `WB-SKILL-002-AC1/AC2/AC4/AC5/AC6`；部分失败的状态分支由共享投影 Unit 与真实 backend 补充。
+- How：真实 UI 建立伙伴与模型配置，通过聊天要求创建含资源的规范并启用；到管理页打开正文、资源，再聊天更新并核对页面同步，最后停用并打开伙伴配置核对。以真实文本和工具事件核对连续动作合并为 Activity、收起/展开箭头与加载名称；单一类型显示对应扳手/厚书，混合为流程图标，刷新后历史一致；不写 IPC、伪造事件或模型结果。
+- Oracle：名称、正文、资源和启停与文件/绑定一致，容量刷新且未保存草稿不被覆盖；两类加载参与 Activity 合并，名称、箭头和单类/混合图标规则在历史与实时一致。对应 `WB-SKILL-002-AC1/AC2/AC4/AC5/AC6`；部分失败的状态分支由共享投影 Unit 与真实 backend 补充。
 
 权限、原子回滚、预算精确边界与损坏配置停用由 Unit 补充；缓存命中率由现有缓存专项验证。
 
 ## 6. 自动化覆盖边界
 
-- `WB-SKILL-002-AC3`：服务与工具层由 `skill-read-publish-and-current-partner-binding`、`user-skills` Unit 验证最终预算和回滚；`user-skill-partner-budget` 提供界面超限拒绝证据，AI 触发失败后的全部界面组合需人工验收。
+- `WB-SKILL-002-AC3`：服务与工具层由 `skill-sync-and-current-partner-binding`、`user-skills` Unit 验证最终预算和回滚；`user-skill-partner-budget` 提供界面超限拒绝证据，AI 触发失败后的全部界面组合需人工验收。
 
 - `WB-COMPOSER-001-AC6`：`reference-mention-keyboard` 自动检查空对话的长文本粘贴、连续换行后的末行可见、内部滚动、工具栏可见和清空后高度恢复；已有消息、窄窗口自动换行及附件组合仍做界面专项验收。
 - `WB-WPS-001-AC6/AC7`：真实 WPS 导航、多个实例和未保存内容保护需要已授权的 macOS／Windows 逐机验收；协议 Unit 不能替代真实选区证据。后续编辑通过原文、对象身份或单元格上下文定位，歧义时仅打开并说明，不使用未确认的旧坐标。

@@ -1,7 +1,3 @@
-import type { SkillManagementRead } from '../../../../skills/UserSkillService'
+import type { SkillStatus, SkillSyncResult } from '../../../../skills/UserSkillService'
 
-export type SkillReadOutput =
-  | SkillManagementRead
-  | { id: string; path: string; enabled: boolean }
-  | { filePath: string }
-export type SkillEditOutput = { id: string; name: string }
+export type SkillSyncOutput = SkillStatus[] | SkillSyncResult | { filePath: string }

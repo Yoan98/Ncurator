@@ -341,7 +341,7 @@ describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live runti
             {
               name: 'human-live-downloads-python-and-runs-temp-script',
               message:
-                'live human 应在 Python 不可用时自行下载可运行环境，用它在临时脚本目录（runtime_paths.scripts）执行临时脚本并得到正确结果。',
+                'live human 应在 Python 不可用时自行下载可运行环境，用它在临时脚本目录执行临时脚本并得到正确结果。',
               data: {
                 commands,
                 resultText,

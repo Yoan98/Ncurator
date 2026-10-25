@@ -76,14 +76,13 @@ describe('assistant process icons and activity summary', () => {
       getAssistantToolItemCopy('load_toolset', 'completed', { toolsetNames: ['skill-management'] })
         .headerShort
     ).toBe('加载 skill 管理')
-    const updated = getToolDisplayInput(
-      'skill_edit',
-      { id: 'stable', sourcePath: '/draft' },
-      { id: 'stable', name: 'weekly-report' }
-    )
-    expect(getAssistantToolItemCopy('skill_edit', 'completed', updated).headerShort).toBe(
-      '更新 weekly-report'
-    )
+    expect(
+      getAssistantToolItemCopy('skill_sync', 'completed', { action: 'sync', name: 'weekly-report' })
+        .headerShort
+    ).toBe('同步 weekly-report')
+    expect(
+      getAssistantToolItemCopy('skill_sync', 'completed', { action: 'status' }).headerShort
+    ).toBe('查看 Skill 启用状态')
   })
   it('uses semantic icons for single-tool activities', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('docx_read_outline'))).toBe('document')

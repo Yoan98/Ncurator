@@ -1,5 +1,5 @@
-import fs from 'node:fs/promises'
 import path from 'node:path'
+import type { JsonObject } from '../../../../../src/shared/types'
 import { describe, it } from 'vitest'
 import { UserSkillService } from '../../../../../src/main/services/skills/UserSkillService'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -12,7 +12,7 @@ import {
   buildCompleteTaskDecision
 } from '../testUtils'
 
-describe('skill management production flow', () => {
+describe('Skill synchronization production flow', () => {
   it(
     'skill-management-tool-flow',
     async () =>
@@ -25,7 +25,8 @@ describe('skill management production flow', () => {
         fixtures: [],
         runMode: 'single',
         knowledge: 'none',
-        description: '仅脚本化模型，真实注册、发布、读取、按名称加载、更新与停用刷新说明。',
+        description:
+          '空库从真实文件工具创建，按名称查询、同步、加载、更新与停用；模型 System 使用实际根目录。',
         execute: async (runtime) => {
           const partnerId = 'skill-flow'
           await runtime.partnerStore.savePartner({
@@ -41,23 +42,17 @@ describe('skill management production flow', () => {
           })
           const service = new UserSkillService(
             runtime.storageService.userSkill,
-            path.join(runtime.workspaceRoot, '.managed')
+            path.join(runtime.workspaceRoot, 'skills')
           )
-          const source = path.join(runtime.workspaceRoot, 'draft')
-          await fs.mkdir(source)
-          const markdown = (body: string) => `---\nname: report\ndescription: Reports\n---\n${body}`
-          await fs.writeFile(path.join(source, 'SKILL.md'), markdown('RULE-ORIGINAL'))
-          const idFromFeedback = (user: string): string => {
-            const id =
-              /<skill_document id="([^"]+)"/.exec(user)?.[1] ??
-              /id=([A-Za-z0-9:-]+)/.exec(user)?.[1]
-            if (!id) throw new Error('The model did not receive a skill ID in real tool feedback')
-            return id
-          }
+          const filename = path.join(service.getRootDirectory(), 'report/SKILL.md')
+          const markdown = (body: string) =>
+            `---\nname: report\ndescription: Reports ${body}\n---\n${body}`
+          const decision = (toolName: string, args: JsonObject) =>
+            buildToolDecision({ toolName, args, summary: '维护规范' })
           const runner = await createAiServiceTestRunner(runtime, {
             partnerId,
             userSkillService: service,
-            userInput: '创建并启用规范，读取后加载，修改规范，再停用。',
+            userInput: '创建并启用规范，查询后加载，再修改并停用。',
             llmScript: {
               'human.brain': [
                 {
@@ -67,39 +62,29 @@ describe('skill management production flow', () => {
                   })
                 },
                 {
-                  output: buildToolDecision({
-                    toolName: 'skill_edit',
-                    args: { sourcePath: source, enabled: true },
-                    summary: '创建规范'
+                  output: decision('text_file_edit', {
+                    action: 'create',
+                    sourcePath: filename,
+                    content: markdown('RULE-ORIGINAL')
                   })
                 },
-                ({ user }) =>
-                  buildToolDecision({
-                    toolName: 'skill_read',
-                    args: { id: idFromFeedback(user) },
-                    summary: '查看规范'
-                  }),
+                { output: decision('skill_sync', { action: 'status' }) },
                 {
-                  output: buildToolDecision({
-                    toolName: 'load_skill',
-                    args: { skillNames: ['report'] },
-                    summary: '加载规范'
+                  output: decision('skill_sync', { action: 'sync', name: 'report', enabled: true })
+                },
+                { output: decision('skill_sync', { action: 'status', name: 'report' }) },
+                { output: decision('load_skill', { skillNames: ['report'] }) },
+                {
+                  output: decision('text_file_edit', {
+                    action: 'rewrite',
+                    sourcePath: filename,
+                    content: markdown('RULE-UPDATED')
                   })
                 },
-                async ({ user }) => {
-                  await fs.writeFile(path.join(source, 'SKILL.md'), markdown('RULE-UPDATED'))
-                  return buildToolDecision({
-                    toolName: 'skill_edit',
-                    args: { id: idFromFeedback(user), sourcePath: source },
-                    summary: '更新规范'
-                  })
+                { output: decision('skill_sync', { action: 'sync', name: 'report' }) },
+                {
+                  output: decision('skill_sync', { action: 'sync', name: 'report', enabled: false })
                 },
-                ({ user }) =>
-                  buildToolDecision({
-                    toolName: 'skill_edit',
-                    args: { id: idFromFeedback(user), enabled: false },
-                    summary: '停用规范'
-                  }),
                 {
                   output: buildCompleteTaskDecision({
                     summary: '完成',
@@ -110,64 +95,72 @@ describe('skill management production flow', () => {
             }
           })
           const output = await runner.run()
-          const childErrors = await Promise.all(
-            ['skill_read', 'skill_edit'].map(async (toolName) => {
-              try {
-                await executeToolCall({
-                  ctx: {
-                    ...runtime.createAiRunContext({ partnerId, userSkillService: service }),
-                    isSubagent: true
-                  },
-                  cache: createHumanRuntimeCache(),
-                  taskId: runtime.taskId,
-                  loadedToolsetIds: ['skill-management'],
-                  toolCallId: `child-${toolName}`,
-                  toolName,
-                  args: { id: service.list()[0].id }
-                })
-                return ''
-              } catch (error) {
-                return error instanceof Error ? error.message : String(error)
-              }
+          let childError = ''
+          try {
+            await executeToolCall({
+              ctx: {
+                ...runtime.createAiRunContext({ partnerId, userSkillService: service }),
+                isSubagent: true
+              },
+              cache: createHumanRuntimeCache(),
+              taskId: runtime.taskId,
+              loadedToolsetIds: ['skill-management'],
+              toolCallId: 'child-sync',
+              toolName: 'skill_sync',
+              args: { action: 'status' }
             })
-          )
-          const systems = runner.io.map((item) =>
-            JSON.stringify(
-              item.requestWire?.messages.filter((message) => message.role === 'system')
-            )
-          )
+          } catch (error) {
+            childError = error instanceof Error ? error.message : String(error)
+          }
           return {
             status: output.status,
-            childErrors,
-            systems,
-            enabled: service.listEnabled(partnerId),
+            childError,
+            root: service.getRootDirectory(),
+            systems: runner.io.map((item) =>
+              JSON.stringify(
+                item.requestWire?.messages.filter((message) => message.role === 'system')
+              )
+            ),
             skills: service.list(),
+            enabled: service.listEnabled(partnerId),
             events: runner.events
           }
         },
         assert: async (result, runtime) => {
           runtime.assertThat(
-            result.childErrors.every((error) => error.includes('子任务不能使用')),
+            result.status === 'completed' &&
+              result.skills.length === 1 &&
+              !result.enabled.length &&
+              result.childError.includes('子任务不能使用'),
             {
-              name: 'child-management-boundary',
-              message: '生产执行层拒绝子任务读取或编辑共享 skill。'
+              name: 'real-file-and-sync-flow',
+              message: '真实文件工具和同步工具完成主链，子任务执行层拒绝管理。'
             }
           )
           runtime.assertThat(
-            result.status === 'completed' &&
-              result.skills.length === 1 &&
-              result.enabled.length === 0,
-            { name: 'management-flow', message: '真实主链完成发布、读取、更新和停用。' }
-          )
-          runtime.assertThat(
-            !result.systems[3]?.includes('RULE-ORIGINAL') &&
-              result.systems[4]?.includes('RULE-ORIGINAL') === true &&
-              result.systems[5]?.includes('RULE-UPDATED') === true &&
+            result.systems[0].includes(result.root) &&
+              result.systems[0].includes('<本机信息与文件约定>') &&
+              !result.systems[0].includes('runtime_paths.') &&
+              !result.systems[0].includes('共享 Skill 目录') &&
+              !result.systems[5]?.includes('\\nRULE-ORIGINAL') &&
+              result.systems[6]?.includes('RULE-ORIGINAL') === true &&
+              result.systems[7]?.includes('RULE-UPDATED') === true &&
               !result.systems.at(-1)?.includes('RULE-UPDATED'),
             {
-              name: 'current-system-instructions',
-              message: '读取不激活；加载、更新及停用后的 System 反映有效说明。',
-              data: { systems: result.systems }
+              name: 'directory-and-current-instructions',
+              message: '空库提供真实根目录与格式，查询不激活，文件变更及停用更新有效说明。'
+            }
+          )
+          runtime.assertThat(
+            result.events.some(
+              (event) =>
+                event.type === 'tool_call_result' &&
+                event.toolName === 'skill_sync' &&
+                JSON.stringify(event.result?.data) === '[]'
+            ),
+            {
+              name: 'status-before-registration',
+              message: '尚未同步的文件不产生数据库登记或绑定。'
             }
           )
         }

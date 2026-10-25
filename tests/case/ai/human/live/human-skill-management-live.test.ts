@@ -127,7 +127,7 @@ describe('skill management quality live', () => {
           }
           const first = await run(
             1,
-            '请参考工作目录中的真实客户项目资料和客户周报要求.md，整理一个可复用的客户周报skill，并为你自己启用。需要包含规范、参考资料、周报模板，以及能按责任人和风险等级汇总CSV事项数量的脚本。请在工作区单独准备草稿目录，保留业务原件；这轮先完成规范沉淀，不生成本周正式交付。'
+            '请参考工作目录中的真实客户项目资料和客户周报要求.md，先核对已有 skill 的启用情况，再整理一个可复用的客户周报 skill，并为你自己启用。需要包含规范、参考资料、周报模板，以及能按责任人和风险等级汇总CSV事项数量的脚本。请实际保存规范及资源并完成登记，保留业务原件；这轮先完成规范沉淀，不生成本周正式交付。'
           )
           const managed = service.list().filter((item) => item.id !== other.id)
           if (managed.length !== 1)
@@ -135,26 +135,6 @@ describe('skill management quality live', () => {
           const skill = managed[0]
           const initialDocument = service.getDocument(skill.id)
           const initialFiles = await snapshot(skill.id)
-          const draftPaths = first.events.flatMap((event) =>
-            event.type === 'tool_call_started' &&
-            event.toolName === 'skill_edit' &&
-            'sourcePath' in event.input &&
-            typeof event.input.sourcePath === 'string'
-              ? [event.input.sourcePath]
-              : []
-          )
-          for (const draft of new Set(draftPaths)) {
-            const resolved = path.resolve(draft)
-            if (
-              !resolved.startsWith(runtime.workspaceRoot + path.sep) ||
-              resolved === path.join(runtime.workspaceRoot, '.managed-skills') ||
-              sources.some(
-                (source) => source.file === resolved || source.file.startsWith(resolved + path.sep)
-              )
-            )
-              throw new Error('Skill draft must be separate from the business source files')
-            await fs.rm(resolved, { recursive: true, force: true })
-          }
           const second = await run(
             2,
             '请按刚建立的客户周报规范，结合工作目录项目资料及本周事实.csv，生成可对外审阅的交付/客户周报-v1.md和内部跟进用的交付/行动清单-v1.csv。实际使用规范的模板、参考资料及汇总脚本核对统计，不把未验收写成已验收，内部事项不要混入客户版本。'
@@ -176,7 +156,7 @@ describe('skill management quality live', () => {
           const updatedFiles = await snapshot(skill.id)
           const fourth = await run(
             4,
-            '暂停你对刚建立的客户周报skill的启用，保留共享skill及其内容，不修改其他skill和其他伙伴的配置。读取确认已停用。'
+            '暂停你对刚建立的客户周报skill的启用，保留该 skill 及其内容，不修改其他skill和其他伙伴的配置。查询确认已停用。'
           )
           const events = [...first.events, ...second.events, ...third.events, ...fourth.events]
           const finalFiles = await snapshot(skill.id)
@@ -239,8 +219,8 @@ describe('skill management quality live', () => {
               result.initialDocument.resources.some((file) => file.startsWith('references/')) &&
               result.initialDocument.resources.some((file) => file.startsWith('assets/')) &&
               result.updated.id === result.skill.id &&
-              result.updated.body.includes('复核人') &&
-              result.updated.body.includes('验收证据'),
+              result.updatedFiles.some((file) => file.content?.includes('复核人')) &&
+              result.updatedFiles.some((file) => file.content?.includes('验收证据')),
             {
               name: 'authored-and-updated-resources',
               message: 'AI 创建完整可复用目录，并在原 ID 上更新规则。'

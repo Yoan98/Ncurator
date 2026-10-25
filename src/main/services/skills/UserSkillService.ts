@@ -80,10 +80,8 @@ const readRegularFile = (filename: string, limit = Infinity): Buffer => {
 
 type PendingImport = { stage: string; owner: number; expiresAt: number }
 
-export type SkillDirectoryEdit = { id?: string; sourcePath?: string; enabled?: boolean }
-export type SkillManagementRead =
-  | { skills: Array<{ id: string; name: string; description: string; enabled: boolean }> }
-  | { id: string; path: string; content: string; enabled: boolean }
+export type SkillStatus = { name: string; enabled: boolean }
+export type SkillSyncResult = SkillStatus & { warning?: string }
 type SkillBinding = { partnerId: string; skillIds: string[] }
 
 const markdownParts = (content: string) => {
@@ -117,13 +115,15 @@ const buildMarkdown = (draft: UserSkillDraft, original?: string): string => {
   return content
 }
 
+export const getSkillRootDirectory = (): string => path.join(getUserDataPath(), 'skills')
+
 export class UserSkillService {
   private readonly root: string
   private readonly imports = new Map<string, PendingImport>()
 
   public constructor(
     private readonly store: UserSkillStore,
-    root = path.join(getUserDataPath(), 'skills'),
+    root = getSkillRootDirectory(),
     private readonly onChanged: () => void = () => undefined
   ) {
     this.root = path.resolve(root)
@@ -138,6 +138,8 @@ export class UserSkillService {
   private directory(skill: UserSkill): string {
     if (!SKILL_NAME.test(skill.directoryName) || skill.directoryName !== skill.name)
       throw new Error('Invalid stored skill directory')
+    if (fs.lstatSync(this.root).isSymbolicLink())
+      throw new Error('Skills directory cannot be a symbolic link')
     const directory = path.join(this.root, skill.directoryName)
     if (fs.lstatSync(directory).isSymbolicLink() || !fs.statSync(directory).isDirectory())
       throw new Error('Skill directory must be a real directory')
@@ -186,54 +188,85 @@ export class UserSkillService {
     })
   }
 
-  public readForPartner(partnerId: string, id?: string): SkillManagementRead {
-    const enabled = new Set(this.listEnabled(partnerId).map((skill) => skill.id))
-    if (!id) {
-      return {
-        skills: this.list().map(({ id, name, description }) => ({
-          id,
-          name,
-          description,
-          enabled: enabled.has(id)
-        }))
-      }
-    }
-    const skill = this.store.get(id)
-    if (!skill) throw new Error('Skill not found')
-    return {
-      id,
-      path: this.resourceDirectory({ id }),
-      content: this.content(skill),
-      enabled: enabled.has(id)
-    }
+  public getRootDirectory(): string {
+    return this.root
   }
 
-  public editForPartner(
-    partnerId: string,
-    input: SkillDirectoryEdit
-  ): { id: string; name: string } {
+  public statusForPartner(partnerId: string, name?: string): SkillStatus[] {
     this.store.partnerName(partnerId)
-    if (
-      (!input.id && !input.sourcePath) ||
-      (input.id && !input.sourcePath && input.enabled === undefined)
-    )
-      throw new Error(
-        'Provide a sourcePath to create, or an id with sourcePath or enabled to update'
-      )
-    const existing = input.id ? this.store.get(input.id) : undefined
-    if (input.id && !existing) throw new Error('Skill not found')
-    if (!input.sourcePath && existing) {
-      const selection = this.binding(partnerId, existing.id, input.enabled!)
-      this.setEnabled(partnerId, selection.skillIds)
-      return { id: existing.id, name: existing.name }
+    const enabled = new Set(this.listEnabled(partnerId).map((skill) => skill.id))
+    const skills = this.list().filter((skill) => name === undefined || skill.name === name)
+    if (name !== undefined && !skills.length)
+      throw new Error('Skill not found; synchronize its directory first')
+    return skills.map((skill) => ({ name: skill.name, enabled: enabled.has(skill.id) }))
+  }
+
+  public syncForPartner(partnerId: string, name: string, enabled?: boolean): SkillSyncResult {
+    this.store.partnerName(partnerId)
+    if (!SKILL_NAME.test(name) || name.length > 64 || RESERVED_NAME.test(name))
+      throw new Error('Invalid skill name')
+    const existing = this.list().find((skill) => skill.name === name)
+    const skill: UserSkill = existing ?? {
+      id: `user:${randomUUID()}`,
+      name,
+      description: '',
+      directoryName: name,
+      createdAt: Date.now()
     }
-    const stage = this.copyFolder(input.sourcePath!, true)
+    const selection = enabled === undefined ? undefined : this.binding(partnerId, skill.id, enabled)
     try {
-      const skill = this.publish(stage, existing, { partnerId, enabled: input.enabled })
-      return { id: skill.id, name: skill.name }
-    } finally {
-      fs.rmSync(stage, { recursive: true, force: true })
+      const parsed = this.inspectDirectory(this.directory(skill))
+      if (parsed.name !== name) throw new Error('Skill directory name must match SKILL.md name')
+      skill.description = parsed.description
+      this.checkBoundBudgets(skill.id, parsed.body, selection)
+    } catch (error) {
+      if (enabled !== false || !existing) throw error
+      this.store.setEnabled(partnerId, selection!.skillIds)
+      this.changed()
+      return {
+        name,
+        enabled: false,
+        warning: `Skill disabled; directory was not synced: ${error instanceof Error ? error.message : String(error)}`
+      }
     }
+    this.writeIndex(skill, Boolean(existing), selection)
+    this.changed()
+    return { name, enabled: this.listEnabled(partnerId).some((item) => item.id === skill.id) }
+  }
+
+  private inspectDirectory(directory: string): ReturnType<typeof parseSkillMarkdown> {
+    let entries = 0
+    let resourceBytes = 0
+    const walk = (folder: string): void => {
+      for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+        if (++entries > MAX_ENTRIES)
+          throw new Error('A skill folder may contain at most 1000 entries')
+        const filename = path.join(folder, entry.name)
+        const stat = fs.lstatSync(filename)
+        if (stat.isSymbolicLink()) throw new Error('Skill folders cannot contain symbolic links')
+        if (stat.isDirectory()) walk(filename)
+        else if (stat.isFile()) {
+          if (process.platform !== 'win32' && stat.mode & 0o7000)
+            throw new Error('Skill files cannot have special permission bits')
+          if (filename !== path.join(directory, 'SKILL.md')) {
+            if (stat.size > MAX_FILE_BYTES) throw new Error('Skill resource exceeds the size limit')
+            resourceBytes += stat.size
+            if (resourceBytes > MAX_DIRECTORY_BYTES)
+              throw new Error('A skill folder may contain at most 64 MiB')
+          }
+        } else throw new Error('Skill folders may contain only regular files and directories')
+      }
+    }
+    walk(directory)
+    return parseSkillMarkdown(readRegularFile(path.join(directory, 'SKILL.md')).toString('utf8'))
+  }
+
+  private writeIndex(skill: UserSkill, existing: boolean, binding?: SkillBinding): void {
+    this.store.transaction(() => {
+      if (existing) this.store.update(skill)
+      else this.store.insert(skill)
+      if (binding) this.store.setEnabled(binding.partnerId, binding.skillIds)
+    })
   }
 
   private binding(partnerId: string, id: string, enabled: boolean): SkillBinding {
@@ -325,9 +358,9 @@ export class UserSkillService {
   }
 
   private read(skill: UserSkill): { skill: UserSkill; body: string; resourceBase: string } {
-    const parsed = parseSkillMarkdown(this.content(skill))
-    if (parsed.name !== skill.name || parsed.description !== skill.description)
-      throw new Error('Skill metadata changed; edit the skill or import the updated folder again')
+    const parsed = this.inspectDirectory(this.directory(skill))
+    if (parsed.name !== skill.name)
+      throw new Error('Skill metadata changed; synchronize its directory before loading')
     return { skill, body: parsed.body, resourceBase: this.directory(skill) }
   }
 
@@ -421,14 +454,8 @@ export class UserSkillService {
       throw new Error('A skill with this name already exists; no files were overwritten')
   }
 
-  private publish(
-    stage: string,
-    existing?: UserSkill,
-    configure?: { partnerId: string; enabled?: boolean }
-  ): UserSkill {
-    const parsed = parseSkillMarkdown(
-      readRegularFile(path.join(stage, 'SKILL.md')).toString('utf8')
-    )
+  private publish(stage: string, existing?: UserSkill): UserSkill {
+    const parsed = this.inspectDirectory(stage)
     this.assertNameAvailable(parsed.name, existing)
     const skill: UserSkill = {
       id: existing?.id ?? `user:${randomUUID()}`,
@@ -437,11 +464,7 @@ export class UserSkillService {
       directoryName: parsed.name,
       createdAt: existing?.createdAt ?? Date.now()
     }
-    const selection =
-      configure?.enabled !== undefined
-        ? this.binding(configure.partnerId, skill.id, configure.enabled)
-        : undefined
-    this.checkBoundBudgets(skill.id, parsed.body, selection)
+    this.checkBoundBudgets(skill.id, parsed.body)
     const destination = path.join(this.root, skill.directoryName)
     const oldDirectory = existing ? this.directory(existing) : undefined
     const backup = existing ? fs.mkdtempSync(path.join(this.root, '.replace-')) : undefined
@@ -456,11 +479,7 @@ export class UserSkillService {
       }
       fs.renameSync(stage, destination)
       newMoved = true
-      this.store.transaction(() => {
-        if (existing) this.store.update(skill)
-        else this.store.insert(skill)
-        if (selection) this.store.setEnabled(selection.partnerId, selection.skillIds)
-      })
+      this.writeIndex(skill, Boolean(existing))
       committed = true
     } catch (error) {
       if (newMoved) fs.renameSync(destination, stage)

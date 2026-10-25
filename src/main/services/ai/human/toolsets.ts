@@ -116,7 +116,7 @@ export const RUNTIME_TOOLSET_CATALOG = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'skill 管理',
-    description: '读取、创建和更新共享 skill 目录，并配置当前伙伴的启用状态。'
+    description: '查询 Skill 启用状态、同步目录索引并配置当前伙伴。'
   },
   'scheduled-tasks': {
     familyId: 'scheduled-tasks',

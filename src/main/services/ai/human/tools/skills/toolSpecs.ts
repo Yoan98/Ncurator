@@ -1,74 +1,36 @@
 import type { HumanToolSpec, ModelResultRenderer } from '../types'
-import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
-import { escapeXmlAttribute } from '../../shared/renderFamilies/shared'
-import {
-  SKILL_READ_SCHEMA,
-  SKILL_EDIT_SCHEMA,
-  type SkillReadInput,
-  type SkillEditInput
-} from './toolSchemas'
-import type { SkillReadOutput, SkillEditOutput } from './outputTypes'
+import { SKILL_SYNC_SCHEMA, type SkillSyncInput } from './toolSchemas'
+import type { SkillSyncOutput } from './outputTypes'
 
-export const renderSkillRead: ModelResultRenderer = ({ data }) => {
-  const output = data as SkillReadOutput
+export const renderSkillSync: ModelResultRenderer = ({ data }) => {
+  const output = data as SkillSyncOutput
+  if (Array.isArray(output))
+    return output.length
+      ? output.map((skill) => `- ${skill.name}：${skill.enabled ? '已启用' : '未启用'}`).join('\n')
+      : '没有已登记的 Skill。'
   if ('filePath' in output)
-    return `完整 skill 清单：${output.filePath}\n请使用 text_file_read 读取。`
-  if ('skills' in output)
-    return output.skills.length
-      ? output.skills
-          .map(
-            (skill) =>
-              `- ${skill.name} [id=${skill.id}; ${skill.enabled ? '已启用' : '未启用'}]\n  ${skill.description}`
-          )
-          .join('\n')
-      : '没有共享 skill。'
-  const header = `<skill_document id="${escapeXmlAttribute(output.id)}" path="${escapeXmlAttribute(output.path)}" enabled="${output.enabled}">`
-  return [
-    header,
-    'content' in output
-      ? output.content
-      : `正文较长，请使用 text_file_read 读取 ${output.path}/SKILL.md。`,
-    '</skill_document>'
-  ].join('\n')
+    return `完整 Skill 状态清单：${output.filePath}\n可使用 text_file_read 读取。`
+  return `${output.warning ? '已停用' : '已同步'} ${output.name}，当前${output.enabled ? '已启用' : '未启用'}。${output.warning ? `\n${output.warning}` : ''}`
 }
 
-export const renderSkillEdit: ModelResultRenderer = ({ args, data }) => {
-  const output = data as SkillEditOutput
-  const action = args.sourcePath ? (args.id ? '更新' : '创建') : ''
-  const enabled = typeof args.enabled === 'boolean' ? (args.enabled ? '启用' : '停用') : ''
-  return `已${[action, enabled].filter(Boolean).join('并')}${output.name}。id=${output.id}`
-}
-
-export const SKILL_READ_SPEC: HumanToolSpec<SkillReadInput, 'skill_read', 'skill-management'> = {
-  name: 'skill_read',
+export const SKILL_SYNC_SPEC: HumanToolSpec<SkillSyncInput, 'skill_sync', 'skill-management'> = {
+  name: 'skill_sync',
   familyId: 'skill-management',
   toolsetIds: ['skill-management'],
-  inputSchema: SKILL_READ_SCHEMA,
+  inputSchema: SKILL_SYNC_SCHEMA,
   promptSpec: {
-    name: 'skill_read',
-    description: '读取共享 skill 的目录或说明原文。'
+    name: 'skill_sync',
+    description: '查询 Skill 启用状态，或同步 Skill 目录到skill数据库并配置当前伙伴的启用状态。'
   },
-  resolveExecutionMeta: createStaticExecutionMetaResolver({
-    mutability: 'read_only',
-    defaultResourceKey: 'skill-management'
+  resolveExecutionMeta: (args) => ({
+    mutability: args.action === 'status' ? 'read_only' : 'mutating',
+    resourceKey: 'skill-management'
   }),
-  modelResult: { renderSuccess: renderSkillRead }
+  modelResult: {
+    renderSuccess: renderSkillSync,
+    renderError: ({ data }) =>
+      `Error: ${data && typeof data === 'object' && !Array.isArray(data) && typeof data.error === 'string' ? data.error : 'Skill sync failed'}`
+  }
 }
 
-export const SKILL_EDIT_SPEC: HumanToolSpec<SkillEditInput, 'skill_edit', 'skill-management'> = {
-  name: 'skill_edit',
-  familyId: 'skill-management',
-  toolsetIds: ['skill-management'],
-  inputSchema: SKILL_EDIT_SCHEMA,
-  promptSpec: {
-    name: 'skill_edit',
-    description: '编辑，创建本地的skill，或配置是否启用。'
-  },
-  resolveExecutionMeta: createStaticExecutionMetaResolver({
-    mutability: 'mutating',
-    defaultResourceKey: 'skill-management'
-  }),
-  modelResult: { renderSuccess: renderSkillEdit }
-}
-
-export const SKILL_MANAGEMENT_TOOL_SPECS = [SKILL_READ_SPEC, SKILL_EDIT_SPEC] as const
+export const SKILL_MANAGEMENT_TOOL_SPECS = [SKILL_SYNC_SPEC] as const

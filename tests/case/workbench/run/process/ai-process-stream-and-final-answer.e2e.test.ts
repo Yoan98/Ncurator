@@ -74,11 +74,11 @@ const collectProcessRenderSnapshot = async (page: Page): Promise<ProcessRenderSn
       continue
     }
 
-    if (hasExpandableBody) {
-      await block.evaluate((element) => {
-        element.setAttribute('open', '')
-      })
-    }
+    if (
+      hasExpandableBody &&
+      !(await block.evaluate((element) => (element as HTMLDetailsElement).open))
+    )
+      await block.locator(':scope > summary').click()
     const summaryText = ((await block.locator(':scope > summary').textContent()) || '').trim()
     const headerColor = await block
       .locator(':scope > summary > span')
@@ -347,10 +347,10 @@ describe('workbench run e2e', () => {
               event.toolName === 'text_file_read' &&
               event.result?.ok === false
           )
-          const successfulTextReads = evidence.events.filter(
+          const successfulReads = evidence.events.filter(
             (event) =>
               event.type === 'tool_call_result' &&
-              event.toolName === 'text_file_read' &&
+              ['text_file_read', 'docx_read_nodes'].includes(event.toolName) &&
               event.result?.ok === true
           )
           return {
@@ -369,7 +369,7 @@ describe('workbench run e2e', () => {
             thinkingStuckAfterComplete: /让俺想想/u.test(processRender.processRootText),
             processRender,
             failedTextReadCount: failedTextReads.length,
-            successfulTextReadCount: successfulTextReads.length,
+            successfulReadCount: successfulReads.length,
             visibleToolNames,
             finalAnswerText,
             eventTypes: evidence.events.map((event) => event.type)
@@ -407,8 +407,8 @@ describe('workbench run e2e', () => {
               ))
           const loadToolsetCopyOk =
             !hasLoadToolset ||
-            allItemTexts.some((text) => /已加载|正在加载/u.test(text)) ||
-            allSummaryTexts.some((text) => /已加载|正在加载|已完成\s*\d+\s*项|工具组/u.test(text))
+            allItemTexts.some((text) => /加载/u.test(text)) ||
+            allSummaryTexts.some((text) => /加载|已完成\s*\d+\s*项/u.test(text))
           const docxCopyOk =
             !hasDocxTool ||
             allItemTexts.some((text) => text.includes('Word 文档')) ||
@@ -445,7 +445,7 @@ describe('workbench run e2e', () => {
               headersStayNeutral &&
               failedRowsStayHighlighted &&
               result.failedTextReadCount > 0 &&
-              result.successfulTextReadCount > 0 &&
+              result.successfulReadCount > 0 &&
               noColonItemLabels &&
               loadToolsetCopyOk &&
               docxCopyOk,

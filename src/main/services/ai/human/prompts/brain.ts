@@ -1,5 +1,6 @@
 import type { AiRunContext } from '../../types'
 import { renderUserSkills, type LoadedUserSkill } from '../userSkills'
+import { getSkillRootDirectory } from '../../../skills/UserSkillService'
 import { PRODUCT_NAME_ZH } from '../../../../../shared/constants'
 import {
   renderAttachmentsText,
@@ -15,13 +16,23 @@ import type { AiRuntimePlatform } from '../../types'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../constants'
 import { listBuiltinToolsetDefinitions, listExternalToolsetDefinitions } from '../toolsets'
 
-export const renderLocalEnvironmentText = (
-  ctx: Pick<AiRunContext, 'partnerId' | 'platform'>
+export const renderLocalContextText = (
+  ctx: Pick<AiRunContext, 'partnerId' | 'platform' | 'userSkillService'>
 ): string =>
   [
-    `- platform：${ctx.platform}`,
-    `- runtime_paths.scripts：${getPartnerScriptsRootDir(ctx.partnerId)}（一次性临时脚本目录）`,
-    `- runtime_paths.assets：${getPartnerAssetsRootDir(ctx.partnerId)}（运行期生成的临时产物目录，如图片、渲染中间结果等）`
+    '<本机信息与文件约定>',
+    `操作系统：${{ macos: 'macOS', windows: 'Windows', linux: 'Linux' }[ctx.platform]}`,
+    `临时脚本目录：${getPartnerScriptsRootDir(ctx.partnerId)}`,
+    `运行资源目录：${getPartnerAssetsRootDir(ctx.partnerId)}`,
+    `Skill 目录：${ctx.userSkillService?.getRootDirectory?.() ?? getSkillRootDirectory()}`,
+    'Skill 结构：每个 Skill 一个同名目录，包含 SKILL.md；可选子目录 scripts/、references/、assets/。',
+    'SKILL.md 示例：',
+    '---',
+    'name: weekly-report',
+    'description: 整理周报时使用。',
+    '---',
+    'Markdown 规范正文。',
+    '</本机信息与文件约定>'
   ].join('\n')
 
 export const renderWorkspaceRootsText = (workspaceRoots: string[]): string =>
@@ -39,9 +50,7 @@ export const renderCurrentTimeText = (runStartedAt: number): string => {
     .replace(/\.\d{3}/, '')
     .replace('Z', `${offsetSign}${offsetHours}:${offsetRemainderMinutes}`)
 
-  return [`- current_time.timezone：${timezone}`, `- current_time.local_iso：${localIso}`].join(
-    '\n'
-  )
+  return [`时区：${timezone}`, `本地时间：${localIso}`].join('\n')
 }
 
 const renderPreferenceText = (preference: AiRunContext['preference']): string => {
@@ -110,8 +119,7 @@ export const buildBrainSystemPrompt = (input: {
 - 合理使用终端等待命令，来应对需要等待的情况。
 - 网页操作碰到验证码、登录、支付等需要用户协助时，可停下来像用户说明情况。
 
-当前运行环境：
-${renderLocalEnvironmentText(input.ctx)}
+${renderLocalContextText(input.ctx)}
 
 工具组目录：
 ${renderToolsetCatalog(input.ctx.platform)}

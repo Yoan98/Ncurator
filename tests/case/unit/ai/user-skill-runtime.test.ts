@@ -226,7 +226,7 @@ describe('user instruction skill runtime', () => {
     const orderedPrompt = String(f.cache.messages![0].content)
     expect(state.skills.loadedSkillIds).toEqual(['user:a', 'user:b'])
     expect(orderedPrompt.indexOf('BODY_A')).toBeLessThan(orderedPrompt.indexOf('BODY_B'))
-    expect(orderedPrompt.indexOf('当前运行环境：')).toBeLessThan(
+    expect(orderedPrompt.indexOf('<本机信息与文件约定>')).toBeLessThan(
       orderedPrompt.indexOf('工具组目录：')
     )
     expect(orderedPrompt.indexOf('工具组目录：')).toBeLessThan(orderedPrompt.indexOf('技能：'))
@@ -528,6 +528,8 @@ describe('user instruction skill runtime', () => {
     const f = fixture()
     f.enabled.set('user:a', 'x'.repeat(MAX_USER_SKILL_BODY_BYTES))
     expect(() => loadCurrentUserSkills(f.ctx, ['user:a', 'user:b'])).toThrow(/64 KiB/)
+    expect(() => loadCurrentUserSkills(f.ctx, ['user:a'])).toThrow(/64 KiB/)
+    f.enabled.delete('user:b')
     expect(loadCurrentUserSkills(f.ctx, ['user:a']).map(({ skill }) => skill.id)).toEqual([
       'user:a'
     ])

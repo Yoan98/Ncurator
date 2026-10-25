@@ -165,7 +165,7 @@ describe('ai unit brain prompt cache stability', () => {
     const bSystem = buildBrainSystemPrompt({ ctx: ctxB })
 
     expect(aSystem).toBe(bSystem)
-    expect(aSystem).not.toContain('current_time.local_iso')
+    expect(aSystem).not.toContain('本地时间：')
 
     const aUser = buildBrainUserMessage({ state: stateA, ctx: ctxA })
     const bUser = buildBrainUserMessage({ state: stateB, ctx: ctxB })

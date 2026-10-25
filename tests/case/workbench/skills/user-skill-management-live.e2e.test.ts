@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import type { AiRunEvent } from '../../../../src/shared/types'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
@@ -38,7 +39,7 @@ describe('skill management UI live', () => {
         windowMode: 'visible',
         runMode: 'single',
         description:
-          '聊天发布与更新目录，页面与伙伴配置同步，未保存草稿保留，两类加载图标在实时与历史一致。',
+          '聊天发布与更新目录，页面与伙伴配置同步，未保存草稿保留，连续工具及加载合并到 Activity，箭头与类别图标在实时和历史一致。',
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
@@ -48,6 +49,7 @@ describe('skill management UI live', () => {
           })
           await selectWorkbenchModel(page, setup.env.modelName)
           await selectWorkbenchExecutionPermission(page, '完全访问', { confirmModal: true })
+          const observed: AiRunEvent[] = []
           const wait = async (at: number) => {
             const done = await waitForWorkbenchAiRunCompletion(
               runtime,
@@ -56,6 +58,7 @@ describe('skill management UI live', () => {
               240_000,
               { page, blockerPolicy: 'auto_approve' }
             )
+            observed.push(...done.events)
             recordWorkbenchAiEvidence(runtime, done, 1)
             return done
           }
@@ -91,25 +94,103 @@ describe('skill management UI live', () => {
           await page.getByRole('button', { name: '放弃修改', exact: true }).click()
           await page.getByTestId(selectors.editor).waitFor({ state: 'hidden' })
           await page.getByTestId(`${workbenchSelectors.partnerItemPrefix}-${partner.id}`).click()
-          const icon = async (kind: string, name: string) =>
-            page
-              .locator('summary')
-              .filter({ hasText: name })
-              .locator(`[data-process-icon-kind="${kind}"]`)
-              .first()
-              .evaluate((element) => ({
-                color: getComputedStyle(element).color,
-                tag: element.tagName,
-                text: element.closest('summary')?.textContent || ''
-              }))
-          const toolIcon = await icon('toolset_loading', 'skill 管理')
-          const skillIcon = await icon('skill_loading', 'workbench-note')
+          const snapshotActivities = async () => {
+            const collapsed = page.locator(
+              `button[data-testid^="${workbenchSelectors.assistantProcessTogglePrefix}-"][aria-expanded="false"]`
+            )
+            while (await collapsed.count()) await collapsed.first().click()
+            return page.locator('[class~="group/execution"]').evaluateAll((elements) =>
+              elements.map((element) => {
+                const summary = element.querySelector('summary')!
+                const icon = summary.querySelector('[data-process-icon-kind]')!
+                return {
+                  id: element.getAttribute('data-testid') || '',
+                  kind: icon.getAttribute('data-process-icon-kind'),
+                  color: getComputedStyle(icon).color,
+                  text: summary.textContent || '',
+                  items: [...element.querySelectorAll('[data-process-item-id]')].map((item) => ({
+                    id: item.getAttribute('data-process-item-id')!,
+                    text: item.textContent || ''
+                  }))
+                }
+              })
+            )
+          }
+          const activities = await snapshotActivities()
+          const firstActivity = page.locator('[class~="group/execution"]').first()
+          const summary = firstActivity.locator(':scope > summary')
+          await summary.hover()
+          const arrow = () =>
+            summary.locator('svg').evaluateAll((elements) =>
+              elements
+                .filter(
+                  (element) =>
+                    element.getAttribute('class')?.includes('group-open/execution') &&
+                    getComputedStyle(element).display !== 'none'
+                )
+                .map((element) => element.querySelector('path')?.getAttribute('d'))
+                .join('|')
+            )
+          const closedArrow = await arrow()
+          await summary.click()
+          const expanded = await firstActivity.evaluate(
+            (element) => (element as HTMLDetailsElement).open
+          )
+          const expandedArrow = await arrow()
           await page.reload()
           await page.getByTestId(`${workbenchSelectors.partnerItemPrefix}-${partner.id}`).click()
-          const restoredTool = await icon('toolset_loading', 'skill 管理')
-          const restoredSkill = await icon('skill_loading', 'workbench-note')
+          const restored = await snapshotActivities()
+          const groupByItem = new Map(
+            activities.flatMap((activity) =>
+              activity.items.map((item) => [item.id, activity.id] as const)
+            )
+          )
+          const tools = new Map<string, string>()
+          const expectedGroups = new Map<string, Set<string>>()
+          const thoughts = new Set<string>()
+          let boundary = 0
+          for (const event of observed) {
+            if (
+              event.type === 'assistant_process_thought' &&
+              event.text.trim() &&
+              !thoughts.has(event.thoughtId)
+            ) {
+              thoughts.add(event.thoughtId)
+              boundary++
+            }
+            if (
+              event.type === 'assistant_process_group_started' &&
+              ['compaction', 'retry'].includes(event.kind)
+            )
+              boundary++
+            if (event.type !== 'tool_call_started') continue
+            tools.set(event.toolCallId, event.toolName)
+            const group = groupByItem.get(event.toolCallId)
+            if (!group) continue
+            const key = `${event.runId}:${boundary}`
+            const groups = expectedGroups.get(key) ?? new Set<string>()
+            groups.add(group)
+            expectedGroups.set(key, groups)
+          }
+          const loadingIds = [...tools]
+            .filter(([, name]) => ['load_toolset', 'load_skill'].includes(name))
+            .map(([id]) => id)
+          const loadingMerged =
+            loadingIds.length >= 2 &&
+            loadingIds.every((id) => groupByItem.has(id)) &&
+            [...expectedGroups.values()].every((groups) => groups.size === 1)
+          const categoryIconsCorrect = activities.every((activity) => {
+            const names = activity.items.map((item) => tools.get(item.id)).filter(Boolean)
+            if (names.every((name) => name === 'load_toolset'))
+              return activity.kind === 'toolset_loading' && activity.color === 'rgb(47, 95, 143)'
+            if (names.every((name) => name === 'load_skill'))
+              return activity.kind === 'skill_loading' && activity.color === 'rgb(128, 100, 162)'
+            if (names.some((name) => ['load_toolset', 'load_skill'].includes(name!)))
+              return activity.kind === 'workflow'
+            return true
+          })
           at = Date.now()
-          await sendWorkbenchMessage(page, '停用 workbench-note，保留共享内容及其他配置。')
+          await sendWorkbenchMessage(page, '停用 workbench-note，保留内容及其他配置。')
           await wait(at)
           await choosePartner(page, '规范管理伙伴')
           const checked = await page
@@ -124,10 +205,13 @@ describe('skill management UI live', () => {
             draftPreserved,
             notice,
             latest,
-            toolIcon,
-            skillIcon,
-            restoredTool,
-            restoredSkill,
+            activities,
+            restored,
+            loadingMerged,
+            categoryIconsCorrect,
+            closedArrow,
+            expandedArrow,
+            expanded,
             checked,
             memo,
             id: skill.id
@@ -151,16 +235,21 @@ describe('skill management UI live', () => {
             }
           )
           await runtime.assertThat(
-            result.toolIcon.color === 'rgb(47, 95, 143)' &&
-              result.skillIcon.color === 'rgb(128, 100, 162)' &&
-              result.restoredTool.color === result.toolIcon.color &&
-              result.restoredSkill.color === result.skillIcon.color &&
-              result.restoredTool.text.includes('加载 ') &&
-              result.restoredTool.text.includes('skill 管理') &&
-              result.restoredSkill.text.includes('加载 workbench-note'),
+            result.loadingMerged &&
+              result.categoryIconsCorrect &&
+              result.expanded &&
+              Boolean(result.closedArrow) &&
+              result.closedArrow !== result.expandedArrow &&
+              JSON.stringify(result.activities) === JSON.stringify(result.restored) &&
+              result.activities.some((activity) =>
+                activity.items.some((item) => item.text.includes('加载 skill 管理'))
+              ) &&
+              result.activities.some((activity) =>
+                activity.items.some((item) => item.text.includes('加载 workbench-note'))
+              ),
             {
-              name: 'loading-icons-live-and-restored',
-              message: '两类加载图标颜色在实时与历史一致。'
+              name: 'activity-boundaries-arrows-and-restore',
+              message: '两类加载按真实文本边界合并，类别图标和箭头正确，历史恢复一致。'
             }
           )
         }

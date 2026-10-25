@@ -8,19 +8,19 @@ import {
   createTextFileToolHarness
 } from '../../../../harness/backend/aiToolHarness'
 
-describe('skill management real tools', () => {
+describe('Skill synchronization real tools', () => {
   it(
-    'skill-read-publish-and-current-partner-binding',
+    'skill-sync-and-current-partner-binding',
     async () =>
       runBackendCase({
-        caseId: 'skill-read-publish-and-current-partner-binding',
+        caseId: 'skill-sync-and-current-partner-binding',
         harnessMode: 'tool-real',
         domain: 'ai',
         suite: 'tool',
         groups: ['skill-management'],
         fixtures: [],
         runMode: 'single',
-        description: '真实工具发布、读取、完整更新、启停及大结果续读，保留当前伙伴其他绑定。',
+        description: '真实只读状态、原位同步、当前伙伴绑定、损坏停用和大清单文件续读。',
         execute: async (runtime) => {
           for (const id of ['a', 'b'])
             await runtime.partnerStore.savePartner({
@@ -36,98 +36,95 @@ describe('skill management real tools', () => {
             })
           const service = new UserSkillService(
             runtime.storageService.userSkill,
-            path.join(runtime.workspaceRoot, '.managed')
+            path.join(runtime.workspaceRoot, 'skills')
           )
-          const other = service.create({ name: 'other', description: 'Keep', body: 'Keep' })
-          service.setEnabled('a', [other.id])
-          service.setEnabled('b', [other.id])
           const tools = createSkillManagementToolHarness(runtime, {
             partnerId: 'a',
             userSkillService: service
           })
-          const source = path.join(runtime.workspaceRoot, 'draft')
-          await fs.mkdir(path.join(source, 'scripts'), { recursive: true })
-          const md = (name: string, body: string) =>
-            `---\nname: ${name}\ndescription: Report\nlicense: MIT\n---\n${body}`
-          await fs.writeFile(path.join(source, 'SKILL.md'), md('report', 'Initial'))
-          await fs.writeFile(
-            path.join(source, 'scripts', 'report.py'),
-            'raise Exception("must not execute on publish")'
-          )
-          const created = await tools.invoke<{ id: string; name: string }>('skill_edit', {
-            sourcePath: source,
+          const reader = createTextFileToolHarness(runtime, { partnerId: 'a' })
+          const directory = path.join(service.getRootDirectory(), 'report')
+          await fs.mkdir(path.join(directory, 'scripts'), { recursive: true })
+          const markdown = (body: string, description = 'Report') =>
+            `---\nname: report\ndescription: ${description}\nlicense: MIT\n---\n${body}`
+          await fs.writeFile(path.join(directory, 'SKILL.md'), markdown('Initial'))
+          const script = path.join(directory, 'scripts/report.py')
+          await fs.writeFile(script, 'raise Exception("must not execute on sync")', { mode: 0o751 })
+          const beforeStatus = await tools.invoke('skill_sync', { action: 'status' })
+          const noWrites = service.list().length === 0
+          const created = await tools.invoke('skill_sync', {
+            action: 'sync',
+            name: 'report',
             enabled: true
           })
-          const detail = await tools.invoke<{
-            id: string
-            path: string
-            content: string
-            enabled: boolean
-          }>('skill_read', { id: created.id })
-          await fs.writeFile(path.join(source, 'SKILL.md'), md('renamed', 'Updated'))
-          const updated = await tools.invoke<{ id: string; name: string }>('skill_edit', {
-            id: created.id,
-            sourcePath: source
-          })
-          const conflict = await tools.invoke('skill_edit', { sourcePath: source }).then(
-            () => '',
-            (error: Error) => error.message
-          )
-          const managedSource = await tools
-            .invoke('skill_edit', {
-              id: created.id,
-              sourcePath: service.resourceDirectory({ id: created.id })
-            })
-            .then(
-              () => '',
-              (error: Error) => error.message
-            )
-          await tools.invoke('skill_edit', { id: created.id, enabled: false })
-          const final = service.readForPartner('a', created.id)
+          const original = service.list()[0]
+          const other = service.create({ name: 'other', description: 'Keep', body: 'Keep' })
+          service.setEnabled('a', [other.id, original.id])
+          service.setEnabled('b', [original.id])
           await fs.writeFile(
-            path.join(source, 'SKILL.md'),
-            md(
-              'renamed',
+            path.join(directory, 'SKILL.md'),
+            markdown('Updated', 'Updated description')
+          )
+          await tools.invoke('skill_sync', { action: 'sync', name: 'report' })
+          const updated = service.list().find((item) => item.name === 'report')!
+          const detail = await reader.invoke('text_file_read', {
+            sourcePath: path.join(directory, 'SKILL.md')
+          })
+          const status = await tools.invoke('skill_sync', { action: 'status', name: 'report' })
+          await fs.writeFile(path.join(directory, 'SKILL.md'), 'invalid')
+          const error = await tools.invoke('skill_sync', { action: 'sync', name: 'report' }).then(
+            () => '',
+            (reason: Error) => reason.message
+          )
+          const disabled = await tools.invoke('skill_sync', {
+            action: 'sync',
+            name: 'report',
+            enabled: false
+          })
+          const a = service.listEnabled('a').map((item) => item.id)
+          const b = service.listEnabled('b').map((item) => item.id)
+          service.setEnabled('b', [])
+          await fs.writeFile(
+            path.join(directory, 'SKILL.md'),
+            markdown(
               Array.from({ length: 1000 }, (_, i) => `${i} ${'x'.repeat(75)}`).join('\n') +
                 '\nTAIL-MARKER'
             )
           )
-          await tools.invoke('skill_edit', { id: created.id, sourcePath: source })
-          const long = await tools.invoke<{
-            id: string
-            path: string
-            enabled: boolean
-            content?: string
-          }>('skill_read', { id: created.id })
-          const reader = createTextFileToolHarness(runtime, { partnerId: 'a' })
+          await tools.invoke('skill_sync', { action: 'sync', name: 'report' })
           const tail = await reader.invoke('text_file_read', {
-            sourcePath: path.join(long.path, 'SKILL.md'),
+            sourcePath: path.join(directory, 'SKILL.md'),
             startLine: 990,
             lineCount: 20
           })
-          for (let index = 0; index < 60; index++)
+          for (let index = 0; index < 800; index++)
             service.create({
-              name: `catalog-${index}`,
-              description: 'd'.repeat(1024),
+              name: `catalog-${String(index).padStart(4, '0')}-${'x'.repeat(48)}`,
+              description: 'Keep',
               body: 'Read'
             })
-          const list = await tools.invoke<{ filePath: string }>('skill_read', {})
-          const listed = await fs.readFile(list.filePath, 'utf8')
-          await fs.rm(source, { recursive: true })
+          const list = await tools.invoke<{ filePath: string }>('skill_sync', { action: 'status' })
+          const listed = await reader.invoke('text_file_read', {
+            sourcePath: list.filePath,
+            startLine: 790,
+            lineCount: 20
+          })
           return {
+            beforeStatus,
+            noWrites,
             created,
+            original,
             updated,
             detail,
-            final,
-            conflict,
-            managedSource,
-            long,
+            status,
+            error,
+            disabled,
+            a,
+            b,
+            other: other.id,
             tail,
             listed,
-            a: service.listEnabled('a').map((item) => item.id),
-            b: service.listEnabled('b').map((item) => item.id),
-            other: other.id,
-            resources: service.getDocument(created.id).resources,
+            mode: (await fs.stat(script)).mode & 0o777,
             events: runtime.eventCollector
               .snapshot()
               .filter((event) => event.type === 'tool_call_result')
@@ -135,35 +132,37 @@ describe('skill management real tools', () => {
         },
         assert: async (result, runtime) => {
           runtime.assertThat(
-            result.created.id === result.updated.id &&
-              result.updated.name === 'renamed' &&
-              result.detail.enabled &&
-              result.detail.content.includes('license: MIT') &&
-              'content' in result.final &&
-              result.final.content.includes('Updated'),
-            { name: 'directory-roundtrip', message: '真实读取包含原始 YAML，重命名更新保留 ID。' }
-          )
-          runtime.assertThat(
-            result.a.join() === result.other &&
-              result.b.join() === result.other &&
-              result.conflict.includes('already exists') &&
-              result.managedSource.includes('managed skill storage') &&
-              result.resources.includes('scripts/report.py'),
+            JSON.stringify(result.beforeStatus) === '[]' &&
+              result.noWrites &&
+              result.original.id === result.updated.id &&
+              result.updated.description === 'Updated description' &&
+              JSON.stringify(result.detail).includes('license: MIT') &&
+              JSON.stringify(result.status).includes('"enabled":true'),
             {
-              name: 'binding-and-publish-boundary',
-              message: '只停用当前伙伴单项，保留其他选择与资源，拒绝同名和托管源。'
+              name: 'read-only-status-and-directory-roundtrip',
+              message: '查询无写入；原位同步保留身份与未知 YAML，文件由实际读取工具读取。'
             }
           )
           runtime.assertThat(
-            !result.long.content &&
-              JSON.stringify(result.tail).includes('TAIL-MARKER') &&
-              result.listed.includes('catalog-59') &&
+            result.a.join() === result.other &&
+              result.b.join() === result.original.id &&
+              result.error.includes('frontmatter') &&
+              JSON.stringify(result.disabled).includes('not synced') &&
+              (process.platform === 'win32' || result.mode === 0o751),
+            {
+              name: 'current-partner-and-broken-directory',
+              message: '只停用当前伙伴单项，保留其他配置；目录错误明确反馈，权限不变且不执行脚本。'
+            }
+          )
+          runtime.assertThat(
+            JSON.stringify(result.tail).includes('TAIL-MARKER') &&
+              JSON.stringify(result.listed).includes('catalog-0799') &&
               result.events.some(
                 (event) => event.type === 'tool_call_result' && event.result?.ok === false
               ),
             {
-              name: 'large-read-and-events',
-              message: '大正文与清单可通过真实文件续读，事件包含真实失败。'
+              name: 'large-real-file-reads',
+              message: '长正文和超长状态清单通过真实文本读取工具续读，失败事件与实际错误一致。'
             }
           )
         }

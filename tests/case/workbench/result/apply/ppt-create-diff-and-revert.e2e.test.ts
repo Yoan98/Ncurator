@@ -117,7 +117,7 @@ describe('workbench result e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请直接在工作区创建“${FILE_NAME}”。做两页简洁专业的 16:9 PPT：第一页标题包含“季度复盘”，并含两行风险表（表头加一行内容），负责人是“${OWNER}”，风险为“芯片供货延迟”；第二页标题包含“下一步”，两页正文都要出现唯一标记“${MARKER}”。必须使用 PPT 工具，每页一次 insert_slide，用元素规格而不是 HTML。表格留足空间容纳中文及全角括号，字号单位是磅。另通过文本文件工具，在系统提供的 runtime_paths.scripts 目录中创建一次性 Python 校验脚本“${VERIFY_FILE_NAME}”，用于只读检查 PPT 页数与“${MARKER}”，不得放入用户工作区。两页完成后不要删除、重建、复制或再次修改 PPT，告诉我已写回。`
+            `请直接在工作区创建“${FILE_NAME}”。做两页简洁专业的 16:9 PPT：第一页标题包含“季度复盘”，并含两行风险表（表头加一行内容），负责人是“${OWNER}”，风险为“芯片供货延迟”；第二页标题包含“下一步”，两页正文都要出现唯一标记“${MARKER}”。必须使用 PPT 工具，每页一次 insert_slide，用元素规格而不是 HTML。表格留足空间容纳中文及全角括号，字号单位是磅。另通过文本文件工具，在系统提供的临时脚本目录中创建一次性 Python 校验脚本“${VERIFY_FILE_NAME}”，用于只读检查 PPT 页数与“${MARKER}”，不得放入用户工作区。两页完成后不要删除、重建、复制或再次修改 PPT，告诉我已写回。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,

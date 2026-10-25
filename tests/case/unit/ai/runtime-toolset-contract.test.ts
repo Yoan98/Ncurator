@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  SKILL_READ_SCHEMA,
-  SKILL_EDIT_SCHEMA
-} from '../../../../src/main/services/ai/human/tools/skills/toolSchemas'
+import type { AiRunContext } from '../../../../src/main/services/ai/types'
+import { buildModelToolResultDelivery } from '../../../../src/main/services/ai/human/shared/modelToolResult'
+import { SKILL_SYNC_SCHEMA } from '../../../../src/main/services/ai/human/tools/skills/toolSchemas'
 import { isToolAllowed } from '../../../../src/main/services/ai/run/toolPolicy'
 import {
   getEffectiveLoadedToolsetIds,
@@ -17,30 +16,39 @@ import {
 
 describe('ai unit runtime toolset contract', () => {
   it('keeps skill management minimal and restricted to the main partner', () => {
-    expect(getToolsetDefinition('skill-management').toolNames).toEqual(['skill_read', 'skill_edit'])
-    for (const input of [{}, { id: 'id' }])
-      expect(SKILL_READ_SCHEMA.safeParse(input).success).toBe(true)
-    for (const input of [{ cursor: 'x' }, { id: '' }, { partnerId: 'other' }, { name: 'weekly' }])
-      expect(SKILL_READ_SCHEMA.safeParse(input).success).toBe(false)
+    expect(getToolsetDefinition('skill-management').toolNames).toEqual(['skill_sync'])
     for (const input of [
-      { sourcePath: '/draft' },
-      { id: 'id', enabled: false },
-      { id: 'id', sourcePath: '/draft', enabled: true }
+      { action: 'status' },
+      { action: 'status', name: 'weekly-report' },
+      { action: 'sync', name: 'weekly-report' },
+      { action: 'sync', name: 'weekly-report', enabled: false }
     ])
-      expect(SKILL_EDIT_SCHEMA.safeParse(input).success).toBe(true)
+      expect(SKILL_SYNC_SCHEMA.safeParse(input).success).toBe(true)
     for (const input of [
       {},
-      { id: 'id' },
-      { enabled: true },
-      { sourcePath: '/draft', partnerId: 'other' },
-      { sourcePath: '/draft', revision: 'x' }
+      { action: 'sync' },
+      { action: 'status', enabled: false },
+      { action: 'sync', name: '../escape' },
+      { action: 'sync', name: 'x', previousName: 'y' },
+      { action: 'sync', name: 'x', partnerId: 'other' },
+      { action: 'sync', name: 'x', sourcePath: '/draft' }
     ])
-      expect(SKILL_EDIT_SCHEMA.safeParse(input).success).toBe(false)
-    for (const name of ['skill_read', 'skill_edit']) {
-      expect(isToolAllowed({ isSubagent: true }, name)).toBe(false)
-      expect(isToolAllowed({ isSubagent: false }, name)).toBe(true)
-    }
+      expect(SKILL_SYNC_SCHEMA.safeParse(input).success).toBe(false)
+    expect(isToolAllowed({ isSubagent: true }, 'skill_sync')).toBe(false)
+    expect(isToolAllowed({ isSubagent: false }, 'skill_sync')).toBe(true)
   })
+
+  it('delivers the affected Chinese partner names and validation reason to the model', async () => {
+    const error = 'Skill instructions exceed 64 KiB for: 周报伙伴、复核伙伴'
+    const delivered = await buildModelToolResultDelivery({
+      ctx: { platform: 'macos' } as AiRunContext,
+      toolCallId: 'sync-budget-error',
+      args: { action: 'sync', name: 'weekly-report', enabled: true },
+      result: { toolName: 'skill_sync', ok: false, data: { error } }
+    })
+    expect(delivered).toEqual({ ok: false, content: `Error: ${error}` })
+  })
+
   it('exposes builtin toolsets', () => {
     expect(listBuiltinToolsetDefinitions().map((definition) => definition.toolsetId)).toEqual([
       'terminal',

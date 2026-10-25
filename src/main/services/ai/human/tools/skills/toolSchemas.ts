@@ -1,34 +1,26 @@
 import { z } from 'zod/v4'
 
-const id = z.string().trim().min(1).describe('skill_read 返回的稳定 skill ID')
-
-export const SKILL_READ_SCHEMA = z.strictObject({
-  id: id.optional().describe('skill ID；省略时列出共享 skill')
-})
-
-export const SKILL_EDIT_SCHEMA = z
+export const SKILL_SYNC_SCHEMA = z
   .strictObject({
-    id: id.optional().describe('已有 skill ID；省略时创建'),
-    sourcePath: z
+    action: z
+      .enum(['status', 'sync'])
+      .describe('status 只读查询当前伙伴的启用状态；sync 校验目录并同步索引及可选启用配置'),
+    name: z
       .string()
-      .trim()
-      .min(1)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .max(64)
       .optional()
-      .describe(
-        '待发布完整目录的本机绝对路径；须含 SKILL.md（YAML 头含 name、description，随后为 Markdown 正文；name 为 1–64 位小写字母、数字或单连字符），可含 scripts、references、assets；编辑时先复制旧目录再修改草稿，更新完整替换，缺失文件视为移除；不接受应用托管目录'
-      ),
-    enabled: z.boolean().optional().describe('是否为当前伙伴启用；省略时创建不启用、更新保持原状')
+      .describe('与 Skill 目录同名；sync 必填，status 省略时查询全部已登记 Skill'),
+    enabled: z
+      .boolean()
+      .optional()
+      .describe('仅 sync 可用：是否为当前伙伴启用；省略时新建关闭、已有配置保持不变')
   })
-  .superRefine((input, context) => {
-    if (
-      (!input.id && !input.sourcePath) ||
-      (input.id && !input.sourcePath && input.enabled === undefined)
-    )
-      context.addIssue({
-        code: 'custom',
-        message: '创建必须提供 sourcePath；更新必须提供 id 及 sourcePath 或 enabled'
-      })
+  .superRefine((input, ctx) => {
+    if (input.action === 'sync' && !input.name)
+      ctx.addIssue({ code: 'custom', message: 'sync requires name' })
+    if (input.action === 'status' && input.enabled !== undefined)
+      ctx.addIssue({ code: 'custom', message: 'status cannot change enabled' })
   })
 
-export type SkillReadInput = z.infer<typeof SKILL_READ_SCHEMA>
-export type SkillEditInput = z.infer<typeof SKILL_EDIT_SCHEMA>
+export type SkillSyncInput = z.infer<typeof SKILL_SYNC_SCHEMA>

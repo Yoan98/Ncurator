@@ -547,7 +547,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 [System] + [User built₁] + … + tail 已发送段（止于 resume 新增的 User built₂ 之前）
 ```
 
-- System 在 platform / paths / 工具包目录、当前伙伴 Skill 绑定及已加载文件内容不变时保持稳定；**不含** `current_time`。Skill 内容刷新规则见第 7.2 节。
+- System 在本机信息与文件约定 / 工具包目录、当前伙伴 Skill 绑定及已加载文件内容不变时保持稳定；**不含**时区与本地时间。Skill 内容刷新规则见第 7.2 节。
 - tail 只许 **末尾 append** assistant/tool（过程 `toolCalls.args` 见第 2.2 节）。
 - 同 run 内：**不改** 当前 build user；「当前时间」取本 run `runStartedAt`。
 - resume：**append** 新 User 在整段末尾；历史 User / 过程 **一字不改**（来自 log `content`）。

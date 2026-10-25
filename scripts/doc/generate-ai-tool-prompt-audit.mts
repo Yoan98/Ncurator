@@ -264,20 +264,10 @@ const extractUnionExamples = (schema: z.ZodType): Array<{ label: string; input: 
 }
 
 const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: JsonObject }>> = {
-  skill_read: [
-    { label: 'list', input: {} },
-    { label: 'get', input: { id: 'user:example' } }
-  ],
-  skill_edit: [
-    {
-      label: 'create-and-enable',
-      input: { sourcePath: '/workspace/draft/weekly-report', enabled: true }
-    },
-    {
-      label: 'update',
-      input: { id: 'user:example', sourcePath: '/workspace/draft/weekly-report' }
-    },
-    { label: 'disable', input: { id: 'user:example', enabled: false } }
+  skill_sync: [
+    { label: 'status', input: { action: 'status' } },
+    { label: 'sync-and-enable', input: { action: 'sync', name: 'weekly-report', enabled: true } },
+    { label: 'disable', input: { action: 'sync', name: 'weekly-report', enabled: false } }
   ],
   web_search: [
     { label: 'search', input: { type: 'search', query: 'typescript tutorial' } },
@@ -357,15 +347,12 @@ const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: Json
 
 /** renderer 实际读取的字段 */
 const OUTPUT_FIELDS: Record<string, OutField[]> = {
-  skill_read: [
-    { path: 'skills[]', description: '列表项包含 id、name、description、enabled' },
-    {
-      path: 'id / path / content / enabled',
-      description: '详情包含稳定 ID、托管目录、原始 SKILL.md 与当前伙伴启用状态；长正文通过文件读取'
-    },
-    { path: 'filePath', description: '仅超长清单：完整工具结果文件' }
+  skill_sync: [
+    { path: '[].name / [].enabled', description: '只读状态：已登记 Skill 对当前伙伴的启用配置' },
+    { path: 'name / enabled', description: '同步后的名称及当前伙伴启用配置' },
+    { path: 'warning?', description: '损坏目录已停用但未同步时的明确说明' },
+    { path: 'filePath', description: '超长状态清单的真实工具结果文件' }
   ],
-  skill_edit: [{ path: 'id / name', description: '保存后的稳定 ID 与名称' }],
   terminal_run: [
     { path: 'status', description: "'running' | 'succeeded' | 'failed' | 'cancelled'" },
     { path: 'terminalId', description: '终端会话 ID' },
@@ -528,58 +515,36 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
 }
 
 const OUTPUT_CASES: Record<string, OutputCase[]> = {
-  skill_read: [
+  skill_sync: [
     {
-      label: '目录',
+      label: '全部启用状态',
       ok: true,
-      input: {},
+      input: { action: 'status' },
+      data: [
+        { name: 'weekly-report', enabled: true },
+        { name: 'project-review', enabled: false }
+      ]
+    },
+    {
+      label: '同步并启用',
+      ok: true,
+      input: { action: 'sync', name: 'weekly-report', enabled: true },
+      data: { name: 'weekly-report', enabled: true }
+    },
+    {
+      label: '停用损坏目录',
+      ok: true,
+      input: { action: 'sync', name: 'weekly-report', enabled: false },
       data: {
-        skills: [
-          {
-            id: 'user:example',
-            name: 'weekly-report',
-            description: '撰写周报时使用。',
-            enabled: true
-          }
-        ]
+        name: 'weekly-report',
+        enabled: false,
+        warning: 'Skill disabled; directory was not synced: SKILL.md is invalid'
       }
-    },
-    {
-      label: '原文',
-      ok: true,
-      input: { id: 'user:example' },
-      data: {
-        id: 'user:example',
-        path: '/userData/skills/weekly-report',
-        enabled: true,
-        content:
-          '---\nname: weekly-report\ndescription: 撰写周报时使用。\n---\n# 周报规范\n只使用用户提供的事实。'
-      }
-    },
-    {
-      label: '长正文',
-      ok: true,
-      input: { id: 'user:example' },
-      data: { id: 'user:example', path: '/userData/skills/weekly-report', enabled: false }
-    }
-  ],
-  skill_edit: [
-    {
-      label: '创建并启用',
-      ok: true,
-      input: { sourcePath: '/workspace/draft/weekly-report', enabled: true },
-      data: { id: 'user:example', name: 'weekly-report' }
-    },
-    {
-      label: '只停用',
-      ok: true,
-      input: { id: 'user:example', enabled: false },
-      data: { id: 'user:example', name: 'weekly-report' }
     },
     {
       label: '预算拒绝',
       ok: false,
-      input: { sourcePath: '/workspace/draft/weekly-report', enabled: true },
+      input: { action: 'sync', name: 'weekly-report', enabled: true },
       data: { error: 'Skill instructions exceed 64 KiB for: 周报伙伴' }
     }
   ],

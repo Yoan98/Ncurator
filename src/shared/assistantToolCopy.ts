@@ -134,8 +134,6 @@ export const getToolDisplayInput = (
   data?: JsonValue
 ): JsonObject | undefined => {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined
-  if (toolName === 'skill_edit' && typeof data.name === 'string')
-    return { ...args, displayName: data.name }
   if (toolName === 'load_skill' && Array.isArray(data.requestedSkillNames))
     return {
       ...args,
@@ -335,18 +333,12 @@ const TOOL_ITEM_RENDERERS: Record<RuntimeToolName, ToolItemRenderer> = {
     return loadingCopy(label || 'skill', input)
   },
   load_toolset: (input) => loadingCopy(readLoadToolsetNames(input), input),
-  skill_read: () => toolCopy('读取 skill', sentence(text('读取 skill'))),
-  skill_edit: (input) => {
+  skill_sync: (input) => {
     const data = input as Record<string, IpcJsonValue> | undefined
-    const action = data?.sourcePath
-      ? data.id
-        ? '更新'
-        : '创建'
-      : data?.enabled === false
-        ? '停用'
-        : '启用'
-    const name = typeof data?.displayName === 'string' ? data.displayName : 'skill'
-    return toolCopy(`${action} ${name}`, sentence(text(`${action} ${name}`)))
+    const name = typeof data?.name === 'string' ? data.name : 'Skill'
+    return data?.action === 'status'
+      ? toolCopy('查看 Skill 启用状态', sentence(text('查看 Skill 启用状态')))
+      : toolCopy(`同步 ${name}`, sentence(text(`同步 ${name}`)))
   },
   list_agent: () => toolCopy('查看子任务', sentence(text('查看子任务'))),
   delegate_to_subagent: () => toolCopy('分头处理', sentence(text('分头处理'))),

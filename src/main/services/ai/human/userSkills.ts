@@ -4,7 +4,7 @@ import type { AiRunContext } from '../types'
 
 export type UserSkillReader = Pick<UserSkillService, 'listEnabled' | 'loadEnabled'>
 export type UserSkillAccess = UserSkillReader &
-  Partial<Pick<UserSkillService, 'readForPartner' | 'editForPartner'>>
+  Partial<Pick<UserSkillService, 'getRootDirectory' | 'statusForPartner' | 'syncForPartner'>>
 export type LoadedUserSkill = ReturnType<UserSkillReader['loadEnabled']>
 
 export const isUserSkillId = (id: string): boolean => id.startsWith('user:')
@@ -14,13 +14,14 @@ export const loadCurrentUserSkills = (
   ids: readonly string[]
 ): LoadedUserSkill[] => {
   if (!ctx.userSkillService) return []
-  const enabled = new Set(ctx.userSkillService.listEnabled(ctx.partnerId).map((skill) => skill.id))
-  const loaded = [...new Set(ids)]
-    .filter((id) => enabled.has(id))
-    .map((id) => ctx.userSkillService!.loadEnabled(ctx.partnerId, id))
-  const bytes = loaded.reduce((sum, item) => sum + Buffer.byteLength(item.body, 'utf8'), 0)
+  const enabled = ctx.userSkillService.listEnabled(ctx.partnerId)
+  const requested = [...new Set(ids)].filter((id) => enabled.some((skill) => skill.id === id))
+  if (!requested.length) return []
+  const current = enabled.map((skill) => ctx.userSkillService!.loadEnabled(ctx.partnerId, skill.id))
+  const bytes = current.reduce((sum, item) => sum + Buffer.byteLength(item.body, 'utf8'), 0)
   if (bytes > MAX_USER_SKILL_BODY_BYTES)
     throw new Error('Skill instructions exceed 64 KiB; adjust the enabled skills before continuing')
+  const loaded = requested.map((id) => current.find((item) => item.skill.id === id)!)
   return loaded
 }
 

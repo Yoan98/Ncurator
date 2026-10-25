@@ -56,8 +56,7 @@ export const RUNTIME_TOOL_CATALOG = {
   ask_user_question: { familyId: 'agent-control', toolsetId: 'agent-control' },
   scheduled_task_list: { familyId: 'scheduled-tasks', toolsetId: 'scheduled-tasks' },
   scheduled_task_action: { familyId: 'scheduled-tasks', toolsetId: 'scheduled-tasks' },
-  skill_read: { familyId: 'skill-management', toolsetId: 'skill-management' },
-  skill_edit: { familyId: 'skill-management', toolsetId: 'skill-management' }
+  skill_sync: { familyId: 'skill-management', toolsetId: 'skill-management' }
 } as const satisfies Record<string, RuntimeToolCatalogEntry>
 
 export type RuntimeToolName = keyof typeof RUNTIME_TOOL_CATALOG
