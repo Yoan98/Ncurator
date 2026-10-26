@@ -3,6 +3,7 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
+  ensureWorkbenchContentPanelExpanded,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   recordWorkbenchAiEvidence,
@@ -26,15 +27,17 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['timeline'],
         description: '有消息后时间轴展示今天节点，点击后跳到当天最早一条消息。',
-        fixtures: ['tests/fixtures/workspace'],
-        knowledge: 'cached',
+        fixtures: [],
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          const setup = await setupWorkbenchWithTempWorkspace(page, {
+            caseId: CASE_ID,
+            workspaceContents: 'empty'
+          })
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(page, PROMPT)
           const evidence = await waitForWorkbenchAiRunCompletion(
@@ -108,7 +111,34 @@ describe('workbench conversation e2e', () => {
             message: '点击今天后最早消息贴顶，侧栏与 Composer 不跟着抖。'
           })
 
+          const readChatTitlebar = () =>
+            page.evaluate((selectors) => {
+              const topbar = document.querySelector(`[data-testid="${selectors.topbar}"]`)
+              if (!(topbar instanceof HTMLElement)) return null
+              const rect = topbar.getBoundingClientRect()
+              const toggle = topbar.querySelector(`[data-testid="${selectors.contentPanelToggle}"]`)
+              return {
+                height: rect.height,
+                appRegion: getComputedStyle(topbar).getPropertyValue('-webkit-app-region'),
+                blankHitRegions: [rect.left + 8, rect.left + rect.width / 2, rect.right - 8].map(
+                  (x) => {
+                    const hit = document.elementFromPoint(x, rect.top + rect.height / 2)
+                    return hit ? getComputedStyle(hit).getPropertyValue('-webkit-app-region') : ''
+                  }
+                ),
+                toggleAppRegion: toggle
+                  ? getComputedStyle(toggle).getPropertyValue('-webkit-app-region')
+                  : null
+              }
+            }, workbenchSelectors)
+          const collapsedChatTitlebar = await readChatTitlebar()
+
+          await ensureWorkbenchContentPanelExpanded(page)
+          const expandedChatTitlebar = await readChatTitlebar()
+
           return {
+            collapsedChatTitlebar,
+            expandedChatTitlebar,
             labels,
             timelineScrollable,
             userMessageInView,
@@ -117,6 +147,24 @@ describe('workbench conversation e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            [result.collapsedChatTitlebar, result.expandedChatTitlebar].every(
+              (titlebar) =>
+                titlebar !== null &&
+                Math.round(titlebar.height) === 44 &&
+                titlebar.appRegion === 'drag' &&
+                titlebar.blankHitRegions.every((region) => region === 'drag')
+            ) && result.collapsedChatTitlebar?.toggleAppRegion === 'no-drag',
+            {
+              name: 'chat-titlebar-blank-space-remains-draggable',
+              message:
+                '聊天标题栏整体及左右留白、中部均应为拖动区，右侧面板开关保持可点击，对齐 WB-CORE-008-AC1。',
+              data: {
+                collapsed: result.collapsedChatTitlebar,
+                expanded: result.expandedChatTitlebar
+              }
+            }
+          )
           await runtime.assertThat(
             result.labels.includes('今天') &&
               !result.labels.includes('昨天') &&

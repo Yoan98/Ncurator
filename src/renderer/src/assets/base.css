@@ -946,7 +946,7 @@ textarea,
   height: var(--workbench-titlebar-height);
   user-select: none;
   -webkit-user-select: none;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 
 .nc-resource-tabbar {
@@ -1019,6 +1019,7 @@ textarea,
   height: 100%;
   transition: width 180ms ease;
   pointer-events: none;
+  -webkit-app-region: no-drag;
 }
 
 .nc-topbar-title-region {
