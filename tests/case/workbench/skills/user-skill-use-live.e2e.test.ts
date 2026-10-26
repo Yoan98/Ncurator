@@ -41,7 +41,7 @@ describe('workbench skills live', () => {
         caseId: CASE_ID,
         domain: 'workbench',
         suite: 'skills',
-        groups: ['live'],
+        groups: [],
         description: '真实 UI 配置规范，AI 使用相对资源，编辑后下一轮使用新规则。',
         fixtures: ['tests/fixtures/workspace/skills/weekly-report'],
         serviceMode: 'real',

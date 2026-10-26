@@ -829,7 +829,7 @@ pnpm test:update:e2e
 
 #### `user-skill-use-live`
 
-- 测试类型：e2e / live；group `live`，原生目录选择要求 `execution: exclusive`。
+- 测试类型：e2e / live；skills suite，不另设 group；原生目录选择要求 `execution: exclusive`。
 - What：用户通过统一创建入口导入、伙伴编辑配置后，真实 AI 使用规范及资源，编辑后使用新规则。
 - Why：证明新入口到模型闭环。
 - How：UI 导入、伙伴编辑内启用周报内容，用户提供业务事实生成文件；Markdown 编辑后再发任务，记录真实请求、工具和产物。
@@ -837,7 +837,7 @@ pnpm test:update:e2e
 
 #### `user-skill-management-live`
 
-- 测试类型：e2e / live；skills / live；knowledge none。
+- 测试类型：e2e / live；skills suite，不另设 group；knowledge none。
 - What：自然语言创建并启用、更新以及停用 skill 后的页面与配置闭环。
 - Why：AI 创建后的列表、资源、容量和过程呈现必须与真实持久化一致。
 - How：真实 UI 建立伙伴与模型配置，通过聊天要求创建含资源的规范并启用；到管理页打开正文、资源，再聊天更新并核对页面同步，最后停用并打开伙伴配置核对。核对按需加载 skill 管理及批量配置，查询/更新过程和简短成功结果；以真实文本和工具事件核对连续动作合并为 Activity、收起/展开箭头与加载名称；单一类型显示对应扳手/厚书，混合为流程图标，刷新后历史一致；不写 IPC、伪造事件或模型结果。

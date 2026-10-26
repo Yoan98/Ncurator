@@ -31,7 +31,7 @@ describe('skill management UI live', () => {
         caseId: CASE_ID,
         domain: 'workbench',
         suite: 'skills',
-        groups: ['live'],
+        groups: [],
         execution: 'live',
         knowledge: 'none',
         fixtures: [],
