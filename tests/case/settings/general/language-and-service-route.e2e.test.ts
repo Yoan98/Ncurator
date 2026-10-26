@@ -2,6 +2,7 @@ import { describe, it } from 'vitest'
 import type { Page } from 'playwright'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import { navigateToSettingsSection, SETTINGS_E2E_TIMEOUT_MS } from '../../../harness/e2e/settings'
+import { createPartnerThroughWorkbenchUi } from '../../../harness/e2e/workbench'
 import {
   settingsSelectors,
   workbenchSelectors
@@ -131,12 +132,7 @@ describe('application language and service region', () => {
             async () => (await window.api.appStartupGetStatus()).serviceRoute === 'domestic'
           )
           await runtime.page.getByTestId(settingsSelectors.backRow).click()
-          await runtime.page.getByTestId(workbenchSelectors.newPartnerButton).click()
-          const partnerName = runtime.page.getByTestId(workbenchSelectors.createPartnerNameInput)
-          await partnerName.fill('English UI check')
-          const modal = runtime.page.getByTestId(workbenchSelectors.createPartnerModal)
-          await modal.locator('.ant-modal-footer .ant-btn-primary').click()
-          await modal.waitFor({ state: 'hidden' })
+          await createPartnerThroughWorkbenchUi(runtime.page, 'English UI check')
           await runtime.page.getByTestId(workbenchSelectors.input).waitFor({ state: 'visible' })
           const englishBrand = await runtime.page.title()
           await runtime.page.waitForTimeout(500)

@@ -56,10 +56,10 @@
 #### `workspace-index-job-store-contract`
 
 - 测试类型：`backend`
-- What：`workspace_index_job` 支持创建、active 查询、阶段进度更新、失败收敛和 cancelled 终态。
+- What：`workspace_index_job` 支持创建、active 查询、阶段进度更新、失败收敛和终态保护。
 - Why：更新索引的进度恢复、中断收敛与用户取消都依赖 job store。
-- How：真实 job store 写入 running/failed/cancelled 记录并查询 active、进度与批量失败。
-- Oracle：active 取最新 running，cancelled 不是 active；进度可持久化读取；running job 可批量失败；cancelled 后 `hasRunningPrepareJob` 为 false，对齐 `SET-WORKSPACE-004-AC3`、`SET-WORKSPACE-004-AC4`、`SET-WORKSPACE-004-AC5`、`SET-WORKSPACE-004-AC14`。
+- How：真实 job store 写入 running/failed/cancelled/succeeded 记录并查询 active、进度与批量失败；对各终态再提交晚到的进度、成功和失败更新，读取完整记录比较。
+- Oracle：active 取最新 running，cancelled 不是 active；进度可持久化读取；running job 可批量失败；各终态记录保持原状态、诊断、计数和时间；cancelled 后 `hasRunningPrepareJob` 为 false，对齐 `SET-WORKSPACE-004-AC3`、`SET-WORKSPACE-004-AC4`、`SET-WORKSPACE-004-AC5`、`SET-WORKSPACE-004-AC14`。
 
 #### `workspace-index-worker-contract`
 

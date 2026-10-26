@@ -73,7 +73,8 @@ describe('unit workspace backend', () => {
         const updatedFileJob = await runtime.storageService.workspaceIndexJob.getJobById(
           newerJob.id
         )
-        const hasRunningPrepareJob = await runtime.storageService.workspaceIndexJob.hasRunningPrepareJob()
+        const hasRunningPrepareJob =
+          await runtime.storageService.workspaceIndexJob.hasRunningPrepareJob()
         const failedCount = await runtime.storageService.workspaceIndexJob.failRunningJobs(
           '程序关闭导致索引中断',
           NOW + 4
@@ -100,6 +101,48 @@ describe('unit workspace backend', () => {
           cancelledJob.id
         )
 
+        const succeededJob = createJob({
+          id: 'succeeded-file-job',
+          sourceKind: 'file',
+          startedAt: NOW + 6
+        })
+        await runtime.storageService.workspaceIndexJob.saveJob(succeededJob)
+        await runtime.storageService.workspaceIndexJob.updateJob(succeededJob.id, {
+          status: 'succeeded',
+          phase: 'complete',
+          processed_count: 3,
+          message: 'completed',
+          updated_at: NOW + 7,
+          finished_at: NOW + 7
+        })
+        const terminalJobs = []
+        for (const id of [newerJob.id, cancelledJob.id, succeededJob.id]) {
+          const before = await runtime.storageService.workspaceIndexJob.getJobById(id)
+          if (!before) throw new Error(`terminal job not found: ${id}`)
+          await runtime.storageService.workspaceIndexJob.updateJob(id, {
+            phase: 'index',
+            processed_count: 0,
+            message: 'late progress',
+            updated_at: NOW + 8
+          })
+          for (const status of ['running', 'succeeded', 'failed', 'cancelled'] as const) {
+            await runtime.storageService.workspaceIndexJob.updateJob(id, {
+              status,
+              phase: 'complete',
+              processed_count: 3,
+              failed_count: 3,
+              message: 'late completion',
+              last_error: 'late diagnostic',
+              updated_at: NOW + 9,
+              finished_at: NOW + 9
+            })
+          }
+          terminalJobs.push({
+            before,
+            after: await runtime.storageService.workspaceIndexJob.getJobById(id)
+          })
+        }
+
         return {
           activeFileJob,
           updatedFileJob,
@@ -110,7 +153,8 @@ describe('unit workspace backend', () => {
           failedWebJob,
           activeAfterCancelled,
           hasRunningPrepareJobAfterCancelled,
-          storedCancelled
+          storedCancelled,
+          terminalJobs
         }
       },
       assert: async (result, runtime) => {
@@ -160,6 +204,19 @@ describe('unit workspace backend', () => {
             message:
               'cancelled 不是 active job，且不再拦截知识库检索，对齐 SET-WORKSPACE-004-AC14。',
             data: result
+          }
+        )
+
+        runtime.assertThat(
+          result.terminalJobs.map(({ before }) => before.status).join(',') ===
+            'failed,cancelled,succeeded' &&
+            result.terminalJobs.every(
+              ({ before, after }) => JSON.stringify(before) === JSON.stringify(after)
+            ),
+          {
+            name: 'terminal-jobs-ignore-late-updates',
+            message: '任务进入终态后，晚到的进度和完成回调不得覆盖状态、诊断、计数或时间。',
+            data: result.terminalJobs
           }
         )
       }

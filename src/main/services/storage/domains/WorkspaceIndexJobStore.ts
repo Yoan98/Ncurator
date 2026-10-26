@@ -9,12 +9,12 @@ import type { SqliteCore } from '../sqlite/SqliteCore'
 import {
   insertOrReplace,
   jsonStringify,
+  omitUndefined,
   parseJsonArray,
   toOptionalNumber,
   toOptionalString,
   toRequiredNumber,
-  toRequiredString,
-  updateById
+  toRequiredString
 } from '../sqlite/sqliteUtils'
 
 type WorkspaceIndexJobRow = Record<string, unknown>
@@ -104,7 +104,7 @@ export class WorkspaceIndexJobStore {
       >
     >
   ): Promise<void> {
-    updateById(this.sqlite, 'workspace_index_job', id, {
+    const next = omitUndefined({
       status: values.status,
       phase: values.phase,
       step_index: values.step_index,
@@ -118,6 +118,15 @@ export class WorkspaceIndexJobStore {
       updated_at: values.updated_at,
       finished_at: values.finished_at
     })
+    const columns = Object.keys(next)
+    if (columns.length === 0) return
+    const assignments = columns.map((column) => `${column} = @${column}`)
+    this.sqlite
+      .prepare(
+        `UPDATE workspace_index_job SET ${assignments.join(', ')}
+         WHERE id = @id AND status = 'running'`
+      )
+      .run({ ...next, id })
   }
 
   public async getJobById(id: string): Promise<WorkspaceIndexJobRecord | null> {
