@@ -318,24 +318,10 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       : staleIndexCount > 0
         ? t(($) => $.settings.embedding.rebuild)
         : t(($) => $.settings.updateIndex)
-  const webPrepareTooltip =
-    hasVectorModel === null
-      ? t(($) => $.settings.checkingVectorModelStatus)
-      : vectorModelMissing
-        ? vectorModelStatus
-        : webPrepareRunning
-          ? t(($) => $.settings.stopThisIndexUpdateAndKeepCompletedItems)
-          : actionableWebIndexCount === 0
-            ? t(($) => $.settings.noIndexesNeedUpdating)
-            : t(($) => $.settings.checkWebpageChangesAndUpdateTheIndex)
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
-      <div className="text-[13px] font-medium text-[#37352F]">
-        {t(($) => $.settings.embedding.configure)}
-      </div>
       <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-        {vectorModelStatus}
-        <p className="mt-1">{t(($) => $.settings.embedding.requirement)}</p>
+        {t(($) => $.settings.embedding.requirement)}
       </div>
       <Button
         type="link"
@@ -427,21 +413,16 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               {t(($) => $.common.checkForUpdates)}
             </Button>
             <div className="relative min-w-0" id="workspace-web-index-action">
-              <Tooltip
-                title={[webPrepareTooltip, !vectorModelMissing ? vectorModelStatus : '']
-                  .filter(Boolean)
-                  .join(' · ')}
+              <Button
+                type="primary"
+                icon={<HiCircleStack className="h-4 w-4" />}
+                onClick={handleWebPrepareButtonClick}
+                disabled={webPrepareDisabled}
+                className={`w-full min-w-0 ${vectorModelMissing ? '!pr-9' : ''}`}
               >
-                <Button
-                  type="primary"
-                  icon={<HiCircleStack className="h-4 w-4" />}
-                  onClick={handleWebPrepareButtonClick}
-                  disabled={webPrepareDisabled}
-                  className={`w-full min-w-0 ${vectorModelMissing ? '!pr-9' : ''}`}
-                >
-                  {webPrepareLabel}
-                </Button>
-              </Tooltip>
+                {webPrepareLabel}
+              </Button>
+
               {vectorModelMissing ? (
                 <Popover
                   trigger={['hover', 'click']}

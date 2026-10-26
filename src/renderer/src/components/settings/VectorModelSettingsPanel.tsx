@@ -28,7 +28,12 @@ import type {
   RemoteEmbeddingModelInput,
   RemoteEmbeddingModelSummary
 } from '../../../../shared/embeddingModels'
-import { HiCheckCircle, HiExclamationCircle, HiTrash } from 'react-icons/hi2'
+import {
+  HiCheckCircle,
+  HiExclamationCircle,
+  HiOutlineQuestionMarkCircle,
+  HiTrash
+} from 'react-icons/hi2'
 import { MODEL_SOURCES, type ModelSource } from '../../../../shared/modelSources'
 import type {
   ModelInfo,
@@ -86,6 +91,38 @@ const isValidMaxInputTokens = (value: number | undefined): value is number =>
   Number.isSafeInteger(value) &&
   value >= MIN_EMBEDDING_INPUT_TOKENS &&
   value <= MAX_EMBEDDING_INPUT_TOKENS
+
+function ModelFieldLabel({
+  htmlFor,
+  label,
+  hint,
+  helpTestId
+}: {
+  htmlFor: string
+  label: string
+  hint?: React.ReactNode
+  helpTestId?: string
+}): React.JSX.Element {
+  return (
+    <div className="mb-1 flex items-center gap-1.5">
+      <label htmlFor={htmlFor} className="text-[13px]">
+        {label}
+      </label>
+      {hint ? (
+        <Tooltip title={hint} trigger={['hover', 'focus']} fresh destroyTooltipOnHide>
+          <button
+            type="button"
+            className="inline-flex items-center text-[#9B9A97] transition-colors hover:text-[#37352F]"
+            aria-label={t(($) => $.settings.embedding.fieldHelp, { field: label })}
+            data-testid={helpTestId}
+          >
+            <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help" aria-hidden="true" />
+          </button>
+        </Tooltip>
+      ) : null}
+    </div>
+  )
+}
 
 const VectorModelSettingsPanel: React.FC = () => {
   const navigate = useNavigate()
@@ -829,9 +866,23 @@ const VectorModelSettingsPanel: React.FC = () => {
               ] as const
             ).map(([field, label, testId]) => (
               <div key={field}>
-                <label htmlFor={`embedding-${field}`} className="mb-1 block text-[13px]">
-                  {label}
-                </label>
+                <ModelFieldLabel
+                  htmlFor={`embedding-${field}`}
+                  label={label}
+                  hint={
+                    field === 'modelName' ? (
+                      <div className="space-y-1">
+                        <div>{t(($) => $.settings.embedding.modelNameHint)}</div>
+                        {draft.id && draft.id === snapshot?.activeModelId ? (
+                          <div>{t(($) => $.settings.embedding.activeEditHint)}</div>
+                        ) : null}
+                      </div>
+                    ) : undefined
+                  }
+                  helpTestId={
+                    field === 'modelName' ? vectorSelectors.remoteModelNameHelp : undefined
+                  }
+                />
                 <Input
                   id={`embedding-${field}`}
                   value={draft[field]}
@@ -851,9 +902,25 @@ const VectorModelSettingsPanel: React.FC = () => {
               </div>
             ))}
             <div>
-              <label htmlFor="embedding-maxInputTokens" className="mb-1 block text-[13px]">
-                {t(($) => $.settings.embedding.maxInputTokens)}
-              </label>
+              <ModelFieldLabel
+                htmlFor="embedding-maxInputTokens"
+                label={t(($) => $.settings.embedding.maxInputTokens)}
+                helpTestId={vectorSelectors.remoteMaxInputTokensHelp}
+                hint={
+                  <div className="space-y-1">
+                    <div>
+                      {t(($) => $.settings.embedding.maxInputTokensHint, {
+                        default: DEFAULT_EMBEDDING_INPUT_TOKENS
+                      })}
+                    </div>
+                    {draftBudget ? (
+                      <div data-testid={vectorSelectors.budgetHint}>
+                        {t(($) => $.settings.embedding.budgetHint, draftBudget)}
+                      </div>
+                    ) : null}
+                  </div>
+                }
+              />
               <InputNumber<number>
                 id="embedding-maxInputTokens"
                 className="!w-full"
@@ -869,32 +936,18 @@ const VectorModelSettingsPanel: React.FC = () => {
                 })}
                 aria-valuemin={MIN_EMBEDDING_INPUT_TOKENS}
                 aria-valuemax={MAX_EMBEDDING_INPUT_TOKENS}
-                aria-describedby="embedding-max-input-hint embedding-budget-hint"
                 onChange={updateMaxInputTokens}
                 onInput={(value) => updateMaxInputTokens(value.trim() ? Number(value) : undefined)}
                 data-testid={vectorSelectors.remoteMaxInputTokensInput}
               />
-              <p id="embedding-max-input-hint" className="mt-1 text-[12px] text-[#787774]">
-                {t(($) => $.settings.embedding.maxInputTokensHint, {
-                  default: DEFAULT_EMBEDDING_INPUT_TOKENS,
-                  min: MIN_EMBEDDING_INPUT_TOKENS,
-                  max: MAX_EMBEDDING_INPUT_TOKENS
-                })}
-              </p>
-              <p
-                id="embedding-budget-hint"
-                className="mt-1 text-[12px] text-[#787774]"
-                aria-live="polite"
-                data-testid={vectorSelectors.budgetHint}
-              >
-                {draftBudget ? t(($) => $.settings.embedding.budgetHint, draftBudget) : null}{' '}
-                {t(($) => $.settings.embedding.lengthEstimateHint)}
-              </p>
             </div>
             <div>
-              <label htmlFor="embedding-apiKey" className="mb-1 block text-[13px]">
-                {t(($) => $.settings.embedding.apiKey)}
-              </label>
+              <ModelFieldLabel
+                htmlFor="embedding-apiKey"
+                label={t(($) => $.settings.embedding.apiKey)}
+                hint={t(($) => $.settings.embedding.keyHint)}
+                helpTestId={vectorSelectors.remoteApiKeyHelp}
+              />
               <Input.Password
                 id="embedding-apiKey"
                 value={draft.apiKey || ''}
@@ -903,7 +956,6 @@ const VectorModelSettingsPanel: React.FC = () => {
                   Boolean(snapshot?.index.running && snapshot.activeModelId === draft.id)
                 }
                 autoComplete="new-password"
-                aria-describedby="embedding-key-hint"
                 onChange={(event) => {
                   setDraft({ ...draft, apiKey: event.target.value })
                   setTestResult('')
@@ -911,15 +963,7 @@ const VectorModelSettingsPanel: React.FC = () => {
                 }}
                 data-testid={vectorSelectors.remoteApiKeyInput}
               />
-              <p id="embedding-key-hint" className="mt-1 text-[12px] text-[#787774]">
-                {t(($) => $.settings.embedding.keyHint)}
-              </p>
             </div>
-            <p className="text-[12px] text-[#787774]">
-              {draft.id && draft.id === snapshot?.activeModelId
-                ? t(($) => $.settings.embedding.activeEditHint)
-                : t(($) => $.settings.embedding.saveHint)}
-            </p>
             {draftError || operationError || testResult ? (
               <div
                 role={draftError || operationError ? 'alert' : 'status'}

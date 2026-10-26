@@ -211,40 +211,36 @@ export const en = {
       cancelDownloadConfirm: 'Cancel and delete',
       use: 'Use',
       noRemote: 'No remote models configured',
+      fieldHelp: 'About {{field}}',
       name: 'Name',
       baseUrl: 'Base URL',
+      modelNameHint: 'Embedding model name, e.g. text-embedding-v4.',
       modelName: 'Model name',
       maxInputTokens: 'Maximum input length (tokens)',
       defaultInputTokens: 'Default: {{tokens}}',
       maxInputTokensHint:
-        'Optional. Leave blank to use {{default}} tokens, or enter the provider’s official maximum: an integer from {{min}} to {{max}}.',
+        'Use the model’s per-text token limit. Default: {{default}}. Long text is split automatically.',
       invalidMaxInputTokens:
         'Maximum input length must be an integer from {{min}} to {{max}} tokens.',
       budgetHint:
-        'The app automatically reserves {{reservedTokens}} tokens, leaving {{contentTokenBudget}} tokens for content.',
-      lengthEstimateHint:
-        'Generic APIs use conservative length estimates for splitting, rather than exact model tokenizer counts. Actual service limits apply.',
+        'Reserved: {{reservedTokens}} · Content: {{contentTokenBudget}} tokens (estimated).',
       apiKey: 'API key',
-      keyHint:
-        'Leave blank to keep the saved key. A new configuration must meet the provider’s key requirements.',
+      keyHint: 'Enter a key for new models. Leave blank when editing to keep the saved key.',
       test: 'Test connection',
       testSuccess: 'Connection succeeded · {{dimension}} dimensions',
-      saveHint: 'Saving does not switch models. Select Use in the list when ready.',
-      activeEditHint: 'Changing the endpoint, model or input limit invalidates existing indexes.',
+      activeEditHint: 'Changing the endpoint, model or input limit requires reindexing.',
       deleteTitle: 'Delete this remote model?',
-      switchBeforeDelete: 'Switch to another model before deleting the current model.',
+      switchBeforeDelete: 'Switch models before deleting.',
       required: 'Enter a name, base URL and model name.',
       requestFailed: 'The operation failed. Please try again.',
       loadFailed: 'Could not load the selected model and index status.',
-      selectedRemote: 'Selected remote model: {{name}} · configured',
-      selectedLocal: 'Selected local model: {{name}} · downloaded',
-      selectedLocalMissing: 'Selected local model: {{name}} · download required',
-      selectionMissing:
-        'The selected model is unavailable. Select a configured remote model or download and select a local model.',
+      selectedRemote: 'Remote: {{name}}',
+      selectedLocal: 'Local: {{name}}',
+      selectedLocalMissing: 'Local: {{name}} (not downloaded)',
+      selectionMissing: 'Select an available embedding model.',
       configure: 'Configure vector models',
-      requirement:
-        'Select a configured remote model or a downloaded local model before updating the index.',
-      saved: 'Saved. Select Use in the list to switch to this model.'
+      requirement: 'Download a local model or select a configured remote model.',
+      saved: 'Saved. Select Use in the list.'
     },
     openHelpWebsiteTitle: 'Open help on the website?',
     openHelpWebsiteDescription:
@@ -295,11 +291,9 @@ export const en = {
     unfinishedItemsWillStopIndexingCompletedIndexesWillBe:
       'Unfinished items will stop indexing. Completed indexes will be kept.',
     slow: 'Slow:',
-    usesFewerComputerResourcesToIndexFilesTakingMore:
-      'Uses fewer computer resources to index files, taking more time.',
+    usesFewerComputerResourcesToIndexFilesTakingMore: 'Fewer resources; takes longer.',
     fast: 'Fast:',
-    usesMoreComputerResourcesToFinishIndexingFaster:
-      'Uses more computer resources to finish indexing faster.',
+    usesMoreComputerResourcesToFinishIndexingFaster: 'Faster; uses more resources.',
     couldNotLoadIndexingSpeed: 'Could not load indexing speed',
     couldNotSaveIndexingSpeed: 'Could not save indexing speed',
     indexingSpeed: 'Indexing speed',
@@ -409,9 +403,6 @@ export const en = {
     stopping: 'Stopping',
     updateIndex: 'Update index',
     checkingVectorModelStatus: 'Checking vector model status',
-    stopThisIndexUpdateAndKeepCompletedItems: 'Stop this index update and keep completed items.',
-    noIndexesNeedUpdating: 'No indexes need updating',
-    checkWebpageChangesAndUpdateTheIndex: 'Check webpage changes and update the index.',
     installAVectorModelFirst: 'Install a vector model first',
     aVectorModelIsRequiredToIndexWorkspaceContent:
       'A vector model is required to index workspace content.',
@@ -420,7 +411,7 @@ export const en = {
     addWebpage: 'Add webpage',
     indexStatus: 'Index status',
     webpageIndexingFetchesTheMainContentAndAddsIt:
-      'Webpage indexing fetches the main content and adds it to the local search database.',
+      'Check for updates finds webpage changes. Update index fetches and indexes content.',
     indexable: 'Indexable',
     includesFailures: 'Includes failures',
     whyIndexingIsUnavailable: 'Why indexing is unavailable',
@@ -456,17 +447,13 @@ export const en = {
     couldNotUpdateTheIndex: 'Could not update the index',
     couldNotRemove: 'Could not remove',
     removed: 'Removed',
-    checkDirectoryChangesAndUpdateIndexesForSupportedFiles:
-      'Check directory changes and update indexes for supported files.',
     installAVectorModelBeforeUpdatingTheIndex2: 'Install a vector model before updating the index.',
     file2: 'File {{value1}}',
     fileLocations: 'File locations',
     addYourUsualWorkingDirectories: 'Add your usual working directories.',
     addDirectory: 'Add directory',
     indexedFilesImproveSearchSpeedAndCanReduceToken:
-      'Indexed files improve search speed and can reduce token usage.',
-    checkThisDirectoryForAddedChangedOrDeletedFiles:
-      'Check this directory for added, changed, or deleted files.',
+      'Check for updates finds changes. Update index processes pending sources.',
     directoryTree: 'Directory tree',
     refreshDirectoryTree: 'Refresh directory tree',
     noFileLocationsYet: 'No file locations yet',

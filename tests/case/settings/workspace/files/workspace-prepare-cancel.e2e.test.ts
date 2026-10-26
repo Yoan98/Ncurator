@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -77,6 +77,8 @@ describe('settings workspace e2e', () => {
           )
           const cancelLabel = ((await prepareButton.innerText()) || '').trim()
           const cancelDisabled = await prepareButton.isDisabled()
+          await prepareButton.hover()
+          await expect.poll(() => page.getByRole('tooltip').count()).toBe(0)
           await prepareButton.click()
           const dialog = page.getByRole('dialog')
           await dialog.waitFor({ state: 'visible' })

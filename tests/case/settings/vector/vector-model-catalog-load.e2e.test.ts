@@ -138,6 +138,15 @@ describe('settings vector e2e', () => {
             vectorSelectors.remoteMaxInputTokensInput
           )
           const budgetHint = getSettingsLocator(page, vectorSelectors.budgetHint)
+          const maxInputHelp = getSettingsLocator(page, vectorSelectors.remoteMaxInputTokensHelp)
+          const readBudgetHint = async (): Promise<string> => {
+            await maxInputHelp.hover()
+            await budgetHint.waitFor({ state: 'visible' })
+            const text = await budgetHint.innerText()
+            await maxInputTokensInput.hover()
+            await budgetHint.waitFor({ state: 'hidden' })
+            return text
+          }
           const remoteCard = (id: string) =>
             getSettingsLocator(page, `${vectorSelectors.remoteCardPrefix}-${id}`)
 
@@ -156,9 +165,34 @@ describe('settings vector e2e', () => {
               'catalog-test-embedding'
             )
             await apiKeyInput.fill('catalog-test-fake-key')
+            expect(await budgetHint.isVisible()).toBe(false)
+            await getSettingsLocator(page, vectorSelectors.remoteApiKeyHelp).hover()
+            await expect
+              .poll(() => page.getByRole('tooltip').innerText())
+              .toMatch(/留空|Leave blank/)
+            await apiKeyInput.hover()
+            await getSettingsLocator(page, vectorSelectors.remoteModelNameHelp).focus()
+            await expect
+              .poll(() => page.getByRole('tooltip').innerText())
+              .toContain('text-embedding-v4')
+            await apiKeyInput.focus()
+            await page.getByRole('tooltip').waitFor({ state: 'hidden' })
+            expect(await modal.locator('p').count()).toBe(0)
+            await runtime.captureScreenshot({
+              name: 'remote-model-compact-form',
+              message: '表单默认只显示字段与操作，说明集中在 label 问号中。'
+            })
             expect(await maxInputTokensInput.inputValue()).toBe('512')
-            expect(await budgetHint.innerText()).toContain('16')
-            expect(await budgetHint.innerText()).toContain('496')
+            expect(await readBudgetHint()).toContain('16')
+            expect(await readBudgetHint()).toContain('496')
+            await maxInputHelp.hover()
+            await budgetHint.waitFor({ state: 'visible' })
+            await runtime.captureScreenshot({
+              name: 'remote-model-input-help',
+              message: '最大输入长度问号悬浮显示简短说明及当前预留、正文预算。'
+            })
+            await maxInputTokensInput.hover()
+            await budgetHint.waitFor({ state: 'hidden' })
             if (maxInputTokens !== undefined) {
               await maxInputTokensInput.fill('0')
               await getSettingsLocator(page, vectorSelectors.remoteSaveButton).click()
@@ -167,8 +201,8 @@ describe('settings vector e2e', () => {
                 false
               )
               await maxInputTokensInput.fill(String(maxInputTokens))
-              expect(await budgetHint.innerText()).toContain('205')
-              expect(await budgetHint.innerText()).toContain('7987')
+              expect(await readBudgetHint()).toContain('205')
+              expect(await readBudgetHint()).toContain('7987')
             }
             await getSettingsLocator(page, vectorSelectors.remoteSaveButton).click()
             await modal.waitFor({ state: 'hidden' })
@@ -203,7 +237,7 @@ describe('settings vector e2e', () => {
           expect(await apiKeyInput.inputValue()).toBe('')
           expect(await maxInputTokensInput.inputValue()).toBe('8192')
           await maxInputTokensInput.fill('')
-          expect(await budgetHint.innerText()).toContain('496')
+          expect(await readBudgetHint()).toContain('496')
           expect(
             await getSettingsLocator(page, vectorSelectors.remoteBaseUrlInput).inputValue()
           ).toBe('https://catalogue-remote-a.invalid/v1')
@@ -266,11 +300,9 @@ describe('settings vector e2e', () => {
           await rebuild.waitFor({ state: 'visible' })
           await expect.poll(() => rebuild.isEnabled()).toBe(true)
           expect(await rebuild.innerText()).toMatch(/重新建立索引|Rebuild index/)
-          await expect
-            .poll(() => rebuild.evaluate((button) => getComputedStyle(button).backgroundColor), {
-              timeout: 5000
-            })
-            .toBe('rgb(47, 52, 55)')
+          await rebuild.hover()
+          await expect.poll(() => page.getByRole('tooltip').count()).toBe(0)
+          await page.mouse.move(0, 0)
           expect((await readSnapshot()).index.running).toBe(false)
           await runtime.captureScreenshot({
             name: 'vector-stale-workspace-action',

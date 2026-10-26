@@ -679,24 +679,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
       : embeddingIndex?.staleFileCount
         ? t(($) => $.settings.embedding.rebuild)
         : t(($) => $.settings.updateIndex)
-  const workspacePrepareTooltip =
-    hasVectorModel === null
-      ? t(($) => $.settings.checkingVectorModelStatus)
-      : vectorModelMissing
-        ? vectorModelError || vectorModelStatus
-        : actionableIndexCount === 0
-          ? t(($) => $.settings.noIndexesNeedUpdating)
-          : filePrepareRunning
-            ? t(($) => $.settings.stopThisIndexUpdateAndKeepCompletedItems)
-            : t(($) => $.settings.checkDirectoryChangesAndUpdateIndexesForSupportedFiles)
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
-      <div className="text-[13px] font-medium text-[#37352F]">
-        {t(($) => $.settings.embedding.configure)}
-      </div>
       <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-        {vectorModelError || vectorModelStatus}
-        <p className="mt-1">{t(($) => $.settings.embedding.requirement)}</p>
+        {vectorModelError || t(($) => $.settings.embedding.requirement)}
       </div>
       <Button
         type="link"
@@ -826,41 +812,28 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             </div>
                           ) : null}
                           <div className="mt-4 flex flex-col gap-2">
-                            <Tooltip
-                              title={t(
-                                ($) => $.settings.checkThisDirectoryForAddedChangedOrDeletedFiles
-                              )}
+                            <Button
+                              icon={<HiArrowPath className="h-4 w-4" />}
+                              onClick={() => void handleWorkspaceScanAll()}
+                              loading={runningFileJob?.action === 'scan'}
+                              disabled={workspaceScanDisabled}
+                              data-testid={importSelectors.workspaceQuickScanButton}
                             >
-                              <Button
-                                icon={<HiArrowPath className="h-4 w-4" />}
-                                onClick={() => void handleWorkspaceScanAll()}
-                                loading={runningFileJob?.action === 'scan'}
-                                disabled={workspaceScanDisabled}
-                                data-testid={importSelectors.workspaceQuickScanButton}
-                              >
-                                {t(($) => $.common.checkForUpdates)}
-                              </Button>
-                            </Tooltip>
+                              {t(($) => $.common.checkForUpdates)}
+                            </Button>
+
                             <div className="relative min-w-0" id="workspace-file-index-action">
-                              <Tooltip
-                                title={[
-                                  workspacePrepareTooltip,
-                                  !vectorModelMissing ? vectorModelStatus : ''
-                                ]
-                                  .filter(Boolean)
-                                  .join(' · ')}
+                              <Button
+                                type="primary"
+                                icon={<HiCircleStack className="h-4 w-4" />}
+                                onClick={handleWorkspacePrepareButtonClick}
+                                disabled={workspacePrepareDisabled}
+                                className={`w-full min-w-0 ${vectorModelMissing ? '!pr-9' : ''}`}
+                                data-testid={importSelectors.workspaceQuickPrepareButton}
                               >
-                                <Button
-                                  type="primary"
-                                  icon={<HiCircleStack className="h-4 w-4" />}
-                                  onClick={handleWorkspacePrepareButtonClick}
-                                  disabled={workspacePrepareDisabled}
-                                  className={`w-full min-w-0 ${vectorModelMissing ? '!pr-9' : ''}`}
-                                  data-testid={importSelectors.workspaceQuickPrepareButton}
-                                >
-                                  {workspacePrepareLabel}
-                                </Button>
-                              </Tooltip>
+                                {workspacePrepareLabel}
+                              </Button>
+
                               {vectorModelMissing ? (
                                 <Popover
                                   trigger={['hover', 'click']}

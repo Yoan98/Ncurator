@@ -167,7 +167,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：更新索引进行中点「取消」，确认框说明尚未完成的不再继续；继续后进度仍可见，停止后按钮恢复且仍有未完成文件。
 - Why：用户需要能停掉长时间索引并关掉应用，不能把没做完的文件标成失败。
 - How：添加含多个真实文件的临时目录，进度可见且 `processed_count < total_count` 后点「取消」；先选「继续更新」检查进度仍可见，再点「取消」并「停止」。
-- Oracle：进行中按钮文案为「取消」且可点，对齐 `SET-WORKSPACE-004-AC12`；弹框不展示已完成/剩余数量，并说明尚未完成的将不会继续索引，继续后进度仍可见，对齐 `SET-WORKSPACE-004-AC13`；停止后按钮回到「更新索引」，仍有可索引或失败文件且未全部变成失败，部分覆盖 `SET-WORKSPACE-004-AC3/AC14`。已完成保留和未完成状态回退由 Knowledge `workspace-index-cancel-contract` 补充；地址顺序停止和当前批之后停由 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts` 补充 `SET-WORKSPACE-004-AC15/AC16`，完整取消链路未逐项验证。
+- Oracle：进行中按钮文案为「取消」且可点，悬浮按钮不出现 Tooltip，对齐 `SET-WORKSPACE-004-AC12`；弹框不展示已完成/剩余数量，并说明尚未完成的将不会继续索引，继续后进度仍可见，对齐 `SET-WORKSPACE-004-AC13`；停止后按钮回到「更新索引」，仍有可索引或失败文件且未全部变成失败，部分覆盖 `SET-WORKSPACE-004-AC3/AC14`。已完成保留和未完成状态回退由 Knowledge `workspace-index-cancel-contract` 补充；地址顺序停止和当前批之后停由 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts` 补充 `SET-WORKSPACE-004-AC15/AC16`，完整取消链路未逐项验证。
 
 #### `workspace-prepare-cancel-after-complete`
 
@@ -209,7 +209,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：网页更新索引进行中点「取消」，确认框说明尚未完成的不再继续，停止后未完成网页不落成已索引。
 - Why：网页抓取可能很慢，用户需要和文件 tab 同一套停法。
 - How：添加延迟响应的本地真实网页，进度可见后点「取消」；覆盖继续与停止。
-- Oracle：进行中按钮为「取消」且可点，弹框不展示数量并说明尚未完成的将不会继续索引，继续后进度仍可见，对齐 `SET-WEB-004-AC10`、`SET-WEB-004-AC11`；停止后没有 `crawling / indexing`、至少一项未索引、没有新失败，按钮回到「更新索引」，部分覆盖 `SET-WEB-004-AC12/AC13`。已完成保留与旧失败状态回退由 Knowledge `workspace-index-cancel-contract` 补充；共用嵌入函数的当前批取消由 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts` 补充，不能算作本 UI case 的逐项证据。
+- Oracle：进行中按钮为「取消」且可点，悬浮按钮不出现 Tooltip，弹框不展示数量并说明尚未完成的将不会继续索引，继续后进度仍可见，对齐 `SET-WEB-004-AC10`、`SET-WEB-004-AC11`；停止后没有 `crawling / indexing`、至少一项未索引、没有新失败，按钮回到「更新索引」，部分覆盖 `SET-WEB-004-AC12/AC13`。已完成保留与旧失败状态回退由 Knowledge `workspace-index-cancel-contract` 补充；共用嵌入函数的当前批取消由 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts` 补充，不能算作本 UI case 的逐项证据。
 
 #### `web-detail-and-delete`
 
@@ -237,7 +237,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：本地／远程列表的名称、当前选择、安装状态和直接操作分开布局，预算及密钥投影正确，并验证手动重建入口闭环。
 - Why：切换不应隐式发送资料；索引失效必须让用户看见并找到恢复入口。
 - How：真实 UI 配置 `.invalid` 远程服务，不调用该服务。隔离 fixture 经本地真实模型先建立索引，再从向量页选择远程，观察失效提示、工作空间导航、待重建状态及按钮；通过可见操作切回本地验证完整恢复。只读 IPC 用于观察快照，不用于修改状态或启动索引。
-- Oracle：保留原同页分类、新增／编辑／删除、Key 不回显和留空保留、保存不自动选择、默认 512／显式 8192／非法值及清空回填验证，对齐 `SET-VECTOR-001-AC1/AC3`、`SET-VECTOR-005-AC1/AC3/AC4/AC5`。新增 `SET-VECTOR-006-AC1`、`SET-VECTOR-007-AC1/AC4`：切换后持续失效提示和待重建数量正确；快捷切回能恢复；前往更新索引只导航；工作空间按钮可点且显示重新建立索引；不显示固定说明、迁移进度或暂停／继续／重试操作。当前选择位于模型名称旁，不重复摘要卡；已安装状态位于辅助信息行，删除为直接可见按钮，没有更多菜单；窄窗口控件换行且页面无横向溢出。
+- Oracle：保留原同页分类、新增／编辑／删除、Key 不回显和留空保留、保存不自动选择、默认 512／显式 8192／非法值及清空回填验证，对齐 `SET-VECTOR-001-AC1/AC3`、`SET-VECTOR-005-AC1/AC3/AC4/AC5`。新增 `SET-VECTOR-006-AC1`、`SET-VECTOR-007-AC1/AC4`：切换后持续失效提示和待重建数量正确；快捷切回能恢复；前往更新索引只导航；工作空间按钮可点且显示重新建立索引；不显示固定说明、迁移进度或暂停／继续／重试操作。当前选择位于模型名称旁，不重复摘要卡；已安装状态位于辅助信息行，删除为直接可见按钮，没有更多菜单；窄窗口控件换行且页面无横向溢出。远程表单的模型名、输入上限和密钥说明位于 label 问号，默认无常驻说明；悬浮／聚焦展示提示，预算随输入更新。
 
 #### `vector-model-download-delete-flow`
 

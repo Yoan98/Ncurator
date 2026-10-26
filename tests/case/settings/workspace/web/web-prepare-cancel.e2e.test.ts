@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -19,7 +19,8 @@ describe('settings workspace web e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['web'],
-        description: '网页更新索引进行中可取消，确认框说明尚未完成的不再继续，停止后未完成网页不落成已索引。',
+        description:
+          '网页更新索引进行中可取消，确认框说明尚未完成的不再继续，停止后未完成网页不落成已索引。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -59,6 +60,8 @@ describe('settings workspace web e2e', () => {
           const cancelButton = page.getByRole('button', { name: '取消', exact: true })
           await cancelButton.waitFor({ state: 'visible' })
           const cancelDisabled = await cancelButton.isDisabled()
+          await cancelButton.hover()
+          await expect.poll(() => page.getByRole('tooltip').count()).toBe(0)
           await cancelButton.click()
           const dialog = page.getByRole('dialog')
           await dialog.waitFor({ state: 'visible' })
