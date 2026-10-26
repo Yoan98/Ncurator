@@ -193,7 +193,7 @@ describe('workbench conversation e2e', () => {
             phase: 'before-app-close',
             dispose: provider.close
           })
-          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
+          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID, 'empty')
           await createModelConfigThroughSettingsUi(page, {
             name: liveEnv.modelName,
             baseUrl: provider.baseUrl,
@@ -287,7 +287,8 @@ describe('workbench conversation e2e', () => {
 
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName: WORKSPACE_NAME,
-            rootPath: workspace.rootPath
+            rootPath: workspace.rootPath,
+            prepareFiles: false
           })
           await selectWorkbenchModel(page, liveEnv.modelName, { preferCustom: true })
           const customSelectedLabel = (
