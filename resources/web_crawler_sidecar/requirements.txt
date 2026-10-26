@@ -2,5 +2,6 @@ crawl4ai==0.8.9
 nltk==3.10.1
 pyinstaller==6.20.0
 ddgs==9.9.1
+primp==0.15.0
 cryptography==46.0.7
 pyOpenSSL==25.3.0

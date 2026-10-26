@@ -20,7 +20,7 @@ prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` 
 - 生产依赖按追踪结果裁剪，并验证关键读写路径；追踪触达待裁剪目录时构建失败，避免误删运行依赖。
 - 依赖内的运行时代码目录按精确路径保留，包括 ExcelJS 的 `lib/doc` 与 YAML 的 `dist/doc`；staging 校验 YAML 解析及序列化，实际安装包审计检查其关键运行时文件，不能按目录名将其当普通文档删除。
 - Windows x64 在 ONNX Runtime 与 Jieba 原生模块旁各自部署 VC++ 运行库，不要求用户预装系统运行库；安装包审计检查两处实际解包的二进制与 DLL，staging 实际加载 Jieba 默认词典并验证中文分词。
-- 网页抓取 sidecar 保留 Playwright 驱动 JS，复用 Electron 提供的 Node 与浏览器，不重复打包这些运行时。构建、缓存复用和打包后检查 sidecar 能否实际启动。
+- 网页抓取 sidecar 保留 Playwright 驱动 JS，复用 Electron 提供的 Node 与浏览器，不重复打包这些运行时。搜索库与 HTTP 客户端固定为相互兼容的版本，避免浏览器指纹协议随传递依赖升级失效；构建、缓存复用和打包后检查 sidecar 能否实际启动。
 - 候选 bundle 绑定 Tag、commit、fragment、安装包、更新文件与哈希，测试和发布消费同一份可校验产物。
 
 具体文件排除规则与体积预算由[构建审计脚本](../../scripts/build/package/content-policy.mjs)维护，打包参数见 [electron-builder 配置](../../electron-builder.yml)。
