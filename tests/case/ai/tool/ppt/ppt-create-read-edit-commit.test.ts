@@ -222,7 +222,7 @@ describe('ai tool ppt backend', () => {
             result.overviewAfterFailedDelete.slideCount === 2 &&
             !JSON.stringify(result.overviewAfterFailedDelete).includes('不应落盘的标题') &&
             typeof result.missingReplace.error === 'string' &&
-            String(result.missingReplace.error).includes('未找到要替换的文字') &&
+            String(result.missingReplace.error).includes('The text to replace was not found') &&
             !Object.hasOwn(result.overview, 'warnings') &&
             !Object.hasOwn(result.created, 'warnings') &&
             Array.isArray(result.search.matches) &&

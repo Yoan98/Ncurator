@@ -385,7 +385,7 @@ describe('ai tool excel edit backend', () => {
         })
         runtime.assertThat(
           result.deleteLastSheet.error &&
-            String(result.deleteLastSheet.error).includes('至少保留一个工作表'),
+            String(result.deleteLastSheet.error).includes('retain at least one worksheet'),
           {
             name: 'excel-cannot-delete-last-sheet',
             message: 'Excel 不能删除最后一个工作表。',

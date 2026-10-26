@@ -283,7 +283,7 @@ describe('ai tool web backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.error === '网页请求失败：404' &&
+          result.error === 'Page request failed: HTTP 404' &&
             result.statusCode === 404 &&
             result.requestedUrl?.endsWith('/missing') === true &&
             result.finalUrl?.endsWith('/missing') === true,

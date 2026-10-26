@@ -109,7 +109,7 @@ describe('ai tool scheduled-task backend', () => {
             result.listB.tasks.length === 0 &&
             item?.enabled === true &&
             JSON.stringify(Object.keys(item || {}).sort()) === JSON.stringify(expectedKeys) &&
-            result.crossPartnerUpdate.error === '定时任务不存在' &&
+            result.crossPartnerUpdate.error === 'The scheduled task was not found' &&
             result.updated.id === result.created.id &&
             result.stored?.timeOfDay === '10:00' &&
             result.stored.enabled === false &&

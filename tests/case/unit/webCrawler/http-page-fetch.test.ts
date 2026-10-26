@@ -18,7 +18,7 @@ describe('HTTP visible page content', () => {
     try {
       const url = `http://127.0.0.1:${address.port}`
       expect((await fetchHttpPage(`${url}/visible`)).markdown).toBe('实际正文')
-      await expect(fetchHttpPage(`${url}/rendered`)).rejects.toThrow('网页正文为空')
+      await expect(fetchHttpPage(`${url}/rendered`)).rejects.toThrow('The page body is empty')
     } finally {
       server.closeAllConnections()
       await new Promise<void>((resolve) => server.close(() => resolve()))

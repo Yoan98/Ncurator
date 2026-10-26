@@ -141,7 +141,7 @@ describe('ai tool text-file search backend', () => {
             result.logResult.matches[0].textContext.length <= TEXT_FILE_SEARCH_CONTEXT_CHARS &&
             result.logResult.matches[0].truncated &&
             result.logResult.matches[0].textContext.includes('TARGET_KEY') &&
-            result.invalidRegexError.includes('正则表达式无效') &&
+            result.invalidRegexError.includes('Invalid regular expression') &&
             result.noMatchResult.totalMatchCount === 0 &&
             result.noMatchResult.returnedMatchCount === 0 &&
             result.noMatchResult.matches.length === 0,

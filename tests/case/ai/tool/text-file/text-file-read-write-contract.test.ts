@@ -198,13 +198,13 @@ describe('ai tool text-file backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.duplicateError.includes('匹配到 2 处') &&
+          result.duplicateError.includes('matches 2 locations') &&
             result.unchangedAfterFailedEdit &&
             result.replaceResult ===
               `已在 ${path.join(runtime.workspaceRoot, 'keywords.txt')} 中替换 2 处内容。` &&
             result.hasBom &&
             result.preservedCrlf &&
-            result.noMatchError.includes('找不到 oldText') &&
+            result.noMatchError.includes('oldText was not found') &&
             result.unchangedAfterNoMatch &&
             result.rewriteResult ===
               `已完整改写文件：${path.join(runtime.workspaceRoot, 'keywords.txt')}。` &&

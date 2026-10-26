@@ -17,6 +17,7 @@
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。`browser_use` 网址协议、系统错误页、加载超时与 `navigate` 成败字段由 Workbench `browser-navigate-error-page` 与 unit `navigate-plan` 覆盖。
 - 工具契约由 family unit contract（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）和 backend tool integration 共同验证；注册完整性由 [registry 编译检查](../../src/main/services/ai/human/tools/registry.ts) 保证。不对 prompt 措辞或 Renderer 投影字句做 unit 单测。
+- 工具失败同时核对具体错误原因与文件、状态不变量；当前面向模型的错误使用英文，覆盖工作表保留、文本匹配、PPT 缺失内容与文字溢出、SVG 校验、HTTP 状态和定时任务归属等原因。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。参数分发、SERP 字段裁剪、tabId 透传与 act 文本覆盖由 `tests/case/unit/ai/web-tool-contract.test.ts` 验证；其替身服务只证明适配契约，真实网页抓取和浏览器操作分别由本域 tool 与 Workbench E2E 验证。
 - `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再让冻结 sidecar bin 的 Python Playwright 显式复用该测试 Electron 的 Node，通过隔离 context 抓取；host 必须 headless 且不得挂主窗口。该独立 host 可以继续开进程级调试口，与正式 App 无关。另覆盖 `browser_use` 服务不可用诊断。禁止使用 sidecar 内置 Node/浏览器或 Electron 默认 context。`web_search` 结果只回模型，不得自动展开右侧搜索列表。
 
@@ -622,7 +623,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：backend / mock-llm。
 - What：超出并发额度的批量派发、FIFO 排队、独立上下文、工具策略、公开流式消息与结果汇集。
 - Why：子任务不能读主聊天、再次派发或主动询问用户；子事件不能终止主 run。
-- How：生产 `AiRunService.run`，只脚本化 LLM 决策，其他依赖使用真实服务与存储。
+- How：生产 `AiRunService.run`，只脚本化 LLM 决策，其他依赖使用真实服务与存储；先同时提交 `name` 与 `agentId`，核对校验反馈保留 `agents[0]` 路径及两个冲突字段，再修正并派发。
 - Oracle：派发参数使用 `agents` / `instruction`，创建名称和续接 ID 互斥；参数失败保留具体错误及原始输入，反馈回主模型修正，执行失败保留已知标题与原始原因。一次提交超过 2 项仍被接受，峰值并发为默认 2，排队任务仅在前序释放后启动，全部结果进入主工具消息；公开文本真实流式投递，实际请求状态成对开关且原始推理不转发；子完整日志按会话隔离存入 SQLite，完成事务清理；状态与精简行动 annotation 持久化；受限工具不可绑定和执行。
 
 ##### `human-subagent-prefix-stability`
@@ -762,7 +763,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：`human` 在 mock-llm 模式下能稳定走通真实 `brain -> toolset_loading -> hand -> brain 交付` 主链路。
 - Why：`human` graph 的最小真实闭环，后续所有复杂样例都建立在这条主链路之上。
 - How：通过 scripted structured output 使用 `toolsetNames` 加载一个真实 external toolset（例如 `docx-read`），再直接执行一次 builtin terminal 工具 `terminal_run(pwd)`，最后由 `brain` 无工具调用输出最终交付。
-- Oracle：`human_brain`、`human_toolset_loading`、`human_hand` 三个 stage 都真实出现，加载开始与结果事件使用 `toolsetNames`，且至少有一次真实 terminal 工具结果与一次真实最终交付。strict 参数边界、旧参数拒绝、目录发现及加载后工具可用性由既有 `unit/ai/user-skill-runtime` 补充验证。
+- Oracle：`human_brain`、`human_toolset_loading`、`human_hand` 三个 stage 都真实出现，加载开始与结果事件使用 `toolsetNames`，成功结果同时给出 `loadingSuccessfulNames` 与空 `loadingFailures`，且至少有一次真实 terminal 工具结果与一次真实最终交付。strict 参数边界、旧参数拒绝、目录发现及加载后工具可用性由既有 `unit/ai/user-skill-runtime` 补充验证。
 
 ##### `learning-tool-budget-tracking`
 

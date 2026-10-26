@@ -73,7 +73,11 @@ describe('ai human mock-llm backend', () => {
           JSON.stringify(loadingStarted?.input) ===
             JSON.stringify({ toolsetNames: ['docx-read'] }) &&
             JSON.stringify(loadingResult?.result?.data) ===
-              JSON.stringify({ toolsetNames: ['docx-read'] }),
+              JSON.stringify({
+                toolsetNames: ['docx-read'],
+                loadingSuccessfulNames: ['docx-read'],
+                loadingFailures: []
+              }),
           {
             name: 'toolset-loading-events-use-names',
             message: '工具组加载开始与结果事件应使用 toolsetNames。',

@@ -273,7 +273,7 @@ describe('ai tool ppt professional editing', () => {
             result.formatChangeMarked &&
             result.failedWritesUnchanged &&
             Boolean(result.invalidDimensions.error) &&
-            String(result.invalidOverflow.error).includes('文字超出边界'),
+            String(result.invalidOverflow.error).includes('Text overflows table cell'),
           {
             name: 'ppt-table-layout-and-self-contained-review',
             message:

@@ -226,14 +226,14 @@ describe('ai tool image-generation backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.scriptError.includes('被禁止的元素') &&
-            result.externalError.includes('外部资源') &&
-            result.cssExternalError.includes('外部资源') &&
+          result.scriptError.includes('prohibited element: script') &&
+            result.externalError.includes('external resources') &&
+            result.cssExternalError.includes('external resources') &&
             result.cssImportError.includes('CSS @import') &&
-            result.oversizedError.includes('尺寸过大') &&
+            result.oversizedError.includes('dimensions exceed the size limit') &&
             result.outsideError.length === 0 &&
             result.formatError.length > 0 &&
-            result.malformedError.includes('SVG 内容无效') &&
+            result.malformedError.includes('SVG content is invalid') &&
             result.preservedUnchanged &&
             !result.scriptExists &&
             !result.externalExists &&

@@ -442,7 +442,11 @@ describe('temporary subagents through production AiRunService', () => {
                     },
                     summary: '续接参数校验'
                   })
-                if (parentCalls === 2) expect(call.user).toContain('omit name')
+                if (parentCalls === 2) {
+                  expect(call.user).toContain('agents[0]')
+                  expect(call.user).toContain('agentId')
+                  expect(call.user).toContain('name')
+                }
                 return parentCalls === 2
                   ? delegate([
                       { name: '海豹', instruction: 'CHILD_ALPHA 独立查验 A' },
@@ -487,7 +491,9 @@ describe('temporary subagents through production AiRunService', () => {
             (record) =>
               record.entry.kind === 'tool' &&
               !record.entry.ok &&
-              record.entry.error?.includes('omit name')
+              record.entry.error?.includes('agents[0]') &&
+              record.entry.error.includes('agentId') &&
+              record.entry.error.includes('name')
           )
         ).toBe(true)
         expect(result.peak).toBe(2)
