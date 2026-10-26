@@ -119,7 +119,8 @@ describe('SQLite migration contract', () => {
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
-    expect(migrationRows.at(-1)).toEqual({ version: 20, name: 'skill_name_bindings' })
+    expect(migrationRows).toContainEqual({ version: 20, name: 'skill_name_bindings' })
+    expect(migrationRows.at(-1)).toEqual({ version: 21, name: 'embedding_models' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -132,9 +133,13 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const prepared = new SqliteCore(databasePath)
     prepared.initialize()
-    prepared.exec('DROP TABLE partner_user_skill')
+    prepared.exec(`DROP TABLE partner_user_skill;
+      DROP TABLE embedding_settings;
+      ALTER TABLE document DROP COLUMN embedding_identity;
+      ALTER TABLE document DROP COLUMN embedding_dim;
+      ALTER TABLE document DROP COLUMN embedding_error;`)
     prepared.exec(userSkillsMigration.sql!)
-    prepared.prepare('DELETE FROM schema_migrations WHERE version = 20').run()
+    prepared.prepare('DELETE FROM schema_migrations WHERE version >= 20').run()
     prepared.exec(`INSERT INTO partner (id,name,avatar_shape,avatar_color,created_at,updated_at,last_viewed_at) VALUES ('a','A','circle','blue',1,1,1),('b','B','circle','blue',1,1,1);
       INSERT INTO user_skill VALUES ('user:old','weekly-report','Reports','weekly-report',1);
       INSERT INTO partner_user_skill VALUES ('a','user:old'),('b','user:old');`)
@@ -154,6 +159,42 @@ describe('SQLite migration contract', () => {
     ).toBeUndefined()
     expect(await fs.readFile(path.join(directory, 'SKILL.md'), 'utf8')).toBe(content)
     upgraded.close()
+  })
+
+  it('upgrades the current v20 schema without invalidating existing local document metadata', async () => {
+    const databasePath = await createDatabasePath()
+    const previous = new SqliteCore(databasePath)
+    previous.initialize()
+    previous.exec(`DROP TABLE embedding_settings;
+      ALTER TABLE document DROP COLUMN embedding_identity;
+      ALTER TABLE document DROP COLUMN embedding_dim;
+      ALTER TABLE document DROP COLUMN embedding_error;
+      DELETE FROM schema_migrations WHERE version = 21;
+      INSERT INTO document (id, name, source_type, import_status, content_hash, active_generation_id, created_at, updated_at)
+      VALUES ('local-document', 'notes.txt', 'file', 2, 'unchanged-hash', 'unchanged-generation', 1, 1);`)
+    previous.close()
+    const upgraded = new SqliteCore(databasePath)
+    try {
+      upgraded.initialize()
+      expect(
+        upgraded
+          .prepare(
+            `SELECT import_status, content_hash, active_generation_id,
+        embedding_identity, embedding_dim, embedding_error FROM document WHERE id = 'local-document'`
+          )
+          .get()
+      ).toEqual({
+        import_status: 2,
+        content_hash: 'unchanged-hash',
+        active_generation_id: 'unchanged-generation',
+        embedding_identity: 'local:jinaai/jina-embeddings-v2-base-zh',
+        embedding_dim: 768,
+        embedding_error: null
+      })
+      expect(upgraded.prepare('SELECT * FROM embedding_settings').all()).toEqual([])
+    } finally {
+      upgraded.close()
+    }
   })
 
   it('records a pending v10 afterCommit hook and runs it only once', async () => {
@@ -309,6 +350,10 @@ describe('SQLite migration contract', () => {
     prepared.exec('DROP TABLE IF EXISTS app_settings')
     prepared.exec('DROP TABLE open_with_preferences')
     prepared.exec('DROP TABLE partner_user_skill;')
+    prepared.exec(`DROP TABLE embedding_settings;
+      ALTER TABLE document DROP COLUMN embedding_identity;
+      ALTER TABLE document DROP COLUMN embedding_dim;
+      ALTER TABLE document DROP COLUMN embedding_error;`)
     prepared.exec('ALTER TABLE ai_run DROP COLUMN pending_messages_json')
     prepared
       .prepare(

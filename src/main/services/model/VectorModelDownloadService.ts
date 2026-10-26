@@ -151,7 +151,10 @@ export class VectorModelDownloadService {
     }
 
     try {
-      if (repoId === this.deps.embeddingService.getModelName()) {
+      if (
+        !this.deps.embeddingService.isRemote() &&
+        repoId === this.deps.embeddingService.getModelName()
+      ) {
         await this.deps.embeddingService.reset()
       }
       await this.deps.modelService.deleteModel(repoId)

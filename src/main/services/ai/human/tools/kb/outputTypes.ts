@@ -32,6 +32,7 @@ export type KbListDocumentItem = {
 export type KbSearchOutput = {
   items: KbSearchResultItem[]
   total: number
+  semanticCoverage?: { total: number; completed: number; pending: number; failed: number }
 }
 
 export type KbListDocumentsOutput = {

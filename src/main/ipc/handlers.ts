@@ -18,6 +18,8 @@ import type { AppErrorLogService } from '../services/logging/AppErrorLogService'
 import type { OpenDialogOptions } from 'electron'
 import { IngestionService } from '../services/ingestion/loader'
 import { EmbeddingService } from '../services/vector/EmbeddingService'
+import type { EmbeddingModelService } from '../services/vector/EmbeddingModelService'
+import type { RemoteEmbeddingModelInput } from '../../shared/embeddingModels'
 import { ensureEmbeddingReady } from '../services/vector/ensureEmbeddingReady'
 import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
@@ -260,6 +262,7 @@ export function registerOpenExternalHandler(): void {
 export function registerHandlers(services: {
   ingestionService: IngestionService
   embeddingService: EmbeddingService
+  embeddingModelService?: EmbeddingModelService
   storageService: StorageService
   modelService: ModelService
   vectorModelDownloadService: VectorModelDownloadService
@@ -1266,15 +1269,7 @@ export function registerHandlers(services: {
     const existingDocument = source.document_id
       ? await documentsStore.getDocumentById(source.document_id)
       : null
-    if (existingDocument) {
-      await documentsStore.updateDocumentById(existingDocument.id, {
-        name: source.title || source.url,
-        file_path: source.url,
-        source_type: 'web',
-        workspace_id: WEB_INDEX_OWNER
-      })
-      await documentsStore.markDocumentIndexing(existingDocument.id, now)
-    } else {
+    if (!existingDocument) {
       await documentsStore.addDocument({
         id: nextDocumentId,
         name: source.title || source.url,
@@ -2696,16 +2691,45 @@ export function registerHandlers(services: {
   })
 
   ipcMain.handle('get-models', async () => {
-    try {
-      return modelService.getModels()
-    } catch (error) {
-      console.error('? [GET-MODELS] ERROR:', error)
-      return []
-    }
+    return modelService.getModels()
   })
 
   ipcMain.handle('get-embedding-status', () => {
     return embeddingService.getRuntimeSnapshot()
+  })
+
+  const requireEmbeddingModels = (): EmbeddingModelService => {
+    if (!services.embeddingModelService) throw new Error('向量模型配置服务未就绪。')
+    return services.embeddingModelService
+  }
+  ipcMain.handle('embedding-models-get', () => requireEmbeddingModels().getSnapshot())
+  const mutateEmbeddingModel = async (
+    operation: () => Promise<import('../../shared/embeddingModels').EmbeddingModelsSnapshot>
+  ) => {
+    try {
+      return { success: true, snapshot: await operation() }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+  ipcMain.handle('embedding-model-save', (_event, input: RemoteEmbeddingModelInput) =>
+    mutateEmbeddingModel(() => requireEmbeddingModels().saveRemote(input))
+  )
+  ipcMain.handle('embedding-model-select', (_event, id: string) =>
+    mutateEmbeddingModel(() => requireEmbeddingModels().select(id))
+  )
+  ipcMain.handle('embedding-model-delete', (_event, id: string) =>
+    mutateEmbeddingModel(() => requireEmbeddingModels().deleteRemote(id))
+  )
+  ipcMain.handle('embedding-index-control', (_event, action: 'pause' | 'resume' | 'retry') =>
+    mutateEmbeddingModel(() => requireEmbeddingModels().control(action))
+  )
+  ipcMain.handle('embedding-model-test', async (_event, input: RemoteEmbeddingModelInput) => {
+    try {
+      return { success: true, dimension: await requireEmbeddingModels().test(input) }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
   })
 
   ipcMain.handle('ai-run-cancel', async (_event, runId: string): Promise<AiRunCancelResponse> => {
@@ -3573,7 +3597,11 @@ export function registerHandlers(services: {
       const saved = await appSettingsStore.save(settings)
       setServiceRoute(saved.serviceRoute)
       if (previous.knowledgeIndexSpeed !== saved.knowledgeIndexSpeed) {
-        await embeddingService.applyIndexSpeed(saved.knowledgeIndexSpeed)
+        if (services.embeddingModelService) {
+          await services.embeddingModelService.applyIndexSpeed(saved.knowledgeIndexSpeed)
+        } else {
+          await embeddingService.applyIndexSpeed(saved.knowledgeIndexSpeed)
+        }
       }
       return { success: true, settings: saved }
     } catch (e: unknown) {

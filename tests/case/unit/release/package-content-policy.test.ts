@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertSafePackagePaths,
   assertWebCrawlerSidecarPackage,
+  isRuntimeDocPath,
   normalizeRelativePath
 } from '../../../../scripts/build/package/content-policy.mjs'
 import { PROTECTED_MAIN_PLAINTEXT_MARKERS } from '../../../../scripts/build/package/obfuscation.mjs'
@@ -32,11 +33,44 @@ describe('package content policy paths', () => {
   })
 
   it('permits ExcelJS runtime modules while rejecting other doc directories', () => {
+    expect(isRuntimeDocPath('node_modules/exceljs/lib/doc')).toBe(true)
+    expect(isRuntimeDocPath('node_modules/exceljs/lib/doc/workbook.js')).toBe(true)
+    expect(() => assertSafePackagePaths(['node_modules/exceljs/lib/doc'])).not.toThrow()
     expect(() => assertSafePackagePaths(['node_modules/exceljs/lib/doc/workbook.js'])).not.toThrow()
     expect(() =>
       assertSafePackagePaths(['node_modules/runtime-package/lib/doc/readme.js'])
     ).toThrow('forbidden directory doc')
   })
+
+  it.each([
+    'node_modules/yaml/dist/doc',
+    'node_modules/yaml/dist/doc/',
+    'node_modules/yaml/dist/doc/directives.js',
+    'node_modules/yaml/dist/doc/Document.js',
+    '\\node_modules\\yaml\\dist\\doc\\directives.js'
+  ])('permits the YAML runtime doc path %s', (relativePath) => {
+    expect(isRuntimeDocPath(relativePath)).toBe(true)
+    expect(() => assertSafePackagePaths([relativePath])).not.toThrow()
+  })
+
+  it.each([
+    ['node_modules/runtime-package/dist/doc', 'doc'],
+    ['node_modules/runtime-package/dist/doc/directives.js', 'doc'],
+    ['node_modules/yaml/doc', 'doc'],
+    ['node_modules/yaml/lib/doc/directives.js', 'doc'],
+    ['node_modules/yaml/docs', 'docs'],
+    ['node_modules/yaml/docs/readme.md', 'docs']
+  ])('rejects the documentation path outside runtime exceptions %s', (relativePath, directory) => {
+    expect(isRuntimeDocPath(relativePath)).toBe(false)
+    expect(() => assertSafePackagePaths([relativePath])).toThrow(`forbidden directory ${directory}`)
+  })
+
+  it.each(['node_modules/yaml/README.md', 'node_modules/yaml/dist/doc/README.md'])(
+    'rejects YAML readme documentation at %s',
+    (relativePath) => {
+      expect(() => assertSafePackagePaths([relativePath])).toThrow()
+    }
+  )
 
   it('rejects runtime directories covered by deterministic package pruning', () => {
     expect(() => assertSafePackagePaths(['node_modules/mathjax-full/es5/tex-svg.js'])).toThrow(
@@ -227,5 +261,55 @@ describe('package content policy paths', () => {
       stderr = String((error as { stderr?: string }).stderr || error)
     }
     expect(stderr).toContain('missing traced runtime package mammoth')
+  })
+
+  it.each([
+    { id: 'yaml-directives-runtime', package: 'yaml', path: 'dist/doc/directives.js' },
+    { id: 'yaml-document-runtime', package: 'yaml', path: 'dist/doc/Document.js' }
+  ])('rejects a packaged YAML manifest missing $path', async (missingFile) => {
+    temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-package-audit-'))
+    const appSource = path.join(temporaryDirectory, 'app-source')
+    const packageDirectory = path.join(temporaryDirectory, 'package')
+    const archivePath = path.join(packageDirectory, 'win-unpacked', 'resources', 'app.asar')
+    const tracePath = path.join(temporaryDirectory, 'runtime-trace-report.json')
+    const yamlDirectory = path.join(appSource, 'node_modules', 'yaml')
+    await mkdir(path.join(appSource, 'out', 'main'), { recursive: true })
+    await mkdir(path.dirname(archivePath), { recursive: true })
+    await mkdir(yamlDirectory, { recursive: true })
+    await writeFile(path.join(appSource, 'out', 'main', 'index.js'), 'export const ready = true\n')
+    await writeFile(
+      path.join(appSource, 'package.json'),
+      `${JSON.stringify({
+        name: 'ncurator-audit-fixture',
+        version: '1.0.0',
+        main: './out/main/index.js',
+        private: true,
+        dependencies: { yaml: '2.8.1' }
+      })}\n`
+    )
+    await writeFile(
+      path.join(yamlDirectory, 'package.json'),
+      `${JSON.stringify({ name: 'yaml', version: '2.8.1', main: './dist/index.js' })}\n`
+    )
+    await writeFile(
+      tracePath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        packages: [{ name: 'yaml', version: '2.8.1' }],
+        requiredFiles: [missingFile]
+      })}\n`
+    )
+    await createPackage(appSource, archivePath)
+
+    await expect(
+      execFileAsync(process.execPath, [
+        path.resolve('scripts/build/package/audit-app.mjs'),
+        packageDirectory,
+        tracePath
+      ])
+    ).rejects.toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining(`missing required runtime file ${missingFile.id}`)
+    })
   })
 })

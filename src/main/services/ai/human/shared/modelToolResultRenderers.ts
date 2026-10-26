@@ -172,6 +172,12 @@ export const renderKbModelError: ModelResultRenderer = ({ toolName, data }) =>
 
 export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {
   const items = normalizeKbSearchItems(data)
+  const coverage =
+    isObject(data) && isObject(data.semanticCoverage) ? data.semanticCoverage : undefined
+  const coverageWarning =
+    coverage && (readNumber(coverage.completed) ?? 0) < (readNumber(coverage.total) ?? 0)
+      ? `Semantic index coverage is incomplete: ${readNumber(coverage.completed) ?? 0}/${readNumber(coverage.total) ?? 0} documents ready. Documents awaiting embeddings remain available to keyword search and reading. Do not describe these results as complete semantic coverage.`
+      : ''
   const sourceKeys = new Map<string, string>()
   const sources: Array<{ ref: string; item: JsonObject }> = []
   items.forEach((item) => {
@@ -216,6 +222,7 @@ export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {
 
   return joinGroupedSections([
     renderGroupedHeader('KB search completed successfully.'),
+    coverageWarning,
     `Returned matches: ${items.length}`,
     'Sources:',
     ...sourceLines,

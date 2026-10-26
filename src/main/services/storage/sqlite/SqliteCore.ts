@@ -25,6 +25,7 @@ import { appLanguageAndServiceRouteMigration } from './migrations/018_app_langua
 
 import { userSkillsMigration } from './migrations/019_user_skills'
 import { skillNameBindingsMigration } from './migrations/020_skill_name_bindings'
+import { embeddingModelsMigration } from './migrations/021_embedding_models'
 
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
@@ -49,10 +50,11 @@ const MIGRATIONS: readonly Migration[] = [
   openWithPreferencesMigration,
   appLanguageAndServiceRouteMigration,
   userSkillsMigration,
-  skillNameBindingsMigration
+  skillNameBindingsMigration,
+  embeddingModelsMigration
 ]
 
-export const CURRENT_SCHEMA_VERSION = 20
+export const CURRENT_SCHEMA_VERSION = 21
 
 const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
   [2, new Set(['workspace_change_sets'])]

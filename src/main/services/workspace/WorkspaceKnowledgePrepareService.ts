@@ -27,6 +27,16 @@ import {
   isIndexPrepareCancelledError
 } from './WorkspaceIndexPrepareController'
 
+class IndexPrepareRestoreError extends Error {
+  public constructor(documentId: string, cause: unknown) {
+    super(
+      `取消索引后恢复文档 ${documentId} 失败：${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause }
+    )
+    this.name = 'IndexPrepareRestoreError'
+  }
+}
+
 export class WorkspaceKnowledgePrepareService {
   private readonly workerClient: WorkspacePrepareWorkerClient
 
@@ -108,23 +118,21 @@ export class WorkspaceKnowledgePrepareService {
             sourceName: path.basename(input.filePath)
           })
         : null
-      const preparedSource = await this.prepareSource({
+      const baseSource = await this.prepareSource({
         sourceType: 'file',
         filePath: input.filePath,
         cachedSplit
       })
+      const preparedSource = this.applyEmbeddingInputBudget(baseSource)
       this.throwIfAborted(input.signal)
       if (input.cache && !this.isUsableCachedSplit(cachedSplit, preparedSource)) {
-        await input.cache.saveSplitSnapshot(
-          preparedSource.splitSnapshot,
-          path.basename(input.filePath)
-        )
+        await input.cache.saveSplitSnapshot(baseSource.splitSnapshot, path.basename(input.filePath))
       }
       const cachedVectors = input.cache
         ? await input.cache.loadVectorSnapshot({
             contentHash,
             fileExt,
-            modelName: this.deps.embeddingService.getModelName(),
+            modelName: this.deps.embeddingService.getIndexIdentity(),
             texts: preparedSource.splitSnapshot.chunks.map((chunk) => chunk.text)
           })
         : null
@@ -163,6 +171,7 @@ export class WorkspaceKnowledgePrepareService {
         signal: input.signal
       })
     } catch (error) {
+      if (error instanceof IndexPrepareRestoreError) throw error
       if (input.signal?.aborted) throw new IndexPrepareCancelledError()
       throw error
     } finally {
@@ -201,7 +210,7 @@ export class WorkspaceKnowledgePrepareService {
             sourceName: `${input.documentName}\n${input.sourceUrl}`
           })
         : null
-      const preparedSource = await this.prepareSource({
+      const baseSource = await this.prepareSource({
         sourceType: 'web',
         documentName: input.documentName,
         sourceUrl: input.sourceUrl,
@@ -209,10 +218,11 @@ export class WorkspaceKnowledgePrepareService {
         contentHash,
         cachedSplit
       })
+      const preparedSource = this.applyEmbeddingInputBudget(baseSource)
       this.throwIfAborted(input.signal)
       if (input.cache && !this.isUsableCachedSplit(cachedSplit, preparedSource)) {
         await input.cache.saveSplitSnapshot(
-          preparedSource.splitSnapshot,
+          baseSource.splitSnapshot,
           `${input.documentName}\n${input.sourceUrl}`
         )
       }
@@ -220,7 +230,7 @@ export class WorkspaceKnowledgePrepareService {
         ? await input.cache.loadVectorSnapshot({
             contentHash,
             fileExt,
-            modelName: this.deps.embeddingService.getModelName(),
+            modelName: this.deps.embeddingService.getIndexIdentity(),
             texts: preparedSource.splitSnapshot.chunks.map((chunk) => chunk.text)
           })
         : null
@@ -259,11 +269,17 @@ export class WorkspaceKnowledgePrepareService {
         signal: input.signal
       })
     } catch (error) {
+      if (error instanceof IndexPrepareRestoreError) throw error
       if (input.signal?.aborted) throw new IndexPrepareCancelledError()
       throw error
     } finally {
       stopAbort()
     }
+  }
+
+  private applyEmbeddingInputBudget(source: WorkspacePreparedSource): WorkspacePreparedSource {
+    const chunks = this.deps.embeddingService.prepareDocumentChunks(source.splitSnapshot.chunks)
+    return { ...source, splitSnapshot: { ...source.splitSnapshot, chunks } }
   }
 
   private isUsableCachedSplit(
@@ -280,7 +296,7 @@ export class WorkspaceKnowledgePrepareService {
     return Boolean(
       cachedVectors &&
       cachedVectors.contentHash === preparedSource.contentHash &&
-      cachedVectors.modelName === this.deps.embeddingService.getModelName() &&
+      cachedVectors.modelName === this.deps.embeddingService.getIndexIdentity() &&
       cachedVectors.vectors.length === preparedSource.splitSnapshot.chunks.length
     )
   }
@@ -294,6 +310,7 @@ export class WorkspaceKnowledgePrepareService {
     signal?: AbortSignal
   }): Promise<WorkspaceKnowledgePreparedDocument> {
     const { preparedSource } = input
+    const identity = this.deps.embeddingService.getIndexIdentity()
     const usesCachedVectors = this.isUsableCachedVectors(input.cachedVectors, preparedSource)
     let vectorSnapshot: WorkspaceKnowledgeVectorSnapshot
     if (usesCachedVectors && input.cachedVectors) {
@@ -302,14 +319,14 @@ export class WorkspaceKnowledgePrepareService {
       vectorSnapshot = {
         contentHash: preparedSource.contentHash,
         fileExt: preparedSource.fileExt,
-        modelName: this.deps.embeddingService.getModelName(),
+        modelName: identity,
         vectors: []
       }
     } else {
       vectorSnapshot = {
         contentHash: preparedSource.contentHash,
         fileExt: preparedSource.fileExt,
-        modelName: this.deps.embeddingService.getModelName(),
+        modelName: identity,
         vectors: (
           await buildWorkspaceKnowledgeVectors({
             embeddingService: this.deps.embeddingService,
@@ -320,6 +337,9 @@ export class WorkspaceKnowledgePrepareService {
       }
     }
 
+    if (identity !== this.deps.embeddingService.getIndexIdentity()) {
+      throw new Error('向量模型已切换，请重新生成索引。')
+    }
     return {
       documentId: input.documentId,
       filePath: preparedSource.filePath,
@@ -368,107 +388,129 @@ export class WorkspaceKnowledgePrepareService {
     usedCachedVectors: boolean
     signal?: AbortSignal
   }): Promise<WorkspaceKnowledgeIndexResult> {
-    const indexedDocument = input.indexedDocument
     if (process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE === '1') {
       console.info(
-        `[workspace-knowledge] ${input.documentName}: split=${input.usedCachedSplit ? 'hit' : 'computed'} vectors=${input.usedCachedVectors ? 'hit' : 'computed'} chunks=${indexedDocument.chunkCount}`
+        `[workspace-knowledge] ${input.documentName}: split=${input.usedCachedSplit ? 'hit' : 'computed'} vectors=${input.usedCachedVectors ? 'hit' : 'computed'} chunks=${input.indexedDocument.chunkCount}`
       )
     }
-
-    const now = Date.now()
-    const newGenerationId = uuidv4()
-    let oldGenerationId: string | undefined
-    let wroteChunks = false
-    let activated = false
-    try {
-      this.throwIfAborted(input.signal)
-      const existingDocument = await this.deps.documentsStore.getDocumentById(input.documentId)
-      oldGenerationId = existingDocument?.active_generation_id
-      if (existingDocument) {
-        await this.deps.documentsStore.updateDocumentById(input.documentId, {
-          name: input.documentName,
-          file_path: input.filePath,
-          source_type: input.sourceType,
-          workspace_id: input.workspaceId,
-          content_hash: input.contentHash
-        })
-        await this.deps.documentsStore.markDocumentIndexing(input.documentId, now)
-      } else {
-        await this.deps.documentsStore.addDocument({
-          id: input.documentId,
-          name: input.documentName,
-          source_type: input.sourceType,
-          workspace_id: input.workspaceId,
-          file_path: input.filePath,
-          created_at: input.createdAt || now,
-          updated_at: now,
-          import_status: 1,
-          content_hash: input.contentHash
-        })
+    return this.deps.documentsStore.runGenerationWrite(async () => {
+      const indexedDocument = input.indexedDocument
+      const identity = indexedDocument.vectorSnapshot.modelName
+      const vectors = indexedDocument.vectorSnapshot.vectors
+      const dimension = vectors[0]?.length ?? 0
+      if (
+        vectors.length !== indexedDocument.chunks.length ||
+        vectors.some(
+          (vector) => !dimension || vector.length !== dimension || !vector.every(Number.isFinite)
+        )
+      ) {
+        throw new Error('资料向量的数量或维度不一致，请重新生成索引。')
+      }
+      if (identity !== this.deps.embeddingService.getIndexIdentity()) {
+        throw new Error('向量模型已切换，请重新生成索引。')
       }
 
-      this.throwIfAborted(input.signal)
-      if (indexedDocument.chunks.length > 0) {
-        await this.addChunksFromVectorSnapshot({
-          chunks: indexedDocument.chunks,
-          vectors: indexedDocument.vectorSnapshot.vectors,
-          generationId: newGenerationId
-        })
-        wroteChunks = true
-      }
-      this.throwIfAborted(input.signal)
-      await this.deps.documentsStore.activateDocumentGeneration({
-        documentId: input.documentId,
-        generationId: newGenerationId,
-        contentHash: input.contentHash,
-        importStatus: 2,
-        updatedAt: Date.now()
-      })
-      activated = true
-      if (oldGenerationId && oldGenerationId !== newGenerationId) {
-        await this.deps.documentsStore.deleteChunksByGeneration({
+      const now = Date.now()
+      const newGenerationId = uuidv4()
+      let oldGenerationId: string | undefined
+      let restoreDocument: (() => boolean) | undefined
+      let wroteChunks = false
+      let activated = false
+      try {
+        this.throwIfAborted(input.signal)
+        const indexing = this.deps.documentsStore.beginDocumentIndexing(
+          {
+            id: input.documentId,
+            name: input.documentName,
+            file_path: input.filePath,
+            source_type: input.sourceType,
+            workspace_id: input.workspaceId,
+            created_at: input.createdAt || now,
+            content_hash: input.contentHash
+          },
+          now
+        )
+        oldGenerationId = indexing.previousGenerationId
+        restoreDocument = indexing.restore
+
+        this.throwIfAborted(input.signal)
+        if (indexedDocument.chunks.length > 0) {
+          await this.addChunksFromVectorSnapshot({
+            chunks: indexedDocument.chunks,
+            vectors: indexedDocument.vectorSnapshot.vectors,
+            generationId: newGenerationId,
+            embeddingIdentity: identity
+          })
+          wroteChunks = true
+        }
+        this.throwIfAborted(input.signal)
+        if (identity !== this.deps.embeddingService.getIndexIdentity()) {
+          throw new Error('向量模型已切换，请重新生成索引。')
+        }
+        await this.deps.documentsStore.activateDocumentGeneration({
           documentId: input.documentId,
-          workspaceId: input.workspaceId,
-          generationId: oldGenerationId
+          generationId: newGenerationId,
+          contentHash: input.contentHash,
+          embeddingIdentity: identity,
+          dimension: indexedDocument.vectorSnapshot.vectors[0]?.length ?? 0,
+          importStatus: 2,
+          updatedAt: Date.now()
         })
-      }
-
-      return {
-        documentId: input.documentId,
-        filePath: input.filePath,
-        fileExt: input.fileExt,
-        documentName: input.documentName,
-        generationId: newGenerationId,
-        contentHash: input.contentHash,
-        chunkCount: indexedDocument.chunks.length,
-        usedCachedSplit: input.usedCachedSplit,
-        usedCachedVectors: input.usedCachedVectors,
-        chunks: indexedDocument.chunks.map((chunk) => ({
-          id: chunk.id,
-          text: chunk.text,
-          page: Number(chunk.metadata.page || 1)
-        }))
-      }
-    } catch (error) {
-      const cancelled = isIndexPrepareCancelledError(error) || Boolean(input.signal?.aborted)
-      if (wroteChunks && !activated) {
-        await this.deps.documentsStore
-          .deleteChunksByGeneration({
+        activated = true
+        if (oldGenerationId && oldGenerationId !== newGenerationId) {
+          await this.deps.documentsStore.deleteChunksByGeneration({
             documentId: input.documentId,
             workspaceId: input.workspaceId,
-            generationId: newGenerationId
+            generationId: oldGenerationId
           })
+        }
+
+        return {
+          documentId: input.documentId,
+          filePath: input.filePath,
+          fileExt: input.fileExt,
+          documentName: input.documentName,
+          generationId: newGenerationId,
+          contentHash: input.contentHash,
+          chunkCount: indexedDocument.chunks.length,
+          usedCachedSplit: input.usedCachedSplit,
+          usedCachedVectors: input.usedCachedVectors,
+          chunks: indexedDocument.chunks.map((chunk) => ({
+            id: chunk.id,
+            text: chunk.text,
+            page: Number(chunk.metadata.page || 1)
+          }))
+        }
+      } catch (error) {
+        const cancelled = isIndexPrepareCancelledError(error) || Boolean(input.signal?.aborted)
+        if (wroteChunks && !activated) {
+          await this.deps.documentsStore
+            .deleteChunksByGeneration({
+              documentId: input.documentId,
+              workspaceId: input.workspaceId,
+              generationId: newGenerationId
+            })
+            .catch(() => {})
+        }
+        if (cancelled) {
+          if (!activated && restoreDocument) {
+            try {
+              restoreDocument()
+            } catch (restoreError) {
+              throw new IndexPrepareRestoreError(input.documentId, restoreError)
+            }
+          }
+          throw new IndexPrepareCancelledError()
+        }
+        await this.deps.documentsStore
+          .markDocumentIndexFailed(
+            input.documentId,
+            error instanceof Error ? error.message : String(error)
+          )
           .catch(() => {})
+        throw new Error(error instanceof Error ? error.message : String(error))
       }
-      if (cancelled) throw new IndexPrepareCancelledError()
-      await this.deps.documentsStore
-        .markDocumentIndexFailed(
-          input.documentId,
-          error instanceof Error ? error.message : String(error)
-        )
-        .catch(() => {})
-      throw new Error(error instanceof Error ? error.message : String(error))
-    }
+    })
   }
 
   public async computeContentHash(filePath: string): Promise<string> {
@@ -479,6 +521,7 @@ export class WorkspaceKnowledgePrepareService {
     chunks: WorkspaceKnowledgeChunkInput[]
     vectors: number[][]
     generationId: string
+    embeddingIdentity: string
   }): Promise<void> {
     for (let start = 0; start < input.chunks.length; start += WORKSPACE_CHUNK_WRITE_BATCH_SIZE) {
       const batchChunks = input.chunks.slice(start, start + WORKSPACE_CHUNK_WRITE_BATCH_SIZE)
@@ -492,7 +535,8 @@ export class WorkspaceKnowledgePrepareService {
           generation_id: input.generationId,
           chunk_index: start + index
         })),
-        generationId: input.generationId
+        generationId: input.generationId,
+        embeddingIdentity: input.embeddingIdentity
       })
     }
   }

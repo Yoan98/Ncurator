@@ -55,6 +55,11 @@ describe('workspace knowledge cache', () => {
   })
 
   it('keys vectors by actual ordered texts, model bytes and embedding code, then rebinds current source metadata', async () => {
+    const localVector = { ...vector, modelName: 'local:model-a' }
+    await cache().saveVectorSnapshot(localVector, vectorKey.texts)
+    await expect(
+      cache().loadVectorSnapshot({ ...vectorKey, modelName: localVector.modelName })
+    ).resolves.toEqual(localVector)
     await cache().saveVectorSnapshot(vector, vectorKey.texts)
     await expect(cache().loadVectorSnapshot(vectorKey)).resolves.toEqual(vector)
     await expect(
@@ -73,7 +78,20 @@ describe('workspace knowledge cache', () => {
       cache({ ...pipeline, split: 'parser-b' }).loadVectorSnapshot(vectorKey)
     ).resolves.toEqual(vector)
     await writeFile(path.join(root, 'models', 'model-a', 'model.onnx'), 'asset-b')
+    await expect(
+      cache().loadVectorSnapshot({ ...vectorKey, modelName: localVector.modelName })
+    ).resolves.toBeNull()
     await expect(cache().loadVectorSnapshot(vectorKey)).resolves.toBeNull()
+  })
+
+  it('keys remote vectors by their configuration identity without requiring local model assets', async () => {
+    const remoteVector = { ...vector, modelName: 'remote:endpoint-model-budget-a' }
+    const remoteKey = { ...vectorKey, modelName: remoteVector.modelName }
+    await cache().saveVectorSnapshot(remoteVector, remoteKey.texts)
+    await expect(cache().loadVectorSnapshot(remoteKey)).resolves.toEqual(remoteVector)
+    await expect(
+      cache().loadVectorSnapshot({ ...remoteKey, modelName: 'remote:endpoint-model-budget-b' })
+    ).resolves.toBeNull()
   })
 
   it('serializes missing work across consumers, retains completed entries on failure, and atomically rejects corruption', async () => {
