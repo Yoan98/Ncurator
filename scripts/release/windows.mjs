@@ -152,6 +152,8 @@ const releaseEnvironment = () => {
 const testEnvironment = (environment) => {
   const sanitized = { ...environment }
   for (const name of [
+    'GH_TOKEN',
+    'GITHUB_TOKEN',
     'AWS_ACCESS_KEY_ID',
     'AWS_SECRET_ACCESS_KEY',
     'R2_ACCOUNT_ID',

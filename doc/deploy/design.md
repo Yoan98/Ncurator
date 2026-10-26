@@ -4,11 +4,11 @@
 
 ### Windows
 
-本地 Windows x64：Node.js 22 x64、项目指定 pnpm、Python 3.12 x64、Git、tar；发布时还需 AWS CLI、COS 和 R2 存储配置，以及已登录且具备公开仓库写权限的 GitHub CLI。`pnpm release:doctor` 检查本机条件。prepare / test / publish 只消费本机候选包。
+本地 Windows x64：Node.js 22 x64、项目指定 pnpm、Python 3.12 x64、Git、tar；发布时还需 AWS CLI、COS 和 R2 存储配置，以及已配置认证且具备公开仓库写权限的 GitHub CLI。`pnpm release:doctor` 检查本机条件。prepare / test / publish 只消费本机候选包。
 
 ### macOS
 
-prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` P12（自建更新签名，`timestamp: none`、`notarize: false`，非 Apple Developer ID 公证）。候选包须完成正式包 E2E；发布时需 AWS CLI、COS 和 R2 存储配置及已登录的 GitHub CLI。不构建、测试或发布 Intel Mac。
+prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` P12（自建更新签名，`timestamp: none`、`notarize: false`，非 Apple Developer ID 公证）。候选包须完成正式包 E2E；发布时需 AWS CLI、COS 和 R2 存储配置及已配置认证的 GitHub CLI。不构建、测试或发布 Intel Mac。
 
 ### 构建与产物边界
 
@@ -51,7 +51,7 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 ### GitHub Releases 手动下载
 
-公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 R2 上线国际版相同的文件；国内包完成正式包回归，国际包通过共用资源一致性绑定该证据，不重新构建。GitHub 登录凭证由 CLI 管理，不新增项目密钥配置。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和版本说明；GitHub 安装包附件使用英文品牌 ASCII 文件名，命名见[品牌规范](../brand.md#下载名-vs-缓存名)，自动更新文件由各发行包固定的 COS／R2 通道提供。
+公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 R2 上线国际版相同的文件；国内包完成正式包回归，国际包通过共用资源一致性绑定该证据，不重新构建。认证复用 CLI 保存的登录凭证，或使用发版机环境中的 `GH_TOKEN`；本地配置与验证见[发布流程](./release.md#31-github-releases-镜像)。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和版本说明；GitHub 安装包附件使用英文品牌 ASCII 文件名，命名见[品牌规范](../brand.md#下载名-vs-缓存名)，自动更新文件由各发行包固定的 COS／R2 通道提供。
 
 Release 的公开 annotated Tag 必须与候选 bundle 的构建 commit 完全一致；公开源码后从该源码创建新的 Tag 和候选包。自动流程不代建 Tag，不把含凭证的私有历史推入公开仓库，也不处理历史包与公开快照的 commit 映射。GitHub 自动附带的 Source code 压缩包不替代安装包，也不替代核对完整对应源码的义务。
 

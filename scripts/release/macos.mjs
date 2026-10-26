@@ -183,6 +183,8 @@ const createCandidate = async (sourceDirectory, platform, commit, distribution) 
 const sanitizedTestEnvironment = () => {
   const environment = { ...process.env }
   for (const name of [
+    'GH_TOKEN',
+    'GITHUB_TOKEN',
     'AWS_ACCESS_KEY_ID',
     'AWS_SECRET_ACCESS_KEY',
     'R2_ACCOUNT_ID',

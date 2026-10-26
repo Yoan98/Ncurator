@@ -119,14 +119,23 @@ export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production
 
 ### 3.1 GitHub Releases 镜像
 
-发版机安装 [GitHub CLI](https://cli.github.com/)，并使用具有 `Yoan98/Ncurator` 写权限的账号完成一次浏览器授权。macOS 可用 `brew install gh`；Windows 在实际发版机安装 CLI 并单独登录。
+发版机安装 [GitHub CLI](https://cli.github.com/)，并配置具有 `Yoan98/Ncurator` 写权限的凭证。macOS 可用 `brew install gh`；Windows 在实际发版机安装 CLI。认证任选一种：
+
+- 无交互发布：在发版机终端环境或被 Git 忽略的本地 `.env` 中设置 `GH_TOKEN`，平台发布脚本自动读取。新建 fine-grained PAT 时只选择 `Yoan98/Ncurator`，授予 `Contents: Read and write`；也可复用已有且具备发布权限的凭证。使用环境 Token 时无需运行 `gh auth login`；凭证有效期间不需要浏览器重复授权。
+- CLI 登录：执行下列命令完成一次浏览器授权，凭证由 CLI 保存到系统凭证存储，后续直接复用。
 
 ```bash
 gh auth login --hostname github.com --web --git-protocol ssh --skip-ssh-key
 gh auth status --hostname github.com
 ```
 
-登录凭证由 CLI 管理，不写入项目 `.env`，无需新增 GitHub Token 配置。每个平台继续使用原有发布命令，COS、R2、GitHub 不另设正常发布开关或上传步骤。
+`gh` 自身不读取项目 `.env`。仅在 `.env` 配置 Token 时，可用以下只读命令验证认证：
+
+```bash
+node --env-file=.env -e "require('node:child_process').execFileSync('gh', ['api', '--method', 'GET', 'repos/Yoan98/Ncurator', '--jq', '.permissions.push'], { stdio: 'inherit' })"
+```
+
+本地 `.env` 中的 Token 不提交到仓库；macOS / Linux 文件权限设为 `600`。正式包 E2E 子进程移除 `GH_TOKEN` / `GITHUB_TOKEN`。本地发布不读取 GitHub Actions Secrets。每个平台继续使用原有发布命令，COS、R2、GitHub 不另设正常发布开关或上传步骤。
 
 `--publish-only` 按以下规则执行：
 
