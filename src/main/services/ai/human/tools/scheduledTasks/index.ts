@@ -60,7 +60,7 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
           args: {},
           execute: async (session) => {
             if (!service) {
-              const result = { error: '定时任务服务不可用' }
+              const result = { error: 'The scheduled task service is unavailable' }
               session.fail(
                 result.error,
                 undefined,
@@ -96,7 +96,7 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
           args: args as Record<string, unknown>,
           execute: async (session) => {
             if (!service) {
-              const result = { error: '定时任务服务不可用' }
+              const result = { error: 'The scheduled task service is unavailable' }
               session.fail(
                 result.error,
                 undefined,
@@ -116,7 +116,7 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
                 selectedReferences: []
               })
               if (!result.success) {
-                const error = result.error || '创建定时任务失败'
+                const error = result.error || 'Failed to create the scheduled task'
                 session.fail(
                   error,
                   undefined,
@@ -130,14 +130,14 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
             }
             const current = await service.getForPartner(input.id, ctx.partnerId)
             if (!current) {
-              const error = '定时任务不存在'
+              const error = 'The scheduled task was not found'
               session.fail(error, undefined, failureResult(SCHEDULED_TASK_ACTION_SPEC.name, error))
               return { error }
             }
             if (input.action === 'delete') {
               const result = await service.deleteForPartner(input.id, ctx.partnerId)
               if (!result.success) {
-                const error = result.error || '删除定时任务失败'
+                const error = result.error || 'Failed to delete the scheduled task'
                 session.fail(
                   error,
                   undefined,
@@ -164,7 +164,7 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
               enabled: input.enabled
             })
             if (!result.success) {
-              const error = result.error || '修改定时任务失败'
+              const error = result.error || 'Failed to update the scheduled task'
               session.fail(error, undefined, failureResult(SCHEDULED_TASK_ACTION_SPEC.name, error))
               return { error }
             }

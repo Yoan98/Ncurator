@@ -228,7 +228,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 }
 ```
 
-**`tool`** — 模型可见的工具结果文本；失败另存可选 `error` 原始原因供 UI 使用，不改变模型可见正文；图片只存 ref，不存 Base64。可选 `displayInput` 保存解析后的展示名称、加载成功项和逐项失败原因，供实时事件与历史 UI 使用；不进入模型消息，不复制说明正文或完整领域结果。
+**`tool`** — 模型可见的工具结果文本；失败正文与可选 `error` 保留同一具体原因，正文可补充工具名和上下文；图片只存 ref，不存 Base64。可选 `displayInput` 保存解析后的展示名称、加载成功项和逐项失败原因，供实时事件与历史 UI 使用；不进入模型消息，不复制说明正文或完整领域结果。
 
 ```json
 {
@@ -807,7 +807,7 @@ brain 返回 update_plan
                               （不改 build user；计划在 tool 结果中可见）
 ```
 
-计划项：`{ title, status }`，`status ∈ todo | done`。
+计划项：`{ title, status }`，`status ∈ todo | doing | done`；允许多个 `doing`。进度只统计 `done`，`doing` 表示执行中的事项。
 扫描该伙伴剩余 log：**最后**一条 `plan_updated` 生效；`finalizing_started` 后投影清空 plan。
 
 参数非法：写失败 `tool`，plan 不变，回 dispatch 继续队列。
@@ -860,7 +860,16 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 ### 8.4 失败、告警与重试
 
-统一出口：`throw` → `createAiRunFailure` / `classifyThrownErrorToAiRunFailure` → **唯一** `run_failed`（`AiRunService`；`ChatRunService` 外层 catch 仅兜底未进入图的异常）。用户停止走 `cancelled`，不并入 `failed`。
+运行级失败的统一出口：`throw` → `createAiRunFailure` / `classifyThrownErrorToAiRunFailure` → **唯一** `run_failed`（`AiRunService`；`ChatRunService` 外层 catch 仅兜底未进入图的异常）。用户停止走 `cancelled`，不并入 `failed`。
+
+#### 工具错误反馈原则
+
+1. **校验器错误**：保留 schema／参数校验器提供的字段路径和诊断，只做排版；不人工枚举错误或重复实现校验规则。
+2. **预设工具错误**：知识库未就绪、文件过大等已知条件，在产生处使用明确的英文文案；我们编写的自定义校验和处理指引也用英文。
+3. **执行异常**：保留工具、依赖及系统已有的原始诊断，不按语言过滤、翻译或替换原因；有效错误码和上下文继续保留。
+4. **最终兜底**：仅在没有有效诊断时返回英文 `Tool <toolName> failed.`；工具名未知时使用 `Tool call failed.`。
+
+事件、日志和模型反馈保留一致的失败原因；统一投递层只包装与排版，不靠匹配报错文案分类。用户取消仍按取消处理。
 
 #### 失败码（互斥）
 

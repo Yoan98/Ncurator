@@ -32,7 +32,7 @@ export const findPptTableOverflows = (
   svg: string
 ): PptTableOverflow[] => {
   const bounds = getShapeBoundsResolved(presentation, table)
-  if (!bounds) throw new Error('无法读取表格边界')
+  if (!bounds) throw new Error('Cannot read the table bounds')
   const expected = [bounds.x, bounds.y, bounds.w, bounds.h].map((value) => Number(value) / 9525)
   const document = new DOMParser().parseFromString(svg, 'image/svg+xml')
   const group = Array.from(document.getElementsByTagName('g')).find((candidate) => {
@@ -45,7 +45,7 @@ export const findPptTableOverflows = (
       children(candidate).filter((child) => child.tagName === 'rect').length > 1
     )
   })
-  if (!group) throw new Error('无法检查表格预览布局')
+  if (!group) throw new Error('Cannot inspect the table preview layout')
   const overflows: PptTableOverflow[] = []
   let cell: Element | undefined
   let cellIndex = 0
@@ -113,7 +113,7 @@ export const assertPptTableFits = async (
   )
   if (overflows.length) {
     throw new Error(
-      `表格第 ${overflows[0]!.cellIndex} 个单元格文字超出边界：请增大列宽或行高、减小字号或精简文字`
+      `Text overflows table cell ${overflows[0]!.cellIndex}. Increase the column width or row height, reduce the font size, or shorten the text`
     )
   }
 }

@@ -233,10 +233,16 @@ export default function UserSkillsView() {
                 data-testid={`${selectors.itemPrefix}-${skill.name}`}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="break-words text-[14px] font-medium text-[#37352F]">
+                  <div
+                    className="line-clamp-2 break-words text-[14px] font-medium text-[#37352F] [overflow-wrap:anywhere]"
+                    title={skill.name}
+                  >
                     {skill.name}
                   </div>
-                  <div className="mt-1 break-words text-[13px] text-[#787774]">
+                  <div
+                    className="mt-1 line-clamp-2 break-words text-[13px] text-[#787774] [overflow-wrap:anywhere]"
+                    title={skill.error ? skillError(skill.error) : skill.description}
+                  >
                     {skill.error ? skillError(skill.error) : skill.description}
                   </div>
                 </div>

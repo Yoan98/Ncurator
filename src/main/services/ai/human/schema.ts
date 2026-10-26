@@ -1,4 +1,5 @@
 import { z } from 'zod/v4'
+import { CHAT_PLAN_STATUSES } from '../../../../shared/types'
 import { aiArtifactRefSchema } from '../schema'
 import { jsonObjectSchema, jsonValueSchema, toolResourceContextSchema } from './toolSchemas'
 import {
@@ -91,11 +92,11 @@ export const humanToolsetLoadingOutcomeSchema = z.object({
   activeToolCount: z.number().int().min(0)
 })
 
-export const humanPlanItemStatusSchema = z.enum(['todo', 'done'])
+export const humanPlanItemStatusSchema = z.enum(CHAT_PLAN_STATUSES)
 
 export const humanPlanItemSchema = z.object({
-  title: z.string().min(1),
-  status: humanPlanItemStatusSchema
+  title: z.string().trim().min(1).describe('计划项标题'),
+  status: humanPlanItemStatusSchema.describe('todo：待处理；doing：正在执行；done：已完成')
 })
 
 export const humanRoundThoughtSchema = z.object({

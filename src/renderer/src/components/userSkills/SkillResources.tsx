@@ -51,20 +51,32 @@ export default function SkillResources({
   }
   return (
     <div className="mb-4" data-testid={selectors.resources}>
-      <Button
-        type="text"
-        size="small"
-        className="!px-0 !text-[12px] !text-[#787774]"
-        icon={<HiOutlinePaperClip />}
-        disabled={disabled}
-        onClick={() => setExpanded(!expanded)}
-        aria-expanded={expanded}
-      >
-        {t(($) => $.userSkills.resources, { count: resources.length })}
-        <HiOutlineChevronDown
-          className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
-        />
-      </Button>
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          type="text"
+          size="small"
+          className="min-w-0 !px-0 !text-[12px] !text-[#787774]"
+          icon={<HiOutlinePaperClip />}
+          disabled={disabled}
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+        >
+          {t(($) => $.userSkills.resources, { count: resources.length })}
+          <HiOutlineChevronDown
+            className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+        </Button>
+        <Button
+          type="text"
+          size="small"
+          icon={<HiOutlineFolderOpen />}
+          onClick={() => void openFolder()}
+          disabled={disabled}
+          className="shrink-0 !text-[12px] !text-[#787774]"
+        >
+          {t(($) => $.userSkills.openFolder)}
+        </Button>
+      </div>
       {expanded && (
         <div className="mt-1 pl-5">
           {resources.map((path) => {
@@ -85,8 +97,13 @@ export default function SkillResources({
               >
                 <Icon className="h-4 w-4 shrink-0 text-[#787774]" />
                 <span className="min-w-0 flex-1 break-words text-[13px] text-[#37352F]">
-                  {name}
-                  <span className="block text-[12px] text-[#787774]">
+                  <span className="line-clamp-2 [overflow-wrap:anywhere]" title={name}>
+                    {name}
+                  </span>
+                  <span
+                    className="line-clamp-2 text-[12px] text-[#787774] [overflow-wrap:anywhere]"
+                    title={parts.length ? parts.join('/') + '/' : './'}
+                  >
                     {parts.length ? parts.join('/') + '/' : './'}
                   </span>
                 </span>
@@ -94,16 +111,6 @@ export default function SkillResources({
               </button>
             )
           })}
-          <Button
-            type="text"
-            size="small"
-            icon={<HiOutlineFolderOpen />}
-            onClick={() => void openFolder()}
-            disabled={disabled}
-            className="mt-1 !text-[12px] !text-[#787774]"
-          >
-            {t(($) => $.userSkills.openFolder)}
-          </Button>
         </div>
       )}
       <Modal

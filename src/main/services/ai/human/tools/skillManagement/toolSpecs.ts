@@ -1,6 +1,9 @@
 import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
-import { renderSkillConfigModelResult } from '../../shared/modelToolResultRenderers'
+import {
+  renderGenericModelError,
+  renderSkillConfigModelResult
+} from '../../shared/modelToolResultRenderers'
 import { SKILL_CONFIG_SCHEMA } from './toolSchemas'
 
 export const SKILL_CONFIG_TOOL_SPEC: HumanToolSpec<
@@ -19,8 +22,7 @@ export const SKILL_CONFIG_TOOL_SPEC: HumanToolSpec<
   }),
   modelResult: {
     renderSuccess: renderSkillConfigModelResult,
-    renderError: ({ data }) =>
-      `Error: ${data && typeof data === 'object' && !Array.isArray(data) && typeof data.error === 'string' ? data.error : 'Skill configuration failed'}`
+    renderError: renderGenericModelError
   }
 }
 

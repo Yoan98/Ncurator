@@ -25,7 +25,7 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'update_plan',
                   args: {
                     plan: [
-                      { title: '确认 A 事项', status: 'todo' },
+                      { title: '确认 A 事项', status: 'doing' },
                       { title: '确认 B 事项', status: 'todo' },
                       { title: '检查是否已经满足用户诉求并能进入最终交付', status: 'todo' }
                     ]
@@ -35,13 +35,13 @@ describe('ai human mock-llm backend', () => {
               },
               ({ user }) => {
                 secondBrainSeesPlan =
-                  user.includes('确认 A 事项') && user.includes('确认 B 事项')
+                  user.includes('[doing] 确认 A 事项') && user.includes('确认 B 事项')
                 return buildToolDecision({
                   toolName: 'update_plan',
                   args: {
                     plan: [
                       { title: '确认 A 事项', status: 'done' },
-                      { title: '确认 B 事项', status: 'todo' },
+                      { title: '确认 B 事项', status: 'doing' },
                       { title: '检查是否已经满足用户诉求并能进入最终交付', status: 'todo' }
                     ]
                   },
@@ -51,7 +51,9 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => {
                 const planEchoCount = user.split('确认 A 事项').length - 1
                 thirdBrainSeesUpdatedPlan =
-                  planEchoCount >= 2 && user.includes('确认 B 事项')
+                  planEchoCount >= 2 &&
+                  user.includes('[done] 确认 A 事项') &&
+                  user.includes('[doing] 确认 B 事项')
                 return buildToolDecision({
                   toolName: 'update_plan',
                   args: {

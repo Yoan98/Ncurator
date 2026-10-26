@@ -933,7 +933,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   return (
     <div className="relative" inert={locked || undefined}>
-      <WorkbenchPlanProgress plan={plan} />
+      <WorkbenchPlanProgress plan={plan} running={loading && showCancel && !cancelling} />
       {mentionQuery !== null ? (
         <ReferenceMentionPanel
           loading={mentionLoading}

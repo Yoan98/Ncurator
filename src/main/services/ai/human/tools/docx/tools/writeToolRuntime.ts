@@ -319,11 +319,13 @@ export const compileDocxOperations = (request: DocxWriteRequest): DocxOperation[
   }
   if (operation.type === 'insert_nodes' && operation.nodes.some((node) => node.type === 'visual')) {
     if (operation.nodes.some((node) => node.type !== 'visual')) {
-      throw new Error('visual 与文字节点请分开调用 insert_nodes，以保证插入顺序明确')
+      throw new Error(
+        'Insert visual and text nodes in separate insert_nodes calls to preserve a clear insertion order'
+      )
     }
     return operation.nodes.map((node) => {
       if (node.type !== 'visual' || !node.imagePath)
-        throw new Error('插入 visual 必须提供 imagePath')
+        throw new Error('Inserting a visual requires imagePath')
       return {
         type: 'insert_image',
         nodeId: operation.nodeId,
@@ -545,7 +547,7 @@ const applyEdit = async (input: {
         toolName: input.toolName,
         toolCallId: input.toolCallId,
         reason: 'failed',
-        error: `文档已经写入，内部会话更新失败，请重新读取文件并反馈作者修复： ${error instanceof Error ? error.message : String(error)}`,
+        error: `The document has been written, but the internal session update failed. Read the file again and report the issue: ${error instanceof Error ? error.message : String(error)}`,
         resourceContext: input.runtime.buildResourceContext({
           sourcePath: input.sourcePath,
           effectKind: 'mutated',
@@ -743,7 +745,8 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
               toolName,
               toolCallId,
               reason: 'invalid_input',
-              error: '新建 DOCX 时只能在 document_end 插入段落或创建表格；其他操作需要已有文档内容',
+              error:
+                'When creating a DOCX, only paragraphs or tables can be inserted at document_end; other operations require existing document content',
               resourceContext: runtime.buildResourceContext({
                 sourcePath: requestedSourcePath,
                 effectKind: 'mutated'
@@ -946,7 +949,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
                 toolName,
                 toolCallId,
                 reason: 'failed',
-                error: `文档已经创建，内部会话更新失败，请重新读取文件并反馈作者修复： ${error instanceof Error ? error.message : String(error)}`,
+                error: `The document has been created, but the internal session update failed. Read the file again and report the issue: ${error instanceof Error ? error.message : String(error)}`,
                 resourceContext: runtime.buildResourceContext({
                   sourcePath: requestedSourcePath,
                   effectKind: 'mutated'

@@ -63,8 +63,8 @@ export const buildExcelCapabilityTools = (input: ExcelCapabilityToolsInput) => {
                 typeof (args as JsonObject)?.sourcePath === 'string'
                   ? String((args as JsonObject).sourcePath)
                   : ''
-              const failure = toExcelToolFailure(sourcePath, error)
-              session.fail(String(failure.error || 'Excel 工具执行失败'), undefined, {
+              const failure = toExcelToolFailure(sourcePath, params.name, error)
+              session.fail(String(failure.error), undefined, {
                 toolName: params.name,
                 ok: false,
                 data: failure
@@ -72,7 +72,7 @@ export const buildExcelCapabilityTools = (input: ExcelCapabilityToolsInput) => {
               input.emitActivity({
                 actionType: params.name,
                 status: 'failed',
-                summary: String(failure.error || 'Excel 工具执行失败')
+                summary: String(failure.error)
               })
               return failure
             }

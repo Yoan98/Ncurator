@@ -14,6 +14,7 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { prepareImagesForMainModel } from './readImage'
 import { FreeModelCatalogService } from '../../../../llm/FreeModelCatalogService'
 import { isFreeModelWithoutVision } from '../../../../../../shared/messageLogVisionContext'
+import { resolveToolErrorMessage } from '../../shared/toolError'
 
 // 加载、计划和提问由各自节点处理；图片读取和子任务派发在公共 hand 工具链执行。
 export const agentControlToolFamily: ToolFamilyDefinition = {
@@ -87,7 +88,8 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
             session.succeed(undefined, result)
             return { children }
           },
-          onError: (error, session) => session.fail(error.message || '未知错误')
+          onError: (error, session) =>
+            session.fail(resolveToolErrorMessage(DELEGATE_TO_SUBAGENT_TOOL_SPEC.name, error))
         }),
       {
         name: DELEGATE_TO_SUBAGENT_TOOL_SPEC.name,

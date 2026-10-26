@@ -21,6 +21,6 @@ export const renderLatexToSvg = (latex: string): string => {
   const markup = adaptor.outerHTML(node)
   const start = markup.indexOf('<svg')
   const end = markup.lastIndexOf('</svg>')
-  if (start < 0 || end < start) throw new Error('公式 SVG 渲染失败')
+  if (start < 0 || end < start) throw new Error('Formula SVG rendering failed')
   return markup.slice(start, end + '</svg>'.length)
 }

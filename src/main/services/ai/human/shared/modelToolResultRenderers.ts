@@ -1,5 +1,6 @@
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
 import type { ModelResultRenderer, ModelResultRendererInput } from '../tools/types'
+import { renderToolError } from './toolError'
 import {
   formatReadRangeFooter,
   renderFileEnvelope,
@@ -38,16 +39,8 @@ export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ data }) 
   ])
 }
 
-const containsOnlyModelSafeDiagnosticText = (value: string): boolean =>
-  /^[\x20-\x7E\r\n\t]+$/u.test(value)
-
-export const renderGenericModelError: ModelResultRenderer = ({ toolName, data }) => {
-  const detail = isObject(data)
-    ? readString(data.error) || readString(data.message)
-    : readString(data)
-  if (detail && containsOnlyModelSafeDiagnosticText(detail)) return `Error: ${detail}`
-  return `Error: ${toolName} failed. Check the tool arguments and try again.`
-}
+export const renderGenericModelError: ModelResultRenderer = ({ toolName, data }) =>
+  renderToolError(toolName, data)
 
 export const renderSkillConfigModelResult: ModelResultRenderer = ({ args, data }) => {
   if (args.action === 'update') return renderPlainConfirmation('修改成功。')
@@ -94,10 +87,7 @@ export const renderScheduledTaskMutationModelResult: ModelResultRenderer = ({ ar
   return `已${verb}定时任务${id ? `，id=${id}` : ''}。`
 }
 
-export const renderScheduledTaskModelError: ModelResultRenderer = ({ toolName, data }) => {
-  const detail = isObject(data) ? readString(data.error) || readString(data.message) : undefined
-  return detail ? `Error: ${detail}` : `Error: ${toolName} 执行失败。`
-}
+export const renderScheduledTaskModelError: ModelResultRenderer = renderGenericModelError
 
 const buildTerminalMarkers = (
   entries: Array<[string, string | number | boolean | undefined]>
@@ -177,10 +167,8 @@ const normalizeKbSearchItems = (data: JsonValue | undefined): JsonObject[] => {
   return data.items.filter(isObject)
 }
 
-export const renderKbModelError: ModelResultRenderer = ({ data }) => {
-  const detail = isObject(data) ? readString(data.error) : ''
-  return `${detail ? `Error: ${detail}` : 'Error: kb tool failed.'}\n当前状态下不要继续调用 KB 工具；请告知用户原因，可继续使用其他可用能力。`
-}
+export const renderKbModelError: ModelResultRenderer = ({ toolName, data }) =>
+  `${renderToolError(toolName, data)}\nDo not call KB tools again while this condition persists. Explain the reason to the user and continue with other available capabilities.`
 
 export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {
   const items = normalizeKbSearchItems(data)
@@ -862,7 +850,6 @@ export const renderBrowserUseModelError: ModelResultRenderer = (input) => {
   const page = isObject(obj.page) ? obj.page : {}
   const pageLabel = [readString(page.title), readString(page.url)].filter(Boolean).join(' — ')
   if (action === 'act') {
-    const message = readString(obj.message) || readString(obj.error) || ''
     const executed = isObject(obj.executed) ? obj.executed : {}
     const executedArgs = Array.isArray(executed.arguments)
       ? executed.arguments.map((value) => String(value))
@@ -875,17 +862,18 @@ export const renderBrowserUseModelError: ModelResultRenderer = (input) => {
       .filter(Boolean)
       .join('; ')
     return renderProse([
-      'Browser act failed.',
+      renderToolError(input.toolName, obj),
       tabId ? `Tab: ${tabId}` : '',
       pageLabel ? `Page: ${pageLabel}` : '',
-      message ? `Message: ${message}` : '',
+      readString(obj.error) && readString(obj.message) && obj.error !== obj.message
+        ? `Message: ${readString(obj.message)}`
+        : '',
       readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : '',
       executedLine ? `Executed: ${executedLine}` : '',
       readString(executed.selector) ? `selector: ${readString(executed.selector)}` : ''
     ])
   }
-  const detail = readString(obj.error) || readString(obj.message) || `${input.toolName} failed.`
-  return renderProse([`Error: ${detail}`, tabId ? `Tab: ${tabId}` : ''])
+  return renderProse([renderToolError(input.toolName, obj), tabId ? `Tab: ${tabId}` : ''])
 }
 
 export const renderPlanUpdateModelResult: ModelResultRenderer = () =>

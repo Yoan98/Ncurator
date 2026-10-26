@@ -2,6 +2,7 @@ import type { ChatMessageLogEntry, JsonObject } from '../../../../../shared/type
 import type { AiRunContext } from '../../types'
 import type { HumanRuntimeCache } from '../types'
 import { appendLogEntriesToCache } from '../memory/conversationLogMessages'
+import { readToolErrorMessage, renderToolError, resolveToolErrorMessage } from './toolError'
 
 export type ToolFeedbackInput = {
   toolCallId: string
@@ -12,17 +13,22 @@ export type ToolFeedbackInput = {
   displayInput?: JsonObject
 }
 
-const buildContent = (input: ToolFeedbackInput): string => {
-  if (input.content) return input.content
-  if (input.ok) return 'Tool feedback completed successfully.'
-  const error = input.errorMessage ?? 'The tool call failed.'
-  return /^[\x20-\x7E\r\n\t]+$/u.test(error)
-    ? `Error: ${error}`
-    : 'Error: The tool call failed. Check the tool arguments and try again.'
-}
-
 export const buildToolFeedback = (input: ToolFeedbackInput): ChatMessageLogEntry => {
-  const content = buildContent(input)
+  const explicitContent = input.content?.trim()
+  const error = input.ok
+    ? undefined
+    : resolveToolErrorMessage(
+        input.toolName,
+        readToolErrorMessage(input.errorMessage) || explicitContent?.replace(/^Error:\s*/u, '')
+      )
+  let content = explicitContent
+  if (!content) {
+    content = input.ok
+      ? 'Tool feedback completed successfully.'
+      : renderToolError(input.toolName, error)
+  } else if (error && !content.includes(error)) {
+    content = `${renderToolError(input.toolName, error)}\n${content}`
+  }
   return {
     kind: 'tool',
     toolCallId: input.toolCallId,
@@ -30,7 +36,7 @@ export const buildToolFeedback = (input: ToolFeedbackInput): ChatMessageLogEntry
     ok: input.ok,
     content,
     displayInput: input.displayInput,
-    error: input.ok ? undefined : input.errorMessage?.trim() || '未知错误'
+    error
   }
 }
 

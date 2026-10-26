@@ -61,7 +61,7 @@ const collectMatches = (input: {
       regex = new RegExp(input.query, 'g')
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`正则表达式无效：${message}`)
+      throw new Error(`Invalid regular expression: ${message}`)
     }
     const matches: MatchEntry[] = []
     let totalMatchCount = 0

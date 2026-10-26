@@ -29,7 +29,7 @@ export const restoreLineEnding = (text: string, lineEnding: '\n' | '\r\n'): stri
 
 export const decodeTextFile = (buffer: Buffer, sourcePath: string): DecodedTextFile => {
   if (buffer.includes(0)) {
-    throw new Error(`无法读取 ${sourcePath}：不支持二进制文件。`)
+    throw new Error(`Cannot read ${sourcePath}: binary files are not supported.`)
   }
   const bom = buffer.subarray(0, UTF8_BOM.length).equals(UTF8_BOM)
   const body = bom ? buffer.subarray(UTF8_BOM.length) : buffer
@@ -37,7 +37,7 @@ export const decodeTextFile = (buffer: Buffer, sourcePath: string): DecodedTextF
   try {
     content = new TextDecoder('utf-8', { fatal: true }).decode(body)
   } catch {
-    throw new Error(`无法读取 ${sourcePath}：文件不是有效的 UTF-8 文本。`)
+    throw new Error(`Cannot read ${sourcePath}: the file is not valid UTF-8 text.`)
   }
   return {
     bom,
@@ -76,7 +76,7 @@ export const resolveSafeTextFilePath = async (input: {
   allowMissing: boolean
 }): Promise<string> => {
   const resolved = resolveToolPath(input.sourcePath)
-  if (!resolved) throw new Error(`无效的文件路径：${input.sourcePath}。`)
+  if (!resolved) throw new Error(`Invalid file path: ${input.sourcePath}.`)
 
   const existingAncestor = await findExistingAncestor(
     input.allowMissing ? path.dirname(resolved) : resolved
@@ -86,9 +86,9 @@ export const resolveSafeTextFilePath = async (input: {
   if (!input.allowMissing) {
     const stats = await fs.lstat(resolved)
     if (stats.isSymbolicLink())
-      throw new Error(`无法访问 ${input.sourcePath}：不支持符号链接。`)
+      throw new Error(`Cannot access ${input.sourcePath}: symbolic links are not supported.`)
     if (!stats.isFile())
-      throw new Error(`无法访问 ${input.sourcePath}：路径不是普通文件。`)
+      throw new Error(`Cannot access ${input.sourcePath}: the path is not a regular file.`)
     await fs.realpath(resolved)
   }
 

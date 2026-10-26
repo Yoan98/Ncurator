@@ -82,6 +82,7 @@ describe('ai human mock-llm backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         await runtime.prepareEmbeddingModel()
+        let fieldErrorSeen = false
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
@@ -89,12 +90,22 @@ describe('ai human mock-llm backend', () => {
                 output: {
                   thought: { next: '发送错误计划后继续读取知识库目录。' },
                   toolCalls: [
+                    {
+                      name: 'update_plan',
+                      args: { plan: [{ title: '保留原计划', status: 'doing' }] }
+                    },
                     { name: 'update_plan', args: { plan: [{ title: '错误状态', status: 'bad' }] } },
                     { name: 'kb_list_documents', args: {} }
                   ]
                 }
               },
-              { output: { thought: { next: '失败结果和后续工具结果都已收到。' } } }
+              ({ user }) => {
+                fieldErrorSeen =
+                  user.includes('plan[0].status') &&
+                  user.includes('doing') &&
+                  user.includes('Invalid option')
+                return { thought: { next: '失败结果和后续工具结果都已收到。' } }
+              }
             ]
           }
         })
@@ -105,6 +116,11 @@ describe('ai human mock-llm backend', () => {
         const messageLog = await runner.ctx.loadMessageLog()
         return {
           output,
+          fieldErrorSeen,
+          events: runtime.eventCollector.snapshot(),
+          planUpdates: messageLog
+            .map((record) => record.entry)
+            .filter((entry) => entry.kind === 'annotation' && entry.eventType === 'plan_updated'),
           toolEntries: messageLog
             .map((record) => record.entry)
             .filter((entry) => entry.kind === 'tool')
@@ -113,8 +129,19 @@ describe('ai human mock-llm backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.output.status === 'completed' &&
+            result.fieldErrorSeen &&
+            result.planUpdates.length === 1 &&
             result.toolEntries.some(
-              (entry) => entry.toolName === 'update_plan' && entry.ok === false
+              (entry) =>
+                entry.toolName === 'update_plan' &&
+                entry.ok === false &&
+                entry.content.includes('plan[0].status') &&
+                result.events.some(
+                  (event) =>
+                    event.type === 'tool_call_result' &&
+                    event.toolCallId === entry.toolCallId &&
+                    entry.error === event.error
+                )
             ) &&
             result.toolEntries.some(
               (entry) => entry.toolName === 'kb_list_documents' && entry.ok === true

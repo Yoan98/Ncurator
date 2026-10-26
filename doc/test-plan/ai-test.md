@@ -754,7 +754,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：真实 KB 不可用只产生工具错误，后续文件工具和最终交付仍正常。
 - Why：知识库失败应交给 AI 决策，不能终止整个 run。
 - How：隔离空模型目录，生产 AiRunService 中 scripted LLM 先调用 kb_search，再读取真实文本并交付；捕获下一轮模型上下文。
-- Oracle：KB 结果 ok=false 且上下文含模型缺失原因及停止调用 KB 指引；真实文本读取成功；run completed，无 run_failed，目录无下载产物。
+- Oracle：KB 结果 ok=false 且上下文含预设英文模型缺失原因及停止调用 KB 指引，事件与日志保留同一原因；真实文本读取成功；run completed，无 run_failed，目录无下载产物。
 
 ##### `learning-hand-mouth-smoke`
 
@@ -809,8 +809,8 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：混合调用中的 `update_plan` 参数无效时，后续 hand 调用仍由 dispatch 执行。
 - Why：控制工具失败不能清空同一 assistant 消息尚未消费的工具队列。
-- How：同一轮依次返回无效 `update_plan` 与 `kb_list_documents`，下一轮检查消息记录。
-- Oracle：plan 获得失败 ToolMessage，KB 工具获得成功 ToolMessage，任务正常完成且没有悬空 tool_call_id。
+- How：先建立含 doing 的合法计划，同一轮再依次返回无效 `update_plan` 与 `kb_list_documents`，下一轮检查模型上下文、事件与消息记录。
+- Oracle：plan 获得包含 `plan[0].status` 和 schema 原始诊断的失败 ToolMessage；失败事件与日志原因一致，原计划不变；KB 工具获得成功 ToolMessage，任务正常完成且没有悬空 tool_call_id。
 
 ##### `human-ask-user-question-runs-mixed-tools-in-order`
 
@@ -863,10 +863,10 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `plan-memory-maintenance`
 
 - 测试类型：`backend`
-- What：任务板（plan）作为长期任务板会在 mock-llm 下跨轮维护 todo、done 状态。
+- What：任务板（plan）作为长期任务板会在 mock-llm 下跨轮维护 todo、doing、done 状态。
 - Why：如果任务板不能跨轮保留并被重写成最新任务板，brain 很容易把长期记忆退化成单轮摘要。
-- How：第一轮 `brain` 通过 `update_plan` 写入只含 todo 的任务板；第二轮 `brain` 读取真实 prompt 后将任务板重写为包含 done 与 todo 的新版本；第三轮验证更新后的状态已写入 prompt，并把任务板收尾为全 done。
-- Oracle：第二轮 `brain` 的完整 messages（含 `update_plan` 的 tool 结果）能看到第一轮写入的任务板项，第三轮能看到第二轮的 done/todo 更新，任务最终完成。同 run 不把 plan 写进 build user 的 `<active_state>`。
+- How：第一轮 `brain` 通过 `update_plan` 写入含 doing 与 todo 的任务板；第二轮 `brain` 读取真实 prompt 后将任务板重写为包含 done、doing 与 todo 的新版本；第三轮验证更新后的状态已写入 prompt，并把任务板收尾为全 done。
+- Oracle：第二轮 `brain` 的完整 messages（含 `update_plan` 的 tool 结果）能看到第一轮任务板及 doing 状态，第三轮能看到第二轮的三态更新；计划事件保留 doing，任务最终完成。同 run 不把 plan 写进 build user 的 `<active_state>`。
 
 ##### `multi-tool-collaboration`
 

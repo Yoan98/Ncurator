@@ -98,6 +98,8 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 跳过 schema 的工具仍走 `normalizeToolCallArgs`。
 
+参数失败统一保留校验器的字段路径和诊断，节点自有校验同样复用公共格式化；错误来源、语言与兜底规则见 [Human Harness 工具错误反馈原则](human-harness.md#工具错误反馈原则)。
+
 ---
 
 ## 5. 统一结果投递

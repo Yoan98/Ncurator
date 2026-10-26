@@ -122,8 +122,16 @@ export default function PartnerSkillPicker({
                       }
                     />
                     <span className="min-w-0 flex-1 text-[13px]">
-                      <span className="block break-words text-[#37352F]">{option.name}</span>
-                      <span className="mt-0.5 block break-words text-[12px] text-[#787774]">
+                      <span
+                        className="line-clamp-2 break-words text-[#37352F] [overflow-wrap:anywhere]"
+                        title={option.name}
+                      >
+                        {option.name}
+                      </span>
+                      <span
+                        className="mt-0.5 line-clamp-2 break-words text-[12px] text-[#787774] [overflow-wrap:anywhere]"
+                        title={option.description}
+                      >
                         {option.description}
                       </span>
                       {option.bodyBytes === null && (

@@ -151,7 +151,7 @@ describe('AI runs independent of knowledge configuration', () => {
                 },
                 (call) => {
                   expect(call.user).toContain(EMBEDDING_MODEL_NOT_INSTALLED_ERROR)
-                  expect(call.user).toContain('不要继续调用 KB')
+                  expect(call.user).toContain('Do not call KB tools again')
                   return buildToolDecision({
                     toolName: 'text_file_read',
                     args: { sourcePath },

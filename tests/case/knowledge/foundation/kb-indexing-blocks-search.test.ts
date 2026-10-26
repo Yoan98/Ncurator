@@ -130,11 +130,11 @@ describe('knowledge foundation', () => {
               (item) =>
                 item.ok === false &&
                 item.content.startsWith(MODEL_FACING_INDEXING_ERROR) &&
-                item.content.includes('不要继续调用 KB')
+                item.content.includes('Do not call KB tools again')
             ),
           {
             name: 'indexing-error-is-model-facing',
-            message: '索引中错误应投递为模型可读的 Error: 正在更新知识库索引，请完成后再检索。',
+            message: '索引中错误应保留预设英文原因及停止继续调用 KB 的指引。',
             data: result.deliveries
           }
         )

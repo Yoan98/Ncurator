@@ -42,7 +42,7 @@ export const fetchHttpPage = async (url: string): Promise<WebSearchFetchOutput> 
   const finalUrl = response.url || url
   if (!response.ok) {
     throw new HttpPageFetchError({
-      message: `网页请求失败：${response.status}`,
+      message: `Page request failed: HTTP ${response.status}`,
       requestedUrl: url,
       finalUrl,
       statusCode: response.status
@@ -55,7 +55,7 @@ export const fetchHttpPage = async (url: string): Promise<WebSearchFetchOutput> 
   $('script, style, noscript, template').remove()
   const markdown = normalizePageText($('body').text())
   if (!markdown) {
-    throw new Error('网页正文为空')
+    throw new Error('The page body is empty')
   }
   return {
     requestedUrl: url,

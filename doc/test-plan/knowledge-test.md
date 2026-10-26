@@ -82,7 +82,7 @@
 - What：prepare 索引进行中时 `kb_search` / `kb_list_documents` 失败，并投递模型可读错误。
 - Why：更新索引期间检索必须明确失败，避免半库结果。
 - How：隔离 sqlite 写入文件 / 网页 running prepare job，再走生产 `createAiRunContext` 调用两个工具并检查投递文案；显式准备真实模型后，验证 running scan 与 prepare 的 succeeded / failed / cancelled 终态不拦截空库查询。
-- Oracle：两工具抛出正在更新知识库错误；模型侧结果包含正在更新知识库原因及当前状态下停止调用 KB 的指引，对齐 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。
+- Oracle：两工具抛出预设英文索引更新错误；模型侧结果保留同一原因及当前状态下停止调用 KB 的英文指引，对齐 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。
 
 #### `kb-availability-contract`
 

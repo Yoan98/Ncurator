@@ -12,7 +12,8 @@ import { KB_LIST_DOCUMENTS_TOOL_SPEC, KB_SEARCH_TOOL_SPEC } from './toolSpecs'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 
-export const KB_INDEXING_IN_PROGRESS_ERROR = '正在更新知识库索引，请完成后再检索。'
+export const KB_INDEXING_IN_PROGRESS_ERROR =
+  'The knowledge base index is being updated. Wait until indexing finishes before searching again.'
 const MAX_RETRIEVAL_LIMIT = 50
 const MAX_LIST_PAGE_SIZE = 50
 
@@ -81,10 +82,14 @@ const resolveRequestedDocumentIds = (requestedIds: string[] | undefined): string
 
 const assertDocumentHasSourceLocation = (document: DocumentRecord): void => {
   if (document.source_type === 'file' && !document.file_path?.trim()) {
-    throw new Error(`知识库文档缺少本地文件路径：${document.name} (${document.id})`)
+    throw new Error(
+      `The knowledge base document has no local file path: ${document.name} (${document.id})`
+    )
   }
   if (document.source_type === 'web' && !document.source_url?.trim()) {
-    throw new Error(`知识库网页文档缺少来源地址：${document.name} (${document.id})`)
+    throw new Error(
+      `The knowledge base web document has no source URL: ${document.name} (${document.id})`
+    )
   }
 }
 
@@ -108,7 +113,9 @@ const enrichSearchRowsWithSourceLocation = async (
   return rows.map((row) => {
     const document = row.document_id ? documentMap.get(row.document_id) : undefined
     if (!document) {
-      throw new Error(`知识库搜索结果缺少来源文档元数据：${row.document_id}`)
+      throw new Error(
+        `The knowledge base search result has no source document metadata: ${row.document_id}`
+      )
     }
     assertDocumentHasSourceLocation(document)
 
@@ -166,7 +173,7 @@ export const buildKbCapabilityTools = (input: {
           await ctx.assertKbAvailable()
           const prepared = resolveSearchArgs(args)
           if (!prepared.queryText) {
-            throw new Error('知识库搜索需要提供查询文本。')
+            throw new Error('A query text is required to search the knowledge base.')
           }
           if (
             Array.isArray(prepared.requestedDocumentIds) &&

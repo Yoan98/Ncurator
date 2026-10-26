@@ -110,12 +110,12 @@ const applyUniqueEdits = (
     const occurrences = countOccurrences(content, oldText)
     if (occurrences === 0) {
       throw new Error(
-        `在 ${sourcePath} 中找不到 edits[${editIndex}].oldText 对应的文本，必须精确匹配。`
+        `edits[${editIndex}].oldText was not found in ${sourcePath}. An exact match is required.`
       )
     }
     if (occurrences > 1) {
       throw new Error(
-        `在 ${sourcePath} 中 edits[${editIndex}].oldText 匹配到 ${occurrences} 处，每个 oldText 必须恰好匹配一处。`
+        `edits[${editIndex}].oldText matches ${occurrences} locations in ${sourcePath}. Each oldText must match exactly one location.`
       )
     }
     const start = content.indexOf(oldText)
@@ -133,13 +133,13 @@ const applyUniqueEdits = (
     const current = ordered[index]
     if (previous && current && previous.end > current.start) {
       throw new Error(
-        `在 ${sourcePath} 中 edits[${previous.editIndex}] 与 edits[${current.editIndex}] 的修改范围重叠。`
+        `The edit ranges of edits[${previous.editIndex}] and edits[${current.editIndex}] overlap in ${sourcePath}.`
       )
     }
   }
 
   const nextContent = applyReplacements(content, replacements)
-  if (nextContent === content) throw new Error(`在 ${sourcePath} 中未产生任何修改。`)
+  if (nextContent === content) throw new Error(`No changes were made to ${sourcePath}.`)
   return { content: nextContent, changeCount: edits.length }
 }
 
@@ -151,10 +151,10 @@ const applyReplaceAll = (input: {
 }): { content: string; changeCount: number } => {
   const oldText = normalizeToLf(input.oldText)
   const newText = normalizeToLf(input.newText)
-  if (oldText === newText) throw new Error(`在 ${input.sourcePath} 中未产生任何修改。`)
+  if (oldText === newText) throw new Error(`No changes were made to ${input.sourcePath}.`)
   const matches = findAllOccurrences(input.content, oldText)
   if (matches.length === 0) {
-    throw new Error(`在 ${input.sourcePath} 中找不到 oldText 对应的文本。`)
+    throw new Error(`The specified oldText was not found in ${input.sourcePath}.`)
   }
   const replacements = matches.map((start) => ({
     start,
@@ -170,7 +170,7 @@ const applyReplaceAll = (input: {
 const ensureCreateTargetAvailable = async (sourcePath: string): Promise<void> => {
   try {
     await fs.lstat(sourcePath)
-    throw new Error(`无法创建 ${sourcePath}：文件已存在。`)
+    throw new Error(`Cannot create ${sourcePath}: the file already exists.`)
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return
     throw error
@@ -251,11 +251,11 @@ const editTextFile = async (
         bom: decoded.bom
       })
       if (beforeBuffer.equals(afterBuffer))
-        throw new Error(`在 ${args.sourcePath} 中未产生任何修改。`)
+        throw new Error(`No changes were made to ${args.sourcePath}.`)
     }
 
     if (afterNormalized.includes('\0')) {
-      throw new Error(`无法写入 ${args.sourcePath}：不支持二进制文本。`)
+      throw new Error(`Cannot write ${args.sourcePath}: binary text is not supported.`)
     }
 
     const confirmed = await buildInput.ctx.writeFileChange({

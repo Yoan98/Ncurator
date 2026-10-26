@@ -344,24 +344,16 @@ export const createBrainNode = (input: {
             schemaInvalidCalls.push({
               id: call.id,
               name: call.name,
-              errorMessage: formatZodErrorForTool(
-                call.name,
-                {
-                  issues: reparsed.error?.issues ?? []
-                },
-                repaired.args
-              )
+              errorMessage: formatZodErrorForTool(call.name, {
+                issues: reparsed.error?.issues ?? []
+              })
             })
             continue
           }
           schemaInvalidCalls.push({
             id: call.id,
             name: call.name,
-            errorMessage: formatZodErrorForTool(
-              call.name,
-              { issues: parsed.error?.issues ?? [] },
-              args
-            )
+            errorMessage: formatZodErrorForTool(call.name, { issues: parsed.error?.issues ?? [] })
           })
         }
       }

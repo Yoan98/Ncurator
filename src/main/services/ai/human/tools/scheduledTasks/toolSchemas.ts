@@ -69,14 +69,14 @@ export const SCHEDULED_TASK_ACTION_SCHEMA = z
         context.addIssue({
           code: 'custom',
           path: ['weekday'],
-          message: '每周任务必须提供 weekday'
+          message: 'Weekly tasks require weekday'
         })
       }
       if (input.scheduleType === 'daily' && input.weekday != null) {
         context.addIssue({
           code: 'custom',
           path: ['weekday'],
-          message: '每天任务不能提供 weekday'
+          message: 'Daily tasks must not specify weekday'
         })
       }
       return
@@ -93,14 +93,14 @@ export const SCHEDULED_TASK_ACTION_SCHEMA = z
       if (!hasChange) {
         context.addIssue({
           code: 'custom',
-          message: '修改任务时至少提供一个要修改的字段'
+          message: 'Updating a task requires at least one field to change'
         })
       }
       if (input.scheduleType === 'daily' && input.weekday != null) {
         context.addIssue({
           code: 'custom',
           path: ['weekday'],
-          message: '改为每天执行时 weekday 必须为空'
+          message: 'weekday must be null when switching to a daily schedule'
         })
       }
     }

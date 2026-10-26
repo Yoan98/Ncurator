@@ -7,6 +7,16 @@ import {
 } from '../../../../src/main/services/ai/human/memory/conversationLogMessages'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { buildToolFeedback } from '../../../../src/main/services/ai/human/shared/toolFeedback'
+import {
+  readToolErrorMessage,
+  resolveToolErrorMessage
+} from '../../../../src/main/services/ai/human/shared/toolError'
+import {
+  renderGenericModelError,
+  renderBrowserUseModelError,
+  renderKbModelError,
+  renderScheduledTaskModelError
+} from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { repairInterruptedToolCalls } from '../../../../src/main/services/ai/human/memory/transcript'
 
 const userEntry = (content: string): ChatMessageLogEntry => ({
@@ -220,7 +230,7 @@ describe('ai unit tool feedback text', () => {
     })
   })
 
-  it('builds an English error message without exposing non-English internals', () => {
+  it('preserves Unicode diagnostics in the model message and transcript', () => {
     const transcript = buildToolFeedback({
       toolCallId: 'call-2',
       toolName: 'update_plan',
@@ -229,9 +239,93 @@ describe('ai unit tool feedback text', () => {
     })
     const message = messagesFromLogEntries([transcript])[0]
 
-    expect(String(message?.content)).toBe(
-      'Error: The tool call failed. Check the tool arguments and try again.'
-    )
+    expect(String(message?.content)).toBe('Error: status 仅允许 todo/done')
     expect(transcript.content).toBe(String(message?.content))
+    expect(transcript.error).toBe('status 仅允许 todo/done')
+  })
+
+  it.each(['', '   ', undefined])(
+    'uses an English fallback only for an empty diagnostic: %s',
+    (errorMessage) => {
+      const entry = buildToolFeedback({
+        toolCallId: 'fallback',
+        toolName: 'text_file_read',
+        ok: false,
+        errorMessage
+      })
+      expect(entry.content).toBe('Error: Tool text_file_read failed.')
+      expect(entry.error).toBe('Tool text_file_read failed.')
+    }
+  )
+
+  it('retains explicit failure content as the error reason', () => {
+    const entry = buildToolFeedback({
+      toolCallId: 'denied',
+      toolName: 'terminal_run',
+      ok: false,
+      content: 'Error: Approval denied. 用户要求停止。'
+    })
+    expect(entry.error).toBe('Approval denied. 用户要求停止。')
+    expect(entry.content).toBe('Error: Approval denied. 用户要求停止。')
+  })
+
+  it('does not let a generic custom message overwrite a known error', () => {
+    const entry = buildToolFeedback({
+      toolCallId: 'failed',
+      toolName: 'test',
+      ok: false,
+      errorMessage: 'ENOENT: /文档/周报',
+      content: 'The operation failed.'
+    })
+    expect(entry.content).toContain('ENOENT: /文档/周报')
+    expect(entry.error).toBe('ENOENT: /文档/周报')
+  })
+
+  it('extracts existing errors without stringifying unknown objects', () => {
+    expect(readToolErrorMessage(new Error('原始异常\nDetails: /文档/周报'))).toBe(
+      '原始异常\nDetails: /文档/周报'
+    )
+    expect(readToolErrorMessage({ error: ' ', message: 'Actual diagnostic' })).toBe(
+      'Actual diagnostic'
+    )
+    expect(resolveToolErrorMessage('test', { other: true })).toBe('Tool test failed.')
+    expect(resolveToolErrorMessage('', new Error(''))).toBe('Tool call failed.')
+  })
+
+  it.each(['文件不存在：/文档/周报.docx', 'EACCES: /文档/周报.docx', '失败原因\nDetails: timeout'])(
+    'keeps execution diagnostics unchanged: %s',
+    (error) => {
+      expect(
+        renderGenericModelError({ toolName: 'text_file_read', args: {}, data: { error } })
+      ).toBe(`Error: ${error}`)
+    }
+  )
+
+  it('uses the same fallback for generic and specialized renderers', () => {
+    for (const render of [renderGenericModelError, renderScheduledTaskModelError])
+      expect(render({ toolName: 'test', args: {}, data: { error: ' ' } })).toBe(
+        'Error: Tool test failed.'
+      )
+  })
+
+  it('preserves browser error and context even when a separate message is present', () => {
+    const rendered = renderBrowserUseModelError({
+      toolName: 'browser_use',
+      args: {},
+      data: { action: 'act', error: '原始失败', message: 'Action failed', tabId: 'tab-1' }
+    })
+    expect(rendered).toContain('原始失败')
+    expect(rendered).toContain('Action failed')
+    expect(rendered).toContain('tab-1')
+  })
+
+  it('keeps KB business errors and its recovery guidance', () => {
+    const rendered = renderKbModelError({
+      toolName: 'kb_search',
+      args: {},
+      data: { error: 'The knowledge base index is being updated.' }
+    })
+    expect(rendered).toContain('Error: The knowledge base index is being updated.')
+    expect(rendered).toContain('Do not call KB tools again')
   })
 })

@@ -154,7 +154,7 @@ const parseBooleanString = (value: unknown): boolean | undefined => {
 
 const collectIssues = (
   issues: readonly ZodIssueLike[],
-  parentPath: readonly (string | number)[] = []
+  parentPath: readonly PropertyKey[] = []
 ): ZodIssueLike[] => {
   const collected: ZodIssueLike[] = []
   for (const issue of issues) {
@@ -182,8 +182,11 @@ export const repairBooleanStringToolArgs = (
 
   for (const issue of collectIssues(issues)) {
     if (issue.code !== 'invalid_type' || issue.expected !== 'boolean') continue
-    const path = issue.path ?? []
-    if (path.length === 0) continue
+    const issuePath = issue.path ?? []
+    const path = issuePath.filter(
+      (segment): segment is string | number => typeof segment !== 'symbol'
+    )
+    if (path.length === 0 || path.length !== issuePath.length) continue
     const pathKey = JSON.stringify(path)
     if (seenPaths.has(pathKey)) continue
     const current = readAtPath(repaired, path)

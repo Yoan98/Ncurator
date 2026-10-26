@@ -674,10 +674,12 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       })
       if (!result.ok) throw new Error(result.error)
       if (result.payload.action !== 'materialize_draft')
-        throw new Error('内部程序错误：Word 导出协议异常，请反馈作者修复。文件尚未保存。')
+        throw new Error(
+          'Internal error: invalid Word export protocol. Report the issue. The file has not been saved.'
+        )
       const buffer = await fs.readFile(tempPath)
       if (createHash('sha256').update(buffer).digest('hex') !== result.payload.checksum)
-        throw new Error('Word 导出校验失败，文件尚未保存。')
+        throw new Error('Word export verification failed. The file has not been saved.')
       publishing = true
       const confirmed = await input.ctx.writeFileChange({
         sourcePath,
@@ -694,7 +696,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       const detail = (error instanceof Error ? error.message : String(error))
         .replace(tempPath, '文档')
         .replace(/(?:[A-Za-z]:)?[\\/]\S+/g, '文件位置')
-      throw new Error(`文档保存准备失败：${detail}。文件尚未保存。`)
+      throw new Error(`Document save preparation failed: ${detail}. The file has not been saved.`)
     } finally {
       await fs.rm(tempPath, { force: true }).catch(() => undefined)
       await fs.rmdir(exportDir).catch(() => undefined)

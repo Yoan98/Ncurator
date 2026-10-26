@@ -5,6 +5,7 @@ import { normalizePlanItems } from '../../memory/thoughtMemory'
 import { emitToolCallResult, emitToolCallStarted } from '../../tools/utils/toolEvents'
 import { UPDATE_PLAN_SCHEMA } from '../../tools/agentControl/toolSchemas'
 import { appendToolFeedback } from '../../shared/toolFeedback'
+import { formatZodErrorForTool } from '../../shared/schemaError'
 import { returnToDispatch } from '../utils/stateTransitions'
 
 const parsePlanArgs = (
@@ -12,8 +13,7 @@ const parsePlanArgs = (
 ): { ok: true; plan: HumanPlanItem[] } | { ok: false; message: string } => {
   const parsed = UPDATE_PLAN_SCHEMA.safeParse(args)
   if (!parsed.success) {
-    const detail = parsed.error.issues.map((issue) => issue.message).join('；')
-    return { ok: false, message: `update_plan 参数不合法：${detail}` }
+    return { ok: false, message: formatZodErrorForTool('update_plan', parsed.error) }
   }
   return { ok: true, plan: normalizePlanItems(parsed.data.plan) }
 }
@@ -61,8 +61,7 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           toolCallId: call.toolCallId,
           toolName: call.toolName,
           ok: false,
-          errorMessage:
-            'Invalid update_plan arguments. Fix the plan item fields or statuses and try again.'
+          errorMessage: parsed.message
         })
         continue
       }

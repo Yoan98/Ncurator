@@ -386,7 +386,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                 abortSignal: ctx.abortSignal
               })
               if (searchResult.results.length === 0) {
-                const payload = { error: 'web_search 没有找到相关结果' }
+                const payload = { error: 'web_search found no relevant results' }
                 session.fail(
                   payload.error,
                   undefined,
@@ -522,7 +522,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                     payload: {
                       action: 'act',
                       tabId,
-                      error: `未知 actionId：${actionId}。请先 observe 获取候选动作后再 act。`
+                      error: `Unknown actionId: ${actionId}. Call observe to obtain candidate actions before calling act.`
                     }
                   })
                 }
@@ -532,7 +532,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                     payload: {
                       action: 'act',
                       tabId,
-                      error: `actionId ${actionId} 属于 tab ${cached.tabId}，与请求的 tabId ${tabId} 不一致。`
+                      error: `actionId ${actionId} belongs to tab ${cached.tabId}, not the requested tabId ${tabId}.`
                     }
                   })
                 }

@@ -13,6 +13,7 @@ import { toExcelArgb, toExcelRgb } from './color'
 import { EXCEL_SEARCH_MAX_MATCHES } from './constants'
 import { calculateExcelFormulas } from './formula'
 import { excelCellValue } from '../../../../../../shared/excelWorkbook'
+import { resolveToolErrorMessage } from '../../shared/toolError'
 
 const EXCEL_READ_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xltx', '.xltm'])
 const EXCEL_WRITE_EXTENSIONS = new Set(['.xlsx'])
@@ -22,10 +23,10 @@ const RED = 'FFD14343'
 const assertExcelPath = (sourcePath: string, mode: 'read' | 'write'): void => {
   const extension = path.extname(sourcePath).toLowerCase()
   if (!EXCEL_READ_EXTENSIONS.has(extension)) {
-    throw new Error('Excel 工具只支持 .xlsx、.xlsm、.xltx 和 .xltm 文件')
+    throw new Error('Excel tools only support .xlsx, .xlsm, .xltx and .xltm files')
   }
   if (mode === 'write' && !EXCEL_WRITE_EXTENSIONS.has(extension)) {
-    throw new Error('excel_edit 只支持 .xlsx，避免写回时丢失宏或模板信息')
+    throw new Error('excel_edit only supports .xlsx to avoid losing macros or template information')
   }
 }
 
@@ -73,12 +74,12 @@ const parseRange = (
   range: string
 ): { top: number; left: number; bottom: number; right: number } => {
   const match = range.trim().match(/^\$?([A-Za-z]+)\$?(\d+)(?::\$?([A-Za-z]+)\$?(\d+))?$/)
-  if (!match) throw new Error(`无效的 A1 范围: ${range}`)
+  if (!match) throw new Error(`Invalid A1 range: ${range}`)
   const left = columnNumber(match[1])
   const top = Number(match[2])
   const right = columnNumber(match[3] || match[1])
   const bottom = Number(match[4] || match[2])
-  if (bottom < top || right < left) throw new Error(`无效的 A1 范围: ${range}`)
+  if (bottom < top || right < left) throw new Error(`Invalid A1 range: ${range}`)
   return { top, left, bottom, right }
 }
 
@@ -416,7 +417,7 @@ const toColumnNumber = (column: string | number): number =>
 
 const requireSheet = (workbook: ExcelJS.Workbook, sheetName: string): ExcelJS.Worksheet => {
   const sheet = workbook.getWorksheet(sheetName)
-  if (!sheet) throw new Error(`工作表不存在: ${sheetName}`)
+  if (!sheet) throw new Error(`Worksheet not found: ${sheetName}`)
   return sheet
 }
 
@@ -507,14 +508,15 @@ const applyOperation = (input: {
   const { workbook, operation, sheetLineage } = input
   if (operation.type === 'add_sheet') {
     if (workbook.getWorksheet(operation.sheetName))
-      throw new Error(`工作表已存在: ${operation.sheetName}`)
+      throw new Error(`Worksheet already exists: ${operation.sheetName}`)
     workbook.addWorksheet(operation.sheetName)
     sheetLineage.set(operation.sheetName, null)
     return
   }
   if (operation.type === 'delete_sheet') {
     const sheet = requireSheet(workbook, operation.sheetName)
-    if (workbook.worksheets.length === 1) throw new Error('Excel 最终必须至少保留一个工作表')
+    if (workbook.worksheets.length === 1)
+      throw new Error('The workbook must retain at least one worksheet')
     workbook.removeWorksheet(sheet.id)
     sheetLineage.delete(sheet.name)
     return
@@ -522,7 +524,7 @@ const applyOperation = (input: {
   if (operation.type === 'rename_sheet') {
     const sheet = requireSheet(workbook, operation.sheetName)
     if (workbook.getWorksheet(operation.newName))
-      throw new Error(`工作表已存在: ${operation.newName}`)
+      throw new Error(`Worksheet already exists: ${operation.newName}`)
     const previousName = sheet.name
     sheet.name = operation.newName
     const baselineName = sheetLineage.get(previousName) ?? null
@@ -542,7 +544,7 @@ const applyOperation = (input: {
       operation.values.some((row) => row.length !== expectedColumns)
     ) {
       throw new Error(
-        `set_range 的 values 行列必须与 range ${operation.range} 一致（${String(expectedRows)}x${String(expectedColumns)}）`
+        `set_range values must match range ${operation.range}: ${String(expectedRows)} rows x ${String(expectedColumns)} columns`
       )
     }
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
@@ -657,7 +659,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
   const currentBytesByPath = new Map<string, Buffer>()
   const resolvePath = (rawPath: string, mode: 'read' | 'write' = 'read'): string => {
     const resolved = resolveToolPath(rawPath)
-    if (!resolved) throw new Error('Excel 文件路径无效')
+    if (!resolved) throw new Error('Invalid Excel file path')
     assertExcelPath(resolved, mode)
     return resolved
   }
@@ -753,7 +755,9 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       const diskBytes = await readBytes(sourcePath)
       if (hashBytes(diskBytes) !== hashBytes(cachedBytes)) {
         currentBytesByPath.delete(sourcePath)
-        throw new Error(`Excel 文件在操作期间发生变化，请重新读取后再编辑: ${args.sourcePath}`)
+        throw new Error(
+          `The Excel file changed during the operation. Read it again before editing: ${args.sourcePath}`
+        )
       }
     }
     const beforeBytes = cachedBytes || (exists ? await readBytes(sourcePath) : undefined)
@@ -800,7 +804,8 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       }
     }
     applyOperation({ workbook, operation: args, sheetLineage })
-    if (workbook.worksheets.length === 0) throw new Error('Excel 最终必须至少保留一个工作表')
+    if (workbook.worksheets.length === 0)
+      throw new Error('The workbook must retain at least one worksheet')
     workbook.calcProperties.fullCalcOnLoad = true
     const afterBytes = Buffer.from(await workbook.xlsx.writeBuffer())
     try {
@@ -823,9 +828,13 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
   return { read, edit }
 }
 
-export const toExcelToolFailure = (sourcePath: string, error: unknown): JsonObject => ({
+export const toExcelToolFailure = (
+  sourcePath: string,
+  toolName: string,
+  error: unknown
+): JsonObject => ({
   sourcePath,
-  error: error instanceof Error ? error.message : String(error)
+  error: resolveToolErrorMessage(toolName, error)
 })
 
 export const materializeExcelReview = async (input: {

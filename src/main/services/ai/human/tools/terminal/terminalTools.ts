@@ -50,8 +50,8 @@ const SESSION_LIMIT_ERROR = 'terminal_session_limit_reached'
 const buildSessionLimitReached = () => ({
   error: SESSION_LIMIT_ERROR,
   hint:
-    `当前会话已有 ${TERMINAL_MAX_CONCURRENT_SESSIONS} 个运行中的终端，已达到上限。` +
-    '可等待某个命令结束，或用新终端执行 kill/pkill/taskkill 终止旧的运行命令后重试（终止类命令不受上限限制）。'
+    `The current chat has reached its limit of ${TERMINAL_MAX_CONCURRENT_SESSIONS} running terminal sessions. ` +
+    'Wait for a command to finish or run kill/pkill/taskkill in a new terminal session to terminate an existing command before retrying. Termination commands are exempt from this limit.'
 })
 
 const emitTerminalStepStarted = (input: {
@@ -206,7 +206,8 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           }
           if (isTerminalExcelMutationCommand(command)) {
             const failure = buildFailure({
-              error: '禁止使用 terminal_exec 创建或修改 Excel 文件，请使用 excel_edit。'
+              error:
+                'Do not use terminal commands to create or modify Excel files. Use excel_edit instead.'
             })
             session.fail(
               failure.error,

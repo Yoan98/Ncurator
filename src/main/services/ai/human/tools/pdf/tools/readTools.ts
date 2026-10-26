@@ -9,11 +9,7 @@ import {
   type PdfToolRuntime
 } from '../runtime'
 import { PDF_SEARCH_MAX_MATCHES } from '../constants'
-import {
-  PDF_OUTLINE_TOOL_SPEC,
-  PDF_READ_PAGES_TOOL_SPEC,
-  PDF_SEARCH_TOOL_SPEC
-} from '../toolSpecs'
+import { PDF_OUTLINE_TOOL_SPEC, PDF_READ_PAGES_TOOL_SPEC, PDF_SEARCH_TOOL_SPEC } from '../toolSpecs'
 
 const uniquePageNumbers = (pageNumbers: number[]): number[] => [...new Set(pageNumbers)]
 
@@ -121,7 +117,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 })
               }
               if (response.payload.action !== 'search')
-                throw new Error('PDF worker 协议错误（search）')
+                throw new Error('PDF worker protocol error (search)')
               return {
                 totalMatchCount: response.payload.totalMatchCount,
                 returnedMatchCount: response.payload.matches.length,
@@ -159,17 +155,19 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 pageNumbers = uniquePageNumbers(selection.pageNumbers)
               } else {
                 if (selection.fromPage > selection.toPage) {
-                  throw new Error('fromPage 不能大于 toPage')
+                  throw new Error('fromPage must not exceed toPage')
                 }
                 const pageCount = selection.toPage - selection.fromPage + 1
-                if (pageCount > 50) throw new Error('单次最多读取 50 页')
+                if (pageCount > 50) throw new Error('At most 50 pages can be read per call')
                 pageNumbers = Array.from(
                   { length: pageCount },
                   (_, index) => selection.fromPage + index
                 )
               }
               if (pageNumbers.length === 0 || pageNumbers.length > 50) {
-                throw new Error('单次最多读取 50 页，且页码范围不能为空')
+                throw new Error(
+                  'At most 50 pages can be read per call, and the page range must not be empty'
+                )
               }
               const response = await runtime.callWorker({
                 action: 'read_pages',
@@ -185,7 +183,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 })
               }
               if (response.payload.action !== 'read_pages')
-                throw new Error('PDF worker 协议错误（read_pages）')
+                throw new Error('PDF worker protocol error (read_pages)')
               const rendered = await runtime.callWorker({
                 action: 'materialize_pages',
                 payload: {
@@ -203,7 +201,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 })
               }
               if (rendered.payload.action !== 'materialize_pages')
-                throw new Error('PDF worker 协议错误（materialize_pages）')
+                throw new Error('PDF worker protocol error (materialize_pages)')
               const imageByPage = new Map(
                 rendered.payload.images.map((image) => [image.pageNumber, image.path])
               )
@@ -211,7 +209,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 pages: response.payload.pages.map((page) => {
                   const pageImagePath = imageByPage.get(page.pageNumber)
                   if (!pageImagePath)
-                    throw new Error(`PDF 第 ${String(page.pageNumber)} 页渲染缺失`)
+                    throw new Error(`The rendered PDF page is missing: ${String(page.pageNumber)}`)
                   return {
                     pageNumber: page.pageNumber,
                     text: page.text,

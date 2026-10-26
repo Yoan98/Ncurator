@@ -10,6 +10,7 @@ import { emitToolProcessCompleted, emitToolProcessStarted } from '../../../event
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import { buildModelToolResultDelivery } from '../../shared/modelToolResult'
 import { buildToolFeedback } from '../../shared/toolFeedback'
+import { resolveToolErrorMessage } from '../../shared/toolError'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLoadedToolsetIds } from '../../toolsets'
 import { analyzeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
@@ -145,7 +146,7 @@ const appendToolMessages = async (input: {
       error: delivery.ok
         ? undefined
         : !result.ok
-          ? result.data.error.trim() || '未知错误'
+          ? resolveToolErrorMessage(call.toolName, result.data)
           : delivery.content,
       images: result.ok ? result.imageRefs : undefined
     })
@@ -257,6 +258,7 @@ const appendBlockedApprovalToolMessages = (input: {
         toolCallId: call.toolCallId,
         toolName: call.toolName,
         ok: false,
+        errorMessage: message,
         content: `Error: ${message}`
       })
     )

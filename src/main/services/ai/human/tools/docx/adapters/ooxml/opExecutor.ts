@@ -1314,7 +1314,7 @@ const createImageRunForPart = async (
   targetDocument: Document,
   visual: VisualDraft
 ): Promise<Element> => {
-  if (!visual.imagePath) throw new Error('节点类型替换为 visual 时必须提供 imagePath')
+  if (!visual.imagePath) throw new Error('Replacing a node with a visual requires imagePath')
   const image = await readImage(visual.imagePath)
   const relationships = await partRelationships(bundle.zip, partName)
   const relationshipId = nextRelationshipId(relationships)

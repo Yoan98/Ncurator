@@ -1,8 +1,6 @@
 import { z } from 'zod/v4'
 import type { DocxCreateTableCellNode } from './nodeTypes'
-import {
-  DOCX_FORMAT_MAX_TARGETS
-} from './constants'
+import { DOCX_FORMAT_MAX_TARGETS } from './constants'
 
 /** OOXML stores RRGGBB without `#`; leading `#` accepted as兜底 and stripped on write. */
 const docxHexColorSchema = z
@@ -229,10 +227,7 @@ const docxReadSourcePathField = z
   .min(1)
   .describe('Word 文件本机绝对路径；支持 .docx 与只读 .doc')
 
-const docxWriteSourcePathField = z
-  .string()
-  .min(1)
-  .describe('Word 文件本机绝对路径；仅 .docx')
+const docxWriteSourcePathField = z.string().min(1).describe('Word 文件本机绝对路径；仅 .docx')
 
 const sourcePathField = docxReadSourcePathField
 const nodeIdField = z.string().min(1).describe('节点 ID')
@@ -247,7 +242,7 @@ export const docxOutlineSchema = z
   .strict()
   .refine((value) => value.toPercent >= value.fromPercent, {
     path: ['toPercent'],
-    message: 'toPercent 必须大于或等于 fromPercent'
+    message: 'toPercent must be greater than or equal to fromPercent'
   })
 
 export const docxSearchSchema = z
@@ -286,7 +281,7 @@ export const docxReadNodesSchema = z
       context.addIssue({
         code: 'custom',
         path: ['range', 'toNodeIndex'],
-        message: 'toNodeIndex 必须大于或等于 fromNodeIndex'
+        message: 'toNodeIndex must be greater than or equal to fromNodeIndex'
       })
       return
     }
@@ -294,30 +289,30 @@ export const docxReadNodesSchema = z
       context.addIssue({
         code: 'custom',
         path: ['range'],
-        message: '单次最多读取 50 个根节点'
+        message: 'At most 50 root nodes can be read per call'
       })
     }
   })
 
 const nonEmptyRunStyleSchema = docxRunStyleSchema.refine(
   (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'format 至少设置一个属性' }
+  { message: 'format must specify at least one property' }
 )
 const nonEmptyParagraphStyleSchema = docxParagraphStyleSchema.refine(
   (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'format 至少设置一个属性' }
+  { message: 'format must specify at least one property' }
 )
 const nonEmptyTableStyleSchema = docxTableStyleSchema.refine(
   (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'format 至少设置一个属性' }
+  { message: 'format must specify at least one property' }
 )
 const nonEmptyRowStyleSchema = docxTableRowStyleSchema.refine(
   (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'format 至少设置一个属性' }
+  { message: 'format must specify at least one property' }
 )
 const nonEmptyCellStyleSchema = docxTableCellStyleSchema.refine(
   (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'format 至少设置一个属性' }
+  { message: 'format must specify at least one property' }
 )
 
 const docxParagraphDraftSchema = z
@@ -371,7 +366,7 @@ const docxVisualDraftSchema = z
       value.widthCm !== undefined ||
       value.heightCm !== undefined ||
       value.altText !== undefined,
-    { message: 'visual 至少设置 imagePath、尺寸或 altText 之一' }
+    { message: 'visual must specify imagePath, dimensions or altText' }
   )
 
 const docxVisualInsertDraftSchema = z
@@ -427,10 +422,14 @@ export const docxContentEditSchema = z.discriminatedUnion('type', [
     .strict()
     .superRefine((value, ctx) => {
       if (value.position === 'document_end' && value.nodeId) {
-        ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'document_end 不接受 nodeId' })
+        ctx.addIssue({
+          code: 'custom',
+          path: ['nodeId'],
+          message: 'document_end does not accept nodeId'
+        })
       }
       if (value.position !== 'document_end' && !value.nodeId) {
-        ctx.addIssue({ code: 'custom', path: ['nodeId'], message: '该 position 必须提供 nodeId' })
+        ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'This position requires nodeId' })
       }
     }),
   z
@@ -466,7 +465,7 @@ const rejectDuplicateNodeIds = (value: { nodeIds: string[] }, context: z.Refinem
       context.addIssue({
         code: 'custom',
         path: ['nodeIds', index],
-        message: 'nodeIds 不允许重复'
+        message: 'nodeIds must not contain duplicates'
       })
     }
     seen.add(nodeId)
@@ -500,7 +499,7 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
               context.addIssue({
                 code: 'custom',
                 path: [index, 'nodeId'],
-                message: 'targets 不允许重复 nodeId'
+                message: 'targets must not contain duplicate nodeId values'
               })
             }
             seen.add(target.nodeId)
@@ -537,7 +536,7 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
         value.marginRightPt !== undefined ||
         value.marginBottomPt !== undefined ||
         value.marginLeftPt !== undefined,
-      { message: 'format_section 至少设置一个格式属性' }
+      { message: 'format_section must specify at least one formatting property' }
     )
     .superRefine(rejectDuplicateNodeIds),
   z
@@ -581,7 +580,7 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
     .refine(
       (value) =>
         value.name !== undefined || value.paragraph !== undefined || value.run !== undefined,
-      { message: 'update_named_style 至少设置一个属性' }
+      { message: 'update_named_style must specify at least one property' }
     ),
   z
     .object({
@@ -620,10 +619,14 @@ const createTableSchema = z
   .strict()
   .superRefine((value, ctx) => {
     if (value.position === 'document_end' && value.nodeId) {
-      ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'document_end 不接受 nodeId' })
+      ctx.addIssue({
+        code: 'custom',
+        path: ['nodeId'],
+        message: 'document_end does not accept nodeId'
+      })
     }
     if (value.position !== 'document_end' && !value.nodeId) {
-      ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'before/after 必须提供 nodeId' })
+      ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'before/after requires nodeId' })
     }
   })
 
@@ -733,10 +736,14 @@ const insertImageSchema = z
   .strict()
   .superRefine((value, ctx) => {
     if (value.position === 'document_end' && value.nodeId) {
-      ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'document_end 不接受 nodeId' })
+      ctx.addIssue({
+        code: 'custom',
+        path: ['nodeId'],
+        message: 'document_end does not accept nodeId'
+      })
     }
     if (value.position !== 'document_end' && !value.nodeId) {
-      ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'before/after 必须提供 nodeId' })
+      ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'before/after requires nodeId' })
     }
   })
 
@@ -770,7 +777,7 @@ export const docxInternalMediaOperationSchema = z.discriminatedUnion('type', [
     .refine(
       (value) =>
         value.widthCm !== undefined || value.heightCm !== undefined || value.altText !== undefined,
-      { message: 'update_image 至少设置一个属性' }
+      { message: 'update_image must specify at least one property' }
     )
 ])
 

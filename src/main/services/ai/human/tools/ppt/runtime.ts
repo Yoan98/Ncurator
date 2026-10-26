@@ -207,7 +207,7 @@ const parseElementId = (elementId: string): { slideId: string; shapeId: number }
 
 const findSlide = (presentation: PresentationData, slideId: string): SlideData => {
   const slide = getSlides(presentation).find((item) => slideIdOf(item) === slideId)
-  if (!slide) throw new Error(`找不到页面 slideId=${slideId}`)
+  if (!slide) throw new Error(`Slide not found: slideId=${slideId}`)
   return slide
 }
 
@@ -218,10 +218,10 @@ const findElement = (
 ): SlideShapeData => {
   const parsed = parseElementId(elementId)
   if (!parsed || parsed.slideId !== slideIdOf(expectedSlide)) {
-    throw new Error(`elementId 不属于当前页面: ${elementId}`)
+    throw new Error(`elementId does not belong to the current slide: ${elementId}`)
   }
   const shape = findShapeById(expectedSlide, parsed.shapeId)
-  if (!shape) throw new Error(`找不到元素 elementId=${elementId}`)
+  if (!shape) throw new Error(`Element not found: elementId=${elementId}`)
   void presentation
   return shape
 }
@@ -296,11 +296,11 @@ const resolveAssetBytes = async (input: { rawPath: string }): Promise<Uint8Array
     try {
       rawPath = fileURLToPath(rawPath)
     } catch {
-      throw new Error(`无效的本地 file URL: ${input.rawPath}`)
+      throw new Error(`Invalid local file URL: ${input.rawPath}`)
     }
   }
   const resolved = resolveToolPath(rawPath)
-  if (!resolved) throw new Error(`资源路径无效: ${input.rawPath}`)
+  if (!resolved) throw new Error(`Invalid resource path: ${input.rawPath}`)
   return new Uint8Array(await fs.readFile(resolved))
 }
 
@@ -380,14 +380,14 @@ const placeSlide = (
 ): number => {
   const slides = getSlides(presentation)
   const sourceIndex = slides.findIndex((item) => item === slide)
-  if (sourceIndex < 0) throw new Error('找不到需要定位的页面')
+  if (sourceIndex < 0) throw new Error('The target slide was not found')
   if (!location) {
     const targetIndex = slides.length - 1
     moveSlide(presentation, slide, targetIndex)
     return targetIndex
   }
   const anchorIndex = slides.findIndex((item) => slideIdOf(item) === location.slideId)
-  if (anchorIndex < 0) throw new Error(`找不到 location.slideId=${location.slideId}`)
+  if (anchorIndex < 0) throw new Error(`Slide not found: location.slideId=${location.slideId}`)
   const insertionIndex = location.position === 'before' ? anchorIndex : anchorIndex + 1
   const targetIndex = sourceIndex < insertionIndex ? insertionIndex - 1 : insertionIndex
   moveSlide(presentation, slide, targetIndex)
@@ -437,7 +437,7 @@ const applyTableLayout = (
 ): void => {
   const bounds = getShapeBoundsResolved(presentation, table)
   const size = getSlideSize(presentation)
-  if (!bounds || !size) throw new Error('无法读取表格或页面尺寸')
+  if (!bounds || !size) throw new Error('Cannot read the table or slide dimensions')
   const updateDimensions = (
     values: number[] | undefined,
     existing: readonly number[],
@@ -453,7 +453,9 @@ const applyTableLayout = (
       values.length !== existing.length ||
       Math.abs(values.reduce((sum, value) => sum + value, 0) - target) > 0.1
     ) {
-      throw new Error(`表格${label}数量须为 ${existing.length}，总和须等于 ${target.toFixed(2)}pt`)
+      throw new Error(
+        `The table must have ${existing.length} ${label} values totaling ${target.toFixed(2)}pt`
+      )
     }
     values.forEach((value, index) =>
       setter(table, index, emu(Math.round((value * slideExtent) / canvasExtent)))
@@ -465,7 +467,7 @@ const applyTableLayout = (
     bounds.w,
     DEFAULT_WIDTH,
     size.width,
-    '列宽',
+    'column width',
     setTableColumnWidth
   )
   updateDimensions(
@@ -474,7 +476,7 @@ const applyTableLayout = (
     bounds.h,
     DEFAULT_HEIGHT,
     size.height,
-    '行高',
+    'row height',
     setTableRowHeight
   )
   if (layout.fontSize !== undefined || layout.fontFamily !== undefined) {
@@ -637,7 +639,7 @@ const outlineItem = (
 
 const assertIndexRange = (fromSlideIndex: number, toSlideIndex: number): void => {
   if (fromSlideIndex > toSlideIndex) {
-    throw new Error('fromSlideIndex 不能大于 toSlideIndex')
+    throw new Error('fromSlideIndex must not exceed toSlideIndex')
   }
 }
 
@@ -654,7 +656,7 @@ const resolveSlideIndices = (slides: readonly SlideData[], ranges: readonly PptS
     }
     for (const slideId of range.slideIds) {
       const index = slides.findIndex((slide) => slideIdOf(slide) === slideId)
-      if (index < 0) throw new Error(`找不到页面 slideId=${slideId}`)
+      if (index < 0) throw new Error(`Slide not found: slideId=${slideId}`)
       indices.add(index)
     }
   }
@@ -874,7 +876,7 @@ const applyElementOperation = async (input: {
   }
   if (op.type === 'update_table') {
     const table = findElement(input.document.presentation, input.slide, op.elementId)
-    if (!isTableShape(table)) throw new Error(`elementId 不是表格: ${op.elementId}`)
+    if (!isTableShape(table)) throw new Error(`elementId is not a table: ${op.elementId}`)
     for (const cell of op.cells || []) {
       setTableCellText(getTableCell(table, cell.rowIndex - 1, cell.columnIndex - 1), cell.text)
     }
@@ -887,7 +889,7 @@ const applyElementOperation = async (input: {
     const chart = getSlideCharts(input.slide).find(
       (item) => getShapeId(item.shape) === getShapeId(shape)
     )
-    if (!chart) throw new Error(`elementId 不是图表: ${op.elementId}`)
+    if (!chart) throw new Error(`elementId is not a chart: ${op.elementId}`)
     setChartSpec(chart, {
       kind: op.chartType as ChartKind,
       categories: op.categories,
@@ -900,13 +902,13 @@ const applyElementOperation = async (input: {
     const oldShape = findElement(input.document.presentation, input.slide, op.elementId)
     const description = getShapeDescription(oldShape) || ''
     if (!description.startsWith('ppt-latex:')) {
-      throw new Error(`elementId 不是公式: ${op.elementId}`)
+      throw new Error(`elementId is not a formula: ${op.elementId}`)
     }
     const bounds = boundsFromEmu(
       input.document.presentation,
       getShapeBoundsResolved(input.document.presentation, oldShape)
     )
-    if (!bounds) throw new Error(`公式缺少可编辑位置: ${op.elementId}`)
+    if (!bounds) throw new Error(`The formula has no editable position: ${op.elementId}`)
     const zIndex = getShapeZIndex(oldShape)
     removeShape(oldShape)
     const shape = await addFormulaShape({
@@ -1000,7 +1002,7 @@ const applyElementOperation = async (input: {
   }
   if (element.type === 'table') {
     if (element.rows.some((row) => row.length !== element.rows[0]!.length)) {
-      throw new Error('表格每行的列数必须相同')
+      throw new Error('All table rows must have the same number of columns')
     }
     const table = addSlideTable(input.slide, { ...bounds, rows: element.rows })
     applyTableLayout(input.document.presentation, table, {
@@ -1074,7 +1076,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
   const resolvePptPath = (rawPath: string): string => {
     const resolved = resolveToolPath(rawPath)
     if (!resolved || !resolved.toLowerCase().endsWith('.pptx')) {
-      throw new Error('sourcePath 必须是 .pptx 文件')
+      throw new Error('sourcePath must be a .pptx file')
     }
     return resolved
   }
@@ -1087,7 +1089,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const existing = documents.get(sourcePath)
     if (existing) return existing
     const exists = await fileExists(sourcePath)
-    if (!exists && !allowCreate) throw new Error(`pptx 文件不存在: ${rawPath}`)
+    if (!exists && !allowCreate) throw new Error(`PPTX file not found: ${rawPath}`)
     const beforeBytes = exists ? new Uint8Array(await fs.readFile(sourcePath)) : undefined
     const session = await input.ctx.getFileChangeSession(sourcePath)
     const identity = session?.identity?.kind === 'ppt' ? session.identity : undefined
@@ -1124,7 +1126,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         continue
       }
       if (range.fromPercent > range.toPercent) {
-        throw new Error('fromPercent 不能大于 toPercent')
+        throw new Error('fromPercent must not exceed toPercent')
       }
       if (slides.length === 0) continue
       const from = Math.min(
@@ -1251,13 +1253,13 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
 
   const persistDocument = async (document: PptRuntimeDocument): Promise<number> => {
     if (getSlides(document.presentation).length === 0) {
-      throw new Error('PPT 最终必须至少保留一页')
+      throw new Error('The presentation must retain at least one slide')
     }
     const issues = validatePresentation(document.presentation).filter(
       (issue) => issue.severity === 'error'
     )
     if (issues.length > 0) {
-      throw new Error(`PPTX 校验失败：${issues.map((issue) => issue.message).join('; ')}`)
+      throw new Error(`PPTX validation failed: ${issues.map((issue) => issue.message).join('; ')}`)
     }
     const afterBytes = await savePresentation(document.presentation)
     const confirmed = await input.ctx.writeFileChange({
@@ -1323,7 +1325,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       } else if (args.type === 'move_slide') {
         const slide = findSlide(document.presentation, args.slideId)
         if (args.location.slideId === args.slideId) {
-          throw new Error('move_slide 的 location.slideId 不能等于 slideId')
+          throw new Error('move_slide location.slideId must differ from slideId')
         }
         placeSlide(document.presentation, slide, args.location)
         document.movedSlideIds.add(args.slideId)
@@ -1362,7 +1364,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
             })
           }
         }
-        if (replacements === 0) throw new Error(`未找到要替换的文字：${args.query}`)
+        if (replacements === 0) throw new Error(`The text to replace was not found: ${args.query}`)
         const uniqueChanged = [...new Set(changedSlideIds)]
         result = editOutput(uniqueChanged.length === 1 ? uniqueChanged[0] : undefined)
       } else if (args.type === 'edit_elements') {
@@ -1392,7 +1394,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     } catch (error) {
       documents.delete(sourcePath)
       const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`${args.type} 失败：${message}`)
+      throw new Error(`${args.type} failed: ${message}`)
     }
   }
 

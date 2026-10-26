@@ -1,9 +1,5 @@
 import { z } from 'zod/v4'
-import type {
-  TextFileEditOutput,
-  TextFileReadOutput,
-  TextFileSearchOutput
-} from './outputTypes'
+import type { TextFileEditOutput, TextFileReadOutput, TextFileSearchOutput } from './outputTypes'
 
 const STRUCTURED_FILE_EXTENSION_PATTERN = /\.(?:doc|docx|ppt|pptx|pdf|xls|xlsx|odt|ods|odp)$/iu
 
@@ -19,11 +15,12 @@ const textFilePathSchema = z
   .string()
   .min(1)
   .refine((value) => !STRUCTURED_FILE_EXTENSION_PATTERN.test(value), {
-    message: 'text_file 工具只支持 UTF-8 普通文本；DOCX、PPT/PPTX、PDF、XLS/XLSX 等结构化文档不支持'
+    message:
+      'text_file tools only support UTF-8 plain text, not structured documents such as DOCX, PPT/PPTX, PDF or XLS/XLSX'
   })
   .meta({
     'x-constraint':
-      'text_file 工具只支持 UTF-8 普通文本；DOCX、PPT/PPTX、PDF、XLS/XLSX 等结构化文档不支持'
+      'text_file tools only support UTF-8 plain text, not structured documents such as DOCX, PPT/PPTX, PDF or XLS/XLSX'
   })
   .describe('UTF-8 普通文本文件本机绝对路径；不支持 docx、pptx、pdf、xlsx 等结构化文件')
 

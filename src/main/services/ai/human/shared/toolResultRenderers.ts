@@ -1,5 +1,6 @@
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
 import type { ToolCallResult, ToolResourceContext } from '../types'
+import { resolveToolErrorMessage } from './toolError'
 
 const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value))
@@ -409,7 +410,9 @@ export const renderToolResultDataText = (
 export const buildToolCallDisplayText = (result: Pick<ToolCallResult, 'toolName' | 'ok'>): string =>
   `调用工具 ${result.toolName}（${result.ok ? '成功' : '失败'}）`
 
-export const resolveToolResultErrorText = (result: Pick<ToolCallResult, 'data'>): string => {
+export const resolveToolResultErrorText = (
+  result: Pick<ToolCallResult, 'toolName' | 'data'>
+): string => {
   if (isJsonObject(result.data)) {
     const explicit =
       readStringField(result.data, 'error') ||
@@ -424,5 +427,5 @@ export const resolveToolResultErrorText = (result: Pick<ToolCallResult, 'data'>)
     return result.data.trim()
   }
 
-  return 'tool call failed'
+  return resolveToolErrorMessage(result.toolName)
 }

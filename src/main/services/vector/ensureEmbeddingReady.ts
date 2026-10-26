@@ -2,7 +2,7 @@ import { ModelService } from '../model/ModelService'
 import { EmbeddingService } from './EmbeddingService'
 
 export const EMBEDDING_MODEL_NOT_INSTALLED_ERROR =
-  '向量模型尚未安装或下载未完成，请在设置页完成模型下载后再使用知识库。'
+  'The embedding model is not installed or its download is incomplete. Complete the model download in Settings before using the knowledge base.'
 
 export const ensureEmbeddingReady = async (input: {
   embeddingService: EmbeddingService
@@ -21,5 +21,7 @@ export const ensureEmbeddingReady = async (input: {
     return
   }
 
-  throw new Error(`向量模型未就绪：${repoId} (${input.embeddingService.getStatus()})`)
+  throw new Error(
+    `The embedding model is not ready: ${repoId} (${input.embeddingService.getStatus()})`
+  )
 }

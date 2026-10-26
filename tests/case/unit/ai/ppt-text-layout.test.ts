@@ -72,6 +72,8 @@ describe('ai unit PPT text layout', () => {
       await renderPptSlideSvg(presentation, slide)
     )
     expect(overflows.length).toBeGreaterThan(0)
-    await expect(assertPptTableFits(presentation, slide, table)).rejects.toThrow('文字超出边界')
+    await expect(assertPptTableFits(presentation, slide, table)).rejects.toThrow(
+      /Text overflows table cell \d+/
+    )
   })
 })

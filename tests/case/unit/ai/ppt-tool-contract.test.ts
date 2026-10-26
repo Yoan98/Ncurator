@@ -206,7 +206,7 @@ describe('ai unit ppt tool contract', () => {
         bounds: { x: 40, y: 40, width: 200, height: 24 },
         style: { fontSize: 36 }
       })
-    ).toThrow('超过框高')
+    ).toThrow('exceeds the bounds height 24pt')
     expect(() => assertPptTextFitsBounds({ fontSize: 24, boundsHeight: 24 })).not.toThrow()
     expect(() =>
       assertPptElementTextFitsBounds({

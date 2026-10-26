@@ -1,13 +1,15 @@
 import { t } from '../../i18n'
 import React, { useEffect, useMemo, useState } from 'react'
 import { HiCheck } from 'react-icons/hi2'
+import { AiOutlineLoading3Quarters } from 'react-icons/ai'
 import type { ChatMessageLogPlanItem } from '../../../../shared/types'
 
 type WorkbenchPlanProgressProps = {
   plan: ChatMessageLogPlanItem[]
+  running: boolean
 }
 
-const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan }) => {
+const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan, running }) => {
   const [visiblePlan, setVisiblePlan] = useState(plan)
   const [finishing, setFinishing] = useState(false)
 
@@ -68,20 +70,30 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan }) =
         <div className="space-y-1">
           {visiblePlan.map((item, index) => {
             const completed = item.status === 'done'
+            const doing = item.status === 'doing'
             return (
               <div
                 key={`${item.title}-${index}`}
                 className="flex min-w-0 items-start gap-2 rounded-[6px] px-1.5 py-1.5 text-[13px] leading-5 text-[#37352F]"
               >
                 <span
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
                     completed
-                      ? 'border-[#37352F] bg-[#37352F] text-white'
-                      : 'border-[#C9C8C3] bg-white'
+                      ? 'border border-[#37352F] bg-[#37352F] text-white'
+                      : doing
+                        ? 'text-[#37352F]'
+                        : 'border border-[#C9C8C3] bg-white'
                   }`}
                   aria-hidden="true"
                 >
-                  {completed ? <HiCheck className="h-3 w-3" /> : null}
+                  {completed ? (
+                    <HiCheck className="h-3 w-3" />
+                  ) : doing ? (
+                    <AiOutlineLoading3Quarters
+                      className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                      style={{ animationPlayState: running ? 'running' : 'paused' }}
+                    />
+                  ) : null}
                 </span>
                 <span className={completed ? 'text-[#787774]' : undefined}>{item.title}</span>
               </div>

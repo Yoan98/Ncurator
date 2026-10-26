@@ -40,14 +40,16 @@ const parseNumericLength = (value: string): number | undefined => {
 const assertSafeReference = (value: string): void => {
   const normalized = value.trim()
   if (!normalized || normalized.startsWith('#') || /^data:image\//iu.test(normalized)) return
-  throw new Error('SVG 包含外部资源引用，禁止加载外部内容。')
+  throw new Error('The SVG references external resources. External content is not allowed.')
 }
 
 const validateSvg = (svg: string): void => {
   if (Buffer.byteLength(svg, 'utf8') > MAX_SVG_BYTES)
-    throw new Error('SVG 内容过大，超出大小上限。')
+    throw new Error('The SVG content exceeds the size limit.')
   if (/<!DOCTYPE|<!ENTITY/iu.test(svg)) {
-    throw new Error('SVG 包含被禁止的文档声明（如 DOCTYPE/ENTITY）。')
+    throw new Error(
+      'The SVG contains a prohibited document declaration, such as DOCTYPE or ENTITY.'
+    )
   }
 
   const parseErrors: string[] = []
@@ -61,10 +63,10 @@ const validateSvg = (svg: string): void => {
       }
     }).parseFromString(svg, 'image/svg+xml')
   } catch {
-    throw new Error('SVG 内容无效。')
+    throw new Error('The SVG content is invalid.')
   }
   if (parseErrors.length > 0 || document.documentElement?.localName?.toLowerCase() !== 'svg') {
-    throw new Error('SVG 内容无效。')
+    throw new Error('The SVG content is invalid.')
   }
 
   const root = document.documentElement
@@ -83,18 +85,18 @@ const validateSvg = (svg: string): void => {
     height &&
     (width > MAX_IMAGE_EDGE || height > MAX_IMAGE_EDGE || width * height > MAX_IMAGE_PIXELS)
   ) {
-    throw new Error('SVG 输出尺寸过大，超出限制。')
+    throw new Error('The SVG output dimensions exceed the size limit.')
   }
 
   const visit = (node: Node): void => {
     if (node.nodeType === 1) {
       const element = node as Element
       if (FORBIDDEN_ELEMENTS.has(element.localName.toLowerCase())) {
-        throw new Error(`SVG 包含被禁止的元素：${element.localName}。`)
+        throw new Error(`The SVG contains a prohibited element: ${element.localName}.`)
       }
       if (element.localName.toLowerCase() === 'style') {
         const css = element.textContent || ''
-        if (/@import\b/iu.test(css)) throw new Error('SVG 包含被禁止的 CSS @import。')
+        if (/@import\b/iu.test(css)) throw new Error('The SVG contains a prohibited CSS @import.')
         for (const match of css.matchAll(/url\(([^)]+)\)/giu)) {
           assertSafeReference(match[1].replace(/^['"]|['"]$/gu, ''))
         }
@@ -104,7 +106,8 @@ const validateSvg = (svg: string): void => {
         if (!attribute) continue
         const name = attribute.name.toLowerCase()
         const value = attribute.value
-        if (name.startsWith('on')) throw new Error(`SVG 包含被禁止的属性：${name}。`)
+        if (name.startsWith('on'))
+          throw new Error(`The SVG contains a prohibited attribute: ${name}.`)
         if (name === 'href' || name === 'xlink:href') assertSafeReference(value)
         for (const match of value.matchAll(/url\(([^)]+)\)/giu)) {
           assertSafeReference(match[1].replace(/^['"]|['"]$/gu, ''))
@@ -122,7 +125,7 @@ const renderImage = async (input: ImageGenerateInput): Promise<Buffer> => {
   try {
     rendered = new Resvg(input.svg).render()
   } catch {
-    throw new Error('SVG 内容无效。')
+    throw new Error('The SVG content is invalid.')
   }
   if (
     rendered.width <= 0 ||
@@ -131,7 +134,7 @@ const renderImage = async (input: ImageGenerateInput): Promise<Buffer> => {
     rendered.height > MAX_IMAGE_EDGE ||
     rendered.width * rendered.height > MAX_IMAGE_PIXELS
   ) {
-    throw new Error('SVG 输出尺寸过大，超出限制。')
+    throw new Error('The SVG output dimensions exceed the size limit.')
   }
   const png = Buffer.from(rendered.asPng())
   const extension = path.extname(input.outputPath).toLowerCase()
@@ -194,7 +197,7 @@ export const generateImage = async (
     try {
       const stats = await fs.lstat(outputPath)
       if (stats.isSymbolicLink() || !stats.isFile()) {
-        throw new Error(`无法写入 ${args.outputPath}：目标不是普通文件。`)
+        throw new Error(`Cannot write ${args.outputPath}: the target is not a regular file.`)
       }
       beforeMode = stats.mode
       beforeBuffer = await fs.readFile(outputPath)
@@ -207,7 +210,9 @@ export const generateImage = async (
     if (!shouldTrackChange) {
       await atomicReplaceFile({ outputPath, content: outputBuffer, mode: beforeMode, operationId })
       if (!(await fs.readFile(outputPath)).equals(outputBuffer))
-        throw new Error('图片保存校验不一致，文件已经写入，请重新读取确认。')
+        throw new Error(
+          'Image verification failed after saving. The file has been written; read it again to verify its contents.'
+        )
       return { outputPath: args.outputPath }
     }
     await buildInput.ctx.writeFileChange({

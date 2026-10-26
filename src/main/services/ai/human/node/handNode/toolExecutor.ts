@@ -4,7 +4,6 @@ import { assertToolAllowed } from '../../../run/toolPolicy'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { JsonObject, JsonValue } from '../../../../../../shared/types'
 import { isJsonObject } from '../../../../../utils/aiCapabilityUtils'
-import { clipText } from '../../../utils/text'
 import type { AiRunContext } from '../../../types'
 import { ensureToolsetTools } from '../toolsetLoadingNode/toolsetLoader'
 import { resolveToolResultErrorText } from '../../shared/toolResultRenderers'
@@ -17,6 +16,7 @@ import type { HumanRuntimeCache, RuntimeToolsetId, ToolCallResult } from '../../
 import { withToolLifecycle } from '../../tools/utils/lifecycle'
 import { createToolEventEmitter, withActiveToolCall } from '../../tools/utils/toolEvents'
 import { isCancelledError } from '../../../utils/runFailure'
+import { resolveToolErrorMessage } from '../../shared/toolError'
 
 const findTool = (input: {
   toolName: string
@@ -32,63 +32,10 @@ const findTool = (input: {
   return undefined
 }
 
-const summarizePreviewRow = (value: JsonValue): string | undefined => {
-  if (!isJsonObject(value)) return undefined
-
-  const name =
-    typeof value.name === 'string'
-      ? value.name.trim()
-      : typeof value.document_name === 'string'
-        ? value.document_name.trim()
-        : typeof value.id === 'string'
-          ? value.id.trim()
-          : ''
-  const text =
-    typeof value.text === 'string' ? clipText(value.text.trim().replace(/\s+/g, ' '), 80) : ''
-
-  if (name && text) return `${name}: ${text}`
-  if (name) return name
-  if (text) return text
-  return undefined
-}
-
-const summarizeObjectPayload = (toolName: string, payload: JsonObject): string | undefined => {
-  const items = Array.isArray(payload.items) ? payload.items : undefined
-  if (items) {
-    const total = typeof payload.total === 'number' ? payload.total : items.length
-    const previews = items
-      .map((row) => summarizePreviewRow(row))
-      .filter((value): value is string => Boolean(value && value.length > 0))
-      .slice(0, 3)
-
-    if (previews.length > 0) {
-      return `${toolName} returned ${total} item(s): ${previews.join(' | ')}`
-    }
-    return `${toolName} returned ${total} item(s)`
-  }
-
-  const singlePreview = summarizePreviewRow(payload)
-  if (singlePreview) {
-    return `${toolName} returned ${singlePreview}`
-  }
-
-  return undefined
-}
-
-const resolvePayloadMessage = (toolName: string, payload: JsonObject): string =>
-  typeof payload.error === 'string'
-    ? payload.error
-    : typeof payload.message === 'string'
-      ? payload.message
-      : summarizeObjectPayload(toolName, payload) || `${toolName} executed`
-
 const normalizeToolCallResult = (toolName: string, payload: JsonValue): ToolCallResult => {
   if (isJsonObject(payload)) {
-    const explicitError =
-      typeof payload.error === 'string' && payload.error.trim() ? payload.error.trim() : undefined
     // 工具成败只由 error 推导；payload 不应再携带 ok/success
-    const ok = !explicitError
-    const payloadMessage = resolvePayloadMessage(toolName, payload)
+    const ok = typeof payload.error !== 'string'
     const data = { ...payload }
     const imageRefs =
       toolName === 'read_image' && Array.isArray(data.images)
@@ -158,7 +105,7 @@ const normalizeToolCallResult = (toolName: string, payload: JsonValue): ToolCall
       ok: false,
       data: {
         ...data,
-        error: explicitError || payloadMessage || `${toolName} failed`
+        error: resolveToolErrorMessage(toolName, payload)
       },
       resourceContext
     }
@@ -251,7 +198,7 @@ export const executeToolCall = async (input: {
       toolName: input.toolName,
       ok: false,
       data: {
-        error: `当前未学习可执行工具 ${input.toolName}。`
+        error: `Tool ${input.toolName} is not loaded or available for execution.`
       }
     }
     return await withToolLifecycle({
@@ -283,10 +230,11 @@ export const executeToolCall = async (input: {
           else session.fail(resolveToolResultErrorText(result), undefined, result)
           return result
         } catch (error) {
+          if (isCancelledError(error)) throw error
           const result: ToolCallResult = {
             toolName: input.toolName,
             ok: false,
-            data: { error: error instanceof Error ? error.message : String(error) }
+            data: { error: resolveToolErrorMessage(input.toolName, error) }
           }
           session.fail(resolveToolResultErrorText(result), undefined, result)
           return result
@@ -303,12 +251,11 @@ export const executeToolCall = async (input: {
     return normalizeToolCallResult(input.toolName, result as JsonValue)
   } catch (error) {
     if (isCancelledError(error)) throw error
-    const message = error instanceof Error ? error.message : String(error)
     return {
       toolName: input.toolName,
       ok: false,
       data: {
-        error: message
+        error: resolveToolErrorMessage(input.toolName, error)
       }
     }
   }

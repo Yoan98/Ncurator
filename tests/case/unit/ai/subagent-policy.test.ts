@@ -60,13 +60,13 @@ describe('subagent policy and file leases', () => {
     expect(() => acquireRunFile('child-B', '/tmp/subagent-exclusive.docx')).not.toThrow()
     releaseRunFiles('child-B')
   })
-  it('preserves actual errors and tells the model how to repair a mixed selector', () => {
+  it('preserves schema diagnostics and execution errors for a mixed selector', () => {
     const args = { agents: [{ name: '海豹', agentId: 'a', instruction: '继续核验' }] }
     const parsed = DELEGATE_TO_SUBAGENT_SCHEMA.safeParse(args)
     if (parsed.success) throw new Error('mixed create/resume selector was accepted')
-    const error = formatZodErrorForTool('delegate_to_subagent', parsed.error, args)
-    expect(error).toContain('agents.[0]')
-    expect(error).toContain('omit name')
+    const error = formatZodErrorForTool('delegate_to_subagent', parsed.error)
+    expect(error).toContain('agents[0]')
+    expect(error).toContain('Unrecognized key')
     const feedback = buildToolFeedback({
       toolCallId: 'dispatch-failure',
       toolName: 'delegate_to_subagent',

@@ -17,5 +17,5 @@ export const normalizePptColor = (
       .join('')}`.toUpperCase()
   const hex = /^#?([0-9a-f]{6})$/i.exec(raw)
   if (hex) return `#${hex[1]!.toUpperCase()}`
-  throw new Error(`颜色必须是 #RRGGBB（不透明），收到: ${raw}`)
+  throw new Error(`Color must be opaque #RRGGBB; received: ${raw}`)
 }

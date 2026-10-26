@@ -1,23 +1,13 @@
-import type {
-  AiToolCallResult,
-  IpcJsonObject
-} from '../../../../../../shared/types'
+import type { AiToolCallResult, IpcJsonObject } from '../../../../../../shared/types'
 import type { ToolEventEmitter } from './toolEvents'
+import { readToolErrorMessage, resolveToolErrorMessage } from '../../shared/toolError'
 
 export type ToolLifecycleSession = {
   toolName: string
   toolCallId: string
-  emitResult: (input: {
-    result?: AiToolCallResult
-    error?: string
-    draftDocId?: string
-  }) => void
+  emitResult: (input: { result?: AiToolCallResult; error?: string; draftDocId?: string }) => void
   succeed: (draftDocId?: string, result?: AiToolCallResult) => void
-  fail: (
-    error: string,
-    draftDocId?: string,
-    result?: AiToolCallResult
-  ) => void
+  fail: (error: string, draftDocId?: string, result?: AiToolCallResult) => void
 }
 
 export const withToolLifecycle = async <TResult>(input: {
@@ -53,7 +43,7 @@ export const withToolLifecycle = async <TResult>(input: {
         toolName: input.toolName,
         toolCallId,
         result,
-        error,
+        error: resolveToolErrorMessage(input.toolName, readToolErrorMessage(error) || result?.data),
         draftDocId
       })
     }
@@ -62,7 +52,8 @@ export const withToolLifecycle = async <TResult>(input: {
   try {
     return await input.execute(session)
   } catch (error) {
-    const normalized = error instanceof Error ? error : new Error(String(error))
+    const normalized =
+      error instanceof Error ? error : new Error(resolveToolErrorMessage(input.toolName, error))
     await input.onError?.(normalized, session)
     throw error
   }

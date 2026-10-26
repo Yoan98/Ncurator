@@ -59,12 +59,12 @@ const readRemoteImage = async (
   url: string
 ): Promise<{ bytes: Buffer; mimeType: string; width: number; height: number }> => {
   const response = await fetch(url, { signal: AbortSignal.timeout(60_000) })
-  if (!response.ok) throw new Error(`远程图片下载失败: HTTP ${String(response.status)}`)
+  if (!response.ok) throw new Error(`Remote image download failed: HTTP ${String(response.status)}`)
   const declaredLength = Number(response.headers.get('content-length') || '0')
   if (Number.isFinite(declaredLength) && declaredLength > MAX_SOURCE_BYTES) {
-    throw new Error('远程图片超过 20 MiB 限制')
+    throw new Error('The remote image exceeds the 20 MiB size limit')
   }
-  if (!response.body) throw new Error('远程图片响应没有内容')
+  if (!response.body) throw new Error('The remote image response has no body')
 
   const chunks: Buffer[] = []
   let total = 0
@@ -77,7 +77,7 @@ const readRemoteImage = async (
       total += chunk.length
       if (total > MAX_SOURCE_BYTES) {
         await reader.cancel()
-        throw new Error('远程图片超过 20 MiB 限制')
+        throw new Error('The remote image exceeds the 20 MiB size limit')
       }
       chunks.push(chunk)
     }
@@ -86,7 +86,7 @@ const readRemoteImage = async (
   }
   const bytes = Buffer.concat(chunks, total)
   const image = await loadImage(bytes).catch(() => null)
-  if (!image) throw new Error('不支持或无法解码远程图片')
+  if (!image) throw new Error('The remote image is unsupported or could not be decoded')
   if (
     image.width <= 0 ||
     image.height <= 0 ||
@@ -94,7 +94,9 @@ const readRemoteImage = async (
     image.height > MAX_SOURCE_EDGE ||
     image.width * image.height > MAX_SOURCE_PIXELS
   ) {
-    throw new Error('远程图片尺寸超过 8192 像素单边或 6400 万像素限制')
+    throw new Error(
+      'The remote image exceeds the limit of 8192 pixels per side or 64 million total pixels'
+    )
   }
   return {
     bytes,
@@ -106,10 +108,11 @@ const readRemoteImage = async (
 
 const readSourceBytes = async (rawPath: string): Promise<Buffer> => {
   const sourcePath = resolveToolPath(rawPath)
-  if (!sourcePath) throw new Error(`图片必须是绝对路径或 HTTP(S) 地址: ${rawPath}`)
+  if (!sourcePath) throw new Error(`The image must use an absolute path or HTTP(S) URL: ${rawPath}`)
   const stats = await fs.stat(sourcePath)
-  if (!stats.isFile()) throw new Error(`图片路径不是文件: ${sourcePath}`)
-  if (stats.size > MAX_SOURCE_BYTES) throw new Error(`图片超过 20 MiB 限制: ${sourcePath}`)
+  if (!stats.isFile()) throw new Error(`The image path is not a file: ${sourcePath}`)
+  if (stats.size > MAX_SOURCE_BYTES)
+    throw new Error(`The image exceeds the 20 MiB size limit: ${sourcePath}`)
   return await fs.readFile(sourcePath)
 }
 
@@ -131,7 +134,7 @@ const encodeWithinBudget = async (
   height: number
 }> => {
   const image = await loadImage(sourceBytes).catch(() => null)
-  if (!image) throw new Error('不支持或无法解码图片')
+  if (!image) throw new Error('The image is unsupported or could not be decoded')
   if (
     image.width <= 0 ||
     image.height <= 0 ||
@@ -139,7 +142,9 @@ const encodeWithinBudget = async (
     image.height > MAX_SOURCE_EDGE ||
     image.width * image.height > MAX_SOURCE_PIXELS
   ) {
-    throw new Error('图片尺寸超过 8192 像素单边或 6400 万像素限制')
+    throw new Error(
+      'The image exceeds the limit of 8192 pixels per side or 64 million total pixels'
+    )
   }
 
   let dimensions = requestDimensions(image.width, image.height)
@@ -154,14 +159,14 @@ const encodeWithinBudget = async (
         return { bytes: candidate, ...dimensions }
       }
     }
-    if (!smallest) throw new Error('图片压缩失败')
+    if (!smallest) throw new Error('Image compression failed')
     const nextScale = Math.min(0.9, Math.sqrt(MAX_REQUEST_BYTES / smallest.length) * 0.95)
     const nextWidth = Math.max(1, Math.floor(dimensions.width * nextScale))
     const nextHeight = Math.max(1, Math.floor(dimensions.height * nextScale))
     if (nextWidth === dimensions.width && nextHeight === dimensions.height) break
     dimensions = { width: nextWidth, height: nextHeight }
   }
-  throw new Error('图片无法压缩到 1 MiB 请求限制以内')
+  throw new Error('The image could not be compressed to fit the 1 MiB request limit')
 }
 
 const readCachedImage = async (cachePath: string): Promise<ReadImageRef | null> => {
@@ -231,7 +236,7 @@ export const prepareImagesForMainModel = async (input: {
       continue
     }
     const sourceBytes = await readSourceBytes(rawPath)
-    if (sourceBytes.length === 0) throw new Error(`图片内容为空: ${rawPath}`)
+    if (sourceBytes.length === 0) throw new Error(`The image is empty: ${rawPath}`)
     const sourceHash = createHash('sha256').update(sourceBytes).digest('hex')
     const cachePath = path.join(cacheDirectory, `${sourceHash}-${NORMALIZATION_VERSION}.webp`)
     let pending = inFlightByCachePath.get(cachePath)

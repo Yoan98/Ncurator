@@ -94,21 +94,21 @@ export const createPdfToolRuntime = (input: PdfCapabilityToolsInput): PdfToolRun
 
   const resolvePdfPath = async (rawPath: string): Promise<string> => {
     const lexicalPath = resolveToolPath(rawPath)
-    if (!lexicalPath) throw new Error('PDF 路径无效')
+    if (!lexicalPath) throw new Error('Invalid PDF path')
     if (path.extname(lexicalPath).toLowerCase() !== '.pdf')
-      throw new Error('sourcePath 必须是 .pdf 文件')
+      throw new Error('sourcePath must be a .pdf file')
 
     const realSourcePath = await fs.realpath(lexicalPath)
     if (path.extname(realSourcePath).toLowerCase() !== '.pdf')
-      throw new Error('sourcePath 必须是 .pdf 文件')
+      throw new Error('sourcePath must be a .pdf file')
     const stat = await fs.stat(realSourcePath)
-    if (!stat.isFile()) throw new Error('sourcePath 不是文件')
+    if (!stat.isFile()) throw new Error('sourcePath is not a file')
     const handle = await fs.open(realSourcePath, 'r')
     try {
       const header = Buffer.alloc(5)
       const { bytesRead } = await handle.read(header, 0, header.length, 0)
       if (bytesRead !== 5 || header.toString('ascii') !== '%PDF-') {
-        throw new Error('文件头无效，不是可读取的 PDF')
+        throw new Error('Invalid file header: the file is not a readable PDF')
       }
     } finally {
       await handle.close()
@@ -122,7 +122,7 @@ export const createPdfToolRuntime = (input: PdfCapabilityToolsInput): PdfToolRun
     if (cached) return cached
     const response = await callWorker({ action: 'open', payload: { sourcePath } })
     if (!response.ok) throw new PdfToolRuntimeError(response)
-    if (response.payload.action !== 'open') throw new Error('PDF worker 协议错误（open）')
+    if (response.payload.action !== 'open') throw new Error('PDF worker protocol error (open)')
     const session: PdfReadSession = response.payload
     sessionBySourcePath.set(sourcePath, session)
     return session

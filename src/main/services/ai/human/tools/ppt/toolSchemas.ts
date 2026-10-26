@@ -456,7 +456,7 @@ export const assertPptTextFitsBounds = (input: {
 }): void => {
   if (input.fontSize > input.boundsHeight) {
     throw new Error(
-      `字号 ${input.fontSize}pt 超过框高 ${input.boundsHeight}pt：请增大 height 或减小 fontSize`
+      `Font size ${input.fontSize}pt exceeds the bounds height ${input.boundsHeight}pt. Increase height or reduce fontSize`
     )
   }
 }
@@ -479,7 +479,9 @@ export const assertPptElementTextFitsBounds = (element: PptElement): void => {
 
 export const assertPptElementInCanvas = (element: PptElement): void => {
   const fail = (detail: string): never => {
-    throw new Error(`元素超出 ${PPT_CANVAS_WIDTH}×${PPT_CANVAS_HEIGHT} 画布：${detail}`)
+    throw new Error(
+      `The element exceeds the ${PPT_CANVAS_WIDTH}×${PPT_CANVAS_HEIGHT} canvas: ${detail}`
+    )
   }
   const pointInCanvas = (x: number, y: number, label: string): void => {
     if (x < 0 || y < 0 || x > PPT_CANVAS_WIDTH || y > PPT_CANVAS_HEIGHT) {

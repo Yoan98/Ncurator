@@ -30,9 +30,7 @@ describe('ai human mock-llm backend', () => {
                 })
               },
               ({ user }) => {
-                validationFeedbackSeen.push(
-                  user.includes('Tool web_search arguments do not match the schema')
-                )
+                validationFeedbackSeen.push(user.includes('Invalid arguments for web_search.'))
                 return {
                   thought: { next: '继续检索并执行一个会失败的安全指令' },
                   toolCalls: [
@@ -51,7 +49,7 @@ describe('ai human mock-llm backend', () => {
               },
               ({ user }) => {
                 validationFeedbackSeen.push(
-                  user.includes('Tool web_search arguments do not match the schema') &&
+                  user.includes('Invalid arguments for web_search.') &&
                     user.includes('definitely-missing-file.txt')
                 )
                 eventsBeforeDelivery = runtime.eventCollector.snapshot()

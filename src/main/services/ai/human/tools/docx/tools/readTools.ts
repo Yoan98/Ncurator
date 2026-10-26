@@ -147,7 +147,8 @@ const materializeDocxVisuals = async (input: {
           mimeType = 'image/png'
         }
       }
-      if (!bytes || !mimeType) throw new Error(`visual node ${visual.nodeId} 无法生成图片`)
+      if (!bytes || !mimeType)
+        throw new Error(`Cannot render an image for visual node ${visual.nodeId}`)
       const hash = createHash('sha256').update(bytes).digest('hex')
       const imagePath = path.join(bucket, `${hash}.${extensionForMime(mimeType)}`)
       try {

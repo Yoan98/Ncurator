@@ -8,7 +8,12 @@ import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createPptToolRuntime, toPptToolFailure } from './runtime'
-import { pptEditSchema, pptOutlineSchema, pptReadSlidesSchema, pptSearchSchema } from './toolSchemas'
+import {
+  pptEditSchema,
+  pptOutlineSchema,
+  pptReadSlidesSchema,
+  pptSearchSchema
+} from './toolSchemas'
 import {
   PPT_EDIT_TOOL_SPEC,
   PPT_READ_OUTLINE_TOOL_SPEC,
@@ -69,7 +74,7 @@ export const buildPptCapabilityTools = (input: Parameters<typeof createPptToolRu
         const slide = value as Record<string, unknown>
         const slideId = String(slide.slideId || '')
         const slideImagePath = stagedBySlideId.get(slideId)
-        if (!slideImagePath) throw new Error(`PPT 页面渲染缺失: ${slideId}`)
+        if (!slideImagePath) throw new Error(`The rendered PPT slide is missing: ${slideId}`)
         return { ...slide, slideImagePath }
       })
     }

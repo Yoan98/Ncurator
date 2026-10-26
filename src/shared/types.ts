@@ -2166,9 +2166,11 @@ export type ChatMessageLogUserContext = {
   contentNodes?: ChatMessageContentNode[]
 }
 
+export const CHAT_PLAN_STATUSES = ['todo', 'doing', 'done'] as const
+
 export type ChatMessageLogPlanItem = {
   title: string
-  status: 'todo' | 'done'
+  status: (typeof CHAT_PLAN_STATUSES)[number]
 }
 
 export type ChatMessageLogAnnotationEntry =
