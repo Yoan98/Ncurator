@@ -126,6 +126,9 @@ export const windowSelectors = {
 } as const
 
 export const vectorSelectors = {
+  staleNotice: 'embedding-index-stale-notice',
+  goIndex: 'embedding-go-index',
+  restoreModel: 'embedding-restore-model',
   activeModel: 'vector-active-model',
   selectButtonPrefix: 'vector-select-button',
   remoteList: 'vector-remote-list',
@@ -146,11 +149,6 @@ export const vectorSelectors = {
   remoteCancelButton: 'vector-remote-cancel',
   remoteFeedback: 'vector-remote-feedback',
   modelError: 'vector-model-error',
-  indexProgress: 'vector-index-progress',
-  indexPauseButton: 'vector-index-pause',
-  indexResumeButton: 'vector-index-resume',
-  indexRetryButton: 'vector-index-retry',
-  coverageNotice: 'vector-coverage-notice',
   page: 'vector-page',
   list: 'vector-model-list',
   catalogError: 'vector-catalog-error',

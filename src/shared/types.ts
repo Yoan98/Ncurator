@@ -121,6 +121,8 @@ export interface DocumentRecord {
 }
 
 export interface WebSourceRecord {
+  /** Derived from the document model identity; never persisted as a source status. */
+  index_stale?: boolean
   id: string
   identity_kind: WebSourceIdentityKind
   normalized_url: string
@@ -151,6 +153,8 @@ export interface WorkspaceSource {
 }
 
 export interface WorkspaceFileIndexRecord {
+  /** Derived from the document model identity; never persisted as a source status. */
+  index_stale?: boolean
   id: string
   workspace_id: string
   relative_path: string
@@ -170,6 +174,8 @@ export interface WorkspaceFileIndexRecord {
 }
 
 export interface WorkspaceTreeEntry {
+  /** Derived from the document model identity; never persisted as a source status. */
+  index_stale?: boolean
   id: string
   workspace_id: string
   parent_id?: string

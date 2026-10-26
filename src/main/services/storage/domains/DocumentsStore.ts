@@ -1,3 +1,4 @@
+import * as lancedb from '@lancedb/lancedb'
 import type {
   ChunkInput,
   ChunkListResponse,
@@ -31,7 +32,6 @@ import {
 const DEFAULT_CHUNK_BATCH_SIZE = 128
 const DEFAULT_CHUNK_BATCH_MAX_TEXT_BYTES = 4 * 1024 * 1024
 
-type EmbeddingChunk = ChunkInput & { generation_id: string; chunk_index: number }
 type EmbeddingDocument = {
   id: string
   active_generation_id: string | null
@@ -139,7 +139,7 @@ const toSearchResult = (value: unknown): SearchResult => {
 }
 
 export class DocumentsStore {
-  private readonly embeddingWrites = new Map<string, Promise<boolean>>()
+  private reranker: lancedb.rerankers.RRFReranker | null = null
   private generationMaintenance: Promise<void> = Promise.resolve()
   private readonly searchResultVersions = new WeakMap<
     SearchResult,
@@ -192,7 +192,7 @@ export class DocumentsStore {
    * Re-read SQLite after asynchronous queries to exclude documents deleted or switched to another
    * generation or embedding model while the query was running.
    */
-  private filterCurrentSearchResults(results: SearchResult[], textOnly = false): SearchResult[] {
+  private filterCurrentSearchResults(results: SearchResult[]): SearchResult[] {
     const documents = new Map<string, EmbeddingDocument | undefined>()
     return results.filter((result) => {
       if (!result.document_id) return false
@@ -211,9 +211,8 @@ export class DocumentsStore {
         document.embedding_dim > 0 &&
         version &&
         document.active_generation_id === version.generationId &&
-        (textOnly ||
-          this.vector.getChunkTableName(document.embedding_identity, document.embedding_dim) ===
-            version.tableName)
+        this.vector.getChunkTableName(document.embedding_identity, document.embedding_dim) ===
+          version.tableName
       )
     })
   }
@@ -225,7 +224,6 @@ export class DocumentsStore {
     tableName?: string
     embeddingIdentity?: string
     dimension?: number
-    textOnly?: boolean
   }): Promise<string | undefined> {
     let activeWhere: string | undefined
     if (input.tableName) {
@@ -251,9 +249,8 @@ export class DocumentsStore {
         .filter(
           (document) =>
             document.embedding_dim > 0 &&
-            (input.textOnly ||
-              this.vector.getChunkTableName(document.embedding_identity, document.embedding_dim) ===
-                input.tableName)
+            this.vector.getChunkTableName(document.embedding_identity, document.embedding_dim) ===
+              input.tableName
         )
       activeWhere = documents.length
         ? documents
@@ -490,105 +487,39 @@ export class DocumentsStore {
     })
   }
 
-  public async getEmbeddingCoverage(
-    identity: string,
-    scope: { workspaceId?: string; documentIds?: string[]; sourceType?: string } = {}
-  ): Promise<{ total: number; completed: number; failed: number; pending: number }> {
-    const params: Record<string, string | number | null> = { identity }
-    if (scope.workspaceId) params.workspace_id = scope.workspaceId
-    if (scope.sourceType) params.source_type = scope.sourceType
-    const where = buildWhere([
-      "active_generation_id IS NOT NULL AND active_generation_id != ''",
-      scope.workspaceId ? 'workspace_id = @workspace_id' : undefined,
-      scope.sourceType ? 'source_type = @source_type' : undefined,
-      scope.documentIds?.length === 0 ? '1 = 0' : undefined,
-      buildInClause('id', scope.documentIds, params, 'document_id')
-    ])
-    const row = this.sqlite
-      .prepare<
-        Record<string, string | number | null>,
-        { total: number; completed: number; failed: number }
-      >(
-        `SELECT COUNT(*) AS total,
-         COALESCE(SUM(CASE WHEN embedding_identity = @identity THEN 1 ELSE 0 END), 0) AS completed,
-         COALESCE(SUM(CASE WHEN embedding_identity != @identity AND embedding_error IS NOT NULL THEN 1 ELSE 0 END), 0) AS failed
-         FROM document WHERE ${where}`
+  public getEmbeddingIndexState(identity: string): {
+    staleFileCount: number
+    staleWebCount: number
+    completeIdentity?: string
+  } {
+    const rows = this.sqlite
+      .prepare<[], { embedding_identity: string; source_type: string; count: number }>(
+        `SELECT embedding_identity, source_type, COUNT(*) AS count FROM document
+       WHERE active_generation_id IS NOT NULL AND active_generation_id != ''
+       GROUP BY embedding_identity, source_type`
       )
-      .get(params)!
-    return { ...row, pending: row.total - row.completed - row.failed }
-  }
-
-  public async listPendingEmbeddingDocuments(identity: string): Promise<
-    Array<{
-      id: string
-      generationId: string
-      contentHash: string
-      identity: string
-      dimension: number
-    }>
-  > {
-    return this.sqlite
-      .prepare<
-        [string],
-        {
-          id: string
-          generationId: string
-          contentHash: string
-          identity: string
-          dimension: number
-        }
-      >(
-        `SELECT id, active_generation_id AS generationId, COALESCE(content_hash, '') AS contentHash,
-         embedding_identity AS identity, embedding_dim AS dimension FROM document
-         WHERE active_generation_id IS NOT NULL AND active_generation_id != ''
-         AND embedding_identity != ? AND embedding_error IS NULL AND import_status != 1
-         ORDER BY created_at, id`
-      )
-      .all(identity)
-  }
-
-  public async getDocumentEmbeddingChunks(documentId: string): Promise<EmbeddingChunk[]> {
-    const document = this.sqlite
-      .prepare<[string], EmbeddingDocument>('SELECT * FROM document WHERE id = ?')
-      .get(documentId)
-    if (!document?.active_generation_id) return []
-    if (document.embedding_dim === 0) return []
-    const table = await this.vector.openChunkTable(
-      document.embedding_identity,
-      document.embedding_dim
-    )
-    const where = this.vector.combineWhere([
-      `document_id = '${this.vector.escapeSqlString(documentId)}'`,
-      `generation_id = '${this.vector.escapeSqlString(document.active_generation_id)}'`
-    ])!
-    if (!table) {
-      if (
-        document.embedding_identity !== DEFAULT_EMBEDDING_IDENTITY ||
-        document.embedding_dim !== DEFAULT_EMBEDDING_DIMENSION
-      ) {
-        throw new Error(`Embedding chunk table is missing for document ${documentId}`)
-      }
-      for (const name of await this.vector.listChunkTableNames()) {
-        if (await (await this.vector.openTable(name)).countRows(where)) {
-          throw new Error(`Embedding chunk table is missing for document ${documentId}`)
-        }
-      }
-      return []
+      .all()
+    const identities = new Set(rows.map((row) => row.embedding_identity))
+    return {
+      staleFileCount: rows
+        .filter((row) => row.embedding_identity !== identity && row.source_type === 'file')
+        .reduce((sum, row) => sum + row.count, 0),
+      staleWebCount: rows
+        .filter((row) => row.embedding_identity !== identity && row.source_type === 'web')
+        .reduce((sum, row) => sum + row.count, 0),
+      ...(identities.size === 1 ? { completeIdentity: rows[0].embedding_identity } : {})
     }
-    const rows = await table.query().where(where).toArray()
-    return rows
-      .map((row: ChunkRow) => ({
-        id: toString(row.id),
-        text: toString(row.text),
-        document_id: toString(row.document_id),
-        document_name: toString(row.document_name),
-        workspace_id: toString(row.workspace_id),
-        source_type: toString(row.source_type),
-        metadata: { page: toNumber(asRecord(row.metadata).page, 1) },
-        generation_id: toString(row.generation_id),
-        chunk_index: toNumber(row.chunk_index)
-      }))
-      .sort((a, b) => a.chunk_index - b.chunk_index)
+  }
+
+  public getStaleEmbeddingDocumentIds(identity: string): Set<string> {
+    return new Set(
+      this.sqlite
+        .prepare<[string], { id: string }>(
+          `SELECT id FROM document WHERE active_generation_id IS NOT NULL AND active_generation_id != '' AND embedding_identity != ?`
+        )
+        .all(identity)
+        .map((row) => row.id)
+    )
   }
 
   /**
@@ -613,204 +544,6 @@ export class DocumentsStore {
         `Embedding dimension changed from ${document.embedding_dim} to ${dimension}; configure a new embedding model identity`
       )
     }
-  }
-
-  /**
-   * 仅回收指定的非活动 generation，逐表删除前重新检查活动标记，保留并发普通索引的其他 generation。
-   *
-   * Reclaim only the specified inactive generation, checking its active marker before each table
-   * deletion and preserving other generations written by concurrent ordinary indexing.
-   */
-  private async deleteInactiveEmbeddingGeneration(
-    documentId: string,
-    generationId: string
-  ): Promise<void> {
-    const where = `document_id = '${this.vector.escapeSqlString(documentId)}' AND generation_id = '${this.vector.escapeSqlString(generationId)}'`
-    for (const name of await this.vector.listChunkTableNames()) {
-      const table = await this.vector.openTable(name)
-      const document = this.sqlite
-        .prepare<
-          [string],
-          { active_generation_id: string | null }
-        >('SELECT active_generation_id FROM document WHERE id = ?')
-        .get(documentId)
-      if (document?.active_generation_id === generationId) return
-      await table.delete(where)
-    }
-  }
-
-  /**
-   * generationId 始终是源版本的 CAS 条件；变更布局时，调用者提供唯一 targetGenerationId 及新块身份。
-   * 先写完整目标正文，再在 SQLite 事务内一起切换活动 generation、模型身份与维度。提交前保留旧正文，
-   * 提交后回收源 generation；失败只清理本次新 generation，不清理并发普通索引的其他 generation。
-   * 未提供新 generation 时保留原有同布局重嵌行为。
-   *
-   * generationId always identifies the source version for CAS. Layout changes require a unique
-   * caller-provided targetGenerationId and new chunk identities. Write all target text first, then
-   * atomically switch the active generation, model identity and dimension in SQLite. Keep old text
-   * until commit and reclaim the source afterward; failures clean only this new generation while
-   * preserving other generations from concurrent ordinary indexing. Omitting a new generation
-   * preserves the existing replacement behavior for unchanged layouts.
-   */
-  public async replaceDocumentEmbeddings(input: {
-    documentId: string
-    generationId: string
-    targetGenerationId?: string
-    contentHash: string
-    embeddingIdentity: string
-    vectors: Float32Array[]
-    chunks: EmbeddingChunk[]
-    isCurrent?: () => boolean
-  }): Promise<boolean> {
-    const previous = this.embeddingWrites.get(input.documentId) ?? Promise.resolve(false)
-    const operation = previous
-      .catch(() => false)
-      .then(() =>
-        this.serializeGenerationMaintenance(async () => {
-          const { vectors, chunks } = input
-          const targetGenerationId = input.targetGenerationId ?? input.generationId
-          if (!targetGenerationId.trim()) {
-            throw new Error('Re-embedding target generation must not be empty')
-          }
-          if (chunks.length !== vectors.length) {
-            throw new Error('Re-embedding requires one vector for every chunk')
-          }
-          const document = this.sqlite
-            .prepare<[string], EmbeddingDocument>('SELECT * FROM document WHERE id = ?')
-            .get(input.documentId)
-          const dimension = vectors[0]?.length ?? 0
-          if (
-            (vectors.length > 0 && !dimension) ||
-            vectors.some((vector) => vector.length !== dimension || !vector.every(Number.isFinite))
-          ) {
-            throw new Error('Embeddings must have the same positive dimension and finite values')
-          }
-          if (
-            chunks.some(
-              (chunk) =>
-                chunk.document_id !== input.documentId || chunk.generation_id !== targetGenerationId
-            )
-          ) {
-            throw new Error('Re-embedding chunks must match the document generation')
-          }
-          if (new Set(chunks.map((chunk) => chunk.id)).size !== chunks.length) {
-            throw new Error('Re-embedding chunk IDs must be unique')
-          }
-          const isEligible = (): boolean => {
-            if (input.isCurrent && !input.isCurrent()) return false
-            return Boolean(
-              this.sqlite
-                .prepare(
-                  `SELECT 1 FROM document WHERE id = ? AND active_generation_id = ?
-           AND COALESCE(content_hash, '') = ? AND import_status != 1`
-                )
-                .get(input.documentId, input.generationId, input.contentHash)
-            )
-          }
-          let committed = false
-          try {
-            if (!isEligible()) return false
-            if (dimension > 0) this.assertEmbeddingDimension(input.embeddingIdentity, dimension)
-            if (
-              !chunks.length &&
-              (await this.getDocumentEmbeddingChunks(input.documentId)).length
-            ) {
-              throw new Error('Cannot replace a nonempty document with empty embeddings')
-            }
-            if (!isEligible()) return false
-            if (
-              targetGenerationId === input.generationId &&
-              document?.embedding_identity === input.embeddingIdentity &&
-              document.embedding_dim === dimension
-            ) {
-              return document.embedding_error === null
-            }
-            if (chunks.length) {
-              const table = (await this.vector.openChunkTable(
-                input.embeddingIdentity,
-                dimension,
-                true
-              ))!
-              for (let offset = 0; offset < chunks.length; offset += DEFAULT_CHUNK_BATCH_SIZE) {
-                if (!isEligible()) return false
-                const batch = chunks
-                  .slice(offset, offset + DEFAULT_CHUNK_BATCH_SIZE)
-                  .map((chunk, index) => ({
-                    ...chunk,
-                    vector: Array.from(vectors[offset + index]),
-                    created_at: Date.now()
-                  }))
-                await table
-                  .mergeInsert(['document_id', 'generation_id', 'id'])
-                  .whenMatchedUpdateAll()
-                  .whenNotMatchedInsertAll()
-                  .execute(batch)
-              }
-            }
-            committed = this.sqlite.transaction(() => {
-              if (!isEligible()) return false
-              if (dimension > 0) this.assertEmbeddingDimension(input.embeddingIdentity, dimension)
-              return (
-                this.sqlite
-                  .prepare(
-                    `UPDATE document SET active_generation_id = ?, embedding_identity = ?, embedding_dim = ?, embedding_error = NULL
-           WHERE id = ? AND active_generation_id = ? AND COALESCE(content_hash, '') = ? AND import_status != 1`
-                  )
-                  .run(
-                    targetGenerationId,
-                    input.embeddingIdentity,
-                    dimension,
-                    input.documentId,
-                    input.generationId,
-                    input.contentHash
-                  ).changes === 1
-              )
-            })
-            return committed
-          } finally {
-            if (targetGenerationId !== input.generationId) {
-              await this.deleteInactiveEmbeddingGeneration(
-                input.documentId,
-                committed ? input.generationId : targetGenerationId
-              )
-            }
-          }
-        })
-      )
-    this.embeddingWrites.set(input.documentId, operation)
-    try {
-      return await operation
-    } finally {
-      if (this.embeddingWrites.get(input.documentId) === operation) {
-        this.embeddingWrites.delete(input.documentId)
-      }
-    }
-  }
-
-  public async markDocumentEmbeddingError(
-    documentId: string,
-    generationId: string,
-    error: string
-  ): Promise<void> {
-    this.sqlite
-      .prepare('UPDATE document SET embedding_error = ? WHERE id = ? AND active_generation_id = ?')
-      .run(error, documentId, generationId)
-  }
-
-  public async clearEmbeddingErrors(identity: string): Promise<void> {
-    void identity
-    this.sqlite
-      .prepare('UPDATE document SET embedding_error = NULL WHERE embedding_error IS NOT NULL')
-      .run()
-  }
-
-  public async getEmbeddingError(identity: string): Promise<string | undefined> {
-    return this.sqlite
-      .prepare<[string], { embedding_error: string }>(
-        `SELECT embedding_error FROM document WHERE embedding_identity != ?
-         AND embedding_error IS NOT NULL AND embedding_error != '' ORDER BY created_at, id LIMIT 1`
-      )
-      .get(identity)?.embedding_error
   }
 
   public async getDocumentById(id: string): Promise<DocumentRecord | null> {
@@ -998,38 +731,37 @@ export class DocumentsStore {
     limit = 50,
     sourceType?: string,
     workspaceId?: string,
-    documentIds?: string[]
+    documentIds?: string[],
+    embeddingIdentity = DEFAULT_EMBEDDING_IDENTITY
   ): Promise<SearchResult[]> {
     if (limit <= 0 || !queryText.trim()) return []
-    const results: SearchResult[] = []
-    for (const tableName of await this.vector.listChunkTableNames()) {
-      const table = await this.vector.openTable(tableName)
-      const where = await this.buildChunkWhere({
-        workspaceId,
-        sourceType,
-        documentIds,
-        tableName,
-        textOnly: true
-      })
-      if ((await table.countRows(where)) === 0) continue
-      const query = table.query()
-      if (where) query.where(where)
-      results.push(
-        ...(await query.fullTextSearch(queryText).limit(limit).toArray()).map((row) =>
-          this.searchResultFromRow(row, tableName)
-        )
+    const document = this.sqlite
+      .prepare<
+        [string],
+        { embedding_dim: number }
+      >(`SELECT embedding_dim FROM document WHERE embedding_identity = ? AND embedding_dim > 0 AND active_generation_id IS NOT NULL LIMIT 1`)
+      .get(embeddingIdentity)
+    if (!document) return []
+    const table = await this.vector.openChunkTable(embeddingIdentity, document.embedding_dim)
+    if (!table)
+      throw new Error(
+        'The embedding index table is missing. Rebuild indexes in Settings > Workspace.'
       )
-    }
-    return [
-      ...new Map(
-        this.filterCurrentSearchResults(results, true).map((row) => [
-          JSON.stringify([row.document_id, row.id]),
-          row
-        ])
-      ).values()
-    ]
-      .sort((a, b) => (b._score ?? 0) - (a._score ?? 0))
-      .slice(0, limit)
+    const tableName = this.vector.getChunkTableName(embeddingIdentity, document.embedding_dim)
+    const where = await this.buildChunkWhere({
+      workspaceId,
+      sourceType,
+      documentIds,
+      tableName,
+      embeddingIdentity
+    })
+    if ((await table.countRows(where)) === 0) return []
+    const query = table.query()
+    if (where) query.where(where)
+    const rows = await query.fullTextSearch(queryText).limit(limit).toArray()
+    return this.filterCurrentSearchResults(
+      rows.map((row) => this.searchResultFromRow(row, tableName))
+    )
   }
 
   public async hybridSearch(
@@ -1042,39 +774,32 @@ export class DocumentsStore {
     embeddingIdentity = DEFAULT_EMBEDDING_IDENTITY
   ): Promise<SearchResult[]> {
     if (limit <= 0) return []
-    const [vectors, texts] = await Promise.all([
-      this.vectorSearch(
-        queryVector,
-        limit,
-        sourceType,
-        workspaceId,
-        documentIds,
-        embeddingIdentity
-      ),
-      this.ftsSearch(queryText, limit, sourceType, workspaceId, documentIds)
-    ])
-    // 分别检索后按 chunk 身份融合；文本单独命中不伪造向量距离。
-    //
-    // Fuse independent rankings by chunk identity without inventing vector distances for text hits.
-    const fused = new Map<string, SearchResult>()
-    for (const ranking of [vectors, texts]) {
-      this.filterCurrentSearchResults(ranking, ranking === texts).forEach((item, index) => {
-        const key = JSON.stringify([item.document_id, item.id])
-        const existing = fused.get(key)
-        const result = {
-          ...existing,
-          ...item,
-          _distance: existing?._distance ?? item._distance,
-          _score: existing?._score ?? item._score,
-          _relevance_score: (existing?._relevance_score ?? 0) + 1 / (60 + index + 1)
-        }
-        this.searchResultVersions.set(result, this.searchResultVersions.get(item)!)
-        fused.set(key, result)
-      })
-    }
-    return [...fused.values()]
-      .sort((a, b) => (b._relevance_score ?? 0) - (a._relevance_score ?? 0))
-      .slice(0, limit)
+    this.assertEmbeddingDimension(embeddingIdentity, queryVector.length)
+    const table = await this.vector.openChunkTable(embeddingIdentity, queryVector.length)
+    if (!table) return []
+    const tableName = this.vector.getChunkTableName(embeddingIdentity, queryVector.length)
+    const where = await this.buildChunkWhere({
+      workspaceId,
+      sourceType,
+      documentIds,
+      tableName,
+      embeddingIdentity,
+      dimension: queryVector.length
+    })
+    if ((await table.countRows(where)) === 0) return []
+    const query = table.query()
+    if (where) query.where(where)
+    this.reranker ??= await lancedb.rerankers.RRFReranker.create()
+    const rows = await query
+      .fullTextSearch(queryText)
+      .nearestTo(queryVector)
+      .distanceType('cosine')
+      .rerank(this.reranker)
+      .limit(limit)
+      .toArray()
+    return this.filterCurrentSearchResults(
+      rows.map((row) => this.searchResultFromRow(row, tableName))
+    )
   }
 
   public async search(
@@ -1102,7 +827,7 @@ export class DocumentsStore {
     if (resultDocumentIds.length === 0) return results
     const documents = await this.getDocumentsByIds(resultDocumentIds)
     const docMap = new Map(documents.map((document) => [document.id, document] as const))
-    return this.filterCurrentSearchResults(results, true).map((item) => ({
+    return this.filterCurrentSearchResults(results).map((item) => ({
       ...item,
       document: item.document_id ? docMap.get(item.document_id) : undefined
     }))

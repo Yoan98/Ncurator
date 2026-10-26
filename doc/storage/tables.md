@@ -330,7 +330,7 @@ DOCX 应用记录表；当前应用/回退接口投影 `ai_file_change`，不再
 | `active_generation_id`  | TEXT             | 当前有效 generation                                                   |
 | `embedding_identity`    | TEXT NOT NULL    | 有效 chunk 的模型身份，默认 `local:jinaai/jina-embeddings-v2-base-zh` |
 | `embedding_dim`         | INTEGER NOT NULL | 有效向量维度，默认 768；合法空资料为 0，不创建向量表                  |
-| `embedding_error`       | TEXT             | 重嵌错误，可空；不替代普通导入的 `last_error`                         |
+| `embedding_error`       | TEXT             | 保留的可空字段；当前索引错误统一使用 `last_error`                     |
 | `created_at`            | INTEGER          | 创建时间                                                              |
 | `updated_at`            | INTEGER          | 更新时间                                                              |
 | `last_error`            | TEXT             | 最近错误                                                              |
@@ -383,10 +383,10 @@ DOCX 应用记录表；当前应用/回退接口投影 `ai_file_change`，不再
 
 向量模型设置单例，由 Main 读写。已保存 Key 不进入 Renderer 的读取或操作响应。
 
-| 字段            | 类型          | 说明                                                                                     |
-| --------------- | ------------- | ---------------------------------------------------------------------------------------- |
-| `id`            | TEXT PK       | 固定 `singleton`，由 CHECK 约束                                                          |
-| `settings_json` | TEXT NOT NULL | `EmbeddingModelSettings` JSON，包含 `activeModelId`、`remoteModels` 及可选 `indexPaused` |
+| 字段            | 类型          | 说明                                                                |
+| --------------- | ------------- | ------------------------------------------------------------------- |
+| `id`            | TEXT PK       | 固定 `singleton`，由 CHECK 约束                                     |
+| `settings_json` | TEXT NOT NULL | `EmbeddingModelSettings` JSON，包含 `activeModelId`、`remoteModels` |
 
 `remoteModels` 每项保存 `id`、`name`、`baseUrl`、`apiKey`、`modelName`、`maxInputTokens`。`maxInputTokens` 是官方单段最大输入 tokens，未填写或旧配置缺少字段时使用 512，由程序自动扣除预留并切分正文。API Key 随配置保存在 SQLite；返回列表用 `hasApiKey` 替代 `apiKey`。无单例记录时默认选择本地 Jina，远程列表为空且不暂停。
 
@@ -394,7 +394,7 @@ DOCX 应用记录表；当前应用/回退接口投影 `ai_file_change`，不再
 
 ### `vector_chunk` / `vector_chunk_<identity_hash>_<dim>`
 
-可重建的完整知识库块表族。本地 Jina 身份 `local:jinaai/jina-embeddings-v2-base-zh` 且维度为 768 时使用 `vector_chunk`，其余使用身份字符串的完整 SHA-256 十六进制哈希与正整数维度组成动态表名。所有表字段一致，只有向量固定长度取各表的维度；每张表均保存正文及 FTS 索引。有效向量表与 generation 由 SQLite `document` 标记决定。全文查询可使用同一有效 generation 的正文副本并去重，避免迁移期间遗漏；模型不匹配的向量不进入语义检索。
+可重建的完整知识库块表族。本地 Jina 身份 `local:jinaai/jina-embeddings-v2-base-zh` 且维度为 768 时使用 `vector_chunk`，其余使用身份字符串的完整 SHA-256 十六进制哈希与正整数维度组成动态表名。所有表字段一致，只有向量固定长度取各表的维度；每张表均保存正文及 FTS 索引。有效向量表与 generation 由 SQLite `document` 标记决定。全文与混合查询只使用当前模型表及有效 generation；存在身份不匹配的有效资料时，KB 搜索和列表统一报错。
 
 | 字段            | 类型                        | 说明                             |
 | --------------- | --------------------------- | -------------------------------- |

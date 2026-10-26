@@ -24,6 +24,8 @@ import { formatDateTime, getWebStatusBadge } from './utils/workspace'
 import { beginPrepareHeld, endPrepareHeld } from './prepareHeld'
 
 type WebSourcesSettingsPanelProps = {
+  staleIndexCount?: number
+  focusIndex?: boolean
   embedded?: boolean
   hasVectorModel: boolean | null
   vectorModelStatus: string
@@ -52,7 +54,9 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   hasVectorModel,
   vectorModelStatus,
   onVectorModelSettingsOpen,
-  onSummaryChange
+  onSummaryChange,
+  staleIndexCount = 0,
+  focusIndex = false
 }) => {
   const [webSources, setWebSources] = useState<WebSourceRecord[]>([])
   const [webLoading, setWebLoading] = useState(false)
@@ -71,7 +75,20 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     needs_index_count: 0,
     failed_count: 0
   })
-  const actionableWebIndexCount = webSummary.needs_index_count + webSummary.failed_count
+  const actionableWebIndexCount = Math.max(
+    webSummary.needs_index_count + webSummary.failed_count,
+    staleIndexCount
+  )
+
+  useEffect(() => {
+    if (!focusIndex) return
+    const timer = setTimeout(() => {
+      const target = document.getElementById('workspace-web-index-action')
+      target?.scrollIntoView({ block: 'nearest' })
+      target?.querySelector('button')?.focus({ preventScroll: true })
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [focusIndex])
 
   const loadWebSources = useCallback(async (): Promise<void> => {
     setWebLoading(true)
@@ -298,7 +315,9 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     ? t(($) => $.settings.stopping)
     : webPrepareRunning
       ? t(($) => $.common.cancel)
-      : t(($) => $.settings.updateIndex)
+      : staleIndexCount > 0
+        ? t(($) => $.settings.embedding.rebuild)
+        : t(($) => $.settings.updateIndex)
   const webPrepareTooltip =
     hasVectorModel === null
       ? t(($) => $.settings.checkingVectorModelStatus)
@@ -407,7 +426,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             >
               {t(($) => $.common.checkForUpdates)}
             </Button>
-            <div className="relative min-w-0">
+            <div className="relative min-w-0" id="workspace-web-index-action">
               <Tooltip
                 title={[webPrepareTooltip, !vectorModelMissing ? vectorModelStatus : '']
                   .filter(Boolean)

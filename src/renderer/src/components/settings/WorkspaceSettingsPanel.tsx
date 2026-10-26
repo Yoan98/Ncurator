@@ -2,7 +2,9 @@ import { t } from '../../i18n'
 import FileIcon from '../FileIcon'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Button, Empty, Modal, Popover, Tabs, Tooltip, message } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import type { EmbeddingIndexSnapshot } from '../../../../shared/embeddingModels'
+import EmbeddingIndexNotice from './EmbeddingIndexNotice'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type {
   WorkspaceIndexJobRecord,
   WorkspaceListItem,
@@ -54,6 +56,10 @@ const getRootDisplayName = (workspace: WorkspaceListItem): string =>
 
 const WorkspaceSettingsPanel: React.FC = () => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedTab = searchParams.get('source') === 'web' ? 'web' : 'files'
+  const [embeddingIndex, setEmbeddingIndex] = useState<EmbeddingIndexSnapshot | null>(null)
+  const previousModelState = useRef('')
   const { modal } = AntdApp.useApp()
   const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([])
   const [workspaceDirectories, setWorkspaceDirectories] = useState<WorkspaceDirectoryMap>({})
@@ -69,7 +75,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [workspaceIndexJobs, setWorkspaceIndexJobs] = useState<WorkspaceJobMap>({})
   const [workspaceLoading, setWorkspaceLoading] = useState(false)
   const [workspaceDirectoryReloadVersion, setWorkspaceDirectoryReloadVersion] = useState(0)
-  const [selectedTabKey, setSelectedTabKey] = useState<'files' | 'web'>('files')
+  const [selectedTabKey, setSelectedTabKey] = useState<'files' | 'web'>(requestedTab)
   const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null)
   const [hasVectorModel, setHasVectorModel] = useState<boolean | null>(null)
   const [vectorModelStatus, setVectorModelStatus] = useState('')
@@ -219,6 +225,20 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }, [loadWorkspaces])
 
   useEffect(() => {
+    setSelectedTabKey(requestedTab)
+  }, [requestedTab])
+
+  useEffect(() => {
+    if (searchParams.get('focus') !== 'index' || selectedTabKey !== 'files') return
+    const timer = setTimeout(() => {
+      const target = document.getElementById('workspace-file-index-action')
+      target?.scrollIntoView({ block: 'nearest' })
+      target?.querySelector('button')?.focus({ preventScroll: true })
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [searchParams, selectedTabKey])
+
+  useEffect(() => {
     let disposed = false
     let timer: ReturnType<typeof setTimeout>
     const refresh = async (): Promise<void> => {
@@ -228,6 +248,12 @@ const WorkspaceSettingsPanel: React.FC = () => {
         const models = remote ? [] : await window.api.getModels()
         const local = models.find((model) => `local:${model.id}` === snapshot.activeModelId)
         if (disposed) return
+        setEmbeddingIndex(snapshot.index)
+        const modelState = `${snapshot.activeModelId}:${snapshot.index.staleFileCount > 0}`
+        if (!snapshot.index.running && previousModelState.current !== modelState) {
+          if (previousModelState.current) setWorkspaceDirectoryReloadVersion((value) => value + 1)
+          previousModelState.current = modelState
+        }
         setHasVectorModel(Boolean(remote || local?.isDownloaded))
         setVectorModelError('')
         setVectorModelStatus(
@@ -331,7 +357,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
     )
   }, [workspaceTreeSummaries, workspaces])
 
-  const actionableIndexCount = summedSummary.needs_index_count + summedSummary.failed_file_count
+  const actionableIndexCount = Math.max(
+    summedSummary.needs_index_count + summedSummary.failed_file_count,
+    embeddingIndex?.staleFileCount ?? 0
+  )
   const runningFileJob = useMemo(
     () => Object.values(workspaceIndexJobs).find((job) => job?.status === 'running'),
     [workspaceIndexJobs]
@@ -647,7 +676,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
     ? t(($) => $.settings.stopping)
     : filePrepareRunning
       ? t(($) => $.common.cancel)
-      : t(($) => $.settings.updateIndex)
+      : embeddingIndex?.staleFileCount
+        ? t(($) => $.settings.embedding.rebuild)
+        : t(($) => $.settings.updateIndex)
   const workspacePrepareTooltip =
     hasVectorModel === null
       ? t(($) => $.settings.checkingVectorModelStatus)
@@ -690,6 +721,23 @@ const WorkspaceSettingsPanel: React.FC = () => {
         data-testid={importSelectors.page}
       >
         <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
+          {embeddingIndex ? (
+            <EmbeddingIndexNotice
+              filesComplete={
+                selectedTabKey === 'files' &&
+                embeddingIndex.staleFileCount === 0 &&
+                embeddingIndex.staleWebCount > 0
+              }
+              index={embeddingIndex}
+              onNavigate={
+                selectedTabKey === 'files' &&
+                embeddingIndex.staleFileCount === 0 &&
+                embeddingIndex.staleWebCount > 0
+                  ? () => setSelectedTabKey('web')
+                  : undefined
+              }
+            />
+          ) : null}
           <Tabs
             className="flex h-full min-h-0 flex-col [&_.ant-tabs-content]:h-full [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:flex-1 [&_.ant-tabs-nav]:mb-4 [&_.ant-tabs-tabpane]:h-full [&_.ant-tabs-tabpane]:overflow-hidden"
             activeKey={selectedTabKey}
@@ -697,7 +745,16 @@ const WorkspaceSettingsPanel: React.FC = () => {
             items={[
               {
                 key: 'files',
-                label: t(($) => $.settings.file2, { value1: summedSummary.file_count }),
+                label: (
+                  <span>
+                    {t(($) => $.settings.file2, { value1: summedSummary.file_count })}
+                    {embeddingIndex?.staleFileCount ? (
+                      <span className="ml-2 rounded-full bg-[#FBF3DB] px-2 py-0.5 text-[12px] text-[#8B6521]">
+                        {t(($) => $.settings.embedding.stale)}
+                      </span>
+                    ) : null}
+                  </span>
+                ),
                 children: (
                   <div className="flex h-full min-h-0 flex-col gap-4">
                     <div className="nc-settings-workspace-columns">
@@ -784,7 +841,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 {t(($) => $.common.checkForUpdates)}
                               </Button>
                             </Tooltip>
-                            <div className="relative min-w-0">
+                            <div className="relative min-w-0" id="workspace-file-index-action">
                               <Tooltip
                                 title={[
                                   workspacePrepareTooltip,
@@ -944,9 +1001,20 @@ const WorkspaceSettingsPanel: React.FC = () => {
               },
               {
                 key: 'web',
-                label: t(($) => $.settings.webpage, { value1: webCount }),
+                label: (
+                  <span>
+                    {t(($) => $.settings.webpage, { value1: webCount })}
+                    {embeddingIndex?.staleWebCount ? (
+                      <span className="ml-2 rounded-full bg-[#FBF3DB] px-2 py-0.5 text-[12px] text-[#8B6521]">
+                        {t(($) => $.settings.embedding.stale)}
+                      </span>
+                    ) : null}
+                  </span>
+                ),
                 children: (
                   <WebSourcesSettingsPanel
+                    staleIndexCount={embeddingIndex?.staleWebCount ?? 0}
+                    focusIndex={selectedTabKey === 'web' && searchParams.get('focus') === 'index'}
                     embedded
                     hasVectorModel={hasVectorModel}
                     vectorModelStatus={vectorModelError || vectorModelStatus}

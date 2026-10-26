@@ -11,6 +11,9 @@ import {
 import { ModelService } from '../../../../src/main/services/model/ModelService'
 import { VectorModelDownloadService } from '../../../../src/main/services/model/VectorModelDownloadService'
 import { DEFAULT_EMBEDDING_MODEL_NAME } from '../../../../src/main/services/vector/EmbeddingService'
+import { LOCAL_EMBEDDING_MODEL_ID } from '../../../../src/shared/embeddingModels'
+import { EmbeddingModelService } from '../../../../src/main/services/vector/EmbeddingModelService'
+import { TransformersEmbeddingExecutor } from '../../../../src/main/services/vector/runtime/TransformersEmbeddingExecutor'
 import { EMBEDDING_MODEL_NOT_INSTALLED_ERROR } from '../../../../src/main/services/vector/ensureEmbeddingReady'
 
 describe('knowledge availability through real services', () => {
@@ -24,49 +27,22 @@ describe('knowledge availability through real services', () => {
         knowledge: 'cold',
         fixtures: [],
         runMode: 'single',
-        description:
-          '真实模型按策略门禁、无模型关键词与列表、初始化失败、空库、全局网页和删除恢复。',
+        description: '真实模型统一门禁、初始化失败、空库、全局网页、切换失效与恢复。',
         assert: async () => {},
         execute: async (runtime) => {
           const harness = createRetrievalToolHarness(runtime, { bindWorkspace: false })
           const modelPath = path.join(modelsPath, DEFAULT_EMBEDDING_MODEL_NAME)
           const modelService = ModelService.getInstance()
-          const assertTextAvailable = async (hasGlobalDocument = false) => {
-            const statusBefore = runtime.embeddingService.getStatus()
-            const keyword = await harness.invoke<{
-              items: Array<{ documentId: string; sourceUrl?: string }>
-              total: number
-            }>('kb_search', { queryText: '全局网页', strategy: 'keyword' })
-            const listed = await harness.invoke<{
-              items: Array<{ id: string }>
-              total: number
-            }>('kb_list_documents', {})
-            if (hasGlobalDocument) {
-              expect(keyword.total).toBeGreaterThan(0)
-              expect(keyword.items).toEqual(
-                expect.arrayContaining([
-                  expect.objectContaining({
-                    documentId: 'global-web',
-                    sourceUrl: 'https://example.com/global'
-                  })
-                ])
-              )
-              expect(listed.total).toBe(1)
-              expect(listed.items[0].id).toBe('global-web')
-            } else {
-              expect(keyword).toEqual({ items: [], total: 0 })
-              expect(listed).toEqual({ items: [], total: 0 })
-            }
-            expect(runtime.embeddingService.getStatus()).toBe(statusBefore)
-          }
-          const assertAllUnavailable = async (hasGlobalDocument = false) => {
+          const assertAllUnavailable = async () => {
             const before = await fs.readdir(modelsPath, { recursive: true })
-            for (const strategy of ['auto', 'semantic']) {
+            for (const strategy of ['auto', 'semantic', 'keyword']) {
               await expect(
                 harness.invoke('kb_search', { queryText: '资料', strategy })
               ).rejects.toThrow(EMBEDDING_MODEL_NOT_INSTALLED_ERROR)
             }
-            await assertTextAvailable(hasGlobalDocument)
+            await expect(harness.invoke('kb_list_documents', {})).rejects.toThrow(
+              EMBEDDING_MODEL_NOT_INSTALLED_ERROR
+            )
             expect(runtime.embeddingService.getStatus()).toBe('uninitialized')
             expect(await fs.readdir(modelsPath, { recursive: true })).toEqual(before)
           }
@@ -109,12 +85,10 @@ describe('knowledge availability through real services', () => {
           await assertAllUnavailable()
           await fs.rm(path.join(modelPath, '.download-state.json'))
           expect(modelService.isModelDownloaded(DEFAULT_EMBEDDING_MODEL_NAME)).toBe(true)
-          await assertTextAvailable()
           await expect(
             harness.invoke('kb_search', { queryText: '资料', strategy: 'semantic' })
           ).rejects.toThrow('向量模型初始化失败')
           expect(runtime.embeddingService.getStatus()).toBe('error')
-          await assertTextAvailable()
           await runtime.embeddingService.close()
           await fs.rm(modelPath, { recursive: true, force: true })
 
@@ -158,10 +132,10 @@ describe('knowledge availability through real services', () => {
             await harness.invoke('kb_list_documents', { documentIds: ['missing-document'] })
           ).toEqual({ items: [], total: 0 })
 
-          // 缓存不能绕过语义查询的安装检查，关键词和列表仍可访问正文。
+          // 缓存不能绕过所有 KB 工具的模型检查。
           // Windows 的 ONNX 会占用模型目录，因此只移动必需的元数据文件。
           //
-          // A cache must not bypass semantic installation checks; keyword/list retain text access.
+          // A cache must not bypass model checks on any KB tool.
           // ONNX holds the directory open on Windows, so move only required metadata.
           const configPath = path.join(modelPath, 'config.json')
           await fs.rename(configPath, `${configPath}-hidden`)
@@ -169,7 +143,12 @@ describe('knowledge availability through real services', () => {
             await expect(
               harness.invoke('kb_search', { queryText: '全局网页', strategy: 'semantic' })
             ).rejects.toThrow(EMBEDDING_MODEL_NOT_INSTALLED_ERROR)
-            await assertTextAvailable(true)
+            await expect(
+              harness.invoke('kb_search', { queryText: '全局网页', strategy: 'keyword' })
+            ).rejects.toThrow(EMBEDDING_MODEL_NOT_INSTALLED_ERROR)
+            await expect(harness.invoke('kb_list_documents', {})).rejects.toThrow(
+              EMBEDDING_MODEL_NOT_INSTALLED_ERROR
+            )
           } finally {
             await fs.rename(`${configPath}-hidden`, configPath)
           }
@@ -181,7 +160,7 @@ describe('knowledge availability through real services', () => {
             success: true
           })
           expect(runtime.embeddingService.getStatus()).toBe('uninitialized')
-          await assertAllUnavailable(true)
+          await assertAllUnavailable()
           await copyInstalledEmbeddingModel(modelsPath, sharedModelsPath)
           expect(
             (
@@ -191,10 +170,60 @@ describe('knowledge availability through real services', () => {
               )
             ).total
           ).toBe(1)
+          const selection = new EmbeddingModelService({
+            settingsStore: runtime.storageService.embeddingSettings,
+            documentsStore: runtime.documentsStore,
+            indexJobStore: runtime.storageService.workspaceIndexJob,
+            embeddingService: runtime.embeddingService,
+            createLocalExecutor: () =>
+              new TransformersEmbeddingExecutor({
+                modelsPath,
+                modelName: DEFAULT_EMBEDDING_MODEL_NAME
+              })
+          })
+          try {
+            await selection.initialize()
+            const remote = await selection.saveRemote({
+              name: 'Unavailable endpoint',
+              baseUrl: 'https://embedding-contract.invalid/v1',
+              modelName: 'embedding',
+              apiKey: 'reserved-domain-test-key'
+            })
+            const selected = await selection.select(remote.remoteModels[0].id)
+            expect(selected.index).toMatchObject({
+              staleFileCount: 0,
+              staleWebCount: 1,
+              restoreModelId: LOCAL_EMBEDDING_MODEL_ID,
+              running: false
+            })
+            for (const strategy of ['keyword', 'semantic', 'auto']) {
+              await expect(
+                harness.invoke('kb_search', {
+                  queryText: '全局网页',
+                  strategy,
+                  documentIds: ['missing-document']
+                })
+              ).rejects.toThrow('indexes do not match')
+            }
+            await expect(harness.invoke('kb_list_documents', {})).rejects.toThrow(
+              'indexes do not match'
+            )
+            // Reopening configures the executor without requesting embeddings from the reserved endpoint.
+            await selection.initialize()
+            expect((await selection.getSnapshot()).index.staleWebCount).toBe(1)
+            await selection.select(LOCAL_EMBEDDING_MODEL_ID)
+            expect((await selection.getSnapshot()).index).toMatchObject({
+              staleFileCount: 0,
+              staleWebCount: 0
+            })
+            expect((await harness.invoke<{ total: number }>('kb_list_documents', {})).total).toBe(1)
+          } finally {
+            await selection.close()
+          }
           runtime.assertThat(true, {
             name: 'kb-availability-boundaries',
             message:
-              '模型不可用时语义与混合查询明确失败，关键词和列表保留正文访问；空库、全局网页与删除恢复可用；未触发隐式下载。'
+              '模型不可用或索引身份失效时全部 KB 工具报错；选择和启动不重建，切回匹配模型后恢复。'
           })
         }
       })

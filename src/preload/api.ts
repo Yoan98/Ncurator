@@ -249,9 +249,6 @@ export type DesktopApi = {
   embeddingModelDelete: (id: string) => Promise<EmbeddingModelMutationResponse>
   embeddingModelSelect: (id: string) => Promise<EmbeddingModelMutationResponse>
   embeddingModelTest: (input: RemoteEmbeddingModelInput) => Promise<EmbeddingModelTestResponse>
-  embeddingIndexControl: (
-    action: 'pause' | 'resume' | 'retry'
-  ) => Promise<EmbeddingModelMutationResponse>
   readFile: (filePath: string) => Promise<Uint8Array>
   fileExists: (filePath: string) => Promise<boolean>
   writeTextFile: (payload: WriteTextFileRequest) => Promise<WriteTextFileResponse>

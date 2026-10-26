@@ -459,7 +459,7 @@ export type AiRunContext = {
   }) => Promise<AiFileChangeRecord[]>
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
-  assertKbAvailable: (options?: { requireEmbedding?: boolean }) => Promise<void>
+  assertKbAvailable: () => Promise<void>
 }
 
 export type AiRunFailureMetadata = {

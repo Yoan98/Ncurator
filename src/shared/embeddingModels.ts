@@ -39,7 +39,6 @@ export type RemoteEmbeddingModel = {
 export type EmbeddingModelSettings = {
   activeModelId: string
   remoteModels: RemoteEmbeddingModel[]
-  indexPaused?: boolean
 }
 
 export type RemoteEmbeddingModelSummary = Omit<RemoteEmbeddingModel, 'apiKey'> & {
@@ -52,12 +51,10 @@ export type RemoteEmbeddingModelInput = Omit<RemoteEmbeddingModel, 'id' | 'apiKe
 }
 
 export type EmbeddingIndexSnapshot = {
-  status: 'idle' | 'running' | 'paused' | 'failed'
-  total: number
-  completed: number
-  pending: number
-  failed: number
-  error?: string
+  staleFileCount: number
+  staleWebCount: number
+  running: boolean
+  restoreModelId?: string
 }
 
 export type EmbeddingModelsSnapshot = {

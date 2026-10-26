@@ -22,6 +22,12 @@ export const getTreeEntryStatusMeta = (
   entry: WorkspaceTreeEntry
 ): { label: string; className: string } | null => {
   if (entry.kind !== 'file' || !entry.supported_for_index) return null
+  if (entry.index_stale && entry.index_status !== 'indexing' && entry.index_status !== 'failed') {
+    return {
+      label: t(($) => $.settings.embedding.stale),
+      className: 'border-transparent bg-[#FBF3DB] text-[#8B6521]'
+    }
+  }
   switch (entry.index_status) {
     case 'indexing':
       return {
@@ -47,7 +53,7 @@ export const getTreeEntryStatusMeta = (
 }
 
 export const getWebStatusBadge = (
-  source: Pick<WebSourceRecord, 'index_status' | 'last_indexed_at' | 'last_error'>,
+  source: Pick<WebSourceRecord, 'index_status' | 'last_indexed_at' | 'last_error' | 'index_stale'>,
   isRefreshing: boolean
 ): StatusBadgeVisual => {
   if (isRefreshing || source.index_status === 'crawling') {
@@ -65,6 +71,15 @@ export const getWebStatusBadge = (
       className: 'border-[#EEEEEC] bg-[#F4F4F2] text-[#2F3437]',
       tooltip: t(($) => $.settings.buildingTheWebpageIndex),
       icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
+    }
+  }
+
+  if (source.index_stale && source.index_status === 'indexed') {
+    return {
+      label: t(($) => $.settings.embedding.stale),
+      className: 'border-transparent bg-[#FBF3DB] text-[#8B6521]',
+      tooltip: t(($) => $.settings.embedding.staleTitle),
+      icon: <HiOutlineClock className={STATUS_ICON_CLASSNAME} />
     }
   }
 

@@ -200,11 +200,19 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     },
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService,
-    assertKbAvailable: async (options) => {
+    assertKbAvailable: async () => {
       if (await deps.hasRunningKnowledgeIndexJob?.()) {
         throw new Error(KB_INDEXING_IN_PROGRESS_ERROR)
       }
-      if (options?.requireEmbedding !== false) await deps.ensureEmbeddingReady()
+      const state = deps.documentsStore.getEmbeddingIndexState(
+        deps.embeddingService.getIndexIdentity()
+      )
+      if (state.staleFileCount + state.staleWebCount > 0) {
+        throw new Error(
+          'Knowledge base indexes do not match the current embedding model. Update indexes in Settings > Workspace or switch back to the original model before using KB tools.'
+        )
+      }
+      await deps.ensureEmbeddingReady()
     }
   }
 }

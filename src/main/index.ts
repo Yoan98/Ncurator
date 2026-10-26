@@ -371,6 +371,7 @@ if (!singleInstanceLock) {
     initializeAppMenu()
     embeddingRuntimeClient.setThreadBudget(resolveOrtThreadBudget(appSettings.knowledgeIndexSpeed))
     const embeddingModelService = new EmbeddingModelService({
+      indexJobStore: storageService.workspaceIndexJob,
       settingsStore: storageService.embeddingSettings,
       documentsStore: storageService.documents,
       embeddingService,

@@ -325,6 +325,46 @@ export function registerHandlers(services: {
   const webSourceStore = storageService.webSource
   const workspaceStore = storageService.workspace
   const workspaceIndexJobStore = storageService.workspaceIndexJob
+  const withEmbeddingState = <T extends { document_id?: string }>(records: T[]): T[] => {
+    const stale = documentsStore.getStaleEmbeddingDocumentIds(embeddingService.getIndexIdentity())
+    return records.map((record) => ({
+      ...record,
+      index_stale: Boolean(record.document_id && stale.has(record.document_id))
+    }))
+  }
+  const listWorkspaceFileRecords = async (workspaceId: string) =>
+    withEmbeddingState(await workspaceStore.listWorkspaceFileIndexRecords(workspaceId))
+  const getWorkspaceFileSummary = async (workspaceId: string) => {
+    const records = await listWorkspaceFileRecords(workspaceId)
+    const summary = workspaceStore.getEmptySummary()
+    for (const record of records) {
+      summary.file_count += 1
+      if (record.index_status === 'failed') summary.failed_file_count += 1
+      else if (record.index_status === 'indexed' && !record.index_stale)
+        summary.indexed_file_count += 1
+      else summary.needs_index_count += 1
+    }
+    return summary
+  }
+  const listWebSources = async () => withEmbeddingState(await webSourceStore.listWebSources())
+  const getWebSourceById = async (id: string) => {
+    const source = await webSourceStore.getWebSourceById(id)
+    return source ? withEmbeddingState([source])[0] : null
+  }
+  const getWebSummary = async () => {
+    const sources = await listWebSources()
+    return {
+      web_count: sources.length,
+      needs_index_count: sources.filter(
+        (source) =>
+          source.index_status === 'needs_index' ||
+          (source.index_status === 'indexed' && source.index_stale)
+      ).length,
+      failed_count: sources.filter(
+        (source) => source.index_status === 'crawl_failed' || source.index_status === 'index_failed'
+      ).length
+    }
+  }
   const prepareController = new WorkspaceIndexPrepareController({
     workspaceStore,
     webSourceStore
@@ -553,7 +593,7 @@ export function registerHandlers(services: {
   const hydrateWorkspaceListItem = async (
     workspace: WorkspaceSource
   ): Promise<WorkspaceListItem> => {
-    const fileSummary = await workspaceStore.getWorkspaceFileSummary(workspace.id)
+    const fileSummary = await getWorkspaceFileSummary(workspace.id)
     let rootKind: WorkspaceListItem['root_kind'] = 'directory'
     try {
       const inspected = await workspaceService.normalizeWorkspaceRoot(workspace.root_path)
@@ -580,7 +620,7 @@ export function registerHandlers(services: {
       if (!currentWorkspace) throw new Error('workspace not found')
       if (!currentWorkspace.root_path) throw new Error('workspace rootPath is required')
 
-      const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
+      const existingRecords = await listWorkspaceFileRecords(workspaceId)
       const now = Date.now()
       let lastReportedScanEntryCount = 0
       const scanResult = await workspaceService.scanWorkspaceTree({
@@ -720,7 +760,7 @@ export function registerHandlers(services: {
       rootPath: input.workspace.root_path || '',
       now: input.now
     })
-    const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(input.workspaceId)
+    const existingRecords = await listWorkspaceFileRecords(input.workspaceId)
     const diff = await workspaceService.diffWorkspaceTreeAgainstIndex({
       entries: scanResult.entries,
       records: existingRecords
@@ -765,8 +805,14 @@ export function registerHandlers(services: {
       recordMap.delete(record.relative_path)
     }
 
+    const staleDocuments = documentsStore.getStaleEmbeddingDocumentIds(
+      embeddingService.getIndexIdentity()
+    )
     const targets = Array.from(recordMap.values()).filter(
-      (record) => record.index_status === 'needs_index' || record.index_status === 'failed'
+      (record) =>
+        record.index_status === 'needs_index' ||
+        record.index_status === 'failed' ||
+        Boolean(record.document_id && staleDocuments.has(record.document_id))
     )
 
     return {
@@ -1012,7 +1058,7 @@ export function registerHandlers(services: {
   }
 
   const ensureWebSourcesHydrated = async (): Promise<void> => {
-    const existingSources = await webSourceStore.listWebSources()
+    const existingSources = await listWebSources()
     const existingByDocumentId = new Map(
       existingSources
         .filter((source) => source.document_id)
@@ -1396,7 +1442,7 @@ export function registerHandlers(services: {
     const workspaceId = job.workspace_id
     try {
       await ensureWebSourcesHydrated()
-      const sources = await webSourceStore.listWebSources()
+      const sources = await listWebSources()
       job = await updateAndEmitWorkspaceIndexJob(job, {
         total_count: sources.length,
         target_ids: sources.map((source) => source.id),
@@ -1461,12 +1507,13 @@ export function registerHandlers(services: {
         return
       }
       await ensureWebSourcesHydrated()
-      const sources = await webSourceStore.listWebSources()
+      const sources = await listWebSources()
       const targets = sources.filter(
         (source) =>
           source.index_status === 'needs_index' ||
           source.index_status === 'crawl_failed' ||
-          source.index_status === 'index_failed'
+          source.index_status === 'index_failed' ||
+          source.index_stale
       )
       job = await updateAndEmitWorkspaceIndexJob(job, {
         phase: targets.length > 0 ? 'crawl' : 'index',
@@ -2162,7 +2209,7 @@ export function registerHandlers(services: {
         if (activeJob) return { success: false, error: '当前工作空间正在处理文件索引' }
         const normalizedRootPath = classified.normalizedRootPath
         const now = Date.now()
-        const oldRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
+        const oldRecords = await listWorkspaceFileRecords(workspaceId)
         const oldDocumentIds = oldRecords
           .map((record) => record.document_id)
           .filter((documentId): documentId is string => Boolean(documentId))
@@ -2202,7 +2249,7 @@ export function registerHandlers(services: {
     async (_event, payload: ListWorkspaceTreeRequest): Promise<WorkspaceTreeListResponse> => {
       try {
         const workspaceId = String(payload?.workspaceId || '').trim()
-        const records = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
+        const records = await listWorkspaceFileRecords(workspaceId)
         const items: WorkspaceTreeEntry[] = records.map((record) => ({
           id: `${workspaceId}:file:${record.relative_path}`,
           workspace_id: workspaceId,
@@ -2215,6 +2262,7 @@ export function registerHandlers(services: {
           size: record.size,
           mtime_ms: record.mtime_ms,
           index_status: record.index_status,
+          index_stale: record.index_stale,
           document_id: record.document_id,
           indexed_at: record.indexed_at,
           last_error: record.last_error
@@ -2222,7 +2270,7 @@ export function registerHandlers(services: {
         return {
           items,
           total: items.length,
-          summary: await workspaceStore.getWorkspaceFileSummary(workspaceId)
+          summary: await getWorkspaceFileSummary(workspaceId)
         }
       } catch (error) {
         console.error('? [WORKSPACE-TREE] ERROR:', error)
@@ -2250,8 +2298,11 @@ export function registerHandlers(services: {
           workspaceId,
           items.filter((item) => item.kind === 'file').map((item) => item.relative_path)
         )
-        const mergedItems = workspaceService.mergeTreeWithIndex({ entries: items, records })
-        const summary = await workspaceStore.getWorkspaceFileSummary(workspaceId)
+        const mergedItems = workspaceService.mergeTreeWithIndex({
+          entries: items,
+          records: withEmbeddingState(records)
+        })
+        const summary = await getWorkspaceFileSummary(workspaceId)
         return { items: mergedItems, total: mergedItems.length, summary }
       } catch (error) {
         return {
@@ -2412,10 +2463,7 @@ export function registerHandlers(services: {
   ipcMain.handle('web-source-list', async (): Promise<WebSourceListResponse> => {
     try {
       await ensureWebSourcesHydrated()
-      const [items, summary] = await Promise.all([
-        webSourceStore.listWebSources(),
-        webSourceStore.getWebSummary()
-      ])
+      const [items, summary] = await Promise.all([listWebSources(), getWebSummary()])
       return { items, total: items.length, summary }
     } catch (error) {
       console.error('? [WEB-SOURCE-LIST] ERROR:', error)
@@ -2552,7 +2600,7 @@ export function registerHandlers(services: {
         if (!webSourceId) {
           return { success: false, error: 'webSourceId is required' }
         }
-        const source = await webSourceStore.getWebSourceById(webSourceId)
+        const source = await getWebSourceById(webSourceId)
         if (!source) {
           return { success: false, error: 'web source not found' }
         }
@@ -2574,7 +2622,7 @@ export function registerHandlers(services: {
         if (!safeId) {
           return { success: false, error: 'webSourceId is required' }
         }
-        const source = await webSourceStore.getWebSourceById(safeId)
+        const source = await getWebSourceById(safeId)
         if (!source) {
           return { success: false, error: 'web source not found' }
         }
@@ -2600,10 +2648,9 @@ export function registerHandlers(services: {
         return await listReferenceItemsPage(
           {
             listWorkspaces: () => workspaceStore.listWorkspaces(),
-            listWorkspaceFileIndexRecords: (workspaceId) =>
-              workspaceStore.listWorkspaceFileIndexRecords(workspaceId),
+            listWorkspaceFileIndexRecords: (workspaceId) => listWorkspaceFileRecords(workspaceId),
             listDirectory: (input) => workspaceService.listDirectory(input),
-            listWebSources: () => webSourceStore.listWebSources(),
+            listWebSources: () => listWebSources(),
             normalizeWorkspaceRoot: (rootPath) => workspaceService.normalizeWorkspaceRoot(rootPath)
           },
           payload || {},
@@ -2683,6 +2730,8 @@ export function registerHandlers(services: {
 
   ipcMain.handle('delete-model', async (_event, repoId: string) => {
     try {
+      if (!embeddingService.isRemote() && repoId === embeddingService.getModelName())
+        await services.embeddingModelService?.assertIndexIdle()
       return await vectorModelDownloadService.deleteModel(repoId)
     } catch (error) {
       console.error('??[DELETE-MODEL] ERROR:', error)
@@ -2707,7 +2756,9 @@ export function registerHandlers(services: {
     operation: () => Promise<import('../../shared/embeddingModels').EmbeddingModelsSnapshot>
   ) => {
     try {
-      return { success: true, snapshot: await operation() }
+      const snapshot = await operation()
+      emitSourceListRefreshToAll()
+      return { success: true, snapshot }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
@@ -2720,9 +2771,6 @@ export function registerHandlers(services: {
   )
   ipcMain.handle('embedding-model-delete', (_event, id: string) =>
     mutateEmbeddingModel(() => requireEmbeddingModels().deleteRemote(id))
-  )
-  ipcMain.handle('embedding-index-control', (_event, action: 'pause' | 'resume' | 'retry') =>
-    mutateEmbeddingModel(() => requireEmbeddingModels().control(action))
   )
   ipcMain.handle('embedding-model-test', async (_event, input: RemoteEmbeddingModelInput) => {
     try {

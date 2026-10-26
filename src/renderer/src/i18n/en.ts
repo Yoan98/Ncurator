@@ -185,6 +185,20 @@ export const en = {
   },
   settings: {
     embedding: {
+      runningDescription:
+        'Knowledge base search and document lists are unavailable until indexing finishes.',
+      runningTitle: 'Rebuilding indexes',
+      goWebIndex: 'Go to webpage indexing',
+      filesComplete: 'File indexes are updated. Webpage indexes still need updating.',
+      indexingGuard:
+        'Indexing is in progress. Cancel the task before switching or editing the current model.',
+      stale: 'Rebuild needed',
+      rebuild: 'Rebuild indexes',
+      restoreModel: 'Switch back to {{name}}',
+      goIndex: 'Go to indexing',
+      staleDescription:
+        '{{staleFileCount}} files and {{staleWebCount}} webpages need rebuilding. The knowledge base is unavailable until they are updated.',
+      staleTitle: 'The embedding model changed. Rebuild the indexes.',
       savedActive: 'Saved. The current model configuration is now in use.',
       localModels: 'Local models',
       remoteModels: 'Remote models',
@@ -212,24 +226,12 @@ export const en = {
       test: 'Test connection',
       testSuccess: 'Connection succeeded · {{dimension}} dimensions',
       saveHint: 'Saving does not switch models. Select Use in the list when ready.',
-      activeEditHint:
-        'Saving changes to the current model takes effect immediately and rebuilds its index.',
+      activeEditHint: 'Changing the endpoint, model or input limit invalidates existing indexes.',
       deleteTitle: 'Delete this remote model?',
       switchBeforeDelete: 'Switch to another model before deleting the current model.',
       required: 'Enter a name, base URL and model name.',
       requestFailed: 'The operation failed. Please try again.',
       loadFailed: 'Could not load the selected model and index status.',
-      indexTitle: 'Background indexing',
-      idle: 'Idle',
-      running: 'Running',
-      paused: 'Paused',
-      failed: 'Failed',
-      pause: 'Pause',
-      resume: 'Resume',
-      progress: '{{completed}} / {{total}} completed · {{pending}} pending · {{failed}} failed',
-      coverage:
-        'Coverage is incomplete for the current model. Search results may be incomplete until indexing finishes.',
-      selectionHint: 'Switching models rebuilds the index in the background.',
       selectedRemote: 'Selected remote model: {{name}} · configured',
       selectedLocal: 'Selected local model: {{name}} · downloaded',
       selectedLocalMissing: 'Selected local model: {{name}} · download required',

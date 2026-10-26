@@ -704,17 +704,13 @@ function createModelFixture(model: RemoteEmbeddingModel = remoteModel) {
     })
   }
   const documentsStore = {
-    getEmbeddingCoverage: vi.fn(async () => ({ total: 1, completed: 1, pending: 0, failed: 0 })),
-    getEmbeddingError: vi.fn(async () => undefined),
-    listPendingEmbeddingDocuments: vi.fn(async (identity: string) => {
-      void identity
-      return []
-    }),
-    clearEmbeddingErrors: vi.fn(async () => undefined),
-    getDocumentEmbeddingChunks: vi.fn(async () => []),
-    replaceDocumentEmbeddings: vi.fn(async () => undefined),
-    markDocumentEmbeddingError: vi.fn(async () => undefined)
+    getEmbeddingIndexState: vi.fn((identity: string) => ({
+      staleFileCount: 0,
+      staleWebCount: 0,
+      completeIdentity: identity
+    }))
   }
+  const indexJobStore = { hasRunningPrepareJob: vi.fn(async () => false) }
   const local: EmbeddingExecutor = {
     initialize: vi.fn(async () => undefined),
     embed: vi.fn(async () => result)
@@ -722,15 +718,98 @@ function createModelFixture(model: RemoteEmbeddingModel = remoteModel) {
   const embeddingService = new EmbeddingService({ executor: local })
   type Dependencies = ConstructorParameters<typeof EmbeddingModelService>[0]
   const service = new EmbeddingModelService({
+    indexJobStore,
     settingsStore: settingsStore as Dependencies['settingsStore'],
     documentsStore: documentsStore as Dependencies['documentsStore'],
     embeddingService,
     createLocalExecutor: () => local
   })
-  return { service, settingsStore, documentsStore, embeddingService }
+  return { service, settingsStore, documentsStore, embeddingService, indexJobStore, local }
 }
 
 describe('EmbeddingModelService unit configuration contracts', () => {
+  it('never starts embeddings on initialization, model selection or reopening', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+    vi.stubGlobal('fetch', fetch)
+    vi.useFakeTimers()
+    try {
+      for (let restart = 0; restart < 2; restart += 1) {
+        const { service, local, documentsStore } = createModelFixture()
+        documentsStore.getEmbeddingIndexState.mockReturnValue({
+          staleFileCount: 1,
+          staleWebCount: 1,
+          completeIdentity: LOCAL_EMBEDDING_MODEL_ID
+        })
+        try {
+          await service.initialize()
+          expect((await service.getSnapshot()).index).toMatchObject({
+            staleFileCount: 1,
+            staleWebCount: 1,
+            restoreModelId: LOCAL_EMBEDDING_MODEL_ID
+          })
+          await service.select(LOCAL_EMBEDDING_MODEL_ID)
+          await service.select(remoteModel.id)
+          await vi.advanceTimersByTimeAsync(60_000)
+          expect(local.embed).not.toHaveBeenCalled()
+          expect(fetch).not.toHaveBeenCalled()
+        } finally {
+          await service.close()
+        }
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('offers restoration only for one complete configured model identity', async () => {
+    const { service, documentsStore } = createModelFixture()
+    try {
+      await service.initialize()
+      documentsStore.getEmbeddingIndexState.mockReturnValue({
+        staleFileCount: 2,
+        staleWebCount: 1,
+        completeIdentity: LOCAL_EMBEDDING_MODEL_ID
+      })
+      expect((await service.getSnapshot()).index.restoreModelId).toBe(LOCAL_EMBEDDING_MODEL_ID)
+      documentsStore.getEmbeddingIndexState.mockReturnValue({
+        staleFileCount: 1,
+        staleWebCount: 1,
+        completeIdentity: undefined
+      })
+      expect((await service.getSnapshot()).index.restoreModelId).toBeUndefined()
+      documentsStore.getEmbeddingIndexState.mockReturnValue({
+        staleFileCount: 1,
+        staleWebCount: 1,
+        completeIdentity: 'remote:deleted-configuration'
+      })
+      expect((await service.getSnapshot()).index.restoreModelId).toBeUndefined()
+    } finally {
+      await service.close()
+    }
+  })
+
+  it('rejects selection and active configuration changes while a manual index job is running', async () => {
+    const { service, indexJobStore, embeddingService } = createModelFixture()
+    try {
+      await service.initialize()
+      const identity = embeddingService.getIndexIdentity()
+      indexJobStore.hasRunningPrepareJob.mockResolvedValue(true)
+      await expect(service.select(LOCAL_EMBEDDING_MODEL_ID)).rejects.toThrow(
+        'Indexing is in progress'
+      )
+      await expect(service.saveRemote({ ...remoteModel, modelName: 'different' })).rejects.toThrow(
+        'Indexing is in progress'
+      )
+      expect((await service.getSnapshot()).activeModelId).toBe(remoteModel.id)
+      expect(embeddingService.getIndexIdentity()).toBe(identity)
+      indexJobStore.hasRunningPrepareJob.mockResolvedValue(false)
+      await service.select(LOCAL_EMBEDDING_MODEL_ID)
+      expect((await service.getSnapshot()).activeModelId).toBe(LOCAL_EMBEDDING_MODEL_ID)
+    } finally {
+      await service.close()
+    }
+  })
+
   it('omits API keys from read and mutation snapshots while retaining them in settings', async () => {
     const { service, settingsStore } = createModelFixture()
     try {
@@ -753,21 +832,13 @@ describe('EmbeddingModelService unit configuration contracts', () => {
       .fn<typeof globalThis.fetch>()
       .mockImplementation(async () => embeddingResponse())
     vi.stubGlobal('fetch', fetch)
-    const { service, embeddingService, documentsStore } = createModelFixture()
+    const { service, embeddingService } = createModelFixture()
     try {
       await service.initialize()
       const identity = embeddingService.getIndexIdentity()
       await service.saveRemote({ ...remoteModel, apiKey: 'unit-test-rotated-key' })
       await embeddingService.embed('explicit query after rotation')
       expect(embeddingService.getIndexIdentity()).toBe(identity)
-      expect(documentsStore.clearEmbeddingErrors).not.toHaveBeenCalled()
-      expect(documentsStore.replaceDocumentEmbeddings).not.toHaveBeenCalled()
-      expect(documentsStore.getDocumentEmbeddingChunks).not.toHaveBeenCalled()
-      expect(
-        documentsStore.listPendingEmbeddingDocuments.mock.calls.every(
-          ([requested]) => requested === identity
-        )
-      ).toBe(true)
       expect(fetch).toHaveBeenCalledTimes(1)
       expect(new Headers(fetch.mock.calls[0][1]?.headers).get('Authorization')).toBe(
         'Bearer unit-test-rotated-key'
@@ -778,7 +849,7 @@ describe('EmbeddingModelService unit configuration contracts', () => {
     }
   })
 
-  it('changes identity and schedules coverage for a changed API address', async () => {
+  it('changes identity without starting indexing for a changed API address', async () => {
     const { service, embeddingService, documentsStore } = createModelFixture()
     try {
       await service.initialize()
@@ -788,9 +859,7 @@ describe('EmbeddingModelService unit configuration contracts', () => {
       const next = embeddingService.getIndexIdentity()
       expect(next).not.toBe(previous)
       expect(next).toBe(remoteEmbeddingIdentity(changed))
-      expect(documentsStore.clearEmbeddingErrors).toHaveBeenCalledWith(next)
-      expect(documentsStore.getEmbeddingCoverage).toHaveBeenLastCalledWith(next)
-      expect(documentsStore.listPendingEmbeddingDocuments).toHaveBeenCalledWith(next)
+      expect(documentsStore.getEmbeddingIndexState).toHaveBeenLastCalledWith(next)
     } finally {
       await service.close()
       await embeddingService.close()
@@ -1116,7 +1185,7 @@ describe('EmbeddingModelService input budget configuration', () => {
     }
   )
 
-  it('preserves explicit 8192 in snapshots and changes identity and pending coverage when the budget changes', async () => {
+  it('preserves explicit 8192 in snapshots and changes identity without automatic indexing when the budget changes', async () => {
     const { service, embeddingService, documentsStore, settingsStore } = createModelFixture()
     try {
       await service.initialize()
@@ -1129,9 +1198,7 @@ describe('EmbeddingModelService input budget configuration', () => {
       expect(saved.remoteModels[0]).toMatchObject({ maxInputTokens: 8192, hasApiKey: true })
       expect(saved.remoteModels[0]).not.toHaveProperty('apiKey')
       expect(settingsStore.get().remoteModels[0].maxInputTokens).toBe(8192)
-      expect(documentsStore.clearEmbeddingErrors).toHaveBeenCalledWith(next)
-      expect(documentsStore.getEmbeddingCoverage).toHaveBeenLastCalledWith(next)
-      expect(documentsStore.listPendingEmbeddingDocuments).toHaveBeenCalledWith(next)
+      expect(documentsStore.getEmbeddingIndexState).toHaveBeenLastCalledWith(next)
     } finally {
       await service.close()
       await embeddingService.close()

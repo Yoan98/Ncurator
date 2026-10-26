@@ -368,6 +368,7 @@ export class WorkspaceSourceService {
         return {
           ...entry,
           index_status: record.index_status,
+          index_stale: record.index_stale,
           document_id: record.document_id,
           indexed_at: record.indexed_at,
           last_error: record.last_error

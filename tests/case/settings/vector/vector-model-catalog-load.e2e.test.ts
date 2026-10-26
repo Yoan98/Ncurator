@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { vectorSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { LOCAL_EMBEDDING_MODEL_ID } from '../../../../src/shared/embeddingModels'
+import { createWorkspaceWithFiles } from '../workspace/files/realWorkspaceHelpers'
+import { importSelectors, vectorSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
-  SETTINGS_E2E_TIMEOUT_MS,
+  SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
+  createRealWorkspaceWithRoot,
+  waitForFileIndexJobIdle,
   getSettingsLocator,
   navigateToSettingsSection
 } from '../../../harness/e2e/settings'
@@ -18,10 +22,26 @@ describe('settings vector e2e', () => {
         description: '向量模型同页分类，并通过真实 UI 新增、编辑、选择远程配置与删除非当前配置。',
         fixtures: [],
         serviceMode: 'real',
+        knowledge: 'cached',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
 
+          const rootPath = await createWorkspaceWithFiles('vector-model-catalog-load', [
+            { relativePath: 'embedding-switch.txt', content: '向量模型切换后的手动索引入口测试。' }
+          ])
+          const created = await createRealWorkspaceWithRoot(page, {
+            name: '模型切换资料',
+            rootPath
+          })
+          await navigateToSettingsSection(page, 'workspace')
+          await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
+          const indexed = await waitForFileIndexJobIdle(page, created.workspace!.id)
+          expect(
+            indexed.tree.items
+              .filter((item) => item.kind === 'file')
+              .map((item) => item.index_status)
+          ).toEqual(['indexed'])
           await navigateToSettingsSection(page, 'vector')
           await page.locator(`[data-testid^="${vectorSelectors.cardPrefix}-"]`).first().waitFor({
             state: 'visible'
@@ -59,7 +79,7 @@ describe('settings vector e2e', () => {
             .toBe(true)
           const readSnapshot = () => page.evaluate(() => window.api.embeddingModelsGet())
           const initial = await readSnapshot()
-          expect(initial.index.total).toBe(0)
+          expect(initial.index).toMatchObject({ staleFileCount: 0, staleWebCount: 0 })
           expect(initial.remoteModels).toHaveLength(0)
           const activeModel = getSettingsLocator(page, vectorSelectors.activeModel)
           const initialActiveLabel = await activeModel.innerText()
@@ -184,6 +204,44 @@ describe('settings vector e2e', () => {
             ).isDisabled()
           ).toBe(true)
 
+          const staleNotice = getSettingsLocator(page, vectorSelectors.staleNotice)
+          await staleNotice.waitFor({ state: 'visible' })
+          expect(await staleNotice.innerText()).toMatch(/索引|index/i)
+          expect(await vectorPage.innerText()).not.toContain(
+            '切换模型后，已有索引需要由你手动更新。'
+          )
+          expect((await readSnapshot()).index).toMatchObject({
+            staleFileCount: 1,
+            staleWebCount: 0,
+            running: false
+          })
+          await getSettingsLocator(page, vectorSelectors.goIndex).click()
+          const rebuild = getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton)
+          await rebuild.waitFor({ state: 'visible' })
+          await expect.poll(() => rebuild.isEnabled()).toBe(true)
+          expect(await rebuild.innerText()).toMatch(/重新建立索引|Rebuild index/)
+          await expect
+            .poll(() => rebuild.evaluate((button) => getComputedStyle(button).backgroundColor), {
+              timeout: 5000
+            })
+            .toBe('rgb(47, 52, 55)')
+          expect((await readSnapshot()).index.running).toBe(false)
+          await runtime.captureScreenshot({
+            name: 'vector-stale-workspace-action',
+            message: '失效索引展示需重建，主按钮保持可点击；导航没有启动任务。'
+          })
+          await navigateToSettingsSection(page, 'vector')
+          await getSettingsLocator(page, vectorSelectors.restoreModel).click()
+          await expect
+            .poll(async () => (await readSnapshot()).activeModelId)
+            .toBe(LOCAL_EMBEDDING_MODEL_ID)
+          await staleNotice.waitFor({ state: 'hidden' })
+          expect((await readSnapshot()).index).toMatchObject({
+            staleFileCount: 0,
+            staleWebCount: 0
+          })
+          await getSettingsLocator(page, `${vectorSelectors.selectButtonPrefix}-${firstId}`).click()
+          await staleNotice.waitFor({ state: 'visible' })
           const secondId = await addRemote('Catalogue remote B', 'catalogue-remote-b')
           expect((await readSnapshot()).activeModelId).toBe(firstId)
           expect(await activeModel.innerText()).toContain('Catalogue remote A edited')
@@ -213,7 +271,11 @@ describe('settings vector e2e', () => {
           const finalSnapshot = await readSnapshot()
           expect(finalSnapshot.remoteModels.map((model) => model.id)).toEqual([secondId])
           expect(finalSnapshot.activeModelId).toBe(secondId)
-          expect(finalSnapshot.index.total).toBe(0)
+          expect(finalSnapshot.index).toMatchObject({
+            staleFileCount: 1,
+            staleWebCount: 0,
+            running: false
+          })
           expect(await getSettingsLocator(page, vectorSelectors.modelError).isVisible()).toBe(false)
           await runtime.captureScreenshot({
             name: 'vector-local-and-remote-catalogue',
@@ -248,6 +310,6 @@ describe('settings vector e2e', () => {
         }
       })
     },
-    SETTINGS_E2E_TIMEOUT_MS * 2
+    SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS * 2
   )
 })

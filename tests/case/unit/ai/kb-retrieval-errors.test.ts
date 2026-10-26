@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildKbCapabilityTools } from '../../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import { renderKbSearchModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 
 describe('KB query failures', () => {
-  it('reports scoped incomplete semantic coverage while keywords remain readable', async () => {
+  it('blocks every KB strategy and listing globally when any active index is stale', async () => {
     await runBackendCase({
       caseId: 'kb-partial-semantic-coverage',
       domain: 'unit',
@@ -54,28 +53,16 @@ describe('KB query failures', () => {
         })
         const tools = buildKbCapabilityTools({ ctx, runId: runtime.runId })
         const search = tools.find((entry) => entry.name === 'kb_search')!
-        const keyword = await search.invoke({
-          queryText: 'quartz',
-          strategy: 'keyword',
-          sourceType: 'file'
-        })
-        expect(keyword).toMatchObject({
-          total: 1,
-          semanticCoverage: { total: 1, completed: 0, pending: 1, failed: 0 }
-        })
-        expect(
-          await search.invoke({ queryText: 'quartz', strategy: 'semantic', sourceType: 'file' })
-        ).toMatchObject({ total: 0, semanticCoverage: { total: 1, completed: 0 } })
-        expect(
-          await search.invoke({ queryText: 'quartz', strategy: 'keyword', sourceType: 'web' })
-        ).toEqual({ items: [], total: 0 })
-        const rendered = await renderKbSearchModelResult({
-          data: keyword,
-          toolName: 'kb_search',
-          args: {}
-        } as Parameters<typeof renderKbSearchModelResult>[0])
-        expect(rendered).toContain('Semantic index coverage is incomplete')
-        expect(rendered).toContain('quartz migration coverage')
+        for (const strategy of ['keyword', 'semantic', 'auto']) {
+          for (const sourceType of ['file', 'web']) {
+            await expect(
+              search.invoke({ queryText: 'quartz', strategy, sourceType })
+            ).rejects.toThrow('indexes do not match')
+          }
+        }
+        await expect(
+          tools.find((entry) => entry.name === 'kb_list_documents')!.invoke({})
+        ).rejects.toThrow('indexes do not match')
       }
     })
   })

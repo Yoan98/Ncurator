@@ -1,5 +1,7 @@
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import { t } from '../../i18n'
+import { useNavigate } from 'react-router-dom'
+import EmbeddingIndexNotice from './EmbeddingIndexNotice'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Button,
@@ -84,6 +86,7 @@ const isValidMaxInputTokens = (value: number | undefined): value is number =>
   value <= MAX_EMBEDDING_INPUT_TOKENS
 
 const VectorModelSettingsPanel: React.FC = () => {
+  const navigate = useNavigate()
   const [models, setModels] = useState<ModelInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [catalogError, setCatalogError] = useState('')
@@ -274,7 +277,13 @@ const VectorModelSettingsPanel: React.FC = () => {
       <Button
         key={`select-${id}`}
         size="small"
-        disabled={!ready || !snapshot || Boolean(snapshotError) || Boolean(pending)}
+        disabled={
+          !ready ||
+          !snapshot ||
+          Boolean(snapshotError) ||
+          Boolean(pending) ||
+          snapshot.index.running
+        }
         loading={pending === `select-${id}`}
         onClick={() => void mutate(`select-${id}`, () => window.api.embeddingModelSelect(id))}
         data-testid={`${vectorSelectors.selectButtonPrefix}-${id}`}
@@ -474,14 +483,11 @@ const VectorModelSettingsPanel: React.FC = () => {
         ? t(($) => $.settings.embedding.selectionMissing)
         : t(($) => $.settings.checkingVectorModelStatus)
   const index = snapshot?.index
-  const indexStatus = index
-    ? {
-        idle: t(($) => $.settings.embedding.idle),
-        running: t(($) => $.settings.embedding.running),
-        paused: t(($) => $.settings.embedding.paused),
-        failed: t(($) => $.settings.embedding.failed)
-      }[index.status]
-    : ''
+  const restoreRemote = snapshot?.remoteModels.find((model) => model.id === index?.restoreModelId)
+  const restoreLocal = models.find(
+    (model) => `local:${model.id}` === index?.restoreModelId && model.isDownloaded
+  )
+  const restoreName = restoreRemote?.name || restoreLocal?.name
 
   return (
     <div
@@ -495,9 +501,6 @@ const VectorModelSettingsPanel: React.FC = () => {
         >
           {activeLabel}
         </div>
-        <p className="mt-1 text-[12px] text-[#787774]">
-          {t(($) => $.settings.embedding.selectionHint)}
-        </p>
         {snapshotError || operationError ? (
           <div
             role="alert"
@@ -509,92 +512,31 @@ const VectorModelSettingsPanel: React.FC = () => {
             {operationError}
           </div>
         ) : null}
+        {index?.running ? (
+          <p className="mt-2 text-[12px] text-[#787774]">
+            {t(($) => $.settings.embedding.indexingGuard)}
+          </p>
+        ) : null}
         {index ? (
-          <div
-            className="mt-3 border-t border-[#EEEEEC] pt-3"
-            data-testid={vectorSelectors.indexProgress}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[13px]">
-                {t(($) => $.settings.embedding.indexTitle)} · {indexStatus}
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {index.status === 'running' ? (
-                  <Button
-                    size="small"
-                    disabled={Boolean(pending) || Boolean(snapshotError)}
-                    loading={pending === 'pause'}
-                    onClick={() =>
-                      void mutate('pause', () => window.api.embeddingIndexControl('pause'))
-                    }
-                    data-testid={vectorSelectors.indexPauseButton}
-                  >
-                    {t(($) => $.settings.embedding.pause)}
-                  </Button>
-                ) : null}
-                {index.status === 'paused' ? (
-                  <Button
-                    size="small"
-                    disabled={Boolean(pending) || Boolean(snapshotError)}
-                    loading={pending === 'resume'}
-                    onClick={() =>
-                      void mutate('resume', () => window.api.embeddingIndexControl('resume'))
-                    }
-                    data-testid={vectorSelectors.indexResumeButton}
-                  >
-                    {t(($) => $.settings.embedding.resume)}
-                  </Button>
-                ) : null}
-                {index.status === 'failed' || index.failed > 0 ? (
-                  <Button
-                    size="small"
-                    disabled={
-                      Boolean(pending) || Boolean(snapshotError) || index.status === 'running'
-                    }
-                    loading={pending === 'retry'}
-                    onClick={() =>
-                      void mutate('retry', () => window.api.embeddingIndexControl('retry'))
-                    }
-                    data-testid={vectorSelectors.indexRetryButton}
-                  >
-                    {t(($) => $.common.retry)}
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-            <Progress
-              percent={
-                index.total > 0
-                  ? Math.min(100, Math.round((index.completed / index.total) * 100))
-                  : 0
-              }
-              status={
-                index.status === 'failed'
-                  ? 'exception'
-                  : index.status === 'running'
-                    ? 'active'
-                    : 'normal'
-              }
-              showInfo={false}
-              strokeColor="#37352F"
-            />
-            <div className="text-[12px] text-[#787774]">
-              {t(($) => $.settings.embedding.progress, { ...index })}
-            </div>
-            {index.error ? (
-              <div role="alert" className="mt-2 break-words text-[12px] text-[#B3261E]">
-                {normalizeUserFacingError(index.error)}
-              </div>
-            ) : null}
-            {index.pending > 0 || index.failed > 0 || index.completed < index.total ? (
-              <div
-                className="nc-notice mt-2 text-[12px]"
-                data-testid={vectorSelectors.coverageNotice}
-              >
-                {t(($) => $.settings.embedding.coverage)}
-              </div>
-            ) : null}
-          </div>
+          <EmbeddingIndexNotice
+            index={index}
+            onNavigate={() =>
+              navigate(
+                `/settings/workspace?source=${index.staleFileCount > 0 ? 'files' : 'web'}&focus=index`
+              )
+            }
+            restoreName={restoreName}
+            onRestore={
+              restoreName && index.restoreModelId
+                ? () => {
+                    void mutate(`select-${index.restoreModelId}`, () =>
+                      window.api.embeddingModelSelect(index.restoreModelId!)
+                    )
+                  }
+                : undefined
+            }
+            disabled={Boolean(pending) || Boolean(snapshotError)}
+          />
         ) : null}
       </section>
       <section className="nc-settings-panel flex shrink-0 flex-col overflow-hidden">
@@ -639,7 +581,13 @@ const VectorModelSettingsPanel: React.FC = () => {
                           okText={TEXT.confirmDelete}
                           cancelText={TEXT.cancelDelete}
                           onConfirm={() => handleDelete(item.id)}
-                          disabled={Boolean(pending)}
+                          disabled={
+                            Boolean(pending) ||
+                            Boolean(
+                              snapshot?.index.running &&
+                              snapshot.activeModelId === `local:${item.id}`
+                            )
+                          }
                           okButtonProps={{
                             'data-testid': `${vectorSelectors.deleteConfirmButtonPrefix}-${item.id}`
                           }}
@@ -650,7 +598,13 @@ const VectorModelSettingsPanel: React.FC = () => {
                           <Button
                             type="text"
                             danger
-                            disabled={Boolean(pending)}
+                            disabled={
+                              Boolean(pending) ||
+                              Boolean(
+                                snapshot?.index.running &&
+                                snapshot.activeModelId === `local:${item.id}`
+                              )
+                            }
                             icon={<HiTrash className="h-4 w-4" />}
                             aria-label={TEXT.delete}
                             data-testid={`${vectorSelectors.deleteButtonPrefix}-${item.id}`}
@@ -669,7 +623,13 @@ const VectorModelSettingsPanel: React.FC = () => {
                             okText={TEXT.confirmDelete}
                             cancelText={TEXT.cancelDelete}
                             onConfirm={() => handleDelete(item.id)}
-                            disabled={Boolean(pending)}
+                            disabled={
+                              Boolean(pending) ||
+                              Boolean(
+                                snapshot?.index.running &&
+                                snapshot.activeModelId === `local:${item.id}`
+                              )
+                            }
                             okButtonProps={{
                               'data-testid': `${vectorSelectors.deleteConfirmButtonPrefix}-${item.id}`
                             }}
@@ -680,7 +640,13 @@ const VectorModelSettingsPanel: React.FC = () => {
                             <Button
                               type="text"
                               danger
-                              disabled={Boolean(pending)}
+                              disabled={
+                                Boolean(pending) ||
+                                Boolean(
+                                  snapshot?.index.running &&
+                                  snapshot.activeModelId === `local:${item.id}`
+                                )
+                              }
                               icon={<HiTrash className="h-4 w-4" />}
                               aria-label={TEXT.delete}
                               data-testid={`${vectorSelectors.deleteButtonPrefix}-${item.id}`}
@@ -806,7 +772,11 @@ const VectorModelSettingsPanel: React.FC = () => {
                   {selectButton(model.id)}
                   <Button
                     size="small"
-                    disabled={Boolean(pending) || Boolean(snapshotError)}
+                    disabled={
+                      Boolean(pending) ||
+                      Boolean(snapshotError) ||
+                      Boolean(snapshot.index.running && snapshot.activeModelId === model.id)
+                    }
                     onClick={() => openEditor(model)}
                     data-testid={`${vectorSelectors.remoteEditButtonPrefix}-${model.id}`}
                   >
@@ -912,7 +882,10 @@ const VectorModelSettingsPanel: React.FC = () => {
                 <Input
                   id={`embedding-${field}`}
                   value={draft[field]}
-                  disabled={Boolean(pending)}
+                  disabled={
+                    Boolean(pending) ||
+                    Boolean(snapshot?.index.running && snapshot.activeModelId === draft.id)
+                  }
                   autoFocus={field === 'name'}
                   autoComplete="off"
                   onChange={(event) => {
@@ -932,7 +905,10 @@ const VectorModelSettingsPanel: React.FC = () => {
                 id="embedding-maxInputTokens"
                 className="!w-full"
                 value={draft.maxInputTokens ?? null}
-                disabled={Boolean(pending)}
+                disabled={
+                  Boolean(pending) ||
+                  Boolean(snapshot?.index.running && snapshot.activeModelId === draft.id)
+                }
                 step={1}
                 inputMode="numeric"
                 placeholder={t(($) => $.settings.embedding.defaultInputTokens, {
@@ -969,7 +945,10 @@ const VectorModelSettingsPanel: React.FC = () => {
               <Input.Password
                 id="embedding-apiKey"
                 value={draft.apiKey || ''}
-                disabled={Boolean(pending)}
+                disabled={
+                  Boolean(pending) ||
+                  Boolean(snapshot?.index.running && snapshot.activeModelId === draft.id)
+                }
                 autoComplete="new-password"
                 aria-describedby="embedding-key-hint"
                 onChange={(event) => {
@@ -999,7 +978,10 @@ const VectorModelSettingsPanel: React.FC = () => {
             ) : null}
             <div className="flex flex-wrap justify-end gap-2">
               <Button
-                disabled={Boolean(pending)}
+                disabled={
+                  Boolean(pending) ||
+                  Boolean(snapshot?.index.running && snapshot.activeModelId === draft.id)
+                }
                 loading={pending === 'test'}
                 onClick={() => void submitDraft(true)}
                 data-testid={vectorSelectors.remoteTestButton}
@@ -1007,7 +989,10 @@ const VectorModelSettingsPanel: React.FC = () => {
                 {t(($) => $.settings.embedding.test)}
               </Button>
               <Button
-                disabled={Boolean(pending)}
+                disabled={
+                  Boolean(pending) ||
+                  Boolean(snapshot?.index.running && snapshot.activeModelId === draft.id)
+                }
                 onClick={() => setDraft(null)}
                 data-testid={vectorSelectors.remoteCancelButton}
               >
@@ -1016,7 +1001,10 @@ const VectorModelSettingsPanel: React.FC = () => {
               <Button
                 type="primary"
                 htmlType="submit"
-                disabled={Boolean(pending)}
+                disabled={
+                  Boolean(pending) ||
+                  Boolean(snapshot?.index.running && snapshot.activeModelId === draft.id)
+                }
                 loading={pending === 'save'}
                 data-testid={vectorSelectors.remoteSaveButton}
               >
