@@ -51,14 +51,15 @@ describe('workbench result e2e', () => {
         domain: 'workbench',
         suite: 'result',
         groups: ['preview'],
-        description: 'TXT/JSON 等 UTF-8 普通文本打开即纯文本编辑，输入自动落盘并保留 CRLF 与 BOM、不 markdown 化改写。',
-        fixtures: ['tests/fixtures/workspace'],
+        description:
+          'TXT/JSON 等 UTF-8 普通文本打开即纯文本编辑，输入自动落盘并保留 CRLF 与 BOM、不 markdown 化改写。',
+        fixtures: [],
         serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
+          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID, 'empty')
           const crlfPath = path.join(workspace.rootPath, 'notes-crlf.txt')
           const jsonPath = path.join(workspace.rootPath, 'config.json')
           const crlfBytes = Buffer.concat([
@@ -71,7 +72,8 @@ describe('workbench result e2e', () => {
           const workspaceName = `Workbench ${CASE_ID}`
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName,
-            rootPath: workspace.rootPath
+            rootPath: workspace.rootPath,
+            prepareFiles: false
           })
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, workspaceName)
@@ -87,8 +89,9 @@ describe('workbench result e2e', () => {
           await textEditor.waitFor({ state: 'visible', timeout: 30_000 })
           await page.waitForFunction(
             (testId) =>
-              (document.querySelector(`[data-testid="${testId}"]`) as HTMLTextAreaElement | null)
-                ?.value?.includes('line one'),
+              (
+                document.querySelector(`[data-testid="${testId}"]`) as HTMLTextAreaElement | null
+              )?.value?.includes('line one'),
             workbenchSelectors.plainTextEditor,
             { timeout: 30_000 }
           )
@@ -96,7 +99,8 @@ describe('workbench result e2e', () => {
           await textEditor.fill('line one\nline two\nappended line\n')
           const autoSavedTxt = await waitForDiskIncludes(crlfPath, 'appended line')
           const savedBytes = await fs.readFile(crlfPath)
-          const bomPreserved = savedBytes[0] === 0xef && savedBytes[1] === 0xbb && savedBytes[2] === 0xbf
+          const bomPreserved =
+            savedBytes[0] === 0xef && savedBytes[1] === 0xbb && savedBytes[2] === 0xbf
           const crlfPreserved = savedBytes.toString('utf8').includes('appended line\r\n')
           const noBareLf = !savedBytes.toString('utf8').match(/(?<!\r)\n/)
 
@@ -109,8 +113,9 @@ describe('workbench result e2e', () => {
           const jsonEditor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
           await page.waitForFunction(
             (testId) =>
-              (document.querySelector(`[data-testid="${testId}"]`) as HTMLTextAreaElement | null)
-                ?.value?.includes('original json'),
+              (
+                document.querySelector(`[data-testid="${testId}"]`) as HTMLTextAreaElement | null
+              )?.value?.includes('original json'),
             workbenchSelectors.plainTextEditor,
             { timeout: 30_000 }
           )

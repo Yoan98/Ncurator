@@ -51,7 +51,7 @@ describe('workbench result e2e', () => {
         groups: ['preview'],
         description:
           '普通文本、DOCX、PPTX、XLSX 被外部保存后自动刷新，切换或关闭文件后停止旧监听。',
-        fixtures: ['tests/fixtures/workspace'],
+        fixtures: [],
         serviceMode: 'real',
         extraEnv: {
           NCURATOR_E2E_OPEN_WITH_NOOP: '1'
@@ -60,7 +60,7 @@ describe('workbench result e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
+          const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID, 'empty')
           const markdownPath = path.join(workspace.rootPath, 'external-watch.md')
           const textPath = path.join(workspace.rootPath, 'external-watch.txt')
           const docxPath = path.join(workspace.rootPath, 'external-watch.docx')
@@ -77,7 +77,8 @@ describe('workbench result e2e', () => {
           const workspaceName = `Workbench ${CASE_ID}`
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName,
-            rootPath: workspace.rootPath
+            rootPath: workspace.rootPath,
+            prepareFiles: false
           })
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, workspaceName)
@@ -157,16 +158,17 @@ describe('workbench result e2e', () => {
           const textEditor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
           await page.waitForFunction(
             (testId) =>
-              (document.querySelector(`[data-testid="${testId}"]`) as HTMLTextAreaElement | null)
-                ?.value?.includes('original text content'),
+              (
+                document.querySelector(`[data-testid="${testId}"]`) as HTMLTextAreaElement | null
+              )?.value?.includes('original text content'),
             workbenchSelectors.plainTextEditor,
             { timeout: 30_000 }
           )
 
           await fs.writeFile(markdownPath, '# External Watch\n\nchanged while inactive')
           await page.waitForTimeout(1_000)
-          const inactiveFileDidNotRefreshCurrentPreview = await textEditor.evaluate(
-            (element) => (element as HTMLTextAreaElement).value.includes('original text content')
+          const inactiveFileDidNotRefreshCurrentPreview = await textEditor.evaluate((element) =>
+            (element as HTMLTextAreaElement).value.includes('original text content')
           )
           const inactiveFileNoticeAbsent =
             (await page.evaluate(
