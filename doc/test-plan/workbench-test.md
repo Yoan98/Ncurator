@@ -16,7 +16,7 @@
 - Workbench UI E2E 测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；需要文件资料时通过 Settings UI 添加文件地址、检查更新和更新索引。前置是创建伙伴；文件地址按场景添加，不作为通用发送门禁。
 - Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。现有用例的执行缺口见第 6 节。
 - Workbench e2e 按 `knowledge: none / cached / cold` 声明索引需求，默认 none。需要真实索引时复用生产 split/vector 计算缓存并隔离本用例统计；不自动追加 UI 预热用例，不复用存储和 UI 状态。缓存身份、按需预热与清理规则遵循 [测试规范](../test.md)。
-- Workbench 模型选择 helper 在 `custom` live 配置下直接进入「自定义模型」按名称搜索，避免同名预设或免费模型改变测试入口；内置目标优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选，未命中再按展示名，仍未命中则进入「自定义模型」按名称搜索。
+- Workbench 模型选择 helper 在 `custom` live 配置下直接进入「自定义模型」按名称搜索，等待异步返回的匹配选项可见后再判定是否存在，避免同名预设或免费模型改变测试入口；内置目标优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选，未命中再按展示名，仍未命中则进入「自定义模型」按名称搜索。
 - Workbench UI E2E 测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖列表打开/焦点刷新、右键行内新建和确认移到回收站，以及删除后禁止自动保存重建。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；用户行为见 `WB-WPS-001`。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。

@@ -1581,6 +1581,11 @@ export const selectWorkbenchModel = async (
   await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
   await searchInput.fill(modelName)
   const modelOptions = menu.getByRole('option')
+  await modelOptions
+    .filter({ hasText: modelName })
+    .first()
+    .waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
+    .catch(() => undefined)
   // Remote providers can expose both `modelName` and prefixed variants such as
   // `vanchin/${modelName}`. Prefer the exact ID so the UI E2E exercises the
   // same model configured by AI_LIVE_MODEL as the backend live harness.
