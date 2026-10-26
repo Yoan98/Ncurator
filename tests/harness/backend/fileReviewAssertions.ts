@@ -5,7 +5,8 @@ import JSZip from 'jszip'
 import ExcelJS from 'exceljs'
 import type { AiRunState } from '../../../src/main/services/ai/types'
 import type { PptDiffManifest } from '../../../src/main/services/ai/human/tools/ppt/types'
-import type { TextFileDiffArtifact } from '../../../src/shared/types'
+import { textReviewSchema } from '../../../src/shared/fileReview'
+import { decodeTextFile } from '../../../src/main/services/ai/human/tools/textFile/textFileUtils'
 import type { BackendTestRuntime } from './test-types'
 
 const checksum = (buffer: Buffer) => createHash('sha256').update(buffer).digest('hex')
@@ -59,12 +60,23 @@ export const assertRunFileReviews = async (runtime: BackendTestRuntime, output: 
         }
       }
     } else {
-      const diff = JSON.parse(review.toString('utf8')) as TextFileDiffArtifact
-      runtime.assertThat(diff.version === 3 && Array.isArray(diff.lines), {
+      const parsed = textReviewSchema.safeParse(JSON.parse(review.toString('utf8')))
+      runtime.assertThat(parsed.success, {
         name: 'live-text-review-parses',
-        message: '文本审核应包含完整有序行数据。',
-        data: { oldLineCount: diff.oldLineCount, newLineCount: diff.newLineCount }
+        message: '文本审核应符合共享 v4 schema，包含完整 before/after 正文。',
+        data: parsed.success
+          ? { beforeLength: parsed.data.before.length, afterLength: parsed.data.after.length }
+          : { issues: parsed.error.issues }
       })
+      if (parsed.success && checksum(formal) === record.afterChecksum) {
+        runtime.assertThat(
+          parsed.data.after === decodeTextFile(formal, record.path).normalizedContent,
+          {
+            name: 'live-text-review-matches-confirmed-content',
+            message: '当前正式文件仍是确认 B 时，文本审核 after 应与其规范化正文一致。'
+          }
+        )
+      }
     }
     const pending = await runtime.docxApplyService.fileChanges.sessions.read(
       record.partnerId,

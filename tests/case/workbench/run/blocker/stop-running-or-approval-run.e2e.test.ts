@@ -18,6 +18,9 @@ import {
 const CASE_ID = 'stop-running-or-approval-run'
 const LONG_RUN_PROMPT =
   '请读取当前工作区所有工作目录资料，写一份至少 2000 字的详细分析，逐项说明证据来源。'
+const PLAN_RUN_PROMPT =
+  '请先建立并维护三步执行计划：读取工作区资料、撰写分析、核对结论。每步开始时标记为执行中，完成后标记为已完成。然后' +
+  LONG_RUN_PROMPT
 const IS_WINDOWS = process.platform === 'win32'
 const CACHE_CONTENTS = 'temporary-cache-file-for-stop-approval-e2e\n'
 const KEEP_CONTENTS = 'temporary-preserved-file-for-stop-approval-e2e\n'
@@ -36,6 +39,48 @@ type ReviewShimmerObserverState = {
 }
 type ReviewShimmerObserverWindow = Window & {
   __reviewShimmerObserver?: ReviewShimmerObserverState
+}
+
+type PlanLoadingSnapshot = {
+  label: string
+  text: string
+  statusLabelCount: number
+  icons: Array<{
+    animation: string
+    playState: string
+    transform: string
+    width: number
+    height: number
+  }>
+}
+
+const readPlanLoading = async (
+  page: Parameters<typeof sendWorkbenchMessage>[0]
+): Promise<PlanLoadingSnapshot> => {
+  const progress = page.getByLabel(/^计划进度 \d+\/\d+$/u).last()
+  await progress.waitFor({ state: 'visible', timeout: 30_000 })
+  await progress.hover()
+  const popover = progress.locator('..').locator(':scope > div').last()
+  await popover.waitFor({ state: 'visible' })
+  const loading = popover.locator('svg.animate-spin')
+  await loading.first().waitFor({ state: 'visible', timeout: 10_000 })
+  return {
+    label: (await progress.getAttribute('aria-label')) || '',
+    text: (await popover.textContent()) || '',
+    statusLabelCount: await popover.getByText('进行中', { exact: true }).count(),
+    icons: await loading.evaluateAll((elements) =>
+      elements.map((element) => {
+        const style = getComputedStyle(element)
+        return {
+          animation: style.animationName,
+          playState: style.animationPlayState,
+          transform: style.transform,
+          width: Number.parseFloat(style.width),
+          height: Number.parseFloat(style.height)
+        }
+      })
+    )
+  }
 }
 
 const quoteCommandPath = (filePath: string): string =>
@@ -245,6 +290,77 @@ describe('workbench run e2e', () => {
             { timeout: 10_000 }
           )
           await createWorkbenchNewSession(page)
+          await sendWorkbenchMessage(page, PLAN_RUN_PROMPT)
+          const planRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'run_started_for_plan_stop',
+            matches: (event) => event.type === 'run_started' && event.input === PLAN_RUN_PROMPT
+          })
+          const doingPlan = await waitForWorkbenchAiEvent(runtime, {
+            name: 'doing_plan_before_stop',
+            matches: (event) =>
+              event.type === 'assistant_plan_updated' &&
+              event.runId === planRunStarted.runId &&
+              event.plan.some((item) => item.status === 'doing')
+          })
+          const runningPlan = await readPlanLoading(page)
+          await page.waitForFunction(
+            (previousTransform) => {
+              const progress = document.querySelector('[aria-label^="计划进度 "]')
+              const spinner = progress?.parentElement?.querySelector('svg.animate-spin')
+              return Boolean(spinner && getComputedStyle(spinner).transform !== previousTransform)
+            },
+            runningPlan.icons[0]!.transform,
+            { timeout: 5_000 }
+          )
+          await runtime.captureScreenshot({
+            name: 'plan-doing-running',
+            message: '真实模型计划的 doing 图标正在旋转。'
+          })
+          await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
+          await waitForWorkbenchAiEvent(runtime, {
+            name: 'plan_run_cancelled',
+            matches: (event) =>
+              event.type === 'run_cancelled' && event.runId === planRunStarted.runId
+          })
+          await page.waitForFunction(
+            (testId) =>
+              !(
+                document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-label') ||
+                ''
+              ).includes('停止'),
+            workbenchSelectors.sendButton,
+            { timeout: 10_000 }
+          )
+          const pausedPlan = await readPlanLoading(page)
+          await runtime.captureScreenshot({
+            name: 'plan-doing-paused',
+            message: '通过 UI 停止后，计划保留且 doing 图标暂停。'
+          })
+          await runtime.assertThat(
+            doingPlan.type === 'assistant_plan_updated' &&
+              runningPlan.icons.length > 0 &&
+              runningPlan.icons.every(
+                (icon) =>
+                  icon.animation !== 'none' &&
+                  icon.playState === 'running' &&
+                  icon.width === 16 &&
+                  icon.height === 16
+              ) &&
+              pausedPlan.icons.length > 0 &&
+              pausedPlan.icons.every((icon) => icon.playState === 'paused') &&
+              runningPlan.statusLabelCount === 0 &&
+              pausedPlan.statusLabelCount === 0,
+            {
+              name: 'workbench-plan-doing-loading-real',
+              message:
+                '真实计划的 doing 图标应在运行中旋转，停止后暂停并保留计划，不显示“进行中”状态文字。',
+              data: { doingPlan, runningPlan, pausedPlan }
+            }
+          )
+          await createWorkbenchNewSession(page)
+          await page
+            .getByLabel(/^计划进度 \d+\/\d+$/u)
+            .waitFor({ state: 'detached', timeout: 10_000 })
 
           const targetDirectory = path.join(setup.workspace.rootPath, 'stop-approval-target')
           await mkdir(targetDirectory, { recursive: true })

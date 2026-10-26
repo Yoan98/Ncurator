@@ -77,7 +77,7 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan, run
                 className="flex min-w-0 items-start gap-2 rounded-[6px] px-1.5 py-1.5 text-[13px] leading-5 text-[#37352F]"
               >
                 <span
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
+                  className={`mt-0.5 flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-full ${
                     completed
                       ? 'border border-[#37352F] bg-[#37352F] text-white'
                       : doing
@@ -87,10 +87,10 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan, run
                   aria-hidden="true"
                 >
                   {completed ? (
-                    <HiCheck className="h-3 w-3" />
+                    <HiCheck className="h-[12px] w-[12px]" />
                   ) : doing ? (
                     <AiOutlineLoading3Quarters
-                      className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                      className="h-[16px] w-[16px] animate-spin motion-reduce:animate-none"
                       style={{ animationPlayState: running ? 'running' : 'paused' }}
                     />
                   ) : null}

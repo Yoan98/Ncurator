@@ -50,7 +50,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及馆长 WPS 通道对 docx / xlsx / pptx 的 dispatch 与本机已授权 WPS 中的 Word / Excel / PPT窗口刷新。
 - `scheduled-task` 验证创建、编辑、资料引用、伙伴绑定、启用、定时与立即执行，以及删除和失效边界。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
-- AI 提问统一归入 `run/blocker`：真实 UI 展示数字徽标单选、方框多选和无选项输入，无独立其他选项，推荐为轻量文字，覆盖手动下一步、多问题切换与刷新恢复；等待回答时侧栏伙伴行显示「需要你的协助」，刷新或切换伙伴后仍保留，提交、取消或结束后清除，审批等待不显示；提交后在对应 Activity 工具行下按顺序显示问题与用户答案。审批结果也在对应工具行下显示，不再使用旧图标前缀或 hover 替换文案。
+- AI 提问统一归入 `run/blocker`：真实 UI 展示数字徽标单选、方框多选和无选项输入，无独立其他选项，推荐使用标题旁标签，覆盖手动下一步、多问题切换与刷新恢复；等待回答时侧栏伙伴行显示「需要你的协助」，刷新或切换伙伴后仍保留，提交、取消或结束后清除，审批等待不显示；提交后在对应 Activity 工具行下按顺序显示问题与用户答案。审批结果也在对应工具行下显示，不再使用旧图标前缀或 hover 替换文案。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足测试 case 口径。
@@ -463,10 +463,10 @@ pnpm test:update:e2e
 #### `stop-running-or-approval-run`
 
 - 测试类型：`e2e`
-- What：智能模式普通运行期间停止入口保持可用，并能取消普通长任务和审批等待；审批卡替代 Composer 时不提供普通追加消息输入。
+- What：智能模式普通运行期间停止入口保持可用，并能取消普通长任务和审批等待；计划中的 doing 图标运行时旋转，停止后保留计划并暂停旋转；审批卡替代 Composer 时不提供普通追加消息输入。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
-- How：E2E 发送真实长任务；随后在隔离 workspace 中准备 `cache.tmp` 和 `keep.txt`，要求通过 terminal 工具提交删除整个目录的命令，并明确当前尚未授权删除，需先在人工审批卡决定。使用真实模型和 UI，不注入审核结果；发送前安装只读 DOM 观察审核期间 header 与命令项的流光状态。任务要求一致；模型未提交操作而另走提问时保留证据并失败。只有收到当前 run 的 `approval_batch_required` 且审批卡可见后才点击停止；命令未进入审批等待或 run 已结束时立即以事件证据失败，不继续等待一个永远不会出现的审批卡。
-- Oracle：运行中停止入口和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中唯一主按钮转圈且禁用，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`；取消后用时停止递增、过程默认收起且仍可展开，对齐 `WB-COMPOSER-016-AC2`；审批等待时普通输入框和 Composer 主按钮均不存在，且不显示「需要你的协助」，对齐 `WB-COMPOSER-017-AC4`、`WB-SESSION-014-AC1`。真实审核期间 Activity header 有流光，展开命令项没有流光；取消审批 run 后清除等待卡和运行态，待审删除命令没有 `terminal_step_started`，`cache.tmp` 与 `keep.txt` 均原样保留，对齐 `WB-BLOCKER-001-AC10`。 已核对的具体验收：`WB-COMPOSER-006-AC2`、`WB-COMPOSER-006-AC3`。
+- How：先发送真实长任务，在等待模型响应时立即停止，保留原停止入口覆盖。开启新会话后，请求真实模型建立并维护三步计划并执行资料分析长任务；等待真实 doing 计划事件，hover 进度浮层，读取图标动画及前后 transform 并截图；通过真实停止按钮取消后再次 hover，检查计划保留、动画暂停且无“进行中”状态文字，开启新会话后进度隐藏。随后在隔离 workspace 中准备 `cache.tmp` 和 `keep.txt`，要求通过 terminal 工具提交删除整个目录的命令，并明确当前尚未授权删除，需先在人工审批卡决定。使用真实模型和 UI，不注入审核结果；发送前安装只读 DOM 观察审核期间 header 与命令项的流光状态。任务要求一致；模型未提交操作而另走提问时保留证据并失败。只有收到当前 run 的 `approval_batch_required` 且审批卡可见后才点击停止；命令未进入审批等待或 run 已结束时立即以事件证据失败，不继续等待一个永远不会出现的审批卡。
+- Oracle：真实计划含 doing；浮层 loading 在运行中实际旋转、停止后暂停且计划保留，无“进行中”状态文字；新会话清空进度，对齐 `WB-COMPOSER-014-AC4` 的三态展示、hover 与中断保留。运行中停止入口和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中唯一主按钮转圈且禁用，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`；取消后用时停止递增、过程默认收起且仍可展开，对齐 `WB-COMPOSER-016-AC2`；审批等待时普通输入框和 Composer 主按钮均不存在，且不显示「需要你的协助」，对齐 `WB-COMPOSER-017-AC4`、`WB-SESSION-014-AC1`。真实审核期间 Activity header 有流光，展开命令项没有流光；取消审批 run 后清除等待卡和运行态，待审删除命令没有 `terminal_step_started`，`cache.tmp` 与 `keep.txt` 均原样保留，对齐 `WB-BLOCKER-001-AC10`。 已核对的具体验收：`WB-COMPOSER-006-AC2`、`WB-COMPOSER-006-AC3`。
 
 #### `interrupted-task-resume-flow`
 
@@ -733,7 +733,8 @@ pnpm test:update:e2e
 - What：统一提问卡允许每题 0 至 4 个选项，支持单个候选项、单选、多选、无选项输入；无独立其他选项，无自动跳题，手动下一步并最终提交；Activity 回显、伙伴切换与刷新恢复正确。
 - Why：无选项协作、选择补充与批次隔离必须由真实 UI 和产品链路验证。
 - How：真实模型通过一次提问询问仅一个候选项的单选、2 至 4 项多选和无选项纯输入三题，真实 UI 点选、取消、填写、翻页与提交；选项行获得焦点后 Enter 下一步，回复框 Enter 下一步和最终发送，空回答 Enter 不前进，Shift+Enter 换行；检查输入采用 Ant Design 默认间距与标准单行高度、无尾部勾叉与选项键盘焦点无整行蓝色外描边；切伙伴和刷新后恢复待处理卡并清空草稿，后续交互继续回答。通过日志检查提交前后运行和工具状态，不注入 UI / IPC 状态。
-- Oracle：对应 `WB-BLOCKER-001-AC9`、`WB-BLOCKER-001-AC11`、`WB-BLOCKER-001-AC12`、`WB-SESSION-014-AC2`；无普通 Composer，单项无分页、多项显示数量与箭头；推荐为文字、多选有轻提示；输入为 Ant Design TextArea，默认间距紧凑、单行不额外撑高，多行按内容增长；有选项时输入默认和悬停无边框及阴影，点击聚焦后显示，失焦后隐藏，纯输入题保留完整细描边；选择行无尾部勾叉和蓝色焦点外描边；每题选项不超过 4 项，单个候选项可选择并提交；纯输入无需选项，空白不能发送；选择后仍停留当前题，翻页保留草稿，最后统一提交，选项焦点与回复框 Enter 执行对应主动作，Shift+Enter 换行，空回答按 Enter 不前进，问答在 Activity 回显。协助标签正确出现和清除，新交互不继承草稿。
+- Oracle：对应 `WB-BLOCKER-001-AC9`、`WB-BLOCKER-001-AC11`、`WB-BLOCKER-001-AC12`、`WB-SESSION-014-AC2`；无普通 Composer，单项无分页、多项显示数量与箭头；多选有轻提示；输入为 Ant Design TextArea，默认间距紧凑、单行不额外撑高，多行按内容增长；有选项时输入默认和悬停无边框及阴影，点击聚焦后显示，失焦后隐藏，纯输入题保留完整细描边；选择行无尾部勾叉和蓝色焦点外描边；每题选项不超过 4 项，单个候选项可选择并提交；纯输入无需选项，空白不能发送；选择后仍停留当前题，翻页保留草稿，最后统一提交，选项焦点与回复框 Enter 执行对应主动作，Shift+Enter 换行，空回答按 Enter 不前进，问答在 Activity 回显。协助标签正确出现和清除，新交互不继承草稿。
+- 人工验收（`WB-BLOCKER-001-AC11`）：推荐标签紧贴标题，以浅蓝底深蓝字显示；未选、选中和改选其他项时持续可见；深灰编号只表达已选；长标题及窄窗口下不溢出。
 
 ### 5.4 `scheduled-task`
 
@@ -857,7 +858,7 @@ pnpm test:update:e2e
 | `WB-PANEL-003-AC29`                        | 部分覆盖：`docx-review-position-and-inline-diff` 与 `docx-apply-panel-preview-and-revert` 已验证同轨叠层、红删绿增、格式语义、点击定位、预览与回退无残留；轨道滚动交互由 `docx-selection-reference` 验证共用组件。密集循环、重复文字、图片/表格、延迟加载、首尾长区域和历史批次切换保留人工验收边界。                     |
 | `WB-CORE-004-AC2/AC3`、`WB-CORE-007-AC3`   | 待补：默认 / 宽松补充和严谨资料边界没有专门真实模型场景。偏好选择、持久化或 prompt 格式检查不能代替行为验证。                                                                                                                                                                                                             |
 | `WB-COMPOSER-014-AC3`                      | 部分覆盖：重试行见 `llm-retry-process-row`；输出截断、半截回答与网络中断上下文的完整 UI 断言待补。                                                                                                                                                                                                                        |
-| `WB-COMPOSER-014-AC4`                      | 待补：计划进度环、三态浮层、doing loading 的运行／暂停、hover、完成隐藏与中断保留没有专门 E2E，需人工验收。                                                                                                                                                                                                                                                            |
+| `WB-COMPOSER-014-AC4`                      | 部分覆盖：`stop-running-or-approval-run` 通过真实模型和 UI 验证 doing loading 的旋转、停止后暂停、hover、中断保留与新会话清空；完成比例、正常完成隐藏和恢复后旋转仍需专项验收。                                                                                                                                                                                                                                                            |
 | `WB-SESSION-001-AC6`、`WB-SESSION-012-AC3` | 部分覆盖：已有创建 / 编辑用例走正常路径，UI 重名拦截与历史重名记录只改形象分支待补。                                                                                                                                                                                                                                      |
 | `WB-COMPOSER-013-AC5`                      | 部分覆盖：unit `message-log-vision-context` 检验有效图片判断和免费无 vision gate；`model-selector-and-provider-error` 验证成功、失败、取消后无需切换伙伴即刷新上下文用量。含图片历史下的真实 UI 禁用、提示与发送拦截，以及跨伙伴查询不串状态仍需人工验收。                                                                |
 | `WB-COMPOSER-013-AC6`                      | AI backend `human-read-image-no-vision` 覆盖工具能力反馈、无图片请求与 graph 继续交付；unit `read-image-multimodal` 覆盖支持视觉、目录未命中和非免费模型。真实免费模型的解释及文字续聊列入人工验收。                                                                                                                      |
