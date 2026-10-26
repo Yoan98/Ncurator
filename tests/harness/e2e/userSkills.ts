@@ -165,7 +165,7 @@ export const previewSkillFolder = async (
     try {
       const result = await selectDirectoryInNativeDialog(
         source,
-        runtime.electronApp.process().pid ?? null,
+        await runtime.electronApp.evaluate(() => process.pid),
         strategy
       )
       diagnostics.push(`${strategy}: ${result.stdout} ${result.stderr}`)
