@@ -21,7 +21,7 @@ describe('knowledge availability through real services', () => {
         domain: 'knowledge',
         suite: 'foundation',
         harnessMode: 'tool-real',
-      knowledge: 'cold',
+        knowledge: 'cold',
         fixtures: [],
         runMode: 'single',
         description:

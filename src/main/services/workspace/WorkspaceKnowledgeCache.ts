@@ -125,7 +125,9 @@ class PersistentWorkspaceKnowledgeCache implements WorkspaceKnowledgeCache {
       schema: SCHEMA,
       pipeline: this.pipeline.embedding,
       modelName: input.modelName,
-      modelAssets: await getModelAssetIdentity(input.modelName),
+      modelAssets: input.modelName.startsWith('remote:')
+        ? null
+        : await getModelAssetIdentity(input.modelName.replace(/^local:/u, '')),
       texts: input.texts
     })
   }

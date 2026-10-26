@@ -149,6 +149,7 @@ describe('workspace worker adapters', () => {
         return preparedSource
       })
       const cache: WorkspaceKnowledgeCache = {
+        withLock: async (_key, action) => action(),
         loadSplitSnapshot: vi.fn(async () => null),
         saveSplitSnapshot: vi.fn(async () => undefined),
         loadVectorSnapshot: vi.fn(async () => null),
@@ -236,7 +237,12 @@ describe('workspace worker adapters', () => {
           ).toBe(chunk.text)
         }
         expect(splitSnapshot).toEqual(originalSplit)
-        expect(cache.saveSplitSnapshot).toHaveBeenCalledWith(originalSplit)
+        expect(cache.saveSplitSnapshot).toHaveBeenCalledWith(
+          originalSplit,
+          sourceType === 'file'
+            ? path.basename(filePath)
+            : `${common.documentName}\n${preparedSource.filePath}`
+        )
         const writes = documentsStore.addChunks.mock.calls.map(([input]) => input)
         const storedChunks = writes.flatMap((input) => input.chunks)
         expect(storedChunks.map((chunk) => chunk.text)).toEqual(embeddedTexts)
