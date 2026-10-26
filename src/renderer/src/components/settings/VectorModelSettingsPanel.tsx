@@ -18,7 +18,6 @@ import {
 } from 'antd'
 import {
   DEFAULT_EMBEDDING_INPUT_TOKENS,
-  embeddingInputBudget,
   MAX_EMBEDDING_INPUT_TOKENS,
   MIN_EMBEDDING_INPUT_TOKENS
 } from '../../../../shared/embeddingModels'
@@ -32,6 +31,7 @@ import {
   HiCheckCircle,
   HiExclamationCircle,
   HiOutlineQuestionMarkCircle,
+  HiPlus,
   HiTrash
 } from 'react-icons/hi2'
 import { MODEL_SOURCES, type ModelSource } from '../../../../shared/modelSources'
@@ -96,16 +96,23 @@ function ModelFieldLabel({
   htmlFor,
   label,
   hint,
-  helpTestId
+  helpTestId,
+  required = false
 }: {
   htmlFor: string
   label: string
   hint?: React.ReactNode
   helpTestId?: string
+  required?: boolean
 }): React.JSX.Element {
   return (
     <div className="mb-1 flex items-center gap-1.5">
       <label htmlFor={htmlFor} className="text-[13px]">
+        {required ? (
+          <span className="mr-1 text-[#ff4d4f]" aria-hidden="true">
+            *
+          </span>
+        ) : null}
         {label}
       </label>
       {hint ? (
@@ -148,12 +155,6 @@ const VectorModelSettingsPanel: React.FC = () => {
   const [draft, setDraft] = useState<RemoteEmbeddingModelInput | null>(null)
   const [draftError, setDraftError] = useState('')
   const [testResult, setTestResult] = useState('')
-  const draftMaxInputTokens = draft?.maxInputTokens ?? DEFAULT_EMBEDDING_INPUT_TOKENS
-  const draftBudget =
-    draft && isValidMaxInputTokens(draftMaxInputTokens)
-      ? embeddingInputBudget(draftMaxInputTokens)
-      : null
-
   useEffect(() => {
     mounted.current = true
     let disposed = false
@@ -251,7 +252,12 @@ const VectorModelSettingsPanel: React.FC = () => {
 
   const submitDraft = async (test: boolean): Promise<void> => {
     if (!draft || pendingRef.current) return
-    if (!draft.name.trim() || !draft.baseUrl.trim() || !draft.modelName.trim()) {
+    if (
+      !draft.name.trim() ||
+      !draft.baseUrl.trim() ||
+      !draft.modelName.trim() ||
+      (!draft.id && !draft.apiKey?.trim())
+    ) {
       setDraftError(t(($) => $.settings.embedding.required))
       return
     }
@@ -555,11 +561,11 @@ const VectorModelSettingsPanel: React.FC = () => {
           disabled={Boolean(pending) || Boolean(snapshotError)}
         />
       ) : null}
-      <section className="shrink-0">
-        <h2 className="mb-3 text-[14px] font-medium">
-          {t(($) => $.settings.embedding.localModels)}
-        </h2>
-        <div className="nc-settings-panel overflow-hidden">
+      <section className="nc-settings-panel shrink-0 overflow-hidden">
+        <div className="nc-settings-panel-toolbar">
+          <h2>{t(($) => $.settings.embedding.localModels)}</h2>
+        </div>
+        <div>
           {catalogError ? (
             <div
               className="nc-notice nc-notice-danger m-4"
@@ -724,19 +730,28 @@ const VectorModelSettingsPanel: React.FC = () => {
         </div>
       </section>
 
-      <section className="shrink-0">
-        <div className="mb-3 flex min-h-8 flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[14px] font-medium">{t(($) => $.settings.embedding.remoteModels)}</h2>
+      <section className="nc-settings-panel shrink-0 overflow-hidden">
+        <div className="nc-settings-panel-toolbar">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2>{t(($) => $.settings.embedding.remoteModels)}</h2>
+            <span className="text-[12px] text-[#787774]">
+              {t(($) => $.settings.serviceConnectionCount, {
+                count: snapshot?.remoteModels.length ?? 0
+              })}
+            </span>
+          </div>
           <Button
-            size="small"
+            type="primary"
+            icon={<HiPlus className="h-4 w-4" aria-hidden="true" />}
+            className="border-none !bg-[#37352F] shadow-none hover:!bg-[#2F3437]"
             disabled={!snapshot || Boolean(snapshotError) || Boolean(pending)}
             onClick={() => openEditor()}
             data-testid={vectorSelectors.remoteAddButton}
           >
-            {t(($) => $.settings.embedding.addRemote)}
+            {t(($) => $.settings.addConfiguration)}
           </Button>
         </div>
-        <div className="nc-settings-panel overflow-hidden" data-testid={vectorSelectors.remoteList}>
+        <div data-testid={vectorSelectors.remoteList}>
           {snapshot?.remoteModels.length ? (
             snapshot.remoteModels.map((model) => (
               <div
@@ -828,9 +843,7 @@ const VectorModelSettingsPanel: React.FC = () => {
 
       <Modal
         title={
-          draft?.id
-            ? t(($) => $.settings.embedding.editRemote)
-            : t(($) => $.settings.embedding.addRemote)
+          draft?.id ? t(($) => $.settings.editConfiguration) : t(($) => $.settings.addConfiguration)
         }
         open={Boolean(draft)}
         maskClosable={false}
@@ -852,40 +865,33 @@ const VectorModelSettingsPanel: React.FC = () => {
           >
             {(
               [
-                ['name', t(($) => $.settings.embedding.name), vectorSelectors.remoteNameInput],
+                [
+                  'name',
+                  t(($) => $.settings.embedding.name),
+                  vectorSelectors.remoteNameInput,
+                  t(($) => $.settings.embedding.namePlaceholder)
+                ],
                 [
                   'baseUrl',
                   t(($) => $.settings.embedding.baseUrl),
-                  vectorSelectors.remoteBaseUrlInput
+                  vectorSelectors.remoteBaseUrlInput,
+                  t(($) => $.settings.embedding.baseUrlPlaceholder)
                 ],
                 [
                   'modelName',
                   t(($) => $.settings.embedding.modelName),
-                  vectorSelectors.remoteModelNameInput
+                  vectorSelectors.remoteModelNameInput,
+                  t(($) => $.settings.embedding.modelNamePlaceholder)
                 ]
               ] as const
-            ).map(([field, label, testId]) => (
+            ).map(([field, label, testId, placeholder]) => (
               <div key={field}>
-                <ModelFieldLabel
-                  htmlFor={`embedding-${field}`}
-                  label={label}
-                  hint={
-                    field === 'modelName' ? (
-                      <div className="space-y-1">
-                        <div>{t(($) => $.settings.embedding.modelNameHint)}</div>
-                        {draft.id && draft.id === snapshot?.activeModelId ? (
-                          <div>{t(($) => $.settings.embedding.activeEditHint)}</div>
-                        ) : null}
-                      </div>
-                    ) : undefined
-                  }
-                  helpTestId={
-                    field === 'modelName' ? vectorSelectors.remoteModelNameHelp : undefined
-                  }
-                />
+                <ModelFieldLabel htmlFor={`embedding-${field}`} label={label} required />
                 <Input
                   id={`embedding-${field}`}
                   value={draft[field]}
+                  placeholder={placeholder}
+                  aria-required="true"
                   disabled={
                     Boolean(pending) ||
                     Boolean(snapshot?.index.running && snapshot.activeModelId === draft.id)
@@ -906,20 +912,7 @@ const VectorModelSettingsPanel: React.FC = () => {
                 htmlFor="embedding-maxInputTokens"
                 label={t(($) => $.settings.embedding.maxInputTokens)}
                 helpTestId={vectorSelectors.remoteMaxInputTokensHelp}
-                hint={
-                  <div className="space-y-1">
-                    <div>
-                      {t(($) => $.settings.embedding.maxInputTokensHint, {
-                        default: DEFAULT_EMBEDDING_INPUT_TOKENS
-                      })}
-                    </div>
-                    {draftBudget ? (
-                      <div data-testid={vectorSelectors.budgetHint}>
-                        {t(($) => $.settings.embedding.budgetHint, draftBudget)}
-                      </div>
-                    ) : null}
-                  </div>
-                }
+                hint={t(($) => $.settings.embedding.maxInputTokensHint)}
               />
               <InputNumber<number>
                 id="embedding-maxInputTokens"
@@ -945,12 +938,17 @@ const VectorModelSettingsPanel: React.FC = () => {
               <ModelFieldLabel
                 htmlFor="embedding-apiKey"
                 label={t(($) => $.settings.embedding.apiKey)}
-                hint={t(($) => $.settings.embedding.keyHint)}
-                helpTestId={vectorSelectors.remoteApiKeyHelp}
+                required={!draft.id}
               />
               <Input.Password
                 id="embedding-apiKey"
                 value={draft.apiKey || ''}
+                aria-required={!draft.id}
+                placeholder={
+                  draft.id
+                    ? t(($) => $.settings.embedding.apiKeyEditPlaceholder)
+                    : t(($) => $.settings.embedding.apiKeyPlaceholder)
+                }
                 disabled={
                   Boolean(pending) ||
                   Boolean(snapshot?.index.running && snapshot.activeModelId === draft.id)

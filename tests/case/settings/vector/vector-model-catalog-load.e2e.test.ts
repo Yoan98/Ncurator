@@ -77,6 +77,19 @@ describe('settings vector e2e', () => {
               timeout: 10_000
             })
             .toBe(true)
+          const addConfigButton = getSettingsLocator(page, vectorSelectors.remoteAddButton)
+          expect(await addConfigButton.innerText()).toMatch(/^(新增配置|Add configuration)$/)
+          expect(await addConfigButton.locator('svg').count()).toBe(1)
+          for (const name of [/^(本地模型|Local models)$/, /^(远程模型|Remote models)$/]) {
+            const heading = vectorPage.getByRole('heading', { name })
+            expect(
+              await heading.evaluate((element) =>
+                Boolean(
+                  element.closest('.nc-settings-panel-toolbar')?.closest('.nc-settings-panel')
+                )
+              )
+            ).toBe(true)
+          }
           const readSnapshot = () => page.evaluate(() => window.api.embeddingModelsGet())
           const initial = await readSnapshot()
           expect(initial.index).toMatchObject({ staleFileCount: 0, staleWebCount: 0 })
@@ -137,14 +150,14 @@ describe('settings vector e2e', () => {
             page,
             vectorSelectors.remoteMaxInputTokensInput
           )
-          const budgetHint = getSettingsLocator(page, vectorSelectors.budgetHint)
           const maxInputHelp = getSettingsLocator(page, vectorSelectors.remoteMaxInputTokensHelp)
-          const readBudgetHint = async (): Promise<string> => {
+          const readLengthHelp = async (): Promise<string> => {
             await maxInputHelp.hover()
-            await budgetHint.waitFor({ state: 'visible' })
-            const text = await budgetHint.innerText()
+            const tooltip = page.getByRole('tooltip')
+            await tooltip.waitFor({ state: 'visible' })
+            const text = await tooltip.innerText()
             await maxInputTokensInput.hover()
-            await budgetHint.waitFor({ state: 'hidden' })
+            await tooltip.waitFor({ state: 'hidden' })
             return text
           }
           const remoteCard = (id: string) =>
@@ -157,6 +170,41 @@ describe('settings vector e2e', () => {
           const addRemote = async (name: string, host: string, maxInputTokens?: number) => {
             await getSettingsLocator(page, vectorSelectors.remoteAddButton).click()
             await modal.waitFor({ state: 'visible' })
+            await modal.evaluate(async (element) => {
+              await Promise.all(
+                element
+                  .getAnimations({ subtree: true })
+                  .map((animation) => animation.finished.catch(() => undefined))
+              )
+            })
+            expect(await modal.getByText(/^(新增配置|Add configuration)$/).count()).toBe(1)
+            expect(await modal.locator('label span[aria-hidden="true"]').count()).toBe(4)
+            expect(await modal.locator('input[aria-required="true"]').count()).toBe(4)
+            expect(await modal.getByRole('button', { name: /说明|About/ }).count()).toBe(1)
+            const namePlaceholder = await getSettingsLocator(
+              page,
+              vectorSelectors.remoteNameInput
+            ).getAttribute('placeholder')
+            expect(namePlaceholder).toMatch(/^(百炼向量|Knowledge base embeddings)$/)
+            expect(
+              await getSettingsLocator(page, vectorSelectors.remoteBaseUrlInput).getAttribute(
+                'placeholder'
+              )
+            ).toBe('https://api.example.com/v1')
+            expect(
+              await getSettingsLocator(page, vectorSelectors.remoteModelNameInput).getAttribute(
+                'placeholder'
+              )
+            ).toBe('text-embedding-v4')
+            expect(await apiKeyInput.getAttribute('placeholder')).toMatch(
+              /请输入 API 密钥|Enter an API key/
+            )
+            await runtime.captureScreenshot({
+              name: 'remote-config-required-fields',
+              message: '统一新增配置标题、直接示例 placeholder 和必填红星，仅长度字段保留问号。'
+            })
+            await getSettingsLocator(page, vectorSelectors.remoteSaveButton).click()
+            expect(await modal.isVisible()).toBe(true)
             await getSettingsLocator(page, vectorSelectors.remoteNameInput).fill(name)
             await getSettingsLocator(page, vectorSelectors.remoteBaseUrlInput).fill(
               `https://${host}.invalid/v1`
@@ -165,34 +213,30 @@ describe('settings vector e2e', () => {
               'catalog-test-embedding'
             )
             await apiKeyInput.fill('catalog-test-fake-key')
-            expect(await budgetHint.isVisible()).toBe(false)
-            await getSettingsLocator(page, vectorSelectors.remoteApiKeyHelp).hover()
-            await expect
-              .poll(() => page.getByRole('tooltip').innerText())
-              .toMatch(/留空|Leave blank/)
-            await apiKeyInput.hover()
-            await getSettingsLocator(page, vectorSelectors.remoteModelNameHelp).focus()
-            await expect
-              .poll(() => page.getByRole('tooltip').innerText())
-              .toContain('text-embedding-v4')
-            await apiKeyInput.focus()
-            await page.getByRole('tooltip').waitFor({ state: 'hidden' })
             expect(await modal.locator('p').count()).toBe(0)
-            await runtime.captureScreenshot({
-              name: 'remote-model-compact-form',
-              message: '表单默认只显示字段与操作，说明集中在 label 问号中。'
-            })
             expect(await maxInputTokensInput.inputValue()).toBe('512')
-            expect(await readBudgetHint()).toContain('16')
-            expect(await readBudgetHint()).toContain('496')
+            const lengthHelp = await readLengthHelp()
+            expect(lengthHelp).toMatch(/自动分段|split automatically/)
+            expect(lengthHelp).not.toMatch(/预留|正文可用|reserved|content budget|496|7987/i)
+            await maxInputHelp.focus()
+            const lengthTooltip = page.getByRole('tooltip')
+            await lengthTooltip.waitFor({ state: 'visible' })
             await maxInputHelp.hover()
-            await budgetHint.waitFor({ state: 'visible' })
+            await lengthTooltip.evaluate(async (element) => {
+              const popup = element.closest('.ant-tooltip') || element
+              await Promise.all(
+                popup
+                  .getAnimations({ subtree: true })
+                  .map((animation) => animation.finished.catch(() => undefined))
+              )
+            })
             await runtime.captureScreenshot({
-              name: 'remote-model-input-help',
-              message: '最大输入长度问号悬浮显示简短说明及当前预留、正文预算。'
+              name: 'remote-config-length-help',
+              message: '问号仅解释向量化分段长度及模型上限，不展示内部计算。'
             })
             await maxInputTokensInput.hover()
-            await budgetHint.waitFor({ state: 'hidden' })
+            await maxInputTokensInput.focus()
+            await lengthTooltip.waitFor({ state: 'hidden' })
             if (maxInputTokens !== undefined) {
               await maxInputTokensInput.fill('0')
               await getSettingsLocator(page, vectorSelectors.remoteSaveButton).click()
@@ -201,8 +245,7 @@ describe('settings vector e2e', () => {
                 false
               )
               await maxInputTokensInput.fill(String(maxInputTokens))
-              expect(await readBudgetHint()).toContain('205')
-              expect(await readBudgetHint()).toContain('7987')
+              expect(await readLengthHelp()).toBe(lengthHelp)
             }
             await getSettingsLocator(page, vectorSelectors.remoteSaveButton).click()
             await modal.waitFor({ state: 'hidden' })
@@ -235,9 +278,14 @@ describe('settings vector e2e', () => {
           ).click()
           await modal.waitFor({ state: 'visible' })
           expect(await apiKeyInput.inputValue()).toBe('')
+          expect(await apiKeyInput.getAttribute('aria-required')).toBe('false')
+          expect(await apiKeyInput.getAttribute('placeholder')).toMatch(
+            /留空保留原密钥|Leave blank to keep the saved key/
+          )
+          expect(await modal.locator('label span[aria-hidden="true"]').count()).toBe(3)
           expect(await maxInputTokensInput.inputValue()).toBe('8192')
           await maxInputTokensInput.fill('')
-          expect(await readBudgetHint()).toContain('496')
+          expect(await maxInputTokensInput.getAttribute('placeholder')).toContain('512')
           expect(
             await getSettingsLocator(page, vectorSelectors.remoteBaseUrlInput).inputValue()
           ).toBe('https://catalogue-remote-a.invalid/v1')
@@ -265,6 +313,11 @@ describe('settings vector e2e', () => {
           ).click()
           await modal.waitFor({ state: 'visible' })
           expect(await apiKeyInput.inputValue()).toBe('')
+          expect(await apiKeyInput.getAttribute('aria-required')).toBe('false')
+          expect(await apiKeyInput.getAttribute('placeholder')).toMatch(
+            /留空保留原密钥|Leave blank to keep the saved key/
+          )
+          expect(await modal.locator('label span[aria-hidden="true"]').count()).toBe(3)
           expect(await maxInputTokensInput.inputValue()).toBe('512')
           expect(await getSettingsLocator(page, vectorSelectors.remoteNameInput).inputValue()).toBe(
             'Catalogue remote A edited'
