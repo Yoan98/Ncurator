@@ -70,7 +70,9 @@ const TEXT = {
   cancelDelete: t(($) => $.common.cancel),
   installed: t(($) => $.settings.installed),
   delete: t(($) => $.common.delete),
-  downloading: t(($) => $.settings.downloading),
+  cancelDownload: t(($) => $.settings.embedding.cancelDownload),
+  cancelDownloadTitle: t(($) => $.settings.embedding.cancelDownloadTitle),
+  cancelDownloadConfirm: t(($) => $.settings.embedding.cancelDownloadConfirm),
   downloadingLabel: t(($) => $.settings.downloading2),
   download: t(($) => $.common.download),
   fileUnit: t(($) => $.common.file)
@@ -268,22 +270,18 @@ const VectorModelSettingsPanel: React.FC = () => {
     }
   }
 
-  const selectButton = (id: string, ready = true): React.ReactNode =>
+  const selectedBadge = (id: string): React.ReactNode =>
     snapshot?.activeModelId === id ? (
-      <Tag key={`select-${id}`} className="!m-0">
+      <Tag className="!m-0 !border-none !bg-[#F4F4F2] !text-[12px] !font-normal !text-[#787774]">
         {t(($) => $.settings.embedding.current)}
       </Tag>
-    ) : (
+    ) : null
+
+  const selectButton = (id: string, ready = true): React.ReactNode =>
+    !ready || snapshot?.activeModelId === id ? null : (
       <Button
-        key={`select-${id}`}
         size="small"
-        disabled={
-          !ready ||
-          !snapshot ||
-          Boolean(snapshotError) ||
-          Boolean(pending) ||
-          snapshot.index.running
-        }
+        disabled={!snapshot || Boolean(snapshotError) || Boolean(pending) || snapshot.index.running}
         loading={pending === `select-${id}`}
         onClick={() => void mutate(`select-${id}`, () => window.api.embeddingModelSelect(id))}
         data-testid={`${vectorSelectors.selectButtonPrefix}-${id}`}
@@ -471,17 +469,6 @@ const VectorModelSettingsPanel: React.FC = () => {
     }
   }
 
-  const activeRemote = snapshot?.remoteModels.find((model) => model.id === snapshot.activeModelId)
-  const activeLocal = models.find((model) => `local:${model.id}` === snapshot?.activeModelId)
-  const activeLabel = activeRemote
-    ? t(($) => $.settings.embedding.selectedRemote, { name: activeRemote.name })
-    : activeLocal
-      ? activeLocal.isDownloaded
-        ? t(($) => $.settings.embedding.selectedLocal, { name: activeLocal.name })
-        : t(($) => $.settings.embedding.selectedLocalMissing, { name: activeLocal.name })
-      : snapshot
-        ? t(($) => $.settings.embedding.selectionMissing)
-        : t(($) => $.settings.checkingVectorModelStatus)
   const index = snapshot?.index
   const restoreRemote = snapshot?.remoteModels.find((model) => model.id === index?.restoreModelId)
   const restoreLocal = models.find(
@@ -494,100 +481,120 @@ const VectorModelSettingsPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto"
       data-testid={vectorSelectors.page}
     >
-      <section className="nc-settings-panel shrink-0 p-4">
+      {snapshotError || operationError ? (
         <div
-          className="break-words text-[14px] font-medium"
-          data-testid={vectorSelectors.activeModel}
+          role="alert"
+          className="nc-notice nc-notice-danger shrink-0 break-words"
+          data-testid={vectorSelectors.modelError}
         >
-          {activeLabel}
+          {snapshotError}
+          {snapshotError && operationError ? ' · ' : ''}
+          {operationError}
         </div>
-        {snapshotError || operationError ? (
-          <div
-            role="alert"
-            className="nc-notice nc-notice-danger mt-3 break-words"
-            data-testid={vectorSelectors.modelError}
-          >
-            {snapshotError}
-            {snapshotError && operationError ? ' · ' : ''}
-            {operationError}
-          </div>
-        ) : null}
-        {index?.running ? (
-          <p className="mt-2 text-[12px] text-[#787774]">
-            {t(($) => $.settings.embedding.indexingGuard)}
-          </p>
-        ) : null}
-        {index ? (
-          <EmbeddingIndexNotice
-            index={index}
-            onNavigate={() =>
-              navigate(
-                `/settings/workspace?source=${index.staleFileCount > 0 ? 'files' : 'web'}&focus=index`
-              )
-            }
-            restoreName={restoreName}
-            onRestore={
-              restoreName && index.restoreModelId
-                ? () => {
-                    void mutate(`select-${index.restoreModelId}`, () =>
-                      window.api.embeddingModelSelect(index.restoreModelId!)
-                    )
-                  }
-                : undefined
-            }
-            disabled={Boolean(pending) || Boolean(snapshotError)}
-          />
-        ) : null}
-      </section>
-      <section className="nc-settings-panel flex shrink-0 flex-col overflow-hidden">
-        <div className="nc-settings-panel-toolbar shrink-0">
-          <h2>{t(($) => $.settings.embedding.localModels)}</h2>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto [&_.ant-list-item]:!border-[#EEEEEC] [&_.ant-list-item]:transition-colors [&_.ant-list-item:hover]:!bg-[#F7F7F5]">
+      ) : null}
+      {index?.running ? (
+        <p className="shrink-0 text-[12px] text-[#787774]">
+          {t(($) => $.settings.embedding.indexingGuard)}
+        </p>
+      ) : null}
+      {index ? (
+        <EmbeddingIndexNotice
+          index={index}
+          onNavigate={() =>
+            navigate(
+              `/settings/workspace?source=${index.staleFileCount > 0 ? 'files' : 'web'}&focus=index`
+            )
+          }
+          restoreName={restoreName}
+          onRestore={
+            restoreName && index.restoreModelId
+              ? () => {
+                  void mutate(`select-${index.restoreModelId}`, () =>
+                    window.api.embeddingModelSelect(index.restoreModelId!)
+                  )
+                }
+              : undefined
+          }
+          disabled={Boolean(pending) || Boolean(snapshotError)}
+        />
+      ) : null}
+      <section className="shrink-0">
+        <h2 className="mb-3 text-[14px] font-medium">
+          {t(($) => $.settings.embedding.localModels)}
+        </h2>
+        <div className="nc-settings-panel overflow-hidden">
           {catalogError ? (
             <div
-              className="nc-notice nc-notice-danger my-3"
+              className="nc-notice nc-notice-danger m-4"
               data-testid={vectorSelectors.catalogError}
             >
               {catalogError}
             </div>
           ) : null}
-
           <List
             loading={loading}
-            itemLayout="horizontal"
             dataSource={models}
-            className="nc-settings-vector-list [&_.ant-list-item]:!flex-wrap [&_.ant-list-item-action]:!ml-0 [&_.ant-list-item-action]:!flex [&_.ant-list-item-action]:!flex-wrap [&_.ant-list-item-action]:!gap-2 [&_.ant-list-item-meta]:!min-w-[min(100%,260px)]"
+            className="[&_.ant-list-item]:!border-[#EEEEEC]"
             data-testid={vectorSelectors.list}
-            renderItem={(item) => (
-              <List.Item
-                data-testid={`${vectorSelectors.cardPrefix}-${item.id}`}
-                actions={[
-                  selectButton(`local:${item.id}`, item.isDownloaded),
-                  ...(item.isDownloaded
-                    ? [
-                        <div
-                          key={`installed-${item.id}`}
-                          className="flex items-center gap-2 font-medium text-[#2F6F4E]"
-                          data-testid={`${vectorSelectors.installedBadgePrefix}-${item.id}`}
-                        >
-                          <HiCheckCircle className="text-lg" />
-                          <span>{TEXT.installed}</span>
-                        </div>,
+            renderItem={(item) => {
+              const id = `local:${item.id}`
+              const isSelected = snapshot?.activeModelId === id
+              const isDownloading = downloadingId === item.id
+              const hasError = Boolean(errorMsg && errorRepoId === item.id)
+              const deleteDisabled =
+                Boolean(pending) || Boolean(snapshot?.index.running && isSelected)
+              return (
+                <List.Item
+                  className="!block !px-5 !py-5"
+                  data-testid={`${vectorSelectors.cardPrefix}-${item.id}`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+                    <div className="min-w-0 flex-1 basis-64">
+                      <div
+                        className="flex min-h-8 flex-wrap items-center gap-2 text-[14px] font-medium text-[#37352F]"
+                        data-testid={isSelected ? vectorSelectors.activeModel : undefined}
+                      >
+                        <span>{item.name}</span>
+                        {selectedBadge(id)}
+                      </div>
+                      <p className="mt-1 text-[13px] leading-5 text-[#787774]">
+                        {item.description}
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-[#787774]">
+                        {item.tags.length ? <span>{item.tags.join(' · ')}</span> : null}
+                        {item.isDownloaded ? (
+                          <>
+                            {item.tags.length ? <span aria-hidden="true">·</span> : null}
+                            <span
+                              className="inline-flex items-center gap-1 text-[#2F6F4E]"
+                              data-testid={`${vectorSelectors.installedBadgePrefix}-${item.id}`}
+                            >
+                              <HiCheckCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                              {TEXT.installed}
+                            </span>
+                          </>
+                        ) : !isDownloading && !hasError ? (
+                          <>
+                            {item.tags.length ? <span aria-hidden="true">·</span> : null}
+                            <span>{t(($) => $.settings.embedding.notDownloaded)}</span>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      {selectButton(id, item.isDownloaded)}
+                      {item.isDownloaded || isDownloading ? (
                         <Popconfirm
-                          key={`delete-confirm-${item.id}`}
-                          title={TEXT.deleteConfirmTitle}
-                          description={TEXT.deleteConfirmDescription}
-                          okText={TEXT.confirmDelete}
+                          title={isDownloading ? TEXT.cancelDownloadTitle : TEXT.deleteConfirmTitle}
+                          description={
+                            isDownloading
+                              ? TEXT.deleteDuringDownloadDescription
+                              : TEXT.deleteConfirmDescription
+                          }
+                          okText={isDownloading ? TEXT.cancelDownloadConfirm : TEXT.confirmDelete}
                           cancelText={TEXT.cancelDelete}
                           onConfirm={() => handleDelete(item.id)}
-                          disabled={
-                            Boolean(pending) ||
-                            Boolean(
-                              snapshot?.index.running &&
-                              snapshot.activeModelId === `local:${item.id}`
-                            )
-                          }
+                          disabled={deleteDisabled}
                           okButtonProps={{
                             'data-testid': `${vectorSelectors.deleteConfirmButtonPrefix}-${item.id}`
                           }}
@@ -596,155 +603,93 @@ const VectorModelSettingsPanel: React.FC = () => {
                           }}
                         >
                           <Button
-                            type="text"
-                            danger
-                            disabled={
-                              Boolean(pending) ||
-                              Boolean(
-                                snapshot?.index.running &&
-                                snapshot.activeModelId === `local:${item.id}`
-                              )
-                            }
-                            icon={<HiTrash className="h-4 w-4" />}
-                            aria-label={TEXT.delete}
-                            data-testid={`${vectorSelectors.deleteButtonPrefix}-${item.id}`}
-                          />
-                        </Popconfirm>
-                      ]
-                    : downloadingId === item.id
-                      ? [
-                          <Button key={`downloading-${item.id}`} disabled loading>
-                            {TEXT.downloading}
-                          </Button>,
-                          <Popconfirm
-                            key={`delete-confirm-${item.id}`}
-                            title={TEXT.deleteConfirmTitle}
-                            description={TEXT.deleteDuringDownloadDescription}
-                            okText={TEXT.confirmDelete}
-                            cancelText={TEXT.cancelDelete}
-                            onConfirm={() => handleDelete(item.id)}
-                            disabled={
-                              Boolean(pending) ||
-                              Boolean(
-                                snapshot?.index.running &&
-                                snapshot.activeModelId === `local:${item.id}`
-                              )
-                            }
-                            okButtonProps={{
-                              'data-testid': `${vectorSelectors.deleteConfirmButtonPrefix}-${item.id}`
-                            }}
-                            cancelButtonProps={{
-                              'data-testid': `${vectorSelectors.deleteCancelButtonPrefix}-${item.id}`
-                            }}
-                          >
-                            <Button
-                              type="text"
-                              danger
-                              disabled={
-                                Boolean(pending) ||
-                                Boolean(
-                                  snapshot?.index.running &&
-                                  snapshot.activeModelId === `local:${item.id}`
-                                )
-                              }
-                              icon={<HiTrash className="h-4 w-4" />}
-                              aria-label={TEXT.delete}
-                              data-testid={`${vectorSelectors.deleteButtonPrefix}-${item.id}`}
-                            />
-                          </Popconfirm>
-                        ]
-                      : [
-                          <Button
-                            key={`download-${item.id}`}
-                            type="primary"
-                            onClick={() => void handleDownload(item.id)}
-                            className="!border-none !bg-[#37352F] shadow-none hover:!bg-[#2F3437]"
-                            disabled={Boolean(downloadingId) || Boolean(pending)}
-                            data-testid={`${vectorSelectors.downloadButtonPrefix}-${item.id}`}
-                          >
-                            {TEXT.download}
-                          </Button>
-                        ])
-                ]}
-              >
-                <List.Item.Meta
-                  title={
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <span className="text-[14px] font-medium text-[#37352F]">{item.name}</span>
-                      {item.tags.map((tag) => (
-                        <Tag key={tag} className="mr-0 text-xs">
-                          {tag}
-                        </Tag>
-                      ))}
-                    </div>
-                  }
-                  description={
-                    <div className="space-y-4">
-                      <p className="text-[13px] leading-5 text-[#787774]">{item.description}</p>
-
-                      {downloadingId === item.id ? (
-                        <div
-                          className="rounded-[8px] border border-[#EEEEEC] bg-[#FFFFFF] p-4"
-                          data-testid={`${vectorSelectors.progressPrefix}-${item.id}`}
-                        >
-                          <div className="mb-2 flex justify-between text-sm">
-                            <span className="font-medium text-[#37352F]">
-                              {TEXT.downloadingLabel}
-                            </span>
-                            <span className="font-medium text-[#37352F]">{downloadProgress}%</span>
-                          </div>
-                          <Progress
-                            percent={downloadProgress}
-                            strokeColor="#37352F"
-                            showInfo={false}
-                            className="!mb-2"
-                          />
-                          <div className="flex justify-between text-xs text-[#9B9A97]">
-                            <span
-                              className="max-w-[200px] truncate"
-                              data-testid={`${vectorSelectors.currentFilePrefix}-${item.id}`}
-                            >
-                              {currentFile}
-                            </span>
-                            <span>
-                              {fileProgress.completed}/{fileProgress.total} {TEXT.fileUnit}
-                            </span>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {errorMsg && errorRepoId === item.id ? (
-                        <div
-                          className="flex flex-wrap items-center gap-2 text-sm text-[#B3261E]"
-                          data-testid={`${vectorSelectors.errorPrefix}-${item.id}`}
-                        >
-                          <HiExclamationCircle />
-                          <span className="font-medium">{TEXT.downloadFailed}</span>
-                          <span className="break-words">{errorMsg}</span>
-                          <Button
-                            type="link"
                             size="small"
-                            className="!h-auto !p-0 !text-[#37352F]"
-                            onClick={() => handleOpenSwitchSource(item.id)}
-                            disabled={Boolean(pending) || Boolean(downloadingId)}
-                            data-testid={`${vectorSelectors.switchSourceButtonPrefix}-${item.id}`}
+                            type={isDownloading ? 'default' : 'text'}
+                            danger={!isDownloading}
+                            disabled={deleteDisabled}
+                            loading={pending === `delete-${item.id}`}
+                            icon={
+                              isDownloading ? undefined : (
+                                <HiTrash className="h-4 w-4" aria-hidden="true" />
+                              )
+                            }
+                            data-testid={`${vectorSelectors.deleteButtonPrefix}-${item.id}`}
                           >
-                            {TEXT.switchSource}
+                            {isDownloading ? TEXT.cancelDownload : TEXT.delete}
                           </Button>
-                        </div>
-                      ) : null}
+                        </Popconfirm>
+                      ) : hasError ? (
+                        <Button
+                          size="small"
+                          onClick={() => handleOpenSwitchSource(item.id)}
+                          disabled={Boolean(pending) || Boolean(downloadingId)}
+                          data-testid={`${vectorSelectors.switchSourceButtonPrefix}-${item.id}`}
+                        >
+                          {TEXT.switchSource}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="small"
+                          type="primary"
+                          onClick={() => void handleDownload(item.id)}
+                          disabled={Boolean(downloadingId) || Boolean(pending)}
+                          data-testid={`${vectorSelectors.downloadButtonPrefix}-${item.id}`}
+                        >
+                          {TEXT.download}
+                        </Button>
+                      )}
                     </div>
-                  }
-                />
-              </List.Item>
-            )}
+                  </div>
+                  {isDownloading ? (
+                    <div
+                      className="mt-5"
+                      data-testid={`${vectorSelectors.progressPrefix}-${item.id}`}
+                    >
+                      <div className="flex justify-between gap-3 text-[13px] text-[#37352F]">
+                        <span>{TEXT.downloadingLabel}</span>
+                        <span className="tabular-nums">{downloadProgress}%</span>
+                      </div>
+                      <Progress
+                        percent={downloadProgress}
+                        strokeColor="#37352F"
+                        strokeWidth={4}
+                        showInfo={false}
+                        className="!my-2"
+                      />
+                      <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[12px] text-[#91918E]">
+                        <span
+                          className="min-w-0 flex-1 break-all"
+                          data-testid={`${vectorSelectors.currentFilePrefix}-${item.id}`}
+                        >
+                          {currentFile}
+                        </span>
+                        <span className="shrink-0 tabular-nums">
+                          {fileProgress.completed}/{fileProgress.total} {TEXT.fileUnit}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                  {hasError ? (
+                    <div
+                      className="mt-4 flex items-start gap-2 text-[13px] text-[#B3261E]"
+                      data-testid={`${vectorSelectors.errorPrefix}-${item.id}`}
+                    >
+                      <HiExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="min-w-0 break-words">
+                        {TEXT.downloadFailed} · {errorMsg}
+                      </span>
+                    </div>
+                  ) : null}
+                </List.Item>
+              )
+            }}
           />
         </div>
       </section>
 
-      <section className="nc-settings-panel shrink-0 overflow-hidden">
-        <div className="nc-settings-panel-toolbar flex flex-wrap items-center justify-between gap-2">
-          <h2>{t(($) => $.settings.embedding.remoteModels)}</h2>
+      <section className="shrink-0">
+        <div className="mb-3 flex min-h-8 flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[14px] font-medium">{t(($) => $.settings.embedding.remoteModels)}</h2>
           <Button
             size="small"
             disabled={!snapshot || Boolean(snapshotError) || Boolean(pending)}
@@ -754,16 +699,24 @@ const VectorModelSettingsPanel: React.FC = () => {
             {t(($) => $.settings.embedding.addRemote)}
           </Button>
         </div>
-        <div data-testid={vectorSelectors.remoteList}>
+        <div className="nc-settings-panel overflow-hidden" data-testid={vectorSelectors.remoteList}>
           {snapshot?.remoteModels.length ? (
             snapshot.remoteModels.map((model) => (
               <div
                 key={model.id}
-                className="nc-list-row flex flex-wrap items-center justify-between gap-3 px-4 py-4"
+                className="nc-list-row flex flex-wrap items-start justify-between gap-x-6 gap-y-3 px-5 py-5"
                 data-testid={`${vectorSelectors.remoteCardPrefix}-${model.id}`}
               >
                 <div className="min-w-0 flex-1 basis-48">
-                  <div className="break-words text-[14px] font-medium">{model.name}</div>
+                  <div
+                    className="flex min-h-8 flex-wrap items-center gap-2 break-words text-[14px] font-medium"
+                    data-testid={
+                      snapshot.activeModelId === model.id ? vectorSelectors.activeModel : undefined
+                    }
+                  >
+                    <span>{model.name}</span>
+                    {selectedBadge(model.id)}
+                  </div>
                   <div className="mt-1 break-all text-[12px] text-[#787774]">
                     {model.modelName} · {model.baseUrl}
                   </div>

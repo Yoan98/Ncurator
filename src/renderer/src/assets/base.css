@@ -1462,10 +1462,6 @@ textarea,
   padding: 16px;
 }
 
-.nc-settings-vector-list .ant-list-item {
-  padding: 18px;
-}
-
 @media (max-width: 1000px) {
   .nc-settings-content-frame {
     padding: 56px 24px 24px;
@@ -1499,15 +1495,6 @@ textarea,
   }
 
   .nc-settings-row-control {
-    margin-left: auto;
-  }
-
-  .nc-settings-vector-list .ant-list-item {
-    flex-wrap: wrap;
-    gap: 16px;
-  }
-
-  .nc-settings-vector-list .ant-list-item-action {
     margin-left: auto;
   }
 }

@@ -1,7 +1,7 @@
 import { lstat, mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { vectorSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import { getSettingsLocator, navigateToSettingsSection } from '../../../harness/e2e/settings'
@@ -63,6 +63,23 @@ describe('settings vector real download e2e', () => {
               modelLocator(vectorSelectors.deleteButtonPrefix)
             )
             await deleteButton.waitFor({ state: 'visible' })
+            expect(await deleteButton.innerText()).toMatch(/取消下载|Cancel download/)
+            const modelCard = getSettingsLocator(page, modelLocator(vectorSelectors.cardPrefix))
+            const progressBox = await progress.boundingBox()
+            const actionBox = await deleteButton.boundingBox()
+            const cardBox = await modelCard.boundingBox()
+            expect(progressBox!.y).toBeGreaterThanOrEqual(actionBox!.y + actionBox!.height)
+            expect(progressBox!.width).toBeGreaterThan(cardBox!.width * 0.8)
+            await runtime.captureScreenshot({
+              name: 'vector-row-downloading',
+              message: '下载进度独占下方整行，右上角只显示取消下载。'
+            })
+            await deleteButton.click()
+            await getSettingsLocator(
+              page,
+              modelLocator(vectorSelectors.deleteCancelButtonPrefix)
+            ).click()
+            expect(await progress.isVisible()).toBe(true)
             await deleteButton.click()
             await getSettingsLocator(
               page,

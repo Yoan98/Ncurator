@@ -83,6 +83,52 @@ describe('settings vector e2e', () => {
           expect(initial.remoteModels).toHaveLength(0)
           const activeModel = getSettingsLocator(page, vectorSelectors.activeModel)
           const initialActiveLabel = await activeModel.innerText()
+          const selectedLocalCard = getSettingsLocator(
+            page,
+            `${vectorSelectors.cardPrefix}-${initial.activeModelId.replace(/^local:/, '')}`
+          )
+          expect(
+            await selectedLocalCard
+              .locator(`[data-testid="${vectorSelectors.activeModel}"]`)
+              .count()
+          ).toBe(1)
+          const installedBadge = selectedLocalCard.locator(
+            `[data-testid^="${vectorSelectors.installedBadgePrefix}-"]`
+          )
+          const localDelete = selectedLocalCard.locator(
+            `[data-testid^="${vectorSelectors.deleteButtonPrefix}-"]`
+          )
+          expect(await localDelete.innerText()).toMatch(/^(删除|Delete)$/)
+          expect(await vectorPage.getByRole('button', { name: /更多|More/ }).count()).toBe(0)
+          const nameBox = await activeModel.boundingBox()
+          const installedBox = await installedBadge.boundingBox()
+          const deleteBox = await localDelete.boundingBox()
+          expect(installedBox!.y).toBeGreaterThanOrEqual(nameBox!.y + nameBox!.height)
+          expect(deleteBox!.x).toBeGreaterThan(installedBox!.x + installedBox!.width)
+          await runtime.captureScreenshot({
+            name: 'vector-row-installed',
+            message: '模型名称旁标记当前选择，安装状态放在辅助信息行，右侧直接显示删除。'
+          })
+          const originalViewport =
+            page.viewportSize() ||
+            (await page.evaluate(() => ({ width: innerWidth, height: innerHeight })))
+          try {
+            await page.setViewportSize({ width: 720, height: 850 })
+            await expect
+              .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+              .toBe(true)
+            const narrowCard = await selectedLocalCard.boundingBox()
+            const narrowDelete = await localDelete.boundingBox()
+            expect(narrowDelete!.x + narrowDelete!.width).toBeLessThanOrEqual(
+              narrowCard!.x + narrowCard!.width
+            )
+            await runtime.captureScreenshot({
+              name: 'vector-row-narrow',
+              message: '窄窗口模型信息与直接操作完整显示，不横向溢出。'
+            })
+          } finally {
+            await page.setViewportSize(originalViewport)
+          }
           const modal = page.getByRole('dialog').filter({
             has: getSettingsLocator(page, vectorSelectors.remoteNameInput)
           })
