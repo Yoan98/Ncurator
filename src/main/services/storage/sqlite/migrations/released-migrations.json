@@ -1,5 +1,5 @@
 {
-  "publishedThrough": 18,
+  "publishedThrough": 21,
   "migrations": [
     {
       "version": 1,
@@ -108,6 +108,24 @@
       "name": "app_language_and_service_route",
       "file": "018_app_language_and_service_route.ts",
       "sha256": "7c17688e31f4ef9f6550431bb1fe8992ba3fe79bd329a2be8750c531d40630ff"
+    },
+    {
+      "version": 19,
+      "name": "user_skills",
+      "file": "019_user_skills.ts",
+      "sha256": "c48325b2d984c9b63faebc6145af347c56062bde0832647532197488d459288e"
+    },
+    {
+      "version": 20,
+      "name": "skill_name_bindings",
+      "file": "020_skill_name_bindings.ts",
+      "sha256": "2f2f000f9852b6de660e87e36f76a5b8c366506f94f30c1fa200779390122ede"
+    },
+    {
+      "version": 21,
+      "name": "embedding_models",
+      "file": "021_embedding_models.ts",
+      "sha256": "12413705805327e17baf98a11598b289b081d00f12f1e863b3d0ab60d68e1ff3"
     }
   ]
 }
