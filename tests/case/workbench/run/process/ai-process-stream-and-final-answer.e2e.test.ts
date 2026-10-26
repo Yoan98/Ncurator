@@ -242,7 +242,7 @@ describe('workbench run e2e', () => {
           const missingReadPath = path.join(setup.workspace.rootPath, 'activity-header-missing.txt')
           await sendWorkbenchMessage(
             page,
-            `${PROMPT}\n另外请尝试读取这个工作区内的文本文件：${missingReadPath}。如果文件不存在，说明读取失败后继续总结已有资料。`
+            `${PROMPT}\n另外请直接用 text_file_read 读取这个工作区内的文本文件：${missingReadPath}，不要用终端存在性检查替代。即使文件不存在，也实际调用一次读取工具；收到读取失败后继续总结已有资料。`
           )
           const processLocator = await waitForLatestAssistantProcess(page)
           const durationLocator = getWorkbenchPrefixLocator(
