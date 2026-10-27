@@ -246,7 +246,8 @@ describe('workbench conversation e2e', () => {
           const actualListFailure = provider.getModelListFailure()
           const modelListErrorHasHttpStatus =
             actualListFailure !== null &&
-            listErrorText.startsWith(`HTTP ${actualListFailure.status}`)
+            listErrorText.includes(`HTTP ${actualListFailure.status}`) &&
+            listErrorText.startsWith(`GET ${provider.baseUrl}/unavailable-catalog/models`)
           const modelListErrorHasBody =
             actualListFailure !== null &&
             (!actualListFailure.body ||
