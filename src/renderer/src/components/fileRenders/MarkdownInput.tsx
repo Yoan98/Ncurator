@@ -147,6 +147,20 @@ export default function MarkdownInput(props: {
   }, [props.readOnly])
   const emitCurrent = (): void => {
     if (!ready.current || !editor.current || current.current.readOnly) return
+    // Deleting a whole code block can leave Vditor's hidden closing marker behind.
+    const codeBlocks = root.current?.querySelectorAll('.vditor-ir [data-type="code-block"]') ?? []
+    for (const block of codeBlocks) {
+      const marker = block.querySelector(':scope > [data-type="code-block-close-marker"]')
+      if (
+        marker &&
+        [...block.childNodes].every(
+          (node) =>
+            node === marker || (node.nodeType === Node.TEXT_NODE && !node.textContent?.trim())
+        )
+      ) {
+        block.remove()
+      }
+    }
     const value = editor.current.getValue()
     if (value !== baseline.current) {
       baseline.current = value

@@ -102,13 +102,24 @@ describe('workbench skills', () => {
               }))
             )
           const drawer = page.locator('.nc-configuration-drawer .ant-drawer-content-wrapper')
+          runtime.signal({
+            name: 'skill-editor-drawer-layout',
+            message: '记录配置表单的实际 CSS 尺寸与视口。',
+            data: await drawer.evaluate((element) => ({
+              width: element.getBoundingClientRect().width,
+              right: element.getBoundingClientRect().right,
+              viewport: window.innerWidth
+            }))
+          })
           await page.waitForFunction(() =>
             (() => {
               const rect = document
                 .querySelector('.nc-configuration-drawer .ant-drawer-content-wrapper')
                 ?.getBoundingClientRect()
               return Boolean(
-                rect && rect.width === 720 && Math.abs(rect.right - window.innerWidth) < 1
+                rect &&
+                Math.abs(rect.width - 720) < 0.05 &&
+                Math.abs(rect.right - window.innerWidth) < 1
               )
             })()
           )
@@ -172,6 +183,20 @@ describe('workbench skills', () => {
             (id) => window.api.userSkillsGetEnabled(id),
             partnerId
           )
+          const richBody = await page.evaluate(
+            async (name) => (await window.api.userSkillsGet(name)).body,
+            renamed.name
+          )
+          await page.getByTestId(`${selectors.editPrefix}-${renamed.name}`).click()
+          await fillSkillContent(page, '替换后的纯文本正文')
+          await saveSkill(page)
+          const fullReplacementBody = await page.evaluate(
+            async (name) => (await window.api.userSkillsGet(name)).body,
+            renamed.name
+          )
+          await page.getByTestId(`${selectors.editPrefix}-${renamed.name}`).click()
+          await fillSkillContent(page, richBody)
+          await saveSkill(page)
           await page.getByTestId(`${selectors.editPrefix}-${renamed.name}`).click()
           await fillSkillContent(page, '未保存正文')
           await page.keyboard.press('Escape')
@@ -197,9 +222,17 @@ describe('workbench skills', () => {
             await input.waitFor()
             const name = await restarted.page.getByTestId(selectors.name).inputValue()
             const body = await readSkillContent(restarted.page)
-            await input.click()
-            await restarted.page.keyboard.press('ControlOrMeta+End')
+            await input.locator('h1, p').first().click()
+            await restarted.page.keyboard.press('End')
             await restarted.page.keyboard.type('temporary-edit')
+            await restarted.page.getByTestId(selectors.description).click()
+            await restarted.page.waitForFunction(
+              (id) =>
+                document
+                  .querySelector(`[data-testid="${id}"] .vditor-ir > pre.vditor-reset`)
+                  ?.textContent?.includes('temporary-edit'),
+              selectors.content
+            )
             const editable = (await readSkillContent(restarted.page)).includes('temporary-edit')
             reopenedEditors.push({
               name,
@@ -240,6 +273,7 @@ describe('workbench skills', () => {
             failureKeptInput,
             namePreserved: renamed.name === 'report-guide' && renamed.name === persisted.name,
             bindingKept: binding.skillNames.includes(renamed.name),
+            fullReplacementBody,
             savedBody: saved.body,
             reopenedEditors,
             cancelledDeletion
@@ -247,7 +281,7 @@ describe('workbench skills', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.toolbar.height === 44 &&
+            Math.abs(result.toolbar.height - 44) < 0.05 &&
               result.toolbar.drag === 'drag' &&
               result.toolbar.buttons === 1 &&
               result.documentStyle.fontSize === '25px' &&
@@ -271,6 +305,7 @@ describe('workbench skills', () => {
               result.failureKeptInput &&
               result.namePreserved &&
               result.bindingKept &&
+              result.fullReplacementBody.trim() === '替换后的纯文本正文' &&
               result.savedBody.includes('# 更新规范') &&
               result.savedBody.includes('- 风险注明影响') &&
               result.savedBody.includes('```text') &&

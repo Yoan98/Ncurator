@@ -62,7 +62,9 @@ const readRegularFile = (filename: string, limit = Infinity): Buffer => {
   const descriptor = fs.openSync(filename, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0))
   try {
     const stat = fs.fstatSync(descriptor)
-    if (!stat.isFile() || stat.size > limit || stat.dev !== before.dev || stat.ino !== before.ino)
+    // Node 22 on Windows may omit dev in path stats while fstat reports the volume ID.
+    const changedDevice = before.dev !== 0 && stat.dev !== before.dev
+    if (!stat.isFile() || stat.size > limit || changedDevice || stat.ino !== before.ino)
       throw new Error('Skill file is not a regular file or exceeds the size limit')
     const buffer = Buffer.alloc(stat.size + 1)
     let bytesRead = 0

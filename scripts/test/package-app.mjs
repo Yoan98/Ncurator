@@ -283,7 +283,7 @@ export const readPackagedKnowledgeCacheIdentity = (
     const identity = JSON.parse(
       extractFile(
         path.join(resources, 'app.asar'),
-        'out/main/knowledge-cache-identity.json'
+        path.join('out', 'main', 'knowledge-cache-identity.json')
       ).toString('utf8')
     )
     return /^[a-f0-9]{64}$/.test(identity.split) && /^[a-f0-9]{64}$/.test(identity.embedding)

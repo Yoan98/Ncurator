@@ -122,10 +122,12 @@ describe('Skill file discovery production flow', () => {
             status: output.status,
             childError,
             root: service.getRootDirectory(),
-            systems: runner.io.map((item) =>
-              JSON.stringify(
-                item.requestWire?.messages.filter((message) => message.role === 'system')
-              )
+            systems: runner.io.map(
+              (item) =>
+                item.requestWire?.messages
+                  .filter((message) => message.role === 'system')
+                  .map((message) => message.content)
+                  .join('\n') || ''
             ),
             initialTools: JSON.stringify(runner.io[0].requestWire?.tools),
             loadedTools: JSON.stringify(runner.io[1].requestWire?.tools),
@@ -150,7 +152,7 @@ describe('Skill file discovery production flow', () => {
               result.systems[0].includes('<本机信息与文件约定>') &&
               !result.systems[0].includes('runtime_paths.') &&
               !result.systems[0].includes('共享 Skill 目录') &&
-              !result.systems[5]?.includes('\\nRULE-ORIGINAL') &&
+              !result.systems[5]?.includes('\nRULE-ORIGINAL') &&
               result.systems[6]?.includes('RULE-ORIGINAL') === true &&
               result.systems[7]?.includes('RULE-UPDATED') === true &&
               !result.systems.at(-1)?.includes('RULE-UPDATED'),

@@ -48,12 +48,28 @@ export const fillSkillContent = async (page: Page, body: string): Promise<void> 
     .getByTestId(selectors.content)
     .locator('.vditor-ir pre[contenteditable="true"]:visible')
   await input.waitFor({ state: 'visible' })
-  await input.click()
+  const prose = input.locator('h1, h2, h3, p').first()
+  if (await prose.isVisible()) await prose.click()
+  else await input.click()
   await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('Backspace')
-  if (!(await pasteTextThroughElectronClipboard(page, body)))
-    throw new Error('Native Markdown paste was unavailable')
-  await page.waitForTimeout(250)
+  await page.waitForFunction((id) => {
+    const content = document.querySelector<HTMLElement>(
+      `[data-testid="${id}"] .vditor-ir > pre.vditor-reset`
+    )
+    return content?.innerText.replace(/\u200b/g, '').trim() === ''
+  }, selectors.content)
+  if (body) {
+    if (!(await pasteTextThroughElectronClipboard(page, body)))
+      throw new Error('Native Markdown paste was unavailable')
+    await page.waitForFunction((id) => {
+      const content = document.querySelector<HTMLElement>(
+        `[data-testid="${id}"] .vditor-ir > pre.vditor-reset`
+      )
+      return Boolean(content?.innerText.replace(/\u200b/g, '').trim())
+    }, selectors.content)
+    await page.getByTestId(selectors.description).click()
+  }
 }
 export const readSkillContent = async (page: Page): Promise<string> => {
   return await page

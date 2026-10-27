@@ -65,11 +65,11 @@ describe('knowledge foundation', () => {
       harnessMode: 'tool-real',
       domain: 'knowledge',
       suite: 'foundation',
-      description:
-        '慢/高速必须在独立 Node 进程的真实 embedding session 上改变操作系统线程数。',
+      description: '慢/高速必须在独立 Node 进程的真实 embedding session 上改变操作系统线程数。',
       fixtures: [],
       runMode: 'single',
-      execute: async () => {
+      execute: async (runtime) => {
+        await runtime.prepareEmbeddingModel()
         const budgets = {
           slow4: resolveOrtThreadBudget('slow', 4),
           slow8: resolveOrtThreadBudget('slow', 8),
@@ -119,7 +119,8 @@ describe('knowledge foundation', () => {
           }
         )
         runtime.assertThat(
-          result.budgets.fast4.intraOpNumThreads === 3 && result.budgets.fast4.allowSpinning === true,
+          result.budgets.fast4.intraOpNumThreads === 3 &&
+            result.budgets.fast4.allowSpinning === true,
           {
             name: 'fast-4-cores',
             message: '4 核高速应为 3 线程且开启 spinning。',
@@ -127,7 +128,8 @@ describe('knowledge foundation', () => {
           }
         )
         runtime.assertThat(
-          result.budgets.fast8.intraOpNumThreads === 7 && result.budgets.fast8.allowSpinning === true,
+          result.budgets.fast8.intraOpNumThreads === 7 &&
+            result.budgets.fast8.allowSpinning === true,
           {
             name: 'fast-8-cores',
             message: '8 核高速应为 7 线程且开启 spinning。',

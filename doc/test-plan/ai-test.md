@@ -1172,7 +1172,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：backend / mock-llm；human / mock-llm；knowledge none。
 - What：空目录创建、自动发现、按需配置、按名称加载以及更新/停用。
 - Why：工具直调无法证明生产主链刷新与子任务边界。
-- How：仅脚本化模型决策，真实 AI 入口、文件工具、目录服务、配置与存储；核对模型拿到的实际根目录和最小格式，先加载 skill-management 再配置；检查加载后的 schema 及工具预算/恢复。
+- How：仅脚本化模型决策，真实 AI 入口、文件工具、目录服务、配置与存储；从 System 消息正文核对模型拿到的实际根目录和最小格式，避免 JSON 转义改变 Windows 路径的比较结果；先加载 skill-management 再配置，检查加载后的 schema 及工具预算/恢复。
 - Oracle：配置工具默认不进入模型工具集合，按需加载后可用；工具包淘汰/恢复不修改绑定或已加载说明；新建无需同步即能查询启用；更新进入下一轮 System，停用后不恢复；查询无写入且不加载正文，子任务拒绝配置。对应 `WB-SKILL-002-AC4/AC6`。
 
 #### `human-skill-management-live`

@@ -242,7 +242,18 @@ describe('workbench conversation e2e', () => {
           const copiedListError = await runtime.electronApp.evaluate(({ clipboard }) =>
             clipboard.readText()
           )
-          const modelListErrorCopied = copiedListError === listErrorText
+          const modelListErrorCopied =
+            copiedListError.replace(/\r\n/g, '\n') === listErrorText.replace(/\r\n/g, '\n')
+          runtime.signal({
+            name: 'model-list-error-clipboard',
+            message: '核对复制内容，仅将 CRLF 与 LF 视为等价换行。',
+            data: {
+              displayedLength: listErrorText.length,
+              copiedLength: copiedListError.length,
+              copiedHasCRLF: copiedListError.includes('\r\n'),
+              matchesAfterLineEndingNormalization: modelListErrorCopied
+            }
+          })
           const actualListFailure = provider.getModelListFailure()
           const modelListErrorHasHttpStatus =
             actualListFailure !== null &&
@@ -818,7 +829,18 @@ describe('workbench conversation e2e', () => {
             {
               name: 'model-list-request-error-can-be-viewed-copied-and-cleared',
               message:
-                '列表失败在对应配置分组内展示，原地保留脱敏 HTTP 状态与原文，支持复制与收起，正确地址加载成功后清除错误。'
+                '列表失败在对应配置分组内展示，原地保留脱敏 HTTP 状态与原文，支持复制与收起，正确地址加载成功后清除错误。',
+              data: {
+                failureText: result.modelListFailureText,
+                failedOptions: result.failedModelOptionCount,
+                copied: result.modelListErrorCopied,
+                httpStatus: result.modelListErrorHasHttpStatus,
+                body: result.modelListErrorHasBody,
+                keyRedacted: result.modelListErrorKeyRedacted,
+                cleared: result.modelListErrorCleared,
+                refreshVisible: result.modelListRefreshIconVisible,
+                refreshRequested: result.modelListHeaderRefreshRequested
+              }
             }
           )
           await runtime.assertThat(
