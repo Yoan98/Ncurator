@@ -28,4 +28,5 @@ cherry-picks the validated commit to main.
 - [ ] The PR targets `dev` in `Yoan98/Ncurator` and the working branch started from the latest `main`.
 - [ ] The PR focuses on one change, with commits ready to be combined into one complete commit.
 - [ ] Commits include `Signed-off-by`, and original authorship is preserved.
+- [ ] For feature changes, I ran the app myself, tried and tested the affected feature, and recorded the steps and results above.
 - [ ] Relevant documentation is updated and validation results are recorded above.

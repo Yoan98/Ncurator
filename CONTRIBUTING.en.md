@@ -45,6 +45,8 @@ pnpm dev
 
 Run checks appropriate to the change and record the commands and results in the PR. The [testing documentation](./doc/test.md) defines test layers, filters, and real E2E requirements. Confirm the category of new test files with a maintainer first. Update relevant product requirements and test plans when changing product behavior. Configure your own local credentials for tests that require live model calls.
 
+**Before opening a PR, you must run the app yourself and personally try out and test any feature you added or changed.** Record the steps and results in the PR. Seeing your own changes work in the app can be rewarding, too.
+
 Keep `.env-example` free of real credentials. Do not commit production shared secrets, model keys, signing certificates, user databases, or test logs. Normal development requires neither COS / R2 upload access nor official service keys. See the [release guide](./doc/deploy/release.md) for official publishing.
 
 ## Opening a Pull Request
