@@ -1,5 +1,5 @@
 {
-  "publishedThrough": 21,
+  "publishedThrough": 22,
   "migrations": [
     {
       "version": 1,
@@ -126,6 +126,12 @@
       "name": "embedding_models",
       "file": "021_embedding_models.ts",
       "sha256": "12413705805327e17baf98a11598b289b081d00f12f1e863b3d0ab60d68e1ff3"
+    },
+    {
+      "version": 22,
+      "name": "llm_manual_models",
+      "file": "022_llm_manual_models.ts",
+      "sha256": "52da44abba80efd1be15fef04e49e21c0d1d8d8b8ddebb79167bfa94b2d03507"
     }
   ]
 }
