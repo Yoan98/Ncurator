@@ -228,7 +228,12 @@ export class PresetModelCatalogService {
         }
       )
       if (!response.ok) {
-        throw new Error(`预设模型目录请求失败（HTTP ${response.status}）`)
+        const body = await response.text()
+        throw new Error(
+          [`HTTP ${response.status} ${response.statusText}`.trim(), body]
+            .filter(Boolean)
+            .join('\n\n')
+        )
       }
       const body: unknown = await response.json()
       const parsed = parseResponse(body)
@@ -267,18 +272,11 @@ export class PresetModelCatalogService {
     if (this.refreshPromise) return this.refreshPromise
     this.refreshPromise = (async () => {
       await this.ensureLoaded()
-      try {
-        const next = await this.fetchRemote()
-        this.cache = next
-        await this.persist(next)
-        await cacheModelIcons(this.collectIconUrls(next.providers))
-        return await this.toSnapshot(next)
-      } catch (error) {
-        if (this.cache && this.cache.providers.length > 0) {
-          return await this.toSnapshot(this.cache)
-        }
-        throw error
-      }
+      const next = await this.fetchRemote()
+      this.cache = next
+      await this.persist(next)
+      await cacheModelIcons(this.collectIconUrls(next.providers))
+      return await this.toSnapshot(next)
     })()
     try {
       return await this.refreshPromise

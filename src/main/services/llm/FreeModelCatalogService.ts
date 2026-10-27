@@ -231,7 +231,12 @@ export class FreeModelCatalogService {
         signal: controller.signal
       })
       if (!response.ok) {
-        throw new Error(`免费模型目录请求失败（HTTP ${response.status}）`)
+        const body = await response.text()
+        throw new Error(
+          [`HTTP ${response.status} ${response.statusText}`.trim(), body]
+            .filter(Boolean)
+            .join('\n\n')
+        )
       }
       const body: unknown = await response.json()
       const parsed = parseResponse(body)

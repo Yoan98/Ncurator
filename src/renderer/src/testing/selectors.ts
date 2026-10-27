@@ -241,6 +241,7 @@ export const workbenchSelectors = {
   modelListErrorCopy: 'workbench-model-list-error-copy',
   modelListErrorClose: 'workbench-model-list-error-close',
   modelListRefresh: 'workbench-model-list-refresh',
+  modelListRefreshIcon: 'workbench-model-list-refresh-icon',
   contextRing: 'workbench-context-ring',
   workspaceSelect: 'workbench-workspace-select',
   mentionPanel: 'workbench-mention-panel',

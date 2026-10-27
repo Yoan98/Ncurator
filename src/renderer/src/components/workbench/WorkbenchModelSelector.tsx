@@ -9,7 +9,7 @@ import React, {
   useState
 } from 'react'
 import { createPortal } from 'react-dom'
-import { App as AntdApp, Button, Modal } from 'antd'
+import { App as AntdApp, Button, Modal, Tooltip } from 'antd'
 import {
   HiAdjustmentsHorizontal,
   HiArrowPath,
@@ -232,6 +232,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const [presetFetchedAt, setPresetFetchedAt] = useState<number | null>(null)
   const [catalogLoadStatus, setCatalogLoadStatus] = useState<CatalogLoadStatus>('loading')
   const [catalogRefreshStatus, setCatalogRefreshStatus] = useState<CatalogRefreshStatus>('idle')
+  const [catalogError, setCatalogError] = useState<string | null>(null)
 
   const clearRefreshFeedbackTimer = useCallback((): void => {
     if (refreshFeedbackTimerRef.current !== null) {
@@ -300,6 +301,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           presetFetchedAt: presetResult.snapshot.fetchedAt
         })
         const ok = freeResult.success && presetResult.success
+        const errors = [freeResult, presetResult].flatMap((result) =>
+          result.success ? [] : [result.error || t(($) => $.common.unknownError)]
+        )
+        setCatalogError(errors.length ? errors.join('\n\n') : null)
         if (showOutcome) {
           setCatalogRefreshStatus(ok ? 'success' : 'error')
           scheduleRefreshIdle()
@@ -316,6 +321,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         return ok
       } catch (error) {
         console.error('Failed to refresh model catalogs', error)
+        setCatalogError(error instanceof Error ? error.message : String(error))
         if (showOutcome) {
           setCatalogRefreshStatus('error')
           scheduleRefreshIdle()
@@ -352,7 +358,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         await refreshCatalog({ showOutcome: false })
       } catch (error) {
         console.error('Failed to load model catalogs', error)
-        if (!cancelled) setCatalogLoadStatus('error')
+        if (!cancelled) {
+          setCatalogError(error instanceof Error ? error.message : String(error))
+          setCatalogLoadStatus('error')
+        }
       }
     }
     void bootstrap()
@@ -698,6 +707,25 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     )
   }
 
+  const renderLoadFailure = (error: string): React.ReactNode => (
+    <>
+      <div role="status" data-testid={workbenchSelectors.modelListLoadFailure}>
+        {t(($) => $.common.loadFailed)}
+      </div>
+      <button
+        type="button"
+        className="mt-2 text-[12px] text-[#0B6BCB] hover:underline"
+        data-testid={workbenchSelectors.modelListErrorOpen}
+        onClick={() => {
+          setErrorDetail(error)
+          setOpen(false)
+        }}
+      >
+        {t(($) => $.common.viewErrorInformation)}
+      </button>
+    </>
+  )
+
   const renderCatalogRefreshButton = (): React.ReactNode => {
     const busy = catalogRefreshStatus === 'loading'
     const iconClass = joinClassNames(
@@ -729,10 +757,11 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
   const renderPresetView = (): React.ReactNode => {
     const showLoading = catalogLoadStatus === 'loading'
-    const showError =
-      catalogLoadStatus === 'error' && presetGroups.length === 0 && freeModels.length === 0
     const showEmpty =
-      catalogLoadStatus === 'ready' && presetGroups.length === 0 && freeModels.length === 0
+      catalogLoadStatus === 'ready' &&
+      !catalogError &&
+      presetGroups.length === 0 &&
+      freeModels.length === 0
 
     return (
       <>
@@ -749,28 +778,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             {showLoading ? (
               <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
                 {t(($) => $.workbench.loadingModelCatalogs)}
-              </div>
-            ) : showError ? (
-              <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
-                <div className="text-[12px] text-[#91918E]">
-                  {t(($) => $.workbench.couldNotLoadModelCatalogs)}
-                </div>
-                <button
-                  type="button"
-                  className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2]"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    void refreshCatalog({ showOutcome: true })
-                  }}
-                >
-                  <HiArrowPath
-                    className={joinClassNames(
-                      'h-3.5 w-3.5',
-                      catalogRefreshStatus === 'loading' ? 'animate-spin' : ''
-                    )}
-                  />
-                  {t(($) => $.common.refresh)}
-                </button>
               </div>
             ) : showEmpty ? (
               <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
@@ -792,6 +799,25 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                 ) : null}
               </>
             )}
+            {catalogError && !showLoading ? (
+              <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
+                {renderLoadFailure(catalogError)}
+                <button
+                  type="button"
+                  disabled={catalogRefreshStatus === 'loading'}
+                  className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void refreshCatalog({ showOutcome: true })}
+                >
+                  <HiArrowPath
+                    className={joinClassNames(
+                      'h-3.5 w-3.5',
+                      catalogRefreshStatus === 'loading' && 'animate-spin'
+                    )}
+                  />
+                  {t(($) => $.common.refresh)}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="border-t border-[#EEEEEC] py-1.5">
@@ -835,6 +861,23 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         <div className="min-w-0 flex-1 text-[13px] font-semibold text-[#37352F]">
           {t(($) => $.workbench.chooseModel)}
         </div>
+        {onRefreshModelLists ? (
+          <Tooltip title={t(($) => $.workbench.fetchModelListAgain)}>
+            <button
+              type="button"
+              aria-label={t(($) => $.workbench.fetchModelListAgain)}
+              aria-busy={modelListsLoading}
+              data-testid={workbenchSelectors.modelListRefreshIcon}
+              disabled={modelListsLoading}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-[#9B9A97] hover:bg-[#F4F4F2] hover:text-[#37352F] disabled:pointer-events-none"
+              onClick={() => void onRefreshModelLists()}
+            >
+              <HiArrowPath
+                className={joinClassNames('h-3.5 w-3.5', modelListsLoading && 'animate-spin')}
+              />
+            </button>
+          </Tooltip>
+        ) : null}
       </div>
       <div className="workbench-select-search">
         <HiMagnifyingGlass className="h-3.5 w-3.5 shrink-0 text-[#91918E]" />
@@ -911,33 +954,15 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         })}
         {groupedModels.length === 0 || modelListError ? (
           <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
-            <div
-              role="status"
-              data-testid={
-                modelListError && !modelListsLoading
-                  ? workbenchSelectors.modelListLoadFailure
-                  : undefined
-              }
-            >
-              {modelListsLoading
-                ? t(($) => $.common.loading)
-                : modelListError
-                  ? t(($) => $.common.loadFailed)
-                  : t(($) => $.workbench.noMatchingModels)}
-            </div>
             {modelListError && !modelListsLoading ? (
-              <button
-                type="button"
-                className="mt-2 text-[12px] text-[#0B6BCB] hover:underline"
-                data-testid={workbenchSelectors.modelListErrorOpen}
-                onClick={() => {
-                  setErrorDetail(modelListError)
-                  setOpen(false)
-                }}
-              >
-                {t(($) => $.common.viewErrorInformation)}
-              </button>
-            ) : null}
+              renderLoadFailure(modelListError)
+            ) : (
+              <div role="status">
+                {modelListsLoading
+                  ? t(($) => $.common.loading)
+                  : t(($) => $.workbench.noMatchingModels)}
+              </div>
+            )}
             {onRefreshModelLists ? (
               <button
                 type="button"

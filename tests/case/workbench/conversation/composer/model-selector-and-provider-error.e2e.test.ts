@@ -64,6 +64,7 @@ const verifyContextUsageForRun = async (
 type ProviderServer = {
   baseUrl: string
   getModelListFailure: () => { status: number; body: string } | null
+  getModelListRequestCount: () => number
   enableUnavailableModel: () => void
   getSuccessfulChatRequestCount: () => number
   getChatRequestCount: () => number
@@ -87,8 +88,10 @@ const startProviderServer = async (upstream: {
   let successfulChatRequestCount = 0
   let unavailableModelEnabled = false
   let modelListFailure: { status: number; body: string } | null = null
+  let modelListRequestCount = 0
   const server = createServer(async (request, response) => {
     const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname
+    if (request.method === 'GET' && pathname.endsWith('/models')) modelListRequestCount += 1
     const isChatRequest = request.method === 'POST' && pathname.endsWith('/chat/completions')
     try {
       const chunks: Buffer[] = []
@@ -152,6 +155,7 @@ const startProviderServer = async (upstream: {
   return {
     baseUrl: `http://127.0.0.1:${String((address as AddressInfo).port)}/v1`,
     getModelListFailure: () => modelListFailure,
+    getModelListRequestCount: () => modelListRequestCount,
     enableUnavailableModel: () => {
       unavailableModelEnabled = true
       chatRequestCount = 0
@@ -278,6 +282,20 @@ describe('workbench conversation e2e', () => {
             .waitFor({ state: 'visible' })
           const modelListErrorCleared =
             (await page.getByTestId(workbenchSelectors.modelListErrorOpen).count()) === 0
+          const modelListRefreshIcon = page.getByTestId(workbenchSelectors.modelListRefreshIcon)
+          const modelListRefreshIconVisible = await modelListRefreshIcon.isVisible()
+          const listRequestsBeforeRefresh = provider.getModelListRequestCount()
+          await modelListRefreshIcon.click()
+          await page.waitForFunction((testId: string) => {
+            const button = document.querySelector(`[data-testid="${testId}"]`)
+            return button?.getAttribute('aria-busy') === 'false'
+          }, workbenchSelectors.modelListRefreshIcon)
+          const modelListHeaderRefreshRequested =
+            provider.getModelListRequestCount() > listRequestsBeforeRefresh
+          await runtime.captureScreenshot({
+            name: 'model-selector-custom-refresh',
+            message: '自定义视图有模型候选时，标题右侧仍可通过刷新图标重新获取模型列表。'
+          })
           await modelSelect.click()
           await modelSelect.click()
           const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
@@ -320,7 +338,7 @@ describe('workbench conversation e2e', () => {
             .isVisible()
             .catch(() => false)
           const catalogErrorVisible = await menu
-            .getByText('模型目录加载失败', { exact: true })
+            .getByTestId(workbenchSelectors.modelListLoadFailure)
             .isVisible()
             .catch(() => false)
           const freeRowHasBadge =
@@ -464,6 +482,8 @@ describe('workbench conversation e2e', () => {
             modelListErrorHasBody,
             modelListErrorKeyRedacted,
             modelListErrorCleared,
+            modelListRefreshIconVisible,
+            modelListHeaderRefreshRequested,
             presetOptionCount,
             freeOptionCount,
             presetEmptyStateVisible,
@@ -499,7 +519,9 @@ describe('workbench conversation e2e', () => {
               result.modelListErrorHasHttpStatus &&
               result.modelListErrorHasBody &&
               result.modelListErrorKeyRedacted &&
-              result.modelListErrorCleared,
+              result.modelListErrorCleared &&
+              result.modelListRefreshIconVisible &&
+              result.modelListHeaderRefreshRequested,
             {
               name: 'model-list-request-error-can-be-viewed-copied-and-cleared',
               message:

@@ -11,6 +11,7 @@ import {
   type FreeModelCatalogEntry
 } from '../../../../src/shared/freeModels'
 import { FreeModelCatalogService } from '../../../../src/main/services/llm/FreeModelCatalogService'
+import { PresetModelCatalogService } from '../../../../src/main/services/llm/PresetModelCatalogService'
 
 const sampleEntry = (overrides?: Partial<FreeModelCatalogEntry>): FreeModelCatalogEntry => ({
   id: 'free-glm-4.7-flash',
@@ -123,4 +124,71 @@ describe('free model catalog helpers', () => {
     expect(isFreeModelApiUrl('https://www.guanzhangai.cn/api/v1/freeload')).toBe(false)
     expect(isFreeModelApiUrl('invalid-url')).toBe(false)
   })
+})
+
+describe('catalog refresh failures', () => {
+  it.each(['free', 'preset'] as const)(
+    'reports the %s catalog HTTP error even when a cached list exists',
+    async (kind) => {
+      const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-catalog-error-'))
+      vi.stubEnv('NCURATOR_USER_DATA_PATH', folder)
+      const body = JSON.stringify({ error: { message: 'Catalog gateway unavailable' } })
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response(body, {
+            status: 503,
+            statusText: 'Service Unavailable'
+          })
+        )
+      )
+      try {
+        const fetchedAt = Date.now()
+        const credential = `test.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 5400 })).toString('base64url')}.signature`
+        const payload =
+          kind === 'free'
+            ? {
+                schemaVersion: FREE_MODEL_CATALOG_CACHE_VERSION,
+                fetchedAt,
+                models: [sampleEntry({ apiKey: credential })]
+              }
+            : {
+                fetchedAt,
+                providers: [
+                  {
+                    providerId: 'deepseek',
+                    models: [
+                      {
+                        id: 'deepseek-flash',
+                        label: 'DeepSeek Flash',
+                        iconUrl: 'https://www.guanzhangai.cn/llm/deepseek.png',
+                        priceTier: 'low',
+                        description: '',
+                        capabilities: ['text']
+                      }
+                    ]
+                  }
+                ]
+              }
+        await fs.writeFile(
+          path.join(
+            folder,
+            `domestic-zh-CN-${kind === 'free' ? 'free' : 'preset'}-models-catalog.json`
+          ),
+          JSON.stringify(payload)
+        )
+        const service =
+          kind === 'free' ? new FreeModelCatalogService() : new PresetModelCatalogService()
+        const snapshot = await service.getSnapshot()
+        expect(snapshot.fetchedAt).toBe(fetchedAt)
+
+        await expect(service.refresh()).rejects.toThrow(`HTTP 503 Service Unavailable\n\n${body}`)
+        expect(await service.getSnapshot()).toEqual(snapshot)
+      } finally {
+        vi.unstubAllGlobals()
+        vi.unstubAllEnvs()
+        await fs.rm(folder, { recursive: true, force: true })
+      }
+    }
+  )
 })
