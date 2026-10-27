@@ -932,6 +932,8 @@ const ChatPage: React.FC = () => {
   const [modelListsByConfigId, setModelListsByConfigId] = useState<
     Record<string, LlmRemoteModel[]>
   >({})
+  const [modelListError, setModelListError] = useState<string | null>(null)
+  const [modelListsLoading, setModelListsLoading] = useState(false)
   const [modelSelection, setModelSelection] = useState<WorkbenchModelSelection>({
     mainModel: null
   })
@@ -2287,6 +2289,48 @@ const ChatPage: React.FC = () => {
     }
   }, [])
 
+  const fetchModelLists = useCallback(
+    async (configs: LLMConfig[]): Promise<Record<string, LlmRemoteModel[]>> => {
+      setModelListsLoading(true)
+      try {
+        const results = await Promise.all(
+          configs.map(async (config) => {
+            try {
+              return {
+                configId: config.id,
+                response: await window.api.llmConfigModelList(config.id)
+              }
+            } catch (error) {
+              return {
+                configId: config.id,
+                response: {
+                  success: false,
+                  items: [],
+                  error: error instanceof Error ? error.message : String(error)
+                }
+              }
+            }
+          })
+        )
+        const lists = Object.fromEntries(
+          results.map(({ configId, response }) => [
+            configId,
+            response.success ? response.items : []
+          ])
+        )
+        const errors = results.flatMap(({ response }) =>
+          response.success ? [] : [response.error || t(($) => $.common.unknownError)]
+        )
+        setModelListsByConfigId(lists)
+        setModelListError(errors.length ? errors.join('\n\n') : null)
+        return lists
+      } finally {
+        setModelListsLoading(false)
+      }
+    },
+    []
+  )
+
   const loadModelConfigs = useCallback(async (): Promise<void> => {
     try {
       const [list, freeSnapshot, presetSnapshot] = await Promise.all([
@@ -2309,6 +2353,7 @@ const ChatPage: React.FC = () => {
       setModelConfigs(list)
       if (list.length === 0) {
         setModelListsByConfigId({})
+        setModelListError(null)
         const resolveModel = (
           model: WorkbenchModelSelection['mainModel']
         ): WorkbenchModelSelection['mainModel'] =>
@@ -2337,19 +2382,7 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      const entries = await Promise.all(
-        list.map(async (config) => {
-          try {
-            const response = await window.api.llmConfigModelList(config.id)
-            const items = response.success ? response.items : []
-            return [config.id, items] as const
-          } catch {
-            return [config.id, []] as const
-          }
-        })
-      )
-      const nextLists = Object.fromEntries(entries)
-      setModelListsByConfigId(nextLists)
+      const nextLists = await fetchModelLists(list)
 
       const resolveModel = (
         model: WorkbenchModelSelection['mainModel']
@@ -2381,29 +2414,16 @@ const ChatPage: React.FC = () => {
       setModelConfigs([])
       setPresetProviders([])
       setModelListsByConfigId({})
+      setModelListError(error instanceof Error ? error.message : String(error))
       setModelSelection({ mainModel: null })
     } finally {
       setModelCatalogLoaded(true)
     }
-  }, [])
+  }, [fetchModelLists])
 
   const refreshModelLists = useCallback(async (): Promise<void> => {
-    try {
-      const entries = await Promise.all(
-        modelConfigs.map(async (config) => {
-          try {
-            const response = await window.api.llmConfigModelList(config.id)
-            return [config.id, response.success ? response.items : []] as const
-          } catch {
-            return [config.id, []] as const
-          }
-        })
-      )
-      setModelListsByConfigId(Object.fromEntries(entries))
-    } catch (error) {
-      console.error('Failed to refresh llm model lists', error)
-    }
-  }, [modelConfigs])
+    await fetchModelLists(modelConfigs)
+  }, [fetchModelLists, modelConfigs])
 
   useEffect(() => {
     const key = currentPartnerIdRef.current || ''
@@ -5362,6 +5382,8 @@ const ChatPage: React.FC = () => {
                                 onExecutionPermissionChange={handleExecutionPermissionChange}
                                 modelConfigs={modelConfigs}
                                 modelListsByConfigId={modelListsByConfigId}
+                                modelListError={modelListError}
+                                modelListsLoading={modelListsLoading}
                                 modelSelection={modelSelection}
                                 onModelSelectionChange={handleModelSelectionChange}
                                 onRefreshModelLists={refreshModelLists}

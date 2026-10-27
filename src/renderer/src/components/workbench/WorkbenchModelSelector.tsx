@@ -9,6 +9,7 @@ import React, {
   useState
 } from 'react'
 import { createPortal } from 'react-dom'
+import { App as AntdApp, Button, Modal } from 'antd'
 import {
   HiAdjustmentsHorizontal,
   HiArrowPath,
@@ -57,6 +58,8 @@ const PRICE_TIER_COIN_COUNT: Record<LlmPriceTier, number> = {
 type WorkbenchModelSelectorProps = {
   configs: LLMConfig[]
   modelListsByConfigId: Record<string, LlmRemoteModel[]>
+  modelListError: string | null
+  modelListsLoading: boolean
   value: WorkbenchModelSelection
   onChange: (value: WorkbenchModelSelection) => void
   onAfterChange?: () => void
@@ -190,6 +193,8 @@ const CatalogModelIcon: React.FC<{ src: string; alt: string }> = ({ src, alt }) 
 const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   configs,
   modelListsByConfigId,
+  modelListError,
+  modelListsLoading,
   value,
   onChange,
   onAfterChange,
@@ -202,6 +207,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   className,
   'data-testid': dataTestId
 }) => {
+  const { message } = AntdApp.useApp()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -210,6 +216,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const listboxId = useId()
   const [open, setOpen] = useState(false)
+  const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [view, setView] = useState<PanelView>('preset')
   const [query, setQuery] = useState('')
   const [collapsedConfigIds, setCollapsedConfigIds] = useState<Set<string>>(() => new Set())
@@ -902,16 +909,46 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             </div>
           )
         })}
-        {groupedModels.length === 0 ? (
+        {groupedModels.length === 0 || modelListError ? (
           <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
-            <div>{t(($) => $.workbench.noMatchingModels)}</div>
+            <div
+              role="status"
+              data-testid={
+                modelListError && !modelListsLoading
+                  ? workbenchSelectors.modelListLoadFailure
+                  : undefined
+              }
+            >
+              {modelListsLoading
+                ? t(($) => $.common.loading)
+                : modelListError
+                  ? t(($) => $.common.loadFailed)
+                  : t(($) => $.workbench.noMatchingModels)}
+            </div>
+            {modelListError && !modelListsLoading ? (
+              <button
+                type="button"
+                className="mt-2 text-[12px] text-[#0B6BCB] hover:underline"
+                data-testid={workbenchSelectors.modelListErrorOpen}
+                onClick={() => {
+                  setErrorDetail(modelListError)
+                  setOpen(false)
+                }}
+              >
+                {t(($) => $.common.viewErrorInformation)}
+              </button>
+            ) : null}
             {onRefreshModelLists ? (
               <button
                 type="button"
-                className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2]"
+                disabled={modelListsLoading}
+                data-testid={workbenchSelectors.modelListRefresh}
+                className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2] disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => void onRefreshModelLists()}
               >
-                <HiArrowPath className="h-3.5 w-3.5" />
+                <HiArrowPath
+                  className={joinClassNames('h-3.5 w-3.5', modelListsLoading && 'animate-spin')}
+                />
                 {t(($) => $.workbench.fetchModelListAgain)}
               </button>
             ) : null}
@@ -1110,6 +1147,46 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             document.body
           )
         : null}
+      <Modal
+        open={errorDetail !== null}
+        title={t(($) => $.common.errorInformation)}
+        width={460}
+        centered
+        onCancel={() => setErrorDetail(null)}
+        afterClose={() => triggerRef.current?.focus()}
+        data-testid={workbenchSelectors.modelListErrorDialog}
+        footer={[
+          <Button
+            key="copy"
+            data-testid={workbenchSelectors.modelListErrorCopy}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(errorDetail || '')
+                message.success(t(($) => $.common.copied))
+              } catch {
+                message.error(t(($) => $.workbench.couldNotCopy))
+              }
+            }}
+          >
+            {t(($) => $.common.copy)}
+          </Button>,
+          <Button
+            key="close"
+            type="primary"
+            data-testid={workbenchSelectors.modelListErrorClose}
+            onClick={() => setErrorDetail(null)}
+          >
+            {t(($) => $.common.close)}
+          </Button>
+        ]}
+      >
+        <pre
+          className="max-h-[45vh] select-text overflow-auto whitespace-pre-wrap rounded-[6px] bg-[#F4F4F2] p-3 text-[12px] leading-5 text-[#37352F] [overflow-wrap:anywhere]"
+          data-testid={workbenchSelectors.modelListErrorText}
+        >
+          {errorDetail}
+        </pre>
+      </Modal>
     </div>
   )
 }

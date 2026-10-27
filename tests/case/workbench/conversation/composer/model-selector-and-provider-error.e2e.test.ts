@@ -4,7 +4,12 @@ import { describe, it } from 'vitest'
 import type { AiRunEvent } from '../../../../../src/shared/types'
 import type { DesktopApi } from '../../../../../src/preload/api'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
-import { createModelConfigThroughSettingsUi } from '../../../../harness/e2e/settings'
+import {
+  createModelConfigThroughSettingsUi,
+  getSettingsLocator,
+  navigateToSettingsSection
+} from '../../../../harness/e2e/settings'
+import { settingsSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -58,6 +63,7 @@ const verifyContextUsageForRun = async (
 
 type ProviderServer = {
   baseUrl: string
+  getModelListFailure: () => { status: number; body: string } | null
   enableUnavailableModel: () => void
   getSuccessfulChatRequestCount: () => number
   getChatRequestCount: () => number
@@ -80,6 +86,7 @@ const startProviderServer = async (upstream: {
   let chatRequestCount = 0
   let successfulChatRequestCount = 0
   let unavailableModelEnabled = false
+  let modelListFailure: { status: number; body: string } | null = null
   const server = createServer(async (request, response) => {
     const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname
     const isChatRequest = request.method === 'POST' && pathname.endsWith('/chat/completions')
@@ -112,6 +119,9 @@ const startProviderServer = async (upstream: {
         }
       )
       const responseBody = Buffer.from(await upstreamResponse.arrayBuffer())
+      if (pathname.endsWith('/models') && !upstreamResponse.ok) {
+        modelListFailure = { status: upstreamResponse.status, body: responseBody.toString('utf8') }
+      }
       response.writeHead(upstreamResponse.status, {
         'content-type': upstreamResponse.headers.get('content-type') || 'application/json'
       })
@@ -141,6 +151,7 @@ const startProviderServer = async (upstream: {
 
   return {
     baseUrl: `http://127.0.0.1:${String((address as AddressInfo).port)}/v1`,
+    getModelListFailure: () => modelListFailure,
     enableUnavailableModel: () => {
       unavailableModelEnabled = true
       chatRequestCount = 0
@@ -196,12 +207,78 @@ describe('workbench conversation e2e', () => {
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID, 'empty')
           await createModelConfigThroughSettingsUi(page, {
             name: liveEnv.modelName,
-            baseUrl: provider.baseUrl,
+            baseUrl: `${provider.baseUrl}/unavailable-catalog`,
             apiKey: liveEnv.apiKey
           })
           await navigateToWorkbench(page, { waitForSessionListText: false })
           await createPartnerThroughWorkbenchUi(page, WORKSPACE_NAME)
           const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
+          await modelSelect.click()
+          await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
+          const listFailure = page.getByTestId(workbenchSelectors.modelListLoadFailure)
+          await listFailure.waitFor({ state: 'visible', timeout: 30_000 })
+          const modelListFailureText = (await listFailure.innerText()).trim()
+          const failedModelOptionCount = await page
+            .locator('.workbench-select-menu.workbench-composer-menu')
+            .getByRole('option')
+            .count()
+          await page.getByTestId(workbenchSelectors.modelListErrorOpen).click()
+          const listErrorDialog = page
+            .getByTestId(workbenchSelectors.modelListErrorDialog)
+            .locator('.ant-modal-content')
+          await listErrorDialog.waitFor({ state: 'visible' })
+          const listErrorText = (
+            await page.getByTestId(workbenchSelectors.modelListErrorText).innerText()
+          ).trim()
+          await page.getByTestId(workbenchSelectors.modelListErrorCopy).click()
+          await page.getByText('已复制', { exact: true }).waitFor({ state: 'visible' })
+          const copiedListError = await runtime.electronApp.evaluate(({ clipboard }) =>
+            clipboard.readText()
+          )
+          const modelListErrorCopied = copiedListError === listErrorText
+          const actualListFailure = provider.getModelListFailure()
+          const modelListErrorHasHttpStatus =
+            actualListFailure !== null &&
+            listErrorText.startsWith(`HTTP ${actualListFailure.status}`)
+          const modelListErrorHasBody =
+            actualListFailure !== null &&
+            (!actualListFailure.body ||
+              listErrorText.includes(
+                actualListFailure.body.split(liveEnv.apiKey).join('[REDACTED]')
+              ))
+          const modelListErrorKeyRedacted = !listErrorText.includes(liveEnv.apiKey)
+          await runtime.captureScreenshot({
+            name: 'model-list-error-information',
+            message: '列表请求失败后展示通用错误信息弹框，保留实际 HTTP 错误文本并支持复制。'
+          })
+          await page.getByTestId(workbenchSelectors.modelListErrorClose).click()
+          await listErrorDialog.waitFor({ state: 'hidden' })
+          await modelSelect.click()
+          await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
+          await page.getByTestId(workbenchSelectors.modelListRefresh).click()
+          await listFailure.waitFor({ state: 'visible' })
+
+          await navigateToSettingsSection(page, 'model')
+          await page
+            .locator('tbody tr')
+            .filter({ hasText: liveEnv.modelName })
+            .getByTestId(new RegExp(`^${settingsSelectors.modelEditButtonPrefix}-`, 'u'))
+            .click()
+          await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).fill(provider.baseUrl)
+          await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
+          await getSettingsLocator(page, settingsSelectors.modelModal)
+            .locator('.ant-modal-content')
+            .waitFor({ state: 'hidden' })
+          await navigateToWorkbench(page, { waitForSessionListText: false })
+          await modelSelect.click()
+          await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
+          await page
+            .locator('.workbench-select-menu.workbench-composer-menu')
+            .getByRole('option', { name: liveEnv.modelName, exact: true })
+            .waitFor({ state: 'visible' })
+          const modelListErrorCleared =
+            (await page.getByTestId(workbenchSelectors.modelListErrorOpen).count()) === 0
+          await modelSelect.click()
           await modelSelect.click()
           const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
           await menu.waitFor({ state: 'visible' })
@@ -380,6 +457,13 @@ describe('workbench conversation e2e', () => {
           })
 
           return {
+            modelListFailureText,
+            failedModelOptionCount,
+            modelListErrorCopied,
+            modelListErrorHasHttpStatus,
+            modelListErrorHasBody,
+            modelListErrorKeyRedacted,
+            modelListErrorCleared,
             presetOptionCount,
             freeOptionCount,
             presetEmptyStateVisible,
@@ -408,6 +492,20 @@ describe('workbench conversation e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.modelListFailureText === '加载失败' &&
+              result.failedModelOptionCount === 0 &&
+              result.modelListErrorCopied &&
+              result.modelListErrorHasHttpStatus &&
+              result.modelListErrorHasBody &&
+              result.modelListErrorKeyRedacted &&
+              result.modelListErrorCleared,
+            {
+              name: 'model-list-request-error-can-be-viewed-copied-and-cleared',
+              message:
+                '列表失败应展示通用提示，错误弹框保留脱敏的 HTTP 状态与原文，支持复制，正确地址加载成功后清除错误。'
+            }
+          )
           await runtime.assertThat(
             result.successContextTokens > 0 &&
               result.cancelledContextTokens > result.successContextTokens &&

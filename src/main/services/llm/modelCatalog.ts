@@ -53,6 +53,11 @@ export const fetchLlmRemoteModels = async (config: LLMConfig): Promise<LlmModelL
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), MODEL_LIST_TIMEOUT_MS)
+  const fail = (error: string): LlmModelListResponse => ({
+    success: false,
+    items: [],
+    error: config.api_key ? error.split(config.api_key).join('[REDACTED]') : error
+  })
 
   try {
     const response = await fetch(url, {
@@ -63,19 +68,29 @@ export const fetchLlmRemoteModels = async (config: LLMConfig): Promise<LlmModelL
       },
       signal: controller.signal
     })
-    if (!response.ok) {
-      return {
-        success: false,
-        items: [],
-        error: `获取模型列表失败：${response.status} ${response.statusText}`.trim()
-      }
-    }
+    const body = await response.text()
+    const status = `HTTP ${response.status} ${response.statusText}`.trim()
+    if (!response.ok) return fail([status, body].filter(Boolean).join('\n\n'))
 
-    const payload = (await response.json()) as RemoteModelListPayload
+    let payload: RemoteModelListPayload | null
+    try {
+      payload = JSON.parse(body) as RemoteModelListPayload | null
+    } catch {
+      return fail(`${status}\n响应不是有效的 JSON\n\n${body}`)
+    }
+    if (!payload || !Array.isArray(payload.data)) {
+      return fail(`${status}\n服务返回的数据格式不符合预期：缺少 data 数组\n\n${body}`)
+    }
     return { success: true, items: toRemoteModels(payload) }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return { success: false, items: [], error: message || '获取模型列表失败' }
+    if (controller.signal.aborted) return fail('请求超时（20 秒）')
+    const message =
+      error instanceof Error
+        ? [error.message, error.cause instanceof Error ? error.cause.message : '']
+            .filter(Boolean)
+            .join('\n')
+        : String(error)
+    return fail(message || '请求失败')
   } finally {
     clearTimeout(timeout)
   }

@@ -110,4 +110,4 @@ macOS 安装后提示“已损坏”或无法打开，请查看[Mac 安装问题
 
 感谢所有为馆长贡献代码、文档、测试和反馈的朋友！以下展示仓库的代码贡献者，点击可查看完整列表。
 
-[![贡献者](https://contrib.rocks/image?repo=Yoan98/Ncurator)](https://github.com/Yoan98/Ncurator/graphs/contributors)
+[![贡献者](https://contrib.rocks/image?repo=yoan98/ncurator)](https://github.com/Yoan98/Ncurator/graphs/contributors)

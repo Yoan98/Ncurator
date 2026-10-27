@@ -73,6 +73,8 @@ type WorkbenchComposerProps = {
   onExecutionPermissionChange: (permission: WorkbenchExecutionPermission) => void
   modelConfigs: LLMConfig[]
   modelListsByConfigId: Record<string, LlmRemoteModel[]>
+  modelListError: string | null
+  modelListsLoading: boolean
   modelSelection: WorkbenchModelSelection
   onModelSelectionChange: (selection: WorkbenchModelSelection) => void
   onRefreshModelLists?: () => void | Promise<void>
@@ -122,6 +124,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onExecutionPermissionChange,
   modelConfigs,
   modelListsByConfigId,
+  modelListError,
+  modelListsLoading,
   modelSelection,
   onModelSelectionChange,
   onRefreshModelLists,
@@ -1181,6 +1185,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             <WorkbenchModelSelector
               configs={modelConfigs}
               modelListsByConfigId={modelListsByConfigId}
+              modelListError={modelListError}
+              modelListsLoading={modelListsLoading}
               value={modelSelection}
               onChange={onModelSelectionChange}
               onAfterChange={focusEditorAfterControlChange}

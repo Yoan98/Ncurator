@@ -108,4 +108,4 @@ If macOS reports that the app is damaged or cannot be opened, see the [Mac insta
 
 Thank you to everyone who contributes code, documentation, testing, and feedback to NCurator! The image below shows the repository's code contributors. Click it to see the full list.
 
-[![Contributors](https://contrib.rocks/image?repo=Yoan98/Ncurator)](https://github.com/Yoan98/Ncurator/graphs/contributors)
+[![Contributors](https://contrib.rocks/image?repo=yoan98/ncurator)](https://github.com/Yoan98/Ncurator/graphs/contributors)
