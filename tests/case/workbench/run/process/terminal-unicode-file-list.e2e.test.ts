@@ -46,10 +46,16 @@ describe('workbench terminal unicode e2e', () => {
           await fs.writeFile(path.join(setup.workspace.rootPath, CHINESE_FILE), 'unicode fixture')
           const startedAtMs = Date.now()
           const handledApprovals = new Set<string>()
+          const isWindows = process.platform === 'win32'
+          const quotedRoot =
+            "'" + setup.workspace.rootPath.replaceAll("'", isWindows ? "''" : "'\\''") + "'"
+          const listCommand = isWindows
+            ? `Get-ChildItem -LiteralPath ${quotedRoot} -Name`
+            : `ls -1 ${quotedRoot}`
 
           await sendWorkbenchMessage(
             runtime.page,
-            `请只使用 terminal_run 执行 ls -1 查看工作区根目录，然后明确写出目录名“${CHINESE_DIRECTORY}”和文件名“${CHINESE_FILE}”。不要猜测文件名。`
+            `请只使用 terminal_run 执行 ${listCommand} 查看工作区根目录，然后明确写出目录名“${CHINESE_DIRECTORY}”和文件名“${CHINESE_FILE}”。不要猜测文件名。`
           )
 
           const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS

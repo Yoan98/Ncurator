@@ -239,10 +239,11 @@ describe('workbench run e2e', () => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
           const startedAtMs = Date.now()
+          const existingReadPath = path.join(setup.workspace.rootPath, '工作', '对外口径确认.txt')
           const missingReadPath = path.join(setup.workspace.rootPath, 'activity-header-missing.txt')
           await sendWorkbenchMessage(
             page,
-            `${PROMPT}\n另外请直接用 text_file_read 读取这个工作区内的文本文件：${missingReadPath}，不要用终端存在性检查替代。即使文件不存在，也实际调用一次读取工具；收到读取失败后继续总结已有资料。`
+            `${PROMPT}\n请先用 text_file_read 读取实际存在的文本文件：${existingReadPath}，再读取这个工作区内不存在的文本文件：${missingReadPath}。这两次读取不要用知识库搜索或终端存在性检查替代；收到缺失文件的读取失败后继续总结已有资料。`
           )
           const processLocator = await waitForLatestAssistantProcess(page)
           const durationLocator = getWorkbenchPrefixLocator(

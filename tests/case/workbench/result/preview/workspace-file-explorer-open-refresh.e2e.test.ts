@@ -284,12 +284,12 @@ describe('workbench result e2e', () => {
             .waitFor({ state: 'visible' })
           const nestedFile = page.getByTitle('子目录/文件夹内新建.txt', { exact: true })
           await nestedFile.click({ button: 'right' })
-          const fileMenuCorrect =
-            (await page.getByRole('menuitem', { name: /^新建文件/u }).count()) === 1 &&
-            (await page.getByRole('menuitem', { name: '重命名', exact: true }).isVisible())
           await page
             .getByRole('menuitem', { name: '重命名', exact: true })
             .waitFor({ state: 'visible' })
+          const fileMenuCorrect =
+            (await page.getByRole('menuitem', { name: /^新建文件/u }).count()) === 1 &&
+            (await page.getByRole('menuitem', { name: '重命名', exact: true }).isVisible())
           await page.waitForTimeout(250)
           await runtime.captureScreenshot({
             name: 'workspace-file-context-menu',

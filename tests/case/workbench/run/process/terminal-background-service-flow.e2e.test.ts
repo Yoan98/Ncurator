@@ -1,4 +1,5 @@
 import net from 'node:net'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
@@ -50,6 +51,14 @@ describe('workbench terminal e2e', () => {
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
+          const isWindows = process.platform === 'win32'
+          const pythonPath = execFileSync(
+            isWindows ? 'python' : 'python3',
+            ['-c', 'import sys; print(sys.executable)'],
+            { encoding: 'utf8', timeout: 10_000 }
+          ).trim()
+          const quotePath = (value: string): string =>
+            "'" + value.replaceAll("'", isWindows ? "''" : "'\\''") + "'"
           const setup = await setupWorkbenchWithTempWorkspace(runtime.page, {
             caseId: CASE_ID
           })
@@ -60,9 +69,12 @@ describe('workbench terminal e2e', () => {
           )
           const startedAtMs = Date.now()
           const handledApprovals = new Set<string>()
+          const command =
+            `${isWindows ? '& ' : ''}${quotePath(pythonPath)} -m http.server ${port}` +
+            ` --bind 127.0.0.1 --directory ${quotePath(setup.workspace.rootPath)}`
           await sendWorkbenchMessage(
             runtime.page,
-            `请使用终端启动 python3 -m http.server ${port} --bind 127.0.0.1，不要在命令末尾添加 &。服务开始运行后，用内置浏览器打开 http://127.0.0.1:${port}/terminal-service.html 并确认页面包含 ${PAGE_MARKER}。`
+            `请使用 terminal_run 执行 ${command}，不要在命令末尾添加 &。服务开始运行后，用内置浏览器打开 http://127.0.0.1:${port}/terminal-service.html 并确认页面包含 ${PAGE_MARKER}。`
           )
 
           const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
