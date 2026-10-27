@@ -8,6 +8,8 @@ Human Harness 通过 human graph、持久化消息和上下文投影，推进 AI
 
 human graph 是单次 AI run 的 LangGraph 编排；**每轮调主模型前必过 `context_budget`**。节点只通过 `AiRunContext.appendMessageLog` 写 transcript，通过 `HumanRuntimeCache.messages` 维护 brain 侧运行时消息序。
 
+单次 graph 调用默认最多推进 800 个节点步骤，主会话与子会话共用此上限；步骤包含预算检查、推理、派发与工具执行等节点，不等于模型请求次数。达到上限时以 `runtime_limit` 结束，允许通过后续消息继续。
+
 ### 1.1 流转图
 
 ```mermaid
