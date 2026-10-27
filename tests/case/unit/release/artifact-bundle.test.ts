@@ -5,11 +5,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
 import { createGitHubReleasePublisher } from '../../../../scripts/release/github.mjs'
 import {
+  readReleaseNotes,
+  renderGitHubReleaseNotes,
+  validateReleaseNotes
+} from '../../../../scripts/release/notes.mjs'
+import {
   createReleaseBundle,
   verifyReleaseBundle
 } from '../../../../scripts/release/artifact-bundle.mjs'
 
 const tempRoots: string[] = []
+const bilingualNotes =
+  '## 中文\n\n- 修复文件读取失败。\n\n## English\n\n- Fix file read failures.\n'
 
 afterEach(async () => {
   await Promise.all(
@@ -105,6 +112,58 @@ describe('release artifact bundle', () => {
   })
 })
 
+describe('bilingual release notes', () => {
+  it('requires real change bullets in both language sections', () => {
+    for (const notes of [
+      '',
+      'Ncurator mac-v1.0.14',
+      '## 中文\n- 修复文件读取。',
+      '## 中文\n\n## English\n- Fix file reads.',
+      '## 中文\n- 修复文件读取。\n\n## English\n- ',
+      '## 中文\n- 修复文件读取。\n\n## English\n- 仅有中文。',
+      `${bilingualNotes}\n## English\n- Duplicate section.`
+    ]) {
+      expect(() => validateReleaseNotes(notes)).toThrow('release notes')
+    }
+    expect(validateReleaseNotes(bilingualNotes)).toBe(bilingualNotes)
+  })
+
+  it('accepts a UTF-8 notes file and rejects missing or conflicting input', async () => {
+    const root = await createFixture()
+    await fs.writeFile(
+      path.join(root, 'notes.md'),
+      `\uFEFF${bilingualNotes.replace(/\n/gu, '\r\n')}`
+    )
+    await expect(readReleaseNotes({ root, notesFile: 'notes.md' })).resolves.toBe(bilingualNotes)
+    await expect(readReleaseNotes({ notes: bilingualNotes })).resolves.toBe(bilingualNotes)
+    await expect(readReleaseNotes({})).rejects.toThrow('exactly one')
+    await expect(
+      readReleaseNotes({ notes: bilingualNotes, notesFile: 'notes.md', root })
+    ).rejects.toThrow('exactly one')
+  })
+
+  it('renders both languages with platform-specific downloads and website links', () => {
+    for (const [tag, platform, extension] of [
+      ['mac-v1.0.14', 'macOS arm64', 'DMG'],
+      ['windows-v1.0.12', 'Windows x64', 'EXE']
+    ]) {
+      const body = renderGitHubReleaseNotes({
+        tag,
+        notes: bilingualNotes,
+        repositoryUrl: 'https://github.com/Yoan98/Ncurator'
+      })
+      expect(body).toContain('修复文件读取失败。')
+      expect(body).toContain('Fix file read failures.')
+      expect(body).toContain(`平台：${platform}。请下载下方的 ${extension}`)
+      expect(body).toContain(`Platform: ${platform}. Download the ${extension}`)
+      expect(body).toContain(`https://github.com/Yoan98/Ncurator/tree/${tag}`)
+      expect(body).toContain('https://www.guanzhangai.cn/zh/changelog')
+      expect(body).toContain('https://www.ncurator.com/en/changelog')
+      expect(validateReleaseNotes(body)).toBe(body)
+    }
+  })
+})
+
 type GitHubAsset = {
   name: string
   state: string
@@ -119,6 +178,7 @@ type GitHubRelease = {
   prerelease: boolean
   assets: GitHubAsset[]
   html_url: string
+  body: string
 }
 
 const githubHarness = () => {
@@ -127,6 +187,8 @@ const githubHarness = () => {
     release: undefined as GitHubRelease | undefined,
     failUpload: '',
     failPublication: false,
+    ignoreNoteUpdates: false,
+    annotation: bilingualNotes,
     writes: [] as string[],
     bytes: new Map<string, Buffer>()
   }
@@ -149,7 +211,7 @@ const githubHarness = () => {
         return {
           stdout: JSON.stringify({
             object: { type: 'commit', sha: state.commit },
-            message: '修复文件读取'
+            message: state.annotation
           })
         }
       }
@@ -166,6 +228,7 @@ const githubHarness = () => {
         draft: true,
         prerelease: false,
         assets: [],
+        body: await fs.readFile(args[args.indexOf('--notes-file') + 1], 'utf8'),
         html_url: `https://github.com/Yoan98/Ncurator/releases/tag/${args[2]}`
       }
     } else if (args[1] === 'upload') {
@@ -184,8 +247,13 @@ const githubHarness = () => {
         browser_download_url: url
       })
     } else if (args[1] === 'edit') {
-      if (state.failPublication) throw new Error('publication interrupted')
-      state.release!.draft = false
+      if (args.includes('--notes-file') && !state.ignoreNoteUpdates) {
+        state.release!.body = await fs.readFile(args[args.indexOf('--notes-file') + 1], 'utf8')
+      }
+      if (args.includes('--draft=false')) {
+        if (state.failPublication) throw new Error('publication interrupted')
+        state.release!.draft = false
+      }
     } else if (args[1] === 'delete') {
       state.release = undefined
     } else {
@@ -234,6 +302,8 @@ describe('GitHub release publication', () => {
       'SHA256SUMS'
     ])
     expect(candidate.verified.bundle.files[0].name).toBe('NCurator-0.1.21-Windows-x64.exe')
+    expect(state.release?.body).toContain('## 中文')
+    expect(state.release?.body).toContain('## English')
     const checksum = state.release!.assets.find((asset) => asset.name === 'SHA256SUMS')!
     expect(state.bytes.get(checksum.browser_download_url)?.toString('utf8')).toBe(
       `${candidate.verified.bundle.files[0].sha256}  NCurator-0.1.21-Windows-x64.exe\n`
@@ -255,6 +325,46 @@ describe('GitHub release publication', () => {
       'live publish is locked'
     )
     expect(state.writes).toEqual([])
+  })
+
+  it('rejects missing bilingual notes before creating a draft or uploading assets', async () => {
+    const { state, publisher } = githubHarness()
+    state.annotation = 'Ncurator windows-v0.1.21'
+    await expect(publisher.prepare(await githubCandidate())).rejects.toThrow('release notes')
+    expect(state.writes).toEqual([])
+  })
+
+  it('refreshes stale draft notes and verifies the stored body before resuming', async () => {
+    const { state, publisher } = githubHarness()
+    const candidate = await githubCandidate()
+    await publisher.prepare(candidate)
+    state.release!.body = 'Old draft description'
+    state.ignoreNoteUpdates = true
+    await expect(publisher.prepare(candidate)).rejects.toThrow('release notes')
+    state.ignoreNoteUpdates = false
+    const prepared = await publisher.prepare(candidate)
+    expect(state.release?.body).toContain('Fix file read failures.')
+    expect(state.release?.draft).toBe(true)
+    expect(state.writes.filter((write) => write === 'upload')).toHaveLength(2)
+    state.release!.body += '\nUnexpected edit\n'
+    await expect(publisher.publish(prepared)).rejects.toThrow('notes differ')
+    expect(state.release?.draft).toBe(true)
+  })
+
+  it('preserves explicitly corrected published notes when the old tag has no changelog', async () => {
+    const { state, publisher } = githubHarness()
+    const candidate = await githubCandidate()
+    await publisher.publish(await publisher.prepare(candidate))
+    state.annotation = 'Legacy version title'
+    state.release!.body = state.release!.body.replace(
+      'Fix file read failures.',
+      'Fix document reads.'
+    )
+    const previousBody = state.release!.body
+    const writes = [...state.writes]
+    await publisher.publish(await publisher.prepare(candidate))
+    expect(state.release?.body).toBe(previousBody)
+    expect(state.writes).toEqual(writes)
   })
 
   it('resumes an interrupted upload without overwriting the existing installer', async () => {

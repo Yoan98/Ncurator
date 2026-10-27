@@ -31,6 +31,7 @@ const CASE_ID = 'model-selector-and-provider-error'
 const MISSING_MODEL_NAME = 'missing-model-must-not-be-created'
 const UNAVAILABLE_MODEL_NAME = 'missing-provider-model-must-fail'
 const WORKSPACE_NAME = 'Model Provider Error Workspace'
+const MANUAL_ALTERNATIVE_SERVICE = '手填备用服务'
 const CANCEL_PROMPT =
   '请先调用 terminal_run 执行 pwd，成功后连续撰写一篇不少于三千字的科普文章，介绍海洋生态。'
 const FAILURE_PROMPT = '请先调用 terminal_run 执行 pwd，成功后只回复“测试失败”。'
@@ -190,14 +191,14 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['composer'],
         description:
-          '验证未配置预设隐藏、统一目录 UI（右上角刷新/无分区标题/悬浮信息侧栏）、免费行或空态、搜索空状态，以及模型服务错误处理。',
+          '验证模型目录、搜索与服务错误反馈，以及手填型号的绑定、保存、刷新失败保留和重启恢复。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
         windowMode: 'background',
         runMode: 'single',
         execute: async (runtime) => {
-          const { page } = runtime
+          let { page } = runtime
           const liveEnv = loadWorkbenchLiveModelEnv()
           const provider = await startProviderServer({
             baseUrl: liveEnv.baseUrl,
@@ -205,7 +206,7 @@ describe('workbench conversation e2e', () => {
           })
           runtime.registerResource({
             name: 'model-provider-server',
-            phase: 'before-app-close',
+            phase: 'after-app-close',
             dispose: provider.close
           })
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID, 'empty')
@@ -216,10 +217,10 @@ describe('workbench conversation e2e', () => {
           })
           await navigateToWorkbench(page, { waitForSessionListText: false })
           await createPartnerThroughWorkbenchUi(page, WORKSPACE_NAME)
-          const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
+          let modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
           await modelSelect.click()
           await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
-          const listFailure = page.getByTestId(workbenchSelectors.modelListLoadFailure)
+          let listFailure = page.getByTestId(workbenchSelectors.modelListLoadFailure)
           await listFailure.waitFor({ state: 'visible', timeout: 30_000 })
           const modelListFailureText = (await listFailure.innerText()).trim()
           const failedModelOptionCount = await page
@@ -261,6 +262,164 @@ describe('workbench conversation e2e', () => {
           await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
           await page.getByTestId(workbenchSelectors.modelListRefresh).click()
           await listFailure.waitFor({ state: 'visible' })
+
+          const openManualDialog = async (): Promise<void> => {
+            await page.keyboard.press('Escape')
+            await modelSelect.click()
+            await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
+            await page.getByTestId(workbenchSelectors.modelManualOpen).click()
+            await page
+              .getByTestId(workbenchSelectors.modelManualDialog)
+              .locator('.ant-modal-content')
+              .waitFor({ state: 'visible' })
+            await page.waitForFunction(
+              (testId) => document.activeElement?.getAttribute('data-testid') === testId,
+              workbenchSelectors.modelManualName
+            )
+          }
+          const selectManualService = async (name: string): Promise<void> => {
+            await page
+              .getByTestId(workbenchSelectors.modelManualService)
+              .locator('.ant-select-selector')
+              .click()
+            await page
+              .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+              .last()
+              .locator('.ant-select-item-option')
+              .filter({ hasText: name })
+              .first()
+              .click()
+          }
+          const currentPartnerId = await page.evaluate(
+            async (name) =>
+              (await window.api.partnerList()).find((partner) => partner.name === name)?.id,
+            WORKSPACE_NAME
+          )
+          if (!currentPartnerId) throw new Error('manual model partner is missing')
+          const originalConfigId = await page.evaluate(
+            async (name) =>
+              (await window.api.llmConfigList()).find((config) => config.name === name)?.id,
+            liveEnv.modelName
+          )
+          if (!originalConfigId) throw new Error('manual model service is missing')
+          const waitForSavedManualModel = async (
+            partnerId: string,
+            name: string
+          ): Promise<void> => {
+            await page.waitForFunction(
+              async (input) => {
+                const { uiState } = await window.api.partnerOpen({ partnerId: input.partnerId })
+                const selected = uiState?.composer.modelSelection.mainModel
+                return (
+                  selected?.manual === true &&
+                  selected.configId === input.configId &&
+                  selected.modelName === input.modelName
+                )
+              },
+              { partnerId, configId: originalConfigId, modelName: name }
+            )
+          }
+          const waitForManualModelLabel = async (): Promise<void> => {
+            await page.waitForFunction(
+              (input) =>
+                document.querySelector(`[data-testid="${input.testId}"]`)?.textContent?.trim() ===
+                input.modelName,
+              { testId: workbenchSelectors.modelSelect, modelName: liveEnv.modelName }
+            )
+          }
+
+          const selectionBeforeManualInput = (await modelSelect.innerText()).trim()
+          await openManualDialog()
+          const manualSingleServiceHidden =
+            (await page.getByTestId(workbenchSelectors.modelManualService).count()) === 0
+          await page.getByTestId(workbenchSelectors.modelManualName).fill('   ')
+          const manualEmptyBlocked = await page
+            .getByTestId(workbenchSelectors.modelManualUse)
+            .isDisabled()
+          await page.getByTestId(workbenchSelectors.modelManualName).fill(liveEnv.modelName)
+          await page.getByTestId(workbenchSelectors.modelManualCancel).click()
+          const manualCancelUnchanged =
+            (await modelSelect.innerText()).trim() === selectionBeforeManualInput
+          await openManualDialog()
+          await page
+            .getByTestId(workbenchSelectors.modelManualName)
+            .fill(`  ${liveEnv.modelName}  `)
+          await page.getByTestId(workbenchSelectors.modelManualUse).click({ trial: true })
+          await runtime.captureScreenshot({
+            name: 'model-manual-entry-single-service',
+            message: '单个服务时直接填写精确模型名称，使用后绑定该服务并保存选择。'
+          })
+          await page.getByTestId(workbenchSelectors.modelManualUse).click()
+          await waitForSavedManualModel(currentPartnerId, liveEnv.modelName)
+          const manualDoesNotStartChat =
+            provider.getSuccessfulChatRequestCount() === 0 && provider.getChatRequestCount() === 0
+          await modelSelect.click()
+          await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
+          await page.getByTestId(workbenchSelectors.modelListRefreshIcon).click()
+          await listFailure.waitFor({ state: 'visible' })
+          const manualRetainedAfterFailure =
+            (await modelSelect.innerText()).trim() === liveEnv.modelName
+
+          await createModelConfigThroughSettingsUi(page, {
+            name: MANUAL_ALTERNATIVE_SERVICE,
+            baseUrl: `${provider.baseUrl}/unavailable-catalog`,
+            apiKey: liveEnv.apiKey
+          })
+          await navigateToWorkbench(page, { waitForSessionListText: false })
+          await openManualDialog()
+          const manualMultipleServicesVisible = await page
+            .getByTestId(workbenchSelectors.modelManualService)
+            .isVisible()
+          await selectManualService(MANUAL_ALTERNATIVE_SERVICE)
+          await page.getByTestId(workbenchSelectors.modelManualUse).click()
+          await openManualDialog()
+          const manualServiceBindingRetained = (
+            await page.getByTestId(workbenchSelectors.modelManualService).innerText()
+          ).includes(MANUAL_ALTERNATIVE_SERVICE)
+          await selectManualService(liveEnv.modelName)
+          await page.getByTestId(workbenchSelectors.modelManualUse).click()
+          await waitForSavedManualModel(currentPartnerId, liveEnv.modelName)
+          await navigateToSettingsSection(page, 'model')
+          const alternativeRow = page
+            .locator('tbody tr')
+            .filter({ hasText: MANUAL_ALTERNATIVE_SERVICE })
+          await alternativeRow
+            .getByTestId(new RegExp(`^${settingsSelectors.modelDeleteButtonPrefix}-`, 'u'))
+            .click()
+          await page.getByText('确定要删除此配置吗？').waitFor({ state: 'visible' })
+          await page.locator('.ant-popover:visible .ant-btn-primary').click()
+          await alternativeRow.waitFor({ state: 'hidden' })
+          await navigateToWorkbench(page, { waitForSessionListText: false })
+
+          await createPartnerThroughWorkbenchUi(page, 'Manual model other partner')
+          await openManualDialog()
+          await page.getByTestId(workbenchSelectors.modelManualName).fill('other-partner-model')
+          await page.getByTestId(workbenchSelectors.modelManualUse).click()
+          await page
+            .getByTestId(new RegExp(`^${workbenchSelectors.partnerItemPrefix}-`, 'u'))
+            .filter({ hasText: WORKSPACE_NAME })
+            .first()
+            .click()
+          await waitForSavedManualModel(currentPartnerId, liveEnv.modelName)
+          await waitForManualModelLabel()
+          const manualRestoredAfterPartnerSwitch =
+            (await modelSelect.innerText()).trim() === liveEnv.modelName
+          const restarted = await runtime.restartApp()
+          page = restarted.page
+          modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
+          listFailure = page.getByTestId(workbenchSelectors.modelListLoadFailure)
+          await navigateToWorkbench(page, { waitForSessionListText: false })
+          await waitForSavedManualModel(currentPartnerId, liveEnv.modelName)
+          await modelSelect.click()
+          await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
+          await listFailure.waitFor({ state: 'visible' })
+          await waitForManualModelLabel()
+          const manualRestoredAfterRestart =
+            (await modelSelect.innerText()).trim() === liveEnv.modelName
+          await runtime.captureScreenshot({
+            name: 'model-manual-selection-after-restart',
+            message: '正常重启后恢复手填型号，列表请求仍失败时保留原选择。'
+          })
 
           await navigateToSettingsSection(page, 'model')
           await page
@@ -484,6 +643,15 @@ describe('workbench conversation e2e', () => {
             modelListErrorCleared,
             modelListRefreshIconVisible,
             modelListHeaderRefreshRequested,
+            manualSingleServiceHidden,
+            manualEmptyBlocked,
+            manualCancelUnchanged,
+            manualDoesNotStartChat,
+            manualRetainedAfterFailure,
+            manualMultipleServicesVisible,
+            manualServiceBindingRetained,
+            manualRestoredAfterPartnerSwitch,
+            manualRestoredAfterRestart,
             presetOptionCount,
             freeOptionCount,
             presetEmptyStateVisible,
@@ -512,6 +680,22 @@ describe('workbench conversation e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.manualSingleServiceHidden &&
+              result.manualEmptyBlocked &&
+              result.manualCancelUnchanged &&
+              result.manualDoesNotStartChat &&
+              result.manualRetainedAfterFailure &&
+              result.manualMultipleServicesVisible &&
+              result.manualServiceBindingRetained &&
+              result.manualRestoredAfterPartnerSwitch &&
+              result.manualRestoredAfterRestart,
+            {
+              name: 'manual-model-selection-is-bound-persisted-and-kept-on-list-failure',
+              message:
+                '手填型号正确绑定服务，空白被拦截、取消不改动；保存后刷新失败、切换伙伴及正常重启均保留选择。'
+            }
+          )
           await runtime.assertThat(
             result.modelListFailureText === '加载失败' &&
               result.failedModelOptionCount === 0 &&

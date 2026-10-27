@@ -6,7 +6,7 @@
 
 发布按以下顺序进行：
 
-1. 在干净的 `main` 上检查版本、环境和发布前置条件。
+1. 在干净的 `main` 上检查版本、环境和发布前置条件，对比上一已发布同平台版本并准备中英文更新日志。
 2. 创建并推送平台 annotated Tag。
 3. 从 Tag 导出干净代码，构建一次共用资源，分别打包并审计国内、国际候选包。
 4. 对比当前 Tag 与上一已发布同平台版本，评估改动影响并确定正式包回归范围。
@@ -25,19 +25,32 @@
 
 `release:start` 会依次完成：
 
-1. 校验 `released-migrations.json` 中已锁定 migration 的版本、名称、文件名和 SHA-256。
-2. 并行执行 `typecheck:node`、`typecheck:web`，并准备网页抓取 sidecar。
-3. 使用 6 个 worker 执行全部非 live backend（AI、Knowledge、Unit，包含 update backend；其中由 `requiresBackendPptBrowser` 识别的 PPT 浏览器用例 `pptBrowserFiles` 固定 1 个 worker 串行）。
-4. 全部通过后，把当前连续 migration 纳入发布锁，与 `package.json` 版本一并提交，创建 annotated Tag，并原子推送 `main` 和 Tag。
+1. 校验双语更新日志，缺少有效内容时在网络操作和耗时检查前失败。
+2. 校验 `released-migrations.json` 中已锁定 migration 的版本、名称、文件名和 SHA-256。
+3. 并行执行 `typecheck:node`、`typecheck:web`，并准备网页抓取 sidecar。
+4. 使用 6 个 worker 执行全部非 live backend（AI、Knowledge、Unit，包含 update backend；其中由 `requiresBackendPptBrowser` 识别的 PPT 浏览器用例 `pptBrowserFiles` 固定 1 个 worker 串行）。
+5. 全部通过后，把当前连续 migration 纳入发布锁，与 `package.json` 版本一并提交，创建含双语日志的 annotated Tag，并原子推送 `main` 和 Tag。
 
 第一个平台执行 `release:start` 时锁定本次新增 migration；另一平台使用同一份已锁源码。已锁 migration 不能合并、重排或修改，只能新增更高版本。
 
 ```bash
-pnpm release:start --platform windows --version X.Y.Z
-pnpm release:start --platform mac --version X.Y.Z
+pnpm release:start --platform windows --version X.Y.Z --notes-file <release-notes.md>
+pnpm release:start --platform mac --version X.Y.Z --notes-file <release-notes.md>
 ```
 
-可用 `--notes <text>` 附加发布说明。
+必须通过 `--notes-file <path>` 或 `--notes <text>` 提供双语更新日志，两者只能选一项。文件使用 UTF-8，临时草稿可放在 `.codex-tmp/`；完整内容写入 annotated Tag，后续发布从 Tag 读取，无需保留临时文件。缺少说明、语言章节缺失或无有效变更条目时，在网络操作和耗时检查前失败，不再以版本名兜底。
+
+日志固定先中文、后英文，每个章节至少一条对应语言的变更列表；可用三级标题分类。发版执行者根据上一已发布同平台 Tag 到本次源码的 commit 和实际 diff 整理用户可感知的新功能、优化和修复，核对中英文逐项对应，剔除内部测试、重试和 prepare 提交。Windows 与 macOS 版本独立，不使用跨平台 GitHub Latest 作为比较基线；GitHub 自动生成的 PR 清单不能替代双语产品说明。格式如下：
+
+```markdown
+## 中文
+
+- 本版本面向用户的功能或修复说明。
+
+## English
+
+- A matching description of the user-facing feature or fix.
+```
 
 Windows 候选包须在本地 Windows x64 构建；macOS 只创建 Tag，候选包须在 Apple Silicon Mac 上构建。macOS 构建前需先在本机配置更新签名：`pnpm release:signing:setup`（依赖 `CSC_LINK` / `CSC_KEY_PASSWORD`）。平台环境与构建审计见 [`design.md`](./design.md)。
 
@@ -140,16 +153,24 @@ node --env-file=.env -e "require('node:child_process').execFileSync('gh', ['api'
 `--publish-only` 按以下规则执行：
 
 1. 复验国内已测试及国际资源一致的候选 bundle，并核对公开仓库的 annotated Tag 指向同一构建 commit。Tag 不存在、源码不一致、登录或权限不足时，在写入 COS / R2 前失败；脚本不会代建或推送 Tag。
-2. 创建 GitHub 草稿，或继续使用同 Tag 的已有草稿。只上传对应平台的 EXE / DMG 和 `SHA256SUMS`；版本说明取 Tag 注释并附源码和官网更新日志入口。GitHub 使用真实国际包的 `NCurator-…` 英文文件名（见[品牌命名](../brand.md#下载名-vs-缓存名)），安装包字节保持一致；不上传更新文件、bundle、日志或签名材料。
+2. 创建 GitHub 草稿，或继续使用同 Tag 的已有草稿。只上传对应平台的 EXE / DMG 和 `SHA256SUMS`；双语版本说明取 Tag 注释，每个语言章节附对应语言的下载说明、源码和官网更新日志入口。恢复草稿时同步正文并读取复验，再补附件；公开前后均核对正文未变化。已公开且双语完整的说明保留，可继续恢复缺失渠道；缺少双语说明时先按下述方式补写。GitHub 使用真实国际包的 `NCurator-…` 英文文件名（见[品牌命名](../brand.md#下载名-vs-缓存名)），安装包字节保持一致；不上传更新文件、bundle、日志或签名材料。
 3. 校验已有附件的大小和 SHA-256；缺少服务端 digest 的旧附件下载复验。中断后只补齐缺失附件，可清除草稿内上传失败留下的 `starter` 附件；内容不同则失败，不覆盖已有安装包。
 4. 分别将国内包发布 COS、国际包发布 R2。每个渠道已经指向对应候选包时只复验；渠道尚未上线或尚未切换时继续该渠道上传 / finalize。支持对已标记 `published` 的双候选包补齐其对应缺失渠道，拒绝覆盖内容不同的文件或降级公开通道。
 5. 将草稿公开，再通过匿名下载复验附件大小与 SHA-256；已公开且内容相同的 Release 只验证。三个渠道全部成功后候选包才标记 `published`。
 
 Windows 与 macOS 保持独立 Tag 和 Release，不设置跨平台共用的 Latest 标记。GitHub 的 Source code 下载项是源码压缩包，用户安装应选择 EXE / DMG。
 
+已公开版本补写或修正文案时，先保存原正文和附件清单，核对该版本与上一已发布同平台版本的真实差异，准备完整中英文正文及下载说明，再仅更新 Release 正文：
+
+```bash
+gh release edit <tag> --repo Yoan98/Ncurator --notes-file <release-body.md>
+```
+
+认证规则同上；仅在 `.env` 保存 Token 时通过已加载该文件的进程调用 CLI。更新后读取正文复验，核对 Release ID、Tag、草稿状态和附件 ID、文件名、大小、digest 均未变化。正文补写不重建安装包、不改 Tag、不切换 COS / R2 通道，不调用平台 `--publish-only`。
+
 首次公开应从清理后的公开源码创建 Tag 和候选包，不推送含凭证、内部资料的私有历史。自动发布要求公开 Tag 与候选 commit 完全一致，不处理历史安装包与公开快照的 commit 映射；补发旧版本需另行核对源码对应关系。
 
-操作依据：[CLI 登录](https://cli.github.com/manual/gh_auth_login)、[创建 Release](https://cli.github.com/manual/gh_release_create)、[上传附件](https://cli.github.com/manual/gh_release_upload)。
+操作依据：[CLI 登录](https://cli.github.com/manual/gh_auth_login)、[创建 Release](https://cli.github.com/manual/gh_release_create)、[更新说明](https://cli.github.com/manual/gh_release_edit)、[上传附件](https://cli.github.com/manual/gh_release_upload)。
 
 ## 4. 中断与恢复
 

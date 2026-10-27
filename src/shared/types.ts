@@ -557,6 +557,7 @@ export interface LLMConfig {
 export type WorkbenchSelectedModel = {
   configId: string
   modelName: string
+  manual?: true
 }
 
 export type WorkbenchModelSelection = {

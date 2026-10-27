@@ -68,6 +68,11 @@ export const resolveSelectedWorkbenchModel = (input: {
   const config = input.configs.find((item) => item.id === selected.configId)
   if (!config) return null
 
+  // An explicit manual choice does not depend on the discovery endpoint.
+  if (selected.manual === true) {
+    return { configId: config.id, modelName: selected.modelName, manual: true }
+  }
+
   const remoteModels = input.modelListsByConfigId[config.id] || []
 
   // Exact id in the remote list is always valid — including custom picks under a

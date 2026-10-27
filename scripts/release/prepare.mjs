@@ -11,6 +11,7 @@ import {
   RELEASE_VERSION_PATTERN
 } from './tag.mjs'
 import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
+import { readReleaseNotes } from './notes.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -23,7 +24,7 @@ const valueAfter = (name) => {
   return value
 }
 
-const VALUE_OPTIONS = new Set(['--platform', '--version', '--notes'])
+const VALUE_OPTIONS = new Set(['--platform', '--version', '--notes', '--notes-file'])
 for (let index = 0; index < args.length; index += 1) {
   const argument = args[index]
   if (VALUE_OPTIONS.has(argument)) {
@@ -39,15 +40,19 @@ const version = valueAfter('--version') || ''
 const platform = valueAfter('--platform') || ''
 const releaseTag =
   RELEASE_VERSION_PATTERN.test(version) && platform ? createReleaseTag(platform, version) : ''
-const notes = valueAfter('--notes') || `Ncurator ${releaseTag}`
 const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const stageDeadline = createReleaseStageDeadline('release preparation')
 
 if (!RELEASE_VERSION_PATTERN.test(version) || !['mac', 'windows'].includes(platform)) {
   throw new Error(
-    'usage: node scripts/release/prepare.mjs --platform <mac|windows> --version <1.2.3> [--notes <text>]'
+    'usage: node scripts/release/prepare.mjs --platform <mac|windows> --version <1.2.3> (--notes <text> | --notes-file <path>)'
   )
 }
+const notes = await readReleaseNotes({
+  notes: valueAfter('--notes'),
+  notesFile: valueAfter('--notes-file'),
+  root: ROOT
+})
 
 const run = (command, commandArgs) =>
   new Promise((resolve, reject) => {
@@ -157,7 +162,7 @@ await run('git', [
   'src/main/services/storage/sqlite/migrations/released-migrations.json'
 ])
 await run('git', ['commit', '--allow-empty', '-m', `release: prepare ${releaseTag}`])
-await run('git', ['tag', '-a', releaseTag, '-m', notes])
+await run('git', ['tag', '-a', releaseTag, '--cleanup=verbatim', '-m', notes])
 await run('git', ['push', '--atomic', 'origin', 'main', releaseTag])
 
 process.stdout.write(`[release] prepared and pushed ${releaseTag}\n`)

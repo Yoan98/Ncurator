@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { resolveReleaseAssetPath } from './r2/fragment-contract.mjs'
 import { assertLivePublishAllowed } from './storage/config.mjs'
 import { parseReleaseTag } from './tag.mjs'
+import { renderGitHubReleaseNotes, validateReleaseNotes } from './notes.mjs'
 import { fetchWithRetry } from './shared/http.mjs'
 
 export const GITHUB_RELEASE_REPOSITORY = 'Yoan98/Ncurator'
@@ -109,6 +110,12 @@ export const createGitHubReleasePublisher = ({
     }
   }
 
+  const verifyNotes = (release, expectedNotes) => {
+    if (validateReleaseNotes(release?.body) !== expectedNotes) {
+      throw new Error('GitHub Release notes differ from the prepared bilingual notes')
+    }
+  }
+
   return {
     async prepare(candidate) {
       assertLivePublishAllowed()
@@ -119,6 +126,16 @@ export const createGitHubReleasePublisher = ({
       if (bundle.distribution !== 'international')
         throw new Error('GitHub requires the international installer')
       const annotation = await verifySource(bundle)
+      let release = await readRelease(bundle.tag)
+      // Published notes may have been explicitly corrected without changing the original tag.
+      const notes =
+        release && !release.draft
+          ? validateReleaseNotes(release.body)
+          : renderGitHubReleaseNotes({
+              tag: bundle.tag,
+              notes: annotation,
+              repositoryUrl: REPOSITORY_URL
+            })
       const installer = bundle.files.find((file) => file.role === 'installer')
       const githubInstaller = installer
       const staging = path.join(candidate.directory, 'github')
@@ -139,21 +156,8 @@ export const createGitHubReleasePublisher = ({
       const { family, version } = parseReleaseTag(bundle.tag)
       const platform = family === 'windows' ? 'Windows x64' : 'macOS arm64'
       const notesPath = path.join(staging, 'release-notes.md')
-      await writeFile(
-        notesPath,
-        [
-          annotation,
-          '',
-          `平台：${platform}。下载下方的 ${family === 'windows' ? 'EXE' : 'DMG'} 安装包。`,
-          '安装包与官网下载版本一致；SHA256SUMS 提供 SHA-256 校验值。',
-          '',
-          `[对应源码](${REPOSITORY_URL}/tree/${bundle.tag}) · [官网更新日志](https://www.guanzhangai.cn/zh/changelog)`,
-          ''
-        ].join('\n'),
-        'utf8'
-      )
+      await writeFile(notesPath, notes, 'utf8')
 
-      let release = await readRelease(bundle.tag)
       if (!release) {
         await gh([
           'release',
@@ -175,6 +179,11 @@ export const createGitHubReleasePublisher = ({
         if (release.prerelease || release.assets.some((asset) => !expectedNames.has(asset.name))) {
           throw new Error('GitHub draft contains unexpected assets or is marked prerelease')
         }
+        if (release.body?.replace(/\r\n?/gu, '\n').trim() !== notes.trim()) {
+          await gh(['release', 'edit', ...releaseArgs(bundle.tag), '--notes-file', notesPath])
+          release = await readRelease(bundle.tag)
+          verifyNotes(release, notes)
+        }
         for (const file of files) {
           const existing = release.assets.find((asset) => asset.name === file.name)
           if (existing?.state === 'starter') {
@@ -186,23 +195,26 @@ export const createGitHubReleasePublisher = ({
         }
         release = await readRelease(bundle.tag)
       }
+      verifyNotes(release, notes)
       await verifyAssets(release, files)
       process.stdout.write(`[release] GitHub assets verified for ${bundle.tag}\n`)
-      return { bundle, files, releaseId: release.id }
+      return { bundle, files, releaseId: release.id, notes }
     },
 
     async publish(prepared) {
       assertLivePublishAllowed()
-      const { bundle, files, releaseId } = prepared
+      const { bundle, files, releaseId, notes } = prepared
       await verifySource(bundle)
       let release = await readRelease(bundle.tag)
       if (release?.id !== releaseId) throw new Error('GitHub Release changed during publication')
+      verifyNotes(release, notes)
       await verifyAssets(release, files)
       if (release.draft) {
         await gh(['release', 'edit', ...releaseArgs(bundle.tag), '--draft=false', '--latest=false'])
         release = await readRelease(bundle.tag)
       }
       if (!release || release.draft) throw new Error('GitHub Release is not public')
+      verifyNotes(release, notes)
       await verifyAssets(release, files)
       // Anonymous downloads verify that users can fetch the same bytes, independently of CLI auth.
       for (const file of files) {

@@ -9,7 +9,8 @@ import React, {
   useState
 } from 'react'
 import { createPortal } from 'react-dom'
-import { App as AntdApp, Button, Modal, Tooltip } from 'antd'
+import { App as AntdApp, Button, Input, Modal, Select, Tooltip } from 'antd'
+import type { InputRef } from 'antd'
 import {
   HiAdjustmentsHorizontal,
   HiArrowPath,
@@ -213,10 +214,16 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const menuRef = useRef<HTMLDivElement | null>(null)
   const inspectorRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const manualModelInputRef = useRef<InputRef>(null)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const listboxId = useId()
+  const manualModelNameId = useId()
+  const manualModelConfigId = useId()
   const [open, setOpen] = useState(false)
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
+  const [manualInputOpen, setManualInputOpen] = useState(false)
+  const [manualConfigId, setManualConfigId] = useState('')
+  const [manualModelName, setManualModelName] = useState('')
   const [view, setView] = useState<PanelView>('preset')
   const [query, setQuery] = useState('')
   const [collapsedConfigIds, setCollapsedConfigIds] = useState<Set<string>>(() => new Set())
@@ -541,10 +548,35 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!query.trim()) setSearchCollapsedConfigIds(new Set())
   }, [query])
 
-  const selectModel = (configId: string, modelName: string): void => {
-    onChange({ mainModel: { configId, modelName } })
+  const selectModel = (configId: string, modelName: string, manual = false): void => {
+    const selected: WorkbenchSelectedModel = { configId, modelName }
+    if (manual || (isSameSelection(value.mainModel, selected) && value.mainModel?.manual)) {
+      selected.manual = true
+    }
+    onChange({ mainModel: selected })
     setOpen(false)
     onAfterChange?.()
+  }
+
+  const openManualInput = (): void => {
+    const current =
+      value.mainModel?.manual && configs.some((config) => config.id === value.mainModel?.configId)
+        ? value.mainModel
+        : null
+    setManualConfigId(configs.length === 1 ? configs[0].id : current?.configId || '')
+    setManualModelName(current?.modelName || '')
+    setManualInputOpen(true)
+    setOpen(false)
+  }
+
+  const canUseManualModel = Boolean(
+    manualModelName.trim() && configs.some((config) => config.id === manualConfigId)
+  )
+
+  const useManualModel = (): void => {
+    if (!canUseManualModel) return
+    setManualInputOpen(false)
+    selectModel(manualConfigId, manualModelName.trim(), true)
   }
 
   const presetGroups = useMemo(
@@ -559,7 +591,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   )
 
   const selectedPreset = useMemo(() => {
-    if (!value.mainModel) return null
+    if (!value.mainModel || value.mainModel.manual) return null
     const config = configs.find((item) => item.id === value.mainModel?.configId)
     const preset = config ? resolvePresetModeProvider(config) : null
     if (!preset) return null
@@ -712,17 +744,29 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       <div role="status" data-testid={workbenchSelectors.modelListLoadFailure}>
         {t(($) => $.common.loadFailed)}
       </div>
-      <button
-        type="button"
-        className="mt-2 text-[12px] text-[#0B6BCB] hover:underline"
-        data-testid={workbenchSelectors.modelListErrorOpen}
-        onClick={() => {
-          setErrorDetail(error)
-          setOpen(false)
-        }}
-      >
-        {t(($) => $.common.viewErrorInformation)}
-      </button>
+      <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
+        <button
+          type="button"
+          className="text-[12px] text-[#0B6BCB] hover:underline"
+          data-testid={workbenchSelectors.modelListErrorOpen}
+          onClick={() => {
+            setErrorDetail(error)
+            setOpen(false)
+          }}
+        >
+          {t(($) => $.common.viewErrorInformation)}
+        </button>
+        {configs.length > 0 ? (
+          <button
+            type="button"
+            className="text-[12px] text-[#0B6BCB] hover:underline"
+            data-testid={workbenchSelectors.modelManualOpen}
+            onClick={openManualInput}
+          >
+            {t(($) => $.workbench.enterModelNameManually)}
+          </button>
+        ) : null}
+      </div>
     </>
   )
 
@@ -1172,6 +1216,76 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             document.body
           )
         : null}
+      <Modal
+        open={manualInputOpen}
+        title={t(($) => $.workbench.enterModelNameManually)}
+        width={440}
+        centered
+        onCancel={() => setManualInputOpen(false)}
+        afterOpenChange={(visible) => {
+          if (visible) manualModelInputRef.current?.focus()
+        }}
+        afterClose={() => triggerRef.current?.focus()}
+        data-testid={workbenchSelectors.modelManualDialog}
+        footer={[
+          <Button
+            key="cancel"
+            data-testid={workbenchSelectors.modelManualCancel}
+            onClick={() => setManualInputOpen(false)}
+          >
+            {t(($) => $.common.cancel)}
+          </Button>,
+          <Button
+            key="use"
+            type="primary"
+            disabled={!canUseManualModel}
+            data-testid={workbenchSelectors.modelManualUse}
+            onClick={useManualModel}
+          >
+            {t(($) => $.common.use)}
+          </Button>
+        ]}
+      >
+        <div className="nc-document-form flex flex-col gap-4 py-1">
+          {configs.length > 1 ? (
+            <div>
+              <label
+                htmlFor={manualModelConfigId}
+                className="mb-2 block text-[13px] text-[#37352F]"
+              >
+                {t(($) => $.workbench.serviceConfiguration)}
+              </label>
+              <Select
+                id={manualModelConfigId}
+                value={manualConfigId || undefined}
+                placeholder={t(($) => $.workbench.selectServiceConfiguration)}
+                onChange={setManualConfigId}
+                options={configs.map((config) => ({
+                  value: config.id,
+                  label: getConfigLabel(config)
+                }))}
+                className="w-full"
+                data-testid={workbenchSelectors.modelManualService}
+              />
+            </div>
+          ) : null}
+          <div>
+            <label htmlFor={manualModelNameId} className="mb-2 block text-[13px] text-[#37352F]">
+              {t(($) => $.workbench.manualModelName)}
+            </label>
+            <Input
+              ref={manualModelInputRef}
+              id={manualModelNameId}
+              value={manualModelName}
+              placeholder={t(($) => $.workbench.manualModelNamePlaceholder)}
+              onChange={(event) => setManualModelName(event.target.value)}
+              onPressEnter={useManualModel}
+              autoComplete="off"
+              data-testid={workbenchSelectors.modelManualName}
+            />
+          </div>
+        </div>
+      </Modal>
       <Modal
         open={errorDetail !== null}
         title={t(($) => $.common.errorInformation)}

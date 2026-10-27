@@ -82,6 +82,76 @@ describe('workbench model selection', () => {
     ).toEqual({ configId: 'cfg-1', modelName: 'qwen3.8-max' })
   })
 
+  it.each([
+    { kind: 'custom', config: customConfig('cfg-manual') },
+    { kind: 'preset', config: presetConfig('cfg-manual') }
+  ])('keeps manually entered names on $kind configs independently of discovery', ({ config }) => {
+    const selected = { configId: config.id, modelName: 'Manual.Model-Exact', manual: true } as const
+    for (const models of [[], remote('other-model'), remote(selected.modelName)]) {
+      expect(
+        resolveSelectedWorkbenchModel({
+          configs: [config],
+          modelListsByConfigId: { [config.id]: models },
+          selected,
+          presetProviders: dashscopeCatalog
+        })
+      ).toEqual(selected)
+    }
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs: [config],
+        modelListsByConfigId: {},
+        selected
+      })
+    ).toEqual(selected)
+  })
+
+  it('invalidates a manual selection only after its service config is removed', () => {
+    const selected = {
+      configId: 'removed-config',
+      modelName: 'manual-model',
+      manual: true
+    } as const
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs: [customConfig('another-config')],
+        modelListsByConfigId: {},
+        selected
+      })
+    ).toBeNull()
+  })
+
+  it('does not let a manual flag bypass the free catalog model identity', () => {
+    const freeModels = [
+      {
+        id: 'entry',
+        configId: 'free:entry',
+        modelName: 'allowed-model',
+        providerKind: 'openai-compatible' as const,
+        label: 'Free',
+        description: '',
+        capabilities: ['text' as const],
+        iconUrl: ''
+      }
+    ]
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs: [],
+        modelListsByConfigId: {},
+        freeModels,
+        selected: { configId: 'free:entry', modelName: 'other-model', manual: true }
+      })
+    ).toBeNull()
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs: [],
+        modelListsByConfigId: {},
+        freeModels,
+        selected: { configId: 'free:entry', modelName: 'allowed-model', manual: true }
+      })
+    ).toEqual({ configId: 'free:entry', modelName: 'allowed-model' })
+  })
+
   it('rejects selected ids that are absent from a non-empty remote list', () => {
     const configs = [presetConfig('cfg-1')]
     const lists = { 'cfg-1': remote('qwen3.8-max') }
