@@ -69,7 +69,7 @@ export const resolveSelectedWorkbenchModel = (input: {
   if (!config) return null
 
   // An explicit manual choice does not depend on the discovery endpoint.
-  if (selected.manual === true) {
+  if (selected.manual === true || config.manualModels?.includes(selected.modelName)) {
     return { configId: config.id, modelName: selected.modelName, manual: true }
   }
 

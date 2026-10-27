@@ -25,6 +25,7 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { VectorModelDownloadService } from '../services/model/VectorModelDownloadService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
+import type { LlmManualModelAddRequest, LlmManualModelAddResponse } from '../../shared/types'
 import { FreeModelCatalogService } from '../services/llm/FreeModelCatalogService'
 import { PresetModelCatalogService } from '../services/llm/PresetModelCatalogService'
 import { validateLlmConfigForSave } from '../services/llm/configGuard'
@@ -3535,6 +3536,18 @@ export function registerHandlers(services: {
       return { success: false, error: getErrorMessage(e) }
     }
   })
+
+  ipcMain.handle(
+    'llm-config-add-manual-model',
+    async (_event, input: LlmManualModelAddRequest): Promise<LlmManualModelAddResponse> => {
+      try {
+        const config = await llmStore.addManualModel(input.configId, input.modelName)
+        return { success: true, config }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
 
   ipcMain.handle('llm-config-delete', async (_event, id: string) => {
     try {

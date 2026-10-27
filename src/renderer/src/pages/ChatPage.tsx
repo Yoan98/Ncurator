@@ -932,7 +932,9 @@ const ChatPage: React.FC = () => {
   const [modelListsByConfigId, setModelListsByConfigId] = useState<
     Record<string, LlmRemoteModel[]>
   >({})
-  const [modelListError, setModelListError] = useState<string | null>(null)
+  const [modelListErrorsByConfigId, setModelListErrorsByConfigId] = useState<
+    Record<string, string>
+  >({})
   const [modelListsLoading, setModelListsLoading] = useState(false)
   const [modelSelection, setModelSelection] = useState<WorkbenchModelSelection>({
     mainModel: null
@@ -2318,11 +2320,20 @@ const ChatPage: React.FC = () => {
             response.success ? response.items : []
           ])
         )
-        const errors = results.flatMap(({ response }) =>
-          response.success ? [] : [response.error || t(($) => $.common.unknownError)]
+        const errors = Object.fromEntries(
+          results.flatMap(({ configId, response }) =>
+            response.success ? [] : [[configId, response.error || t(($) => $.common.unknownError)]]
+          )
         )
-        setModelListsByConfigId(lists)
-        setModelListError(errors.length ? errors.join('\n\n') : null)
+        setModelListsByConfigId((current) =>
+          Object.fromEntries(
+            results.map(({ configId, response }) => [
+              configId,
+              response.success ? response.items : current[configId] || []
+            ])
+          )
+        )
+        setModelListErrorsByConfigId(errors)
         return lists
       } finally {
         setModelListsLoading(false)
@@ -2353,7 +2364,7 @@ const ChatPage: React.FC = () => {
       setModelConfigs(list)
       if (list.length === 0) {
         setModelListsByConfigId({})
-        setModelListError(null)
+        setModelListErrorsByConfigId({})
         const resolveModel = (
           model: WorkbenchModelSelection['mainModel']
         ): WorkbenchModelSelection['mainModel'] =>
@@ -2414,7 +2425,7 @@ const ChatPage: React.FC = () => {
       setModelConfigs([])
       setPresetProviders([])
       setModelListsByConfigId({})
-      setModelListError(error instanceof Error ? error.message : String(error))
+      setModelListErrorsByConfigId({})
       setModelSelection({ mainModel: null })
     } finally {
       setModelCatalogLoaded(true)
@@ -2424,6 +2435,14 @@ const ChatPage: React.FC = () => {
   const refreshModelLists = useCallback(async (): Promise<void> => {
     await fetchModelLists(modelConfigs)
   }, [fetchModelLists, modelConfigs])
+
+  const addManualModel = useCallback(async (configId: string, modelName: string): Promise<void> => {
+    const response = await window.api.llmConfigAddManualModel({ configId, modelName })
+    if (!response.success) throw new Error(response.error)
+    setModelConfigs((current) =>
+      current.map((config) => (config.id === response.config.id ? response.config : config))
+    )
+  }, [])
 
   useEffect(() => {
     const key = currentPartnerIdRef.current || ''
@@ -5382,11 +5401,12 @@ const ChatPage: React.FC = () => {
                                 onExecutionPermissionChange={handleExecutionPermissionChange}
                                 modelConfigs={modelConfigs}
                                 modelListsByConfigId={modelListsByConfigId}
-                                modelListError={modelListError}
+                                modelListErrorsByConfigId={modelListErrorsByConfigId}
                                 modelListsLoading={modelListsLoading}
                                 modelSelection={modelSelection}
                                 onModelSelectionChange={handleModelSelectionChange}
                                 onRefreshModelLists={refreshModelLists}
+                                onAddManualModel={addManualModel}
                                 onFreeModelsChange={setFreeModels}
                                 onDraftChange={handleComposerDraftChange}
                                 onSubmit={() => void handleSend()}

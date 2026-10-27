@@ -552,7 +552,13 @@ export interface LLMConfig {
   providerKind: LlmProviderKind
   base_url: string
   api_key: string
+  manualModels?: string[]
 }
+
+export type LlmManualModelAddRequest = { configId: string; modelName: string }
+export type LlmManualModelAddResponse =
+  | { success: true; config: LLMConfig }
+  | { success: false; error: string }
 
 export type WorkbenchSelectedModel = {
   configId: string

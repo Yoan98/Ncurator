@@ -1,4 +1,5 @@
 import { OpenWithPreferenceStore } from '../../../../src/main/services/storage/domains/OpenWithPreferenceStore'
+import { LlmConfigStore } from '../../../../src/main/services/storage/domains/LlmConfigStore'
 import { projectMessageLogRecords } from '../../../../src/main/services/ai/human/memory/transcript'
 import { ChatMessageLogStore } from '../../../../src/main/services/storage/domains/ChatMessageLogStore'
 import { AiSubagentStore } from '../../../../src/main/services/storage/domains/AiSubagentStore'
@@ -102,6 +103,38 @@ describe('sqlite storage core and stores', () => {
   afterEach(async () => {
     sqlite.close()
     if (tempDir) await fs.rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('keeps exact manual model names with their service through edits and reopening the database', async () => {
+    const store = new LlmConfigStore(sqlite)
+    const config = {
+      id: 'manual-service',
+      name: 'test',
+      providerKind: 'openai-compatible' as const,
+      base_url: 'http://localhost:9000/v1',
+      api_key: 'local-key'
+    }
+    await store.save(config)
+    await store.addManualModel(config.id, '  Manual.Model  ')
+    await store.addManualModel(config.id, 'Manual.Model')
+    await store.addManualModel(config.id, 'manual.model')
+    await store.save({ ...config, name: 'renamed', api_key: 'new-key' })
+    await store.save({ ...config, id: 'another-service', name: 'other' })
+    await expect(store.addManualModel(config.id, '   ')).rejects.toThrow('请输入模型名称')
+    await expect(store.addManualModel('missing', 'model')).rejects.toThrow('配置不存在')
+    sqlite.close()
+    sqlite = new SqliteCore(path.join(tempDir, 'app.sqlite'))
+    sqlite.initialize()
+    const reopened = new LlmConfigStore(sqlite)
+    expect(await reopened.getById(config.id)).toMatchObject({
+      name: 'renamed',
+      api_key: 'new-key',
+      manualModels: ['Manual.Model', 'manual.model']
+    })
+    expect((await reopened.getById('another-service'))?.manualModels).toEqual([])
+    await reopened.delete(config.id)
+    await reopened.save(config)
+    expect((await reopened.getById(config.id))?.manualModels).toEqual([])
   })
 
   it('roundtrips legacy loader annotations without reviving or erasing independent current snapshots', async () => {
@@ -221,7 +254,8 @@ describe('sqlite storage core and stores', () => {
       { version: 18, name: 'app_language_and_service_route' },
       { version: 19, name: 'user_skills' },
       { version: 20, name: 'skill_name_bindings' },
-      { version: 21, name: 'embedding_models' }
+      { version: 21, name: 'embedding_models' },
+      { version: 22, name: 'llm_manual_models' }
     ])
 
     const legacyTables = sqlite

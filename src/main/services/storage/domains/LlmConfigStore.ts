@@ -1,7 +1,7 @@
 import type { LLMConfig } from '../../../types/store'
 import { isLlmProviderKind } from '../../../../shared/llmProvider'
 import type { SqliteCore } from '../sqlite/SqliteCore'
-import { insertOrReplace } from '../sqlite/sqliteUtils'
+import { parseStringArray } from '../sqlite/sqliteUtils'
 
 type LlmConfigRow = {
   id?: unknown
@@ -9,6 +9,7 @@ type LlmConfigRow = {
   providerKind?: unknown
   base_url?: unknown
   api_key?: unknown
+  manual_models_json?: unknown
 }
 
 const toConfig = (row: LlmConfigRow): LLMConfig => {
@@ -21,7 +22,8 @@ const toConfig = (row: LlmConfigRow): LLMConfig => {
     name: String(row.name || ''),
     providerKind,
     base_url: String(row.base_url || ''),
-    api_key: String(row.api_key || '')
+    api_key: String(row.api_key || ''),
+    manualModels: parseStringArray(row.manual_models_json) || []
   }
 }
 
@@ -29,13 +31,37 @@ export class LlmConfigStore {
   public constructor(private readonly sqlite: SqliteCore) {}
 
   public async save(config: LLMConfig): Promise<void> {
-    insertOrReplace(this.sqlite, 'llm_config', {
-      id: config.id,
-      name: config.name,
-      providerKind: config.providerKind,
-      base_url: config.base_url,
-      api_key: config.api_key
-    })
+    this.sqlite
+      .prepare(
+        `
+      INSERT INTO llm_config (id, name, providerKind, base_url, api_key)
+      VALUES (@id, @name, @providerKind, @base_url, @api_key)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name,
+        providerKind = excluded.providerKind, base_url = excluded.base_url, api_key = excluded.api_key
+    `
+      )
+      .run({
+        id: config.id,
+        name: config.name,
+        providerKind: config.providerKind,
+        base_url: config.base_url,
+        api_key: config.api_key
+      })
+  }
+
+  public async addManualModel(configId: string, modelName: string): Promise<LLMConfig> {
+    const name = modelName.trim()
+    if (!name) throw new Error('请输入模型名称')
+    const row = this.sqlite.prepare('SELECT * FROM llm_config WHERE id = ?').get(configId) as
+      | LlmConfigRow
+      | undefined
+    if (!row) throw new Error('配置不存在')
+    const config = toConfig(row)
+    const manualModels = [...new Set([...(config.manualModels || []), name])]
+    this.sqlite
+      .prepare('UPDATE llm_config SET manual_models_json = ? WHERE id = ?')
+      .run(JSON.stringify(manualModels), configId)
+    return { ...config, manualModels }
   }
 
   public async list(): Promise<LLMConfig[]> {

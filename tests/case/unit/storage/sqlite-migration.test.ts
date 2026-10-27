@@ -120,7 +120,7 @@ describe('SQLite migration contract', () => {
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
     expect(migrationRows).toContainEqual({ version: 20, name: 'skill_name_bindings' })
-    expect(migrationRows.at(-1)).toEqual({ version: 21, name: 'embedding_models' })
+    expect(migrationRows.at(-1)).toEqual({ version: 22, name: 'llm_manual_models' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -134,6 +134,7 @@ describe('SQLite migration contract', () => {
     const prepared = new SqliteCore(databasePath)
     prepared.initialize()
     prepared.exec(`DROP TABLE partner_user_skill;
+      ALTER TABLE llm_config DROP COLUMN manual_models_json;
       DROP TABLE embedding_settings;
       ALTER TABLE document DROP COLUMN embedding_identity;
       ALTER TABLE document DROP COLUMN embedding_dim;
@@ -165,11 +166,12 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const previous = new SqliteCore(databasePath)
     previous.initialize()
-    previous.exec(`DROP TABLE embedding_settings;
+    previous.exec(`ALTER TABLE llm_config DROP COLUMN manual_models_json;
+      DROP TABLE embedding_settings;
       ALTER TABLE document DROP COLUMN embedding_identity;
       ALTER TABLE document DROP COLUMN embedding_dim;
       ALTER TABLE document DROP COLUMN embedding_error;
-      DELETE FROM schema_migrations WHERE version = 21;
+      DELETE FROM schema_migrations WHERE version >= 21;
       INSERT INTO document (id, name, source_type, import_status, content_hash, active_generation_id, created_at, updated_at)
       VALUES ('local-document', 'notes.txt', 'file', 2, 'unchanged-hash', 'unchanged-generation', 1, 1);`)
     previous.close()
@@ -192,6 +194,48 @@ describe('SQLite migration contract', () => {
         embedding_error: null
       })
       expect(upgraded.prepare('SELECT * FROM embedding_settings').all()).toEqual([])
+    } finally {
+      upgraded.close()
+    }
+  })
+
+  it('upgrades v21 and collects existing manual selections into their own service config', async () => {
+    const databasePath = await createDatabasePath()
+    const previous = new SqliteCore(databasePath)
+    previous.initialize()
+    previous.exec(`ALTER TABLE llm_config DROP COLUMN manual_models_json;
+      DELETE FROM schema_migrations WHERE version = 22;
+      INSERT INTO llm_config (id, name, providerKind, base_url, api_key)
+      VALUES ('manual-service', 'test', 'openai-compatible', 'http://localhost/v1', 'key'),
+        ('other-service', 'other', 'openai-compatible', 'http://localhost/v1', 'key');
+      INSERT INTO partner (id, name, avatar_shape, avatar_color, created_at, updated_at, last_viewed_at)
+      VALUES ('one', 'One', 'circle', 'blue', 1, 1, 1), ('two', 'Two', 'circle', 'blue', 1, 1, 1);`)
+    const state = JSON.stringify({
+      composer: {
+        modelSelection: {
+          mainModel: {
+            configId: 'manual-service',
+            modelName: 'Manual.Model',
+            manual: true
+          }
+        }
+      }
+    })
+    const insert = previous.prepare(
+      'INSERT INTO partner_ui_state (partner_id, state_json, updated_at) VALUES (?, ?, 1)'
+    )
+    insert.run('one', state)
+    insert.run('two', state)
+    previous.close()
+    const upgraded = new SqliteCore(databasePath)
+    try {
+      upgraded.initialize()
+      expect(
+        upgraded.prepare('SELECT id, manual_models_json FROM llm_config ORDER BY id').all()
+      ).toEqual([
+        { id: 'manual-service', manual_models_json: '["Manual.Model"]' },
+        { id: 'other-service', manual_models_json: '[]' }
+      ])
     } finally {
       upgraded.close()
     }
@@ -350,7 +394,8 @@ describe('SQLite migration contract', () => {
     prepared.exec('DROP TABLE IF EXISTS app_settings')
     prepared.exec('DROP TABLE open_with_preferences')
     prepared.exec('DROP TABLE partner_user_skill;')
-    prepared.exec(`DROP TABLE embedding_settings;
+    prepared.exec(`ALTER TABLE llm_config DROP COLUMN manual_models_json;
+      DROP TABLE embedding_settings;
       ALTER TABLE document DROP COLUMN embedding_identity;
       ALTER TABLE document DROP COLUMN embedding_dim;
       ALTER TABLE document DROP COLUMN embedding_error;`)

@@ -109,6 +109,8 @@ import type {
   ListWorkspaceDirectoryRequest,
   LLMConfig,
   LlmModelListResponse,
+  LlmManualModelAddRequest,
+  LlmManualModelAddResponse,
   PrepareWorkspaceRequest,
   RefreshWebSourceRequest,
   PickDirectoryResponse,
@@ -318,6 +320,7 @@ export type DesktopApi = {
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigModelList: (id: string) => Promise<LlmModelListResponse>
+  llmConfigAddManualModel: (input: LlmManualModelAddRequest) => Promise<LlmManualModelAddResponse>
   freeModelsGet: (options?: { refreshIfStale?: boolean }) => Promise<FreeModelsSnapshot>
   freeModelsRefresh: () => Promise<{
     success: boolean

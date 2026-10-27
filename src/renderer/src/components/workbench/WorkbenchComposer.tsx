@@ -73,11 +73,12 @@ type WorkbenchComposerProps = {
   onExecutionPermissionChange: (permission: WorkbenchExecutionPermission) => void
   modelConfigs: LLMConfig[]
   modelListsByConfigId: Record<string, LlmRemoteModel[]>
-  modelListError: string | null
+  modelListErrorsByConfigId: Record<string, string>
   modelListsLoading: boolean
   modelSelection: WorkbenchModelSelection
   onModelSelectionChange: (selection: WorkbenchModelSelection) => void
   onRefreshModelLists?: () => void | Promise<void>
+  onAddManualModel: (configId: string, modelName: string) => Promise<void>
   onFreeModelsChange?: (models: FreeModelPublicEntry[]) => void
   onDraftChange: (draft: ComposerDraftValue) => void
   onSubmit: () => void
@@ -124,11 +125,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onExecutionPermissionChange,
   modelConfigs,
   modelListsByConfigId,
-  modelListError,
+  modelListErrorsByConfigId,
   modelListsLoading,
   modelSelection,
   onModelSelectionChange,
   onRefreshModelLists,
+  onAddManualModel,
   onFreeModelsChange,
   onDraftChange,
   onSubmit,
@@ -1185,12 +1187,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             <WorkbenchModelSelector
               configs={modelConfigs}
               modelListsByConfigId={modelListsByConfigId}
-              modelListError={modelListError}
+              modelListErrorsByConfigId={modelListErrorsByConfigId}
               modelListsLoading={modelListsLoading}
               value={modelSelection}
               onChange={onModelSelectionChange}
               onAfterChange={focusEditorAfterControlChange}
               onRefreshModelLists={onRefreshModelLists}
+              onAddManualModel={onAddManualModel}
               onFreeModelsChange={onFreeModelsChange}
               noDrag
               hideTriggerIcon

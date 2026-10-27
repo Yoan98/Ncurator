@@ -31,6 +31,7 @@ const CASE_ID = 'model-selector-and-provider-error'
 const MISSING_MODEL_NAME = 'missing-model-must-not-be-created'
 const UNAVAILABLE_MODEL_NAME = 'missing-provider-model-must-fail'
 const WORKSPACE_NAME = 'Model Provider Error Workspace'
+const PRIMARY_SERVICE_NAME = 'test'
 const MANUAL_ALTERNATIVE_SERVICE = '手填备用服务'
 const CANCEL_PROMPT =
   '请先调用 terminal_run 执行 pwd，成功后连续撰写一篇不少于三千字的科普文章，介绍海洋生态。'
@@ -211,7 +212,7 @@ describe('workbench conversation e2e', () => {
           })
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID, 'empty')
           await createModelConfigThroughSettingsUi(page, {
-            name: liveEnv.modelName,
+            name: PRIMARY_SERVICE_NAME,
             baseUrl: `${provider.baseUrl}/unavailable-catalog`,
             apiKey: liveEnv.apiKey
           })
@@ -228,10 +229,11 @@ describe('workbench conversation e2e', () => {
             .getByRole('option')
             .count()
           await page.getByTestId(workbenchSelectors.modelListErrorOpen).click()
-          const listErrorDialog = page
-            .getByTestId(workbenchSelectors.modelListErrorDialog)
-            .locator('.ant-modal-content')
-          await listErrorDialog.waitFor({ state: 'visible' })
+          const listErrorPanel = page.getByTestId(workbenchSelectors.modelListErrorPanel)
+          await listErrorPanel.waitFor({ state: 'visible' })
+          const errorDetailsKeepMenuOpen = await page
+            .getByTestId(workbenchSelectors.modelListRefreshIcon)
+            .isVisible()
           const listErrorText = (
             await page.getByTestId(workbenchSelectors.modelListErrorText).innerText()
           ).trim()
@@ -254,41 +256,31 @@ describe('workbench conversation e2e', () => {
           const modelListErrorKeyRedacted = !listErrorText.includes(liveEnv.apiKey)
           await runtime.captureScreenshot({
             name: 'model-list-error-information',
-            message: '列表请求失败后展示通用错误信息弹框，保留实际 HTTP 错误文本并支持复制。'
+            message: '错误原文在 test 配置分组内展开，支持复制，模型面板保持打开。'
           })
-          await page.getByTestId(workbenchSelectors.modelListErrorClose).click()
-          await listErrorDialog.waitFor({ state: 'hidden' })
-          await modelSelect.click()
-          await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
-          await page.getByTestId(workbenchSelectors.modelListRefresh).click()
+          await page.getByTestId(workbenchSelectors.modelListErrorOpen).click()
+          await listErrorPanel.waitFor({ state: 'hidden' })
+          await page.getByTestId(workbenchSelectors.modelListRefreshIcon).click()
           await listFailure.waitFor({ state: 'visible' })
 
-          const openManualDialog = async (): Promise<void> => {
-            await page.keyboard.press('Escape')
-            await modelSelect.click()
-            await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
-            await page.getByTestId(workbenchSelectors.modelManualOpen).click()
-            await page
-              .getByTestId(workbenchSelectors.modelManualDialog)
-              .locator('.ant-modal-content')
+          const openCustomModels = async (): Promise<void> => {
+            if (!(await page.getByTestId(workbenchSelectors.modelListRefreshIcon).isVisible())) {
+              await modelSelect.click()
+              await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
+            }
+          }
+          const configGroup = (id: string) =>
+            page.getByTestId(`${workbenchSelectors.modelConfigGroupPrefix}-${id}`)
+          const openManualInput = async (configId = originalConfigId): Promise<void> => {
+            await openCustomModels()
+            await configGroup(configId).getByTestId(workbenchSelectors.modelManualOpen).click()
+            await configGroup(configId)
+              .getByTestId(workbenchSelectors.modelManualForm)
               .waitFor({ state: 'visible' })
             await page.waitForFunction(
               (testId) => document.activeElement?.getAttribute('data-testid') === testId,
               workbenchSelectors.modelManualName
             )
-          }
-          const selectManualService = async (name: string): Promise<void> => {
-            await page
-              .getByTestId(workbenchSelectors.modelManualService)
-              .locator('.ant-select-selector')
-              .click()
-            await page
-              .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
-              .last()
-              .locator('.ant-select-item-option')
-              .filter({ hasText: name })
-              .first()
-              .click()
           }
           const currentPartnerId = await page.evaluate(
             async (name) =>
@@ -299,7 +291,7 @@ describe('workbench conversation e2e', () => {
           const originalConfigId = await page.evaluate(
             async (name) =>
               (await window.api.llmConfigList()).find((config) => config.name === name)?.id,
-            liveEnv.modelName
+            PRIMARY_SERVICE_NAME
           )
           if (!originalConfigId) throw new Error('manual model service is missing')
           const waitForSavedManualModel = async (
@@ -329,32 +321,51 @@ describe('workbench conversation e2e', () => {
           }
 
           const selectionBeforeManualInput = (await modelSelect.innerText()).trim()
-          await openManualDialog()
-          const manualSingleServiceHidden =
-            (await page.getByTestId(workbenchSelectors.modelManualService).count()) === 0
+          await openManualInput()
+          const manualServiceAutoBound =
+            (await page.locator('.ant-select:visible').count()) === 0 &&
+            (await configGroup(originalConfigId).isVisible())
           await page.getByTestId(workbenchSelectors.modelManualName).fill('   ')
           const manualEmptyBlocked = await page
             .getByTestId(workbenchSelectors.modelManualUse)
             .isDisabled()
           await page.getByTestId(workbenchSelectors.modelManualName).fill(liveEnv.modelName)
+          await configGroup(originalConfigId)
+            .getByTestId(workbenchSelectors.modelListErrorOpen)
+            .click()
+          await openManualInput()
+          const manualDraftRetained =
+            (await page.getByTestId(workbenchSelectors.modelManualName).inputValue()) ===
+            liveEnv.modelName
           await page.getByTestId(workbenchSelectors.modelManualCancel).click()
           const manualCancelUnchanged =
             (await modelSelect.innerText()).trim() === selectionBeforeManualInput
-          await openManualDialog()
+          await openManualInput()
           await page
             .getByTestId(workbenchSelectors.modelManualName)
             .fill(`  ${liveEnv.modelName}  `)
           await page.getByTestId(workbenchSelectors.modelManualUse).click({ trial: true })
           await runtime.captureScreenshot({
             name: 'model-manual-entry-single-service',
-            message: '单个服务时直接填写精确模型名称，使用后绑定该服务并保存选择。'
+            message: '在 test 分组内直接填写精确模型名称，自动绑定配置，保持模型面板打开。'
           })
           await page.getByTestId(workbenchSelectors.modelManualUse).click()
           await waitForSavedManualModel(currentPartnerId, liveEnv.modelName)
+          const manualUseKeepsMenuOpen = await page
+            .getByTestId(workbenchSelectors.modelListRefreshIcon)
+            .isVisible()
+          await openManualInput()
+          await page.getByTestId(workbenchSelectors.modelManualName).fill(liveEnv.modelName)
+          await page.getByTestId(workbenchSelectors.modelManualUse).click()
+          await configGroup(originalConfigId)
+            .getByTestId(workbenchSelectors.modelManualForm)
+            .waitFor({ state: 'hidden' })
+          const manualCandidateDeduplicated =
+            (await configGroup(originalConfigId)
+              .getByRole('option', { name: liveEnv.modelName, exact: true })
+              .count()) === 1
           const manualDoesNotStartChat =
             provider.getSuccessfulChatRequestCount() === 0 && provider.getChatRequestCount() === 0
-          await modelSelect.click()
-          await page.getByTestId(workbenchSelectors.modelSelectCustomEntry).click()
           await page.getByTestId(workbenchSelectors.modelListRefreshIcon).click()
           await listFailure.waitFor({ state: 'visible' })
           const manualRetainedAfterFailure =
@@ -366,19 +377,71 @@ describe('workbench conversation e2e', () => {
             apiKey: liveEnv.apiKey
           })
           await navigateToWorkbench(page, { waitForSessionListText: false })
-          await openManualDialog()
-          const manualMultipleServicesVisible = await page
-            .getByTestId(workbenchSelectors.modelManualService)
+          const alternativeConfigId = await page.evaluate(
+            async (name) =>
+              (await window.api.llmConfigList()).find((config) => config.name === name)?.id,
+            MANUAL_ALTERNATIVE_SERVICE
+          )
+          if (!alternativeConfigId) throw new Error('alternative manual service is missing')
+          await openManualInput(alternativeConfigId)
+          const manualMultipleGroupsVisible =
+            (await configGroup(originalConfigId).isVisible()) &&
+            (await configGroup(alternativeConfigId).isVisible())
+          await page.getByTestId(workbenchSelectors.modelManualName).fill('alternate-manual-model')
+          await page.getByTestId(workbenchSelectors.modelManualUse).click()
+          await configGroup(alternativeConfigId)
+            .getByRole('option', { name: 'alternate-manual-model', exact: true })
+            .waitFor({ state: 'visible' })
+          const manualServiceBindingRetained = await page.evaluate(
+            async (ids) => {
+              const configs = await window.api.llmConfigList()
+              const primary =
+                configs.find((config) => config.id === ids.primary)?.manualModels || []
+              const alternative =
+                configs.find((config) => config.id === ids.alternative)?.manualModels || []
+              return (
+                primary.includes(ids.model) &&
+                !primary.includes('alternate-manual-model') &&
+                alternative.includes('alternate-manual-model') &&
+                !alternative.includes(ids.model)
+              )
+            },
+            {
+              primary: originalConfigId,
+              alternative: alternativeConfigId,
+              model: liveEnv.modelName
+            }
+          )
+          await navigateToSettingsSection(page, 'model')
+          await page
+            .locator('tbody tr')
+            .filter({ hasText: MANUAL_ALTERNATIVE_SERVICE })
+            .getByTestId(new RegExp(`^${settingsSelectors.modelEditButtonPrefix}-`, 'u'))
+            .click()
+          await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).fill(provider.baseUrl)
+          await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
+          await getSettingsLocator(page, settingsSelectors.modelModal)
+            .locator('.ant-modal-content')
+            .waitFor({ state: 'hidden' })
+          await navigateToWorkbench(page, { waitForSessionListText: false })
+          await openCustomModels()
+          await configGroup(alternativeConfigId)
+            .getByRole('option', { name: liveEnv.modelName, exact: true })
+            .waitFor({ state: 'visible' })
+          const manualCandidateSurvivesConfigEdit = await configGroup(alternativeConfigId)
+            .getByRole('option', { name: 'alternate-manual-model', exact: true })
             .isVisible()
-          await selectManualService(MANUAL_ALTERNATIVE_SERVICE)
-          await page.getByTestId(workbenchSelectors.modelManualUse).click()
-          await openManualDialog()
-          const manualServiceBindingRetained = (
-            await page.getByTestId(workbenchSelectors.modelManualService).innerText()
-          ).includes(MANUAL_ALTERNATIVE_SERVICE)
-          await selectManualService(liveEnv.modelName)
-          await page.getByTestId(workbenchSelectors.modelManualUse).click()
-          await waitForSavedManualModel(currentPartnerId, liveEnv.modelName)
+          const partialFailureScoped =
+            (await configGroup(originalConfigId)
+              .getByTestId(workbenchSelectors.modelListLoadFailure)
+              .isVisible()) &&
+            (await configGroup(alternativeConfigId)
+              .getByTestId(workbenchSelectors.modelListLoadFailure)
+              .count()) === 0
+          await runtime.captureScreenshot({
+            name: 'model-errors-scoped-by-configuration',
+            message: 'test 加载失败仍保留分组，另一成功配置与手填候选正常显示，错误不合并。'
+          })
           await navigateToSettingsSection(page, 'model')
           const alternativeRow = page
             .locator('tbody tr')
@@ -390,9 +453,23 @@ describe('workbench conversation e2e', () => {
           await page.locator('.ant-popover:visible .ant-btn-primary').click()
           await alternativeRow.waitFor({ state: 'hidden' })
           await navigateToWorkbench(page, { waitForSessionListText: false })
+          await openCustomModels()
+          const removedConfigGroupAbsent = (await configGroup(alternativeConfigId).count()) === 0
+          await configGroup(originalConfigId)
+            .getByRole('option', { name: liveEnv.modelName, exact: true })
+            .click()
+          await waitForSavedManualModel(currentPartnerId, liveEnv.modelName)
 
           await createPartnerThroughWorkbenchUi(page, 'Manual model other partner')
-          await openManualDialog()
+          await openCustomModels()
+          const manualCandidateSharedAcrossPartners = await configGroup(originalConfigId)
+            .getByRole('option', { name: liveEnv.modelName, exact: true })
+            .isVisible()
+          await configGroup(originalConfigId)
+            .getByRole('option', { name: liveEnv.modelName, exact: true })
+            .click()
+          await waitForManualModelLabel()
+          await openManualInput()
           await page.getByTestId(workbenchSelectors.modelManualName).fill('other-partner-model')
           await page.getByTestId(workbenchSelectors.modelManualUse).click()
           await page
@@ -415,7 +492,10 @@ describe('workbench conversation e2e', () => {
           await listFailure.waitFor({ state: 'visible' })
           await waitForManualModelLabel()
           const manualRestoredAfterRestart =
-            (await modelSelect.innerText()).trim() === liveEnv.modelName
+            (await modelSelect.innerText()).trim() === liveEnv.modelName &&
+            (await configGroup(originalConfigId)
+              .getByRole('option', { name: liveEnv.modelName, exact: true })
+              .isVisible())
           await runtime.captureScreenshot({
             name: 'model-manual-selection-after-restart',
             message: '正常重启后恢复手填型号，列表请求仍失败时保留原选择。'
@@ -424,7 +504,7 @@ describe('workbench conversation e2e', () => {
           await navigateToSettingsSection(page, 'model')
           await page
             .locator('tbody tr')
-            .filter({ hasText: liveEnv.modelName })
+            .filter({ hasText: PRIMARY_SERVICE_NAME })
             .getByTestId(new RegExp(`^${settingsSelectors.modelEditButtonPrefix}-`, 'u'))
             .click()
           await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).fill(provider.baseUrl)
@@ -519,7 +599,7 @@ describe('workbench conversation e2e', () => {
 
           const providerGroupVisible = await menu
             .locator('button[aria-expanded]')
-            .filter({ hasText: liveEnv.modelName })
+            .filter({ hasText: PRIMARY_SERVICE_NAME })
             .first()
             .isVisible()
 
@@ -643,12 +723,20 @@ describe('workbench conversation e2e', () => {
             modelListErrorCleared,
             modelListRefreshIconVisible,
             modelListHeaderRefreshRequested,
-            manualSingleServiceHidden,
+            manualServiceAutoBound,
+            manualDraftRetained,
+            manualUseKeepsMenuOpen,
+            manualCandidateDeduplicated,
+            manualCandidateSurvivesConfigEdit,
+            partialFailureScoped,
+            removedConfigGroupAbsent,
+            manualCandidateSharedAcrossPartners,
+            errorDetailsKeepMenuOpen,
             manualEmptyBlocked,
             manualCancelUnchanged,
             manualDoesNotStartChat,
             manualRetainedAfterFailure,
-            manualMultipleServicesVisible,
+            manualMultipleGroupsVisible,
             manualServiceBindingRetained,
             manualRestoredAfterPartnerSwitch,
             manualRestoredAfterRestart,
@@ -681,19 +769,39 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.manualSingleServiceHidden &&
+            result.manualServiceAutoBound &&
+              result.manualDraftRetained &&
+              result.manualUseKeepsMenuOpen &&
+              result.manualCandidateDeduplicated &&
+              result.manualCandidateSurvivesConfigEdit &&
+              result.partialFailureScoped &&
+              result.removedConfigGroupAbsent &&
+              result.manualCandidateSharedAcrossPartners &&
+              result.errorDetailsKeepMenuOpen &&
               result.manualEmptyBlocked &&
               result.manualCancelUnchanged &&
               result.manualDoesNotStartChat &&
               result.manualRetainedAfterFailure &&
-              result.manualMultipleServicesVisible &&
+              result.manualMultipleGroupsVisible &&
               result.manualServiceBindingRetained &&
               result.manualRestoredAfterPartnerSwitch &&
               result.manualRestoredAfterRestart,
             {
               name: 'manual-model-selection-is-bound-persisted-and-kept-on-list-failure',
               message:
-                '手填型号正确绑定服务，空白被拦截、取消不改动；保存后刷新失败、切换伙伴及正常重启均保留选择。'
+                '错误与手填原地展开且不关闭面板；候选按配置去重保存，不串配置，编辑配置、伙伴切换和重启后可选，失败不清除，删除配置移除分组。',
+              data: {
+                autoBound: result.manualServiceAutoBound,
+                draftRetained: result.manualDraftRetained,
+                menuKept: result.manualUseKeepsMenuOpen,
+                deduplicated: result.manualCandidateDeduplicated,
+                editRetained: result.manualCandidateSurvivesConfigEdit,
+                scopedFailure: result.partialFailureScoped,
+                configRemoved: result.removedConfigGroupAbsent,
+                sharedCandidate: result.manualCandidateSharedAcrossPartners,
+                partnerRestored: result.manualRestoredAfterPartnerSwitch,
+                restartRestored: result.manualRestoredAfterRestart
+              }
             }
           )
           await runtime.assertThat(
@@ -709,7 +817,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'model-list-request-error-can-be-viewed-copied-and-cleared',
               message:
-                '列表失败应展示通用提示，错误弹框保留脱敏的 HTTP 状态与原文，支持复制，正确地址加载成功后清除错误。'
+                '列表失败在对应配置分组内展示，原地保留脱敏 HTTP 状态与原文，支持复制与收起，正确地址加载成功后清除错误。'
             }
           )
           await runtime.assertThat(

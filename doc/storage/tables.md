@@ -371,13 +371,14 @@ DOCX 应用记录表；当前应用/回退接口投影 `ai_file_change`，不再
 
 大模型可用服务配置。
 
-| 字段           | 类型    | 说明       |
-| -------------- | ------- | ---------- |
-| `id`           | TEXT PK | 配置 id    |
-| `name`         | TEXT    | 名称       |
-| `providerKind` | TEXT    | 服务商类型 |
-| `base_url`     | TEXT    | 接口地址   |
-| `api_key`      | TEXT    | API Key    |
+| 字段                 | 类型    | 说明                                                    |
+| -------------------- | ------- | ------------------------------------------------------- |
+| `id`                 | TEXT PK | 配置 id                                                 |
+| `name`               | TEXT    | 名称                                                    |
+| `providerKind`       | TEXT    | 服务商类型                                              |
+| `base_url`           | TEXT    | 接口地址                                                |
+| `api_key`            | TEXT    | API Key                                                 |
+| `manual_models_json` | TEXT    | 按配置保存、精确去重的手填模型名称 JSON 数组，默认 `[]` |
 
 ### `embedding_settings`
 

@@ -106,6 +106,17 @@ describe('workbench model selection', () => {
     ).toEqual(selected)
   })
 
+  it('recognizes a saved manual candidate without relying on a partner source flag', () => {
+    const config = { ...customConfig('manual-config'), manualModels: ['Manual.Model'] }
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs: [config],
+        modelListsByConfigId: {},
+        selected: { configId: config.id, modelName: 'Manual.Model' }
+      })
+    ).toEqual({ configId: config.id, modelName: 'Manual.Model', manual: true })
+  })
+
   it('invalidates a manual selection only after its service config is removed', () => {
     const selected = {
       configId: 'removed-config',

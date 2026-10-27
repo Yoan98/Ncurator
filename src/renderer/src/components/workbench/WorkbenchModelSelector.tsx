@@ -9,7 +9,7 @@ import React, {
   useState
 } from 'react'
 import { createPortal } from 'react-dom'
-import { App as AntdApp, Button, Input, Modal, Select, Tooltip } from 'antd'
+import { App as AntdApp, Input, Tooltip } from 'antd'
 import type { InputRef } from 'antd'
 import {
   HiAdjustmentsHorizontal,
@@ -59,12 +59,13 @@ const PRICE_TIER_COIN_COUNT: Record<LlmPriceTier, number> = {
 type WorkbenchModelSelectorProps = {
   configs: LLMConfig[]
   modelListsByConfigId: Record<string, LlmRemoteModel[]>
-  modelListError: string | null
+  modelListErrorsByConfigId: Record<string, string>
   modelListsLoading: boolean
   value: WorkbenchModelSelection
   onChange: (value: WorkbenchModelSelection) => void
   onAfterChange?: () => void
   onRefreshModelLists?: () => void | Promise<void>
+  onAddManualModel: (configId: string, modelName: string) => Promise<void>
   onFreeModelsChange?: (models: FreeModelPublicEntry[]) => void
   disabled?: boolean
   noDrag?: boolean
@@ -75,6 +76,7 @@ type WorkbenchModelSelectorProps = {
 }
 
 type PanelView = 'preset' | 'custom'
+type InlinePanel = { kind: 'error'; key: string } | { kind: 'manual'; configId: string }
 
 type CatalogLoadStatus = 'loading' | 'ready' | 'error'
 type CatalogRefreshStatus = 'idle' | 'loading' | 'success' | 'error'
@@ -194,12 +196,13 @@ const CatalogModelIcon: React.FC<{ src: string; alt: string }> = ({ src, alt }) 
 const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   configs,
   modelListsByConfigId,
-  modelListError,
+  modelListErrorsByConfigId,
   modelListsLoading,
   value,
   onChange,
   onAfterChange,
   onRefreshModelLists,
+  onAddManualModel,
   onFreeModelsChange,
   disabled = false,
   noDrag = false,
@@ -218,12 +221,11 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const listboxId = useId()
   const manualModelNameId = useId()
-  const manualModelConfigId = useId()
   const [open, setOpen] = useState(false)
-  const [errorDetail, setErrorDetail] = useState<string | null>(null)
-  const [manualInputOpen, setManualInputOpen] = useState(false)
-  const [manualConfigId, setManualConfigId] = useState('')
-  const [manualModelName, setManualModelName] = useState('')
+  const [inlinePanel, setInlinePanel] = useState<InlinePanel | null>(null)
+  const [manualDrafts, setManualDrafts] = useState<Record<string, string>>({})
+  const [manualSaving, setManualSaving] = useState(false)
+  const [manualSaveError, setManualSaveError] = useState<string | null>(null)
   const [view, setView] = useState<PanelView>('preset')
   const [query, setQuery] = useState('')
   const [collapsedConfigIds, setCollapsedConfigIds] = useState<Set<string>>(() => new Set())
@@ -416,10 +418,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
       preferredWidth,
-      preferredHeight: 320,
+      preferredHeight: view === 'custom' && inlinePanel ? 480 : 320,
       minWidth: view === 'custom' ? CUSTOM_MENU_MIN_WIDTH : PRESET_MENU_MIN_WIDTH,
       maxWidth: view === 'custom' ? CUSTOM_MENU_MAX_WIDTH : PRESET_MENU_MAX_WIDTH,
-      maxHeight: 360,
+      maxHeight: view === 'custom' ? 480 : 360,
       align: 'end',
       topInset: WORKBENCH_TITLEBAR_HEIGHT + 12
     })
@@ -430,7 +432,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       width: placement.width,
       maxHeight: placement.maxHeight
     })
-  }, [view])
+  }, [view, inlinePanel])
 
   useLayoutEffect(() => {
     if (!open) return
@@ -453,10 +455,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
       preferredWidth: nextWidth,
-      preferredHeight: 320,
+      preferredHeight: view === 'custom' && inlinePanel ? 480 : 320,
       minWidth,
       maxWidth,
-      maxHeight: 360,
+      maxHeight: view === 'custom' ? 480 : 360,
       align: 'end',
       topInset: WORKBENCH_TITLEBAR_HEIGHT + 12
     })
@@ -491,6 +493,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     query,
     configs,
     modelListsByConfigId,
+    modelListErrorsByConfigId,
+    inlinePanel,
     freeModels,
     presetProviders
   ])
@@ -548,35 +552,64 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!query.trim()) setSearchCollapsedConfigIds(new Set())
   }, [query])
 
-  const selectModel = (configId: string, modelName: string, manual = false): void => {
+  useEffect(() => {
+    if (open && inlinePanel?.kind === 'manual') manualModelInputRef.current?.focus()
+  }, [open, inlinePanel])
+
+  const selectModel = (
+    configId: string,
+    modelName: string,
+    manual = false,
+    keepOpen = false
+  ): void => {
     const selected: WorkbenchSelectedModel = { configId, modelName }
     if (manual || (isSameSelection(value.mainModel, selected) && value.mainModel?.manual)) {
       selected.manual = true
     }
     onChange({ mainModel: selected })
-    setOpen(false)
-    onAfterChange?.()
+    if (!keepOpen) {
+      setOpen(false)
+      onAfterChange?.()
+    }
   }
 
-  const openManualInput = (): void => {
-    const current =
-      value.mainModel?.manual && configs.some((config) => config.id === value.mainModel?.configId)
-        ? value.mainModel
-        : null
-    setManualConfigId(configs.length === 1 ? configs[0].id : current?.configId || '')
-    setManualModelName(current?.modelName || '')
-    setManualInputOpen(true)
-    setOpen(false)
+  const openManualInput = (configId: string): void => {
+    setManualSaveError(null)
+    setInlinePanel((current) =>
+      current?.kind === 'manual' && current.configId === configId
+        ? null
+        : { kind: 'manual', configId }
+    )
   }
 
+  const manualConfigId = inlinePanel?.kind === 'manual' ? inlinePanel.configId : ''
+  const manualModelName = manualDrafts[manualConfigId] || ''
   const canUseManualModel = Boolean(
-    manualModelName.trim() && configs.some((config) => config.id === manualConfigId)
+    !manualSaving &&
+    manualModelName.trim() &&
+    configs.some((config) => config.id === manualConfigId)
   )
 
-  const useManualModel = (): void => {
+  const applyManualModel = async (): Promise<void> => {
     if (!canUseManualModel) return
-    setManualInputOpen(false)
-    selectModel(manualConfigId, manualModelName.trim(), true)
+    const name = manualModelName.trim()
+    setManualSaving(true)
+    setManualSaveError(null)
+    try {
+      await onAddManualModel(manualConfigId, name)
+      selectModel(manualConfigId, name, true, true)
+      setInlinePanel(null)
+      setManualDrafts((current) => ({ ...current, [manualConfigId]: '' }))
+      window.requestAnimationFrame(() =>
+        menuRef.current
+          ?.querySelector<HTMLButtonElement>('[role="option"][aria-selected="true"]')
+          ?.focus()
+      )
+    } catch (error) {
+      setManualSaveError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setManualSaving(false)
+    }
   }
 
   const presetGroups = useMemo(
@@ -616,12 +649,23 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const groupedModels = useMemo(() => {
     return configs
       .map((config) => {
-        const models = (modelListsByConfigId[config.id] || []).filter((model) =>
+        const allModels = new Map(
+          (modelListsByConfigId[config.id] || []).map((model) => [model.id, model])
+        )
+        for (const name of config.manualModels || []) {
+          if (!allModels.has(name)) allModels.set(name, { id: name, label: name })
+        }
+        const models = [...allModels.values()].filter((model) =>
           modelMatchesQuery({ query, config, model })
         )
         return { config, models }
       })
-      .filter((group) => group.models.length > 0)
+      .filter(
+        (group) =>
+          !query.trim() ||
+          group.models.length > 0 ||
+          getConfigLabel(group.config).toLowerCase().includes(query.trim().toLowerCase())
+      )
   }, [configs, modelListsByConfigId, query])
 
   const renderPresetModelOption = (
@@ -739,35 +783,123 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     )
   }
 
+  const renderErrorAction = (key: string): React.ReactNode => {
+    const expanded = inlinePanel?.kind === 'error' && inlinePanel.key === key
+    return (
+      <button
+        type="button"
+        disabled={manualSaving}
+        className="text-[12px] text-[#0B6BCB] hover:underline"
+        data-testid={workbenchSelectors.modelListErrorOpen}
+        aria-expanded={expanded}
+        onClick={() => setInlinePanel(expanded ? null : { kind: 'error', key })}
+      >
+        {expanded
+          ? t(($) => $.workbench.collapseErrorInformation)
+          : t(($) => $.common.viewErrorInformation)}
+      </button>
+    )
+  }
+
+  const renderErrorDetails = (error: string): React.ReactNode => (
+    <div
+      className="mt-2 border-t border-[#EEEEEC] pt-2 text-left"
+      data-testid={workbenchSelectors.modelListErrorPanel}
+    >
+      <div className="flex items-center justify-between gap-2 text-[12px] text-[#37352F]">
+        <span>{t(($) => $.common.errorInformation)}</span>
+        <button
+          type="button"
+          data-testid={workbenchSelectors.modelListErrorCopy}
+          className="text-[#787774] hover:text-[#37352F]"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(error)
+              message.success(t(($) => $.common.copied))
+            } catch {
+              message.error(t(($) => $.workbench.couldNotCopy))
+            }
+          }}
+        >
+          {t(($) => $.common.copy)}
+        </button>
+      </div>
+      <pre
+        className="mt-2 max-h-40 select-text overflow-auto whitespace-pre-wrap rounded-[6px] bg-[#F4F4F2] p-2 text-[11px] leading-[18px] text-[#37352F] [overflow-wrap:anywhere]"
+        data-testid={workbenchSelectors.modelListErrorText}
+      >
+        {error}
+      </pre>
+    </div>
+  )
+
+  const renderManualInput = (configId: string): React.ReactNode => {
+    if (inlinePanel?.kind !== 'manual' || inlinePanel.configId !== configId) return null
+    return (
+      <div
+        className="nc-document-form mt-2 border-t border-[#EEEEEC] pt-2"
+        data-testid={workbenchSelectors.modelManualForm}
+      >
+        <label htmlFor={manualModelNameId} className="mb-1 block text-[12px] text-[#37352F]">
+          {t(($) => $.workbench.manualModelName)}
+        </label>
+        <Input
+          ref={manualModelInputRef}
+          id={manualModelNameId}
+          value={manualModelName}
+          placeholder={t(($) => $.workbench.manualModelNamePlaceholder)}
+          disabled={manualSaving}
+          autoComplete="off"
+          data-testid={workbenchSelectors.modelManualName}
+          onChange={(event) =>
+            setManualDrafts((current) => ({ ...current, [configId]: event.target.value }))
+          }
+          onPressEnter={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            if (!event.nativeEvent.isComposing) void applyManualModel()
+          }}
+        />
+        {manualSaveError ? (
+          <div role="alert" className="mt-2 text-[12px] text-[#C45D57]">
+            {manualSaveError}
+          </div>
+        ) : null}
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            disabled={manualSaving}
+            data-testid={workbenchSelectors.modelManualCancel}
+            className="rounded-[6px] border border-[#E5E4E0] px-3 py-1 text-[12px] text-[#37352F] hover:bg-[#F4F4F2] disabled:opacity-40"
+            onClick={() => setInlinePanel(null)}
+          >
+            {t(($) => $.common.cancel)}
+          </button>
+          <button
+            type="button"
+            disabled={!canUseManualModel}
+            aria-busy={manualSaving}
+            data-testid={workbenchSelectors.modelManualUse}
+            className="rounded-[6px] bg-[#37352F] px-3 py-1 text-[12px] text-white disabled:opacity-40"
+            onClick={() => void applyManualModel()}
+          >
+            {t(($) => $.common.use)}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   const renderLoadFailure = (error: string): React.ReactNode => (
-    <>
+    <div className="w-full">
       <div role="status" data-testid={workbenchSelectors.modelListLoadFailure}>
         {t(($) => $.common.loadFailed)}
       </div>
-      <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
-        <button
-          type="button"
-          className="text-[12px] text-[#0B6BCB] hover:underline"
-          data-testid={workbenchSelectors.modelListErrorOpen}
-          onClick={() => {
-            setErrorDetail(error)
-            setOpen(false)
-          }}
-        >
-          {t(($) => $.common.viewErrorInformation)}
-        </button>
-        {configs.length > 0 ? (
-          <button
-            type="button"
-            className="text-[12px] text-[#0B6BCB] hover:underline"
-            data-testid={workbenchSelectors.modelManualOpen}
-            onClick={openManualInput}
-          >
-            {t(($) => $.workbench.enterModelNameManually)}
-          </button>
-        ) : null}
-      </div>
-    </>
+      <div className="mt-2">{renderErrorAction('catalog')}</div>
+      {inlinePanel?.kind === 'error' && inlinePanel.key === 'catalog'
+        ? renderErrorDetails(error)
+        : null}
+    </div>
   )
 
   const renderCatalogRefreshButton = (): React.ReactNode => {
@@ -935,6 +1067,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       </div>
       <div className="overflow-y-auto py-1.5" style={{ flex: 1, minHeight: 0 }}>
         {groupedModels.map((group) => {
+          const error = modelListErrorsByConfigId[group.config.id]
           const searching = Boolean(query.trim())
           const activeCollapsedIds = searching ? searchCollapsedConfigIds : collapsedConfigIds
           const collapsed = activeCollapsedIds.has(group.config.id)
@@ -948,11 +1081,15 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             })
           }
           return (
-            <div key={group.config.id} className="py-1">
+            <div
+              key={group.config.id}
+              className="py-1"
+              data-testid={`${workbenchSelectors.modelConfigGroupPrefix}-${group.config.id}`}
+            >
               <button
                 type="button"
                 aria-expanded={!collapsed}
-                className="flex w-full items-center px-3 py-1 text-left text-[11px] font-medium text-[#9B9A97] hover:text-[#37352F]"
+                className="flex w-full items-center justify-between gap-2 px-3 py-1 text-left text-[11px] font-medium text-[#9B9A97] hover:text-[#37352F]"
                 onClick={toggleCollapsed}
               >
                 <span className="inline-flex items-center gap-1">
@@ -963,6 +1100,17 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                     <HiChevronDown className="h-3 w-3 shrink-0" />
                   )}
                 </span>
+                {modelListsLoading ? (
+                  <span role="status">{t(($) => $.common.loading)}</span>
+                ) : error ? (
+                  <span
+                    role="status"
+                    className="text-[#C45D57]"
+                    data-testid={workbenchSelectors.modelListLoadFailure}
+                  >
+                    {t(($) => $.common.loadFailed)}
+                  </span>
+                ) : null}
               </button>
               {!collapsed
                 ? group.models.map((model) => {
@@ -980,7 +1128,13 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                           'workbench-select-option',
                           selected ? 'workbench-select-option-selected' : ''
                         )}
-                        onClick={() => selectModel(group.config.id, model.id)}
+                        onClick={() =>
+                          selectModel(
+                            group.config.id,
+                            model.id,
+                            group.config.manualModels?.includes(model.id)
+                          )
+                        }
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           {getProviderLogo(resolveLlmProvider(group.config.base_url).providerId)}
@@ -993,34 +1147,49 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                     )
                   })
                 : null}
+              {!collapsed ? (
+                <div className="px-3 pb-1 pl-6">
+                  {!error && !modelListsLoading && group.models.length === 0 ? (
+                    <div role="status" className="py-2 text-[12px] text-[#91918E]">
+                      {t(($) => $.workbench.noMatchingModels)}
+                    </div>
+                  ) : null}
+                  {error ? (
+                    <>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 py-1">
+                        {renderErrorAction(group.config.id)}
+                        <button
+                          type="button"
+                          disabled={manualSaving}
+                          className="text-[12px] text-[#0B6BCB] hover:underline"
+                          data-testid={workbenchSelectors.modelManualOpen}
+                          aria-expanded={
+                            inlinePanel?.kind === 'manual' &&
+                            inlinePanel.configId === group.config.id
+                          }
+                          onClick={() => openManualInput(group.config.id)}
+                        >
+                          {t(($) => $.workbench.enterModelNameManually)}
+                        </button>
+                      </div>
+                      {inlinePanel?.kind === 'error' && inlinePanel.key === group.config.id
+                        ? renderErrorDetails(error)
+                        : null}
+                    </>
+                  ) : null}
+                  {renderManualInput(group.config.id)}
+                </div>
+              ) : null}
             </div>
           )
         })}
-        {groupedModels.length === 0 || modelListError ? (
+        {groupedModels.length === 0 ? (
           <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
-            {modelListError && !modelListsLoading ? (
-              renderLoadFailure(modelListError)
-            ) : (
-              <div role="status">
-                {modelListsLoading
-                  ? t(($) => $.common.loading)
-                  : t(($) => $.workbench.noMatchingModels)}
-              </div>
-            )}
-            {onRefreshModelLists ? (
-              <button
-                type="button"
-                disabled={modelListsLoading}
-                data-testid={workbenchSelectors.modelListRefresh}
-                className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2] disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => void onRefreshModelLists()}
-              >
-                <HiArrowPath
-                  className={joinClassNames('h-3.5 w-3.5', modelListsLoading && 'animate-spin')}
-                />
-                {t(($) => $.workbench.fetchModelListAgain)}
-              </button>
-            ) : null}
+            <div role="status">
+              {modelListsLoading
+                ? t(($) => $.common.loading)
+                : t(($) => $.workbench.noMatchingModels)}
+            </div>
           </div>
         ) : null}
       </div>
@@ -1216,116 +1385,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             document.body
           )
         : null}
-      <Modal
-        open={manualInputOpen}
-        title={t(($) => $.workbench.enterModelNameManually)}
-        width={440}
-        centered
-        onCancel={() => setManualInputOpen(false)}
-        afterOpenChange={(visible) => {
-          if (visible) manualModelInputRef.current?.focus()
-        }}
-        afterClose={() => triggerRef.current?.focus()}
-        data-testid={workbenchSelectors.modelManualDialog}
-        footer={[
-          <Button
-            key="cancel"
-            data-testid={workbenchSelectors.modelManualCancel}
-            onClick={() => setManualInputOpen(false)}
-          >
-            {t(($) => $.common.cancel)}
-          </Button>,
-          <Button
-            key="use"
-            type="primary"
-            disabled={!canUseManualModel}
-            data-testid={workbenchSelectors.modelManualUse}
-            onClick={useManualModel}
-          >
-            {t(($) => $.common.use)}
-          </Button>
-        ]}
-      >
-        <div className="nc-document-form flex flex-col gap-4 py-1">
-          {configs.length > 1 ? (
-            <div>
-              <label
-                htmlFor={manualModelConfigId}
-                className="mb-2 block text-[13px] text-[#37352F]"
-              >
-                {t(($) => $.workbench.serviceConfiguration)}
-              </label>
-              <Select
-                id={manualModelConfigId}
-                value={manualConfigId || undefined}
-                placeholder={t(($) => $.workbench.selectServiceConfiguration)}
-                onChange={setManualConfigId}
-                options={configs.map((config) => ({
-                  value: config.id,
-                  label: getConfigLabel(config)
-                }))}
-                className="w-full"
-                data-testid={workbenchSelectors.modelManualService}
-              />
-            </div>
-          ) : null}
-          <div>
-            <label htmlFor={manualModelNameId} className="mb-2 block text-[13px] text-[#37352F]">
-              {t(($) => $.workbench.manualModelName)}
-            </label>
-            <Input
-              ref={manualModelInputRef}
-              id={manualModelNameId}
-              value={manualModelName}
-              placeholder={t(($) => $.workbench.manualModelNamePlaceholder)}
-              onChange={(event) => setManualModelName(event.target.value)}
-              onPressEnter={useManualModel}
-              autoComplete="off"
-              data-testid={workbenchSelectors.modelManualName}
-            />
-          </div>
-        </div>
-      </Modal>
-      <Modal
-        open={errorDetail !== null}
-        title={t(($) => $.common.errorInformation)}
-        width={460}
-        centered
-        onCancel={() => setErrorDetail(null)}
-        afterClose={() => triggerRef.current?.focus()}
-        data-testid={workbenchSelectors.modelListErrorDialog}
-        footer={[
-          <Button
-            key="copy"
-            data-testid={workbenchSelectors.modelListErrorCopy}
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(errorDetail || '')
-                message.success(t(($) => $.common.copied))
-              } catch {
-                message.error(t(($) => $.workbench.couldNotCopy))
-              }
-            }}
-          >
-            {t(($) => $.common.copy)}
-          </Button>,
-          <Button
-            key="close"
-            type="primary"
-            data-testid={workbenchSelectors.modelListErrorClose}
-            onClick={() => setErrorDetail(null)}
-          >
-            {t(($) => $.common.close)}
-          </Button>
-        ]}
-      >
-        <pre
-          className="max-h-[45vh] select-text overflow-auto whitespace-pre-wrap rounded-[6px] bg-[#F4F4F2] p-3 text-[12px] leading-5 text-[#37352F] [overflow-wrap:anywhere]"
-          data-testid={workbenchSelectors.modelListErrorText}
-        >
-          {errorDetail}
-        </pre>
-      </Modal>
     </div>
   )
 }

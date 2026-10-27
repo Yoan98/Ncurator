@@ -419,6 +419,7 @@ const api: DesktopApi = {
   },
   llmConfigSave: (config) => ipcRenderer.invoke('llm-config-save', config),
   llmConfigDelete: (id: string) => ipcRenderer.invoke('llm-config-delete', id),
+  llmConfigAddManualModel: (input) => ipcRenderer.invoke('llm-config-add-manual-model', input),
   llmConfigModelList: (id: string) => {
     emitE2EIpcCall('llmConfigModelList', id)
     return ipcRenderer.invoke('llm-config-model-list', id)
