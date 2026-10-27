@@ -203,8 +203,8 @@ if ([string]::IsNullOrWhiteSpace($original.WorkingDirectory)) {
 $copyPath = Join-Path $config.directory 'instrumented.lnk'
 Copy-Item -LiteralPath $config.entryPath -Destination $copyPath
 $copy = $shell.CreateShortcut($copyPath)
-# Keep the installer target and WorkingDirectory. Only add observer debug args
-# to a private copy; the user's installed shortcut remains untouched.
+# Keep the installer target and WorkingDirectory. Add the observer debug args
+# and declared desktop input profile only to a private shortcut copy.
 $arguments = @($config.arguments | ForEach-Object { '"' + $_.Replace('"', '\"') + '"' }) -join ' '
 $copy.Arguments = ($original.Arguments + ' ' + $arguments).Trim()
 $copy.Save()

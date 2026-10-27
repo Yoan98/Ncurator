@@ -217,6 +217,8 @@ export type ElectronSignalSink = {
 
 const OUT_MAIN_ENTRY = path.resolve(process.cwd(), 'out', 'main', 'index.js')
 const APP_ROOT = process.cwd()
+const WINDOWS_DESKTOP_MOUSE_ARGUMENT =
+  '--blink-settings=availableHoverTypes=2,availablePointerTypes=4,primaryHoverType=2,primaryPointerType=4'
 const electronApplicationByPage = new WeakMap<Page, ElectronApplication>()
 const exposedObserverPages = new WeakSet<Page>()
 
@@ -556,7 +558,10 @@ export const launchElectronApp = async (input: {
   try {
     electronApp = await electron.launch({
       executablePath: desktopLaunch?.executablePath || launch.executablePath,
-      args: launch.args,
+      args:
+        process.platform === 'win32'
+          ? [WINDOWS_DESKTOP_MOUSE_ARGUMENT, ...launch.args]
+          : launch.args,
       cwd: launch.cwd,
       env: (desktopLaunch?.env || launchEnv) as Record<string, string>,
       timeout: 90_000
