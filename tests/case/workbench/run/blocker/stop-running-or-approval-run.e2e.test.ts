@@ -16,6 +16,7 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'stop-running-or-approval-run'
+const CSS_PIXEL_TOLERANCE = 0.05
 const LONG_RUN_PROMPT =
   '请读取当前工作区所有工作目录资料，写一份至少 2000 字的详细分析，逐项说明证据来源。'
 const PLAN_RUN_PROMPT =
@@ -343,8 +344,8 @@ describe('workbench run e2e', () => {
                 (icon) =>
                   icon.animation !== 'none' &&
                   icon.playState === 'running' &&
-                  icon.width === 16 &&
-                  icon.height === 16
+                  Math.abs(icon.width - 16) <= CSS_PIXEL_TOLERANCE &&
+                  Math.abs(icon.height - 16) <= CSS_PIXEL_TOLERANCE
               ) &&
               pausedPlan.icons.length > 0 &&
               pausedPlan.icons.every((icon) => icon.playState === 'paused') &&

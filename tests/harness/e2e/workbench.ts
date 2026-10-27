@@ -133,7 +133,7 @@ export {
 export const dismissWorkbenchLlmConfigMissingNotification = async (page: Page): Promise<void> => {
   const card = getWorkbenchLocator(page, workbenchSelectors.llmConfigMissingNotification)
   if (!(await card.isVisible().catch(() => false))) return
-  await card.getByRole('button', { name: '稍后', exact: true }).click()
+  await card.getByRole('button', { name: /^(稍后|Later)$/ }).click()
   await card.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => undefined)
 }
 

@@ -28,19 +28,35 @@ const lifecycle = (
   })
 
 describe('Windows Electron exit classification', () => {
-  it('accepts a known inspector exit after successful test teardown starts', () => {
+  it.each([3221225477, 3221226505, -1073741819, -1073740791])(
+    'accepts known inspector status %i after successful test teardown starts',
+    (code) => {
+      expect(
+        isExpectedWindowsInspectorTeardownExit({
+          platform: 'win32',
+          lifecycleEntries: lifecycle(
+            'electron-process-started',
+            'electron-teardown-started',
+            'page-close',
+            { name: 'electron-process-exit', data: { code, signal: null } }
+          ),
+          testPassed: true
+        })
+      ).toBe(true)
+    }
+  )
+
+  it.each([-1073741819, -1073740791])('rejects signed status %i before teardown', (code) => {
     expect(
       isExpectedWindowsInspectorTeardownExit({
         platform: 'win32',
         lifecycleEntries: lifecycle(
-          'electron-process-started',
-          'electron-teardown-started',
-          'page-close',
-          'electron-process-exit'
+          { name: 'electron-process-exit', data: { code, signal: null } },
+          'electron-teardown-started'
         ),
         testPassed: true
       })
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it.each([

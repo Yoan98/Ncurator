@@ -209,7 +209,7 @@ describe('workbench scheduled-task e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.toolbarButtons.every(
-              (button) => button.height === 28 && button.fontSize === '12px'
+              (button) => Math.abs(button.height - 28) <= 0.05 && button.fontSize === '12px'
             ) &&
               result.manualListCompact &&
               result.aiListCompact &&

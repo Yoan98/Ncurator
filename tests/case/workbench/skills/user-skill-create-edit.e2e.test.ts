@@ -22,6 +22,7 @@ describe('workbench skills', () => {
     async () => {
       await runE2ECase({
         caseId: CASE_ID,
+        execution: 'exclusive',
         domain: 'workbench',
         suite: 'skills',
         groups: [],

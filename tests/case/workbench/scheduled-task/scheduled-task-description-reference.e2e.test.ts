@@ -93,7 +93,8 @@ describe('workbench scheduled-task e2e', () => {
           }))
           await windowHandle.evaluate((window) => {
             window.setMinimumSize(0, 0)
-            window.setSize(1400, 560)
+            // Leave room for native Windows size quantization while keeping the viewport below 560px.
+            window.setContentSize(1400, 540)
           })
           await page.waitForFunction(() => window.innerHeight <= 560)
           await page.getByTestId(scheduledTaskSelectors.formContent).evaluate((content) => {

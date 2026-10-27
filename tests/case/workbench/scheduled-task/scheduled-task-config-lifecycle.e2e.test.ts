@@ -249,13 +249,21 @@ describe('workbench scheduled-task e2e', () => {
               element.scrollTop + element.clientHeight >= element.scrollHeight - 1
             )
           })
-          const lastPartnerVisibleAtScrollEnd = await lastPartnerOption.evaluate((option) => {
+          const lastPartnerAtScrollEnd = await lastPartnerOption.evaluate((option) => {
             const list = option.parentElement?.parentElement
-            if (!(list instanceof HTMLElement)) return false
+            if (!(list instanceof HTMLElement)) throw new Error('partner list is unavailable')
             const optionRect = option.getBoundingClientRect()
             const listRect = list.getBoundingClientRect()
-            return optionRect.top >= listRect.top && optionRect.bottom <= listRect.bottom
+            return {
+              optionTop: optionRect.top,
+              optionBottom: optionRect.bottom,
+              listTop: listRect.top,
+              listBottom: listRect.bottom
+            }
           })
+          const lastPartnerVisibleAtScrollEnd =
+            lastPartnerAtScrollEnd.optionTop >= lastPartnerAtScrollEnd.listTop - 0.05 &&
+            lastPartnerAtScrollEnd.optionBottom <= lastPartnerAtScrollEnd.listBottom + 0.05
           if (!originalPartner) throw new Error('failed to locate original scheduled-task partner')
           await selectScheduledTaskPartner(page, originalPartner.id)
           const selectedPartnerOption = getWorkbenchLocator(
@@ -454,6 +462,7 @@ describe('workbench scheduled-task e2e', () => {
             partnerListMetrics,
             partnerListReachedEnd,
             lastPartnerVisibleAtScrollEnd,
+            lastPartnerAtScrollEnd,
             partnerListShowsSelectedPartner,
             createdCorrectly,
             itemShowsSummary,

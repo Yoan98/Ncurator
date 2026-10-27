@@ -111,7 +111,9 @@ export const isExpectedWindowsInspectorTeardownExit = (input: {
   const exitData = input.lifecycleEntries[exitIndex]?.data as
     | { code?: number | null; signal?: string | null }
     | undefined
-  return (exitData?.code === 3221225477 || exitData?.code === 3221226505) && !exitData.signal
+  // Windows launchers may expose the same NTSTATUS as a signed int32.
+  const exitCode = typeof exitData?.code === 'number' ? exitData.code >>> 0 : undefined
+  return (exitCode === 3221225477 || exitCode === 3221226505) && !exitData?.signal
 }
 
 /** Playwright close 挂死后由 harness 主动终止；测试已通过时保留平台退出警告。 */
@@ -661,6 +663,15 @@ export const launchElectronApp = async (input: {
     artifactSha256: String(process.env.NCURATOR_E2E_ARTIFACT_SHA256 || '').trim() || null
   }
   recordLifecycle('electron-app-verified', appInfo)
+  recordLifecycle(
+    'electron-input-capabilities',
+    await page.evaluate(() => ({
+      hover: matchMedia('(hover: hover)').matches,
+      finePointer: matchMedia('(pointer: fine)').matches,
+      maxTouchPoints: navigator.maxTouchPoints,
+      devicePixelRatio: window.devicePixelRatio
+    }))
+  )
   if ((input.windowMode || process.env.NCURATOR_E2E_WINDOW_MODE) === 'visible') {
     await focusVisibleElectronWindow(electronApp)
   }

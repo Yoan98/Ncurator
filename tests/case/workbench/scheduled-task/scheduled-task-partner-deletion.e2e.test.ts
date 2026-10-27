@@ -26,6 +26,7 @@ describe('workbench scheduled-task e2e', () => {
     async () => {
       await runE2ECase({
         caseId: CASE_ID,
+        execution: 'exclusive',
         domain: 'workbench',
         suite: 'scheduled-task',
         groups: [],
