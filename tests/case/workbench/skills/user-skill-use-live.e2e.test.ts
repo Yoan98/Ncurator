@@ -111,10 +111,14 @@ describe('workbench skills live', () => {
           )
           recordWorkbenchAiEvidence(runtime, second, 1)
           const reportOne = JSON.parse(
-            await fs.readFile(path.join(setup.workspace.rootPath, 'report-one.json'), 'utf8')
+            (
+              await fs.readFile(path.join(setup.workspace.rootPath, 'report-one.json'), 'utf8')
+            ).replace(/^\uFEFF/u, '')
           ) as Report
           const reportTwo = JSON.parse(
-            await fs.readFile(path.join(setup.workspace.rootPath, 'report-two.json'), 'utf8')
+            (
+              await fs.readFile(path.join(setup.workspace.rootPath, 'report-two.json'), 'utf8')
+            ).replace(/^\uFEFF/u, '')
           ) as Report
           const io = await collectWorkbenchLlmIoRecords(runtime)
           await assertNoWorkbenchFakeSignals(runtime)

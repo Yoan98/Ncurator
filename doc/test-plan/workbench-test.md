@@ -834,7 +834,7 @@ pnpm test:update:e2e
 - 测试类型：e2e / live；skills suite，不另设 group；原生目录选择要求 `execution: exclusive`。
 - What：用户通过统一创建入口导入、伙伴编辑配置后，真实 AI 使用规范及资源，编辑后使用新规则。
 - Why：证明新入口到模型闭环。
-- How：UI 导入、伙伴编辑内启用周报内容，用户提供业务事实生成文件；Markdown 编辑后再发任务，记录真实请求、工具和产物。
+- How：UI 导入、伙伴编辑内启用周报内容，用户提供业务事实生成文件；Markdown 编辑后再发任务，记录真实请求、工具和产物。读取实际 JSON 产物时只去除可选的文件头 UTF-8 BOM 后解析，保留全部字段断言；上版文件仍按原始文本精确比较，不能改写模型产物。
 - Oracle：`WB-SKILL-001-AC4/AC5`；按名称加载，正文和资源进入模型，两轮使用各自有效规则且保留上版；不逐字匹配最终回答。
 
 #### `user-skill-management-live`
