@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type TestContext } from 'vitest'
 import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteCore'
 import { PartnerStore } from '../../../../src/main/services/storage/domains/PartnerStore'
 import { PartnerSkillStore } from '../../../../src/main/services/storage/domains/PartnerSkillStore'
@@ -16,6 +16,27 @@ const importSkill = (source: string) =>
 
 const markdown = (name = 'example', body = 'Read references/guide.md first.') =>
   `---\nname: ${name}\ndescription: A reusable workflow\nlicense: MIT\nmetadata:\n  custom: keep-me\n---\n${body}\n`
+
+const createFileSymlink = (target: string, link: string, context: TestContext): void => {
+  try {
+    fs.symlinkSync(target, link, 'file')
+  } catch (error) {
+    if (
+      process.platform === 'win32' &&
+      error instanceof Error &&
+      'code' in error &&
+      error.code === 'EPERM'
+    ) {
+      context.skip('Windows denied file symlink creation; file symlink safety is unverified')
+    }
+    throw error
+  }
+}
+
+const createDirectoryLink = (target: string, link: string): void => {
+  fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir')
+  expect(fs.lstatSync(link).isSymbolicLink()).toBe(true)
+}
 let root: string
 let db: SqliteCore
 let store: PartnerSkillStore
@@ -376,17 +397,31 @@ describe('shared user Skill files and partner bindings', () => {
     expect(fs.existsSync(path.join(root, 'skills', 'example'))).toBe(false)
   })
 
-  it('rejects symlinked resources without copying files outside the selected folder', () => {
+  it('rejects symlinked resources without copying files outside the selected folder', (context) => {
     const source = path.join(root, 'source')
     fs.mkdirSync(source)
     fs.writeFileSync(path.join(source, 'SKILL.md'), markdown())
     fs.writeFileSync(path.join(root, 'outside'), 'private')
-    fs.symlinkSync(path.join(root, 'outside'), path.join(source, 'escape'))
+    createFileSymlink(path.join(root, 'outside'), path.join(source, 'escape'), context)
     expect(() => importSkill(source)).toThrow(/symbolic links/i)
     expect(service.list()).toEqual([])
     expect(fs.readdirSync(path.join(root, 'skills'))).toEqual([])
-    fs.symlinkSync(source, path.join(root, 'source-link'))
+  })
+
+  it('rejects linked resource directories and import roots without reading outside files', () => {
+    const source = path.join(root, 'source')
+    const outside = path.join(root, 'outside')
+    fs.mkdirSync(source)
+    fs.mkdirSync(outside)
+    fs.writeFileSync(path.join(source, 'SKILL.md'), markdown())
+    fs.writeFileSync(path.join(outside, 'private.txt'), 'PRIVATE')
+    createDirectoryLink(outside, path.join(source, 'escape'))
+    expect(() => importSkill(source)).toThrow(/symbolic links/i)
+    expect(service.list()).toEqual([])
+    expect(fs.readdirSync(path.join(root, 'skills'))).toEqual([])
+    createDirectoryLink(source, path.join(root, 'source-link'))
     expect(() => importSkill(path.join(root, 'source-link'))).toThrow(/symbolic link/)
+    expect(fs.readFileSync(path.join(outside, 'private.txt'), 'utf8')).toBe('PRIVATE')
   })
 
   it('rejects oversized files and excessive directory entries with complete staging cleanup', () => {
@@ -405,14 +440,14 @@ describe('shared user Skill files and partner bindings', () => {
     expect(() => importSkill(root)).toThrow(/containing managed/)
   })
 
-  it('rejects a replaced SKILL.md symlink on each load and never reads its target', () => {
+  it('rejects a replaced SKILL.md symlink on each load and never reads its target', (context) => {
     const skill = service.create(parseSkillMarkdown(markdown()))
     service.setEnabled('alice', [skill.name])
     const skillFile = path.join(root, 'skills', 'example', 'SKILL.md')
     fs.rmSync(skillFile)
     const external = path.join(root, 'external.md')
     fs.writeFileSync(external, markdown('example', 'PRIVATE'))
-    fs.symlinkSync(external, skillFile)
+    createFileSymlink(external, skillFile, context)
     expect(() => service.loadEnabled('alice', skill.name)).toThrow(/symbolic links/)
     expect(fs.readFileSync(external, 'utf8')).toContain('PRIVATE')
   })
@@ -830,14 +865,12 @@ describe('shared user Skill files and partner bindings', () => {
     expect(service.resourceDirectory({ name: saved.name })).toBe(
       path.join(root, 'skills', saved.name)
     )
-    if (process.platform !== 'win32') {
-      const folder = path.join(root, 'skills', saved.name, 'references')
-      fs.rmSync(folder, { recursive: true })
-      fs.symlinkSync(source, folder, 'dir')
-      expect(() => service.previewResource({ name: saved.name }, 'references/SKILL.md')).toThrow(
-        /symbolic/
-      )
-      expect(() => service.getDocument(saved.name)).toThrow(/symbolic/)
-    }
+    const folder = path.join(root, 'skills', saved.name, 'references')
+    fs.rmSync(folder, { recursive: true })
+    createDirectoryLink(source, folder)
+    expect(() => service.previewResource({ name: saved.name }, 'references/SKILL.md')).toThrow(
+      /symbolic/
+    )
+    expect(() => service.getDocument(saved.name)).toThrow(/symbolic/)
   })
 })
