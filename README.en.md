@@ -45,6 +45,7 @@ Both distributions include Simplified Chinese and English interfaces. Choose a l
 | 🧠 Local knowledge base | Index local folders and web material, retrieve content, and cite sources                                |
 | 🔍 Web search           | Search the web, read page content, and use the built-in browser                                         |
 | 💻 Local terminal       | Run local commands and scripts for data processing and task automation                                  |
+| 🧩 Custom Skills        | Create, import, and edit Skills; enable them per partner and load them as needed. Maintain reusable workflows and delivery requirements through chat |
 | ✍️ Change review        | Preview results, inspect changes, and revert supported file edits                                       |
 | 🔗 WPS integration      | Click an AI change to open the document at that location in WPS; auto-refresh after AI edits or reverts |
 | ⏰ Scheduled tasks      | Run tasks on a schedule using a partner's material and model configuration                              |
