@@ -125,7 +125,7 @@ const cleanupLocalCandidates = async () => {
 
 const cleanupLocalTestLogsSafely = async () => {
   try {
-    await cleanupLocalTestLogs(ROOT)
+    await cleanupLocalTestLogs(ROOT, { tag: releaseTag })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     process.stderr.write(`[release] local test log cleanup warning: ${message}\n`)

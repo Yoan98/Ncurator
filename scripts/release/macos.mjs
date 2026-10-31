@@ -350,7 +350,7 @@ await github.publish(githubRelease)
 for (const distribution of DISTRIBUTIONS)
   await markCandidatePublished({ tag: releaseTag, platform: MACOS_PLATFORM, distribution })
 try {
-  await cleanupLocalTestLogs(ROOT)
+  await cleanupLocalTestLogs(ROOT, { tag: releaseTag })
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)
   process.stderr.write(`[release] local test log cleanup warning: ${message}\n`)

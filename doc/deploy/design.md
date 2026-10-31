@@ -66,6 +66,8 @@ publish 在写入前校验 COS / R2 配置与两个公开渠道的版本，再�
 
 `~/.ncurator/release-work`（Windows）或系统临时目录（非 Windows）：prepare/test 临时目录，阶段结束删除。`~/.ncurator/release-candidates`：发布并公开验证后只保留本平台最新候选及其 E2E 结果。`~/.ncurator/release-tools`：可复用构建缓存，不随发布删除。
 
+三个渠道全部发布验证成功后，同时清理仓库 `tests/logs/` 和 `.codex-tmp/release-{tag}/` 中本次及更早同平台版本的临时复测目录，包括复制的日志和回放包。较新版本、其他平台及普通 `.codex-tmp/` 目录保留；失败、prepare-only、test-only 不触发这项清理。清理拒绝通过符号链接进入仓库外目录。
+
 ## 3. 自动更新通道
 
 每个发行包内置固定更新地址；下列为国内 COS，国际包使用相同路径并将域名换为 `download.ncurator.com`。线路设置不参与更新地址解析。
