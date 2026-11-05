@@ -109,7 +109,7 @@ LanceDB fragment 是一次或多次写入形成的数据片段，不等于一行
 
 登录凭证由 Main 管理，刷新凭证使用系统凭据保护能力持久化，不进入 SQLite、普通 JSON、Renderer、日志或 URL；保护能力不可用时明确失败。授权的 state 和 PKCE 证明只保留在 Main 内存，流程结束后释放。
 
-新刷新凭证可靠保存后才公布换新成功；退出或换账号后，旧响应不能覆盖当前凭证和余额快照。完整授权及轮换协议见官网[身份规范](https://github.com/Yoan98/ncurator-official/blob/master/doc/backend/identity.md)。
+新刷新凭证可靠保存后才公布换新成功；退出或换账号后，旧响应不能覆盖当前凭证和余额快照。
 
 账号展示使用服务端返回的 `user_no`；接口中的整数标识保持十进制字符串，不转成 JavaScript `Number`。官方凭证及缓存按所属系统隔离，本地聊天、资料和个人连接继续保留。
 
