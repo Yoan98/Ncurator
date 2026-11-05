@@ -48,11 +48,11 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 每次正式发布产出国内、国际两个发行包：国内包只写 COS，国际包只写 R2。二者共用同一构建的应用资源，记录相同的共用资源 SHA-256；安装包、签名与文件哈希分别登记。存储对象布局与缓存策略一致，公开 manifest 使用各自域名。COS 配置：环境变量 `SecretId` / `SecretKey`（或 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`）。桶与区域默认使用 `ncurator-1324873382` / `ap-guangzhou`，可通过 `COS_BUCKET` / `COS_REGION` 覆盖；公开地址必须为 `https://download.guanzhangai.cn`。使用默认配置时无需将这些值写入 `.env`。CDN、DNS、资费与采购见 [`tencent-cdn-billing.md`](./tencent-cdn-billing.md)。发布子用户权限模板：[`scripts/release/cos/cam-policy.json`](../../scripts/release/cos/cam-policy.json)。
 
-国内官网／下载为 `https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`，国际官网／下载为 `https://www.ncurator.com`、`https://download.ncurator.com`。国内发行包固定从 COS 自动更新，国际包固定从 R2 更新；设置中的官方服务线路只改变 API 和帮助请求，不改变更新源。两端分别更新对应发行包、metadata 与 manifest，不跨站镜像。
+国内官网／下载为 `https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`，国际官网／下载为 `https://www.ncurator.com`、`https://download.ncurator.com`。国内发行包固定从 COS 自动更新，国际包固定从 R2 更新；官方业务入口按发行包固定，见[整体架构](../architecture.md)。两端分别更新对应发行包、metadata 与 manifest，不跨站镜像。
 
 ### GitHub Releases 手动下载
 
-公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 R2 上线国际版相同的文件；国内包完成正式包回归，国际包通过共用资源一致性绑定该证据，不重新构建。认证复用 CLI 保存的登录凭证，或使用发版机环境中的 `GH_TOKEN`；本地配置与验证见[发布流程](./release.md#31-github-releases-镜像)。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和中英文版本说明；新版本的双语变更内容固化于 annotated Tag，下载说明按语言生成，草稿恢复及公开前后校验正文。已公开说明可以独立修正，附件和 Tag 保持原身份。GitHub 安装包附件使用英文品牌 ASCII 文件名，命名见[品牌规范](../brand.md#下载名-vs-缓存名)，自动更新文件由各发行包固定的 COS／R2 通道提供。
+公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 R2 上线国际版相同的文件；国内包完成正式包回归，国际包通过共用资源一致性绑定该证据，不重新构建。认证复用 CLI 保存的登录凭证，或使用发版机环境中的 `GH_TOKEN`；本地配置与验证见[发布流程](./release.md#31-github-releases-镜像)。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和中英文版本说明；新版本的双语变更内容固化于 annotated Tag，下载说明按语言生成，草稿恢复及公开前后校验正文。已公开说明可以独立修正，附件和 Tag 保持原身份。GitHub 安装包附件使用英文品牌 ASCII 文件名，命名见[品牌规范](../brand.md#下载与缓存命名)，自动更新文件由各发行包固定的 COS／R2 通道提供。
 
 Release 的公开 annotated Tag 必须与候选 bundle 的构建 commit 完全一致；公开源码后从该源码创建新的 Tag 和候选包。自动流程不代建 Tag，不把含凭证的私有历史推入公开仓库，也不处理历史包与公开快照的 commit 映射。GitHub 自动附带的 Source code 压缩包不替代安装包，也不替代核对完整对应源码的义务。
 
@@ -70,7 +70,7 @@ publish 在写入前校验 COS / R2 配置与两个公开渠道的版本，再�
 
 ## 3. 自动更新通道
 
-每个发行包内置固定更新地址；下列为国内 COS，国际包使用相同路径并将域名换为 `download.ncurator.com`。线路设置不参与更新地址解析。
+每个发行包内置固定更新地址；下列为国内 COS，国际包使用相同路径并将域名换为 `download.ncurator.com`。界面语言不影响更新地址。
 
 ```text
 Windows 清单：https://download.guanzhangai.cn/releases/latest/windows.json

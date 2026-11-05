@@ -26,6 +26,7 @@
 
 - `doc/test-plan/ai-test.md`：涉及 AI 回归测试范围、live case 设计或 suite 覆盖维护时阅读。
 - `doc/test-plan/knowledge-test.md`：涉及知识库专项（foundation 功能与 optimization 效果）时阅读。
+- `doc/test-plan/account-test.md`：涉及账号入口、登录授权、余额概览、独立退出、官网跳转或原有免登录能力回归时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
 - `doc/test-plan/workbench-test.md`：涉及 Workbench 回归测试范围、真实 e2e case 设计、发送前置条件验证或 suite 覆盖维护时阅读。
 - `doc/test.md`：涉及测试体系、UI E2E 回归规则、runner 或回归测试流程时阅读。
@@ -33,6 +34,7 @@
 
 ### 1.5 prd产品文档相关
 
+- `doc/prd/account.md`：涉及账号菜单、设置账号页、登录状态、余额概览及官网账户功能分工时阅读。
 - `doc/prd/workbench.md`：涉及 Workbench 产品需求、发送前置条件、消息流/过程层交互、定时任务或 composer 偏好验收标准时阅读。
 - `doc/prd/settings.md`：涉及 Settings 产品需求、文件地址森林、全局网页资料、索引/模型/通知或验收标准时阅读。
 - `doc/ai-tool-prompt-audit.md`：Toolset / Tool 契约活例子，**按需生成、不入库**（`pnpm doc:ai-tool-prompt-audit`）；改工具契约时本地生成对照，不替代 `tool-design.md`。
@@ -62,9 +64,11 @@
 │   ├── test.md                       # 测试体系和执行规则
 │   ├── ui-style.md                   # UI 风格和交互规范
 │   ├── prd/                          # 产品需求
+│   │   ├── account.md                # 账号与余额概览需求
 │   │   ├── settings.md               # Settings 产品需求
 │   │   └── workbench.md              # Workbench 产品需求（含定时任务）
 │   ├── test-plan/                    # 专项测试计划
+│   │   ├── account-test.md            # 账号专项测试计划
 │   │   ├── ai-test.md                # AI 回归测试计划
 │   │   ├── knowledge-test.md         # 知识库专项测试计划
 │   │   ├── settings-test.md          # Settings 测试计划
@@ -82,6 +86,7 @@
 │   └── shared/                       # Main / Renderer 共享类型与契约
 ├── tests/                            # 自动化测试
 │   ├── case/                         # 测试用例
+│   │   ├── account/                  # 账号 UI E2E（随功能落地）
 │   │   ├── ai/                       # AI 测试用例
 │   │   ├── knowledge/                # 知识库专项测试
 │   │   ├── showcase/                 # 独立官网样例采集

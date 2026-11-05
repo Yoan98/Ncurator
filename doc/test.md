@@ -2,7 +2,7 @@
 
 ## 1. 测试体系总览
 
-- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`knowledge-test` 专门覆盖知识库的功能测试（如搜索和索引等），优化设计测试（如召回率、检索与索引优化等），全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑；`showcase` 是独立官网样例采集，不进入领域测试计划。
+- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`knowledge-test` 专门覆盖知识库的功能测试（如搜索和索引等），优化设计测试（如召回率、检索与索引优化等），全部是 backend；`account-test`、`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑；`showcase` 是独立官网样例采集，不进入领域测试计划。
 
 测试体系只沉淀一层长期执行产物：
 
@@ -22,7 +22,7 @@
 - `showcase`
   - 放在 `tests/case/showcase/**`，文件后缀 `.showcase.test.ts`。
   - 独立官网样例采集，走真实 E2E 链路，用 `pnpm test:showcase` 单独执行。
-- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Knowledge、Settings、Workbench、Showcase 或 Unit。
+- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Knowledge、Account、Settings、Workbench、Showcase 或 Unit。
 
 ### 1.2 目录结构
 
@@ -32,6 +32,7 @@ tests/
   fixtures/
   case/
     ai/
+    account/
     knowledge/
     unit/
     settings/
@@ -48,7 +49,7 @@ tests/
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的子目录。
 - 各测试 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义。
 - 当某个 `suite` 不需要继续细分时，测试 case 可以直接放在该 `suite` 目录下。
-- `tests/case/{ai,knowledge,settings,unit,workbench,showcase}/**` 只允许放已在 `doc/test-plan/**` 登记的正式测试 case（`unit`、`showcase` 例外，不进入测试计划）。
+- `tests/case/{ai,account,knowledge,settings,unit,workbench,showcase}/**` 只允许放已在 `doc/test-plan/**` 登记的正式测试 case（`unit`、`showcase` 例外，不进入测试计划）。
 - `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，以及 backend/unit 直接引用的固定文件输入，统一复用该目录。
 - `tests/fixtures/sqlite/` 放数据库迁移 fixture。
 - `tests/fixtures/**` 全部是只读测试输入：测试禁止对其中任何文件原地写入、覆盖或修改；需要写入时，必须通过 `fixtures: []` 声明由 runner/harness 复制到隔离临时 workspace（或按 E2E 规则复制到临时目录），测完删除。公开真实文档保留发布方原始字节；异常格式仅在隔离副本注入，不改写检入原件。fixture 需要更新时直接提交新二进制，禁止引入任何 fixture 生成器脚本（生成器不得以 `.test.ts` 形态进入 `tests/case/**` 自动发现）。
@@ -56,7 +57,7 @@ tests/
 
 ### 1.3 稳定映射模型
 
-测试按 `domain / suite / groups... / caseId` 映射到目录和日志；普通 `.test.ts` 为 backend，`.e2e.test.ts` 为 E2E，`.showcase.test.ts` 为独立样例采集。固定边界为：`ai`、`knowledge`、`unit` 只能是 backend，`settings`、`workbench` 只能是 E2E。
+测试按 `domain / suite / groups... / caseId` 映射到目录和日志；普通 `.test.ts` 为 backend，`.e2e.test.ts` 为 E2E，`.showcase.test.ts` 为独立样例采集。固定边界为：`ai`、`knowledge`、`unit` 只能是 backend，`account`、`settings`、`workbench` 只能是 E2E。
 
 ## 2. 测试用例规则
 
@@ -82,7 +83,7 @@ tests/
 - `Oracle`
   - 必须成立的明确断言集合。
 
-Settings / Workbench 每项 PRD 验收必须通过完整 AC 编号登记到具体 case 的 Oracle，或本域计划的人工验收 / 自动化覆盖边界；可使用同需求的 `AC1/AC2` 缩写与明确的闭区间。仅引用需求编号不能代替逐项登记。跨 AI / Unit 的证据须指明实际 case / 文件和覆盖层次。架构校验只检查验收登记及 case 文件关系，不证明行为已执行或断言充分。
+Account / Settings / Workbench 每项 PRD 验收必须通过完整 AC 编号登记到具体 case 的 Oracle，或本域计划的人工验收 / 自动化覆盖边界；可使用同需求的 `AC1/AC2` 缩写与明确的闭区间。仅引用需求编号不能代替逐项登记。跨 AI / Unit 的证据须指明实际 case / 文件和覆盖层次。架构校验只检查验收登记及 case 文件关系，不证明行为已执行或断言充分。
 
 ### 2.3 backend 正式 case 规则
 
@@ -94,9 +95,10 @@ Settings / Workbench 每项 PRD 验收必须通过完整 AC 编号登记到具�
 
 ### 2.4 UI E2E 测试规则
 
-- UI E2E 必须通过真实 UI 和产品链路完成被测行为；禁止 fake、mock、stub、直接写状态或内部写 IPC 绕过。
+- UI E2E 必须通过真实 UI 和产品链路完成被测行为；禁止用 fake、mock、stub 替代被测桌面 UI、生产 Main 服务和本地持久化结果，禁止直接写状态或内部写 IPC 绕过。
 - fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
-- Settings / Workbench E2E 默认使用 `serviceMode: real`；仅自动更新、数据库版本恢复等受控状态的 case 可使用 `fixture`，并在对应 `doc/test-plan/**` 说明原因。
+- Account / Settings / Workbench E2E 默认使用 `serviceMode: real`；仅自动更新、数据库版本恢复等受控状态的 case 可使用 `fixture`，并在对应 `doc/test-plan/**` 说明原因。
+- Account 跨端测试的后端及外部服务边界见 [Account 测试计划](test-plan/account-test.md#2-suite-与验证边界)。
 - 允许的模拟、种子或受控注入只写在对应 `doc/test-plan/**` case 的 How；新增假数据或模拟路径须先说明必要性、取得用户确认，并写入该 case 所在测试计划。
 - observer、只读 IPC 和截图只能收集证据，不能触发被测行为或改变运行结果。
 - 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。不为 E2E 增加生产环境变量、故障开关、全局探针或其他生产代码入口；确需修改生产代码时，必须先取得用户确认。

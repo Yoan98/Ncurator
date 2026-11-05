@@ -5,18 +5,17 @@
 - 本计划定义 Workbench 用户可见交互的测试范围，并对齐 [workbench.md](../prd/workbench.md) 的 `WB-*` 需求和验收编号。
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
 - Workbench UI E2E 测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。依赖资料时通过设置页添加文件地址，普通发送不要求资料目录。
-- 涉及 AI 的 Workbench UI E2E 使用真实模型，共享 live 配置见 [测试规范](../test.md)。内置目标通过 Settings「推荐」类型准备；`custom` 目标通过「自定义」类型准备地址与 Key，并在 Composer 自定义模型列表选择指定型号；全内置服务商冒烟见 `live-preset-provider-smoke`。
+- 涉及 AI 的 Workbench UI E2E 使用真实模型，共享 live 配置见 [测试规范](../test.md)。内置目标通过 Settings 的自定义连接选择已知服务商模板准备；其他目标手动填写地址与 Key，均在 Composer 自定义模型列表选择指定型号；全内置服务商冒烟见 `live-preset-provider-smoke`。
 - case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
-- 多语言发布回归只使用国内候选包：英文界面在同一国内包内通过设置并重启验证；国际官方服务通过手动切换线路联调。国际包不重复安装、UI 或升级回归，发行配置及更新入口由共用 backend Unit 检查。
-- `SET-GENERAL-006-AC3` 的实际网络联调验证国际目录、签名、取票及一次免费模型流式调用；失败不跨线路及凭证隔离由 Unit `app-gateway` 验证。不以静态配置检查替代真实连通结论。
+- 语言与固定官方入口验证见 Settings 的 `language-and-service-route`。
 
 ## 2. 测试边界
 
 - Workbench UI E2E 测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；需要文件资料时通过 Settings UI 添加文件地址、检查更新和更新索引。前置是创建伙伴；文件地址按场景添加，不作为通用发送门禁。
 - Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。现有用例的执行缺口见第 6 节。
 - Workbench e2e 按 `knowledge: none / cached / cold` 声明索引需求，默认 none。需要真实索引时复用生产 split/vector 计算缓存并隔离本用例统计；不自动追加 UI 预热用例，不复用存储和 UI 状态。缓存身份、按需预热与清理规则遵循 [测试规范](../test.md)。
-- Workbench 模型选择 helper 在 `custom` live 配置下直接进入「自定义模型」按名称搜索，等待异步返回的匹配选项可见后再判定是否存在，避免同名预设或免费模型改变测试入口；内置目标优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选，未命中再按展示名，仍未命中则进入「自定义模型」按名称搜索。
+- Workbench 模型选择 helper 在 `custom` live 配置下直接进入「自定义模型」按名称搜索，等待异步返回的匹配选项可见后再判定是否存在，避免同名预设或免费模型改变测试入口；内置目标在同一自定义服务分组按公开内置型号的精确调用名选择；不因同名馆长或免费条目改变调用方式。
 - Workbench UI E2E 测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖列表打开/焦点刷新、右键行内新建和确认移到回收站，以及删除后禁止自动保存重建。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；用户行为见 `WB-WPS-001`。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
@@ -231,20 +230,27 @@ pnpm test:update:e2e
 
 #### `model-selector-and-provider-error`
 
+- 测试类型：`e2e / live`
+- What：三类模型入口、自定义精确型号选择、手填及错误反馈。
+- Why：目录更新或自动回退可能改变用户选择及计费方式。
+- How：未登录检查馆长引导、免费及自定义入口；通过 Settings 创建模板及手动连接，选择精确型号完成真实调用。用转发代理的无效路径形成真实服务错误，核对分组、展开、收起、复制及刷新，覆盖部分成功和搜索无匹配。检查手填的空白、取消、保存、去重及跨伙伴选择；刷新、编辑、重启和目录停用后核对原选择，再删除连接检查失效。成功、取消及失败后的上下文用量与本地日志投影核对。
+- Oracle：入口、模型行、侧栏及精确选择覆盖 `WB-COMPOSER-007-AC1/AC2/AC3/AC4`；失效提示且不自动回退覆盖 `WB-COMPOSER-007-AC6`；免费、自定义免登录及独立计费覆盖 `WB-COMPOSER-007-AC14/AC15`；错误归组、原文复制、Key 脱敏、刷新及手填生命周期覆盖 `WB-COMPOSER-007-AC16/AC17/AC18`。入口图标及主模型选择覆盖 `WB-COMPOSER-007-AC7`、`WB-COMPOSER-013-AC1`；终态上下文补证 `WB-COMPOSER-013-AC5`，异常 cause 和持久化失败由 Unit 补充。
+
+#### `managed-model-catalog`
+
 - 测试类型：`e2e`
-- What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示；无已配置预设且无免费目录时显示空态，有免费目录则在统一列表展示免费行；推荐配置默认选中预设稳定调用名；预设统一列表（付费在上、免费在下、无分区标题）；列表右上角有统一目录刷新（不单独占顶栏行）；悬浮/聚焦预设或免费行时右侧显示信息侧栏；预设/免费行含接口 `iconUrl`；不可用预设禁用；自定义入口可选中 remote id 且不被强制改回预设，并正确展示 provider 错误反馈。
-- 补充取证：复制内容保留完整文本，比较时只归一化 Windows CRLF 与 LF 换行；记录各错误展示与刷新断言的独立结果。
-- Why：主模型配置是智能任务能否启动的直接前提，预设区是用户首选的模型入口。
-- How：先通过 Settings 将自定义服务配置为既有转发代理下的无效路径，请求真实上游取得 HTTP 错误；进入自定义列表检查「加载失败」、对应配置名下的错误原文、原地展开及收起、复制和标题刷新，确认不关闭模型面板；组内手填检查自动绑定、无服务下拉框、空白禁用、取消不变、使用后面板与分组保持展开、候选保存及精确去重。新增第二配置，检查成功／失败配置同时可见且错误各自归组、手填不会串配置；编辑配置保留候选，删除配置移除分组。刷新失败、切换伙伴及正常重启后检查候选和选择恢复，并在其他伙伴中选取已保存的手填候选；代理在重启期间保持可访问，不注入响应。修复地址后，在有候选的自定义视图检查标题右侧刷新图标，通过该按钮再次触发真实列表请求并记录截图。通过 Settings 编辑为正确地址，返回 Workbench 确认错误清除后继续原有选模与对话流程，不增加模拟响应或写入 IPC。使用空工作地址，通过真实设置页配置 live 自定义模型（非预设服务商模式），不准备资料索引；回到 Workbench 展开选择器，等待目录结束 loading；检查无「免费模型」分区标题、右上角刷新按钮可见；若有免费行则悬停并断言右侧信息侧栏出现；预设 option 数为 0；若官网免费目录可用则可见免费 option 与「免费」文案及图标，否则可见「暂无已配置的预设模型」空态；进入自定义模型视图后侧栏消失，按名称搜索并选中后 pill 保持该模型名。完成一次真实请求，再让真实模型执行只读 `pwd`，后续长文字请求开始时点击停止；第三次再次执行 `pwd` 后，既有转发代理只将工具结果后的模型请求改为不存在的模型名，取得真实 provider 错误。三次终态均 hover 上下文用量环，使用只读上下文查询核对 tooltip，不切换伙伴。
-- Oracle：未配置预设服务商时不展示付费预设行，对齐 `WB-COMPOSER-007-AC2`；悬浮信息侧栏对齐 `WB-COMPOSER-007-AC3`；统一列表 / 右上角刷新入口 / 免费行（若目录非空）与侧栏「免费」+ 稳定性提示对齐 `WB-COMPOSER-007-AC14` 的 UI 部分；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且不另加视觉图标，对齐 `WB-COMPOSER-013-AC1`；伙伴保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败请求仅一次，气泡短标题为「模型请求失败」，「查看详情」可见 HTTP 状态码和错误原文，对齐 `WB-COMPOSER-007`、`WB-CORE-006`、`WB-SESSION-007-AC8`。成功、取消、失败后三次上下文用量均与日志投影一致，取消及失败后用量包含新增工具上下文，对齐 `WB-COMPOSER-013-AC5` 的终态刷新边界；不证明含图片历史下的发送拦截。列表请求失败的配置名与错误归属、HTTP 状态与原文、原地展开及收起、复制、Key 脱敏及成功后清除对齐 `WB-COMPOSER-007-AC16`；超时、无效 JSON、响应结构异常、请求方法与地址、网络异常的类型／堆栈／多层 cause／聚合错误／错误码与连接字段、无 HTTP 响应和读取响应中断的区分及深层 Key 脱敏由 `unit/ai/model-catalog.test.ts` 补充，自定义标题刷新按钮在有候选时可见并触发新请求，对齐 `WB-COMPOSER-007-AC17`；免费／推荐目录有缓存时刷新失败仍报错并保留缓存，由 `unit/model/free-models.test.ts` 补证。组内手填与自动绑定、空白拦截与取消、面板保持展开、候选去重及跨伙伴可选、配置编辑与删除、刷新失败保留及伙伴切换和正常重启恢复，对齐 `WB-COMPOSER-007-AC18`；非空目录不匹配仍保留手填选择、配置删除及免费目录型号门禁由 `unit/model/workbench-model-selection.test.ts` 补证。手填存储与升级由 `unit/storage/sqlite-storage.test.ts`、`unit/storage/sqlite-migration.test.ts` 补证；官网目录部分失败、成功空列表及复制／手填保存失败的界面需人工检查。
+- What：馆长目录登录边界、选择保持、动态价格及公开信息投影。
+- Why：登录或充值后自动改模型、旧账号缓存及采购信息泄漏会造成误收费或隐私问题。
+- How：使用本地正式官网后端及隔离 PG，经正式管理入口准备免费、匹配客户端内置服务商标识的自定义内置型号和馆长条目；在真实桌面保持原免费或自定义选择，走正式网页登录授权，零余额浏览馆长目录，再通过测试渠道充值。核对每次操作均不自动改选择；管理端变更折扣、时段和条目状态后按 UI 刷新，检查当前显示、失效提示及安全错误。退出、更换账号及丢失会话后重开面板，核对实际请求、目录缓存及截图；公开接口中的私有字段由官网接口计划验证，不在桌面硬编码采购数据。
+- Oracle：登录前只有引导，零余额可读馆长目录，登录、充值、刷新及失效不换型号或计费方式，旧账号受保护目录不再展示，覆盖 `WB-COMPOSER-007-AC20`；折扣、参考价格、时段和变动提示正确，无采购渠道信息，覆盖 `WB-COMPOSER-007-AC21`，并补充 `WB-COMPOSER-007-AC2/AC3` 的馆长区域。真实单次固定价和调价后的下一请求计费由官网 BILL-04 验证，不能以目录截图证明资金正确。
 
 #### `live-preset-provider-smoke`
 
 - 测试类型：`e2e / live`（路径 `conversation/provider-matrix/`，独立连通性检查；仅专用命令或显式 `--case live-preset-provider-smoke` 执行）
-- What：对 `.env` 中已填写 `AI_LIVE_KEY_*` 的每个内置服务商，经真实 Settings「推荐」配置 + Composer 预设 option（稳定调用名 testid）选模，各发一句「你好」；免费目录非空时，再选择一个免费型号完成真实调用。
-- Why：日常全量 live 只跑 `AI_LIVE_PROVIDER`/`AI_LIVE_MODEL` 选定目标；需要 smoke 覆盖已配置服务商，以及正式包中的免费模型官网调用与鉴权链路。
-- How：通过专用命令或显式 case 选择独立执行，不随日常或全量回归运行。读取 `listConfiguredLiveLlmTargets()`，默认测试模型须在当前推荐目录中；为每个目标走 Settings UI 创建推荐服务商；创建伙伴后依次点预设 option（不得走自定义搜索兜底）并发送「你好」，等待 run 完成。随后通过只读 `freeModelsGet` 取得公开目录；目录非空时点击对应免费 option 并发送「你好」，观测真实完成事件与回答，记录型号、标签与截图；目录为空时明确记录该覆盖缺口。
-- Oracle：每个已配置 Key 的服务商都有非空最终回答；未配置 Key 的服务商不参与、不失败。免费目录非空时，所选免费型号必须真实完成且回答非空，不能因免费通道失败而跳过；目录为空只证明已配置服务商连通性。本检查提供外部服务连通性证据，PRD 功能行为由常规功能用例覆盖。
+- What：对已填写 live Key 的内置服务商，通过 Settings 的已知服务商模板创建自定义连接，在对应分组选择精确型号并各发一句“你好”；免费目录可用时再完成一次免费调用。
+- Why：日常 live 只跑单一目标，仍须按需验证各客户端内置服务商及免费网关连通，不能把个人连接冒烟当成馆长收费链路验证。
+- How：独立执行现有冒烟入口，不加入日常或全量回归；读取实际配置的 live 目标，通过 UI 创建连接、伙伴并精确选择目标型号，逐一等待真实终态。客户端内置服务商或对应内置型号缺失时如实记录接入缺口，不改选同名馆长或其他计费类型，不直接写配置。免费调用使用实际目录和免费凭证，不要求业务登录。
+- Oracle：各目标确实调用所选自定义连接和型号，Key 不泄漏且不产生馆长钱包消费；免费调用独立有效。所选型号最终回答非空，缺少配置的目标如实记录；模型行选择补证 `WB-COMPOSER-007-AC4/AC14/AC15`。
 
 #### `prefix-cache-retain-live`
 
@@ -406,11 +412,13 @@ pnpm test:update:e2e
 #### `queue-message-during-run`
 
 - 测试类型：`e2e / live`
-- What：真实模型读取资料期间从 Composer 追加消息，验证单一主按钮、浅灰待处理气泡、安全续接，以及交接后旧过程固定用时和消息显示顺序。
+- What：真实模型读取资料期间从 Composer 追加消息，验证单一主按钮、浅灰待处理气泡、安全续接、模型选择生效边界，以及交接后旧过程固定用时和消息显示顺序。
 - Why：AI backend case 不覆盖 Renderer 输入、运行态单按钮切换、pending 气泡投影和 IPC 续接；发送草稿时停止入口暂时切换为排队发送，发送后必须恢复。
-- How：在临时工作区创建三个文本输入，通过真实 UI 发送跨文件汇总请求；观察 `text_file_read` 开始后检查空草稿时唯一主按钮为停止，输入第一条消息后同一按钮切换为发送并提交排队，再输入第二条消息重复提交；确认每次清空草稿后按钮恢复为停止；等待原 run 正常结束及续接 run 完成，并检查原 user 气泡位于对应助手过程卡之前。记录真实模型、run 事件与最终回答。
+- How：在临时工作区创建三个文本输入，通过真实 UI 发送跨文件汇总请求；观察 `text_file_read` 开始后检查空草稿时唯一主按钮为停止，输入第一条消息后同一按钮切换为发送并提交排队，再输入第二条消息重复提交；确认每次清空草稿后按钮恢复为停止；等待原 run 正常结束及续接 run 完成，并检查原 user 气泡位于对应助手过程卡之前。增加模型选择分支：原 run 使用模型 A，在其工具执行中仅选择 B，核对原 run 后续请求仍为 A；随后以 B 提交追加消息，并在交接前再次改变选择器但不提交，核对接续使用追加消息保存的 B。需要多条追加消息时按现有最新提交配置核对。通过真实上游转发记录、run 和子任务配置补证，不使用回答自报型号或模拟事件代替实际目标。记录真实模型、run 事件与最终回答。
 - Oracle：原过程固定用时必须含数值及秒单位，中文标签与数字之间空白不影响判定。
 - Oracle：任一时刻 Composer 仅有一个主按钮；空草稿时标签为停止，有可发送内容时同一按钮标签为发送；发送后草稿清空且标签恢复为停止。两条待处理消息都按 FIFO 显示为浅灰气泡且无编辑入口；续接使用第二条消息作为最新诉求并完成。初始 run 交接后原过程行显示固定“用时”，对应用户气泡排在其助手过程行之前。工具结果先于追加消息由 AI live `human-queued-message-safe-boundary-live` 覆盖；FIFO transcript、停止 / 中断后不自动启动由 unit `chat-run-service-contract` 覆盖，对齐 `WB-COMPOSER-017`、`WB-COMPOSER-006`。 已核对的具体验收：`WB-COMPOSER-006-AC1`。
+
+- Oracle：只改选择器不改变原 run 及子任务的模型，追加消息保存提交时选择，安全交接后的接续模型不受后来未提交选择影响，覆盖 `WB-COMPOSER-007-AC19`。
 
 #### `llm-retry-process-row`
 
@@ -419,6 +427,14 @@ pnpm test:update:e2e
 - Why：免费/共享额度模型会稳定打出 429；重试行叠层或与思考等待并存是用户可直接看见的过程层 bug，过程流主 case 不保证本轮出现重试。
 - How：经 Settings 添加自定义模型，指向本地 OpenAI 兼容代理；代理对前两次 `chat/completions` 返回真实 HTTP 429，其后转发 live 上游。Workbench 选中该自定义模型并发送短请求；运行中持续采集过程区重试行数、次数文案与“让俺想想”是否共存，直至 run 完成。
 - Oracle：必须见到 `正在重试 1/5` 且随后在同一行见到 `2/5`，对齐 `WB-COMPOSER-015-AC1`；任一时刻过程区最多一行“正在重试 / 重试失败”，对齐 `WB-COMPOSER-015-AC2`；重试行 running 时不得同时出现“让俺想想”，对齐 `WB-COMPOSER-015-AC3`、`WB-COMPOSER-003-AC3`。前两次 chat 为 429、第三次起转发上游；429 退避毫秒以及断网/`TimeoutError`/调用层 `TIMEOUT` 分类由 unit `llm-error-classification` 覆盖。run 完成后过程区不得再留“已重试 / 正在重试”，对齐 `WB-COMPOSER-015-AC4`。
+
+#### `managed-request-admission-and-recovery`
+
+- 测试类型：`e2e / live`
+- What：馆长未执行限流使用既有重试，已执行或状态不明时不重新发起模型。
+- Why：直接套用通用 429、断流及超时重试可能重复执行、重复收费，或把用户身份和资金门禁误当作临时并发问题。
+- How：使用正式后端、隔离 PG 及真实上游，经正式接口占满账户执行额度，再从 UI 提交馆长请求，检查重试行、额度释放后的执行及重试耗尽。对已受理请求丢弃完成确认，通过原请求查询状态，核对上游次数和账本。分别以零余额、已撤销会话形成门禁；欠费及待落账状态复用 Account 场景的前置。
+- Oracle：未执行并发拒绝沿用次数、退避和同一请求编号，额度释放后只执行一次，始终未受理不冻结或收费，覆盖 `WB-COMPOSER-015-AC1/AC2/AC3/AC4`；已受理或结果不明不重发，身份和资金门禁不作为并发重试，覆盖 `WB-COMPOSER-015-AC5`。
 
 #### `terminal-background-service-flow`
 
@@ -849,6 +865,8 @@ pnpm test:update:e2e
 
 ## 6. 自动化覆盖边界
 
+馆长目录与三类模型选择、退出账号关联及运行中模型选择边界的新增或修订场景尚未执行，按实际落地补充证据；文档中的验收映射不代表现有 case 已覆盖。
+
 - `WB-SKILL-002-AC3`：服务与工具层由 `skill-config-and-current-partner-binding`、`user-skills` Unit 验证最终预算和回滚；`user-skill-partner-budget` 提供界面超限拒绝证据，AI 触发失败后的全部界面组合需人工验收。
 
 - `WB-COMPOSER-001-AC6`：`reference-mention-keyboard` 自动检查空对话的长文本粘贴、连续换行后的末行可见、内部滚动、工具栏可见和清空后高度恢复；已有消息、窄窗口自动换行及附件组合仍做界面专项验收。
@@ -887,7 +905,7 @@ pnpm test:update:e2e
 | `WB-SESSION-009-AC1/AC3/AC4`                                                | 部分覆盖：`partner-pin-toggle` 验证取消后图钉不常驻；图标样式、取消后区域排序及重启持久化待补。                                                                                                                                                                                                                                           |
 | `WB-SESSION-012-AC1/AC2`                                                    | 部分覆盖：`partner-edit` 验证名称回填、伙伴数量、新形象和侧栏；形象初始回填、顶栏及消息保留缺少独立断言。                                                                                                                                                                                                                                 |
 | `WB-COMPOSER-001-AC2/AC3/AC4`                                               | 部分覆盖：`send-guard-and-preferences` 检查无伙伴空态与无模型提示，`queue-message-during-run` 验证运行中追加；空白发送和占位见 `multi-format-selection-reference`、`reference-mention-keyboard`，`partner-edit` 检查创建及改名后的伙伴名称占位。提交去重、全部禁用原因及改名后 AI 自称待补。                                              |
-| `WB-COMPOSER-007-AC6/AC7/AC11/AC15`                                         | 部分覆盖：`model-selector-and-provider-error` 走自定义与免费目录；失效快照回退、付费目录、入口图标及偏好实际影响资料边界待补。                                                                                                                                                                                                            |
+| `WB-COMPOSER-007-AC6/AC7/AC11/AC15`                                         | 部分覆盖：`model-selector-and-provider-error` 走自定义与免费目录；失效选择不自动回退、馆长目录、客户端固定服务商及内置型号标识匹配的新验收见上述待落地场景，不能沿用旧推荐目录的结果；偏好实际影响资料边界待补。                                                                                                                                                                                                            |
 | `WB-COMPOSER-017-AC1/AC2/AC3/AC5/AC6/AC7`                                   | 部分覆盖：`queue-message-during-run` 检查单一按钮、两条浅灰追加消息、续接输入和固定用时；最终回答期追加、异常保留、悬空工具修复与校验竞态未完整验证。                                                                                                                                                                                     |
 | `WB-COMPOSER-010-AC1/AC3/AC4/AC5/AC6`                                       | 部分覆盖：`composer-attachments-context` 核对多格式附件、路径与无预解析、图标、预览及横滑证据；无伙伴添加、任意数量/大小边界和系统目录原生拖放未全部自动化，原生目录拖放需人工验收。                                                                                                                                                      |
 | `WB-COMPOSER-011-AC1/AC2`                                                   | 部分覆盖：`workbench-help-entry` 检查可访问名称、官方 URL 和路由；说明文案及草稿保留未逐项断言。                                                                                                                                                                                                                                          |
