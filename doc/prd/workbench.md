@@ -1021,6 +1021,21 @@ Composer 使用 18px 圆角、15px 正文和 24px 行高；正文随内容增高
   - `WB-SKILL-002-AC5` 查询/更新文案、简短结果及两类加载的 Activity、图标、颜色和历史恢复一致。
   - `WB-SKILL-002-AC6` 子任务不能调用配置工具；配置与加载均按名称，读取与查询不激活正文。
 
+### 6.13 产品埋点
+
+#### WB-TELEMETRY-001 消息受理与主 run 结束分别统计
+
+- 系统行为：正式客户端异步上报 `app_started`、`message_submitted` 和 `run_finished`，来源固定为 `desktop`。消息成功受理或加入运行中任务队列后记一次 `message_submitted`，不附结果字段；提交失败或发送前拦截不记为已发送消息。
+- 执行口径：一个主 run 最终为 `completed`、`failed` 或 `cancelled` 时至多生成一次 `run_finished`，不跨 run 归并。模型请求、子任务、工具循环及内部重试不各自记为主 run 结束，等待、仅保存上下文和内部接续不直接当正常结束；按真实最终状态判断，不能只监听通用结束信号。
+- 结果协议：`run_finished.outcome` 只允许 `completed`、`failed`、`cancelled`；仅 `failed` 带 `failureCode`，允许 `llm_request_failed`、`output_truncated`、`input_too_long`、`runtime_limit`、`internal_error`、`unexpected_error`、`process_interrupted`。中断只在既有恢复流程确证时上报；主动取消不作为失败，无终态不推定失败。
+- 投递与边界：同一结束结果的重复处理及重发复用原随机 `eventId`，离线待发和应用重启不因此生成第二条结束事件。按发行包固定入口投递，开发和 E2E 禁止向生产上报；升级丢弃旧协议待发事件并保留安装标识，公开协议不带 `environment`。投递失败不阻塞发送、取消或运行收尾；不发送消息正文、路径、附件、原始错误、密钥或私有模型连接资料。
+- 验收：
+  - `WB-TELEMETRY-001-AC1` 新消息受理及运行中追加消息分别计消息事件，发送前拦截及提交失败不计；消息量与主 run 数不强行一一对应。
+  - `WB-TELEMETRY-001-AC2` 正常结束、失败和主动取消准确分类；多次模型、工具、子任务执行不增加主 run 结束数量，等待和内部接续不伪装正常完成。
+  - `WB-TELEMETRY-001-AC3` 同一主 run 重复终态处理及网络重发复用结束事件，成功投递后不再排入同一结束结果。
+  - `WB-TELEMETRY-001-AC4` 开发与 E2E 不生成生产待发事件，分包入口和语言独立；埋点投递失败不改变任务状态或阻塞用户操作。
+  - `WB-TELEMETRY-001-AC5` 来源、结果和失败码符合公开协议，仅 run 失败有允许的失败码；事件无环境字段、原始内容、认证材料或私有连接资料。
+
 ## 7. 非目标
 
 - 不定义设置页中的工作地址、网页资料或模型配置行为。

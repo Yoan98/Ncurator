@@ -548,6 +548,14 @@ pnpm test:update:e2e
 - How：通过 Settings UI 添加空文件地址并创建伙伴、配置真实模型，不依赖文件资料索引。启动真实本地 HTTP 页面，初始 HTML 没有正文，由 JavaScript 请求正文接口后渲染本次唯一口令；通过真实 Workbench UI 要求 AI 读取该 URL 正文；等待真实 AI run 完成。不注入模型结果，不直接调用抓取 IPC，不绕过生产 HTTP → 浏览器抓取流程；正式包经系统真实入口启动。
 - Oracle：run 完成；与该 URL 的 fetch 调用关联的结果 `ok=true` 且正文包含本次唯一口令；本地服务记录正文接口被浏览器请求，证明抓取进程完成真实渲染；不调用 `browser_use`；右侧不得出现搜索列表面板（该面板已不存在），对齐 `WB-CORE-007-AC4`；不出现 fake crawl / fake AI 信号。
 
+#### `run-telemetry-production-isolation`
+
+- 测试类型：`e2e / live`；路径 `run/process/`。
+- What：真实消息受理、主 run 正常结束和停止保持原用户流程，E2E 不产生生产埋点。
+- Why：验证产品事件不改变运行交互，也不能为了覆盖上报链路而把测试数据送入生产。
+- How：通过真实 UI 配置模型、创建伙伴、发送消息及运行中追加消息，完成一次多步真实运行并另起一次运行主动停止；只读核对实际 run 状态和本地待发文件变化。保持正常 E2E 禁发条件，不伪造 AI 事件、不直接调用提交服务或增加生产测试开关。
+- Oracle：真实受理及最终状态准确，发送、追加和停止未被埋点阻塞，E2E 无新增生产待发事件，覆盖 `WB-TELEMETRY-001-AC4`；`AC1/AC2` 的 UI 行为在此验证，事件触发数量及映射由下述 Unit 补证，不能把禁发环境宣称为完整上报链路通过。
+
 ### 5.3 `result`
 
 #### `image-generation-preview-and-revert`
@@ -861,6 +869,8 @@ pnpm test:update:e2e
 权限、原子回滚、预算精确边界与损坏配置停用由 Unit 补充；缓存命中率由现有缓存专项验证。
 
 ## 6. 自动化覆盖边界
+
+产品埋点的完整规则见 `WB-TELEMETRY-001`。`AC1/AC2/AC3/AC5` 的真实服务触发、终态分类、稳定事件标识及白名单由 backend Unit 随功能补齐，目标文件为 `tests/case/unit/telemetry/run-telemetry.test.ts`，投递和队列复用 `tests/case/unit/telemetry/telemetry-service.test.ts`；不作为 Workbench backend 正式 case 登记。上述新场景尚未实现或执行，现有 Unit 不自动视为已覆盖。E2E 只证明真实用户行为和禁发，受控测试的请求或模拟终态不冒充真实 UI 上报结果。
 
 馆长目录与三类模型选择、退出账号关联及运行中模型选择边界的新增或修订场景尚未执行，按实际落地补充证据；文档中的验收映射不代表现有 case 已覆盖。
 
