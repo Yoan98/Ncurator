@@ -2,7 +2,6 @@ import { AppSettingsError } from '../../../../shared/appErrors'
 import type { AppSettings, KnowledgeIndexSpeed } from '../../../../shared/types'
 import {
   isAppLanguage,
-  isServiceRoute,
   type AppDistribution
 } from '../../../../shared/appPreferences'
 import { getAppRuntime } from '../../app/AppRuntime'
@@ -13,7 +12,6 @@ type AppSettingsRow = {
   system_notifications_enabled: number
   knowledge_index_speed: string
   language: string
-  service_route: string | null
 }
 const normalizeIndexSpeed = (value: string | undefined): KnowledgeIndexSpeed =>
   value === 'fast' ? 'fast' : 'slow'
@@ -29,12 +27,12 @@ export class AppSettingsStore {
     const row = this.sqlite
       .prepare('SELECT * FROM app_settings WHERE id = ?')
       .get(SETTINGS_ROW_ID) as AppSettingsRow
-    const serviceRoute = isServiceRoute(row.service_route) ? row.service_route : this.distribution
+    const serviceRoute = this.distribution
     const language = isAppLanguage(row.language) ? row.language : 'system'
-    if (row.service_route !== serviceRoute || row.language !== language) {
+    if (row.language !== language) {
       this.sqlite
-        .prepare('UPDATE app_settings SET service_route = ?, language = ? WHERE id = ?')
-        .run(serviceRoute, language, SETTINGS_ROW_ID)
+        .prepare('UPDATE app_settings SET language = ? WHERE id = ?')
+        .run(language, SETTINGS_ROW_ID)
     }
     return {
       systemNotificationsEnabled: row.system_notifications_enabled !== 0,
@@ -47,8 +45,6 @@ export class AppSettingsStore {
   public async save(patch: Partial<AppSettings>): Promise<AppSettings> {
     if (patch.language !== undefined && !isAppLanguage(patch.language))
       throw new AppSettingsError('invalid_language')
-    if (patch.serviceRoute !== undefined && !isServiceRoute(patch.serviceRoute))
-      throw new AppSettingsError('invalid_service_route')
     if (
       patch.knowledgeIndexSpeed !== undefined &&
       !['slow', 'fast'].includes(patch.knowledgeIndexSpeed)
@@ -68,7 +64,7 @@ export class AppSettingsStore {
       UPDATE app_settings SET
         system_notifications_enabled = COALESCE(@notifications, system_notifications_enabled),
         knowledge_index_speed = COALESCE(@speed, knowledge_index_speed),
-        language = COALESCE(@language, language), service_route = COALESCE(@route, service_route)
+        language = COALESCE(@language, language)
       WHERE id = @id
     `
       )
@@ -81,8 +77,7 @@ export class AppSettingsStore {
               ? 1
               : 0,
         speed: patch.knowledgeIndexSpeed ?? null,
-        language: patch.language ?? null,
-        route: patch.serviceRoute ?? null
+        language: patch.language ?? null
       })
     return this.get()
   }

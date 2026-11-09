@@ -6,6 +6,7 @@ import type {
   AiApprovalBatchRequest,
   AiApprovalBatchResult
 } from '../../../../../src/main/services/ai/types'
+import { TelemetryService } from '../../../../../src/main/services/telemetry/TelemetryService'
 import { ChatRunService } from '../../../../../src/main/services/ai/ChatRunService'
 import { resolveHistoryFloor } from '../../../../../src/main/services/ai/human/memory/transcript'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
@@ -25,6 +26,7 @@ import type {
 } from '../../../../../src/shared/types'
 
 type TestService = {
+  telemetry: TelemetryService
   workspaceRoot: string
   storage: StorageService
   service: ChatRunService
@@ -116,7 +118,10 @@ const createTestService = async (options?: {
         isPartnerBusy: (id) => service.hasActivePartnerRun(id)
       })
     : undefined
+  const telemetry = new TelemetryService({ userDataPath: root, appVersion: '1.0.12', isPackaged: false })
+  vi.spyOn(telemetry, 'track')
   const service = new ChatRunService({
+    telemetryService: telemetry,
     partnerStore: storage.partner,
     partnerCacheService,
     chatMessageLogStore: storage.chatMessageLog,
@@ -139,7 +144,7 @@ const createTestService = async (options?: {
     autoStartRuns: options?.autoStartRuns ?? false,
     onRunTerminal: options?.onRunTerminal
   })
-  return { workspaceRoot, storage, service, events }
+  return { workspaceRoot, storage, service, events, telemetry }
 }
 
 const seedPartner = async (storage: StorageService): Promise<Partner> => {
@@ -1619,5 +1624,33 @@ describe('unit ai persistence backend', () => {
     expect(remaining.every((record) => record.runId === 'kept-run')).toBe(true)
     expect(after.historyFloorSeq).toBe(2)
     expect(after.compactionCheckpoint?.compactBlockId).toBe('kept-compact')
+  })
+})
+
+
+describe('product telemetry from the real run service', () => {
+  it('counts accepted messages and one completed run, not model or child progress', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    expect(setup.telemetry.track).toHaveBeenCalledWith('message_submitted')
+    const service = setup.service as ChatRunServicePrivate
+    await service.queueRunEvent(run.id, { type: 'llm_request_state', runId: run.id, callId: 'request-1', requesting: false })
+    expect(setup.telemetry.track).toHaveBeenCalledTimes(1)
+    await service.queueRunEvent(run.id, { type: 'run_completed', runId: run.id })
+    await service.queueRunEvent(run.id, { type: 'run_completed', runId: run.id })
+    expect(setup.telemetry.track).toHaveBeenCalledTimes(2)
+    expect(setup.telemetry.track).toHaveBeenLastCalledWith('run_finished', { outcome: 'completed' }, expect.stringMatching(/^[0-9a-f-]{36}$/))
+  })
+  it.each(['run_failed', 'run_cancelled'] as const)('classifies %s without emitting a successful result', async type => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const service = setup.service as ChatRunServicePrivate
+    const event: AiRunEvent = type === 'run_failed'
+      ? { type, runId: run.id, code: 'llm_request_failed', message: 'private diagnostic sentinel' }
+      : { type, runId: run.id }
+    await service.queueRunEvent(run.id, event)
+    const metadata = type === 'run_failed' ? { outcome: 'failed', failureCode: 'llm_request_failed' } : { outcome: 'cancelled' }
+    expect(setup.telemetry.track).toHaveBeenLastCalledWith('run_finished', metadata, expect.any(String))
+    expect(JSON.stringify(vi.mocked(setup.telemetry.track).mock.calls)).not.toContain('private diagnostic sentinel')
   })
 })

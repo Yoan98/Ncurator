@@ -5,21 +5,9 @@ import { officialUrl } from '../../../shared/appPreferences'
 import { getAppRuntime } from '../app/AppRuntime'
 import { buildDesktopAppGatewayHeaders } from '../officialApi/appClient'
 
-export type TelemetryEventName = 'app_started' | 'message_submit_completed'
-
-type TelemetryFailureCode = 'REQUEST_FAILED' | 'NETWORK' | 'UNKNOWN'
-
-export type MessageSubmitTelemetryMetadata =
-  | {
-      outcome: 'succeeded'
-      failureCode?: never
-    }
-  | {
-      outcome: 'failed'
-      failureCode: TelemetryFailureCode
-    }
-
-type TelemetryEnvironment = 'production' | 'development' | 'e2e'
+export type TelemetryEventName = 'app_started' | 'message_submitted' | 'run_finished'
+export type TelemetryFailureCode = 'llm_request_failed' | 'output_truncated' | 'input_too_long' | 'runtime_limit' | 'internal_error' | 'unexpected_error' | 'process_interrupted'
+export type RunTelemetryMetadata = { outcome: 'completed' | 'cancelled'; failureCode?: never } | { outcome: 'failed'; failureCode: TelemetryFailureCode }
 
 type TelemetryServiceOptions = {
   userDataPath: string
@@ -32,17 +20,16 @@ type TelemetryEventPayload = {
   eventId: string
   eventName: TelemetryEventName
   source: 'desktop'
-  environment: TelemetryEnvironment
   installationId: string
   platform: 'win32' | 'darwin' | 'linux' | 'other'
   arch: 'x64' | 'arm64' | 'ia32' | 'other'
   appVersion: string
-  outcome?: 'succeeded' | 'failed'
+  outcome?: 'completed' | 'failed' | 'cancelled'
   failureCode?: TelemetryFailureCode
 }
 
 type PersistedTelemetryState = {
-  schemaVersion: 2
+  schemaVersion: 3
   installationId: string
   pending: TelemetryEventPayload[]
 }
@@ -57,9 +44,7 @@ const APP_VERSION_PATTERN = /^[0-9A-Za-z._+-]{1,64}$/
 const TELEMETRY_PLATFORMS = new Set(['win32', 'darwin', 'linux', 'other'])
 const TELEMETRY_ARCHES = new Set(['x64', 'arm64', 'ia32', 'other'])
 const TELEMETRY_FAILURE_CODES = new Set<TelemetryFailureCode>([
-  'REQUEST_FAILED',
-  'NETWORK',
-  'UNKNOWN'
+  'llm_request_failed', 'output_truncated', 'input_too_long', 'runtime_limit', 'internal_error', 'unexpected_error', 'process_interrupted'
 ])
 
 const isUuid = (value: unknown): value is string =>
@@ -71,11 +56,6 @@ const isE2ERuntime = (): boolean =>
     process.env.NCURATOR_E2E_OBSERVER ||
     process.env.NCURATOR_E2E_APP_TARGET
   )
-
-const resolveEnvironment = (isPackaged: boolean): TelemetryEnvironment => {
-  if (isE2ERuntime()) return 'e2e'
-  return isPackaged ? 'production' : 'development'
-}
 
 const shouldEnableTelemetry = (isPackaged: boolean): boolean => {
   return isPackaged && !isE2ERuntime()
@@ -105,22 +85,19 @@ const isPendingEvent = (value: unknown): value is TelemetryEventPayload => {
   const hasValidBase =
     isUuid(event.eventId) &&
     isUuid(event.installationId) &&
-    (event.eventName === 'app_started' || event.eventName === 'message_submit_completed') &&
+    (['app_started', 'message_submitted', 'run_finished'].includes(event.eventName || '')) &&
     event.source === 'desktop' &&
-    (event.environment === 'production' ||
-      event.environment === 'development' ||
-      event.environment === 'e2e') &&
     typeof event.platform === 'string' &&
     TELEMETRY_PLATFORMS.has(event.platform) &&
     typeof event.arch === 'string' &&
     TELEMETRY_ARCHES.has(event.arch) &&
     typeof event.appVersion === 'string' &&
     APP_VERSION_PATTERN.test(event.appVersion)
-  if (!hasValidBase) return false
-  if (event.eventName === 'app_started') {
+  if (!hasValidBase || Object.keys(event).some(key => !['eventId', 'eventName', 'source', 'installationId', 'platform', 'arch', 'appVersion', 'outcome', 'failureCode'].includes(key))) return false
+  if (event.eventName !== 'run_finished') {
     return event.outcome === undefined && event.failureCode === undefined
   }
-  if (event.outcome !== 'succeeded' && event.outcome !== 'failed') {
+  if (!['completed', 'cancelled', 'failed'].includes(event.outcome || '')) {
     return false
   }
   if (event.outcome === 'failed') {
@@ -136,7 +113,6 @@ export class TelemetryService {
   private readonly statePath: string
   private readonly endpoint: string | undefined
   private readonly enabled: boolean
-  private readonly environment: TelemetryEnvironment
   private statePromise: Promise<PersistedTelemetryState> | null = null
   private operationChain: Promise<void> = Promise.resolve()
   private retryAfter = 0
@@ -145,19 +121,15 @@ export class TelemetryService {
     this.statePath = path.join(options.userDataPath, 'telemetry.json')
     this.endpoint = options.endpoint?.trim() || undefined
     this.enabled = shouldEnableTelemetry(options.isPackaged)
-    this.environment = resolveEnvironment(options.isPackaged)
   }
 
-  public track(eventName: 'app_started'): void
-  public track(
-    eventName: 'message_submit_completed',
-    metadata: MessageSubmitTelemetryMetadata
-  ): void
-  public track(eventName: TelemetryEventName, metadata?: MessageSubmitTelemetryMetadata): void {
+  public track(eventName: 'app_started' | 'message_submitted'): void
+  public track(eventName: 'run_finished', metadata: RunTelemetryMetadata, eventId: string): void
+  public track(eventName: TelemetryEventName, metadata?: RunTelemetryMetadata, eventId?: string): void {
     if (!this.enabled) return
-    if (eventName === 'message_submit_completed' && !metadata) return
+    if (eventName === 'run_finished' && (!metadata || !eventId)) return
     this.operationChain = this.operationChain
-      .then(async () => await this.enqueueAndDrain(eventName, metadata))
+      .then(async () => await this.enqueueAndDrain(eventName, metadata, eventId))
       .catch(() => undefined)
   }
 
@@ -178,10 +150,12 @@ export class TelemetryService {
 
   private async enqueueAndDrain(
     eventName: TelemetryEventName,
-    metadata?: MessageSubmitTelemetryMetadata
+    metadata?: RunTelemetryMetadata,
+    eventId?: string
   ): Promise<void> {
     const state = await this.getState()
-    state.pending.push(this.createPayload(state.installationId, eventName, metadata))
+    const event = this.createPayload(state.installationId, eventName, metadata, eventId)
+    if (!state.pending.some(item => item.eventId === event.eventId)) state.pending.push(event)
     if (state.pending.length > MAX_PENDING_EVENTS) {
       state.pending.splice(0, state.pending.length - MAX_PENDING_EVENTS)
     }
@@ -192,20 +166,20 @@ export class TelemetryService {
   private createPayload(
     installationId: string,
     eventName: TelemetryEventName,
-    metadata?: MessageSubmitTelemetryMetadata
+    metadata?: RunTelemetryMetadata,
+    eventId?: string
   ): TelemetryEventPayload {
     const base: TelemetryEventPayload = {
-      eventId: randomUUID(),
+      eventId: eventId || randomUUID(),
       eventName,
       source: 'desktop',
-      environment: this.environment,
       installationId,
       platform: normalizePlatform(),
       arch: normalizeArch(),
       appVersion: this.options.appVersion
     }
-    if (eventName === 'app_started') return base
-    if (!metadata) throw new Error('message_submit_completed requires metadata')
+    if (eventName !== 'run_finished') return base
+    if (!metadata) throw new Error('run_finished requires metadata')
     return {
       ...base,
       outcome: metadata.outcome,
@@ -229,7 +203,7 @@ export class TelemetryService {
   private async deliver(event: TelemetryEventPayload): Promise<DeliveryResult> {
     try {
       const endpoint =
-        this.endpoint || officialUrl(getAppRuntime().serviceRoute, '/api/telemetry/events')
+        this.endpoint || officialUrl(getAppRuntime().distribution, '/api/telemetry/events')
       const body = JSON.stringify(event)
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -271,6 +245,7 @@ export class TelemetryService {
     try {
       const raw = await readFile(this.statePath, 'utf8')
       const parsed = JSON.parse(raw) as {
+        schemaVersion?: number
         installationId?: unknown
         clientId?: unknown
         pending?: unknown
@@ -281,9 +256,9 @@ export class TelemetryService {
           ? parsed.clientId
           : randomUUID()
       return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         installationId,
-        pending: Array.isArray(parsed.pending)
+        pending: parsed.schemaVersion === 3 && Array.isArray(parsed.pending)
           ? parsed.pending
               .filter(isPendingEvent)
               .filter((event) => event.installationId === installationId)
@@ -291,7 +266,7 @@ export class TelemetryService {
       }
     } catch {
       return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         installationId: randomUUID(),
         pending: []
       }

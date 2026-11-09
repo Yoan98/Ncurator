@@ -1,4 +1,4 @@
-import { getAppRuntime } from '../app/AppRuntime'
+import { getAppRuntime, getOfficialAppKey } from '../app/AppRuntime'
 import { routeForOfficialUrl } from '../../../shared/appPreferences'
 import { isFreeModelApiUrl } from '../../../shared/freeModels'
 import { createHmac, createHash, randomUUID } from 'node:crypto'
@@ -8,8 +8,7 @@ export const APP_TIMESTAMP_HEADER = 'x-ncurator-timestamp'
 export const APP_NONCE_HEADER = 'x-ncurator-nonce'
 export const APP_SIGNATURE_HEADER = 'x-ncurator-signature'
 
-export const getDesktopAppSecret = (): string =>
-  String(process.env.NCURATOR_APP_SECRET_DESKTOP || '').trim()
+export const getDesktopAppSecret = getOfficialAppKey
 
 const sha256Hex = (value: string): string =>
   createHash('sha256').update(value, 'utf8').digest('hex')
@@ -34,8 +33,9 @@ export const buildDesktopAppGatewayHeaders = (input: {
   url: string
   body?: string
 }): Record<string, string> => {
+  const route = routeForOfficialUrl(input.url)
+  if (route && route !== getAppRuntime().distribution) throw new Error('Official service region does not match this application')
   const secret = getDesktopAppSecret()
-  if (!secret) return {}
   let path = '/'
   try {
     path = new URL(input.url).pathname
@@ -70,8 +70,8 @@ const readRequestBody = async (request: Request): Promise<string> => {
 }
 
 export const createFreeModelFetch = (baseUrl?: string): typeof fetch => {
-  const route = baseUrl ? routeForOfficialUrl(baseUrl) : getAppRuntime().serviceRoute
-  if (!route) throw new Error('Invalid official model origin')
+  const route = getAppRuntime().distribution
+  if (baseUrl && routeForOfficialUrl(baseUrl) !== route) throw new Error('Invalid official model origin')
   const signedFetch: typeof fetch = async (input, init) => {
     const request = new Request(input, init)
     const url = request.url

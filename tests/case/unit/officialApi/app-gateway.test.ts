@@ -15,6 +15,7 @@ const originalSecret = process.env.NCURATOR_APP_SECRET_DESKTOP
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   if (originalSecret === undefined) delete process.env.NCURATOR_APP_SECRET_DESKTOP
   else process.env.NCURATOR_APP_SECRET_DESKTOP = originalSecret
 })
@@ -106,14 +107,14 @@ describe('all free models use the official proxy', () => {
 })
 
 describe('desktop app gateway headers', () => {
-  it('omits HMAC headers when the desktop secret is missing', () => {
+  it('blocks official request signing when the application key is missing', () => {
     delete process.env.NCURATOR_APP_SECRET_DESKTOP
     expect(
-      buildDesktopAppGatewayHeaders({
+      () => buildDesktopAppGatewayHeaders({
         method: 'GET',
         url: 'https://www.guanzhangai.cn/api/v1/free-models'
       })
-    ).toEqual({})
+    ).toThrow('Missing official application key')
   })
 
   it('signs method, path, timestamp, nonce and body hash', () => {
@@ -152,7 +153,7 @@ describe('free model token expiry', () => {
   })
 })
 
-describe('explicit official service regions', () => {
+describe('fixed official service regions', () => {
   it('keeps credentials and a running request bound to the selected origin', async () => {
     vi.resetModules()
     process.env.NCURATOR_APP_SECRET_DESKTOP = 'unit-test-secret'
@@ -171,23 +172,22 @@ describe('explicit official service regions', () => {
         return Response.json({ choices: [] })
       })
     )
-    await createFreeModelFetch('https://www.ncurator.com/api/v1/free')(
-      'https://www.ncurator.com/api/v1/free/chat/completions',
-      { method: 'POST', body: '{}' }
-    )
+    expect(() => createFreeModelFetch('https://www.ncurator.com/api/v1/free')).toThrow('Invalid official model origin')
     await createFreeModelFetch('https://www.guanzhangai.cn/api/v1/free')(
       'https://www.guanzhangai.cn/api/v1/free/chat/completions',
       { method: 'POST', body: '{}' }
     )
     expect(requests.map((request) => request.authorization)).toEqual([
-      `Bearer ${jwt('international')}`,
       `Bearer ${jwt('domestic')}`
     ])
-    expect(requests[0].url).toContain('www.ncurator.com')
+    expect(requests[0].url).toContain('www.guanzhangai.cn')
   })
 
   it('surfaces international network failures without retrying another region', async () => {
+    vi.stubEnv('NCURATOR_DISTRIBUTION', 'international')
+    vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'unit-international-key')
     vi.resetModules()
+    const { createFreeModelFetch } = await import('../../../../src/main/services/officialApi/appClient')
     const { seedFreeModelToken } =
       await import('../../../../src/main/services/officialApi/freeModelToken')
     seedFreeModelToken(jwt('international'), 'international')

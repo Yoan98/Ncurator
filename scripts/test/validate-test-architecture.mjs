@@ -303,8 +303,12 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
         }
       }
     }
+    const pending = new Set([...plan.source.matchAll(/^待实现用例：([^\n]+)/gmu)].flatMap(match => [...match[1].matchAll(/`([^`]+)`/gu)].map(item => item[1])))
+    for (const caseId of pending) {
+      if (!planned.has(caseId) || actual.has(caseId)) failures.push(`${rule.plan}: 待实现声明与用例状态不符 ${caseId}`)
+    }
     for (const caseId of planned) {
-      if (!actual.has(caseId)) failures.push(`${rule.plan}: case ${caseId} 没有实际测试`)
+      if (!actual.has(caseId) && !pending.has(caseId)) failures.push(`${rule.plan}: case ${caseId} 没有实际测试`)
     }
     for (const caseId of actual) {
       if (!planned.has(caseId)) failures.push(`${domain}: case ${caseId} 未登记到 ${rule.plan}`)

@@ -3,7 +3,7 @@ import { resolveUserContent } from '../sourceScope/userContent'
 import { buildReferenceScope } from './human/prompts/referenceScope'
 import { appendFileChangeArtifactsAndEmitEvents } from './utils/artifacts'
 import { BrowserWindow } from 'electron'
-import { v4 as uuidv4 } from 'uuid'
+import { v4 as uuidv4, v5 as uuidv5 } from 'uuid'
 import { AiRunService } from './AiRunService'
 import { classifyThrownErrorToAiRunFailure } from './utils/runFailure'
 import { resolveAiRunFailurePresentation } from './runFailureCatalog'
@@ -25,7 +25,7 @@ import type { WebSourceStore } from '../storage/domains/WebSourceStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { BrowserEmbedService } from '../browser/BrowserEmbedService'
 import type { WebCrawlerService } from '../webCrawler/types'
-import type { TelemetryService } from '../telemetry/TelemetryService'
+import type { TelemetryService, TelemetryFailureCode } from '../telemetry/TelemetryService'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type { AiRunDeps, AiApprovalBatchRequest, AiApprovalBatchResult } from './types'
 import { PRODUCT_NAME_ZH } from '../../../shared/constants'
@@ -268,6 +268,7 @@ export class ChatRunService {
       }
       await this.deps.aiRunStore.saveRun(nextRun)
       try {
+        this.trackRunResult(nextRun)
         await this.deps.onRunTerminal?.(nextRun, 'failed')
       } catch (error) {
         console.error('[CHAT-RUN] terminal notification failed:', error)
@@ -445,10 +446,6 @@ export class ChatRunService {
     if (this.deps.partnerCacheService?.isCleaning(partnerId))
       return { success: false, error: '当前伙伴正在清理数据，请稍后再发送' }
     if (this.pendingPartnerSubmissions.has(partnerId)) {
-      this.deps.telemetryService?.track('message_submit_completed', {
-        outcome: 'failed',
-        failureCode: 'REQUEST_FAILED'
-      })
       return { success: false, error: '当前伙伴已有运行中的任务，请等待完成后再发送。' }
     }
     this.pendingPartnerSubmissions.add(partnerId)
@@ -488,12 +485,6 @@ export class ChatRunService {
       }
       this.trackSubmitResult(response)
       return response
-    } catch (error) {
-      this.deps.telemetryService?.track('message_submit_completed', {
-        outcome: 'failed',
-        failureCode: 'UNKNOWN'
-      })
-      throw error
     } finally {
       this.pendingPartnerSubmissions.delete(partnerId)
     }
@@ -795,17 +786,24 @@ export class ChatRunService {
     await this.deps.aiRunStore.saveRun(run)
   }
 
+  private readonly telemetryFinishedRuns = new Set<string>()
+
   private trackSubmitResult(response: ChatSubmitResponse): void {
-    if (response.success) {
-      this.deps.telemetryService?.track('message_submit_completed', {
-        outcome: 'succeeded'
-      })
-      return
+    if (response.success) this.deps.telemetryService?.track('message_submitted')
+  }
+
+  private trackRunResult(run: AiRunRecord): void {
+    if (this.telemetryFinishedRuns.has(run.id)) return
+    if (run.status !== 'completed' && run.status !== 'failed' && run.status !== 'cancelled') return
+    this.telemetryFinishedRuns.add(run.id)
+    const eventId = uuidv5(run.id, '52c2e7d6-091d-4b7a-b148-015eeff1a92c')
+    if (run.status === 'failed') {
+      const codes: TelemetryFailureCode[] = ['llm_request_failed', 'output_truncated', 'input_too_long', 'runtime_limit', 'internal_error', 'unexpected_error', 'process_interrupted']
+      const failureCode = codes.includes(run.failureCode as TelemetryFailureCode) ? run.failureCode as TelemetryFailureCode : 'unexpected_error'
+      this.deps.telemetryService?.track('run_finished', { outcome: 'failed', failureCode }, eventId)
+    } else {
+      this.deps.telemetryService?.track('run_finished', { outcome: run.status }, eventId)
     }
-    this.deps.telemetryService?.track('message_submit_completed', {
-      outcome: 'failed',
-      failureCode: 'REQUEST_FAILED'
-    })
   }
 
   public async cancelRun(runId: string): Promise<AiRunCancelResponse> {
@@ -1610,6 +1608,7 @@ export class ChatRunService {
       (run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled')
     ) {
       try {
+        this.trackRunResult(run)
         await this.deps.onRunTerminal?.(run, run.status)
       } catch (error) {
         console.error('[CHAT-RUN] terminal notification failed:', error)

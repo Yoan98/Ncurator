@@ -32,27 +32,28 @@ describe('application language and service preferences', () => {
     expect(resolveAppLocale('system', ['zh-Hans-FI', 'en-US'])).toBe('zh-CN')
     expect(resolveAppLocale('system', ['fr-FR'])).toBe('en')
     expect(resolveAppLocale('en', ['zh-CN'])).toBe('en')
-    expect(resolveDistribution(undefined)).toBe('domestic')
-    expect(resolveDistribution('invalid')).toBe('domestic')
+    expect(() => resolveDistribution(undefined)).toThrow()
+    expect(() => resolveDistribution('invalid')).toThrow()
   })
 
-  it('reads the installed marker and defaults domestically only when identification fails', async () => {
+  it('rejects missing or invalid installed markers instead of selecting another system', async () => {
     const directory = await temporary()
-    expect(readAppDistribution(directory)).toBe('domestic')
+    expect(() => readAppDistribution(directory)).toThrow()
     await fs.writeFile(
       path.join(directory, 'app-distribution.json'),
       JSON.stringify({ distribution: 'international' })
     )
     expect(readAppDistribution(directory)).toBe('international')
     await fs.writeFile(path.join(directory, 'app-distribution.json'), '{bad')
-    expect(readAppDistribution(directory)).toBe('domestic')
+    expect(() => readAppDistribution(directory)).toThrow()
   })
 
-  it('persists the first distribution default and merges concurrent partial settings', async () => {
+  it('ignores an old routing preference and merges independent settings', async () => {
     const directory = await temporary()
     const sqlite = new SqliteCore(path.join(directory, 'app.sqlite'))
     cores.push(sqlite)
     sqlite.initialize()
+    sqlite.prepare("UPDATE app_settings SET service_route = 'domestic' WHERE id = 'singleton'").run()
     const international = new AppSettingsStore(sqlite, 'international')
     expect(await international.get()).toMatchObject({
       language: 'system',
@@ -68,9 +69,9 @@ describe('application language and service preferences', () => {
       serviceRoute: 'international'
     })
     const domestic = new AppSettingsStore(sqlite, 'domestic')
-    expect((await domestic.get()).serviceRoute).toBe('international')
+    expect((await domestic.get()).serviceRoute).toBe('domestic')
     await domestic.save({ serviceRoute: 'domestic' })
-    expect((await international.get()).serviceRoute).toBe('domestic')
+    expect((await international.get()).serviceRoute).toBe('international')
   })
 
   it('separates help routing from distribution-specific download entrypoints', () => {
@@ -79,7 +80,7 @@ describe('application language and service preferences', () => {
       locale: 'en',
       serviceRoute: 'domestic'
     } as const
-    expect(manualUrl(runtime)).toBe('https://www.guanzhangai.cn/en/manual')
+    expect(manualUrl(runtime)).toBe('https://www.ncurator.com/en/manual')
     expect(downloadPageUrl(runtime)).toBe('https://www.ncurator.com/en')
   })
 })

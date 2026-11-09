@@ -1,6 +1,7 @@
 import { createDistributionConfig } from './distribution-config.mjs'
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import path from 'node:path'
+import { loadEnv } from 'vite'
 import { spawnSync } from 'node:child_process'
 import { parse } from 'yaml'
 import {
@@ -15,6 +16,7 @@ if (!['win', 'mac'].includes(platform))
   throw new Error('usage: distributions.mjs win|mac [--signed]')
 const signed = process.argv.includes('--signed')
 const root = process.cwd()
+const distributionEnvironment = loadEnv('production', root, '')
 const base = parse(readFileSync(path.join(root, 'electron-builder.yml'), 'utf8'))
 const sharedAppHash = hashSharedApp(path.join(root, 'release-stage', 'app'))
 const run = (command, args) => {
@@ -26,7 +28,15 @@ const run = (command, args) => {
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`${command} failed (${result.status})`)
 }
+const distributionKeys = Object.fromEntries(DISTRIBUTIONS.map(distribution => {
+  const name = distribution === 'domestic' ? 'NCURATOR_APP_SECRET_DOMESTIC' : 'NCURATOR_APP_SECRET_INTERNATIONAL'
+  const key = distributionEnvironment[name]
+  if (!key || key.length < 16 || /\s/.test(key)) throw new Error(`Missing ${name}`)
+  return [distribution, key]
+}))
+if (distributionKeys.domestic === distributionKeys.international) throw new Error('Distribution application keys must differ')
 for (const distribution of DISTRIBUTIONS) {
+  const marker = { distribution, appKey: distributionKeys[distribution] }
   const origin =
     distribution === 'international'
       ? 'https://download.ncurator.com'
@@ -42,7 +52,7 @@ for (const distribution of DISTRIBUTIONS) {
     updateFile,
     `provider: generic\nurl: ${origin}/updates/latest\nupdaterCacheDirName: ncurator-updater\n`
   )
-  writeFileSync(markerFile, JSON.stringify({ distribution }) + '\n')
+  writeFileSync(markerFile, JSON.stringify(marker) + '\n')
   const config = createDistributionConfig(base, {
     distribution,
     output,

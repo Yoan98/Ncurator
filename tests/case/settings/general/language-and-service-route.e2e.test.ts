@@ -46,7 +46,7 @@ describe('application language and service region', () => {
         caseId: 'language-and-service-route',
         domain: 'settings',
         suite: 'general',
-        description: 'Language changes apply after restart; service regions persist independently.',
+        description: 'Language changes apply after restart while the distribution stays fixed.',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -65,11 +65,6 @@ describe('application language and service region', () => {
           await runtime.page.waitForFunction(
             async () => (await window.api.appSettingsGet()).language === 'en'
           )
-          await runtime.page.getByTestId('settings-service-route').click()
-          await runtime.page.getByTitle('国际', { exact: true }).click()
-          await runtime.page.waitForFunction(
-            async () => (await window.api.appSettingsGet()).serviceRoute === 'international'
-          )
           await runtime.page.getByTestId(settingsSelectors.systemNotificationsSwitch).click()
           await runtime.restartApp()
           await runtime.page.setViewportSize({ width: 1600, height: 1000 })
@@ -81,7 +76,7 @@ describe('application language and service region', () => {
             .isVisible()
           await runtime.captureScreenshot({
             name: 'english-general-settings',
-            message: 'English settings layout and independent service region'
+            message: 'English settings layout without a service-region switch'
           })
           const englishLayout = await readSettingsLayout(runtime.page)
           await runtime.page.getByTestId(settingsSelectors.helpButton).click()
@@ -90,7 +85,7 @@ describe('application language and service region', () => {
           const englishHelpText = await helpDialog.textContent()
           await runtime.captureScreenshot({
             name: 'english-help-confirmation',
-            message: '英文确认框展示国际官网的英文手册地址'
+            message: '英文确认框展示本发行版英文手册地址'
           })
           await helpDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
           await helpDialog.waitFor({ state: 'hidden' })
@@ -120,17 +115,7 @@ describe('application language and service region', () => {
             }
           }
           await navigateToSettingsSection(runtime.page, 'general')
-          const choices = await runtime.page.getByTestId('settings-service-route').textContent()
-          await runtime.page.getByTestId('settings-service-route').click()
-          const optionCount = await runtime.page
-            .locator(
-              '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option'
-            )
-            .count()
-          await runtime.page.getByTitle('Mainland China', { exact: true }).click()
-          await runtime.page.waitForFunction(
-            async () => (await window.api.appStartupGetStatus()).serviceRoute === 'domestic'
-          )
+          const routeControlAbsent = (await runtime.page.getByTestId('settings-service-route').count()) === 0
           await runtime.page.getByTestId(settingsSelectors.backRow).click()
           await createPartnerThroughWorkbenchUi(runtime.page, 'English UI check')
           await runtime.page.getByTestId(workbenchSelectors.input).waitFor({ state: 'visible' })
@@ -148,9 +133,8 @@ describe('application language and service region', () => {
             saved,
             language,
             englishVisible,
-            choices,
             englishBrand,
-            optionCount,
+            routeControlAbsent,
             chineseLayout,
             englishLayout,
             englishHelpText,
@@ -160,11 +144,11 @@ describe('application language and service region', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.englishHelpText?.includes('https://www.ncurator.com/en/manual') &&
+            result.englishHelpText?.includes(result.initial.serviceRoute === 'international' ? 'https://www.ncurator.com/en/manual' : 'https://www.guanzhangai.cn/en/manual') &&
               result.englishHelpText.includes('Open website'),
             {
               name: 'localized-help-confirmation-and-destination',
-              message: '国际线路英文界面的帮助确认框应展示国际官网英文手册地址与英文确认操作。',
+              message: '英文帮助确认框应展示所属发行版的英文手册和确认操作。',
               data: { englishHelpText: result.englishHelpText }
             }
           )
@@ -179,7 +163,7 @@ describe('application language and service region', () => {
                   layout.centered &&
                   layout.noHorizontalOverflow &&
                   layout.controlsFit &&
-                  layout.selectHeights.length === 2 &&
+                  layout.selectHeights.length === 1 &&
                   layout.selectHeights.every(
                     (height) => Math.abs(height - 32) <= CSS_LAYOUT_TOLERANCE_PX
                   )
@@ -196,25 +180,25 @@ describe('application language and service region', () => {
             }
           )
           await runtime.assertThat(
-            result.initial.serviceRoute === 'domestic' && result.initial.language === 'system',
+            result.initial.serviceRoute === (process.env.NCURATOR_DISTRIBUTION || 'domestic') && result.initial.language === 'system',
             {
-              name: 'domestic-initial-preferences',
-              message: 'Domestic installation initializes the domestic service region.',
+              name: 'distribution-initial-preferences',
+              message: 'The application uses its configured distribution.',
               data: result.initial
             }
           )
           await runtime.assertThat(
             result.saved.language === 'en' &&
-              result.saved.serviceRoute === 'international' &&
+              result.saved.serviceRoute === result.initial.serviceRoute &&
               result.saved.systemNotificationsEnabled === false &&
               result.language === 'en' &&
               result.englishVisible &&
-              result.optionCount === 2 &&
+              result.routeControlAbsent &&
               result.englishBrand?.includes('NCurator'),
             {
               name: 'independent-persistent-preferences',
               message:
-                'Language and region persist independently with exactly two service options.',
+                'Language persists and no setting changes the official service region.',
               data: result
             }
           )

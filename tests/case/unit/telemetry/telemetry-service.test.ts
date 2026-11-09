@@ -1,7 +1,8 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TelemetryService } from '../../../../src/main/services/telemetry/TelemetryService'
 
 const originalE2EObserver = process.env.NCURATOR_E2E_OBSERVER
@@ -19,7 +20,10 @@ const acceptedResponse = (): Response =>
     headers: { 'content-type': 'application/json' }
   })
 
+beforeEach(() => vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'unit-telemetry-synthetic-key'))
+
 afterEach(async () => {
+  vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   if (originalE2EObserver === undefined) delete process.env.NCURATOR_E2E_OBSERVER
   else process.env.NCURATOR_E2E_OBSERVER = originalE2EObserver
@@ -62,7 +66,7 @@ describe('TelemetryService', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('persists one installation id and emits the v2 production payload', async () => {
+  it('persists one installation id and emits the production-only payload', async () => {
     const directory = await createDirectory()
     const fetchMock = vi.fn(async () => acceptedResponse())
     vi.stubGlobal('fetch', fetchMock)
@@ -86,7 +90,7 @@ describe('TelemetryService', () => {
       isPackaged: true,
       endpoint: 'https://example.test/telemetry'
     })
-    secondService.track('message_submit_completed', { outcome: 'succeeded' })
+    secondService.track('message_submitted')
     await secondService.flush()
     const secondPayload = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as Record<
       string,
@@ -101,18 +105,17 @@ describe('TelemetryService', () => {
     expect(firstPayload).toMatchObject({
       eventName: 'app_started',
       source: 'desktop',
-      environment: 'production',
       appVersion: '1.2.3'
     })
     expect(secondPayload).toMatchObject({
-      eventName: 'message_submit_completed',
-      environment: 'production',
-      outcome: 'succeeded'
+      eventName: 'message_submitted'
     })
     expect(secondPayload).not.toHaveProperty('mode')
+    expect(firstPayload).not.toHaveProperty('environment')
+    expect(secondPayload).not.toHaveProperty('environment')
     expect(secondPayload.installationId).toBe(firstPayload.installationId)
     expect(state).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       installationId: firstPayload.installationId,
       pending: []
     })
@@ -145,10 +148,10 @@ describe('TelemetryService', () => {
       installationId: string
     }
     expect(payload.installationId).toBe(legacyClientId)
-    expect(state).toMatchObject({ schemaVersion: 2, installationId: legacyClientId })
+    expect(state).toMatchObject({ schemaVersion: 3, installationId: legacyClientId })
   })
 
-  it('drops pending events that belong to another installation id', async () => {
+  it('drops the old queue while preserving the installation id', async () => {
     const directory = await createDirectory()
     const installationId = '22222222-2222-4222-8222-222222222222'
     await writeFile(
@@ -162,7 +165,7 @@ describe('TelemetryService', () => {
             eventName: 'app_started',
             source: 'desktop',
             environment: 'production',
-            installationId: '44444444-4444-4444-8444-444444444444',
+            installationId,
             platform: 'win32',
             arch: 'x64',
             appVersion: '1.2.3'
@@ -199,10 +202,10 @@ describe('TelemetryService', () => {
       isPackaged: true
     })
 
-    firstService.track('message_submit_completed', {
+    firstService.track('run_finished', {
       outcome: 'failed',
-      failureCode: 'NETWORK'
-    })
+      failureCode: 'llm_request_failed'
+    }, randomUUID())
     await firstService.flush()
     const failedState = JSON.parse(
       await readFile(path.join(directory, 'telemetry.json'), 'utf8')
@@ -227,6 +230,10 @@ describe('TelemetryService', () => {
     }
 
     expect(acceptedFetch).toHaveBeenCalledTimes(2)
+    const original = JSON.parse(String(failingFetch.mock.calls[0]?.[1]?.body))
+    const replay = JSON.parse(String(acceptedFetch.mock.calls[0]?.[1]?.body))
+    expect(replay.eventId).toBe(original.eventId)
+    expect(replay.eventName).toBe('run_finished')
     expect(recoveredState.pending).toEqual([])
   })
 })

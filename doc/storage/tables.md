@@ -44,7 +44,7 @@
 | `system_notifications_enabled` | INTEGER   | AI 终态系统通知，默认 `1`                                                               |
 | `knowledge_index_speed`        | TEXT      | 索引速度 `slow` / `fast`，默认 `slow`                                                   |
 | `language`                     | TEXT      | 界面语言偏好 `system` / `zh-CN` / `en`，默认 `system`                                   |
-| `service_route`                | TEXT NULL | `domestic` / `international`；迁移后首次读取按发行包初始化并保存，NULL 仅表示尚未初始化 |
+| `service_route`                | TEXT NULL | 旧线路偏好；当前请求归属由发行包配置决定 |
 
 ### `partner`
 

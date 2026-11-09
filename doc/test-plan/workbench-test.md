@@ -870,7 +870,9 @@ pnpm test:update:e2e
 
 ## 6. 自动化覆盖边界
 
-产品埋点的完整规则见 `WB-TELEMETRY-001`。`AC1/AC2/AC3/AC5` 的真实服务触发、终态分类、稳定事件标识及白名单由 backend Unit 随功能补齐，目标文件为 `tests/case/unit/telemetry/run-telemetry.test.ts`，投递和队列复用 `tests/case/unit/telemetry/telemetry-service.test.ts`；不作为 Workbench backend 正式 case 登记。上述新场景尚未实现或执行，现有 Unit 不自动视为已覆盖。E2E 只证明真实用户行为和禁发，受控测试的请求或模拟终态不冒充真实 UI 上报结果。
+待实现用例：`managed-model-catalog`、`managed-request-admission-and-recovery`。
+
+产品埋点的完整规则见 `WB-TELEMETRY-001`。`WB-TELEMETRY-001-AC1/AC2/AC3/AC5` 的受理触发、终态及去重由 `chat-run-service-contract` 验证，字段、旧队列丢弃和重试复用事件 ID 由 `telemetry-service` 验证。E2E 只证明真实用户行为和禁发，受控测试的请求或模拟终态不冒充真实 UI 上报结果。
 
 馆长目录与三类模型选择、退出账号关联及运行中模型选择边界的新增或修订场景尚未执行，按实际落地补充证据；文档中的验收映射不代表现有 case 已覆盖。
 

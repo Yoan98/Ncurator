@@ -10,8 +10,7 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => {
   execFileSync(process.execPath, [resolve('scripts/build/vditor-assets.mjs')], { stdio: 'inherit' })
   const knowledgeIdentity = await createKnowledgeCacheIdentity()
   const env = loadEnv(mode, process.cwd(), '')
-  const desktopAppSecret =
-    env.NCURATOR_APP_SECRET_DESKTOP || process.env.NCURATOR_APP_SECRET_DESKTOP || ''
+  if (mode === 'development' && env.NCURATOR_APP_SECRET_DESKTOP) process.env.NCURATOR_APP_SECRET_DESKTOP = env.NCURATOR_APP_SECRET_DESKTOP
 
   return {
     main: {
@@ -28,7 +27,6 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => {
         }
       ],
       define: {
-        'process.env.NCURATOR_APP_SECRET_DESKTOP': JSON.stringify(desktopAppSecret),
         __NCURATOR_KNOWLEDGE_IDENTITY__: JSON.stringify(knowledgeIdentity)
       },
       build: {

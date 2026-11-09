@@ -7,7 +7,7 @@ import type {
 } from '../../shared/userSkills'
 import { AppSettingsError } from '../../shared/appErrors'
 import { mainText } from '../services/app/i18n'
-import { getAppRuntime, setServiceRoute } from '../services/app/AppRuntime'
+import { getAppRuntime } from '../services/app/AppRuntime'
 import { FileReviewService } from '../services/ai/fileChanges/FileReviewService'
 import { isWpsApplication, type OpenFileReviewLocationRequest } from '../../shared/fileReview'
 import { notifyWpsFileOpened } from '../services/wps/officeFileWriteNotify'
@@ -3656,7 +3656,6 @@ export function registerHandlers(services: {
         return { success: false, error: '正在更新索引，请完成后再切换速度' }
       }
       const saved = await appSettingsStore.save(settings)
-      setServiceRoute(saved.serviceRoute)
       if (previous.knowledgeIndexSpeed !== saved.knowledgeIndexSpeed) {
         if (services.embeddingModelService) {
           await services.embeddingModelService.applyIndexSpeed(saved.knowledgeIndexSpeed)

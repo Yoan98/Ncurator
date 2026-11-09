@@ -9,21 +9,21 @@ import {
   type ServiceRoute
 } from '../../../shared/appPreferences'
 
-export const readAppDistribution = (resourcesPath?: string): AppDistribution => {
-  if (!resourcesPath) return 'domestic'
-  try {
-    const marker = JSON.parse(
-      readFileSync(path.join(resourcesPath, 'app-distribution.json'), 'utf8')
-    ) as {
-      distribution?: string
-    }
-    return resolveDistribution(marker.distribution)
-  } catch {
-    return 'domestic'
-  }
+type DistributionConfiguration = { distribution: AppDistribution; appKey?: string }
+const packaged = Boolean(process.versions.electron && !process.defaultApp)
+const readConfiguration = (resourcesPath?: string): DistributionConfiguration => {
+  if (!resourcesPath) throw new Error('Missing application distribution configuration')
+  const marker = JSON.parse(readFileSync(path.join(resourcesPath, 'app-distribution.json'), 'utf8')) as DistributionConfiguration
+  return { distribution: resolveDistribution(marker.distribution), appKey: marker.appKey }
 }
-
-const distribution = readAppDistribution(process.resourcesPath)
+export const readAppDistribution = (resourcesPath?: string): AppDistribution => readConfiguration(resourcesPath).distribution
+const packagedConfiguration = packaged ? readConfiguration(process.resourcesPath) : null
+export const getOfficialAppKey = (): string => {
+  const key = packaged ? packagedConfiguration?.appKey : process.env.NCURATOR_APP_SECRET_DESKTOP
+  if (typeof key !== 'string' || key.length < 16 || /\s/.test(key)) throw new Error('Missing official application key')
+  return key
+}
+const distribution = packagedConfiguration?.distribution ?? resolveDistribution(process.env.NCURATOR_DISTRIBUTION || 'domestic')
 let runtime: AppRuntimeSnapshot = { distribution, locale: 'zh-CN', serviceRoute: distribution }
 export const getAppRuntime = (): Readonly<AppRuntimeSnapshot> => runtime
 export const initializeAppRuntime = (
@@ -33,10 +33,6 @@ export const initializeAppRuntime = (
   runtime = {
     distribution,
     locale: resolveAppLocale(settings?.language || 'system', systemLanguages),
-    serviceRoute: settings?.serviceRoute || distribution
+    serviceRoute: distribution
   }
-}
-// Language takes effect on the next launch. Route changes affect new operations only.
-export const setServiceRoute = (serviceRoute: ServiceRoute): void => {
-  runtime = { ...runtime, serviceRoute }
 }

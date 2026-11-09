@@ -120,25 +120,6 @@ const GeneralSettingsPanel: React.FC = () => {
           />
         </SettingsRow>
         <SettingsRow
-          title={t(($) => $.preferences.serviceRoute)}
-          description={t(($) => $.preferences.serviceRouteDescription)}
-        >
-          <Select
-            data-testid="settings-service-route"
-            aria-label={t(($) => $.preferences.serviceRoute)}
-            className="nc-settings-preference-select"
-            value={settings?.serviceRoute ?? 'domestic'}
-            disabled={!settings || saving}
-            options={[
-              { value: 'domestic', label: t(($) => $.preferences.domestic) },
-              { value: 'international', label: t(($) => $.preferences.international) }
-            ]}
-            onChange={(serviceRoute: AppSettings['serviceRoute']) =>
-              void updatePreference({ serviceRoute })
-            }
-          />
-        </SettingsRow>
-        <SettingsRow
           title={t(($) => $.settings.aiTaskNotifications)}
           description={t(($) => $.settings.sendDesktopNotificationsWhenAiTasksSucceedFailOr)}
         >

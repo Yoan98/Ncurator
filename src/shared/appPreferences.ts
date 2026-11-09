@@ -15,8 +15,10 @@ export const isServiceRoute = (value: string | undefined | null): value is Servi
   value === 'domestic' || value === 'international'
 export const isAppLanguage = (value: string | undefined | null): value is AppLanguage =>
   value === 'system' || value === 'zh-CN' || value === 'en'
-export const resolveDistribution = (value?: string | null): AppDistribution =>
-  value === 'international' ? 'international' : 'domestic'
+export const resolveDistribution = (value?: string | null): AppDistribution => {
+  if (!isServiceRoute(value)) throw new Error('Invalid application distribution')
+  return value
+}
 
 export const resolveAppLocale = (
   preference: AppLanguage,
@@ -43,7 +45,7 @@ export const productName = (locale: AppLocale): string =>
 export const officialUrl = (route: ServiceRoute, pathname: string): string =>
   `${OFFICIAL_ORIGINS[route]}${pathname}`
 export const manualUrl = (runtime: AppRuntimeSnapshot, anchor = ''): string =>
-  officialUrl(runtime.serviceRoute, `/${runtime.locale === 'zh-CN' ? 'zh' : 'en'}/manual${anchor}`)
+  officialUrl(runtime.distribution, `/${runtime.locale === 'zh-CN' ? 'zh' : 'en'}/manual${anchor}`)
 export const downloadPageUrl = (runtime: AppRuntimeSnapshot): string =>
   officialUrl(runtime.distribution, `/${runtime.locale === 'zh-CN' ? 'zh' : 'en'}`)
 export const routeForOfficialUrl = (value: string): ServiceRoute | null => {
