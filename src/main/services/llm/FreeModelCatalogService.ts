@@ -10,6 +10,7 @@ import {
   FREE_MODEL_CATALOG_TTL_MS,
   FREE_MODEL_CATALOG_CACHE_VERSION,
   isFreeModelApiUrl,
+  isFreeModelExecutionId,
   parseCatalogContextWindowTokens,
   type FreeModelCatalogEntry,
   type FreeModelsCatalogResponse,
@@ -27,6 +28,7 @@ import { ensureFreeModelToken, readJwtExpiryMs } from '../officialApi/freeModelT
 
 const CACHE_FILE_NAME = 'free-models-catalog.json'
 const FETCH_TIMEOUT_MS = 15_000
+const DOMESTIC_CATALOG_CACHE_VERSION = 3
 
 type CachePayload = {
   schemaVersion: number
@@ -53,7 +55,7 @@ const parseCapabilities = (value: unknown): FreeModelCatalogEntry['capabilities'
   return capabilities.length > 0 ? capabilities : null
 }
 
-const parseEntry = (value: unknown): FreeModelCatalogEntry | null => {
+const parseEntry = (value: unknown, current = false): FreeModelCatalogEntry | null => {
   if (!value || typeof value !== 'object') return null
   const row = value as Record<string, unknown>
   const id = String(row.id || '').trim()
@@ -65,14 +67,21 @@ const parseEntry = (value: unknown): FreeModelCatalogEntry | null => {
   const baseUrl = String(row.baseUrl || '').trim()
   const apiKey = String(row.apiKey || '').trim()
   const capabilities = parseCapabilities(row.capabilities)
+  const executionId = row.executionId
+  const validRoute =
+    isFreeModelApiUrl(baseUrl) &&
+    new URL(baseUrl).pathname === (current ? '/api/v2/free' : '/api/v1/free')
+  const validCredential = current
+    ? isFreeModelExecutionId(executionId) && apiKey === ''
+    : readJwtExpiryMs(apiKey) !== null
   if (
     !id ||
     !PROVIDER_KINDS.has(providerKind) ||
     !modelName ||
     !label ||
     !iconUrl ||
-    !isFreeModelApiUrl(baseUrl) ||
-    readJwtExpiryMs(apiKey) === null ||
+    !validRoute ||
+    !validCredential ||
     !capabilities
   ) {
     return null
@@ -87,7 +96,8 @@ const parseEntry = (value: unknown): FreeModelCatalogEntry | null => {
     contextWindowTokens: parseCatalogContextWindowTokens(row.contextWindowTokens),
     iconUrl,
     baseUrl,
-    apiKey
+    apiKey,
+    ...(current && isFreeModelExecutionId(executionId) && { executionId })
   }
 }
 
@@ -105,6 +115,71 @@ const parseResponse = (value: unknown): FreeModelsCatalogResponse | null => {
     updatedAt: isNonEmptyString(row.updatedAt) ? row.updatedAt.trim() : new Date().toISOString(),
     models
   }
+}
+
+const parseDomesticResponse = (
+  value: unknown,
+  baseUrl: string
+): { updatedAt: null; models: FreeModelCatalogEntry[] } | null => {
+  if (!value || typeof value !== 'object') return null
+  const { protocolVersion, revision, models } = value as Record<string, unknown>
+  if (
+    protocolVersion !== 1 ||
+    typeof revision !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(revision) ||
+    !Array.isArray(models)
+  )
+    return null
+  const result: FreeModelCatalogEntry[] = []
+  const seen = new Set<string>()
+  for (const value of models) {
+    if (!value || typeof value !== 'object') return null
+    const row = value as Record<string, unknown>
+    if (row.kind !== 'free') continue
+    if (
+      !isFreeModelExecutionId(row.id) ||
+      typeof row.iconUrl !== 'string' ||
+      routeForOfficialUrl(row.iconUrl) !== 'domestic'
+    )
+      return null
+    const legacy = row.legacy
+    let id = row.id
+    let modelName = row.id
+    if (legacy !== undefined) {
+      if (
+        !legacy ||
+        typeof legacy !== 'object' ||
+        !('id' in legacy) ||
+        !('modelName' in legacy) ||
+        typeof legacy.id !== 'string' ||
+        !/^free-[A-Za-z0-9._-]+$/.test(legacy.id) ||
+        !isNonEmptyString(legacy.modelName)
+      )
+        return null
+      id = legacy.id
+      modelName = legacy.modelName
+    }
+    const entry = parseEntry(
+      {
+        id,
+        modelName,
+        executionId: row.id,
+        providerKind: 'openai-compatible',
+        label: row.label,
+        description: row.description,
+        capabilities: row.capabilities,
+        contextWindowTokens: row.contextWindowTokens,
+        iconUrl: row.iconUrl,
+        baseUrl,
+        apiKey: ''
+      },
+      true
+    )
+    if (!entry || seen.has(entry.id)) return null
+    seen.add(entry.id)
+    result.push(entry)
+  }
+  return { updatedAt: null, models: result }
 }
 
 export class FreeModelCatalogService {
@@ -161,7 +236,12 @@ export class FreeModelCatalogService {
   }
 
   private isStale(cache: CachePayload | null, now = Date.now()): boolean {
-    if (!cache) return true
+    if (
+      !cache ||
+      (this.context.serviceRoute === 'domestic' &&
+        cache.schemaVersion !== DOMESTIC_CATALOG_CACHE_VERSION)
+    )
+      return true
     return now - cache.fetchedAt >= FREE_MODEL_CATALOG_TTL_MS
   }
 
@@ -177,8 +257,11 @@ export class FreeModelCatalogService {
       try {
         const raw = await fs.readFile(this.cachePath(), 'utf8')
         const parsed = JSON.parse(raw) as Partial<CachePayload>
+        const current =
+          this.context.serviceRoute === 'domestic' &&
+          parsed.schemaVersion === DOMESTIC_CATALOG_CACHE_VERSION
         if (
-          parsed.schemaVersion !== FREE_MODEL_CATALOG_CACHE_VERSION ||
+          (!current && parsed.schemaVersion !== FREE_MODEL_CATALOG_CACHE_VERSION) ||
           typeof parsed.fetchedAt !== 'number' ||
           !Array.isArray(parsed.models)
         ) {
@@ -186,12 +269,14 @@ export class FreeModelCatalogService {
         }
         const models: FreeModelCatalogEntry[] = []
         for (const item of parsed.models) {
-          const entry = parseEntry(item)
+          const entry = parseEntry(item, current)
           if (!entry) throw new Error('免费模型缓存无效')
           models.push(entry)
         }
         this.cache = {
-          schemaVersion: FREE_MODEL_CATALOG_CACHE_VERSION,
+          schemaVersion: current
+            ? DOMESTIC_CATALOG_CACHE_VERSION
+            : FREE_MODEL_CATALOG_CACHE_VERSION,
           fetchedAt: parsed.fetchedAt,
           updatedAt: isNonEmptyString(parsed.updatedAt) ? parsed.updatedAt : null,
           models
@@ -216,17 +301,21 @@ export class FreeModelCatalogService {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
-      const response = await fetch(officialUrl(this.context.serviceRoute, '/api/v1/free-models'), {
+      const domestic = this.context.serviceRoute === 'domestic'
+      const url = officialUrl(
+        this.context.serviceRoute,
+        domestic ? '/api/v1/model-catalog' : '/api/v1/free-models'
+      )
+      const baseUrl = officialUrl(
+        this.context.serviceRoute,
+        domestic ? '/api/v2/free' : '/api/v1/free'
+      )
+      const response = await fetch(url, {
         method: 'GET',
         redirect: 'error',
         headers: {
           Accept: 'application/json',
-          'Accept-Language': this.context.locale,
-          ...buildDesktopAppGatewayHeaders({
-            method: 'GET',
-            url: officialUrl(this.context.serviceRoute, '/api/v1/free-models'),
-            body: ''
-          })
+          ...buildDesktopAppGatewayHeaders({ method: 'GET', url, body: '' })
         },
         signal: controller.signal
       })
@@ -239,18 +328,18 @@ export class FreeModelCatalogService {
         )
       }
       const body: unknown = await response.json()
-      const parsed = parseResponse(body)
+      const parsed = domestic ? parseDomesticResponse(body, baseUrl) : parseResponse(body)
       if (parsed)
         parsed.models = parsed.models.map((model) => ({
           ...model,
-          baseUrl: officialUrl(this.context.serviceRoute, '/api/v1/free'),
+          baseUrl,
           iconUrl: this.resolveIconUrl(model.iconUrl)
         }))
       if (!parsed) {
         throw new Error('免费模型目录数据无效')
       }
       return {
-        schemaVersion: FREE_MODEL_CATALOG_CACHE_VERSION,
+        schemaVersion: domestic ? DOMESTIC_CATALOG_CACHE_VERSION : FREE_MODEL_CATALOG_CACHE_VERSION,
         fetchedAt: Date.now(),
         updatedAt: parsed.updatedAt,
         models: parsed.models

@@ -6,6 +6,7 @@ import {
   HiCloudArrowDown,
   HiOutlineAdjustmentsHorizontal,
   HiOutlineRectangleStack,
+  HiOutlineUser,
   HiSparkles
 } from 'react-icons/hi2'
 
@@ -16,6 +17,7 @@ import mimoLogo from '../../assets/img/mimo.png'
 
 export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = [
   'general',
+  'account',
   'model',
   'workspace',
   'vector'
@@ -29,6 +31,14 @@ export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSection
     description: t(($) => $.settings.manageAppPreferencesIncludingDesktopNotifications),
     path: '/settings/general',
     icon: <HiOutlineAdjustmentsHorizontal className="h-5 w-5" />
+  },
+  account: {
+    value: 'account',
+    label: t($ => $.account.title),
+    title: t($ => $.account.title),
+    description: '',
+    path: '/settings/account',
+    icon: <HiOutlineUser className="h-5 w-5" />
   },
   model: {
     value: 'model',

@@ -25,6 +25,7 @@ export type FreeModelCatalogEntry = {
   iconUrl: string
   baseUrl: string
   apiKey: string
+  executionId?: string
 }
 
 export type FreeModelsCatalogResponse = {
@@ -93,15 +94,24 @@ export const toFreeModelRuntimeConfig = (
   modelName?: string
 ): LlmRuntimeConfig => ({
   ...toFreeModelLlmConfig(entry),
-  model_name: String(modelName || entry.modelName).trim() || entry.modelName
+  model_name: entry.executionId || String(modelName || entry.modelName).trim() || entry.modelName
 })
+
+export const isFreeModelExecutionId = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  /^[1-9][0-9]{0,18}$/.test(value) &&
+  (value.length < 19 || value <= '9223372036854775807')
 
 export const isFreeModelApiUrl = (value: string): boolean => {
   try {
     const url = new URL(value)
+    const route = routeForOfficialUrl(value)
     return (
-      routeForOfficialUrl(value) !== null &&
-      (url.pathname === '/api/v1/free' || url.pathname.startsWith('/api/v1/free/'))
+      route !== null &&
+      (url.pathname === '/api/v1/free' ||
+        url.pathname.startsWith('/api/v1/free/') ||
+        (route === 'domestic' &&
+          ['/api/v2/free', '/api/v2/free/chat/completions'].includes(url.pathname)))
     )
   } catch {
     return false

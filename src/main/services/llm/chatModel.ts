@@ -5,6 +5,7 @@ import { resolveLlmProviderKind } from '../../../shared/llmProvider'
 import { resolveOpenAICompatibleRuntimeOptions } from './openaiCompatible'
 import { createFreeModelFetch } from '../officialApi/appClient'
 import { isFreeModelConfigId } from '../../../shared/freeModels'
+import { createManagedModelFetch, isManagedModelConfigId } from '../officialApi/managedModel'
 
 export type ChatModelFactoryOptions = {
   temperature?: number
@@ -17,6 +18,8 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
     providerKind: cfg.providerKind,
     baseUrl: cfg.base_url
   })
+  const managed = isManagedModelConfigId(cfg.id)
+  if (managed && providerKind !== 'openai-compatible') throw new Error('馆长模型配置无效')
   if (providerKind === 'deepseek') {
     return new ChatDeepSeek({
       model: cfg.model_name,
@@ -43,7 +46,8 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
     streaming: opts?.streaming === true,
     configuration: {
       baseURL: runtimeOptions.baseURL,
-      ...(isFreeModelConfigId(cfg.id) ? { fetch: createFreeModelFetch(cfg.base_url) } : {})
+      ...(managed ? { fetch: createManagedModelFetch(cfg) }
+        : isFreeModelConfigId(cfg.id) ? { fetch: createFreeModelFetch(cfg.base_url) } : {})
     }
   })
 }

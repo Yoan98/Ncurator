@@ -32,6 +32,7 @@ import type {
 } from '../shared/partnerCache'
 import type { FreeModelsSnapshot } from '../shared/freeModels'
 import type { PresetModelsSnapshot } from '../shared/llmPresets'
+import type { DesktopAccountCommand, DesktopAccountSnapshot } from '../shared/desktopAccount'
 import type {
   AppSettings,
   ConfirmDialogRequest,
@@ -193,6 +194,8 @@ export type ActiveDownloadSnapshot = {
 }
 
 export type DesktopApi = {
+  desktopAccount: (command: DesktopAccountCommand) => Promise<DesktopAccountSnapshot>
+  onDesktopAccountChanged: (listener: (snapshot: DesktopAccountSnapshot) => void) => () => void
   ingestWeb: (
     payload: WebIngestPayload
   ) => Promise<{ success: boolean; count?: number; error?: string }>

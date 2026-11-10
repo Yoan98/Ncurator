@@ -10,6 +10,7 @@ import type { AiExecutionPermission, AiPreference } from '../../../shared/types'
 import { isFreeModelConfigId } from '../../../shared/freeModels'
 import { acquireRunFile } from './run/fileLease'
 import { FreeModelCatalogService } from '../llm/FreeModelCatalogService'
+import { isManagedModelConfigId, resolveManagedRuntimeConfig } from '../officialApi/managedModel'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
@@ -46,6 +47,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     if (!configId || !modelName) {
       throw new Error(`请先选择${label}`)
     }
+    if (isManagedModelConfigId(configId)) return resolveManagedRuntimeConfig(configId, modelName)
     if (isFreeModelConfigId(configId)) {
       const freeCfg = await freeCatalog.resolveRuntimeConfig(configId, modelName)
       if (!freeCfg) throw new Error(`${label}对应的免费模型不可用，请重新选择`)

@@ -11,6 +11,7 @@ export const createDistributionConfig = (base, { distribution, output, resources
   return {
     ...base,
     productName: name,
+    ...(distribution === 'domestic' ? { protocols: [{ name, schemes: ['ncurator'] }] } : {}),
     directories: { ...base.directories, output },
     extraResources: [
       ...base.extraResources.filter((item) => item.to !== 'app-update.yml'),

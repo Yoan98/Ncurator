@@ -14,6 +14,7 @@ import ModelDownloadPage from './pages/ModelDownloadPage'
 import NotificationCenter from './components/NotificationCenter'
 import { useWpsIntegrationNotices } from './components/workbench/wpsIntegrationFeedback'
 import { AppUpdateProvider } from './contexts/AppUpdateProvider'
+import { DesktopAccountProvider } from './contexts/DesktopAccountProvider'
 import AppWindowFrame from './components/app/AppWindowFrame'
 import UpdateRequiredPage from './pages/UpdateRequiredPage'
 import type { AppStartupStatus } from '../../shared/types'
@@ -146,10 +147,12 @@ function App(): React.JSX.Element {
             <HashRouter>
               <SystemNotificationNavigationBridge />
               <WpsIntegrationNoticeBridge />
-              <AppWindowFrame>
-                <MainLayout />
-                <NotificationCenter />
-              </AppWindowFrame>
+              <DesktopAccountProvider>
+                <AppWindowFrame>
+                  <MainLayout />
+                  <NotificationCenter />
+                </AppWindowFrame>
+              </DesktopAccountProvider>
             </HashRouter>
           )}
         </AppUpdateProvider>

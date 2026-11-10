@@ -1,6 +1,6 @@
 import { getAppRuntime, getOfficialAppKey } from '../app/AppRuntime'
 import { routeForOfficialUrl } from '../../../shared/appPreferences'
-import { isFreeModelApiUrl } from '../../../shared/freeModels'
+import { isFreeModelApiUrl, isFreeModelExecutionId } from '../../../shared/freeModels'
 import { createHmac, createHash, randomUUID } from 'node:crypto'
 
 export const APP_CLIENT_HEADER = 'x-ncurator-client'
@@ -34,7 +34,8 @@ export const buildDesktopAppGatewayHeaders = (input: {
   body?: string
 }): Record<string, string> => {
   const route = routeForOfficialUrl(input.url)
-  if (route && route !== getAppRuntime().distribution) throw new Error('Official service region does not match this application')
+  if (route && route !== getAppRuntime().distribution)
+    throw new Error('Official service region does not match this application')
   const secret = getDesktopAppSecret()
   let path = '/'
   try {
@@ -71,17 +72,34 @@ const readRequestBody = async (request: Request): Promise<string> => {
 
 export const createFreeModelFetch = (baseUrl?: string): typeof fetch => {
   const route = getAppRuntime().distribution
-  if (baseUrl && routeForOfficialUrl(baseUrl) !== route) throw new Error('Invalid official model origin')
+  if (baseUrl && routeForOfficialUrl(baseUrl) !== route)
+    throw new Error('Invalid official model origin')
   const signedFetch: typeof fetch = async (input, init) => {
     const request = new Request(input, init)
     const url = request.url
     if (!isFreeModelApiUrl(url) || routeForOfficialUrl(url) !== route)
       throw new Error('免费模型调用地址无效')
     const method = request.method
-    const body = await readRequestBody(request)
+    let body = await readRequestBody(request)
     const headers = new Headers(request.headers)
     headers.delete('content-length')
     headers.delete('host')
+
+    const pathname = new URL(url).pathname
+    if (pathname.startsWith('/api/v2/free')) {
+      if (pathname !== '/api/v2/free/chat/completions' || method !== 'POST')
+        throw new Error('免费模型调用地址无效')
+      const parsed: unknown = JSON.parse(body)
+      if (
+        !parsed ||
+        typeof parsed !== 'object' ||
+        !('model' in parsed) ||
+        !isFreeModelExecutionId(parsed.model)
+      )
+        throw new Error('免费模型编号无效')
+      body = JSON.stringify(parsed)
+      headers.set('Makers-Conversation-Id', randomUUID())
+    }
 
     const { ensureFreeModelToken } = await import('./freeModelToken')
     headers.set('Authorization', `Bearer ${await ensureFreeModelToken(undefined, route)}`)

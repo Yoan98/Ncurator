@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url)
 const obfuscatorPackage = require('javascript-obfuscator/package.json')
 
 export const MAIN_OBFUSCATION_SCHEMA_VERSION = 1
-export const MAIN_OBFUSCATION_CONFIGURATION_VERSION = 2
+export const MAIN_OBFUSCATION_CONFIGURATION_VERSION = 3
 export const MAX_MAIN_OBFUSCATION_GROWTH_BYTES = 3 * 1024 * 1024
 
 export const PROTECTED_MAIN_PLAINTEXT_MARKERS = [
@@ -51,7 +51,7 @@ export const createMainObfuscationOptions = (relativePath) => ({
   stringArrayRotate: true,
   stringArrayShuffle: true,
   splitStrings: true,
-  splitStringsChunkLength: 8,
+  splitStringsChunkLength: 12,
   controlFlowFlattening: false,
   deadCodeInjection: false,
   debugProtection: false,
@@ -201,7 +201,7 @@ export const obfuscatePackageMain = ({ stageDirectory, reportPath }) => {
     growthBytes = obfuscatedBytes - originalBytes
     if (growthBytes > MAX_MAIN_OBFUSCATION_GROWTH_BYTES) {
       throw new Error(
-        `main-process obfuscation grew by ${(growthBytes / 1024 / 1024).toFixed(1)} MiB; limit is ${(MAX_MAIN_OBFUSCATION_GROWTH_BYTES / 1024 / 1024).toFixed(1)} MiB`
+        `main-process obfuscation grew by ${growthBytes} bytes; limit is ${MAX_MAIN_OBFUSCATION_GROWTH_BYTES} bytes`
       )
     }
 

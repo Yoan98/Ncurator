@@ -99,6 +99,43 @@ const parseResponse = (value: unknown): PresetModelsCatalogResponse | null => {
   }
 }
 
+const parseDomesticResponse = (
+  value: unknown
+):
+  | (Omit<PresetModelsCatalogResponse, 'updatedAt'> & {
+      updatedAt: null
+    })
+  | null => {
+  if (!value || typeof value !== 'object') return null
+  const { protocolVersion, revision, models } = value as Record<string, unknown>
+  if (
+    protocolVersion !== 1 ||
+    typeof revision !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(revision) ||
+    !Array.isArray(models)
+  )
+    return null
+
+  const providers = new Map<string, PresetCatalogProviderPayload>()
+  for (const value of models) {
+    if (!value || typeof value !== 'object') return null
+    const row = value as Record<string, unknown>
+    if (row.kind !== 'custom') continue
+    if (typeof row.providerKey !== 'string' || !isLlmPresetProviderId(row.providerKey)) continue
+    if (!isNonEmptyString(row.modelName)) return null
+    // Keep the exact provider model name as the local selection identity.
+    const model = parseRemoteModel({ ...row, id: row.modelName })
+    if (!model) {
+      if (row.priceTier === null) continue
+      return null
+    }
+    const provider = providers.get(row.providerKey)
+    if (provider) provider.models.push(model)
+    else providers.set(row.providerKey, { providerId: row.providerKey, models: [model] })
+  }
+  return { updatedAt: null, providers: [...providers.values()] }
+}
+
 export class PresetModelCatalogService {
   private static instances = new Map<string, PresetModelCatalogService>()
 
@@ -139,7 +176,7 @@ export class PresetModelCatalogService {
   }
 
   private async toSnapshot(cache: CachePayload | null): Promise<PresetModelsSnapshot> {
-    if (!cache || cache.providers.length === 0) {
+    if (!cache) {
       return emptyPresetModelsSnapshot()
     }
     const resolvedIcons = await resolveCachedIconUrls(this.collectIconUrls(cache.providers))
@@ -171,11 +208,7 @@ export class PresetModelCatalogService {
       try {
         const raw = await fs.readFile(this.cachePath(), 'utf8')
         const parsed = JSON.parse(raw) as Partial<CachePayload>
-        if (
-          typeof parsed.fetchedAt !== 'number' ||
-          !Array.isArray(parsed.providers) ||
-          parsed.providers.length === 0
-        ) {
+        if (typeof parsed.fetchedAt !== 'number' || !Array.isArray(parsed.providers)) {
           return
         }
         const providers = mergePresetCatalogProviders(
@@ -184,7 +217,6 @@ export class PresetModelCatalogService {
             models: provider.models
           }))
         )
-        if (providers.length === 0) return
         this.cache = {
           fetchedAt: parsed.fetchedAt,
           updatedAt: isNonEmptyString(parsed.updatedAt) ? parsed.updatedAt : null,
@@ -210,23 +242,20 @@ export class PresetModelCatalogService {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
-      const response = await fetch(
-        officialUrl(this.context.serviceRoute, '/api/v1/preset-models'),
-        {
-          method: 'GET',
-          redirect: 'error',
-          headers: {
-            Accept: 'application/json',
-            'Accept-Language': this.context.locale,
-            ...buildDesktopAppGatewayHeaders({
-              method: 'GET',
-              url: officialUrl(this.context.serviceRoute, '/api/v1/preset-models'),
-              body: ''
-            })
-          },
-          signal: controller.signal
-        }
+      const domestic = this.context.serviceRoute === 'domestic'
+      const url = officialUrl(
+        this.context.serviceRoute,
+        domestic ? '/api/v1/model-catalog' : '/api/v1/preset-models'
       )
+      const response = await fetch(url, {
+        method: 'GET',
+        redirect: 'error',
+        headers: {
+          Accept: 'application/json',
+          ...buildDesktopAppGatewayHeaders({ method: 'GET', url, body: '' })
+        },
+        signal: controller.signal
+      })
       if (!response.ok) {
         const body = await response.text()
         throw new Error(
@@ -236,7 +265,7 @@ export class PresetModelCatalogService {
         )
       }
       const body: unknown = await response.json()
-      const parsed = parseResponse(body)
+      const parsed = domestic ? parseDomesticResponse(body) : parseResponse(body)
       if (parsed)
         parsed.providers = parsed.providers.map((provider) => ({
           ...provider,

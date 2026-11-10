@@ -50,6 +50,8 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 国内官网／下载为 `https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`，国际官网／下载为 `https://www.ncurator.com`、`https://download.ncurator.com`。国内发行包固定从 COS 自动更新，国际包固定从 R2 更新；官方业务入口按发行包固定，见[整体架构](../architecture.md)。两端分别更新对应发行包、metadata 与 manifest，不跨站镜像。
 
+国内和国际发行包是同一应用的两个发行渠道，沿用同一应用身份、本地工作数据和单实例启动规则。浏览器账号授权的系统协议由国内发行包登记。验收应通过实际安装包验证 macOS 和 Windows 的热启动回跳及冷启动行为。
+
 ### GitHub Releases 手动下载
 
 公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 R2 上线国际版相同的文件；国内包完成正式包回归，国际包通过共用资源一致性绑定该证据，不重新构建。认证复用 CLI 保存的登录凭证，或使用发版机环境中的 `GH_TOKEN`；本地配置与验证见[发布流程](./release.md#31-github-releases-镜像)。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和中英文版本说明；新版本的双语变更内容固化于 annotated Tag，下载说明按语言生成，草稿恢复及公开前后校验正文。已公开说明可以独立修正，附件和 Tag 保持原身份。GitHub 安装包附件使用英文品牌 ASCII 文件名，命名见[品牌规范](../brand.md#下载与缓存命名)，自动更新文件由各发行包固定的 COS／R2 通道提供。

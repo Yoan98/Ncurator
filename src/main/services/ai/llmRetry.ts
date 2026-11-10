@@ -1,4 +1,4 @@
-import { isLlmOutputError } from './errors'
+import { isLlmOutputError, LlmProviderError } from './errors'
 import { normalizeStructuredOutputError } from './structuredOutput'
 import { isCancelledError } from './utils/runFailure'
 
@@ -113,4 +113,22 @@ export const classifyLlmRetry = (error: unknown, attempt = 1): LlmRetryDecision 
     message,
     ...(isRateLimitOrCapacityError(info) ? { delayMs: resolveCapacityBackoffDelay(attempt) } : {})
   }
+}
+
+// The managed transport uses this error only for a verified gateway rejection before admission.
+export class ManagedModelConcurrencyRejection extends LlmProviderError {
+  constructor(message: string) {
+    super({ message, httpStatus: 429, providerCode: 'model_concurrency_limited', retryable: true })
+    this.name = 'ManagedModelConcurrencyRejection'
+  }
+}
+
+export const classifyManagedLlmRetry = (error: unknown, attempt = 1): LlmRetryDecision => {
+  let cause = error
+  for (let depth = 0; cause && depth < 5; depth++, cause = readCause(cause)) {
+    if (cause instanceof ManagedModelConcurrencyRejection) {
+      return { retryable: true, message: cause.message, delayMs: resolveCapacityBackoffDelay(attempt) }
+    }
+  }
+  return { retryable: false, message: normalizeStructuredOutputError(error).message }
 }

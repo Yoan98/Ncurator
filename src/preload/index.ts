@@ -20,6 +20,7 @@ import {
   APP_UPDATE_STATUS_CHANNEL
 } from '../shared/constants'
 import type { DesktopApi, DownloadProgress } from './api'
+import { DESKTOP_ACCOUNT_CHANGED, DESKTOP_ACCOUNT_COMMAND, type DesktopAccountSnapshot } from '../shared/desktopAccount'
 import { isModelSource, type ModelSource } from '../shared/modelSources'
 
 const isE2EFixtureMode = process.env.NCURATOR_E2E_MODE === '1'
@@ -114,6 +115,12 @@ if (isE2EFixtureMode) {
 
 // Custom APIs for renderer
 const api: DesktopApi = {
+  desktopAccount: (command) => ipcRenderer.invoke(DESKTOP_ACCOUNT_COMMAND, command),
+  onDesktopAccountChanged(listener) {
+    const receive = (_event: Electron.IpcRendererEvent, snapshot: DesktopAccountSnapshot) => listener(snapshot)
+    ipcRenderer.on(DESKTOP_ACCOUNT_CHANGED, receive)
+    return () => ipcRenderer.removeListener(DESKTOP_ACCOUNT_CHANGED, receive)
+  },
   appStartupGetStatus: () =>
     ipcRenderer.invoke(APP_STARTUP_GET_STATUS_CHANNEL) as Promise<AppStartupStatus>,
   appQuit: () => ipcRenderer.invoke(APP_QUIT_CHANNEL),

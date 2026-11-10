@@ -90,6 +90,7 @@ describe('all free models use the official proxy', () => {
 
   it('does not renew JWTs for provider failures or send credentials to other hosts', async () => {
     vi.resetModules()
+    vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'unit-test-secret')
     const { seedFreeModelToken } =
       await import('../../../../src/main/services/officialApi/freeModelToken')
     seedFreeModelToken(jwt('seed'))
@@ -109,8 +110,8 @@ describe('all free models use the official proxy', () => {
 describe('desktop app gateway headers', () => {
   it('blocks official request signing when the application key is missing', () => {
     delete process.env.NCURATOR_APP_SECRET_DESKTOP
-    expect(
-      () => buildDesktopAppGatewayHeaders({
+    expect(() =>
+      buildDesktopAppGatewayHeaders({
         method: 'GET',
         url: 'https://www.guanzhangai.cn/api/v1/free-models'
       })
@@ -172,14 +173,14 @@ describe('fixed official service regions', () => {
         return Response.json({ choices: [] })
       })
     )
-    expect(() => createFreeModelFetch('https://www.ncurator.com/api/v1/free')).toThrow('Invalid official model origin')
+    expect(() => createFreeModelFetch('https://www.ncurator.com/api/v1/free')).toThrow(
+      'Invalid official model origin'
+    )
     await createFreeModelFetch('https://www.guanzhangai.cn/api/v1/free')(
       'https://www.guanzhangai.cn/api/v1/free/chat/completions',
       { method: 'POST', body: '{}' }
     )
-    expect(requests.map((request) => request.authorization)).toEqual([
-      `Bearer ${jwt('domestic')}`
-    ])
+    expect(requests.map((request) => request.authorization)).toEqual([`Bearer ${jwt('domestic')}`])
     expect(requests[0].url).toContain('www.guanzhangai.cn')
   })
 
@@ -187,7 +188,8 @@ describe('fixed official service regions', () => {
     vi.stubEnv('NCURATOR_DISTRIBUTION', 'international')
     vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'unit-international-key')
     vi.resetModules()
-    const { createFreeModelFetch } = await import('../../../../src/main/services/officialApi/appClient')
+    const { createFreeModelFetch } =
+      await import('../../../../src/main/services/officialApi/appClient')
     const { seedFreeModelToken } =
       await import('../../../../src/main/services/officialApi/freeModelToken')
     seedFreeModelToken(jwt('international'), 'international')
@@ -204,4 +206,54 @@ describe('fixed official service regions', () => {
     )
     expect(network).toHaveBeenCalledTimes(1)
   })
+})
+
+it('signs the canonical v2 body and reuses its session ID only on the one token retry', async () => {
+  vi.resetModules()
+  const secret = 'test-domestic-gateway-v2-key'
+  vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', secret)
+  const { seedFreeModelToken } =
+    await import('../../../../src/main/services/officialApi/freeModelToken')
+  seedFreeModelToken(jwt('v2-seed'))
+  const route = '/api/v2/free/chat/completions'
+  const url = 'https://www.guanzhangai.cn' + route
+  const calls: RequestInit[] = []
+  const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (target, init) => {
+    if (String(target).endsWith('/free/token')) return Response.json({ token: jwt('v2-refresh') })
+    calls.push({ ...init, headers: new Headers(init?.headers) })
+    return new Response('', { status: calls.length === 1 ? 401 : 200 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  const send = createFreeModelFetch('https://www.guanzhangai.cn/api/v2/free')
+  const body = '{ "model": "9007199254740993", "messages": [], "stream": true }'
+  expect((await send(url, { method: 'POST', body })).status).toBe(200)
+  expect(calls).toHaveLength(2)
+  const session = new Headers(calls[0].headers).get('Makers-Conversation-Id')
+  expect(session).toMatch(/^[0-9a-f-]{36}$/)
+  for (const call of calls) {
+    expect(call.body).toBe(JSON.stringify(JSON.parse(body)))
+    const headers = new Headers(call.headers)
+    expect(headers.get('Makers-Conversation-Id')).toBe(session)
+    const payload = buildAppGatewaySignaturePayload({
+      method: 'POST',
+      path: route,
+      timestamp: headers.get(APP_TIMESTAMP_HEADER)!,
+      nonce: headers.get(APP_NONCE_HEADER)!,
+      body: String(call.body)
+    })
+    expect(headers.get(APP_SIGNATURE_HEADER)).toBe(
+      createHmac('sha256', secret).update(payload).digest('hex')
+    )
+  }
+  expect(new Headers(calls[0].headers).get(APP_NONCE_HEADER)).not.toBe(
+    new Headers(calls[1].headers).get(APP_NONCE_HEADER)
+  )
+  expect(new Headers(calls[1].headers).get('authorization')).toBe(`Bearer ${jwt('v2-refresh')}`)
+  await expect(send(url, { method: 'POST', body: '{"model":"old-model"}' })).rejects.toThrow(
+    '免费模型编号无效'
+  )
+  await expect(send('https://www.ncurator.com' + route, { method: 'POST', body })).rejects.toThrow(
+    '免费模型调用地址无效'
+  )
+  expect(fetchMock).toHaveBeenCalledTimes(3)
 })

@@ -35,6 +35,8 @@ describe('app update publish config', () => {
     expect(international.publish.url).toBe('https://download.ncurator.com/updates/latest')
     expect(international.win.executableName).toBe('NCurator')
     expect(international.nsis.uninstallDisplayName).toBe('NCurator')
+    expect(domestic.protocols).toEqual([{ name: '馆长', schemes: ['ncurator'] }])
+    expect(international.protocols).toBeUndefined()
     expect(international.appId).toBe(domestic.appId)
   })
 

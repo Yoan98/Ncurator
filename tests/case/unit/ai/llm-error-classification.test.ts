@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { LlmOutputError, LlmProviderError } from '../../../../src/main/services/ai/errors'
-import { classifyLlmErrorKind, classifyLlmRetry } from '../../../../src/main/services/ai/llmRetry'
+import {
+  classifyLlmErrorKind,
+  classifyLlmRetry,
+  classifyManagedLlmRetry
+} from '../../../../src/main/services/ai/llmRetry'
 
 describe('ai unit llm error classification', () => {
   it('classifies response_format unavailable errors as unknown (no capability fallback)', () => {
@@ -215,6 +219,26 @@ describe('ai unit llm error classification', () => {
     expect([1, 2, 3, 4, 5].map((attempt) => classifyLlmRetry(error, attempt).delayMs)).toEqual([
       2_000, 4_000, 8_000, 15_000, 15_000
     ])
+  })
+
+  it('never retries an unverified or admitted managed call through the model retry loop', () => {
+    const errors = [
+      new DOMException('timed out', 'TimeoutError'),
+      new TypeError('fetch failed'),
+      new LlmProviderError({ message: 'upstream rate limit', httpStatus: 429, providerCode: 'rate_limit_exceeded' }),
+      new LlmProviderError({ message: 'unverified limit', httpStatus: 429, providerCode: 'model_concurrency_limited' }),
+      new LlmProviderError({ message: 'permit lost', httpStatus: 503, providerCode: 'lookup_required' }),
+      new LlmProviderError({ message: 'settlement pending', providerCode: 'settlement_pending' }),
+      new LlmProviderError({ message: 'expired before admission', httpStatus: 401, providerCode: 'access_token_expired' }),
+      new LlmOutputError({ message: 'incomplete output', retryable: true })
+    ]
+    for (const error of errors) {
+      expect(classifyManagedLlmRetry(error)).toEqual({ retryable: false, message: error.message })
+    }
+    expect(classifyLlmRetry(errors[0]).retryable).toBe(true)
+    expect(classifyLlmRetry(errors[2]).retryable).toBe(true)
+    expect(classifyLlmRetry(errors[4]).retryable).toBe(true)
+    expect(classifyLlmRetry(errors[7]).retryable).toBe(true)
   })
 
   it('uses capacity backoff for resource_exhausted code', () => {

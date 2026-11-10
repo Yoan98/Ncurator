@@ -25,7 +25,8 @@ import type {
 import type { AiEventDispatchContext } from './types'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS, AI_LLM_CALL_TIMEOUT_MS } from './constants'
 import { LlmProviderError, toLlmOutputError } from './errors'
-import { classifyLlmRetry } from './llmRetry'
+import { classifyLlmRetry, classifyManagedLlmRetry } from './llmRetry'
+import { forManagedInvocation, isManagedModelConfigId } from '../officialApi/managedModel'
 import {
   extractTextContent,
   parsePromptJsonOutput,
@@ -763,7 +764,7 @@ export const createAiLlmExecutor = (input: {
     }> => {
       input.checkCancelled()
       const streamingMode = request.streamingMode || defaultStreamingMode
-      const cfg = await input.getConfig()
+      const cfg = forManagedInvocation(await input.getConfig())
       const result = await runLlmCallWithActivity<T>({
         ctx: input.eventCtx,
         runId: input.eventCtx.runId,
@@ -782,7 +783,7 @@ export const createAiLlmExecutor = (input: {
           contextBudgetSnapshot: request.contextBudgetSnapshot
         },
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
-        classifyRetry: classifyLlmRetry,
+        classifyRetry: isManagedModelConfigId(cfg.id) ? classifyManagedLlmRetry : classifyLlmRetry,
         execute: async (observer) =>
           await withAbortTimeout({
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
@@ -826,7 +827,7 @@ export const createAiLlmExecutor = (input: {
     chatText: async (request: AiLlmTextRequest): Promise<string> => {
       input.checkCancelled()
       const streamingMode = request.streamingMode || defaultStreamingMode
-      const cfg = await input.getConfig()
+      const cfg = forManagedInvocation(await input.getConfig())
       const result = await runLlmCallWithActivity<string>({
         ctx: input.eventCtx,
         runId: input.eventCtx.runId,
@@ -845,7 +846,7 @@ export const createAiLlmExecutor = (input: {
         },
         onTextDelta: request.onTextDelta,
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
-        classifyRetry: classifyLlmRetry,
+        classifyRetry: isManagedModelConfigId(cfg.id) ? classifyManagedLlmRetry : classifyLlmRetry,
         execute: async (observer) =>
           await withAbortTimeout({
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
@@ -875,7 +876,7 @@ export const createAiLlmExecutor = (input: {
     chatMessages: async (request: AiLlmTextMessagesRequest): Promise<string> => {
       input.checkCancelled()
       const streamingMode = request.streamingMode || defaultStreamingMode
-      const cfg = await input.getConfig()
+      const cfg = forManagedInvocation(await input.getConfig())
       const userHash = JSON.stringify(
         request.messages.map((message) => ({
           role: message.getType(),
@@ -900,7 +901,7 @@ export const createAiLlmExecutor = (input: {
         },
         onTextDelta: request.onTextDelta,
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
-        classifyRetry: classifyLlmRetry,
+        classifyRetry: isManagedModelConfigId(cfg.id) ? classifyManagedLlmRetry : classifyLlmRetry,
         execute: async (observer) =>
           await withAbortTimeout({
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
@@ -929,7 +930,7 @@ export const createAiLlmExecutor = (input: {
 
     chatTools: async (request: AiLlmToolCallRequest): Promise<AiLlmToolCallResult> => {
       input.checkCancelled()
-      const cfg = await input.getConfig()
+      const cfg = forManagedInvocation(await input.getConfig())
       const providerKind = resolveConfigProviderKind(cfg)
       const streamingMode = request.streamingMode || defaultStreamingMode
       const systemHash = JSON.stringify(
@@ -970,7 +971,7 @@ export const createAiLlmExecutor = (input: {
         onTextReset: request.onTextReset,
         onToolCallDelta: request.onToolCallDelta,
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
-        classifyRetry: classifyLlmRetry,
+        classifyRetry: isManagedModelConfigId(cfg.id) ? classifyManagedLlmRetry : classifyLlmRetry,
         execute: async (observer) =>
           await withAbortTimeout({
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerHandlers, registerOpenExternalHandler } from './ipc/handlers'
+import { desktopProtocolLink, registerDesktopAccount } from './ipc/desktopAccount'
 import { IngestionService } from './services/ingestion/loader'
 import { DEFAULT_EMBEDDING_MODEL_NAME, EmbeddingService } from './services/vector/EmbeddingService'
 import { EmbeddingRuntimeClient } from './services/vector/runtime/EmbeddingRuntimeClient'
@@ -57,6 +58,19 @@ let appStartupStatus: AppStartupStatus = { mode: 'normal', ...getAppRuntime() }
 let quitAfterShutdown = false
 let shutdownRequested = false
 let rendererFlushSequence = 0
+let mainAppWindow: BrowserWindow | undefined
+let deliverDesktopLink: ((link: string) => void) | undefined
+let focusOnShow = false
+
+function focusAppWindow() {
+  if (!mainAppWindow) {
+    focusOnShow = true
+    return
+  }
+  if (mainAppWindow.isMinimized()) mainAppWindow.restore()
+  mainAppWindow.show()
+  mainAppWindow.focus()
+}
 
 const requestRendererWorkbenchFlush = async (window: BrowserWindow): Promise<void> => {
   if (window.isDestroyed() || window.webContents.isDestroyed()) return
@@ -179,6 +193,10 @@ function createWindow(): BrowserWindow {
       sandbox: false
     }
   })
+  mainAppWindow = mainWindow
+  mainWindow.on('closed', () => {
+    if (mainAppWindow === mainWindow) mainAppWindow = undefined
+  })
   if (process.platform === 'darwin') {
     attachDarwinLiveResizeThrottle(mainWindow)
   }
@@ -199,7 +217,8 @@ function createWindow(): BrowserWindow {
   })
 
   mainWindow.on('ready-to-show', () => {
-    if (process.env.NCURATOR_E2E_WINDOW_MODE === 'visible') {
+    if (focusOnShow || process.env.NCURATOR_E2E_WINDOW_MODE === 'visible') {
+      focusOnShow = false
       mainWindow.show()
       mainWindow.focus()
       return
@@ -248,12 +267,23 @@ function createWindow(): BrowserWindow {
 if (!singleInstanceLock) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
-    const mainWindow = BrowserWindow.getAllWindows()[0]
-    if (!mainWindow) return
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
+  function openDesktopLink(args: string[]) {
+    if (shutdownRequested) return
+    const link = desktopProtocolLink(args)
+    if (link && getAppRuntime().distribution === 'domestic') {
+      deliverDesktopLink?.(link)
+      focusAppWindow()
+      if (!mainAppWindow && deliverDesktopLink) createWindow()
+    }
+  }
+
+  app.on('open-url', (event, url) => {
+    event.preventDefault()
+    openDesktopLink([url])
+  })
+  app.on('second-instance', (_event, args) => {
+    if (args.some(value => /^ncurator:/i.test(value))) openDesktopLink(args)
+    else focusAppWindow()
   })
 
   // This method will be called when Electron has finished
@@ -261,6 +291,10 @@ if (!singleInstanceLock) {
   // Some APIs can only be used after this event occurs.
   app.whenReady().then(async () => {
     initializeAppRuntime(app.getPreferredSystemLanguages())
+    if (getAppRuntime().distribution === 'domestic') {
+      if (app.isPackaged && process.platform === 'win32') app.setAsDefaultProtocolClient('ncurator')
+      if (process.platform !== 'darwin') openDesktopLink(process.argv.slice(1))
+    }
     appStartupStatus = { mode: 'normal', ...getAppRuntime() }
     initializeAppMenu()
     // Set app user model id for windows
@@ -388,6 +422,8 @@ if (!singleInstanceLock) {
     })
     await embeddingModelService.initialize()
 
+    deliverDesktopLink = registerDesktopAccount(() => mainAppWindow,
+      is.dev ? process.env.ELECTRON_RENDERER_URL : undefined)
     const mainWindow = createWindow()
     mainWindow.webContents.on('render-process-gone', (_event, details) => {
       errorLogService.write({

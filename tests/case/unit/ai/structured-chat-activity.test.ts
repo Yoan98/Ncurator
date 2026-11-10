@@ -1,10 +1,24 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   runLlmCallWithActivity,
   runStructuredChatWithActivity
 } from '../../../../src/main/services/ai/utils/structuredChatActivity'
-import { classifyLlmRetry } from '../../../../src/main/services/ai/llmRetry'
+import {
+  classifyLlmRetry,
+  classifyManagedLlmRetry,
+  ManagedModelConcurrencyRejection
+} from '../../../../src/main/services/ai/llmRetry'
+import { LlmProviderError } from '../../../../src/main/services/ai/errors'
 import type { AiLlmIoRecord, AiRunEvent } from '../../../../src/shared/types'
+
+const managedTelemetry = {
+  actionType: 'llm_text_output',
+  caller: 'human.brain',
+  schemaName: 'brain',
+  modelName: 'managed-fixture',
+  baseUrl: 'https://example.test/v2',
+  streamingMode: 'force_stream'
+} as const
 
 describe('ai unit structured chat activity', () => {
   it('resets streamed draft before a retry so stale chunks are not duplicated', async () => {
@@ -104,6 +118,52 @@ describe('ai unit structured chat activity', () => {
         delayMs
       }))
     )
+  })
+
+  it('backs off after a verified managed admission rejection and keeps the original call ID', async () => {
+    vi.useFakeTimers()
+    try {
+      const callIds: string[] = []
+      const rejection = new ManagedModelConcurrencyRejection('capacity before admission')
+      const result = runLlmCallWithActivity({
+        ctx: { runId: 'managed-retry-run', sendEvent: () => undefined },
+        runId: 'managed-retry-run',
+        system: 'system',
+        user: 'user',
+        telemetry: managedTelemetry,
+        maxAttempts: 2,
+        classifyRetry: classifyManagedLlmRetry,
+        execute: async (_observer, callId) => {
+          callIds.push(callId)
+          if (callIds.length === 1) throw rejection
+          return { output: 'success' }
+        }
+      })
+      await vi.advanceTimersByTimeAsync(1999)
+      expect(callIds).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(result).resolves.toMatchObject({ output: 'success' })
+      expect(callIds).toEqual([callIds[0], callIds[0]])
+    } finally { vi.useRealTimers() }
+  })
+
+  it.each([
+    new DOMException('response timed out', 'TimeoutError'),
+    new LlmProviderError({ message: 'upstream limit', httpStatus: 429, providerCode: 'rate_limit_exceeded' }),
+    new LlmProviderError({ message: 'permit response lost', httpStatus: 503, providerCode: 'lookup_required' })
+  ])('ends the managed attempt on %s without executing again', async (error) => {
+    const execute = vi.fn(async () => { throw error })
+    await expect(runLlmCallWithActivity({
+      ctx: { runId: 'managed-unknown-run', sendEvent: () => undefined },
+      runId: 'managed-unknown-run',
+      system: 'system',
+      user: 'user',
+      telemetry: managedTelemetry,
+      maxAttempts: 2,
+      classifyRetry: classifyManagedLlmRetry,
+      execute
+    })).rejects.toThrow(error.message)
+    expect(execute).toHaveBeenCalledTimes(1)
   })
 
   it('records scripted structured output activity and llm io', async () => {

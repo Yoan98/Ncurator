@@ -192,3 +192,181 @@ describe('catalog refresh failures', () => {
     }
   )
 })
+
+describe('自定义内置型号目录', () => {
+  it('国内包只匹配内置服务商，保留精确调用名，并接受服务端主动清空目录', async () => {
+    const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-custom-catalog-'))
+    vi.stubEnv('NCURATOR_USER_DATA_PATH', folder)
+    vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'test-domestic-catalog-app-key')
+    const catalogPath = 'https://www.guanzhangai.cn/api/v1/model-catalog'
+    const row = {
+      kind: 'custom',
+      id: '9007199254740993',
+      modelName: 'example/Case-Sensitive',
+      providerKey: 'deepseek',
+      label: '示例型号',
+      priceTier: 'low',
+      description: null,
+      contextWindowTokens: 4096,
+      capabilities: ['text'],
+      iconUrl: 'https://www.guanzhangai.cn/llm/deepseek.png'
+    }
+    let models: object[] = [
+      row,
+      { ...row, id: '2', providerKey: 'unknown-provider' },
+      { ...row, id: '3', kind: 'free' },
+      { ...row, id: '4', kind: 'managed', privateCredential: 'fixture-private-field' }
+    ]
+    const request = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (url) =>
+        url === catalogPath
+          ? Response.json({ protocolVersion: 1, revision: 'a'.repeat(64), models })
+          : new Response(null, { status: 404 })
+      )
+    vi.stubGlobal('fetch', request)
+    try {
+      const service = new PresetModelCatalogService()
+      const snapshot = await service.refresh()
+      const call = request.mock.calls.find(([url]) => url === catalogPath)
+      expect(call).toBeDefined()
+      const headers = new Headers(call?.[1]?.headers)
+      expect(headers.get('x-ncurator-signature')).toMatch(/^[a-f0-9]{64}$/)
+      expect(headers.has('authorization')).toBe(false)
+      expect(snapshot.providers.map((p) => p.providerId)).toEqual(['deepseek'])
+      expect(snapshot.providers[0].models.map((model) => model.id)).toEqual([row.modelName])
+      expect(service.findModelById(row.id)).toBeNull()
+      expect(service.findModelById(row.modelName)).toMatchObject({ contextWindowTokens: 4096 })
+      expect(JSON.stringify(snapshot)).not.toMatch(/fixture-private-field|unknown-provider/)
+
+      models = []
+      const empty = await service.refresh()
+      expect(empty.fetchedAt).toBeTypeOf('number')
+      expect(empty.providers).toEqual([])
+      expect((await new PresetModelCatalogService().getSnapshot()).fetchedAt).toBe(empty.fetchedAt)
+    } finally {
+      vi.unstubAllGlobals()
+      vi.unstubAllEnvs()
+      await fs.rm(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('海外包继续读取自身的旧目录，不请求国内接口', async () => {
+    const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-global-catalog-'))
+    vi.stubEnv('NCURATOR_USER_DATA_PATH', folder)
+    vi.stubEnv('NCURATOR_DISTRIBUTION', 'international')
+    vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'test-overseas-catalog-app-key')
+    vi.resetModules()
+    const catalogPath = 'https://www.ncurator.com/api/v1/preset-models'
+    const request = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+      url === catalogPath
+        ? Response.json({
+            providers: [
+              {
+                providerId: 'deepseek',
+                models: [
+                  {
+                    id: 'example-global',
+                    label: 'Example',
+                    priceTier: 'low',
+                    capabilities: ['text'],
+                    iconUrl: 'https://www.ncurator.com/llm/deepseek.png'
+                  }
+                ]
+              }
+            ]
+          })
+        : new Response(null, { status: 404 })
+    )
+    vi.stubGlobal('fetch', request)
+    try {
+      const { PresetModelCatalogService: OverseasCatalog } =
+        await import('../../../../src/main/services/llm/PresetModelCatalogService')
+      const snapshot = await new OverseasCatalog().refresh()
+      expect(snapshot.providers[0].models[0].id).toBe('example-global')
+      expect(request.mock.calls[0][0]).toBe(catalogPath)
+      expect(request.mock.calls.every(([url]) => !String(url).includes('guanzhangai.cn'))).toBe(
+        true
+      )
+    } finally {
+      vi.unstubAllGlobals()
+      vi.unstubAllEnvs()
+      vi.resetModules()
+      await fs.rm(folder, { recursive: true, force: true })
+    }
+  })
+})
+
+it('restores a saved free selection but sends only the current numeric execution ID', async () => {
+  vi.resetModules()
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-free-catalog-v3-'))
+  vi.stubEnv('NCURATOR_USER_DATA_PATH', folder)
+  vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'test-domestic-catalog-app-key')
+  const legacy = sampleEntry()
+  const credential = `test.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 5400 })).toString('base64url')}.signature`
+  const executionId = '9007199254740993'
+  const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (url) => {
+    if (String(url).endsWith('/api/v1/model-catalog'))
+      return Response.json({
+        protocolVersion: 1,
+        revision: 'a'.repeat(64),
+        models: [
+          {
+            id: executionId,
+            kind: 'free',
+            label: legacy.label,
+            capabilities: ['text'],
+            contextWindowTokens: 4096,
+            iconUrl: legacy.iconUrl,
+            legacy: { id: legacy.id, modelName: legacy.modelName }
+          }
+        ]
+      })
+    if (String(url).endsWith('/api/v1/free/token')) return Response.json({ token: credential })
+    return new Response(null, { status: 404 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  try {
+    const { FreeModelCatalogService: DomesticFreeCatalog } =
+      await import('../../../../src/main/services/llm/FreeModelCatalogService')
+    const service = new DomesticFreeCatalog()
+    const snapshot = await service.refresh()
+    const catalogRequest = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith('/api/v1/model-catalog')
+    )
+    expect(new Headers(catalogRequest?.[1]?.headers).get('authorization')).toBeNull()
+    expect(snapshot.models).toHaveLength(1)
+    expect(snapshot.models[0]).toMatchObject({
+      id: legacy.id,
+      configId: toFreeModelConfigId(legacy.id),
+      modelName: legacy.modelName
+    })
+    expect(snapshot.models[0]).not.toHaveProperty('executionId')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/free/token'))).toBe(false)
+
+    const reloaded = new DomesticFreeCatalog()
+    expect((await reloaded.getSnapshot()).models).toEqual(snapshot.models)
+    expect(
+      await reloaded.resolveRuntimeConfig(toFreeModelConfigId(legacy.id), 'other-model')
+    ).toBeNull()
+    expect(
+      await reloaded.resolveRuntimeConfig(toFreeModelConfigId(legacy.id), legacy.modelName)
+    ).toMatchObject({
+      model_name: executionId,
+      base_url: 'https://www.guanzhangai.cn/api/v2/free',
+      api_key: credential
+    })
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/api/v1/free/token'))
+    ).toHaveLength(1)
+    const persisted = await fs.readFile(
+      path.join(folder, 'domestic-zh-CN-free-models-catalog.json'),
+      'utf8'
+    )
+    expect(persisted).not.toContain(credential)
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    await fs.rm(folder, { recursive: true, force: true })
+  }
+})

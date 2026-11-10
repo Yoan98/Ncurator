@@ -177,6 +177,7 @@ import { userSkillsSelectors, workbenchSelectors } from '../testing/selectors'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import brandIcon from '../../../../assets/brand/png/ncurator-logo-24.png'
 import PartnerAvatar, { PARTNER_AVATAR_COLOR_HEX } from '../components/workbench/PartnerAvatar'
+import { DesktopAccountMenu } from '../components/account/DesktopAccountMenu'
 import SidebarUpdateControl from '../components/update/SidebarUpdateControl'
 
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
@@ -5136,6 +5137,7 @@ const ChatPage: React.FC = () => {
               </button>
             </Tooltip>
           </div>
+          <div className="flex"><DesktopAccountMenu /></div>
         </div>
         <div
           className="nc-sidebar-resizer workbench-no-drag"
