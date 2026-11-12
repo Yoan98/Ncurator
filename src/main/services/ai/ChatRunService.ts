@@ -25,7 +25,7 @@ import type { WebSourceStore } from '../storage/domains/WebSourceStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { BrowserEmbedService } from '../browser/BrowserEmbedService'
 import type { WebCrawlerService } from '../webCrawler/types'
-import type { TelemetryService, TelemetryFailureCode } from '../telemetry/TelemetryService'
+import type { RunModelTelemetry, TelemetryService, TelemetryFailureCode } from '../telemetry/TelemetryService'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type { AiRunDeps, AiApprovalBatchRequest, AiApprovalBatchResult } from './types'
 import { PRODUCT_NAME_ZH } from '../../../shared/constants'
@@ -81,6 +81,7 @@ type ActiveQuestion = {
 type ActiveRun = {
   fileChangeOwnerRunId?: string
   run: AiRunRecord
+  telemetryModel?: RunModelTelemetry
   contentNodes?: ChatMessageContentNode[]
   cancelled: boolean
   finalizing: boolean
@@ -716,6 +717,7 @@ export class ChatRunService {
       fileChangeOwnerRunId:
         this.activeRuns.get(previousRun.id)?.fileChangeOwnerRunId || previousRun.id,
       run: continuationRun,
+      telemetryModel: this.deps.telemetryService?.captureRunModel(mainModel),
       contentNodes: latest.contentNodes,
       cancelled: false,
       finalizing: false,
@@ -801,8 +803,11 @@ export class ChatRunService {
       const codes: TelemetryFailureCode[] = ['llm_request_failed', 'output_truncated', 'input_too_long', 'runtime_limit', 'internal_error', 'unexpected_error', 'process_interrupted']
       const failureCode = codes.includes(run.failureCode as TelemetryFailureCode) ? run.failureCode as TelemetryFailureCode : 'unexpected_error'
       this.deps.telemetryService?.track('run_finished', { outcome: 'failed', failureCode }, eventId)
+    } else if (run.status === 'completed') {
+      const model = this.activeRuns.get(run.id)?.telemetryModel
+      this.deps.telemetryService?.track('run_finished', { outcome: 'completed', ...(model && { model }) }, eventId)
     } else {
-      this.deps.telemetryService?.track('run_finished', { outcome: run.status }, eventId)
+      this.deps.telemetryService?.track('run_finished', { outcome: 'cancelled' }, eventId)
     }
   }
 
@@ -1069,6 +1074,7 @@ export class ChatRunService {
 
     const activeRun: ActiveRun = {
       run,
+      telemetryModel: this.deps.telemetryService?.captureRunModel(mainModel),
       contentNodes: payload.contentNodes,
       cancelled: false,
       finalizing: false,

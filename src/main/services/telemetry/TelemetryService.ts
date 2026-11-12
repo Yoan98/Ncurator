@@ -2,12 +2,18 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { officialUrl } from '../../../shared/appPreferences'
+import { freeModelEntryIdFromConfigId } from '../../../shared/freeModels'
+import type { WorkbenchSelectedModel } from '../../../shared/types'
 import { getAppRuntime } from '../app/AppRuntime'
+import { FreeModelCatalogService } from '../llm/FreeModelCatalogService'
+import { PresetModelCatalogService } from '../llm/PresetModelCatalogService'
 import { buildDesktopAppGatewayHeaders } from '../officialApi/appClient'
 
 export type TelemetryEventName = 'app_started' | 'message_submitted' | 'run_finished'
 export type TelemetryFailureCode = 'llm_request_failed' | 'output_truncated' | 'input_too_long' | 'runtime_limit' | 'internal_error' | 'unexpected_error' | 'process_interrupted'
-export type RunTelemetryMetadata = { outcome: 'completed' | 'cancelled'; failureCode?: never } | { outcome: 'failed'; failureCode: TelemetryFailureCode }
+export type RunModelTelemetry = { modelSource: 'managed' | 'free' | 'custom'; modelRef?: string }
+export type RunTelemetryMetadata = { outcome: 'completed'; model?: RunModelTelemetry } |
+  { outcome: 'cancelled' } | { outcome: 'failed'; failureCode: TelemetryFailureCode }
 
 type TelemetryServiceOptions = {
   userDataPath: string
@@ -26,6 +32,8 @@ type TelemetryEventPayload = {
   appVersion: string
   outcome?: 'completed' | 'failed' | 'cancelled'
   failureCode?: TelemetryFailureCode
+  modelSource?: RunModelTelemetry['modelSource']
+  modelRef?: string
 }
 
 type PersistedTelemetryState = {
@@ -41,6 +49,8 @@ const RETRY_BACKOFF_MS = 30_000
 const DELIVERY_TIMEOUT_MS = 20_000
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const APP_VERSION_PATTERN = /^[0-9A-Za-z._+-]{1,64}$/
+const MODEL_REF_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/
+const MODEL_SOURCES = new Set(['managed', 'free', 'custom'])
 const TELEMETRY_PLATFORMS = new Set(['win32', 'darwin', 'linux', 'other'])
 const TELEMETRY_ARCHES = new Set(['x64', 'arm64', 'ia32', 'other'])
 const TELEMETRY_FAILURE_CODES = new Set<TelemetryFailureCode>([
@@ -93,7 +103,11 @@ const isPendingEvent = (value: unknown): value is TelemetryEventPayload => {
     TELEMETRY_ARCHES.has(event.arch) &&
     typeof event.appVersion === 'string' &&
     APP_VERSION_PATTERN.test(event.appVersion)
-  if (!hasValidBase || Object.keys(event).some(key => !['eventId', 'eventName', 'source', 'installationId', 'platform', 'arch', 'appVersion', 'outcome', 'failureCode'].includes(key))) return false
+  if (!hasValidBase || Object.keys(event).some(key => !['eventId', 'eventName', 'source', 'installationId', 'platform', 'arch', 'appVersion', 'outcome', 'failureCode', 'modelSource', 'modelRef'].includes(key))) return false
+  const hasModel = event.modelSource !== undefined || event.modelRef !== undefined
+  if (hasModel && (event.eventName !== 'run_finished' || event.outcome !== 'completed' ||
+    !event.modelSource || !MODEL_SOURCES.has(event.modelSource) ||
+    (event.modelRef !== undefined && (typeof event.modelRef !== 'string' || !MODEL_REF_PATTERN.test(event.modelRef))))) return false
   if (event.eventName !== 'run_finished') {
     return event.outcome === undefined && event.failureCode === undefined
   }
@@ -121,6 +135,26 @@ export class TelemetryService {
     this.statePath = path.join(options.userDataPath, 'telemetry.json')
     this.endpoint = options.endpoint?.trim() || undefined
     this.enabled = shouldEnableTelemetry(options.isPackaged)
+  }
+
+  public captureRunModel(selection: WorkbenchSelectedModel): RunModelTelemetry | undefined {
+    if (!this.enabled || typeof selection.configId !== 'string') return undefined
+    try {
+      const managed = /^managed:([1-9][0-9]{0,18})$/.exec(selection.configId)?.[1]
+      if (managed && getAppRuntime().distribution === 'domestic' && BigInt(managed) <= 9_223_372_036_854_775_807n) {
+        return { modelSource: 'managed', modelRef: managed }
+      }
+      const free = freeModelEntryIdFromConfigId(selection.configId)
+      if (free) {
+        const entry = FreeModelCatalogService.getInstance().findEntryById(free)
+        const ref = entry?.executionId ?? entry?.id
+        return { modelSource: 'free', ...(ref && MODEL_REF_PATTERN.test(ref) && { modelRef: ref }) }
+      }
+      const preset = selection.manual ? null : PresetModelCatalogService.getInstance().findModelById(selection.modelName)
+      return { modelSource: 'custom', ...(preset && MODEL_REF_PATTERN.test(preset.id) && { modelRef: preset.id }) }
+    } catch {
+      return undefined
+    }
   }
 
   public track(eventName: 'app_started' | 'message_submitted'): void
@@ -183,7 +217,10 @@ export class TelemetryService {
     return {
       ...base,
       outcome: metadata.outcome,
-      ...(metadata.outcome === 'failed' ? { failureCode: metadata.failureCode } : {})
+      ...(metadata.outcome === 'failed' ? { failureCode: metadata.failureCode } : {}),
+      ...(metadata.outcome === 'completed' && metadata.model && {
+        modelSource: metadata.model.modelSource, modelRef: metadata.model.modelRef
+      })
     }
   }
 

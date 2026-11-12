@@ -1631,6 +1631,9 @@ describe('unit ai persistence backend', () => {
 describe('product telemetry from the real run service', () => {
   it('counts accepted messages and one completed run, not model or child progress', async () => {
     const setup = await createTestService()
+    const capture = vi.spyOn(setup.telemetry, 'captureRunModel')
+      .mockReturnValueOnce({ modelSource: 'free', modelRef: '7' })
+      .mockReturnValue({ modelSource: 'managed', modelRef: '8' })
     const run = await submitAiRun(setup)
     expect(setup.telemetry.track).toHaveBeenCalledWith('message_submitted')
     const service = setup.service as ChatRunServicePrivate
@@ -1639,7 +1642,10 @@ describe('product telemetry from the real run service', () => {
     await service.queueRunEvent(run.id, { type: 'run_completed', runId: run.id })
     await service.queueRunEvent(run.id, { type: 'run_completed', runId: run.id })
     expect(setup.telemetry.track).toHaveBeenCalledTimes(2)
-    expect(setup.telemetry.track).toHaveBeenLastCalledWith('run_finished', { outcome: 'completed' }, expect.stringMatching(/^[0-9a-f-]{36}$/))
+    expect(capture).toHaveBeenCalledTimes(1)
+    expect(setup.telemetry.track).toHaveBeenLastCalledWith('run_finished', {
+      outcome: 'completed', model: { modelSource: 'free', modelRef: '7' }
+    }, expect.stringMatching(/^[0-9a-f-]{36}$/))
   })
   it.each(['run_failed', 'run_cancelled'] as const)('classifies %s without emitting a successful result', async type => {
     const setup = await createTestService()

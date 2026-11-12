@@ -192,7 +192,7 @@ describe('TelemetryService', () => {
     expect(payload.installationId).toBe(installationId)
   })
 
-  it('keeps failed deliveries in the outbox and retries them on the next launch', async () => {
+  it('keeps a completed run and its permitted attribution in the outbox and retries on launch', async () => {
     const directory = await createDirectory()
     const failingFetch = vi.fn(async () => new Response(null, { status: 503 }))
     vi.stubGlobal('fetch', failingFetch)
@@ -202,10 +202,9 @@ describe('TelemetryService', () => {
       isPackaged: true
     })
 
-    firstService.track('run_finished', {
-      outcome: 'failed',
-      failureCode: 'llm_request_failed'
-    }, randomUUID())
+    const model = firstService.captureRunModel({ configId: 'private-config-sentinel', modelName: 'private-model-sentinel', manual: true })
+    expect(model).toEqual({ modelSource: 'custom' })
+    firstService.track('run_finished', { outcome: 'completed', model }, randomUUID())
     await firstService.flush()
     const failedState = JSON.parse(
       await readFile(path.join(directory, 'telemetry.json'), 'utf8')
@@ -234,6 +233,9 @@ describe('TelemetryService', () => {
     const replay = JSON.parse(String(acceptedFetch.mock.calls[0]?.[1]?.body))
     expect(replay.eventId).toBe(original.eventId)
     expect(replay.eventName).toBe('run_finished')
+    expect(replay).toMatchObject({ outcome: 'completed', modelSource: 'custom' })
+    expect(replay).not.toHaveProperty('modelRef')
+    expect(JSON.stringify(replay)).not.toContain('private-')
     expect(recoveredState.pending).toEqual([])
   })
 })

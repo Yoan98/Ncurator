@@ -872,7 +872,7 @@ pnpm test:update:e2e
 
 待实现用例：`managed-model-catalog`、`managed-request-admission-and-recovery`。
 
-产品埋点的完整规则见 `WB-TELEMETRY-001`。`WB-TELEMETRY-001-AC1/AC2/AC3/AC5` 的受理触发、终态及去重由 `chat-run-service-contract` 验证，字段、旧队列丢弃和重试复用事件 ID 由 `telemetry-service` 验证。E2E 只证明真实用户行为和禁发，受控测试的请求或模拟终态不冒充真实 UI 上报结果。
+产品埋点的完整规则见 `WB-TELEMETRY-001`。`WB-TELEMETRY-001-AC1/AC2/AC3/AC5/AC6` 的受理触发、终态、开始时的公开型号快照及去重由 `chat-run-service-contract` 验证。`telemetry-service` 验证字段、旧队列丢弃、私有型号隔离和重试复用事件 ID。E2E 验证真实用户行为和禁发，隔离回归验证上报。
 
 馆长目录与三类模型选择、退出账号关联及运行中模型选择边界的新增或修订场景尚未执行，按实际落地补充证据；文档中的验收映射不代表现有 case 已覆盖。
 
