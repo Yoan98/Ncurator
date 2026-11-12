@@ -328,7 +328,7 @@ export const findTestFiles = async (input) => {
     .filter(
       (filePath) =>
         !filePath.startsWith(`${PROVIDER_MATRIX_ROOT}${path.sep}`) ||
-        input.caseIds.includes('live-preset-provider-smoke')
+        input.caseIds.includes(toCaseId(filePath))
     )
     .filter((filePath) => {
       if (input.excludeGroups.length === 0) return true
@@ -1038,7 +1038,7 @@ const USAGE = `NCurator 测试 runner
 
 注意:
   不带任何过滤参数会执行全量测试（含 live 真实模型调用），会消耗真实 API 额度。
-  服务商矩阵默认排除，通过 pnpm test:workbench:provider-matrix 或 --case live-preset-provider-smoke 显式执行。
+  服务商矩阵默认排除，可用 --case 显式指定对应的用例名。
   请使用 --domain/--suite/--case 缩小范围；未知参数会导致立即报错退出。
 `
 

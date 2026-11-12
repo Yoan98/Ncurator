@@ -252,6 +252,14 @@ pnpm test:update:e2e
 - How：独立执行现有冒烟入口，不加入日常或全量回归；读取实际配置的 live 目标，通过 UI 创建连接、伙伴并精确选择目标型号，逐一等待真实终态。客户端内置服务商或对应内置型号缺失时如实记录接入缺口，不改选同名馆长或其他计费类型，不直接写配置。免费调用使用实际目录和免费凭证，不要求业务登录。
 - Oracle：各目标确实调用所选自定义连接和型号，Key 不泄漏且不产生馆长钱包消费；免费调用独立有效。所选型号最终回答非空，缺少配置的目标如实记录；模型行选择补证 `WB-COMPOSER-007-AC4/AC14/AC15`。
 
+#### `published-free-model-smoke`
+
+- 测试类型：`e2e / live`（路径 `conversation/provider-matrix/`，正式包独立验证）
+- What：已发布国内桌面包的免登录免费模型链路。
+- Why：正式包的签名、目录和模型入口可能与当前源码不同。
+- How：显式执行 `pnpm test:e2e:package --case published-free-model-smoke --bundle <正式包清单>`。在独立用户目录刷新免费目录，从 Composer 选择一个免费型号并发送一条合成消息。
+- Oracle：免费目录存在可用条目，选中型号的运行到达成功终态并返回非空内容，覆盖 `WB-COMPOSER-007-AC14`。
+
 #### `prefix-cache-retain-live`
 
 - 测试类型：`e2e / live`（路径 `conversation/prefix-cache/`）
