@@ -207,6 +207,7 @@ export class DesktopAccount {
       this.publishWallet(parseWallet(value))
     }
     return {
+      assertCurrent,
       accessToken,
       applyWallet,
       recover: async (requestId: string, signal?: AbortSignal) => {

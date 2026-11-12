@@ -36,10 +36,20 @@ afterEach(() => {
   filesystem.denyCredentialDeletion = false
 })
 
-function managedDesktopFixture(respond: (requestId: string, attempt: number) => Response, recover = { status: 'settlement_pending' }) {
+type ManagedDirectFixture = {
+  apiOrigin: string
+  controlOrigin: string
+  appSecret: string
+  modelId: string
+  primary: { userNo: string; access: string }
+  secondary: { userNo: string; access: string }
+}
+
+function managedDesktopFixture(respond: (requestId: string, attempt: number) => Response, recover = { status: 'settlement_pending' },
+  direct?: ManagedDirectFixture) {
   const dir = mkdtempSync(join(tmpdir(), 'ncurator-managed-call-'))
   vi.stubEnv('NCURATOR_USER_DATA_PATH', dir)
-  vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'synthetic-desktop-gateway-test-key')
+  vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', direct?.appSecret ?? 'synthetic-desktop-gateway-test-key')
   electron.safeStorage.isEncryptionAvailable.mockReturnValue(true)
   electron.safeStorage.encryptString.mockImplementation((plain: string) => Buffer.from(plain))
   electron.safeStorage.decryptString.mockImplementation((encrypted: Buffer) => encrypted.toString())
@@ -48,22 +58,37 @@ function managedDesktopFixture(respond: (requestId: string, attempt: number) => 
   let loginCount = 0
   const submitted: { requestId: string; access: string | null }[] = []
   const lookedUp: string[] = []
+  const http = globalThis.fetch
   vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit) => {
-    const path = new URL(input).pathname
+    const url = new URL(input)
+    const path = url.pathname
+    if (direct && url.origin === direct.controlOrigin) return http(input, init)
     if (path.endsWith('/start')) {
       state = JSON.parse(String(init.body)).state
       return Response.json({ flowId: '10', expiresIn: 600, authorizationUrl: 'https://www.guanzhangai.cn/desktop/authorize#flow=10&state=' + state })
     }
-    if (path.endsWith('/exchange') || path.endsWith('/refresh'))
-      return Response.json({ ...value(String(++loginCount)), userNo: owner })
+    if (path.endsWith('/exchange') || path.endsWith('/refresh')) {
+      const credentials = direct && [direct.primary, direct.secondary].find(item => item.userNo === owner)
+      return Response.json({ ...value(String(++loginCount)), userNo: owner, ...(credentials && { accessToken: credentials.access }) })
+    }
     if (path.endsWith('/receipt') || path.endsWith('/logout')) return Response.json({ ok: true })
     if (path.startsWith('/api/v2/managed/calls/')) {
       lookedUp.push(path.split('/').at(-1)!)
+      if (direct) return http(direct.apiOrigin + path, init)
       return Response.json(recover)
     }
     if (path === '/api/v2/managed/chat/completions') {
       const { requestId } = JSON.parse(String(init.body))
       submitted.push({ requestId, access: new Headers(init.headers).get('authorization') })
+      if (direct) {
+        const response = await http(direct.apiOrigin + path, init)
+        if (String(init.body).includes('isolated_disconnect')) {
+          const raw = await response.text()
+          expect(raw).toContain('event: ncurator.result')
+          return new Response(raw.split('event: ncurator.result')[0], { status: response.status, headers: response.headers })
+        }
+        return response
+      }
       return respond(requestId, submitted.length)
     }
     throw new Error('Unexpected request: ' + path)
@@ -153,6 +178,61 @@ it.each(['tools', 'pending', 'incomplete', 'disconnected'] as const)('returns a 
     expect(fixture.lookedUp).toEqual(scenario === 'pending' || scenario === 'disconnected' ? [fixture.submitted[0].requestId] : [])
   } finally { fixture.cleanup() }
 })
+
+it.runIf(Boolean(process.env.NCURATOR_TEST_MANAGED_DIRECT))('uses the real API from the managed desktop execution layer', async () => {
+  const direct = JSON.parse(process.env.NCURATOR_TEST_MANAGED_DIRECT!) as ManagedDirectFixture
+  for (const origin of [direct.apiOrigin, direct.controlOrigin]) expect(new URL(origin).hostname).toBe('127.0.0.1')
+  const fixture = managedDesktopFixture(() => { throw new Error('Expected an isolated HTTP endpoint') }, undefined, direct)
+  const release = async (step: string) => expect((await fetch(direct.controlOrigin + '/fixture/' + step, { method: 'POST' })).status).toBe(204)
+  try {
+    await fixture.login(direct.primary.userNo)
+    const config = resolveManagedRuntimeConfig('managed:' + direct.modelId, '合成模型')
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => config, saveConfig: async () => {}, checkCancelled: () => {} })
+    const invoked = vi.fn(async ({ name }: { name: string }) => 'found ' + name)
+    const lookup = tool(invoked, { name: 'lookup', description: 'Lookup a fixture', schema: z.object({ name: z.string() }) })
+    const prompt = new HumanMessage('isolated_tool')
+    const firstDelta = Promise.withResolvers<void>()
+    const first = executor.chatTools({ caller: 'test', messages: [prompt], tools: [lookup], streamingMode: 'force_stream',
+      onTextDelta: () => firstDelta.resolve() }).then(async result => {
+      const [call] = result.message.tool_calls ?? []
+      expect(call?.args).toEqual({ name: 'doc' })
+      const found = await lookup.invoke(call.args)
+      return executor.chatTools({ caller: 'test', messages: [prompt, result.message,
+        new ToolMessage({ content: String(found), tool_call_id: call.id! })], tools: [lookup], streamingMode: 'force_stream' })
+    })
+    void first.catch(() => undefined)
+    await firstDelta.promise
+    expect(fixture.submitted).toHaveLength(1)
+    expect(invoked).not.toHaveBeenCalled()
+    await release('tool')
+    expect(await first).toMatchObject({ finishReason: 'stop', message: { content: '合成工具后的回复' } })
+    expect(invoked).toHaveBeenCalledOnce()
+    expect(fixture.submitted).toHaveLength(2)
+
+    const switchDelta = Promise.withResolvers<void>()
+    const deltas: string[] = []
+    const switching = executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: 'isolated_switch',
+      streamingMode: 'force_stream', onTextDelta: text => { deltas.push(text); switchDelta.resolve() } })
+    const observed = switching.then(output => ({ output }), error => ({ error }))
+    await switchDelta.promise
+    await fixture.account.logout()
+    await fixture.login(direct.secondary.userNo)
+    await release('switch')
+    expect(await observed).toHaveProperty('error')
+    expect(deltas.join('')).toBe('切换前首段')
+    expect(fixture.account.getSnapshot()).toMatchObject({ status: 'signed_in', userNo: direct.secondary.userNo })
+    expect(fixture.submitted).toHaveLength(3)
+
+    await expect(executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: 'isolated_disconnect',
+      streamingMode: 'force_stream' })).resolves.toBe('合成查回回复')
+    expect(fixture.submitted).toHaveLength(4)
+    expect(new Set(fixture.submitted.map(item => item.requestId)).size).toBe(4)
+    expect(fixture.lookedUp).toEqual([fixture.submitted[3].requestId])
+    expect(fixture.submitted.slice(0, 3).map(item => item.access)).toEqual(Array(3).fill('Bearer ' + direct.primary.access))
+    expect(fixture.submitted[3].access).toBe('Bearer ' + direct.secondary.access)
+  } finally { fixture.cleanup() }
+}, 25_000)
 
 it.each(['expired', 'lookup', 'unknown-429', 'stream-recovered'] as const)('handles %s through the managed invocation without replaying an admitted call', async scenario => {
   const fixture = managedDesktopFixture((requestId, attempt) => {

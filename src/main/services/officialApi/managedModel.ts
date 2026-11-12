@@ -131,6 +131,7 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
   }
 
   function closeSuccess(controller: ReadableStreamDefaultController<Uint8Array>) {
+    scope.assertCurrent()
     controller.enqueue(encoder.encode(finishFrame + '\n\ndata: [DONE]\n\n'))
     controller.close()
     void reader.cancel().catch(() => undefined)
@@ -140,12 +141,14 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
     async pull(controller) {
       try {
         for (;;) {
+          scope.assertCurrent()
           const boundary = /\r?\n\r?\n/.exec(buffer)
           if (!boundary) {
             if (buffer.length > 1_048_576) throw failure('incomplete')
             let next: ReadableStreamReadResult<Uint8Array>
             try { next = await reader.read() }
             catch { await finishFromStatus(controller); return }
+            scope.assertCurrent()
             if (next.done) { await finishFromStatus(controller); return }
             buffer += decoder.decode(next.value, { stream: true })
             continue
@@ -230,6 +233,10 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
         void recover().catch(() => undefined)
         request.signal.throwIfAborted()
         throw failure('incomplete')
+      }
+      try { scope.assertCurrent() } catch (error) {
+        await response.body?.cancel().catch(() => undefined)
+        throw error
       }
       if (response.status === 202) {
         await response.body?.cancel()
