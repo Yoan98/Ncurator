@@ -63,6 +63,7 @@ function managedDesktopFixture(respond: (requestId: string, attempt: number) => 
     const url = new URL(input)
     const path = url.pathname
     if (direct && url.origin === direct.controlOrigin) return http(input, init)
+    expect(url.origin).toBe('https://api.guanzhangai.cn')
     if (path.endsWith('/start')) {
       state = JSON.parse(String(init.body)).state
       return Response.json({ flowId: '10', expiresIn: 600, authorizationUrl: 'https://www.guanzhangai.cn/desktop/authorize#flow=10&state=' + state })
