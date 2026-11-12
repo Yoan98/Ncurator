@@ -147,6 +147,7 @@ describe('TelemetryService', () => {
       schemaVersion: number
       installationId: string
     }
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.guanzhangai.cn/api/telemetry/events')
     expect(payload.installationId).toBe(legacyClientId)
     expect(state).toMatchObject({ schemaVersion: 3, installationId: legacyClientId })
   })

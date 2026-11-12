@@ -1,4 +1,4 @@
-import { officialUrl, type ServiceRoute } from '../../../shared/appPreferences'
+import { officialApiUrl, routeForOfficialUrl } from '../../../shared/appPreferences'
 import { getAppRuntime } from '../app/AppRuntime'
 import { buildDesktopAppGatewayHeaders, getDesktopAppSecret } from './appClient'
 
@@ -9,8 +9,8 @@ type CachedToken = {
   expiresAt: number
 }
 
-const cached = new Map<ServiceRoute, CachedToken>()
-const refreshPromises = new Map<ServiceRoute, Promise<string>>()
+const cached = new Map<string, CachedToken>()
+const refreshPromises = new Map<string, Promise<string>>()
 
 export const readJwtExpiryMs = (token: string): number | null => {
   const parts = String(token || '')
@@ -33,31 +33,33 @@ const isFresh = (entry: CachedToken | null | undefined, now = Date.now()): entry
   return entry.expiresAt - now > REFRESH_SKEW_MS
 }
 
-const remember = (route: ServiceRoute, token: string, expiresAt?: number): string => {
+const remember = (origin: string, token: string, expiresAt?: number): string => {
   const expiry =
     expiresAt && expiresAt > 0 ? expiresAt : readJwtExpiryMs(token) || Date.now() + 60 * 60_000
-  cached.set(route, { token, expiresAt: expiry })
+  cached.set(origin, { token, expiresAt: expiry })
   return token
 }
 
 export const seedFreeModelToken = (
   token: string,
-  route: ServiceRoute = getAppRuntime().serviceRoute
+  origin = officialApiUrl(getAppRuntime().distribution, '')
 ): void => {
   const value = String(token || '').trim()
   if (!value) return
-  if (isFresh(cached.get(route))) return
+  if (isFresh(cached.get(origin))) return
   const expiresAt = readJwtExpiryMs(value)
   if (!expiresAt || expiresAt - Date.now() <= REFRESH_SKEW_MS) return
-  remember(route, value, expiresAt)
+  remember(origin, value, expiresAt)
 }
 
 export const refreshFreeModelToken = async (
-  route: ServiceRoute = getAppRuntime().serviceRoute
+  origin = officialApiUrl(getAppRuntime().distribution, '')
 ): Promise<string> => {
-  const pending = refreshPromises.get(route)
+  if (routeForOfficialUrl(origin) !== getAppRuntime().distribution || new URL(origin).origin !== origin)
+    throw new Error('免费模型取票地址无效')
+  const pending = refreshPromises.get(origin)
   if (pending) return await pending
-  const tokenUrl = officialUrl(route, '/api/v1/free/token')
+  const tokenUrl = new URL('/api/v1/free/token', origin).href
   const refreshPromise = (async () => {
     const secret = getDesktopAppSecret()
     if (!secret) {
@@ -87,22 +89,22 @@ export const refreshFreeModelToken = async (
     if (!token) throw new Error('免费模型取票失败：响应无效')
     const expiresAt =
       typeof payload.expiresAt === 'string' ? Date.parse(payload.expiresAt) : readJwtExpiryMs(token)
-    return remember(route, token, Number.isFinite(expiresAt) ? Number(expiresAt) : undefined)
+    return remember(origin, token, Number.isFinite(expiresAt) ? Number(expiresAt) : undefined)
   })()
-  refreshPromises.set(route, refreshPromise)
+  refreshPromises.set(origin, refreshPromise)
   try {
     return await refreshPromise
   } finally {
-    refreshPromises.delete(route)
+    refreshPromises.delete(origin)
   }
 }
 
 export const ensureFreeModelToken = async (
   seedToken?: string,
-  route: ServiceRoute = getAppRuntime().serviceRoute
+  origin = officialApiUrl(getAppRuntime().distribution, '')
 ): Promise<string> => {
-  if (seedToken) seedFreeModelToken(seedToken, route)
-  const entry = cached.get(route)
+  if (seedToken) seedFreeModelToken(seedToken, origin)
+  const entry = cached.get(origin)
   if (isFresh(entry)) return entry.token
-  return await refreshFreeModelToken(route)
+  return await refreshFreeModelToken(origin)
 }

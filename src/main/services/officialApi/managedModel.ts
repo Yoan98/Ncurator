@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { officialUrl } from '../../../shared/appPreferences'
+import { officialApiUrl } from '../../../shared/appPreferences'
 import type { LlmRuntimeConfig } from '../../../shared/types'
 import { getAppRuntime } from '../app/AppRuntime'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS } from '../ai/constants'
@@ -34,7 +34,7 @@ export function resolveManagedRuntimeConfig(configId: string, name: string): Llm
   const id = modelId(configId)
   if (!id || getAppRuntime().distribution !== 'domestic') throw new Error('馆长模型暂不可用')
   currentDomesticDesktopAccount().managedCallScope()
-  return { id: configId, name, providerKind: 'openai-compatible', base_url: officialUrl('domestic', endpoint),
+  return { id: configId, name, providerKind: 'openai-compatible', base_url: officialApiUrl('domestic', endpoint),
     api_key: 'managed-placeholder', model_name: id }
 }
 
@@ -206,7 +206,7 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
 }): typeof fetch {
   const id = modelId(config.id)
   if (!id || getAppRuntime().distribution !== 'domestic') throw failure('model_not_found')
-  const url = officialUrl('domestic', endpoint + '/chat/completions')
+  const url = officialApiUrl('domestic', endpoint + '/chat/completions')
   const invocation = invocations.get(config)
   return async (input, init) => {
     const request = new Request(input, init)

@@ -32,7 +32,7 @@ describe('all free models use the official proxy', () => {
       const { seedFreeModelToken } =
         await import('../../../../src/main/services/officialApi/freeModelToken')
       const credential = jwt('seed')
-      seedFreeModelToken(credential)
+      seedFreeModelToken(credential, 'https://www.guanzhangai.cn')
       const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ choices: [] }))
       vi.stubGlobal('fetch', fetchMock)
       const body = JSON.stringify({
@@ -59,7 +59,7 @@ describe('all free models use the official proxy', () => {
     process.env.NCURATOR_APP_SECRET_DESKTOP = 'unit-test-secret'
     const { seedFreeModelToken } =
       await import('../../../../src/main/services/officialApi/freeModelToken')
-    seedFreeModelToken(jwt('seed'))
+    seedFreeModelToken(jwt('seed'), 'https://www.guanzhangai.cn')
     const refreshed = jwt('refreshed')
     const requests: Array<{ url: string; headers: Headers; body: BodyInit | null | undefined }> = []
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
@@ -93,7 +93,7 @@ describe('all free models use the official proxy', () => {
     vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'unit-test-secret')
     const { seedFreeModelToken } =
       await import('../../../../src/main/services/officialApi/freeModelToken')
-    seedFreeModelToken(jwt('seed'))
+    seedFreeModelToken(jwt('seed'), 'https://www.guanzhangai.cn')
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response('upstream failed', { status: 502 }))
@@ -160,8 +160,8 @@ describe('fixed official service regions', () => {
     process.env.NCURATOR_APP_SECRET_DESKTOP = 'unit-test-secret'
     const { seedFreeModelToken } =
       await import('../../../../src/main/services/officialApi/freeModelToken')
-    seedFreeModelToken(jwt('domestic'), 'domestic')
-    seedFreeModelToken(jwt('international'), 'international')
+    seedFreeModelToken(jwt('domestic'), 'https://www.guanzhangai.cn')
+    seedFreeModelToken(jwt('international'), 'https://www.ncurator.com')
     const requests: Array<{ url: string; authorization: string | null }> = []
     vi.stubGlobal(
       'fetch',
@@ -192,7 +192,7 @@ describe('fixed official service regions', () => {
       await import('../../../../src/main/services/officialApi/appClient')
     const { seedFreeModelToken } =
       await import('../../../../src/main/services/officialApi/freeModelToken')
-    seedFreeModelToken(jwt('international'), 'international')
+    seedFreeModelToken(jwt('international'), 'https://www.ncurator.com')
     const network = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('network unavailable'))
     vi.stubGlobal('fetch', network)
     const send = createFreeModelFetch('https://www.ncurator.com/api/v1/free')
@@ -208,32 +208,33 @@ describe('fixed official service regions', () => {
   })
 })
 
-it('signs the canonical v2 body and reuses its session ID only on the one token retry', async () => {
+it('signs the canonical v2 body and renews only the API-origin ticket', async () => {
   vi.resetModules()
   const secret = 'test-domestic-gateway-v2-key'
   vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', secret)
   const { seedFreeModelToken } =
     await import('../../../../src/main/services/officialApi/freeModelToken')
+  seedFreeModelToken(jwt('legacy-seed'), 'https://www.guanzhangai.cn')
   seedFreeModelToken(jwt('v2-seed'))
   const route = '/api/v2/free/chat/completions'
-  const url = 'https://www.guanzhangai.cn' + route
+  const url = 'https://api.guanzhangai.cn' + route
   const calls: RequestInit[] = []
   const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (target, init) => {
-    if (String(target).endsWith('/free/token')) return Response.json({ token: jwt('v2-refresh') })
+    if (String(target).endsWith('/free/token')) {
+      expect(target).toBe('https://api.guanzhangai.cn/api/v1/free/token')
+      return Response.json({ token: jwt('v2-refresh') })
+    }
     calls.push({ ...init, headers: new Headers(init?.headers) })
     return new Response('', { status: calls.length === 1 ? 401 : 200 })
   })
   vi.stubGlobal('fetch', fetchMock)
-  const send = createFreeModelFetch('https://www.guanzhangai.cn/api/v2/free')
+  const send = createFreeModelFetch('https://api.guanzhangai.cn/api/v2/free')
   const body = '{ "model": "9007199254740993", "messages": [], "stream": true }'
   expect((await send(url, { method: 'POST', body })).status).toBe(200)
   expect(calls).toHaveLength(2)
-  const session = new Headers(calls[0].headers).get('Makers-Conversation-Id')
-  expect(session).toMatch(/^[0-9a-f-]{36}$/)
   for (const call of calls) {
     expect(call.body).toBe(JSON.stringify(JSON.parse(body)))
     const headers = new Headers(call.headers)
-    expect(headers.get('Makers-Conversation-Id')).toBe(session)
     const payload = buildAppGatewaySignaturePayload({
       method: 'POST',
       path: route,
@@ -248,9 +249,13 @@ it('signs the canonical v2 body and reuses its session ID only on the one token 
   expect(new Headers(calls[0].headers).get(APP_NONCE_HEADER)).not.toBe(
     new Headers(calls[1].headers).get(APP_NONCE_HEADER)
   )
+  expect(new Headers(calls[0].headers).get('authorization')).toBe(`Bearer ${jwt('v2-seed')}`)
   expect(new Headers(calls[1].headers).get('authorization')).toBe(`Bearer ${jwt('v2-refresh')}`)
   await expect(send(url, { method: 'POST', body: '{"model":"old-model"}' })).rejects.toThrow(
     '免费模型编号无效'
+  )
+  await expect(send('https://www.guanzhangai.cn' + route, { method: 'POST', body })).rejects.toThrow(
+    '免费模型调用地址无效'
   )
   await expect(send('https://www.ncurator.com' + route, { method: 'POST', body })).rejects.toThrow(
     '免费模型调用地址无效'

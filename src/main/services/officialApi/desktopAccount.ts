@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { safeStorage, shell } from 'electron'
-import { officialUrl } from '../../../shared/appPreferences'
+import { officialApiUrl, officialUrl } from '../../../shared/appPreferences'
 import type { DesktopAccountSnapshot, DesktopWallet } from '../../../shared/desktopAccount'
 import { getUserDataPath } from '../../utils/userDataPath'
 import { getAppRuntime } from '../app/AppRuntime'
@@ -530,7 +530,7 @@ export function createDomesticDesktopAccount(changed: (snapshot: DesktopAccountS
   async function request(route: Route | 'profile' | 'wallet' | { requestId: string }, method: 'GET' | 'POST', input?: object,
     bearer?: string, signal?: AbortSignal) {
     const lookup = typeof route !== 'string'
-    const url = officialUrl('domestic', lookup ? '/api/v2/managed/calls/' + route.requestId : '/api/auth/desktop/' + route)
+    const url = officialApiUrl('domestic', lookup ? '/api/v2/managed/calls/' + route.requestId : '/api/auth/desktop/' + route)
     const body = input && JSON.stringify(input)
     try {
       const headers = new Headers(buildDesktopAppGatewayHeaders({ method, url, body }))

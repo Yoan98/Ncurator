@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { officialUrl } from '../../../shared/appPreferences'
+import { officialApiUrl } from '../../../shared/appPreferences'
 import { freeModelEntryIdFromConfigId } from '../../../shared/freeModels'
 import type { WorkbenchSelectedModel } from '../../../shared/types'
 import { getAppRuntime } from '../app/AppRuntime'
@@ -240,7 +240,7 @@ export class TelemetryService {
   private async deliver(event: TelemetryEventPayload): Promise<DeliveryResult> {
     try {
       const endpoint =
-        this.endpoint || officialUrl(getAppRuntime().distribution, '/api/telemetry/events')
+        this.endpoint || officialApiUrl(getAppRuntime().distribution, '/api/telemetry/events')
       const body = JSON.stringify(event)
       const response = await fetch(endpoint, {
         method: 'POST',

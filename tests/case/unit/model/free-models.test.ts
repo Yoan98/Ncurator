@@ -198,7 +198,7 @@ describe('自定义内置型号目录', () => {
     const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-custom-catalog-'))
     vi.stubEnv('NCURATOR_USER_DATA_PATH', folder)
     vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'test-domestic-catalog-app-key')
-    const catalogPath = 'https://www.guanzhangai.cn/api/v1/model-catalog'
+    const catalogPath = 'https://api.guanzhangai.cn/api/v1/model-catalog'
     const row = {
       kind: 'custom',
       id: '9007199254740993',
@@ -334,6 +334,7 @@ it('restores a saved free selection but sends only the current numeric execution
     const catalogRequest = fetchMock.mock.calls.find(([url]) =>
       String(url).endsWith('/api/v1/model-catalog')
     )
+    expect(catalogRequest?.[0]).toBe('https://api.guanzhangai.cn/api/v1/model-catalog')
     expect(new Headers(catalogRequest?.[1]?.headers).get('authorization')).toBeNull()
     expect(snapshot.models).toHaveLength(1)
     expect(snapshot.models[0]).toMatchObject({
@@ -344,6 +345,11 @@ it('restores a saved free selection but sends only the current numeric execution
     expect(snapshot.models[0]).not.toHaveProperty('executionId')
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/free/token'))).toBe(false)
 
+    const cacheFile = path.join(folder, 'domestic-zh-CN-free-models-catalog.json')
+    const previous = (await fs.readFile(cacheFile, 'utf8')).replace(
+      'https://api.guanzhangai.cn/api/v2/free', 'https://www.guanzhangai.cn/api/v2/free'
+    )
+    await fs.writeFile(cacheFile, previous)
     const reloaded = new DomesticFreeCatalog()
     expect((await reloaded.getSnapshot()).models).toEqual(snapshot.models)
     expect(
@@ -353,12 +359,14 @@ it('restores a saved free selection but sends only the current numeric execution
       await reloaded.resolveRuntimeConfig(toFreeModelConfigId(legacy.id), legacy.modelName)
     ).toMatchObject({
       model_name: executionId,
-      base_url: 'https://www.guanzhangai.cn/api/v2/free',
+      base_url: 'https://api.guanzhangai.cn/api/v2/free',
       api_key: credential
     })
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/api/v1/free/token'))
     ).toHaveLength(1)
+    expect(fetchMock.mock.calls.find(([url]) => String(url).endsWith('/api/v1/free/token'))?.[0])
+      .toBe('https://api.guanzhangai.cn/api/v1/free/token')
     const persisted = await fs.readFile(
       path.join(folder, 'domestic-zh-CN-free-models-catalog.json'),
       'utf8'

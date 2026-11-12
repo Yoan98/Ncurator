@@ -1,4 +1,4 @@
-import { routeForOfficialUrl } from './appPreferences'
+import { officialApiUrl, officialUrl, routeForOfficialUrl } from './appPreferences'
 import type { LLMConfig, LlmProviderKind, LlmRuntimeConfig } from './types'
 
 export const FREE_MODEL_CONFIG_ID_PREFIX = 'free:'
@@ -106,13 +106,12 @@ export const isFreeModelApiUrl = (value: string): boolean => {
   try {
     const url = new URL(value)
     const route = routeForOfficialUrl(value)
-    return (
-      route !== null &&
-      (url.pathname === '/api/v1/free' ||
-        url.pathname.startsWith('/api/v1/free/') ||
-        (route === 'domestic' &&
-          ['/api/v2/free', '/api/v2/free/chat/completions'].includes(url.pathname)))
-    )
+    if (!route || url.username || url.password) return false
+    if (route === 'domestic' && url.origin === officialApiUrl(route, '')) {
+      return ['/api/v2/free', '/api/v2/free/chat/completions'].includes(url.pathname)
+    }
+    return url.origin === officialUrl(route, '') &&
+      (url.pathname === '/api/v1/free' || url.pathname.startsWith('/api/v1/free/'))
   } catch {
     return false
   }

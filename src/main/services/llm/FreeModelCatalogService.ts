@@ -1,5 +1,6 @@
 import { getAppRuntime } from '../app/AppRuntime'
 import {
+  officialApiUrl,
   officialUrl,
   routeForOfficialUrl,
   type AppRuntimeSnapshot
@@ -64,7 +65,10 @@ const parseEntry = (value: unknown, current = false): FreeModelCatalogEntry | nu
   const label = String(row.label || '').trim()
   const description = typeof row.description === 'string' ? row.description.trim() : ''
   const iconUrl = String(row.iconUrl || '').trim()
-  const baseUrl = String(row.baseUrl || '').trim()
+  const rawBaseUrl = String(row.baseUrl || '').trim()
+  const baseUrl = current && rawBaseUrl === officialUrl('domestic', '/api/v2/free')
+    ? officialApiUrl('domestic', '/api/v2/free')
+    : rawBaseUrl
   const apiKey = String(row.apiKey || '').trim()
   const capabilities = parseCapabilities(row.capabilities)
   const executionId = row.executionId
@@ -270,7 +274,8 @@ export class FreeModelCatalogService {
         const models: FreeModelCatalogEntry[] = []
         for (const item of parsed.models) {
           const entry = parseEntry(item, current)
-          if (!entry) throw new Error('免费模型缓存无效')
+          if (!entry || routeForOfficialUrl(entry.baseUrl) !== this.context.serviceRoute)
+            throw new Error('免费模型缓存无效')
           models.push(entry)
         }
         this.cache = {
@@ -302,11 +307,11 @@ export class FreeModelCatalogService {
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
       const domestic = this.context.serviceRoute === 'domestic'
-      const url = officialUrl(
+      const url = officialApiUrl(
         this.context.serviceRoute,
         domestic ? '/api/v1/model-catalog' : '/api/v1/free-models'
       )
-      const baseUrl = officialUrl(
+      const baseUrl = officialApiUrl(
         this.context.serviceRoute,
         domestic ? '/api/v2/free' : '/api/v1/free'
       )
@@ -399,7 +404,7 @@ export class FreeModelCatalogService {
     if (!entry) return null
     if (modelName.trim() !== entry.modelName) return null
     const runtime = toFreeModelRuntimeConfig(entry)
-    const token = await ensureFreeModelToken(entry.apiKey, this.context.serviceRoute)
+    const token = await ensureFreeModelToken(entry.apiKey, new URL(entry.baseUrl).origin)
     return { ...runtime, api_key: token }
   }
 }

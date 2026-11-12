@@ -36,6 +36,10 @@ export const OFFICIAL_ORIGINS: Record<ServiceRoute, string> = {
   domestic: 'https://www.guanzhangai.cn',
   international: 'https://www.ncurator.com'
 }
+export const OFFICIAL_API_ORIGINS: Record<ServiceRoute, string> = {
+  domestic: 'https://api.guanzhangai.cn',
+  international: OFFICIAL_ORIGINS.international
+}
 export const DOWNLOAD_ORIGINS: Record<AppDistribution, string> = {
   domestic: 'https://download.guanzhangai.cn',
   international: 'https://download.ncurator.com'
@@ -44,6 +48,8 @@ export const productName = (locale: AppLocale): string =>
   locale === 'zh-CN' ? PRODUCT_NAME_ZH : PRODUCT_NAME_EN
 export const officialUrl = (route: ServiceRoute, pathname: string): string =>
   `${OFFICIAL_ORIGINS[route]}${pathname}`
+export const officialApiUrl = (route: ServiceRoute, pathname: string): string =>
+  `${OFFICIAL_API_ORIGINS[route]}${pathname}`
 export const manualUrl = (runtime: AppRuntimeSnapshot, anchor = ''): string =>
   officialUrl(runtime.distribution, `/${runtime.locale === 'zh-CN' ? 'zh' : 'en'}/manual${anchor}`)
 export const downloadPageUrl = (runtime: AppRuntimeSnapshot): string =>
@@ -51,7 +57,7 @@ export const downloadPageUrl = (runtime: AppRuntimeSnapshot): string =>
 export const routeForOfficialUrl = (value: string): ServiceRoute | null => {
   try {
     const origin = new URL(value).origin
-    if (origin === OFFICIAL_ORIGINS.domestic) return 'domestic'
+    if (origin === OFFICIAL_ORIGINS.domestic || origin === OFFICIAL_API_ORIGINS.domestic) return 'domestic'
     if (origin === OFFICIAL_ORIGINS.international) return 'international'
   } catch {
     /* Invalid external addresses are never official endpoints. */

@@ -85,7 +85,7 @@ export const createFreeModelFetch = (baseUrl?: string): typeof fetch => {
     headers.delete('content-length')
     headers.delete('host')
 
-    const pathname = new URL(url).pathname
+    const { pathname, origin } = new URL(url)
     if (pathname.startsWith('/api/v2/free')) {
       if (pathname !== '/api/v2/free/chat/completions' || method !== 'POST')
         throw new Error('免费模型调用地址无效')
@@ -98,11 +98,10 @@ export const createFreeModelFetch = (baseUrl?: string): typeof fetch => {
       )
         throw new Error('免费模型编号无效')
       body = JSON.stringify(parsed)
-      headers.set('Makers-Conversation-Id', randomUUID())
     }
 
     const { ensureFreeModelToken } = await import('./freeModelToken')
-    headers.set('Authorization', `Bearer ${await ensureFreeModelToken(undefined, route)}`)
+    headers.set('Authorization', `Bearer ${await ensureFreeModelToken(undefined, origin)}`)
 
     const signedHeaders = buildDesktopAppGatewayHeaders({ method, url, body })
     for (const [key, value] of Object.entries(signedHeaders)) {
@@ -122,7 +121,7 @@ export const createFreeModelFetch = (baseUrl?: string): typeof fetch => {
     if (response.status === 401) {
       await response.body?.cancel()
       const { refreshFreeModelToken } = await import('./freeModelToken')
-      const token = await refreshFreeModelToken(route)
+      const token = await refreshFreeModelToken(origin)
       headers.set('Authorization', `Bearer ${token}`)
       const retryHeaders = buildDesktopAppGatewayHeaders({ method, url, body })
       for (const [key, value] of Object.entries(retryHeaders)) {
