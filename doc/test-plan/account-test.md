@@ -22,7 +22,7 @@
 
 ### access
 
-#### anonymous-existing-usage
+#### `anonymous-existing-usage`
 
 - 测试类型：`e2e / live`
 - What：原有免费及自带 Key 路径继续免登录使用，登录变化保留已有配置和资料。
@@ -32,7 +32,7 @@
 
 ### authorization
 
-#### browser-login-outcomes
+#### `browser-login-outcomes`
 
 - 测试类型：`e2e`
 - What：系统浏览器授权及成功、取消和无效回跳的处理。
@@ -40,7 +40,7 @@
 - How：从桌面真实入口打开官网完成登录和授权，覆盖成功、取消、过期、错误 state 及重复回跳。用网络代理丢弃已处理的首次兑换响应，核对重新授权流程；延迟旧回调至取消、退出或新登录后交付，检查账号及会话。
 - Oracle：系统浏览器及目标正确，凭证保存成功后显示对应账号，覆盖 `ACC-LOGIN-001-AC1/AC2`；重复回调合并，一次性兑换结果不明可重新授权，异常不显示成功，凭证不泄漏，覆盖 `ACC-LOGIN-001-AC3/AC4`；旧回调不覆盖当前登录，覆盖 `ACC-SESSION-002-AC4`。
 
-#### independent-sessions-and-restart
+#### `independent-sessions-and-restart`
 
 - 测试类型：`e2e`
 - What：登录恢复、按需续期、独立退出及失效后的使用边界。
@@ -48,7 +48,7 @@
 - How：通过授权建立网页和两个独立桌面会话，退出应用后重启，核对登录恢复且原任务不自动执行。访问凭证到期后触发刷新，丢弃已成功处理的刷新响应，检查协议恢复及持久化后重启；恢复失败时重新授权。暂停后端后恢复，核对网络失败不误退出。分别退出网页、当前桌面或经官网撤销设备，检查各会话范围、本地数据及重新授权后的原账号和钱包。
 - Oracle：重启恢复、按需续期、响应丢失恢复及新凭证持久化正确，旧响应不复活会话，覆盖 `ACC-SESSION-001-AC1`；网页与各桌面独立退出，覆盖 `ACC-SESSION-001-AC2`；明确失效后不能新开馆长调用，重新授权保留原账号和钱包，不恢复旧任务，本地数据和免登录能力保留，覆盖 `ACC-SESSION-001-AC3`。
 
-#### account-change-during-runs
+#### `account-change-during-runs`
 
 - 测试类型：`e2e / live`
 - What：主动退出、会话失效和更换账号时，馆长任务及旧回调的账号边界。
@@ -58,15 +58,15 @@
 
 ### overview
 
-#### account-menu-and-page
+#### `account-menu-and-page`
 
 - 测试类型：`e2e`
 - What：菜单、设置账号页、本人标识、余额及异常展示。
 - Why：入口不一致、读取失败或残留数据会展示错误账号或误导余额为零。
-- How：经正式授权登录后操作头像、设置导航、编号复制、外部点击及 Escape，核对登录前后菜单和页面；余额通过正式充值形成。将 UI 及剪贴板中的用户编号与官网本人账号核对。暂停后端形成读取失败，恢复后重试；
+- How：经正式授权登录后操作头像、设置导航、编号复制、外部点击及 Escape，核对登录前后菜单和页面；余额通过正式充值形成。将 UI 及剪贴板中的用户编号与官网本人账号核对。暂停后端形成读取失败，恢复后重试。
 - Oracle：菜单、键盘操作及登录前后范围正确，覆盖 `ACC-ENTRY-001-AC1/AC2/AC3`；两个入口到同一页面，本人邮箱、独立对外 `user_no` 和复制一致且无内部用户 ID 泄露，覆盖 `ACC-PAGE-001-AC1/AC2`；失败不伪装为零或他人数据，未登录不阻断原能力，覆盖 `ACC-PAGE-001-AC3/AC4`。
 
-#### balance-display-and-funds-state
+#### `balance-display-and-funds-state`
 
 - 测试类型：`e2e`
 - What：两位默认金额、精确详情、非零小额和资金占用及异常状态。
@@ -74,7 +74,7 @@
 - How：在独立测试 API 环境，通过充值、馆长调用、退款及异常场景形成普通余额、小于一分、零、欠费、资金占用和结算中状态。检查菜单、账号页及精确金额查看复制，暂停读取服务后重试，与账号余额及调用接口结果核对。
 - Oracle：默认两位且精确值一致，显示不改费用，覆盖 `ACC-BALANCE-001-AC1`；真零、非零小额及欠费区分，覆盖 `ACC-BALANCE-001-AC2`；当前、可用及占用正确，预占不当成消费，覆盖 `ACC-BALANCE-001-AC3`；未取得、失败、结算中及欠费反馈正确，原有免费、自定义不新增门禁，覆盖 `ACC-BALANCE-001-AC4`。
 
-#### balance-refresh-and-ordering
+#### `balance-refresh-and-ordering`
 
 - 测试类型：`e2e`
 - What：事件刷新、30 秒复用、逐次结算快照以及旧响应防覆盖。
@@ -82,16 +82,29 @@
 - How：通过真实 UI 登录、打开菜单及账号页、前后台切换、手动刷新和官网充值跳转，用实际网络记录及真实等待核对 30 秒窗口和相同请求合并。发起使用受控计量上游的真实馆长调用，检查每次完成确认的资金快照及查询次数，不以固定输出证明 AI 任务质量。网络交付控制仅延迟或丢弃真实响应，不改写响应内容，覆盖新版本先到、原完成确认缺失、退出后旧响应到达及重新登录；核对余额、调用状态与任务没有重复变化。
 - Oracle：登录恢复获取余额，覆盖 `ACC-BALANCE-002-AC1`；普通查看复用并合并，手动刷新及充值返回立即读取，覆盖 `ACC-BALANCE-002-AC2/AC3`；逐次快照直接更新，缺失仅按原请求读取或补读，不重发模型、不轮询保活或自动补账，覆盖 `ACC-BALANCE-002-AC4`；旧版本、旧账号和重建上下文前的响应被丢弃，覆盖 `ACC-BALANCE-002-AC5`。
 
-#### account-web-navigation
+#### `account-web-navigation`
 
 - 测试类型：`e2e`
 - What：官网跳转、退款边界及海外功能隔离。
 - Why：跳转可能泄漏凭证、假定网页登录或错误显示海外付费入口。
-- How：从菜单和账号页打开充值、明细及帮助，核对系统浏览器目标；无网页会话时验证网页登录。检查桌面无退款入口、用户编号一致，并用海外发行配置确认无国内账号及资金入口。
+- How：从菜单和账号页打开充值及账单，从菜单打开帮助，核对系统浏览器目标。无网页会话时验证网页登录。从官网账户打开模型调用记录。检查桌面无退款入口、用户编号一致，并用海外发行配置确认无国内账号及资金入口。
 - Oracle：目标和打开方式正确，不带桌面凭证、不假定网页登录，覆盖 `ACC-WEB-001-AC1/AC2`；桌面无退款入口、编号与官网一致，海外不展示国内资金能力，覆盖 `ACC-WEB-001-AC3/AC4`。
 
 ## 4. 执行与覆盖边界
 
-上述场景尚未实现和执行；实施时补齐 account 领域入口及逐项 AC 证据。
+待实现用例：`anonymous-existing-usage`、`browser-login-outcomes`、`independent-sessions-and-restart`、`account-change-during-runs`、`account-menu-and-page`、`balance-display-and-funds-state`、`balance-refresh-and-ordering`、`account-web-navigation`。
 
-用 macOS、Windows 安装包验证浏览器唤起、默认协议关联、回跳、系统凭据存储及剪贴板。Windows 核对安装器注册及回跳交给正在运行的实例。凭据保护不可用时不能明文回退，同一本地目录运行不同发行包时不串用账号或清除个人数据，补证 `ACC-LOGIN-001-AC4`、`ACC-SESSION-001-AC1`、`ACC-ACCESS-001-AC2`、`ACC-WEB-001-AC4`。
+下列 [Unit 用例](../../tests/case/unit/officialApi/desktop-account.test.ts) 补证主进程边界，桌面操作与系统实际行为由各 E2E 和人工验收覆盖。
+
+| 验收 | 已有用例与断言范围 |
+| --- | --- |
+| `ACC-LOGIN-001-AC1/AC2/AC4` | `keeps the verifier in Main and coalesces matching callbacks until secure storage succeeds` 检查授权地址、回跳校验、合并兑换和保存 |
+| `ACC-LOGIN-001-AC3` | `does not replay an uncertain exchange or publish success on storage failure` 检查兑换结果不明及保存失败 |
+| `ACC-SESSION-001-AC1` | `coalesces refresh, preserves the previous protected credential on failure, and rejects stale results after logout` 检查换新及退出时的迟到结果 |
+| `ACC-PAGE-001-AC3`、`ACC-BALANCE-002-AC2/AC5` | `shares wallet reads, retains the last good amount offline, and ignores results from an older context` 检查读取合并、短时间复用、失败保留及旧响应 |
+| `ACC-BALANCE-002-AC4` | `looks up the original managed call without a wallet round trip and applies only a newer snapshot` 检查按原请求读取及更新钱包 |
+| `ACC-SESSION-002-AC4` | `discards an exchange response after cancellation and after a newer authorization` 检查过时兑换不写入凭据 |
+
+人工待验收：用 macOS、Windows 安装包验证浏览器唤起、默认协议关联、回跳、系统凭据存储及剪贴板。Windows 核对安装器注册及回跳交给正在运行的实例。验证凭据保护不可用时拒绝保存，同一本地目录运行不同发行包时账号隔离且个人数据保留，补证 `ACC-LOGIN-001-AC1/AC4`、`ACC-SESSION-001-AC1`、`ACC-ACCESS-001-AC2`、`ACC-WEB-001-AC4`。
+
+真实渠道待验证：实际邮箱与微信登录、真实充值到账后回桌面及余额刷新，补证 `ACC-LOGIN-001-AC2`、`ACC-BALANCE-002-AC3`。

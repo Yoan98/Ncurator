@@ -6,6 +6,7 @@ const CASE_ROOT = path.join(ROOT, 'tests', 'case')
 const PLAN_ROOT = path.join(ROOT, 'doc', 'test-plan')
 const PRD_ROOT = path.join(ROOT, 'doc', 'prd')
 const DOMAIN_RULES = {
+  account: { type: 'e2e', plan: 'account-test.md', prd: 'account.md', acPrefixes: ['ACC'] },
   ai: { type: 'backend', plan: 'ai-test.md' },
   knowledge: { type: 'backend', plan: 'knowledge-test.md' },
   settings: { type: 'e2e', plan: 'settings-test.md', prd: 'settings.md', acPrefixes: ['SET'] },
@@ -46,9 +47,16 @@ const acceptanceReferences = (source, prefixes) => {
   return references
 }
 
-const walk = async (directory) => {
+const walk = async (directory, allowMissing = false) => {
+  let entries
+  try {
+    entries = await readdir(directory, { withFileTypes: true })
+  } catch (error) {
+    if (allowMissing && error.code === 'ENOENT') return []
+    throw error
+  }
   const files = []
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
+  for (const entry of entries) {
     const entryPath = path.join(directory, entry.name)
     if (entry.isDirectory()) files.push(...(await walk(entryPath)))
     else if (entry.isFile() && entry.name.endsWith('.test.ts')) files.push(entryPath)
@@ -104,7 +112,7 @@ const summaries = []
 
 for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
   const domainRoot = path.join(CASE_ROOT, domain)
-  const files = await walk(domainRoot)
+  const files = await walk(domainRoot, domain === 'account')
   const actualCaseIds = []
 
   for (const filePath of files) {
@@ -296,11 +304,20 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
     const plannedCaseIds = plan.cases.map((item) => item.id)
     const planned = new Set(plannedCaseIds)
     const actual = new Set(actualCaseIds)
+    for (const id of planned) {
+      if (plannedCaseIds.indexOf(id) !== plannedCaseIds.lastIndexOf(id)) {
+        failures.push(`${rule.plan}: 重复计划 caseId ${id}`)
+      }
+    }
     for (const item of plan.cases) {
       for (const field of PLAN_FIELDS) {
         if (!new RegExp(`^- ${field}：`, 'mu').test(item.body)) {
           failures.push(`${rule.plan}: case ${item.id} 缺少 ${field}`)
         }
+      }
+      const oracle = item.body.match(/^- Oracle：.*$/gmu)?.join('\n') || ''
+      if (domain === 'account' && acceptanceReferences(oracle, rule.acPrefixes).size === 0) {
+        failures.push(`${rule.plan}: case ${item.id} 的 Oracle 未登记验收编号`)
       }
     }
     const pending = new Set([...plan.source.matchAll(/^待实现用例：([^\n]+)/gmu)].flatMap(match => [...match[1].matchAll(/`([^`]+)`/gu)].map(item => item[1])))
@@ -314,10 +331,25 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
       if (!planned.has(caseId)) failures.push(`${domain}: case ${caseId} 未登记到 ${rule.plan}`)
     }
 
+    let acceptanceSummary = ''
     if (rule.prd) {
       const prd = await readFile(path.join(PRD_ROOT, rule.prd), 'utf8')
       const prdAcs = acceptanceReferences(prd, rule.acPrefixes)
       const planAcs = acceptanceReferences(plan.source, rule.acPrefixes)
+      if (domain === 'account') {
+        const declarations = new Set()
+        for (const line of prd.matchAll(/^- 验收：.+$/gmu)) {
+          for (const [, id] of line[0].matchAll(/`(ACC-[A-Z0-9-]+-AC[1-9]\d*)`/gu)) {
+            if (declarations.has(id)) failures.push(`${rule.prd}: 重复验收编号 ${id}`)
+            declarations.add(id)
+          }
+        }
+        if (!declarations.size) failures.push(`${rule.prd}: 没有验收项`)
+        for (const id of prdAcs) {
+          if (!declarations.has(id)) failures.push(`${rule.prd}: 未定义验收编号 ${id}`)
+        }
+        acceptanceSummary = ` / ${prdAcs.size} AC registered`
+      }
       const registrationSource = [
         ...plan.cases.flatMap((item) => item.body.match(/^- Oracle：.*$/gmu) || []),
         ...[
@@ -336,7 +368,11 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
         if (!prdAcs.has(ac)) failures.push(`${rule.plan}: 引用了不存在的 ${ac}`)
       }
     }
-    summaries.push(`${domain} ${String(files.length)} files / ${String(actual.size)} cases`)
+    summaries.push(
+      `${domain} ${files.length} files / ${actual.size} cases${
+        pending.size ? ` / ${pending.size} pending` : ''
+      }${acceptanceSummary}`
+    )
   } else {
     summaries.push(`${domain} ${String(files.length)} files`)
   }
