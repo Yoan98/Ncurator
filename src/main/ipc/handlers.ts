@@ -1,4 +1,5 @@
 import { UserSkillService } from '../services/skills/UserSkillService'
+import { registerDesktopAccount } from './desktopAccount'
 import type {
   UserSkillCreateRequest,
   UserSkillUpdateRequest,
@@ -261,6 +262,8 @@ export function registerOpenExternalHandler(): void {
 }
 
 export function registerHandlers(services: {
+  currentWindow: () => BrowserWindow | undefined
+  rendererUrl?: string
   ingestionService: IngestionService
   embeddingService: EmbeddingService
   embeddingModelService?: EmbeddingModelService
@@ -3794,4 +3797,5 @@ export function registerHandlers(services: {
       return scheduledTaskService.dismissBusyNotice(payload)
     }
   )
+  return registerDesktopAccount(services.currentWindow, services.rendererUrl, chatRunService, confirmDialogService)
 }

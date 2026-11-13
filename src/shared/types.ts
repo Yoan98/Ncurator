@@ -2134,6 +2134,7 @@ type AiRunEventPayload =
       type: 'run_cancelled'
       runId: string
     }
+  | { type: 'run_pending_messages_parked'; runId: string; messageIds: string[] }
   | {
       type: 'human_interaction_required'
       runId: string
@@ -2177,6 +2178,7 @@ export type ChatMessageLogUserContext = {
   selectedReferences: SelectedReference[]
   attachments: ChatAttachment[]
   contentNodes?: ChatMessageContentNode[]
+  displayOnly?: true
 }
 
 export const CHAT_PLAN_STATUSES = ['todo', 'doing', 'done'] as const

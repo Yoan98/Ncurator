@@ -104,6 +104,12 @@ export class ChatMessageLogStore {
       .filter((record): record is ChatMessageLogRecord => record !== null)
   }
 
+  public async listForModel(partnerId: string, subagentId?: string): Promise<ChatMessageLogRecord[]> {
+    return (await this.list(partnerId, subagentId)).filter(record =>
+      record.entry.kind !== 'user' || !record.entry.context.displayOnly
+    )
+  }
+
   public async listPage(input: {
     partnerId: string
     subagentId?: string

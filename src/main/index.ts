@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerHandlers, registerOpenExternalHandler } from './ipc/handlers'
-import { desktopProtocolLink, registerDesktopAccount } from './ipc/desktopAccount'
+import { desktopProtocolLink } from './ipc/desktopAccount'
 import { IngestionService } from './services/ingestion/loader'
 import { DEFAULT_EMBEDDING_MODEL_NAME, EmbeddingService } from './services/vector/EmbeddingService'
 import { EmbeddingRuntimeClient } from './services/vector/runtime/EmbeddingRuntimeClient'
@@ -422,8 +422,6 @@ if (!singleInstanceLock) {
     })
     await embeddingModelService.initialize()
 
-    deliverDesktopLink = registerDesktopAccount(() => mainAppWindow,
-      is.dev ? process.env.ELECTRON_RENDERER_URL : undefined)
     const mainWindow = createWindow()
     mainWindow.webContents.on('render-process-gone', (_event, details) => {
       errorLogService.write({
@@ -469,7 +467,9 @@ if (!singleInstanceLock) {
       resolveCdpConnection: () => webCrawlerBrowserHost.getConnection()
     })
 
-    registerHandlers({
+    deliverDesktopLink = registerHandlers({
+      currentWindow: () => mainAppWindow,
+      rendererUrl: is.dev ? process.env.ELECTRON_RENDERER_URL : undefined,
       ingestionService,
       embeddingService,
       embeddingModelService,

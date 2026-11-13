@@ -61,6 +61,13 @@ import type {
 } from '../../../shared/types'
 import { projectAiConversationMessages } from '../../../shared/workbench/conversationProjection'
 import { buildBrainUserMessageForInput } from './human/prompts/brain'
+import { currentDomesticDesktopAccount } from '../officialApi/desktopAccount'
+import { isManagedModelConfigId, resolveManagedRuntimeConfig } from '../officialApi/managedModel'
+
+type ManagedRunBinding = {
+  session: AbortSignal
+  modelConfig: ReturnType<typeof resolveManagedRuntimeConfig>
+}
 
 type ActiveApproval = {
   event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
@@ -81,6 +88,8 @@ type ActiveQuestion = {
 type ActiveRun = {
   fileChangeOwnerRunId?: string
   run: AiRunRecord
+  managed?: ManagedRunBinding
+  managedMessages: Map<string, ManagedRunBinding>
   telemetryModel?: RunModelTelemetry
   contentNodes?: ChatMessageContentNode[]
   cancelled: boolean
@@ -123,6 +132,7 @@ type ChatRunServiceDeps = {
   resolveHumanRuntimeOverrides?: (
     run: AiRunRecord
   ) => AiRunDeps['humanRuntimeOverrides'] | undefined
+  bindManagedModel?: typeof bindManagedModel
   onRunTerminal?: (
     run: AiRunRecord,
     status: Extract<AiRunRecord['status'], 'completed' | 'failed' | 'cancelled'>
@@ -139,6 +149,16 @@ const isActiveRunRecord = (run: AiRunRecord): boolean =>
   (run.status === 'continued' && (run.pendingMessages?.length || 0) > 0)
 const INTERRUPTED_RUN_MESSAGE = '运行已中断，请重新发送消息。'
 const PARTIAL_SAVE_DELAY_MS = 500
+
+function bindManagedModel(selection: NonNullable<ChatSubmitRequest['mainModel']>): ManagedRunBinding {
+  const scope = currentDomesticDesktopAccount().managedCallScope()
+  return {
+    session: scope.session,
+    modelConfig: resolveManagedRuntimeConfig(selection.configId, selection.modelName, scope)
+  }
+}
+
+const stoppedManagedSubmission = { success: false, error: '请重新登录馆长后再发送' } as const
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
@@ -162,6 +182,7 @@ export class ChatRunService {
   private readonly activeApprovals = new Map<string, ActiveApproval[]>()
   private readonly activeQuestions = new Map<string, ActiveQuestion>()
   private readonly pendingPartnerSubmissions = new Set<string>()
+  private readonly pendingManagedSubmissions = new Set<ManagedRunBinding>()
 
   public constructor(private readonly deps: ChatRunServiceDeps) {}
 
@@ -449,6 +470,12 @@ export class ChatRunService {
     if (this.pendingPartnerSubmissions.has(partnerId)) {
       return { success: false, error: '当前伙伴已有运行中的任务，请等待完成后再发送。' }
     }
+    let managed: ManagedRunBinding | undefined
+    if (payload.mainModel && isManagedModelConfigId(payload.mainModel.configId)) {
+      try { managed = (this.deps.bindManagedModel ?? bindManagedModel)(payload.mainModel) }
+      catch { return stoppedManagedSubmission }
+      this.pendingManagedSubmissions.add(managed)
+    }
     this.pendingPartnerSubmissions.add(partnerId)
     try {
       const activeRun = Array.from(this.activeRuns.values()).find(
@@ -467,7 +494,8 @@ export class ChatRunService {
                 workspace: this.deps.workspaceStore,
                 webSources: this.deps.webSourceStore
               }
-            )
+            ),
+            managed
           )
         } finally {
           finishSubmission()
@@ -481,13 +509,15 @@ export class ChatRunService {
               workspace: this.deps.workspaceStore,
               webSources: this.deps.webSourceStore
             }
-          )
+          ),
+          managed
         )
       }
       this.trackSubmitResult(response)
       return response
     } finally {
       this.pendingPartnerSubmissions.delete(partnerId)
+      if (managed) this.pendingManagedSubmissions.delete(managed)
     }
   }
 
@@ -514,6 +544,10 @@ export class ChatRunService {
     }
   }
 
+  private hasPendingContinuation(entry: ActiveRun): boolean {
+    return entry.run.pendingMessages?.some(message => !entry.managedMessages.get(message.id)?.session.aborted) === true
+  }
+
   private async prepareFileChangeFinalization(
     runId: string,
     allowContinuation: boolean
@@ -523,7 +557,7 @@ export class ChatRunService {
     // Seal before awaiting registered submissions, so no new message can race review generation.
     entry.finalizing = true
     await this.waitForPendingUserMessageSubmissions(runId)
-    if (allowContinuation && (entry.run.pendingMessages?.length || 0) > 0) {
+    if (allowContinuation && this.hasPendingContinuation(entry)) {
       entry.finalizing = false
       return false
     }
@@ -532,7 +566,8 @@ export class ChatRunService {
 
   private async enqueueMessage(
     activeRun: ActiveRun,
-    payload: Awaited<ReturnType<typeof resolveUserContent>>
+    payload: Awaited<ReturnType<typeof resolveUserContent>>,
+    managed?: ManagedRunBinding
   ): Promise<ChatSubmitResponse> {
     const { run } = activeRun
     if (activeRun.finalizing)
@@ -566,6 +601,7 @@ export class ChatRunService {
     }
 
     const workspaces = await this.deps.workspaceStore.listWorkspaces()
+    if (managed?.session.aborted) return stoppedManagedSubmission
     if (
       this.activeRuns.get(run.id) !== activeRun ||
       activeRun.cancelled ||
@@ -593,6 +629,7 @@ export class ChatRunService {
       createdAt: Math.max(Date.now(), previousCreatedAt + 1)
     }
     activeRun.run.pendingMessages = [...(activeRun.run.pendingMessages || []), queued]
+    if (managed) activeRun.managedMessages.set(queued.id, managed)
     activeRun.run.updatedAt = queued.createdAt
     await this.deps.aiRunStore.saveRun(activeRun.run)
     const userMessage: ChatMessage = {
@@ -604,7 +641,7 @@ export class ChatRunService {
       contentNodes: queued.contentNodes,
       selectedReferences: queued.selectedReferences,
       attachments: queued.attachments,
-      pending: true
+      pending: !managed?.session.aborted || undefined
     }
     return { success: true, queued: true, userMessage }
   }
@@ -633,7 +670,8 @@ export class ChatRunService {
 
   private async appendContextOnlyMessages(
     messages: PendingChatMessage[],
-    partnerId: string
+    partnerId: string,
+    displayOnly = false
   ): Promise<void> {
     for (const message of messages) {
       const run = this.createContextOnlyRun(partnerId, message)
@@ -654,7 +692,7 @@ export class ChatRunService {
           {
             kind: 'user',
             messageId: message.id,
-            content: buildBrainUserMessageForInput({
+            content: displayOnly ? '' : buildBrainUserMessageForInput({
               userInput: message.input,
               preference: message.preference,
               referenceScope: buildReferenceScope({
@@ -669,7 +707,8 @@ export class ChatRunService {
             context: {
               selectedReferences: message.selectedReferences,
               attachments: message.attachments,
-              contentNodes: message.contentNodes
+              contentNodes: message.contentNodes,
+              ...(displayOnly && { displayOnly: true })
             }
           }
         ]
@@ -678,9 +717,10 @@ export class ChatRunService {
   }
 
   private async createQueuedContinuation(
-    previousRun: AiRunRecord,
+    previous: ActiveRun,
     terminalStatus: 'completed' | 'continued'
   ): Promise<ActiveRun | null> {
+    const previousRun = previous.run
     const queued = previousRun.pendingMessages || []
     if (queued.length === 0) return null
     const timestampFloor = Math.max(Date.now(), previousRun.updatedAt, previousRun.finishedAt || 0)
@@ -717,6 +757,8 @@ export class ChatRunService {
       fileChangeOwnerRunId:
         this.activeRuns.get(previousRun.id)?.fileChangeOwnerRunId || previousRun.id,
       run: continuationRun,
+      managed: previous.managedMessages.get(latest.id),
+      managedMessages: new Map(),
       telemetryModel: this.deps.telemetryService?.captureRunModel(mainModel),
       contentNodes: latest.contentNodes,
       cancelled: false,
@@ -729,6 +771,7 @@ export class ChatRunService {
     }
 
     previousRun.pendingMessages = []
+    previous.managedMessages.clear()
     previousRun.status = terminalStatus
     previousRun.updatedAt = Date.now()
     previousRun.finishedAt = previousRun.updatedAt
@@ -815,14 +858,55 @@ export class ChatRunService {
     const normalizedRunId = String(runId || '').trim()
     const entry = this.activeRuns.get(normalizedRunId)
     if (!entry || entry.finalizing) return { success: false, error: '当前运行已结束' }
+    await this.stopRun(entry)
+    return { success: true }
+  }
+
+  public hasManagedSessionWork(session: AbortSignal): boolean {
+    return [...this.pendingManagedSubmissions].some(binding => binding.session === session) ||
+      [...this.activeRuns.values()].some(entry => !entry.cancelled &&
+        (entry.managed?.session === session && isActiveRunRecord(entry.run) ||
+          [...entry.managedMessages.values()].some(binding => binding.session === session)))
+  }
+
+  public async stopManagedSession(session: AbortSignal): Promise<void> {
+    if (!session.aborted) return
+    const work: Promise<void>[] = []
+    for (const entry of this.activeRuns.values()) {
+      if (entry.managed?.session === session && isActiveRunRecord(entry.run)) {
+        work.push(this.stopRun(entry))
+      } else if ([...entry.managedMessages.values()].some(binding => binding.session === session)) {
+        work.push(this.queueRunOperation(entry.run.id, () => this.parkExpiredManagedMessages(entry)))
+      }
+    }
+    const results = await Promise.allSettled(work)
+    for (const result of results) {
+      if (result.status === 'rejected') console.error('[CHAT-RUN] account task cleanup failed:', result.reason)
+    }
+  }
+
+  private async parkExpiredManagedMessages(entry: ActiveRun): Promise<void> {
+    const pending = entry.run.pendingMessages || []
+    const expired = pending.filter(message => entry.managedMessages.get(message.id)?.session.aborted)
+    if (!expired.length) return
+    // Keep the submitted text visible without adding it to future model context.
+    await this.appendContextOnlyMessages(expired, entry.run.partnerId, true)
+    const expiredIds = new Set(expired.map(message => message.id))
+    entry.run.pendingMessages = entry.run.pendingMessages?.filter(message => !expiredIds.has(message.id))
+    for (const id of expiredIds) entry.managedMessages.delete(id)
+    await this.deps.aiRunStore.saveRun(entry.run)
+    this.broadcastEvent({ type: 'run_pending_messages_parked', runId: entry.run.id, messageIds: [...expiredIds] })
+  }
+
+  private async stopRun(entry: ActiveRun): Promise<void> {
+    if (entry.cancelled) return
+    const runId = entry.run.id
     entry.cancelled = true
     entry.abortController.abort()
-    await terminalSessionManager.stopByRun(normalizedRunId)
-    await this.closeApprovalQueue(normalizedRunId, '已取消')
-    const question = this.activeQuestions.get(normalizedRunId)
+    const question = this.activeQuestions.get(runId)
     question?.resolve({ accepted: false, error: '已取消' })
-    this.activeQuestions.delete(normalizedRunId)
-    return { success: true }
+    this.activeQuestions.delete(runId)
+    await Promise.all([terminalSessionManager.stopByRun(runId), this.closeApprovalQueue(runId, '已取消')])
   }
 
   public async submitHumanInteraction(
@@ -967,7 +1051,8 @@ export class ChatRunService {
   }
 
   private async submitAi(
-    payload: Awaited<ReturnType<typeof resolveUserContent>>
+    payload: Awaited<ReturnType<typeof resolveUserContent>>,
+    managed?: ManagedRunBinding
   ): Promise<ChatSubmitResponse> {
     const partnerHasActiveRun = Array.from(this.activeRuns.values()).some(
       (entry) => entry.run.partnerId === payload.partnerId
@@ -999,6 +1084,7 @@ export class ChatRunService {
       runId
     })
     if (!validation.ok) return { success: false, error: validation.error }
+    if (managed?.session.aborted) return stoppedManagedSubmission
 
     const createdAt = Date.now()
     const userMessage: ChatMessage = {
@@ -1074,6 +1160,8 @@ export class ChatRunService {
 
     const activeRun: ActiveRun = {
       run,
+      managed,
+      managedMessages: new Map(),
       telemetryModel: this.deps.telemetryService?.captureRunModel(mainModel),
       contentNodes: payload.contentNodes,
       cancelled: false,
@@ -1085,6 +1173,7 @@ export class ChatRunService {
       pendingUserMessageSubmissions: new Set()
     }
     this.activeRuns.set(runId, activeRun)
+    if (managed?.session.aborted) await this.stopRun(activeRun)
 
     if (this.deps.autoStartRuns !== false) {
       this.launchRun(runId)
@@ -1132,7 +1221,7 @@ export class ChatRunService {
         : this.deps.scheduledTaskService
 
     try {
-      const result = await AiRunService.getInstance().run(
+      const execute = () => AiRunService.getInstance().run(
         {
           runId,
           ownerRunId: entry.fileChangeOwnerRunId || runId,
@@ -1150,6 +1239,7 @@ export class ChatRunService {
           workspaceRoots
         },
         {
+          modelConfig: entry.managed?.modelConfig,
           releaseRun: (executionRunId) => this.deps.runResourceManager.releaseRun(executionRunId),
           llmStore: this.deps.llmStore,
           partnerStore: this.deps.partnerStore,
@@ -1169,8 +1259,7 @@ export class ChatRunService {
           isCancelled: () => Boolean(this.activeRuns.get(runId)?.cancelled),
           prepareFileChangeFinalization: (allowContinuation) =>
             this.prepareFileChangeFinalization(runId, allowContinuation),
-          hasPendingUserMessages: () =>
-            (this.activeRuns.get(runId)?.run.pendingMessages?.length || 0) > 0,
+          hasPendingUserMessages: () => this.hasPendingContinuation(entry),
           waitForPendingUserMessageSubmissions: async () =>
             await this.waitForPendingUserMessageSubmissions(runId),
           abortSignal: this.activeRuns.get(runId)?.abortController.signal,
@@ -1187,6 +1276,20 @@ export class ChatRunService {
         }
       )
 
+      let result = await execute()
+      while (result.status === 'continued' && !entry.cancelled) {
+        await this.flushRunEvents(runId)
+        if (entry.cancelled) break
+        run.status = 'continued'
+        run.artifacts = result.finalArtifacts.reduce(appendArtifact, run.artifacts || [])
+        run.updatedAt = Date.now()
+        await this.deps.aiRunStore.saveRun(run)
+        await this.queueRunEvent(runId, { type: 'run_completed', runId })
+        if (entry.run.status !== 'running') return
+        if (entry.cancelled) break
+        // The queued continuation was withdrawn after the graph yielded. Keep the original task.
+        result = await execute()
+      }
       await this.flushRunEvents(runId)
       if (this.activeRuns.get(runId)?.cancelled && result.status !== 'cancelled') {
         await this.queueRunEvent(runId, { type: 'run_cancelled', runId })
@@ -1211,24 +1314,6 @@ export class ChatRunService {
           }
         })
         // run_failed 已由 AiRunService 唯一发送，这里不再补发。
-        return
-      }
-
-      if (result.status === 'continued') {
-        const continuedRun = await this.getMutableRun(runId)
-        if (continuedRun) {
-          continuedRun.status = 'continued'
-          continuedRun.pendingMessages = continuedRun.pendingMessages || []
-          continuedRun.partialAnswer = ''
-          continuedRun.finalAnswer = undefined
-          continuedRun.artifacts = result.finalArtifacts.reduce(
-            (artifacts, artifact) => appendArtifact(artifacts, artifact),
-            continuedRun.artifacts || []
-          )
-          continuedRun.updatedAt = Date.now()
-          await this.deps.aiRunStore.saveRun(continuedRun)
-        }
-        await this.queueRunEvent(runId, { type: 'run_completed', runId })
         return
       }
 
@@ -1573,12 +1658,26 @@ export class ChatRunService {
       entry.finalizing = true
       await this.waitForPendingUserMessageSubmissions(runId)
     }
-    let projectedEvent: AiRunEvent =
-      event.type === 'run_completed' && entry?.cancelled ? { type: 'run_cancelled', runId } : event
     const run = await this.getMutableRun(runId)
     if (!run || entry?.deleted) return
-    if (projectedEvent.type === 'run_completed' && entry?.cancelled) {
-      projectedEvent = { type: 'run_cancelled', runId }
+    if (entry && isTerminalEvent) {
+      // Scope changes can occur during SQLite writes. Filter again before synchronously moving the queue.
+      while (run.pendingMessages?.some(message => entry.managedMessages.get(message.id)?.session.aborted)) {
+        await this.parkExpiredManagedMessages(entry)
+      }
+    }
+    if (entry?.deleted) return
+    if (entry?.managed?.session.aborted && isTerminalEvent) {
+      entry.cancelled = true
+    }
+    const projectedEvent: AiRunEvent = isTerminalEvent && entry?.cancelled
+      ? { type: 'run_cancelled', runId } : event
+    if (entry?.managed?.session.aborted && !isTerminalEvent && event.type !== 'run_started') return
+    if (entry && projectedEvent.type === 'run_completed' && run.status === 'continued' && !run.pendingMessages?.length) {
+      run.status = 'running'
+      entry.finalizing = false
+      await this.deps.aiRunStore.saveRun(run)
+      return
     }
     let continuation: ActiveRun | null = null
     const discardUnstartedContinuation = (): void => {
@@ -1592,9 +1691,9 @@ export class ChatRunService {
     }
     if (projectedEvent.type === 'run_cancelled' || projectedEvent.type === 'run_failed') {
       await this.parkQueuedMessages(run)
-    } else if (projectedEvent.type === 'run_completed' && (run.pendingMessages?.length || 0) > 0) {
+    } else if (entry && projectedEvent.type === 'run_completed' && (run.pendingMessages?.length || 0) > 0) {
       continuation = await this.createQueuedContinuation(
-        run,
+        entry,
         run.status === 'continued' ? 'continued' : 'completed'
       )
     }

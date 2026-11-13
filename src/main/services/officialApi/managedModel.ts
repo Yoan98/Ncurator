@@ -15,6 +15,7 @@ const endpoint = '/api/v2/managed'
 const resultEvent = 'ncurator.result'
 const finishReasons = new Set(['stop', 'length', 'tool_calls', 'content_filter'])
 const invocations = new WeakMap<LlmRuntimeConfig, { requestId: string; scope: Scope }>()
+const modelScopes = new WeakMap<LlmRuntimeConfig, Scope>()
 
 function modelId(configId: string) {
   const value = managedId.exec(configId)?.[1]
@@ -25,17 +26,23 @@ export const isManagedModelConfigId = (id: string) => modelId(id) !== undefined
 
 export function forManagedInvocation(config: LlmRuntimeConfig) {
   if (!isManagedModelConfigId(config.id)) return config
+  const scope = modelScopes.get(config)
+  if (!scope) throw failure('unauthorized')
+  scope.assertCurrent()
   const invocation = { ...config }
-  invocations.set(invocation, { requestId: randomUUID(), scope: currentDomesticDesktopAccount().managedCallScope() })
+  invocations.set(invocation, { requestId: randomUUID(), scope })
   return invocation
 }
 
-export function resolveManagedRuntimeConfig(configId: string, name: string): LlmRuntimeConfig {
+export function resolveManagedRuntimeConfig(configId: string, name: string,
+  scope = currentDomesticDesktopAccount().managedCallScope()): LlmRuntimeConfig {
   const id = modelId(configId)
   if (!id || getAppRuntime().distribution !== 'domestic') throw new Error('馆长模型暂不可用')
-  currentDomesticDesktopAccount().managedCallScope()
-  return { id: configId, name, providerKind: 'openai-compatible', base_url: officialApiUrl('domestic', endpoint),
+  scope.assertCurrent()
+  const config: LlmRuntimeConfig = { id: configId, name, providerKind: 'openai-compatible', base_url: officialApiUrl('domestic', endpoint),
     api_key: 'managed-placeholder', model_name: id }
+  modelScopes.set(config, scope)
+  return config
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -72,7 +79,6 @@ const failure = (code: string, status?: number) => new LlmProviderError({
 
 type Scope = ReturnType<ReturnType<typeof currentDomesticDesktopAccount>['managedCallScope']>
 type Dependencies = {
-  scope: () => Scope
   fetch: typeof fetch
   wait: (ms: number, signal: AbortSignal) => Promise<unknown>
 }
@@ -201,7 +207,6 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
 }
 
 export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependencies = {
-  scope: () => currentDomesticDesktopAccount().managedCallScope(),
   fetch: globalThis.fetch, wait: (ms, signal) => delay(ms, undefined, { signal })
 }): typeof fetch {
   const id = modelId(config.id)
@@ -216,13 +221,15 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
     const requestId = invocation?.requestId ?? randomUUID()
     const body = JSON.stringify({ ...parsed, model: id, requestId })
     const routeId = randomUUID()
-    const scope = invocation?.scope ?? deps.scope()
+    const scope = invocation?.scope ?? modelScopes.get(config)
+    if (!scope) throw failure('unauthorized')
     let recovered: ReturnType<Scope['recover']> | undefined
     const recover = () => recovered ??= scope.recover(requestId, AbortSignal.timeout(5_000))
     let access = await scope.accessToken()
     let refreshed = false
     for (let attempt = 0; ; ) {
       request.signal.throwIfAborted()
+      scope.assertCurrent()
       const headers = new Headers(buildDesktopAppGatewayHeaders({ method: 'POST', url, body }))
       headers.set('Content-Type', 'application/json')
       headers.set('Authorization', 'Bearer ' + access)

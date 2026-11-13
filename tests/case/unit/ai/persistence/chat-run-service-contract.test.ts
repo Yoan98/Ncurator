@@ -11,7 +11,7 @@ import { ChatRunService } from '../../../../../src/main/services/ai/ChatRunServi
 import { resolveHistoryFloor } from '../../../../../src/main/services/ai/human/memory/transcript'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
 import { AiRunResourceManager } from '../../../../../src/main/services/ai/run/AiRunResourceManager'
-import { createCompletedAiRunState } from '../../../../../src/main/services/ai/run/state'
+import { createCompletedAiRunState, createContinuedAiRunState } from '../../../../../src/main/services/ai/run/state'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
 import { StorageService } from '../../../../../src/main/services/storage/StorageService'
@@ -93,6 +93,7 @@ const createTestService = async (options?: {
   autoStartRuns?: boolean
   onRunTerminal?: (run: AiRunRecord, status: 'completed' | 'failed' | 'cancelled') => void
   observeEvent?: (event: AiRunEvent) => void
+  bindManagedModel?: ConstructorParameters<typeof ChatRunService>[0]['bindManagedModel']
 }): Promise<TestService> => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'ncurator-chat-run-'))
   const workspaceRoot = path.join(root, 'workspace')
@@ -142,6 +143,7 @@ const createTestService = async (options?: {
       options?.observeEvent?.(event)
     },
     autoStartRuns: options?.autoStartRuns ?? false,
+    bindManagedModel: options?.bindManagedModel,
     onRunTerminal: options?.onRunTerminal
   })
   return { workspaceRoot, storage, service, events, telemetry }
@@ -446,6 +448,98 @@ describe('unit ai persistence backend', () => {
         (item) => item.id === `queued-${queued.userMessage?.id}`
       )
     ).toBe(false)
+  })
+
+  it('stops only the ended session and preserves custom work and locally submitted text', async () => {
+    const first = new AbortController()
+    const second = new AbortController()
+    let session = first.signal
+    const setup = await createTestService({
+      bindManagedModel: ({ configId, modelName }) => ({
+        session,
+        modelConfig: { id: configId, name: modelName, model_name: modelName,
+          providerKind: 'openai-compatible', base_url: 'https://example.invalid', api_key: 'synthetic' }
+      })
+    })
+    const partner = await seedPartner(setup.storage)
+    for (const id of ['managed-first', 'managed-second', 'free-run']) {
+      await setup.storage.partner.savePartner({ ...partner, id, name: id })
+    }
+    const submit = (partnerId: string, configId: string, prompt: string) => setup.service.submit({
+      partnerId, mainModel: { configId, modelName: 'model' }, contentNodes: [{ kind: 'text', text: prompt }]
+    })
+    const custom = (await submit(partner.id, 'custom', '自定义当前任务')).run!
+    const free = (await submit('free-run', 'free:synthetic', '免费当前任务')).run!
+    const a = (await submit('managed-first', 'managed:1', '旧会话任务')).run!
+    const queued = await submit(partner.id, 'managed:1', '未执行的旧会话追加消息')
+    expect(queued.queued).toBe(true)
+    session = second.signal
+    const b = (await submit('managed-second', 'managed:1', '新会话任务')).run!
+    const retained = await submit(partner.id, 'custom', '保留的自定义追加消息')
+    expect(retained.queued).toBe(true)
+    expect(setup.service.hasManagedSessionWork(first.signal)).toBe(true)
+
+    const service = setup.service as ChatRunServicePrivate
+    const awaiting = service.requestApprovalBatch(a.id, approvalRequest(a.id, 'first'))
+    await waitForCondition(async () => (await setup.storage.aiRun.getRun(a.id))?.status === 'waiting_approval')
+    first.abort()
+    await setup.service.stopManagedSession(first.signal)
+    expect(await awaiting).toMatchObject({ accepted: false })
+    await service.queueRunEvent(a.id, { type: 'run_completed', runId: a.id })
+    expect((await setup.storage.aiRun.getRun(a.id))?.status).toBe('cancelled')
+    for (const run of [free, b, custom]) {
+      expect((await setup.storage.aiRun.getRun(run.id))?.status).toBe('running')
+    }
+    expect(setup.service.hasManagedSessionWork(first.signal)).toBe(false)
+    expect(setup.service.hasManagedSessionWork(second.signal)).toBe(true)
+    const snapshot = await setup.service.getPartnerSnapshot(partner.id)
+    expect(snapshot.messages.find(message => message.id === queued.userMessage?.id)).toMatchObject({
+      content: '未执行的旧会话追加消息'
+    })
+    expect((await setup.storage.chatMessageLog.listForModel(partner.id))
+      .some(record => record.entry.kind === 'user' && record.entry.messageId === queued.userMessage?.id)).toBe(false)
+    await service.queueRunEvent(custom.id, { type: 'run_completed', runId: custom.id })
+    expect((await setup.service.getPartnerSnapshot(partner.id)).activeRuns.map(item => item.run.id))
+      .toEqual(['queued-' + retained.userMessage!.id])
+  })
+
+  it('resumes a custom task when its queued managed continuation loses its session during handoff', async () => {
+    const session = new AbortController()
+    const setup = await createTestService({ autoStartRuns: true, bindManagedModel: ({ configId, modelName }) => ({
+      session: session.signal,
+      modelConfig: { id: configId, name: modelName, model_name: modelName,
+        providerKind: 'openai-compatible', base_url: 'https://example.invalid', api_key: 'synthetic' }
+    }) })
+    const executionStarted = Promise.withResolvers<void>()
+    const yielded = Promise.withResolvers<void>()
+    const execute = vi.spyOn(AiRunService.getInstance(), 'run').mockImplementationOnce(async (payload, deps) => {
+      executionStarted.resolve()
+      await yielded.promise
+      expect(deps.hasPendingUserMessages?.()).toBe(true)
+      session.abort()
+      await setup.service.stopManagedSession(session.signal)
+      return createContinuedAiRunState({ runId: payload.runId, partnerId: payload.partnerId, input: payload.input, finalArtifacts: [] })
+    }).mockImplementationOnce(async (payload, deps) => {
+      expect(deps.hasPendingUserMessages?.()).toBe(false)
+      return createCompletedAiRunState({ runId: payload.runId, partnerId: payload.partnerId, input: payload.input,
+        finalDeliveryMarkdown: '原任务已继续完成', finalArtifacts: [] })
+    })
+    try {
+      const run = await submitAiRun(setup)
+      await executionStarted.promise
+      const queued = await setup.service.submit({
+        partnerId: run.partnerId, mainModel: { configId: 'managed:1', modelName: '测试模型' },
+        contentNodes: [{ kind: 'text', text: '不执行这条馆长消息' }]
+      })
+      expect(queued.queued).toBe(true)
+      yielded.resolve()
+      await waitForCondition(async () => (await setup.storage.aiRun.getRun(run.id))?.status === 'completed')
+      expect(execute.mock.calls.map(([payload]) => payload.runId)).toEqual([run.id, run.id])
+      expect((await setup.storage.aiRun.getRun(run.id))?.finalAnswer).toBe('原任务已继续完成')
+    } finally {
+      yielded.resolve()
+      execute.mockRestore()
+    }
   })
 
   it('seals submissions during review generation and keeps queued continuations open', async () => {

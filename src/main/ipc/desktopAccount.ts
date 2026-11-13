@@ -1,4 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
+import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
 import {
@@ -6,6 +7,9 @@ import {
 } from '../../shared/desktopAccount'
 import { getAppRuntime } from '../services/app/AppRuntime'
 import { createDomesticDesktopAccount, type DesktopAccount } from '../services/officialApi/desktopAccount'
+import type { ChatRunService } from '../services/ai/ChatRunService'
+import type { ConfirmDialogWindowService } from '../services/ConfirmDialogWindowService'
+import { mainText } from '../services/app/i18n'
 
 export function desktopProtocolLink(args: string[]) {
   const links = args.filter(value => /^ncurator:/i.test(value))
@@ -15,7 +19,12 @@ export function desktopProtocolLink(args: string[]) {
     ? link : undefined
 }
 
-export function registerDesktopAccount(currentWindow: () => BrowserWindow | undefined, rendererUrl?: string) {
+export function registerDesktopAccount(
+  currentWindow: () => BrowserWindow | undefined,
+  rendererUrl: string | undefined,
+  runs: Pick<ChatRunService, 'hasManagedSessionWork' | 'stopManagedSession'>,
+  dialogs: ConfirmDialogWindowService
+) {
   const entry = new URL(rendererUrl || pathToFileURL(join(__dirname, '../renderer/index.html')).href)
   function isAccountPage(value: string) {
     try {
@@ -24,6 +33,32 @@ export function registerDesktopAccount(currentWindow: () => BrowserWindow | unde
     } catch { return false }
   }
   let account: DesktopAccount | undefined
+  let logoutRequest: { session: AbortSignal; promise: Promise<void> } | undefined
+
+  async function logout(account: DesktopAccount, session: AbortSignal, window: BrowserWindow) {
+    if (runs.hasManagedSessionWork(session)) {
+      const dialogId = 'desktop-account-logout-' + randomUUID()
+      const close = () => dialogs.close(window, dialogId)
+      session.addEventListener('abort', close, { once: true })
+      try {
+        const response = await dialogs.show(window, {
+          dialogId,
+          title: mainText('desktopAccountLogout'),
+          message: mainText('desktopAccountStopRuns'),
+          confirmText: mainText('desktopAccountLogout'),
+          cancelText: mainText('cancel'),
+          danger: true
+        })
+        if (!response.success) throw new Error(response.error)
+        if (response.action !== 'confirm' || session.aborted || window.isDestroyed()) return
+      } finally {
+        session.removeEventListener('abort', close)
+        close()
+      }
+    }
+    await account.logout().catch(() => {})
+  }
+
   ipcMain.handle(DESKTOP_ACCOUNT_COMMAND, async (event, command: string): Promise<DesktopAccountSnapshot> => {
     const window = currentWindow()
     if (window?.webContents !== event.sender || event.senderFrame !== event.sender.mainFrame) {
@@ -38,7 +73,7 @@ export function registerDesktopAccount(currentWindow: () => BrowserWindow | unde
         if (!contents || contents.isDestroyed()) return
         const frame = contents.mainFrame
         if (isAccountPage(frame.url)) frame.send(DESKTOP_ACCOUNT_CHANGED, snapshot)
-      })
+      }, session => { void runs.stopManagedSession(session) })
     } catch {
       return { status: 'storage_unavailable' }
     }
@@ -53,7 +88,16 @@ export function registerDesktopAccount(currentWindow: () => BrowserWindow | unde
       if (status === 'authorizing') await account.reopenBrowser()
       else if (status !== 'signed_in' && status !== 'restoring' && status !== 'logout_incomplete') await account.begin().catch(() => {})
     }
-    if (command === 'logout') await account.logout().catch(() => {})
+    if (command === 'logout') {
+      const session = account.getSessionSignal()
+      if (logoutRequest?.session !== session && account.getSnapshot().status !== 'signed_out') {
+        const promise = logout(account, session, window).finally(() => {
+          if (logoutRequest?.promise === promise) logoutRequest = undefined
+        })
+        logoutRequest = { session, promise }
+      }
+      if (logoutRequest?.session === session) await logoutRequest.promise
+    }
     return account.getSnapshot()
   })
   return (link: string) => {

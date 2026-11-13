@@ -6,10 +6,12 @@ import { HumanMessage, ToolMessage } from '@langchain/core/messages'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createDomesticDesktopAccount, DesktopAccount, DesktopAccountError } from '../../../../src/main/services/officialApi/desktopAccount'
+import { createDomesticDesktopAccount, currentDomesticDesktopAccount, DesktopAccount, DesktopAccountError } from '../../../../src/main/services/officialApi/desktopAccount'
 import { resolveManagedRuntimeConfig } from '../../../../src/main/services/officialApi/managedModel'
 import { createAiLlmExecutor } from '../../../../src/main/services/ai/llmExecutor'
 import { desktopProtocolLink, registerDesktopAccount } from '../../../../src/main/ipc/desktopAccount'
+import { ConfirmDialogWindowService } from '../../../../src/main/services/ConfirmDialogWindowService'
+import type { ConfirmDialogResponse } from '../../../../src/shared/types'
 
 const electron = vi.hoisted(() => ({
   safeStorage: { isEncryptionAvailable: vi.fn(), getSelectedStorageBackend: vi.fn(() => 'synthetic'), encryptString: vi.fn(), decryptString: vi.fn() },
@@ -225,7 +227,14 @@ it.runIf(Boolean(process.env.NCURATOR_TEST_MANAGED_DIRECT))('uses the real API f
     expect(fixture.account.getSnapshot()).toMatchObject({ status: 'signed_in', userNo: direct.secondary.userNo })
     expect(fixture.submitted).toHaveLength(3)
 
-    await expect(executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: 'isolated_disconnect',
+    const nextInput = { caller: 'test', schemaName: 'managed', system: '系统', user: 'isolated_disconnect',
+      streamingMode: 'force_stream' } as const
+    await expect(executor.chatText(nextInput)).rejects.toThrow()
+    expect(fixture.submitted).toHaveLength(3)
+    const nextExecutor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:' + direct.modelId, '合成模型'),
+      saveConfig: async () => {}, checkCancelled: () => {} })
+    await expect(nextExecutor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: 'isolated_disconnect',
       streamingMode: 'force_stream' })).resolves.toBe('合成查回回复')
     expect(fixture.submitted).toHaveLength(4)
     expect(new Set(fixture.submitted.map(item => item.requestId)).size).toBe(4)
@@ -353,7 +362,9 @@ it('rejects a main frame that leaves the trusted entry and suppresses its accoun
   const sender = { mainFrame: frame, isDestroyed: () => false }
   const send = { sender, senderFrame: frame }
   const fakeWindow = { webContents: sender } as unknown as Electron.BrowserWindow
-  const deliver = registerDesktopAccount(() => fakeWindow, trustedUrl)
+  const deliver = registerDesktopAccount(() => fakeWindow, trustedUrl, {
+    hasManagedSessionWork: () => false, stopManagedSession: async () => {}
+  }, new ConfirmDialogWindowService())
   const command = electron.ipcMain.handle.mock.calls.at(-1)![1]
   let state = ''
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
@@ -377,6 +388,62 @@ it('rejects a main frame that leaves the trusted entry and suppresses its accoun
     await expect.poll(() => command(send, 'restore')).toEqual({ status: 'signed_in', userNo })
     expect(frame.send.mock.calls).toEqual([['desktop-account:changed', { status: 'authorizing' }]])
   } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+it('shares one logout prompt, preserves work on cancellation and ignores a late confirmation for another login', async () => {
+  const fixture = managedDesktopFixture(() => { throw new Error('unexpected model request') })
+  const url = 'http://127.0.0.1:5173/'
+  const frame = { url, send: vi.fn() }
+  const sender = { mainFrame: frame, isDestroyed: () => false }
+  const event = { sender, senderFrame: frame }
+  const window = { webContents: sender, isDestroyed: () => false } as unknown as Electron.BrowserWindow
+  let decision = Promise.withResolvers<ConfirmDialogResponse>()
+  const show = vi.fn(() => decision.promise)
+  const close = vi.fn()
+  const dialogs = { show, close } as unknown as ConfirmDialogWindowService
+  const stop = vi.fn(async (_session: AbortSignal) => {})
+  registerDesktopAccount(() => window, url, {
+    hasManagedSessionWork: () => true, stopManagedSession: stop
+  }, dialogs)
+  const command = electron.ipcMain.handle.mock.calls.at(-1)![1]
+  await command(event, 'restore')
+  const account = currentDomesticDesktopAccount()
+  const login = async () => {
+    await command(event, 'begin')
+    const target = electron.shell.openExternal.mock.calls.at(-1)![0] as string
+    const state = new URLSearchParams(new URL(target).hash.slice(1)).get('state')
+    await account.acceptCallback('ncurator://auth/callback?code=' + secret() + '&state=' + state)
+    return account.getSessionSignal()
+  }
+  try {
+    const firstSession = await login()
+    stop.mockClear()
+    const first = command(event, 'logout')
+    const duplicate = command(event, 'logout')
+    expect(show).toHaveBeenCalledTimes(1)
+    decision.resolve({ success: true, action: 'cancel' })
+    expect(await Promise.all([first, duplicate])).toEqual(Array(2).fill({ status: 'signed_in', userNo }))
+    expect(firstSession.aborted).toBe(false)
+    expect(stop).not.toHaveBeenCalled()
+
+    decision = Promise.withResolvers()
+    const stale = command(event, 'logout')
+    account.clearLocalSession()
+    const secondSession = await login()
+    decision.resolve({ success: true, action: 'confirm' })
+    expect(await stale).toEqual({ status: 'signed_in', userNo })
+    expect(firstSession.aborted).toBe(true)
+    expect(secondSession.aborted).toBe(false)
+    expect(stop.mock.calls.map(([signal]) => signal)).toContain(firstSession)
+    expect(stop.mock.calls.map(([signal]) => signal)).not.toContain(secondSession)
+
+    decision = Promise.withResolvers()
+    const confirmed = command(event, 'logout')
+    decision.resolve({ success: true, action: 'confirm' })
+    expect(await confirmed).toEqual({ status: 'signed_out' })
+    expect(secondSession.aborted).toBe(true)
+    expect(stop.mock.calls.filter(([signal]) => signal === secondSession)).toHaveLength(1)
+  } finally { fixture.cleanup() }
 })
 
 it('discards a late profile from a previous login and validates its owner', async () => {

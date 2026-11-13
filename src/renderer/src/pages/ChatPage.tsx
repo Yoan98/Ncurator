@@ -3658,6 +3658,15 @@ const ChatPage: React.FC = () => {
       }
       const eventPartnerId = activeRunPartnerIdsRef.current[event.runId]
 
+      if (event.type === 'run_pending_messages_parked') {
+        if (eventPartnerId === currentPartnerIdRef.current) {
+          setCurrentMessages(previous => previous.map(item =>
+            item.pending && event.messageIds.includes(item.id) ? { ...item, pending: false } : item
+          ))
+        }
+        return
+      }
+
       if (event.type === 'human_interaction_required' && event.interaction.kind === 'question') {
         if (eventPartnerId) setPartnerQuestionState(eventPartnerId, true)
       }

@@ -32,6 +32,7 @@ type Dependencies = {
   managedCall(requestId: string, accessToken: string, signal?: AbortSignal): Promise<Record<string, unknown>>
   openBrowser(url: string): Promise<void>
   changed?(snapshot: DesktopAccountSnapshot): void
+  sessionEnded?(session: AbortSignal): void
 }
 type Pending = { state: string; verifier: string; id?: string; url?: string; exchange?: Promise<string>; timeout?: ReturnType<typeof setTimeout> }
 
@@ -77,6 +78,7 @@ export class DesktopAccount {
   private access?: { token: string; expiresAt: number }
   private refresh?: Promise<string>
   private generation = 0
+  private session = new AbortController()
   private walletRead?: Promise<DesktopAccountSnapshot>
   private walletReadAt = 0
   private restoreBlocked = false
@@ -88,6 +90,19 @@ export class DesktopAccount {
 
   getSnapshot(): DesktopAccountSnapshot {
     return this.snapshot
+  }
+
+  getSessionSignal(): AbortSignal {
+    return this.session.signal
+  }
+
+  private advanceGeneration() {
+    const previous = this.session
+    this.session = new AbortController()
+    this.generation++
+    previous.abort()
+    this.deps.sessionEnded?.(previous.signal)
+    return this.generation
   }
 
   private publish(snapshot: DesktopAccountSnapshot) {
@@ -207,6 +222,7 @@ export class DesktopAccount {
       this.publishWallet(parseWallet(value))
     }
     return {
+      session: this.session.signal,
       assertCurrent,
       accessToken,
       applyWallet,
@@ -240,7 +256,7 @@ export class DesktopAccount {
 
   async begin() {
     void this.cancel()
-    this.generation++
+    this.advanceGeneration()
     const pending = { state: randomBytes(32).toString('base64url'), verifier: randomBytes(32).toString('base64url') } as Pending
     this.pending = pending
     this.publish({ status: 'authorizing' })
@@ -326,7 +342,7 @@ export class DesktopAccount {
 
     this.clearPending(pending)
     this.restoreBlocked = false
-    const generation = ++this.generation
+    const generation = this.advanceGeneration()
     this.refresh = undefined
     this.access = session.access
     this.publish({ status: 'signed_in', userNo: session.stored.userNo })
@@ -401,7 +417,7 @@ export class DesktopAccount {
   }
 
   private blockLocalSession() {
-    this.generation++
+    const generation = this.advanceGeneration()
     this.restoreBlocked = true
     this.clearPending()
     this.walletRead = undefined
@@ -410,7 +426,7 @@ export class DesktopAccount {
     this.access = undefined
     let durable = false
     try { this.deps.store.block(); durable = true } catch { /* Explicit logout still attempts server revocation and local deletion. */ }
-    return { generation: this.generation, durable }
+    return { generation, durable }
   }
 
   clearLocalSession() {
@@ -525,7 +541,8 @@ export function currentDomesticDesktopAccount() {
   return activeDomesticAccount
 }
 
-export function createDomesticDesktopAccount(changed: (snapshot: DesktopAccountSnapshot) => void) {
+export function createDomesticDesktopAccount(changed: (snapshot: DesktopAccountSnapshot) => void,
+  sessionEnded?: (session: AbortSignal) => void) {
   if (getAppRuntime().distribution !== 'domestic') throw new DesktopAccountError('unavailable')
   async function request(route: Route | 'profile' | 'wallet' | { requestId: string }, method: 'GET' | 'POST', input?: object,
     bearer?: string, signal?: AbortSignal) {
@@ -555,6 +572,7 @@ export function createDomesticDesktopAccount(changed: (snapshot: DesktopAccountS
   activeDomesticAccount = new DesktopAccount(installationId(), {
     store: systemStore(),
     changed,
+    sessionEnded,
     openBrowser: url => shell.openExternal(url),
     post: (route, input, refreshToken) => request(route, 'POST', input, refreshToken),
     profile: token => request('profile', 'GET', undefined, token),

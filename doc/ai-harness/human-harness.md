@@ -94,6 +94,7 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 - 交接只会在前序工具结果已写入 transcript 且 dispatch 队列清空后发生，因此下一次 brain 不会越过尚未记录的工具结果。Brain 已开始后才到达的追加请求由下一处 `context_budget` 边界处理。
 - 若最终回答已经开始，human graph 正常完成原交付；Main 在 `run_completed` 事件后创建一次续接 run。批次内的 user 按 FIFO 进入 transcript，各自保留正文、引用和附件快照；最后一条消息决定续接模型、偏好与执行权限。
 - 安全交接时较早的追加消息以 `context_only` run 和 user log 落库，最后一条由续接 run 写入。运行正常结束时自动启动续接；停止、失败和应用重启恢复时只把待处理消息转成普通 user log，不自动调用模型。
+- 桌面会话结束时，尚未执行的该会话馆长追加消息只保留在本地时间轴，不进入模型上下文。会话绑定只存在于 Main 内存。
 - 停止若发生在工具调用中途，已落库结果保持原样。`repairInterruptedToolCalls` 只在模型上下文投影中为没有结果的悬空调用补充合成 ToolMessage（“The run was interrupted before this tool call could be executed.”）；不会写成真实工具失败记录。
 
 ### 1.7 子会话与派发

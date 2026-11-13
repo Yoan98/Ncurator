@@ -17,7 +17,7 @@ export const getAiContextUsage = async (input: {
   updatedAt: number
   hasEffectiveImageContext: boolean
 }> => {
-  const records = await input.chatMessageLogStore.list(input.partnerId)
+  const records = await input.chatMessageLogStore.listForModel(input.partnerId)
   const messages = projectMessageLogRecords(records).messages
   const usedContextTokens = estimateMessagesForContext(messages)
   const partnerState = await input.workbenchUiStore.getPartnerState(input.partnerId)

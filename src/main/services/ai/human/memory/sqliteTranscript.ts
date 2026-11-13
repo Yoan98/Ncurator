@@ -12,5 +12,5 @@ export const createSqliteTranscript = (
   append: async (entries, options) => {
     await store.appendBatch({ ...scope, runId: options?.runId || runId, entries })
   },
-  load: () => store.list(scope.partnerId, scope.subagentId)
+  load: () => store.listForModel(scope.partnerId, scope.subagentId)
 })
