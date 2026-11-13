@@ -1,5 +1,4 @@
 import { describe, it } from 'vitest'
-import { USER_MANUAL_URL } from '../../../../../src/shared/constants'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
@@ -19,12 +18,16 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['composer'],
-        description: '验证 Workbench 左侧使用帮助入口打开官方手册且不改变会话路由。',
+        description: '验证 Workbench 左侧使用帮助入口打开官网联系页且不改变会话路由。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const { serviceRoute } = await page.evaluate(() => window.api.appSettingsGet())
+          const locale = await page.locator('html').getAttribute('lang')
+          const origin = serviceRoute === 'domestic' ? 'https://www.guanzhangai.cn' : 'https://www.ncurator.com'
+          const contactUrl = origin + (locale === 'zh-CN' ? '/zh/contact' : '/en/contact')
           await navigateToWorkbench(page, { waitForSessionListText: false })
           const helpButton = getWorkbenchLocator(page, workbenchSelectors.settingsHelpButton)
           await helpButton.waitFor({ state: 'visible' })
@@ -34,6 +37,7 @@ describe('workbench conversation e2e', () => {
           const signals = await runtime.collectSignals()
 
           return {
+            contactUrl,
             accessibleName,
             routeBeforeClick,
             routeAfterClick: await page.evaluate(() => window.location.hash),
@@ -46,11 +50,11 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             result.accessibleName === '查看使用帮助' &&
               result.routeAfterClick === result.routeBeforeClick &&
-              result.openExternalCalls.some((entry) => entry.payload === USER_MANUAL_URL),
+              result.openExternalCalls.some((entry) => entry.payload === result.contactUrl),
             {
-              name: 'workbench-help-entry-opens-official-manual',
+              name: 'workbench-help-entry-opens-official-contact',
               message:
-                'Workbench 使用帮助入口应打开官方中文手册，并保持当前会话路由，对齐 WB-COMPOSER-011。',
+                'Workbench 使用帮助入口应打开当前语言的官网联系页，并保持当前会话路由，对齐 WB-COMPOSER-011。',
               data: result
             }
           )

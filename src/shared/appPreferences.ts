@@ -52,6 +52,8 @@ export const officialApiUrl = (route: ServiceRoute, pathname: string): string =>
   `${OFFICIAL_API_ORIGINS[route]}${pathname}`
 export const manualUrl = (runtime: AppRuntimeSnapshot, anchor = ''): string =>
   officialUrl(runtime.distribution, `/${runtime.locale === 'zh-CN' ? 'zh' : 'en'}/manual${anchor}`)
+export const contactUrl = (runtime: AppRuntimeSnapshot): string =>
+  officialUrl(runtime.distribution, `/${runtime.locale === 'zh-CN' ? 'zh' : 'en'}/contact`)
 export const downloadPageUrl = (runtime: AppRuntimeSnapshot): string =>
   officialUrl(runtime.distribution, `/${runtime.locale === 'zh-CN' ? 'zh' : 'en'}`)
 export const routeForOfficialUrl = (value: string): ServiceRoute | null => {

@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { safeStorage, shell } from 'electron'
 import { officialApiUrl, officialUrl } from '../../../shared/appPreferences'
 import type { DesktopAccountSnapshot, DesktopWallet } from '../../../shared/desktopAccount'
+import { MANAGED_MODELS_PATH, parseManagedModels, type ManagedModelsResult } from '../../../shared/managedModels'
 import { getUserDataPath } from '../../utils/userDataPath'
 import { getAppRuntime } from '../app/AppRuntime'
 import { buildDesktopAppGatewayHeaders } from './appClient'
@@ -539,6 +540,35 @@ let activeDomesticAccount: DesktopAccount | undefined
 export function currentDomesticDesktopAccount() {
   if (!activeDomesticAccount || getAppRuntime().distribution !== 'domestic') throw new DesktopAccountError('invalid_grant')
   return activeDomesticAccount
+}
+
+export async function readManagedModels(account: DesktopAccount): Promise<ManagedModelsResult> {
+  if (getAppRuntime().distribution !== 'domestic' || account.getSnapshot().status !== 'signed_in') {
+    return { status: 'signed_out' }
+  }
+  try {
+    const scope = account.managedCallScope()
+    const url = officialApiUrl('domestic', MANAGED_MODELS_PATH)
+    const get = (token: string) => fetch(url, {
+      headers: { ...buildDesktopAppGatewayHeaders({ url, method: 'GET' }), authorization: 'Bearer ' + token },
+      cache: 'no-store', redirect: 'error', signal: AbortSignal.any([scope.session, AbortSignal.timeout(10_000)])
+    })
+    const token = await scope.accessToken()
+    let response = await get(token)
+    if (response.status === 401) {
+      await response.body?.cancel()
+      response = await get(await scope.accessToken(token))
+    }
+    if (!response.ok) {
+      await response.body?.cancel()
+      return { status: 'unavailable' }
+    }
+    const models = parseManagedModels(await response.json())
+    scope.assertCurrent()
+    return { status: 'ready', models }
+  } catch {
+    return { status: account.getSnapshot().status === 'signed_in' ? 'unavailable' : 'signed_out' }
+  }
 }
 
 export function createDomesticDesktopAccount(changed: (snapshot: DesktopAccountSnapshot) => void,

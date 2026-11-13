@@ -12,7 +12,7 @@ import {
   HiOutlineWallet
 } from 'react-icons/hi2'
 import { useDesktopAccount } from '../../contexts/DesktopAccountProvider'
-import { getManualUrl, t } from '../../i18n'
+import { getContactUrl, t } from '../../i18n'
 import { walletAmount } from './walletAmount'
 
 export function DesktopAccountMenu() {
@@ -92,7 +92,7 @@ export function DesktopAccountMenu() {
       label: t(($) => $.common.viewHelp),
       onClick: () => {
         void window.api
-          .openExternal(getManualUrl())
+          .openExternal(getContactUrl())
           .then((value) => {
             if (!value.success) message.error(t(($) => $.settings.couldNotOpenHelpWebsite))
           })

@@ -1,4 +1,4 @@
-import { t, getManualUrl, getRendererRuntime } from '../i18n'
+import { t, getContactUrl, getRendererRuntime } from '../i18n'
 import React, { useEffect, useMemo, useState } from 'react'
 import { ConfigProvider, Modal, message } from 'antd'
 import { NavLink, Navigate, useLocation, useParams } from 'react-router-dom'
@@ -175,7 +175,7 @@ const SettingsPage: React.FC = () => {
               <button
                 type="button"
                 className="nc-sidebar-item flex items-center gap-2.5 px-2.5 py-2"
-                onClick={() => setHelpUrl(getManualUrl())}
+                onClick={() => setHelpUrl(getContactUrl())}
                 aria-label={t(($) => $.common.viewHelp)}
                 data-testid={settingsSelectors.helpButton}
               >

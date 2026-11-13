@@ -7,6 +7,7 @@ import {
 } from './llmPresets'
 import { isFreeModelConfigId } from './freeModels'
 import type { FreeModelPublicEntry } from './freeModels'
+import { isManagedModelConfigId } from './managedModels'
 
 const isChatModelId = (modelId: string): boolean =>
   !/(image|audio|video|tts|asr|realtime|embedding|rerank|ocr|transcri|whisper|search|speech)/u.test(
@@ -59,6 +60,9 @@ export const resolveSelectedWorkbenchModel = (input: {
 }): WorkbenchSelectedModel | null => {
   const selected = input.selected
   if (!selected?.configId || !selected.modelName) return null
+  if (isManagedModelConfigId(selected.configId)) {
+    return { configId: selected.configId, modelName: selected.modelName }
+  }
   if (isFreeModelConfigId(selected.configId)) {
     const entry = input.freeModels?.find(
       (model) => model.configId === selected.configId && model.modelName === selected.modelName

@@ -1,4 +1,4 @@
-import { ipcMain, type BrowserWindow } from 'electron'
+import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
@@ -6,7 +6,8 @@ import {
   DESKTOP_ACCOUNT_CHANGED, DESKTOP_ACCOUNT_COMMAND, type DesktopAccountSnapshot
 } from '../../shared/desktopAccount'
 import { getAppRuntime } from '../services/app/AppRuntime'
-import { createDomesticDesktopAccount, type DesktopAccount } from '../services/officialApi/desktopAccount'
+import { MANAGED_MODELS_GET, type ManagedModelsResult } from '../../shared/managedModels'
+import { createDomesticDesktopAccount, readManagedModels, type DesktopAccount } from '../services/officialApi/desktopAccount'
 import type { ChatRunService } from '../services/ai/ChatRunService'
 import type { ConfirmDialogWindowService } from '../services/ConfirmDialogWindowService'
 import { mainText } from '../services/app/i18n'
@@ -59,12 +60,21 @@ export function registerDesktopAccount(
     await account.logout().catch(() => {})
   }
 
-  ipcMain.handle(DESKTOP_ACCOUNT_COMMAND, async (event, command: string): Promise<DesktopAccountSnapshot> => {
+  function requireAccountPage(event: IpcMainInvokeEvent) {
     const window = currentWindow()
     if (window?.webContents !== event.sender || event.senderFrame !== event.sender.mainFrame) {
       throw new Error('desktop_account_forbidden')
     }
     if (!isAccountPage(event.senderFrame.url)) throw new Error('desktop_account_forbidden')
+    return window
+  }
+  ipcMain.handle(MANAGED_MODELS_GET, async (event): Promise<ManagedModelsResult> => {
+    requireAccountPage(event)
+    if (getAppRuntime().distribution !== 'domestic' || !account) return { status: 'signed_out' }
+    return readManagedModels(account)
+  })
+  ipcMain.handle(DESKTOP_ACCOUNT_COMMAND, async (event, command: string): Promise<DesktopAccountSnapshot> => {
+    const window = requireAccountPage(event)
     if (getAppRuntime().distribution !== 'domestic') return { status: 'unsupported' }
     if (!['restore', 'begin', 'cancel', 'logout', 'profile', 'wallet', 'refresh-wallet'].includes(command)) throw new Error('desktop_account_invalid_command')
     try {

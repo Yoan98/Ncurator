@@ -162,7 +162,7 @@ pnpm test:update:e2e
 - What：Workbench 左侧使用帮助入口。
 - Why：帮助入口必须独立于伙伴创建和模型运行保持可用。
 - How：打开 Workbench，点击帮助入口并观察外链调用和当前路由。
-- Oracle：入口可访问，打开官方中文手册且不改变当前伙伴路由，对齐 `WB-COMPOSER-011`。
+- Oracle：入口可访问，打开所属站点当前语言的联系页，保留当前伙伴路由，覆盖 `WB-COMPOSER-011-AC1/AC2`。
 
 #### `sidebar-app-update`
 
@@ -243,6 +243,7 @@ pnpm test:update:e2e
 - Why：登录或充值后自动改模型、旧账号缓存及采购信息泄漏会造成误收费或隐私问题。
 - How：使用独立测试 API 环境，经正式管理入口准备免费、匹配客户端内置服务商标识的自定义内置型号和馆长条目；在真实桌面保持原免费或自定义选择，走正式网页登录授权，零余额浏览馆长目录，再通过测试渠道充值。核对每次操作均不自动改选择；管理端变更折扣、时段和条目状态后按 UI 刷新，检查当前显示、失效提示及安全错误。退出、更换账号及丢失会话后重开面板，核对实际请求、目录缓存及截图；公开接口中的私有字段由官网接口计划验证，不在桌面硬编码采购数据。
 - Oracle：登录前只有引导，零余额可读馆长目录，登录、充值、刷新及失效不换型号或计费方式，旧账号受保护目录不再展示，覆盖 `WB-COMPOSER-007-AC20`；折扣、参考价格、时段和变动提示正确，无采购渠道信息，覆盖 `WB-COMPOSER-007-AC21`，并补充 `WB-COMPOSER-007-AC2/AC3` 的馆长区域。每次调用返回的费用与当前目录展示分别核对。
+- `desktop-account.test.ts` 中的 `reads managed pricing with the active account and drops a response delivered after account change` 补证目录签名、折扣更新、公开字段投影和旧账号响应隔离。
 
 #### `live-preset-provider-smoke`
 

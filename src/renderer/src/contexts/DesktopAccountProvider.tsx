@@ -1,18 +1,23 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { officialUrl } from '../../../shared/appPreferences'
 import type { DesktopAccountCommand, DesktopAccountSnapshot } from '../../../shared/desktopAccount'
+import type { ManagedModel } from '../../../shared/managedModels'
 import { getRendererRuntime } from '../i18n'
 
 const accountPages = { recharge: '/account/recharge', billing: '/account/billing' } as const
+type Catalog = { userNo: string; models?: ManagedModel[]; status: 'loading' | 'ready' | 'unavailable' }
 type AccountContext = {
   snapshot: DesktopAccountSnapshot
   run: (command: DesktopAccountCommand) => Promise<DesktopAccountSnapshot>
   openAccountPage: (page: keyof typeof accountPages) => Promise<void>
+  managedCatalog?: Catalog
+  loadManagedCatalog: () => Promise<boolean>
 }
 const Context = createContext<AccountContext>({
   snapshot: { status: 'unsupported' },
   run: async () => ({ status: 'unsupported' }),
-  openAccountPage: async () => { throw new Error('desktop_account_unavailable') }
+  openAccountPage: async () => { throw new Error('desktop_account_unavailable') },
+  loadManagedCatalog: async () => false
 })
 
 export function DesktopAccountProvider({ children }: { children: ReactNode }) {
@@ -21,8 +26,20 @@ export function DesktopAccountProvider({ children }: { children: ReactNode }) {
     status: domestic ? 'restoring' : 'unsupported'
   })
   const change = useRef(0)
+  const catalogRequest = useRef<Promise<boolean> | undefined>(undefined)
+  const [catalog, setCatalog] = useState<Catalog>()
   const rechargeReturn = useRef<{ userNo: string } | undefined>(undefined)
   const userNo = snapshot.status === 'signed_in' ? snapshot.userNo : undefined
+  const currentUser = useRef(userNo)
+  const applySnapshot = useCallback((value: DesktopAccountSnapshot) => {
+    const next = value.status === 'signed_in' ? value.userNo : undefined
+    if (currentUser.current !== next) {
+      currentUser.current = next
+      catalogRequest.current = undefined
+      setCatalog(undefined)
+    }
+    setSnapshot(value)
+  }, [])
 
   useEffect(() => {
     if (!domestic) return
@@ -31,21 +48,42 @@ export function DesktopAccountProvider({ children }: { children: ReactNode }) {
     const unsubscribe = window.api.onDesktopAccountChanged((value) => {
       changed = true
       change.current++
-      setSnapshot(value)
+      applySnapshot(value)
     })
     void window.api
       .desktopAccount('restore')
       .then((value) => {
-        if (active && !changed) setSnapshot(value)
+        if (active && !changed) applySnapshot(value)
       })
       .catch(() => {
-        if (active && !changed) setSnapshot({ status: 'unavailable' })
+        if (active && !changed) applySnapshot({ status: 'unavailable' })
       })
     return () => {
       active = false
+      catalogRequest.current = undefined
       unsubscribe()
     }
-  }, [domestic])
+  }, [domestic, applySnapshot])
+
+  const loadManagedCatalog = useCallback(() => {
+    if (!userNo || currentUser.current !== userNo) return Promise.resolve(true)
+    if (catalogRequest.current) return catalogRequest.current
+    setCatalog(value => ({ userNo, models: value?.userNo === userNo ? value.models : undefined, status: 'loading' }))
+    const pending = window.api.managedModelsGet().catch(() => ({ status: 'unavailable' } as const))
+      .then(result => {
+        if (catalogRequest.current !== pending || currentUser.current !== userNo) return false
+        if (result.status === 'ready') {
+          setCatalog({ userNo, status: 'ready', models: result.models })
+          return true
+        }
+        setCatalog(value => ({ userNo, status: 'unavailable', models: value?.userNo === userNo ? value.models : undefined }))
+        return false
+      }).finally(() => {
+        if (catalogRequest.current === pending) catalogRequest.current = undefined
+      })
+    catalogRequest.current = pending
+    return pending
+  }, [userNo])
 
   useEffect(() => {
     rechargeReturn.current = undefined
@@ -65,7 +103,7 @@ export function DesktopAccountProvider({ children }: { children: ReactNode }) {
   async function run(command: DesktopAccountCommand) {
     const revision = ++change.current
     const value = await window.api.desktopAccount(command)
-    if (revision === change.current) setSnapshot(value)
+    if (revision === change.current) applySnapshot(value)
     return value
   }
 
@@ -82,7 +120,8 @@ export function DesktopAccountProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <Context.Provider value={{ snapshot, run, openAccountPage }}>{children}</Context.Provider>
+  const managedCatalog = catalog && catalog.userNo === userNo ? catalog : undefined
+  return <Context.Provider value={{ snapshot, run, openAccountPage, managedCatalog, loadManagedCatalog }}>{children}</Context.Provider>
 }
 
 export const useDesktopAccount = () => useContext(Context)

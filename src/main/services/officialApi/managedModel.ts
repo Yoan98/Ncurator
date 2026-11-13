@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { officialApiUrl } from '../../../shared/appPreferences'
+import { isManagedModelConfigId, managedModelEntryId } from '../../../shared/managedModels'
 import type { LlmRuntimeConfig } from '../../../shared/types'
 import { getAppRuntime } from '../app/AppRuntime'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS } from '../ai/constants'
@@ -9,20 +10,13 @@ import { classifyManagedLlmRetry, ManagedModelConcurrencyRejection } from '../ai
 import { buildDesktopAppGatewayHeaders } from './appClient'
 import { currentDomesticDesktopAccount } from './desktopAccount'
 
-const managedId = /^managed:([1-9]\d{0,18})$/
-const maxId = '9223372036854775807'
 const endpoint = '/api/v2/managed'
 const resultEvent = 'ncurator.result'
 const finishReasons = new Set(['stop', 'length', 'tool_calls', 'content_filter'])
 const invocations = new WeakMap<LlmRuntimeConfig, { requestId: string; scope: Scope }>()
 const modelScopes = new WeakMap<LlmRuntimeConfig, Scope>()
 
-function modelId(configId: string) {
-  const value = managedId.exec(configId)?.[1]
-  return value && (value.length < 19 || value <= maxId) ? value : undefined
-}
-
-export const isManagedModelConfigId = (id: string) => modelId(id) !== undefined
+export { isManagedModelConfigId } from '../../../shared/managedModels'
 
 export function forManagedInvocation(config: LlmRuntimeConfig) {
   if (!isManagedModelConfigId(config.id)) return config
@@ -36,7 +30,7 @@ export function forManagedInvocation(config: LlmRuntimeConfig) {
 
 export function resolveManagedRuntimeConfig(configId: string, name: string,
   scope = currentDomesticDesktopAccount().managedCallScope()): LlmRuntimeConfig {
-  const id = modelId(configId)
+  const id = managedModelEntryId(configId)
   if (!id || getAppRuntime().distribution !== 'domestic') throw new Error('馆长模型暂不可用')
   scope.assertCurrent()
   const config: LlmRuntimeConfig = { id: configId, name, providerKind: 'openai-compatible', base_url: officialApiUrl('domestic', endpoint),
@@ -209,7 +203,7 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
 export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependencies = {
   fetch: globalThis.fetch, wait: (ms, signal) => delay(ms, undefined, { signal })
 }): typeof fetch {
-  const id = modelId(config.id)
+  const id = managedModelEntryId(config.id)
   if (!id || getAppRuntime().distribution !== 'domestic') throw failure('model_not_found')
   const url = officialApiUrl('domestic', endpoint + '/chat/completions')
   const invocation = invocations.get(config)

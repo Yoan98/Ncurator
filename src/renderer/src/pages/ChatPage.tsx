@@ -1,5 +1,6 @@
 import { messageTimeLabel } from '../i18n/systemText'
-import { t, getProductName, getManualUrl } from '../i18n'
+import { t, getProductName, getContactUrl } from '../i18n'
+import { useDesktopAccount } from '../contexts/DesktopAccountProvider'
 import FileIcon from '../components/FileIcon'
 import {
   flushAllTextFiles,
@@ -56,6 +57,7 @@ import {
   resolveSelectedWorkbenchModel
 } from '../../../shared/workbenchModelSelection'
 import { isFreeModelConfigId, type FreeModelPublicEntry } from '../../../shared/freeModels'
+import { isManagedModelConfigId, managedModelConfigId } from '../../../shared/managedModels'
 import { shouldBlockFreeModelWithoutVision } from '../../../shared/messageLogVisionContext'
 import type { LlmPresetProvider } from '../../../shared/llmPresets'
 import MarkdownRenderer from '../components/MarkdownRenderer'
@@ -887,6 +889,7 @@ const getUserAttachmentPaths = (messages: readonly ChatMessage[]): string[] =>
 
 const ChatPage: React.FC = () => {
   const { message, modal } = AntdApp.useApp()
+  const { snapshot: account, managedCatalog, loadManagedCatalog } = useDesktopAccount()
   const navigate = useNavigate()
   const [partners, setPartners] = useState<PartnerListItem[]>([])
   const [partnersListHydrated, setPartnersListHydrated] = useState(false)
@@ -1490,11 +1493,28 @@ const ChatPage: React.FC = () => {
     [currentMessages]
   )
 
+  const selectedManagedId = modelSelection.mainModel && isManagedModelConfigId(modelSelection.mainModel.configId)
+    ? modelSelection.mainModel.configId : undefined
+  const signedIn = account.status === 'signed_in'
+  useEffect(() => {
+    if (selectedManagedId && signedIn) void loadManagedCatalog()
+  }, [selectedManagedId, signedIn, loadManagedCatalog])
+
   const composerSubmitDisabledReason = useMemo(() => {
     if (!input.trim()) return null
     if (!currentPartnerId) return t(($) => $.workbench.selectAPartnerFirst)
     if (switchingPartnerId) return t(($) => $.workbench.theCurrentPartnerIsNotReady)
     if (!modelSelection.mainModel) return t(($) => $.workbench.selectAMainModelFirst)
+    if (selectedManagedId) {
+      if (!signedIn) return t(($) => $.workbench.managedModelLoginRequired)
+      if (managedCatalog?.models && !managedCatalog.models.some(model => managedModelConfigId(model.id) === selectedManagedId)) {
+        return t(($) => $.workbench.managedModelRemoved)
+      }
+      if (!managedCatalog?.models) {
+        return managedCatalog?.status === 'unavailable' ? t(($) => $.workbench.managedModelsUnavailable)
+          : t(($) => $.workbench.loadingManagedModels)
+      }
+    }
     const hasEffectiveImageContext =
       contextUsage?.partnerId === currentPartnerId && contextUsage.hasEffectiveImageContext
     if (
@@ -1512,7 +1532,10 @@ const ChatPage: React.FC = () => {
     currentPartnerId,
     freeModels,
     input,
+    managedCatalog,
     modelSelection.mainModel,
+    selectedManagedId,
+    signedIn,
     switchingPartnerId
   ])
 
@@ -5138,7 +5161,7 @@ const ChatPage: React.FC = () => {
               <button
                 type="button"
                 className="nc-manual-help-button"
-                onClick={() => void window.api.openExternal(getManualUrl())}
+                onClick={() => void window.api.openExternal(getContactUrl())}
                 aria-label={t(($) => $.common.viewHelp)}
                 data-testid={workbenchSelectors.settingsHelpButton}
               >

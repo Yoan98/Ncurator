@@ -80,12 +80,12 @@ describe('application language and service region', () => {
           })
           const englishLayout = await readSettingsLayout(runtime.page)
           await runtime.page.getByTestId(settingsSelectors.helpButton).click()
-          const helpDialog = runtime.page.getByRole('dialog', { name: 'Open help on the website?' })
+          const helpDialog = runtime.page.getByRole('dialog', { name: 'Open Contact us?' })
           await helpDialog.waitFor({ state: 'visible' })
           const englishHelpText = await helpDialog.textContent()
           await runtime.captureScreenshot({
             name: 'english-help-confirmation',
-            message: '英文确认框展示本发行版英文手册地址'
+            message: '英文确认框展示本发行版英文联系页地址'
           })
           await helpDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
           await helpDialog.waitFor({ state: 'hidden' })
@@ -144,11 +144,11 @@ describe('application language and service region', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.englishHelpText?.includes(result.initial.serviceRoute === 'international' ? 'https://www.ncurator.com/en/manual' : 'https://www.guanzhangai.cn/en/manual') &&
+            result.englishHelpText?.includes(result.initial.serviceRoute === 'international' ? 'https://www.ncurator.com/en/contact' : 'https://www.guanzhangai.cn/en/contact') &&
               result.englishHelpText.includes('Open website'),
             {
               name: 'localized-help-confirmation-and-destination',
-              message: '英文帮助确认框应展示所属发行版的英文手册和确认操作。',
+              message: '英文帮助确认框应展示所属发行版的英文联系页和确认操作。',
               data: { englishHelpText: result.englishHelpText }
             }
           )

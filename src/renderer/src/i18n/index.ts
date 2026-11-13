@@ -2,7 +2,7 @@ import type { AppSettingsErrorCode } from '../../../shared/appErrors'
 import { createInstance } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { zh, en } from './resources'
-import { manualUrl, productName, type AppRuntimeSnapshot } from '../../../shared/appPreferences'
+import { contactUrl, manualUrl, productName, type AppRuntimeSnapshot } from '../../../shared/appPreferences'
 
 const i18n = createInstance()
 let runtime: AppRuntimeSnapshot = {
@@ -13,6 +13,7 @@ let runtime: AppRuntimeSnapshot = {
 export const getRendererRuntime = (): Readonly<AppRuntimeSnapshot> => runtime
 export const getProductName = (): string => productName(runtime.locale)
 export const getManualUrl = (anchor = ''): string => manualUrl(runtime, anchor)
+export const getContactUrl = (): string => contactUrl(runtime)
 export const updateRendererRoute = (serviceRoute: AppRuntimeSnapshot['serviceRoute']): void => {
   runtime = { ...runtime, serviceRoute }
 }

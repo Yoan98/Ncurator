@@ -6,7 +6,7 @@ import { HumanMessage, ToolMessage } from '@langchain/core/messages'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createDomesticDesktopAccount, currentDomesticDesktopAccount, DesktopAccount, DesktopAccountError } from '../../../../src/main/services/officialApi/desktopAccount'
+import { createDomesticDesktopAccount, currentDomesticDesktopAccount, DesktopAccount, DesktopAccountError, readManagedModels } from '../../../../src/main/services/officialApi/desktopAccount'
 import { resolveManagedRuntimeConfig } from '../../../../src/main/services/officialApi/managedModel'
 import { createAiLlmExecutor } from '../../../../src/main/services/ai/llmExecutor'
 import { desktopProtocolLink, registerDesktopAccount } from '../../../../src/main/ipc/desktopAccount'
@@ -108,6 +108,53 @@ function managedDesktopFixture(respond: (requestId: string, attempt: number) => 
 
 const sampleWallet = { currency: 'CNY', available: '975', balance: '975', usageFrozen: '0', refundFrozen: '0',
   debt: '0', version: '3', settlementPending: false }
+
+it('reads managed pricing with the active account and drops a response delivered after account change', async () => {
+  const fixture = managedDesktopFixture(() => { throw new Error('unexpected model request') })
+  const http = globalThis.fetch
+  const late = Promise.withResolvers<Response>()
+  const started = Promise.withResolvers<void>()
+  const rates = { input: '2.000000000000', cachedInput: null, output: '4.000000000000' }
+  const response = (discountRate: string) => Response.json({ protocolVersion: 1, models: [{
+    id: '9007199254740995', kind: 'managed', label: 'Fixture DeepSeek', description: 'Public description',
+    capabilities: ['text'], iconUrl: 'https://www.guanzhangai.cn/llm/guanzhang.png',
+    modelName: 'private-fixture-id', providerId: 'private-fixture-provider',
+    pricing: { discountRate, referenceSource: 'private-fixture-reference', allDay: {
+      reference: rates, sale: rates
+    } }
+  }] })
+  let requests = 0
+  vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit) => {
+    if (new URL(input).pathname !== '/api/v1/managed-models') return http(input, init)
+    expect(input).toBe('https://api.guanzhangai.cn/api/v1/managed-models')
+    const headers = new Headers(init.headers)
+    expect(headers.get('authorization')).toMatch(/^Bearer access\.part\./)
+    expect(headers.get('x-ncurator-signature')).toMatch(/^[0-9a-f]{64}$/)
+    requests++
+    if (requests === 1) return response('0.750000')
+    if (requests === 2) return response('0.820000')
+    started.resolve()
+    return late.promise
+  }))
+  try {
+    expect(await readManagedModels(fixture.account)).toEqual({ status: 'signed_out' })
+    expect(requests).toBe(0)
+    await fixture.login()
+    const first = await readManagedModels(fixture.account)
+    expect(first).toMatchObject({ status: 'ready', models: [{ id: '9007199254740995', pricing: { discountRate: '0.75' } }] })
+    expect(JSON.stringify(first)).not.toContain('private-fixture')
+    expect(await readManagedModels(fixture.account)).toMatchObject({ status: 'ready', models: [{ pricing: { discountRate: '0.82' } }] })
+    const previous = readManagedModels(fixture.account)
+    await started.promise
+    await fixture.account.logout()
+    await fixture.login(randomUUID())
+    late.resolve(response('0.810000'))
+    expect(await previous).toEqual({ status: 'unavailable' })
+  } finally {
+    late.resolve(response('0.75'))
+    fixture.cleanup()
+  }
+})
 
 function managedSse(requestId: string, scenario: 'text' | 'tools' | 'incomplete' | 'pending' | 'disconnected') {
   const tools = scenario === 'tools' || scenario === 'incomplete' || scenario === 'pending'

@@ -1,4 +1,4 @@
-import { t, providerDisplayName } from '../../i18n'
+import { t, providerDisplayName, getRendererRuntime } from '../../i18n'
 import React, {
   useCallback,
   useEffect,
@@ -37,12 +37,14 @@ import {
   type LlmPriceTier
 } from '../../../../shared/llmPresets'
 import { type FreeModelPublicEntry } from '../../../../shared/freeModels'
+import { isManagedModelConfigId, managedModelConfigId, type ManagedModel } from '../../../../shared/managedModels'
 import { resolveLlmProvider } from '../../../../shared/llmProvider'
 import { isPresetModelAvailableInRemoteList } from '../../../../shared/workbenchModelSelection'
 import { resolveFloatingPlacement } from './floatingPlacement'
 import { WORKBENCH_TITLEBAR_HEIGHT } from './constants'
 import { getProviderLogo } from '../settings/constants'
 import { workbenchSelectors } from '../../testing/selectors'
+import { useDesktopAccount } from '../../contexts/DesktopAccountProvider'
 
 const PRICE_TIER_LABELS: Record<LlmPriceTier, string> = {
   low: t(($) => $.workbench.low),
@@ -95,7 +97,17 @@ type FreeInspector = {
   top: number
 }
 
-type ModelInspector = PresetInspector | FreeInspector
+type ModelInspector = PresetInspector | FreeInspector | { kind: 'managed'; id: string; top: number }
+
+const discountLabel = (rate: string) => {
+  const ratio = Number(rate)
+  if (getRendererRuntime().locale === 'en') {
+    return t(($) => $.workbench.managedDiscount, {
+      value: new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 4 }).format(1 - ratio)
+    })
+  }
+  return t(($) => $.workbench.managedDiscount, { value: Number((ratio * 10).toFixed(5)) })
+}
 
 type MenuPosition = {
   top?: number
@@ -212,6 +224,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   'data-testid': dataTestId
 }) => {
   const { message } = AntdApp.useApp()
+  const { snapshot: account, managedCatalog, loadManagedCatalog, run } = useDesktopAccount()
+  const signedIn = account.status === 'signed_in'
+  const showManaged = getRendererRuntime().distribution === 'domestic'
+  const managedModels = managedCatalog?.models
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -299,9 +315,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       clearRefreshFeedbackTimer()
       setCatalogRefreshStatus('loading')
       try {
-        const [freeResult, presetResult] = await Promise.all([
+        const [freeResult, presetResult, managedOk] = await Promise.all([
           window.api.freeModelsRefresh(),
-          window.api.presetModelsRefresh()
+          window.api.presetModelsRefresh(),
+          loadManagedCatalog()
         ])
         const hasData = applyCatalogSnapshots({
           freeModels: freeResult.snapshot.models,
@@ -315,7 +332,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         )
         setCatalogError(errors.length ? errors.join('\n\n') : null)
         if (showOutcome) {
-          setCatalogRefreshStatus(ok ? 'success' : 'error')
+          setCatalogRefreshStatus(ok && managedOk ? 'success' : 'error')
           scheduleRefreshIdle()
         } else {
           setCatalogRefreshStatus('idle')
@@ -327,7 +344,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         } else {
           setCatalogLoadStatus('ready')
         }
-        return ok
+        return ok && managedOk
       } catch (error) {
         console.error('Failed to refresh model catalogs', error)
         setCatalogError(error instanceof Error ? error.message : String(error))
@@ -348,6 +365,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       applyCatalogSnapshots,
       clearRefreshFeedbackTimer,
       freeModels.length,
+      loadManagedCatalog,
       presetProviders.length,
       scheduleRefreshIdle
     ]
@@ -407,6 +425,16 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   }, [open, view])
 
   const mainLabel = value.mainModel?.modelName || t(($) => $.workbench.chooseModel)
+
+  useEffect(() => {
+    if (open && view === 'preset' && signedIn) void loadManagedCatalog()
+  }, [open, view, signedIn, loadManagedCatalog])
+
+  useEffect(() => {
+    if (inspectedModel?.kind === 'managed' && !managedModels?.some(model => model.id === inspectedModel.id)) {
+      setInspectedModel(null)
+    }
+  }, [inspectedModel, managedModels])
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current
@@ -496,6 +524,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     modelListErrorsByConfigId,
     inlinePanel,
     freeModels,
+    managedModels,
     presetProviders
   ])
 
@@ -645,6 +674,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       ) || null
     )
   }, [value.mainModel, freeModels])
+  const selectedManaged = managedModels?.find(model => managedModelConfigId(model.id) === value.mainModel?.configId)
 
   const groupedModels = useMemo(() => {
     return configs
@@ -779,6 +809,41 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           </span>
         </span>
         {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
+      </button>
+    )
+  }
+
+  const renderManagedModelOption = (model: ManagedModel, index: number): React.ReactNode => {
+    const configId = managedModelConfigId(model.id)
+    const selected = value.mainModel?.configId === configId
+    const inspect = (event: React.SyntheticEvent<HTMLButtonElement>) =>
+      setInspectedModel({ kind: 'managed', id: model.id, top: event.currentTarget.getBoundingClientRect().top })
+    return (
+      <button
+        key={configId}
+        type="button"
+        role="option"
+        aria-selected={selected}
+        data-testid={`${workbenchSelectors.modelSelectManagedOptionPrefix}-${model.id}`}
+        className={joinClassNames(
+          'workbench-select-option',
+          selected && 'workbench-select-option-selected'
+        )}
+        style={index === 0 ? { paddingRight: 40 } : undefined}
+        onClick={() => selectModel(configId, model.label)}
+        onMouseEnter={inspect}
+        onFocus={inspect}
+      >
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <CatalogModelIcon src={model.iconUrl} alt={model.label} />
+          <span className="truncate text-[13px] font-medium text-[#37352F]">{model.label}</span>
+        </span>
+        {model.pricing.discountRate !== '1' && (
+          <span className="shrink-0 text-[11px] font-medium tabular-nums text-[#787774]">
+            {discountLabel(model.pricing.discountRate)}
+          </span>
+        )}
+        {selected && <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" />}
       </button>
     )
   }
@@ -937,7 +1002,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       catalogLoadStatus === 'ready' &&
       !catalogError &&
       presetGroups.length === 0 &&
-      freeModels.length === 0
+      freeModels.length === 0 && !managedModels?.length
 
     return (
       <>
@@ -951,11 +1016,25 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             className="overflow-y-auto py-1.5"
             style={{ maxHeight: PRESET_LIST_MAX_HEIGHT, minHeight: 0 }}
           >
-            {showLoading ? (
+            {managedModels?.map(renderManagedModelOption)}
+            {managedCatalog?.status === 'loading' && !managedModels && (
+              <div role="status" className="px-3 py-2 text-[12px] text-[#787774]">
+                {t(($) => $.workbench.loadingManagedModels)}
+              </div>
+            )}
+            {managedCatalog?.status === 'unavailable' && (
+              <div role="status" className="px-3 py-2 text-[12px] text-[#787774]">
+                {t(($) => $.workbench.managedModelsUnavailable)}
+              </div>
+            )}
+            {managedCatalog?.status === 'ready' && !managedModels?.length && !showEmpty && (
+              <div className="px-3 py-2 text-[12px] text-[#787774]">{t(($) => $.workbench.noManagedModels)}</div>
+            )}
+            {showLoading && !managedModels?.length ? (
               <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
                 {t(($) => $.workbench.loadingModelCatalogs)}
               </div>
-            ) : showEmpty ? (
+            ) : showEmpty && (!showManaged || managedCatalog?.status === 'ready') ? (
               <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
                 {t(($) => $.workbench.noConfiguredPresetModels)}
               </div>
@@ -966,14 +1045,18 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                     renderPresetModelOption(provider, model, matchedConfig)
                   )
                 )}
-                {freeModels.length > 0 ? (
-                  <div
-                    className={presetGroups.length > 0 ? 'mt-1 border-t border-[#EEEEEC] pt-1' : ''}
-                  >
-                    {freeModels.map((model) => renderFreeModelOption(model))}
-                  </div>
-                ) : null}
+                {freeModels.map(renderFreeModelOption)}
               </>
+            )}
+            {showManaged && !signedIn && account.status !== 'restoring' && (
+              <button
+                type="button"
+                className="workbench-select-option text-[13px]"
+                onMouseEnter={() => setInspectedModel(null)}
+                onClick={() => void run('begin').catch(() => message.error(t(($) => $.account.error)))}
+              >
+                {t(($) => $.workbench.managedModelLogin)}
+              </button>
             )}
             {catalogError && !showLoading ? (
               <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
@@ -1200,6 +1283,67 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
   const renderInspector = (): React.ReactNode => {
     if (view !== 'preset' || !inspectedModel) return null
+    if (inspectedModel.kind === 'managed') {
+      const model = managedModels?.find(model => model.id === inspectedModel.id)
+      if (!model) return null
+      const { pricing } = model
+      const periods = 'allDay' in pricing
+        ? [{ label: t(($) => $.workbench.managedAllDay), price: pricing.allDay }]
+        : [{ label: t(($) => $.workbench.managedOffPeak), price: pricing.offPeak },
+          { label: t(($) => $.workbench.managedPeak), price: pricing.peak }]
+      return (
+        <div
+          ref={inspectorRef}
+          data-testid={workbenchSelectors.inspector}
+          className="max-h-[calc(100vh-24px)] overflow-y-auto rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3 text-[12px]"
+          style={{ position: 'fixed', top: inspectorTop, left: inspectorLeft, width: INSPECTOR_WIDTH, zIndex: 1001 }}
+        >
+          <div data-testid={workbenchSelectors.inspectorTitle} className="text-[14px] font-semibold text-[#252521]">
+            {model.label}
+          </div>
+          {!!model.description && <p className="mt-1.5 leading-[18px] text-[#5F5E5A]">{model.description}</p>}
+          <p className="mt-1.5 leading-[18px] text-[#787774]">{t(($) => $.workbench.managedPriceNotice)}</p>
+          <div className="mt-2.5 space-y-2 border-t border-[#EEEEEC] pt-2.5 text-[#37352F]">
+            <div className="flex justify-between gap-2">
+              <span className="text-[#787774]">{t(($) => $.workbench.vision)}</span>
+              <span>{model.capabilities.includes('vision')
+                ? t(($) => $.workbench.supported) : t(($) => $.workbench.notSupported)}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-[#787774]">{t(($) => $.workbench.managedPricing)}</span>
+              {pricing.discountRate !== '1' && <span>{discountLabel(pricing.discountRate)}</span>}
+            </div>
+            {periods.map(({ label, price }) => (
+              <div key={label} className="leading-[18px]">
+                <div className="font-medium">{label}</div>
+                <div className="text-[#5F5E5A]">{t(($) => $.workbench.managedInputOutputPrice, {
+                  input: price.sale.input, output: price.sale.output
+                })}</div>
+                {price.sale.cachedInput !== null && <div className="text-[#5F5E5A]">
+                  {t(($) => $.workbench.managedCachedPrice, { value: price.sale.cachedInput })}
+                </div>}
+                <div className="text-[#787774]">{t(($) => $.workbench.managedReferencePrice, {
+                  input: price.reference.input, output: price.reference.output
+                })}</div>
+              </div>
+            ))}
+            {'timeRule' in pricing && (
+              <p className="leading-[18px] text-[#787774]">
+                {t(($) => $.workbench.managedPeakSchedule, {
+                  days: new Intl.ListFormat(getRendererRuntime().locale, { style: 'short' }).format(
+                    pricing.timeRule.peakWeekdays.map(day => new Intl.DateTimeFormat(getRendererRuntime().locale, {
+                      weekday: 'short', timeZone: 'UTC'
+                    }).format(Date.UTC(2024, 0, day)))
+                  ),
+                  windows: pricing.timeRule.peakWindows.map(window => window.start + '–' + window.end).join(', '),
+                  zone: pricing.timeRule.timeZone
+                })}
+              </p>
+            )}
+          </div>
+        </div>
+      )
+    }
     if (inspectedModel.kind === 'free') {
       const supportsVision = inspectedModel.model.capabilities.includes('vision')
       return (
@@ -1328,7 +1472,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         }}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
-          {selectedPreset ? (
+          {selectedManaged ? (
+            <>
+              <CatalogModelIcon src={selectedManaged.iconUrl} alt={selectedManaged.label} />
+              <span className="truncate">{selectedManaged.label}</span>
+            </>
+          ) : selectedPreset ? (
             <>
               <CatalogModelIcon src={selectedPreset.iconUrl} alt={selectedPreset.modelLabel} />
               <span className="truncate">{selectedPreset.modelLabel}</span>
@@ -1345,6 +1494,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             <>
               {!hideTriggerIcon ? <HiCpuChip className="h-3.5 w-3.5 shrink-0" /> : null}
               <span className="truncate">{mainLabel}</span>
+              {isManagedModelConfigId(value.mainModel?.configId || '') && (
+                <span className="shrink-0 text-[11px] text-[#787774]">
+                  {!signedIn ? t(($) => $.workbench.managedModelLoginRequired)
+                    : managedCatalog?.status === 'ready' ? t(($) => $.workbench.managedModelRemoved) : null}
+                </span>
+              )}
             </>
           )}
         </span>

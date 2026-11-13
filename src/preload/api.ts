@@ -33,6 +33,7 @@ import type {
 import type { FreeModelsSnapshot } from '../shared/freeModels'
 import type { PresetModelsSnapshot } from '../shared/llmPresets'
 import type { DesktopAccountCommand, DesktopAccountSnapshot } from '../shared/desktopAccount'
+import type { ManagedModelsResult } from '../shared/managedModels'
 import type {
   AppSettings,
   ConfirmDialogRequest,
@@ -195,6 +196,7 @@ export type ActiveDownloadSnapshot = {
 
 export type DesktopApi = {
   desktopAccount: (command: DesktopAccountCommand) => Promise<DesktopAccountSnapshot>
+  managedModelsGet: () => Promise<ManagedModelsResult>
   onDesktopAccountChanged: (listener: (snapshot: DesktopAccountSnapshot) => void) => () => void
   ingestWeb: (
     payload: WebIngestPayload

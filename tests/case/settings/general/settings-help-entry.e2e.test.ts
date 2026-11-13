@@ -1,5 +1,4 @@
 import { describe, it } from 'vitest'
-import { USER_MANUAL_URL } from '../../../../src/shared/constants'
 import { settingsSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
@@ -16,12 +15,16 @@ describe('settings help e2e', () => {
         caseId: 'settings-help-entry',
         domain: 'settings',
         suite: 'general',
-        description: '使用帮助展示目标地址，取消不跳转，确认后打开官方手册。',
+        description: '使用帮助展示目标地址，取消不跳转，确认后打开官网联系页。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const { serviceRoute } = await page.evaluate(() => window.api.appSettingsGet())
+          const locale = await page.locator('html').getAttribute('lang')
+          const origin = serviceRoute === 'domestic' ? 'https://www.guanzhangai.cn' : 'https://www.ncurator.com'
+          const contactUrl = origin + (locale === 'zh-CN' ? '/zh/contact' : '/en/contact')
           await navigateToSettingsSection(page, 'model')
 
           const helpButton = getSettingsLocator(page, settingsSelectors.helpButton)
@@ -40,7 +43,7 @@ describe('settings help e2e', () => {
               (entry) => entry.name === 'openExternal'
             )
           const baselineCallCount = (await readExternalCalls()).length
-          const dialog = page.getByRole('dialog', { name: '前往官网查看使用帮助？' })
+          const dialog = page.getByRole('dialog', { name: '前往官网联系我们？' })
           const dismissals = []
           for (const method of ['cancel', 'escape', 'close', 'mask'] as const) {
             await helpButton.click()
@@ -74,6 +77,7 @@ describe('settings help e2e', () => {
           await dialog.waitFor({ state: 'hidden' })
 
           return {
+            contactUrl,
             dismissals,
             confirmationText,
             callsBeforeConfirm,
@@ -115,15 +119,15 @@ describe('settings help e2e', () => {
             }
           )
           await runtime.assertThat(
-            result.confirmationText?.includes(USER_MANUAL_URL) &&
+            result.confirmationText?.includes(result.contactUrl) &&
               result.callsBeforeConfirm === 0 &&
               result.openExternalCalls.length === 1 &&
-              result.openExternalCalls[0]?.payload === USER_MANUAL_URL &&
+              result.openExternalCalls[0]?.payload === result.contactUrl &&
               result.routeAfterClick === result.routeBeforeClick,
             {
-              name: 'settings-help-entry-opens-official-manual',
+              name: 'settings-help-entry-opens-official-contact',
               message:
-                '只有确认后才通过 openExternal 打开官方中文手册，并保持当前设置页路由，对齐 SET-HELP-001-AC2。',
+                '只有确认后才通过 openExternal 打开当前语言的官网联系页，并保持当前设置页路由，对齐 SET-HELP-001-AC2。',
               data: result
             }
           )

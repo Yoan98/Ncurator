@@ -232,6 +232,7 @@ export const workbenchSelectors = {
   modelSelect: 'workbench-model-select',
   modelSelectPresetOptionPrefix: 'workbench-model-preset-option',
   modelSelectFreeOptionPrefix: 'workbench-model-free-option',
+  modelSelectManagedOptionPrefix: 'workbench-model-managed-option',
   modelSelectCatalogRefresh: 'workbench-model-catalog-refresh',
   modelSelectCustomEntry: 'workbench-model-custom-entry',
   modelListLoadFailure: 'workbench-model-list-load-failure',
