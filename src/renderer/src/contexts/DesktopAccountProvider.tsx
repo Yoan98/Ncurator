@@ -1,14 +1,18 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { officialUrl } from '../../../shared/appPreferences'
 import type { DesktopAccountCommand, DesktopAccountSnapshot } from '../../../shared/desktopAccount'
 import { getRendererRuntime } from '../i18n'
 
+const accountPages = { recharge: '/account/recharge', billing: '/account/billing' } as const
 type AccountContext = {
   snapshot: DesktopAccountSnapshot
   run: (command: DesktopAccountCommand) => Promise<DesktopAccountSnapshot>
+  openAccountPage: (page: keyof typeof accountPages) => Promise<void>
 }
 const Context = createContext<AccountContext>({
   snapshot: { status: 'unsupported' },
-  run: async () => ({ status: 'unsupported' })
+  run: async () => ({ status: 'unsupported' }),
+  openAccountPage: async () => { throw new Error('desktop_account_unavailable') }
 })
 
 export function DesktopAccountProvider({ children }: { children: ReactNode }) {
@@ -17,6 +21,7 @@ export function DesktopAccountProvider({ children }: { children: ReactNode }) {
     status: domestic ? 'restoring' : 'unsupported'
   })
   const change = useRef(0)
+  const rechargeReturn = useRef<{ userNo: string } | undefined>(undefined)
   const userNo = snapshot.status === 'signed_in' ? snapshot.userNo : undefined
 
   useEffect(() => {
@@ -43,12 +48,18 @@ export function DesktopAccountProvider({ children }: { children: ReactNode }) {
   }, [domestic])
 
   useEffect(() => {
+    rechargeReturn.current = undefined
     if (!userNo) return
     const readWallet = () => void window.api.desktopAccount('wallet').catch(() => {})
+    const onFocus = () => {
+      const returningFromRecharge = rechargeReturn.current?.userNo === userNo
+      rechargeReturn.current = undefined
+      void window.api.desktopAccount(returningFromRecharge ? 'refresh-wallet' : 'wallet').catch(() => {})
+    }
     void window.api.desktopAccount('profile').catch(() => {})
     readWallet()
-    window.addEventListener('focus', readWallet)
-    return () => window.removeEventListener('focus', readWallet)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [userNo])
 
   async function run(command: DesktopAccountCommand) {
@@ -58,7 +69,20 @@ export function DesktopAccountProvider({ children }: { children: ReactNode }) {
     return value
   }
 
-  return <Context.Provider value={{ snapshot, run }}>{children}</Context.Provider>
+  async function openAccountPage(page: keyof typeof accountPages) {
+    if (!domestic || !userNo) throw new Error('desktop_account_unavailable')
+    const returning = page === 'recharge' ? { userNo } : undefined
+    if (returning) rechargeReturn.current = returning
+    try {
+      const result = await window.api.openExternal(officialUrl('domestic', accountPages[page]))
+      if (!result.success) throw new Error('desktop_account_page_unavailable')
+    } catch (error) {
+      if (returning && rechargeReturn.current === returning) rechargeReturn.current = undefined
+      throw error
+    }
+  }
+
+  return <Context.Provider value={{ snapshot, run, openAccountPage }}>{children}</Context.Provider>
 }
 
 export const useDesktopAccount = () => useContext(Context)

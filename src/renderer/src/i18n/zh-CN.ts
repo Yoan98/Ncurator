@@ -25,7 +25,7 @@ export const zh = {
     copied: "已复制用户编号",
     balance: "可用余额",
     recharge: "充值",
-    usage: "账单与用量",
+    billing: "账单",
     logout: "退出登录",
     logoutHere: "退出当前桌面",
     logoutHint: "不会退出网页或其他设备。",

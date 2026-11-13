@@ -7,7 +7,7 @@ import { t } from '../../i18n'
 import { exactWalletAmount, walletAmount } from './walletAmount'
 
 export function DesktopAccountSettings() {
-  const { snapshot: account, run } = useDesktopAccount()
+  const { snapshot: account, run, openAccountPage } = useDesktopAccount()
   const [busy, setBusy] = useState<DesktopAccountCommand>()
   const { message } = App.useApp()
   useEffect(() => {
@@ -26,6 +26,8 @@ export function DesktopAccountSettings() {
     logout_incomplete: t(($) => $.account.logoutRetry)
   }
   const detail = statusText[account.status]
+  const openPage = (page: 'recharge' | 'billing') =>
+    void openAccountPage(page).catch(() => message.error(t(($) => $.settings.couldNotOpenHelpWebsite)))
   async function command(value: DesktopAccountCommand) {
     if (busy && value !== 'cancel') return
     setBusy(value)
@@ -187,10 +189,10 @@ export function DesktopAccountSettings() {
               </details>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button type="primary" disabled>
+              <Button type="primary" onClick={() => openPage('recharge')}>
                 {t(($) => $.account.recharge)}
               </Button>
-              <Button disabled>{t(($) => $.account.usage)}</Button>
+              <Button onClick={() => openPage('billing')}>{t(($) => $.account.billing)}</Button>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--notion-line)] py-4">

@@ -25,7 +25,7 @@ export const en = {
     copied: "Account number copied",
     balance: "Available balance",
     recharge: "Top up",
-    usage: "Billing and usage",
+    billing: "Billing",
     logout: "Sign out",
     logoutHere: "Sign out of this desktop",
     logoutHint: "Your browser and other devices stay signed in.",

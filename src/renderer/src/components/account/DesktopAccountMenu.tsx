@@ -16,7 +16,7 @@ import { getManualUrl, t } from '../../i18n'
 import { walletAmount } from './walletAmount'
 
 export function DesktopAccountMenu() {
-  const { snapshot, run } = useDesktopAccount()
+  const { snapshot, run, openAccountPage } = useDesktopAccount()
   const navigate = useNavigate()
   const { message } = App.useApp()
   const [open, setOpen] = useState(false)
@@ -25,6 +25,8 @@ export function DesktopAccountMenu() {
   const signedIn = snapshot.status === 'signed_in'
   const identity = signedIn ? snapshot.maskedEmail || snapshot.userNo : t(($) => $.account.title)
   const openSettings = () => navigate('/settings/account')
+  const openPage = (page: 'recharge' | 'billing') =>
+    void openAccountPage(page).catch(() => message.error(t(($) => $.settings.couldNotOpenHelpWebsite)))
   const items: MenuProps['items'] = [
     {
       type: 'group',
@@ -60,13 +62,13 @@ export function DesktopAccountMenu() {
             key: 'recharge',
             icon: <HiOutlinePlusCircle />,
             label: t(($) => $.account.recharge),
-            disabled: true
+            onClick: () => openPage('recharge')
           },
           {
-            key: 'usage',
+            key: 'billing',
             icon: <HiOutlineChartBar />,
-            label: t(($) => $.account.usage),
-            disabled: true
+            label: t(($) => $.account.billing),
+            onClick: () => openPage('billing')
           }
         ]
       : [
