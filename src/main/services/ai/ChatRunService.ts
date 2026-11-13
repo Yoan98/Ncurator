@@ -274,7 +274,7 @@ export class ChatRunService {
           removedContinuations.add(orphanedContinuationId)
         }
       }
-      await this.parkQueuedMessages(run)
+      await this.parkQueuedMessages(run, true)
       const now = Date.now()
       const nextRun: AiRunRecord = {
         ...run,
@@ -815,7 +815,7 @@ export class ChatRunService {
     return child
   }
 
-  private async parkQueuedMessages(run: AiRunRecord): Promise<void> {
+  private async parkQueuedMessages(run: AiRunRecord, recoveringAfterRestart = false): Promise<void> {
     const queued = run.pendingMessages || []
     if (queued.length === 0) return
     const timestampFloor = Math.max(Date.now(), run.updatedAt, run.finishedAt || 0)
@@ -825,7 +825,15 @@ export class ChatRunService {
         ...message,
         createdAt: Math.max(message.createdAt, timestampFloor + index + 1)
       }))
-    await this.appendContextOnlyMessages(ordered, run.partnerId)
+    if (recoveringAfterRestart) {
+      // A recovered queue has no live session binding.
+      for (const message of ordered) {
+        await this.appendContextOnlyMessages([message], run.partnerId,
+          Boolean(message.mainModel && isManagedModelConfigId(message.mainModel.configId)))
+      }
+    } else {
+      await this.appendContextOnlyMessages(ordered, run.partnerId)
+    }
     run.pendingMessages = []
     run.updatedAt = Date.now()
     await this.deps.aiRunStore.saveRun(run)

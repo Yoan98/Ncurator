@@ -646,7 +646,9 @@ describe('unit ai persistence backend', () => {
       executionPermission: 'review',
       partialAnswer: '',
       artifacts: [],
-      pendingMessages: [queuedMessage],
+      pendingMessages: [queuedMessage, { ...queuedMessage, id: 'queued-managed-message',
+        input: '重启后只显示的馆长消息', createdAt: createdAt + 2,
+        mainModel: { configId: 'managed:1', modelName: '测试模型' } }],
       createdAt,
       updatedAt: createdAt
     })
@@ -661,8 +663,11 @@ describe('unit ai persistence backend', () => {
     expect(contextRun?.status).toBe('context_only')
     expect(messages.filter((item) => item.role === 'user').map((item) => item.content)).toEqual([
       '原始请求',
-      queuedMessage.input
+      queuedMessage.input,
+      '重启后只显示的馆长消息'
     ])
+    expect((await setup.storage.chatMessageLog.listForModel('partner-1'))
+      .filter(record => record.entry.kind === 'user').map(record => record.entry.input)).toEqual([queuedMessage.input])
     expect(
       (await setup.storage.aiRun.listRunsByPartner('partner-1')).some((item) =>
         item.id.startsWith('queued-')
