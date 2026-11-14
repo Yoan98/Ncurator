@@ -252,9 +252,10 @@ export async function withAccountFixture(
       headers: { authorization: 'Bearer ' + fixture.appKey, 'content-type': 'application/json' }
     })
   try {
+    const { version } = JSON.parse(await readFile(resolve('package.json'), 'utf8')) as { version: string }
     await writeFile(
       join(root, 'package.json'),
-      JSON.stringify({ name: 'ncurator-account-test', main: 'main.cjs' })
+      JSON.stringify({ name: 'ncurator-account-test', version, main: 'main.cjs' })
     )
     await writeFile(join(root, 'main.cjs'), sourceBootstrap)
     const browser = await chromium.launch({
