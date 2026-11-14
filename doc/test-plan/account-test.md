@@ -64,7 +64,7 @@
 - 测试类型：`e2e`
 - What：菜单、设置账号页、本人标识、余额及异常展示。
 - Why：入口不一致、读取失败或残留数据会展示错误账号或误导余额为零。
-- How：经正式授权登录后操作头像、设置导航、编号复制、外部点击及 Escape，核对登录前后菜单和页面；余额通过正式充值形成。将 UI 及剪贴板中的用户编号与官网本人账号核对。在桌面网络边界中断余额读取，恢复后通过刷新按钮重试。
+- How：经正式授权登录后操作头像、设置导航、编号复制、外部点击及 Escape，核对登录前后菜单和页面；余额通过正式充值形成。核对账单之后紧跟使用帮助、设置独立分组、退出登录图标、只读版本行及底栏无重复入口。真实 Electron 在正常及原生最小 1400×800 窗口保存菜单、账号页和长编号截图，记录窗口及内容区尺寸、DPR 和缩放；不修改全局最小窗口。将 UI 及剪贴板中的用户编号与官网本人账号核对。在桌面网络边界中断余额读取，恢复后通过刷新按钮重试；无本会话馆长工作时通过菜单退出，核对应用仍在、网页有效及本桌面失效。
 - Oracle：菜单、键盘操作及登录前后范围正确，覆盖 `ACC-ENTRY-001-AC1/AC2/AC3`；两个入口到同一页面，本人邮箱、独立对外 `user_no` 和复制一致且无内部用户 ID 泄露，覆盖 `ACC-PAGE-001-AC1/AC2`；失败不伪装为零或他人数据，未登录不阻断原能力，覆盖 `ACC-PAGE-001-AC3/AC4`。
 
 #### `balance-display-and-funds-state`
@@ -93,9 +93,11 @@
 
 ## 4. 执行与覆盖边界
 
-菜单、余额与网页跳转的源码回归使用独立的回环测试服务。将该服务生成的测试描述文件路径设为 `NCURATOR_ACCOUNT_E2E_FIXTURE`，运行 `pnpm test:e2e:source --domain account --case account-menu-and-page --case account-web-navigation`。隔离浏览器按桌面给出的地址操作，回跳与回到窗口的焦点事件由测试交给应用入口，后续处理走实际 Main、IPC、凭据存储和 UI。系统默认浏览器、真实焦点切换及安装协议关联由安装包验收。
+菜单、余额与网页跳转的源码回归使用独立的回环测试服务。将该服务生成的测试描述文件路径设为 `NCURATOR_ACCOUNT_E2E_FIXTURE`，运行 `pnpm test:e2e:source --domain account --case account-menu-and-page --case account-web-navigation --case balance-refresh-and-ordering --case independent-sessions-and-restart`。隔离浏览器按桌面给出的地址操作，回跳与回到窗口的焦点事件由测试交给应用入口，后续处理走实际 Main、IPC、凭据存储和 UI。系统默认浏览器、真实焦点切换及安装协议关联由安装包验收。
 
-待实现用例：`anonymous-existing-usage`、`browser-login-outcomes`、`independent-sessions-and-restart`、`account-change-during-runs`、`balance-display-and-funds-state`、`balance-refresh-and-ordering`。
+待实现用例：`anonymous-existing-usage`、`browser-login-outcomes`、`account-change-during-runs`、`balance-display-and-funds-state`。
+
+`independent-sessions-and-restart` 当前自动化覆盖两个独立桌面、网页、重启恢复与各自退出；到期刷新响应丢失、长期停机恢复和全设备撤销仍由主进程 Unit、跨端回归及签名包验收补证。`balance-refresh-and-ordering` 当前覆盖短期复用、真实结算先于延迟余额响应、完成确认丢失后按原请求查回及退出后迟到余额；30 秒边界与多窗口并发另由主进程 Unit 补证，不将其计为该 E2E 已覆盖。
 
 下列 [Unit 用例](../../tests/case/unit/officialApi/desktop-account.test.ts) 补证主进程边界，桌面操作与系统实际行为由各 E2E 和人工验收覆盖。
 

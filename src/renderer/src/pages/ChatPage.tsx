@@ -1,5 +1,5 @@
 import { messageTimeLabel } from '../i18n/systemText'
-import { t, getProductName, getContactUrl } from '../i18n'
+import { t, getProductName, getContactUrl, getRendererRuntime } from '../i18n'
 import { useDesktopAccount } from '../contexts/DesktopAccountProvider'
 import FileIcon from '../components/FileIcon'
 import {
@@ -5146,30 +5146,36 @@ const ChatPage: React.FC = () => {
         </div>
 
         <div className="px-2 py-2">
-          <div className="flex items-center">
-            <button
-              type="button"
-              onClick={() => navigate('/settings/model')}
-              className="nc-sidebar-nav-row flex-1"
-              aria-label={t(($) => $.common.settings)}
-            >
-              <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
-              <span>{t(($) => $.common.settings)}</span>
-            </button>
-            <SidebarUpdateControl />
-            <Tooltip title={t(($) => $.common.viewHelp)} placement="right">
+          {getRendererRuntime().distribution === 'domestic' ? (
+            <div className="nc-account-footer">
+              <DesktopAccountMenu />
+              <SidebarUpdateControl compact />
+            </div>
+          ) : (
+            <div className="flex items-center">
               <button
                 type="button"
-                className="nc-manual-help-button"
-                onClick={() => void window.api.openExternal(getContactUrl())}
-                aria-label={t(($) => $.common.viewHelp)}
-                data-testid={workbenchSelectors.settingsHelpButton}
+                onClick={() => navigate('/settings/model')}
+                className="nc-sidebar-nav-row flex-1"
+                aria-label={t(($) => $.common.settings)}
               >
-                <HiOutlineQuestionMarkCircle className="h-4 w-4" />
+                <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
+                <span>{t(($) => $.common.settings)}</span>
               </button>
-            </Tooltip>
-          </div>
-          <div className="flex"><DesktopAccountMenu /></div>
+              <SidebarUpdateControl />
+              <Tooltip title={t(($) => $.common.viewHelp)} placement="right">
+                <button
+                  type="button"
+                  className="nc-manual-help-button"
+                  onClick={() => void window.api.openExternal(getContactUrl())}
+                  aria-label={t(($) => $.common.viewHelp)}
+                  data-testid={workbenchSelectors.settingsHelpButton}
+                >
+                  <HiOutlineQuestionMarkCircle className="h-4 w-4" />
+                </button>
+              </Tooltip>
+            </div>
+          )}
         </div>
         <div
           className="nc-sidebar-resizer workbench-no-drag"

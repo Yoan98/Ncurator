@@ -16,23 +16,68 @@ const settings = JSON.parse(process.env.NCURATOR_ACCOUNT_TEST_INPUT)
 const origin = new URL(settings.api)
 if (origin.protocol !== 'http:' || origin.hostname !== '127.0.0.1') throw new Error('Expected a local test API')
 const fetchNetwork = globalThis.fetch
-const network = { walletReads: 0, blockWallet: false, urls: [] }
+const network = { walletReads: 0, blockWallet: false, urls: [], refreshStatuses: [],
+  modelPosts: [], modelLookups: [], droppedRefreshes: 0, droppedResults: 0, releasedWallets: 0,
+  dropRefresh: settings.dropRefresh === true }
 globalThis.__accountTestNetwork = network
 globalThis.fetch = async (input, init) => {
   const request = new Request(input, init)
   const url = new URL(request.url)
-  if (url.origin !== 'https://api.guanzhangai.cn' || !url.pathname.startsWith('/api/auth/desktop/')) {
+  const path = url.pathname
+  const modelPost = path === '/api/v2/managed/chat/completions'
+  const lookup = /^\/api\/v2\/managed\/calls\/([a-f0-9-]{36})$/.exec(path)
+  if (url.origin !== 'https://api.guanzhangai.cn' || !(path.startsWith('/api/auth/desktop/') ||
+    path === '/api/v1/managed-models' || modelPost || lookup)) {
     return Response.json({ error: 'isolated_test' }, { status: 503 })
   }
-  const wallet = url.pathname === '/api/auth/desktop/wallet'
+  const wallet = path === '/api/auth/desktop/wallet'
+  const holdWallet = wallet && network.holdWallet
+  if (holdWallet) network.holdWallet = false
   if (wallet) {
     network.walletReads++
     if (network.blockWallet) throw new Error('Isolated wallet transport interruption')
   }
-  return fetchNetwork(new URL(url.pathname + url.search, origin), {
+  const body = request.body ? await request.arrayBuffer() : undefined
+  if (modelPost) network.modelPosts.push(JSON.parse(Buffer.from(body).toString()).requestId)
+  if (lookup) network.modelLookups.push(lookup[1])
+  const response = await fetchNetwork(new URL(path + url.search, origin), {
     method: request.method, headers: request.headers, signal: request.signal, redirect: 'error',
-    ...(request.body && { body: await request.arrayBuffer() })
+    ...(body && { body })
   })
+  if (holdWallet && response.ok) {
+    const {available, version} = await response.clone().json()
+    await new Promise(resolve => {
+      const finish = () => {
+        clearTimeout(timer)
+        network.pendingWallet = undefined
+        resolve()
+      }
+      const timer = setTimeout(finish, 20000)
+      network.pendingWallet = {available, version, release: () => { network.releasedWallets++; finish() }}
+    })
+  }
+  if (path === '/api/auth/desktop/refresh') {
+    network.refreshStatuses.push(response.status)
+    if (response.ok && network.dropRefresh) {
+      network.dropRefresh = false
+      network.droppedRefreshes++
+      await response.arrayBuffer()
+      throw new Error('Isolated refresh response was lost')
+    }
+  }
+  if (modelPost && response.ok && network.dropModelResult &&
+    response.headers.get('content-type')?.startsWith('text/event-stream')) {
+    network.dropModelResult = false
+    const frames = await response.text()
+    const delimiter = 'event: ncurator.result\n'
+    const at = frames.indexOf(delimiter)
+    if (at < 0) throw new Error('Missing settled model result in the fixture')
+    network.droppedResults++
+    return new Response(frames.slice(0, at) + 'data: [DONE]\n\n', { headers: {
+      'content-type': 'text/event-stream'
+    } })
+  }
+  return response
 }
 shell.openExternal = async (target) => {
   const url = new URL(target)
@@ -48,11 +93,25 @@ app.on('ready', () => session.defaultSession.webRequest.onBeforeRequest(
 require(settings.main)
 `
 
-type Fixture = { api: string; control: string; appKey: string; browserArgs: string[] }
+type Fixture = {
+  api: string; control: string; appKey: string; browserArgs: string[]
+  model?: { id: string; reply: string }
+}
+type Desktop = Pick<E2ETestRuntime, 'page' | 'electronApp'>
 type Transport = {
   walletReads: number
   blockWallet: boolean
   urls: string[]
+  holdWallet?: boolean
+  dropRefresh?: boolean
+  dropModelResult?: boolean
+  pendingWallet?: { available: string; version: string; release: () => void }
+  releasedWallets: number
+  droppedRefreshes: number
+  droppedResults: number
+  refreshStatuses: number[]
+  modelPosts: string[]
+  modelLookups: string[]
 }
 type AccountRuntime = typeof globalThis & { __accountTestNetwork: Transport }
 
@@ -63,7 +122,7 @@ export const labels = {
   balance: /可用余额|Available balance/u,
   recharge: /^(?:充\s*值|Top up)$/u,
   billing: /^(?:账\s*单|Billing)$/u,
-  signOut: /^(?:退出当前桌面|Sign out of this desktop)$/u,
+  signOut: /^(?:退出登录|Sign out)$/u,
   copy: /^(?:复\s*制|Copy)$/u,
   refresh: /刷新余额|Refresh balance/u,
   stale: /余额待更新|Balance awaiting update/u,
@@ -77,16 +136,30 @@ export const accountButton = (page: Page) => page.getByTestId('desktop-account-m
 export const available = (page: Page) => page.getByTestId('desktop-account-available')
 export const menuItem = (page: Page, name: RegExp) => page.getByRole('menuitem', { name })
 export const settingsAccount = (page: Page) => page.locator('a[href="#/settings/account"]')
-export const externalUrls = (runtime: E2ETestRuntime) =>
+export const externalUrls = (runtime: Desktop) =>
   runtime.electronApp.evaluate(() => [...(globalThis as AccountRuntime).__accountTestNetwork.urls])
-export const walletReads = (runtime: E2ETestRuntime) =>
+export const walletReads = (runtime: Desktop) =>
   runtime.electronApp.evaluate(
     () => (globalThis as AccountRuntime).__accountTestNetwork.walletReads
   )
-export const setWalletOffline = (runtime: E2ETestRuntime, block: boolean) =>
+export const setWalletOffline = (runtime: Desktop, block: boolean) =>
   runtime.electronApp.evaluate((_electron, value) => {
     ;(globalThis as AccountRuntime).__accountTestNetwork.blockWallet = value
   }, block)
+export const armAccountFault = (
+  runtime: Desktop, fault: 'holdWallet' | 'dropModelResult'
+) => runtime.electronApp.evaluate((_electron, key) => {
+  ;(globalThis as AccountRuntime).__accountTestNetwork[key] = true
+}, fault)
+export const releaseWallet = (runtime: Desktop) => runtime.electronApp.evaluate(() => {
+  ;(globalThis as AccountRuntime).__accountTestNetwork.pendingWallet?.release()
+})
+export const accountNetwork = (runtime: Desktop) => runtime.electronApp.evaluate(() => {
+  const { pendingWallet, releasedWallets, refreshStatuses, droppedRefreshes, droppedResults, modelPosts,
+    modelLookups } = (globalThis as AccountRuntime).__accountTestNetwork
+  return { heldWallet: pendingWallet && { available: pendingWallet.available, version: pendingWallet.version },
+    releasedWallets, refreshStatuses, droppedRefreshes, droppedResults, modelPosts, modelLookups }
+})
 export async function readCopiedNumber(runtime: E2ETestRuntime) {
   const previous = await runtime.electronApp.evaluate(({ clipboard }) => clipboard.readText())
   try {
@@ -138,10 +211,17 @@ type Service = {
   browserPage: () => Promise<Page>
   continueInBrowser: (page: Page) => Promise<Page>
   signIn: (page: Page, email: string, target: string) => Promise<void>
-  authorize: (runtime: E2ETestRuntime, page: Page, email: string) => Promise<void>
+  authorize: (runtime: Desktop, page: Page, email: string, signedIn?: true) => Promise<void>
   userNumber: (page: Page) => Promise<string>
   recharge: (page: Page) => Promise<void>
   checkOverseas: () => Promise<void>
+  launchSecondDesktop: (input?: { userDataDir?: string; dropRefresh?: boolean }) => ReturnType<typeof launchElectronApp>
+  evidence: (email: string) => Promise<AccountEvidence>
+  model: Fixture['model']
+}
+type AccountEvidence = {
+  sessions: { clientType: string; revokedReason: string | null; lastActivityAt: string; refreshRetryExpiresAt: string | null }[]
+  calls: { requestId: string; paidAmount: string; feeDecision: string; executionStatus: string }[]
 }
 
 export const newTestEmail = (prefix: string) => prefix + '-' + randomUUID() + '@example.test'
@@ -183,6 +263,19 @@ export async function withAccountFixture(
     })
     try {
       const service: Service = {
+        model: fixture.model,
+        launchSecondDesktop: (input) => launchElectronApp({
+          serviceMode: 'real', sourceAppPath: root, windowMode: 'visible',
+          userDataDir: input?.userDataDir,
+          extraEnv: { ...extraEnv, NCURATOR_ACCOUNT_TEST_INPUT: JSON.stringify({
+            api: fixture.api, main: resolve('out/main/index.js'), dropRefresh: input?.dropRefresh
+          }) }
+        }),
+        async evidence(email) {
+          const response = await post('/evidence', { email })
+          expect(response.status).toBe(200)
+          return await response.json() as AccountEvidence
+        },
         async browserPage() {
           const context = await browser.newContext({
             ignoreHTTPSErrors: true,
@@ -215,7 +308,7 @@ export async function withAccountFixture(
           await page.getByRole('button', { name: '登录', exact: true }).click()
           await page.waitForURL((url) => url.pathname === new URL(target).pathname)
         },
-        async authorize(desktop, page, email) {
+        async authorize(desktop, page, email, signedIn) {
           const before = (await externalUrls(desktop)).length
           await accountPanel(desktop.page).getByRole('button', { name: labels.login }).click()
           await expect.poll(async () => (await externalUrls(desktop)).length).toBe(before + 1)
@@ -225,7 +318,8 @@ export async function withAccountFixture(
             'flow',
             'state'
           ])
-          await service.signIn(page, email, target.href)
+          if (signedIn) await page.goto(target.href)
+          else await service.signIn(page, email, target.href)
           const [approval] = await Promise.all([
             page.waitForResponse(
               (response) => response.url() === api + '/api/auth/desktop/approve'
@@ -344,6 +438,6 @@ export async function withAccountFixture(
   }
 }
 
-export async function returnToDesktop(runtime: E2ETestRuntime) {
+export async function returnToDesktop(runtime: Desktop) {
   await runtime.page.evaluate(() => window.dispatchEvent(new Event('focus')))
 }

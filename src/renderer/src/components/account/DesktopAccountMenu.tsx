@@ -1,10 +1,12 @@
 import { Dropdown, type MenuProps, App } from 'antd'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   HiOutlineArrowLeftOnRectangle,
+  HiOutlineArrowUpRight,
   HiOutlineChartBar,
   HiOutlineChevronUp,
+  HiOutlineChevronRight,
   HiOutlineCog6Tooth,
   HiOutlinePlusCircle,
   HiOutlineQuestionMarkCircle,
@@ -14,19 +16,31 @@ import {
 import { useDesktopAccount } from '../../contexts/DesktopAccountProvider'
 import { getContactUrl, t } from '../../i18n'
 import { walletAmount } from './walletAmount'
+import { useAppUpdate } from '../../contexts/AppUpdateContext'
+import { workbenchSelectors } from '../../testing/selectors'
 
 export function DesktopAccountMenu() {
   const { snapshot, run, openAccountPage } = useDesktopAccount()
+  const { snapshot: update } = useAppUpdate()
   const navigate = useNavigate()
   const { message } = App.useApp()
   const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
   if (snapshot.status === 'unsupported') return null
 
   const signedIn = snapshot.status === 'signed_in'
   const identity = signedIn ? snapshot.maskedEmail || snapshot.userNo : t(($) => $.account.title)
   const openSettings = () => navigate('/settings/account')
   const openPage = (page: 'recharge' | 'billing') =>
-    void openAccountPage(page).catch(() => message.error(t(($) => $.settings.couldNotOpenHelpWebsite)))
+    void openAccountPage(page).catch(() =>
+      message.error(t(($) => $.settings.couldNotOpenHelpWebsite))
+    )
+  const externalLabel = (label: string) => (
+    <span className="nc-account-menu-label">
+      {label}
+      <HiOutlineArrowUpRight aria-hidden="true" />
+    </span>
+  )
   const items: MenuProps['items'] = [
     {
       type: 'group',
@@ -51,8 +65,9 @@ export function DesktopAccountMenu() {
             label: (
               <span className="flex justify-between gap-3">
                 {t(($) => $.account.balance)}
-                <span className="tabular-nums">
+                <span className="ml-auto flex items-center gap-2 tabular-nums">
                   {snapshot.wallet ? walletAmount(snapshot.wallet.available) : '—'}
+                  <HiOutlineChevronRight aria-hidden="true" className="text-[#91918E]" />
                 </span>
               </span>
             ),
@@ -61,13 +76,13 @@ export function DesktopAccountMenu() {
           {
             key: 'recharge',
             icon: <HiOutlinePlusCircle />,
-            label: t(($) => $.account.recharge),
+            label: externalLabel(t(($) => $.account.recharge)),
             onClick: () => openPage('recharge')
           },
           {
             key: 'billing',
             icon: <HiOutlineChartBar />,
-            label: t(($) => $.account.billing),
+            label: externalLabel(t(($) => $.account.billing)),
             onClick: () => openPage('billing')
           }
         ]
@@ -79,17 +94,14 @@ export function DesktopAccountMenu() {
             onClick: openSettings
           }
         ]),
-    { type: 'divider' },
-    {
-      key: 'settings',
-      icon: <HiOutlineCog6Tooth />,
-      label: t(($) => $.common.settings),
-      onClick: () => navigate('/settings/general')
-    },
     {
       key: 'help',
       icon: <HiOutlineQuestionMarkCircle />,
-      label: t(($) => $.common.viewHelp),
+      label: (
+        <span aria-label={t(($) => $.common.viewHelp)}>
+          {externalLabel(t(($) => $.settings.userHelp))}
+        </span>
+      ),
       onClick: () => {
         void window.api
           .openExternal(getContactUrl())
@@ -99,13 +111,20 @@ export function DesktopAccountMenu() {
           .catch(() => message.error(t(($) => $.settings.couldNotOpenHelpWebsite)))
       }
     },
+    { type: 'divider' },
+    {
+      key: 'settings',
+      icon: <HiOutlineCog6Tooth />,
+      label: t(($) => $.common.settings),
+      onClick: () => navigate('/settings/general')
+    },
     ...(signedIn
       ? [
           { type: 'divider' as const },
           {
             key: 'logout',
             icon: <HiOutlineArrowLeftOnRectangle />,
-            label: t(($) => $.account.logoutHere),
+            label: t(($) => $.account.logout),
             onClick: () =>
               void run('logout')
                 .then((value) => {
@@ -127,16 +146,37 @@ export function DesktopAccountMenu() {
       trigger={['click']}
       placement="topLeft"
       autoFocus
-      overlayStyle={{ width: 252 }}
+      overlayStyle={{ width: 260 }}
+      overlayClassName="nc-account-dropdown"
+      dropdownRender={(menu) => (
+        <div
+          className="nc-account-popup"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              setOpen(false)
+              trigger.current?.focus()
+            }
+          }}
+        >
+          {menu}
+          <div className="nc-account-version">
+            <span>{t(($) => $.account.currentVersion)}</span>
+            <span className="tabular-nums" data-testid={workbenchSelectors.appVersion}>
+              {update ? `v${update.currentVersion}` : '—'}
+            </span>
+          </div>
+        </div>
+      )}
       menu={{ items, onClick: () => setOpen(false) }}
     >
       <button
+        ref={trigger}
         type="button"
         aria-label={t(($) => $.account.title)}
         aria-haspopup="menu"
         aria-expanded={open}
         data-testid="desktop-account-menu"
-        className="nc-sidebar-nav-row flex min-w-0 flex-1 gap-2"
+        className="nc-sidebar-nav-row nc-account-trigger flex min-w-0 flex-1 gap-2"
         onKeyDown={(event) => {
           if (event.key === 'Escape') setOpen(false)
         }}

@@ -137,7 +137,7 @@ textarea,
 }
 
 .ant-select-dropdown,
-.ant-dropdown .ant-dropdown-menu,
+.ant-dropdown:not(.nc-account-dropdown) .ant-dropdown-menu,
 .ant-popover .ant-popover-inner,
 .ant-cascader-dropdown,
 .ant-mentions-dropdown {
@@ -806,6 +806,148 @@ textarea,
 
 .nc-sidebar-session-toggle {
   @apply flex h-7 w-full items-center justify-start gap-1 rounded-[6px] pl-7 text-[12px] font-medium text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B6BCB]/30;
+}
+
+.nc-account-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+}
+.nc-account-trigger {
+  height: 44px;
+  font-size: 12px;
+}
+.nc-account-popup {
+  background: var(--notion-page);
+  border: 1px solid var(--notion-line-strong);
+  border-radius: 9px;
+  box-shadow: 0 8px 24px rgba(15, 15, 15, 0.08);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 6px;
+}
+.nc-account-dropdown .nc-account-popup .ant-dropdown-menu {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.nc-account-dropdown .ant-dropdown-menu-item {
+  min-height: 35px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+.nc-account-menu-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.nc-account-menu-label > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--notion-text-faint);
+}
+.nc-account-version {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 5px;
+  border-top: 1px solid var(--notion-line);
+  padding: 12px 10px 8px;
+  color: var(--notion-text-soft);
+  font-size: 12px;
+}
+.nc-account-update {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 48px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: #2f5f8f;
+  cursor: pointer;
+}
+.nc-account-update:not(:disabled):hover {
+  background: var(--notion-surface-hover);
+}
+.nc-account-update:focus-visible {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: 2px;
+}
+.nc-account-update:disabled {
+  cursor: default;
+}
+.nc-account-update-orb {
+  width: 28px;
+  height: 28px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #edf3f8;
+}
+.nc-account-update-orb > svg:not(.nc-account-update-ring) {
+  width: 15px;
+  height: 15px;
+}
+.nc-account-update-orb.is-progress {
+  background: transparent;
+}
+.nc-account-update.is-ready {
+  color: #2f6f4e;
+}
+.nc-account-update.is-ready .nc-account-update-orb {
+  background: #edf6ef;
+}
+.nc-account-update.is-error {
+  color: #b3261e;
+}
+.nc-account-update.is-error .nc-account-update-orb {
+  background: #f8ebe9;
+}
+.nc-account-update-label {
+  font-size: 11px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.nc-account-update-ring {
+  position: absolute;
+  inset: -2px;
+  width: 32px;
+  height: 32px;
+  transform: rotate(-90deg);
+}
+.nc-account-update-ring circle {
+  fill: none;
+  stroke-width: 2.4;
+}
+.nc-account-update-track {
+  stroke: #dce6ef;
+}
+.nc-account-update-value {
+  stroke: currentColor;
+  stroke-linecap: round;
+}
+.nc-account-update-ring.is-unknown {
+  animation: nc-account-update-turn 1.4s linear infinite;
+}
+@keyframes nc-account-update-turn {
+  to {
+    transform: rotate(270deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nc-account-update-ring.is-unknown {
+    animation: none;
+  }
 }
 
 .nc-sidebar-update-button {

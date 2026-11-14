@@ -26,13 +26,21 @@ describe('workbench conversation e2e', () => {
           const { page } = runtime
           const { serviceRoute } = await page.evaluate(() => window.api.appSettingsGet())
           const locale = await page.locator('html').getAttribute('lang')
-          const origin = serviceRoute === 'domestic' ? 'https://www.guanzhangai.cn' : 'https://www.ncurator.com'
+          const origin =
+            serviceRoute === 'domestic' ? 'https://www.guanzhangai.cn' : 'https://www.ncurator.com'
           const contactUrl = origin + (locale === 'zh-CN' ? '/zh/contact' : '/en/contact')
           await navigateToWorkbench(page, { waitForSessionListText: false })
-          const helpButton = getWorkbenchLocator(page, workbenchSelectors.settingsHelpButton)
+          if (serviceRoute === 'domestic') await page.getByTestId('desktop-account-menu').click()
+          const helpButton =
+            serviceRoute === 'domestic'
+              ? page.getByRole('menuitem', { name: '查看使用帮助', exact: true })
+              : getWorkbenchLocator(page, workbenchSelectors.settingsHelpButton)
           await helpButton.waitFor({ state: 'visible' })
           const routeBeforeClick = await page.evaluate(() => window.location.hash)
-          const accessibleName = (await helpButton.getAttribute('aria-label')) || ''
+          const accessibleName =
+            serviceRoute === 'domestic'
+              ? await helpButton.innerText()
+              : (await helpButton.getAttribute('aria-label')) || ''
           await helpButton.click()
           const signals = await runtime.collectSignals()
 
@@ -48,7 +56,7 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.accessibleName === '查看使用帮助' &&
+            /使用帮助/u.test(result.accessibleName) &&
               result.routeAfterClick === result.routeBeforeClick &&
               result.openExternalCalls.some((entry) => entry.payload === result.contactUrl),
             {

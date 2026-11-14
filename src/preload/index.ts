@@ -530,7 +530,10 @@ const api: DesktopApi = {
     setAppUpdateFixtureSnapshot({
       ...appUpdateFixtureSnapshot,
       status: 'downloading',
-      progressPercent: 0,
+      progressPercent: undefined,
+      transferredBytes: undefined,
+      totalBytes: undefined,
+      bytesPerSecond: undefined,
       error: undefined
     })
     await waitForAppUpdateFixtureStep()

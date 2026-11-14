@@ -196,6 +196,55 @@ describe('AppUpdateService contract', () => {
     expect(mocks.updater.quitAndInstall).toHaveBeenCalledWith(false, true)
   })
 
+  it('clears previous progress before download and retry until the updater reports it', async () => {
+    let finish!: () => void
+    vi.mocked(mocks.updater.downloadUpdate as () => Promise<unknown>).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        })
+    )
+    const service = new AppUpdateService()
+    service.initialize()
+    emitUpdaterEvent('update-available', { version: '0.1.1' })
+    const first = Promise.resolve(getIpcHandler(APP_UPDATE_DOWNLOAD_CHANNEL)())
+    const read = () => getIpcHandler(APP_UPDATE_GET_SNAPSHOT_CHANNEL)() as AppUpdateSnapshot
+    expect(read()).toMatchObject({
+      status: 'downloading',
+      progressPercent: undefined,
+      transferredBytes: undefined,
+      totalBytes: undefined,
+      bytesPerSecond: undefined
+    })
+    emitUpdaterEvent('download-progress', {
+      percent: 73,
+      transferred: 73,
+      total: 100,
+      bytesPerSecond: 8
+    })
+    emitUpdaterEvent('error', new Error('interrupted'))
+    finish()
+    await first
+    expect(read().progressPercent).toBe(73)
+    const retry = Promise.resolve(getIpcHandler(APP_UPDATE_DOWNLOAD_CHANNEL)())
+    expect(read()).toMatchObject({
+      status: 'downloading',
+      progressPercent: undefined,
+      transferredBytes: undefined,
+      totalBytes: undefined,
+      bytesPerSecond: undefined
+    })
+    emitUpdaterEvent('download-progress', {
+      percent: 0,
+      transferred: 0,
+      total: 100,
+      bytesPerSecond: 0
+    })
+    expect(read().progressPercent).toBe(0)
+    finish()
+    await retry
+  })
+
   it('refuses downloads before an update is available', async () => {
     const service = new AppUpdateService()
     service.initialize()

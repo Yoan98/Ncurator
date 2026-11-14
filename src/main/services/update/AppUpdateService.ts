@@ -228,7 +228,14 @@ export class AppUpdateService {
       }
     }
 
-    this.setSnapshot({ status: 'downloading', progressPercent: 0, error: undefined })
+    this.setSnapshot({
+      status: 'downloading',
+      progressPercent: undefined,
+      transferredBytes: undefined,
+      totalBytes: undefined,
+      bytesPerSecond: undefined,
+      error: undefined
+    })
     try {
       await this.dependencies.updater.downloadUpdate()
       if (this.snapshot.status === 'error') {

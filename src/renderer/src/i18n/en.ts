@@ -1,5 +1,8 @@
 export const en = {
   account: {
+    currentVersion: "Current version",
+    updateRestart: "Restart",
+    updateDownloading: "Downloading",
     refreshBalance: "Refresh balance",
     balanceStale: "Balance awaiting update",
     settlementPending: "Settling charges",

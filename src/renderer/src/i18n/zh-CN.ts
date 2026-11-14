@@ -1,5 +1,8 @@
 export const zh = {
   account: {
+    currentVersion: "当前版本",
+    updateRestart: "重启",
+    updateDownloading: "下载中",
     refreshBalance: "刷新余额",
     balanceStale: "余额待更新",
     settlementPending: "费用结算中",
