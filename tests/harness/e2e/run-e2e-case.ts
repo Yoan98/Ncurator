@@ -157,7 +157,7 @@ type E2EServiceConfiguration =
 
 export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   caseId: string
-  domain: Extract<TestDomain, 'settings' | 'workbench' | 'showcase'>
+  domain: Extract<TestDomain, 'account' | 'settings' | 'workbench' | 'showcase'>
   suite: string
   groups?: readonly string[]
   description: string
@@ -167,6 +167,7 @@ export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   windowMode?: ElectronWindowMode
   extraEnv?: Readonly<Record<string, string>>
   prepareUserData?: (userDataDir: string) => Promise<void>
+  sourceAppPath?: string
   runMode: E2ETestRunMode
   execute: (runtime: E2ETestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: E2ETestRuntime) => Promise<void>
@@ -606,6 +607,7 @@ export const runE2ECase = async <TResult>(
           windowMode: definition.windowMode,
           extraEnv: resolvedExtraEnv,
           prepareUserData: input?.prepareUserData,
+          sourceAppPath: definition.sourceAppPath,
           signalSink,
           userDataDir: app.userDataDir
         })
@@ -714,6 +716,7 @@ export const runE2ECase = async <TResult>(
       windowMode: definition.windowMode,
       extraEnv: resolvedExtraEnv,
       prepareUserData: definition.prepareUserData,
+      sourceAppPath: definition.sourceAppPath,
       signalSink
     })
     recordEvent({

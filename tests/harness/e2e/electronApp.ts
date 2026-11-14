@@ -286,7 +286,7 @@ const resolveAppTarget = (): E2EAppTarget => {
   throw new Error(`Unsupported NCURATOR_E2E_APP_TARGET: ${target}`)
 }
 
-const resolveElectronLaunch = async (): Promise<{
+const resolveElectronLaunch = async (sourceAppPath?: string): Promise<{
   target: E2EAppTarget
   executablePath: string
   args: string[]
@@ -298,11 +298,12 @@ const resolveElectronLaunch = async (): Promise<{
     return {
       target,
       executablePath: electronPath as unknown as string,
-      args: [APP_ROOT],
+      args: [sourceAppPath || APP_ROOT],
       cwd: APP_ROOT
     }
   }
 
+  if (sourceAppPath) throw new Error('A source entry cannot override an installed application')
   const executablePath = String(process.env.NCURATOR_E2E_EXECUTABLE || '').trim()
   if (!executablePath) {
     throw new Error('Package E2E requires NCURATOR_E2E_EXECUTABLE')
@@ -498,8 +499,9 @@ export const launchElectronApp = async (input: {
   signalSink?: ElectronSignalSink
   userDataDir?: string
   prepareUserData?: (userDataDir: string) => Promise<void>
+  sourceAppPath?: string
 }): Promise<LaunchedElectronApp> => {
-  const launch = await resolveElectronLaunch()
+  const launch = await resolveElectronLaunch(input.sourceAppPath)
 
   const consoleEntries: E2EConsoleEntry[] = []
   const lifecycleEntries: E2ELifecycleEntry[] = []

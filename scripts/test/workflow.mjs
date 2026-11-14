@@ -325,6 +325,11 @@ export const findTestFiles = async (input) => {
   const allFiles = await walk(scopeDir)
   const candidates = allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
+    .filter((filePath) => {
+      if (!filePath.startsWith(path.join(TEST_CASES_ROOT, 'account') + path.sep)) return true
+      if (input.domain === 'account' || input.caseIds.includes(toCaseId(filePath))) return true
+      return input.target !== 'package' && Boolean(process.env.NCURATOR_ACCOUNT_E2E_FIXTURE)
+    })
     .filter(
       (filePath) =>
         !filePath.startsWith(`${PROVIDER_MATRIX_ROOT}${path.sep}`) ||
@@ -1022,7 +1027,7 @@ const USAGE = `NCurator 测试 runner
   node scripts/test/workflow.mjs [选项]
 
 选项:
-  --domain <ai|knowledge|unit|settings|workbench>  测试域；默认全量
+  --domain <ai|knowledge|unit|account|settings|workbench>  测试域；默认全量
   --type <backend|e2e>                  执行类型；不带时按 backend -> e2e 顺序
   --suite <suite>                        过滤 suite
   --group <group>                        过滤 group，可重复传入
@@ -1072,6 +1077,7 @@ export const runTestWorkflow = async (argv, options = {}) => {
     ai: 'backend',
     knowledge: 'backend',
     unit: 'backend',
+    account: 'e2e',
     settings: 'e2e',
     workbench: 'e2e'
   }

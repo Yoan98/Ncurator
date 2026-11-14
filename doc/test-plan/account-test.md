@@ -64,7 +64,7 @@
 - 测试类型：`e2e`
 - What：菜单、设置账号页、本人标识、余额及异常展示。
 - Why：入口不一致、读取失败或残留数据会展示错误账号或误导余额为零。
-- How：经正式授权登录后操作头像、设置导航、编号复制、外部点击及 Escape，核对登录前后菜单和页面；余额通过正式充值形成。将 UI 及剪贴板中的用户编号与官网本人账号核对。暂停后端形成读取失败，恢复后重试。
+- How：经正式授权登录后操作头像、设置导航、编号复制、外部点击及 Escape，核对登录前后菜单和页面；余额通过正式充值形成。将 UI 及剪贴板中的用户编号与官网本人账号核对。在桌面网络边界中断余额读取，恢复后通过刷新按钮重试。
 - Oracle：菜单、键盘操作及登录前后范围正确，覆盖 `ACC-ENTRY-001-AC1/AC2/AC3`；两个入口到同一页面，本人邮箱、独立对外 `user_no` 和复制一致且无内部用户 ID 泄露，覆盖 `ACC-PAGE-001-AC1/AC2`；失败不伪装为零或他人数据，未登录不阻断原能力，覆盖 `ACC-PAGE-001-AC3/AC4`。
 
 #### `balance-display-and-funds-state`
@@ -88,12 +88,14 @@
 - 测试类型：`e2e`
 - What：官网跳转、退款边界及海外功能隔离。
 - Why：跳转可能泄漏凭证、假定网页登录或错误显示海外付费入口。
-- How：从菜单和账号页打开充值及账单，在系统浏览器调用边界核对公开地址。无网页会话时分别登录并检查原页面回跳，验证网页可使用不同于桌面的账号。打开充值后返回桌面，核对一次即时余额读取。检查桌面无退款入口、用户编号一致，并用海外发行配置确认无国内账号及资金入口。菜单帮助按联系页地址验收。
+- How：从菜单和账号页打开充值及账单，在系统浏览器调用边界核对公开地址。无网页会话时分别登录并检查原页面回跳，验证网页可使用不同于桌面的账号。打开充值后返回桌面，核对一次即时余额读取。检查桌面无退款入口、用户编号一致，并用海外发行配置确认无国内账号及资金入口。菜单帮助按联系页地址验收。海外入口使用现有源码发行配置验证，安装包发行标记另按包验收。
 - Oracle：目标和打开方式正确，不带桌面凭证、不假定网页登录，覆盖 `ACC-WEB-001-AC1/AC2`；桌面无退款入口、编号与官网一致，海外不展示国内资金能力，覆盖 `ACC-WEB-001-AC3/AC4`。
 
 ## 4. 执行与覆盖边界
 
-待实现用例：`anonymous-existing-usage`、`browser-login-outcomes`、`independent-sessions-and-restart`、`account-change-during-runs`、`account-menu-and-page`、`balance-display-and-funds-state`、`balance-refresh-and-ordering`、`account-web-navigation`。
+菜单、余额与网页跳转的源码回归使用独立的回环测试服务。将该服务生成的测试描述文件路径设为 `NCURATOR_ACCOUNT_E2E_FIXTURE`，运行 `pnpm test:e2e:source --domain account --case account-menu-and-page --case account-web-navigation`。隔离浏览器按桌面给出的地址操作，回跳与回到窗口的焦点事件由测试交给应用入口，后续处理走实际 Main、IPC、凭据存储和 UI。系统默认浏览器、真实焦点切换及安装协议关联由安装包验收。
+
+待实现用例：`anonymous-existing-usage`、`browser-login-outcomes`、`independent-sessions-and-restart`、`account-change-during-runs`、`balance-display-and-funds-state`、`balance-refresh-and-ordering`。
 
 下列 [Unit 用例](../../tests/case/unit/officialApi/desktop-account.test.ts) 补证主进程边界，桌面操作与系统实际行为由各 E2E 和人工验收覆盖。
 
