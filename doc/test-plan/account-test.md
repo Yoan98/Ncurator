@@ -27,8 +27,8 @@
 - 测试类型：`e2e / live`
 - What：原有免费及自带 Key 路径继续免登录使用，登录变化保留已有配置和资料。
 - Why：新增账号可能成为全局门禁，或将旧连接替换成平台付费。
-- How：在隔离本地目录通过真实 UI 配置自带 Key、创建伙伴及资料，未登录分别使用免费和自定义模型完成简单请求；经正式登录和退出后再次读取原配置。零余额下使用原连接，检查官网隔离库无馆长消费。历史配置升级的 fixture 验证随模型及存储变更补充，不直接改状态代替操作。
-- Oracle：未登录及零余额仍可用原路径，覆盖 `ACC-ACCESS-001-AC1`；登录变化保留配置和本地内容，不替换原连接、不产生平台消费，覆盖 `ACC-ACCESS-001-AC2/AC3`。
+- How：在隔离本地目录通过真实 UI 配置个人连接、创建两个伙伴和 UTF-8 文件资料，依次在未登录、同目录重启、A 零余额正常执行、A 运行中退出、退出后、B 零余额、网页撤销全部设备及重新授权 B 后经管理 UI 封禁八组状态，各发送免费／自定义一次，合计 16 次。记录对象 ID、原选择、连接公开属性、聊天前缀、工作区关联及文件内容保持；只读 IPC／数据库用于收证，不写业务状态。使用正式隔离目录、免费取票及调用路由；目录必须有预期条目且无错误，不能以错误态或空目录通过正向验收。
+- Oracle：未登录、失效、封禁及零余额仍可用原路径，覆盖 `ACC-ACCESS-001-AC1`；运行中退出不停止免费／自定义，网页独立有效；登录变化保留配置和本地内容，不替换原连接、不自动恢复任务，覆盖 `ACC-ACCESS-001-AC2/AC3`。每组相对前置基线检查免费／自定义没有新增 `model_calls`、钱包预占和资金流水；正式 usage／funds 查询也不出现对应记录。显式登录创建身份与既有账单单独计数，不能仅以全库零记录推断。
 
 ### authorization
 
@@ -95,7 +95,15 @@
 
 菜单、余额与网页跳转的源码回归使用独立的回环测试服务。将该服务生成的测试描述文件路径设为 `NCURATOR_ACCOUNT_E2E_FIXTURE`，运行 `pnpm test:e2e:source --domain account --case account-menu-and-page --case account-web-navigation --case balance-refresh-and-ordering --case independent-sessions-and-restart`。隔离浏览器按桌面给出的地址操作，回跳与回到窗口的焦点事件由测试交给应用入口，后续处理走实际 Main、IPC、凭据存储和 UI。系统默认浏览器、真实焦点切换及安装协议关联由安装包验收。
 
-待实现用例：`anonymous-existing-usage`、`browser-login-outcomes`、`account-change-during-runs`、`balance-display-and-funds-state`。
+待实现用例：`browser-login-outcomes`、`account-change-during-runs`、`balance-display-and-funds-state`。
+
+`anonymous-existing-usage` 的节点验收只运行真实上游的 16 次矩阵：个人自定义经已授权的本机订阅代理使用 `gpt-6-luna`，平台免费专项使用现有产品目录中的智谱 `glm-4.7-flash` 或 `glm-4-flash-250414`。免费服务用 `NCURATOR_ACCOUNT_E2E_FREE_MODEL` 显式选定本轮型号，默认前者，不自动回退；执行前复核零价条件，复用已有个人智谱测试凭据。账号、钱包和授权复用既有隔离 PG／Fastify／受控邮件；两条模型回复与用量来自真实供应商，不使用固定回复或填补缺失 usage。新增模拟矩阵暂停，其历史结果不作为节点验收。
+
+执行真实矩阵时，隔离服务显式选 `NCURATOR_ACCOUNT_E2E_PROFILE=node-one-free-live`，免费 Key 只注入服务内存；桌面读取已有 custom live 配置，真实查询本机代理的模型列表并通过 UI 保存个人连接。控制描述位于 OS 私有临时目录并保持 0600；桌面使用同一 `NCURATOR_ACCOUNT_E2E_FIXTURE` 执行 `pnpm test:e2e:source --domain account --case anonymous-existing-usage`。测试资料和消息不含秘密。只记录阶段、发送 ID、状态、固定错误码、公开源码坐标、字节／时长及不变量，保留必要脱敏诊断，不保存完整凭据或原始认证报文。既有本机代理按其当前遮罩规则运行，不改共享配置，不读取／清理已有日志，不作绝对零风险承诺。网页登录有效时比较正式 usage／funds 返回，封禁后按权限拒绝，另以正式管理列表／钱包概要核对，不能将拒绝视为空账单。
+
+一条路径受阻时，可显式设 `NCURATOR_ACCOUNT_E2E_FAMILY=custom` 或 `free` 独立执行另一条尚未完成的八组；不调用对侧模型、不填模拟结果，只形成对应分支证据，不能据八次部分通过宣称完整矩阵完成。失败的已消费许可不自动补发，保留累计请求及失败证据，根据原因和实际可用性人工恢复，避免高频盲重试；不以自设累计次数上限阻止已授权的正常验证，已独审通过的分支不重跑。
+
+该 profile 逐次发放一次推理许可，免费／自定义各最多八次，异常、超时或关闭撤销后续许可；输入最多 64 KiB，流式累计到 16 KiB 立即中止，单次 30 秒、整例 10 分钟；禁止工具执行、重试、回退及额外探测。GPT 路径以已批准的字节／时限约束执行，不冒充实际生成 token 或费用硬限；免费参数硬限 256 token。该例从创建 context 起不启用 trace／HAR／视频／DOM snapshots，避免凭据表单进入产物；用脱敏状态、源码坐标和计数排查，临时产品凭据按正常流程保存于私有用户目录，收尾整体销毁。真实缺失 usage 保持缺失，不调整产品压缩行为。
 
 `independent-sessions-and-restart` 当前自动化覆盖两个独立桌面、网页、重启恢复与各自退出；到期刷新响应丢失、长期停机恢复和全设备撤销仍由主进程 Unit、跨端回归及签名包验收补证。`balance-refresh-and-ordering` 当前覆盖短期复用、真实结算先于延迟余额响应、完成确认丢失后按原请求查回及退出后迟到余额；30 秒边界与多窗口并发另由主进程 Unit 补证，不将其计为该 E2E 已覆盖。
 

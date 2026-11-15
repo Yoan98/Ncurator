@@ -234,7 +234,7 @@ pnpm test:update:e2e
 - What：三类模型入口、自定义精确型号选择、手填及错误反馈。
 - Why：目录更新或自动回退可能改变用户选择及计费方式。
 - How：未登录检查馆长引导、免费及自定义入口；通过 Settings 创建模板及手动连接，使用新版目录中不同的条目 ID 和 `modelName`，选择精确型号完成真实调用，核对出站使用实际型号且重启保留原选择。用转发代理的无效路径形成真实服务错误，核对分组、展开、收起、复制及刷新，覆盖部分成功和搜索无匹配。检查手填的空白、取消、保存、去重及跨伙伴选择；刷新、编辑、重启和目录停用后核对原选择，再删除连接检查失效。成功、取消及失败后的上下文用量与本地日志投影核对。
-- Oracle：入口、模型行、侧栏及精确选择覆盖 `WB-COMPOSER-007-AC1/AC2/AC3/AC4`；失效提示且不自动回退覆盖 `WB-COMPOSER-007-AC6`；免费、自定义免登录及独立计费覆盖 `WB-COMPOSER-007-AC14/AC15`；错误归组、原文复制、Key 脱敏、刷新及手填生命周期覆盖 `WB-COMPOSER-007-AC16/AC17/AC18`。入口图标及主模型选择覆盖 `WB-COMPOSER-007-AC7`、`WB-COMPOSER-013-AC1`；终态上下文补证 `WB-COMPOSER-013-AC5`，异常 cause 和持久化失败由 Unit 补充。
+- Oracle：入口、模型行、侧栏及精确选择覆盖 `WB-COMPOSER-007-AC1/AC2/AC3/AC4`；失效提示且不自动回退覆盖 `WB-COMPOSER-007-AC6`；个人自定义调用补证 `WB-COMPOSER-007-AC15`，免费目录错误／空态仅为负向反馈，不能计为 `AC14` 免费可用性通过。正向免费调用见 `published-free-model-smoke`；账号变化下的免费／自定义资料保持及正式平台零消费见 [Account 矩阵](account-test.md#anonymous-existing-usage)，受控上游与 live 证据分开。错误归组、原文复制、Key 脱敏、刷新及手填生命周期覆盖 `WB-COMPOSER-007-AC16/AC17/AC18`。入口图标及主模型选择覆盖 `WB-COMPOSER-007-AC7`、`WB-COMPOSER-013-AC1`；终态上下文补证 `WB-COMPOSER-013-AC5`，异常 cause 和持久化失败由 Unit 补充。
 
 #### `managed-model-catalog`
 

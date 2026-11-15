@@ -31,6 +31,7 @@ import {
   type LaunchedElectronApp
 } from './electronApp'
 import { ensureE2EModelReady } from './modelFixture'
+import { nodeOneError, safeNodeOneEvidence, type NodeOneEvidence } from './nodeOneAcceptance'
 import {
   E2EResourceScope,
   runWithE2EResourceScope,
@@ -166,6 +167,7 @@ export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   execution?: E2EExecutionClass
   windowMode?: ElectronWindowMode
   extraEnv?: Readonly<Record<string, string>>
+  nodeOneAcceptance?: { revoke: () => void }
   prepareUserData?: (userDataDir: string) => Promise<void>
   sourceAppPath?: string
   runMode: E2ETestRunMode
@@ -368,15 +370,63 @@ export const runE2ECase = async <TResult>(
   let executionErrorName: string | null = null
   let executionErrorMessage: string | null = null
   let primaryError: Error | null = null
+  let nodeOneFailureSite: string | undefined
   const resourceScope = new E2EResourceScope()
   const teardownErrors: E2EResourceDisposalError[] = []
 
   const pushEvent = (event: TestLogEvent): void => {
+    if (definition.nodeOneAcceptance) {
+      if (event.type === 'signal' && !['node-one-send', 'node-one-phase'].includes(event.name))
+        return
+      let data: JsonValue = null
+      if (event.type === 'error' && nodeOneFailureSite) data = { site: nodeOneFailureSite }
+      try {
+        if (event.name === 'node-one-send')
+          data = safeNodeOneEvidence(event.data as NodeOneEvidence)
+        if (event.name === 'node-one-phase') {
+          const value = event.data as Record<string, JsonValue>
+          const allowed = [
+            'stage',
+            'localPreserved',
+            'zeroPlatformDelta',
+            'formalQueriesUnchanged',
+            'syntheticOnly'
+          ]
+          if (
+            !value ||
+            Object.keys(value).some((key) => !allowed.includes(key)) ||
+            typeof value.stage !== 'number' ||
+            value.stage < 1 ||
+            value.stage > 8 ||
+            Object.entries(value).some(
+              ([key, value]) => key !== 'stage' && typeof value !== 'boolean'
+            )
+          )
+            throw new Error('node-one:evidence')
+          data = { ...value }
+        }
+      } catch {
+        definition.nodeOneAcceptance.revoke()
+        throw new Error('node-one:evidence')
+      }
+      event = {
+        ts: event.ts,
+        type: event.type,
+        status: event.status,
+        name: data ? event.name : event.type,
+        message:
+          event.type === 'error'
+            ? nodeOneError(new Error(executionErrorMessage || ''))
+            : 'Node one acceptance metadata',
+        data
+      }
+    }
     events.push(event)
     streamingLogWriter.appendTimelineEvent(event)
   }
 
   const appendRuntimeEventOnce = (entry: E2ERuntimeSignals['aiRunEventEntries'][number]): void => {
+    if (definition.nodeOneAcceptance) return
     const key = getRuntimeEventKey(entry)
     if (emittedRuntimeEventKeys.has(key)) return
     emittedRuntimeEventKeys.add(key)
@@ -384,6 +434,7 @@ export const runE2ECase = async <TResult>(
   }
 
   const appendLlmIoOnce = (entry: E2ERuntimeSignals['llmIoEntries'][number]): void => {
+    if (definition.nodeOneAcceptance) return
     const key = getLlmIoKey(entry)
     if (emittedLlmIoKeys.has(key)) return
     emittedLlmIoKeys.add(key)
@@ -442,6 +493,8 @@ export const runE2ECase = async <TResult>(
     message: string
     refs?: TestArtifactRefs
   }): Promise<TestArtifact> => {
+    // No automatic screenshot while a credential field or error dialog may be visible.
+    if (definition.nodeOneAcceptance) throw new Error('node-one:evidence')
     const relativePath = path.posix.join('screenshots', `${input.name}.png`)
     const absolutePath = path.join(logDirArtifacts, relativePath)
     await mkdir(path.dirname(absolutePath), { recursive: true })
@@ -557,14 +610,15 @@ export const runE2ECase = async <TResult>(
           data: input.data
         })
         if (!condition) {
-          await captureScreenshot({
-            name: `${input.name}-${assertionId}-failed`,
-            message: '保存失败截图',
-            refs: {
-              assertionId,
-              stepId: lastStepId || undefined
-            }
-          })
+          if (!definition.nodeOneAcceptance)
+            await captureScreenshot({
+              name: `${input.name}-${assertionId}-failed`,
+              message: '保存失败截图',
+              refs: {
+                assertionId,
+                stepId: lastStepId || undefined
+              }
+            })
           throw new Error(input.message)
         }
       },
@@ -597,11 +651,12 @@ export const runE2ECase = async <TResult>(
           preserveUserData: true,
           crash: input?.crash
         })
-        await captureArtifact({
-          kind: 'trace',
-          relativePath: traceRelativePath,
-          message: `保存第 ${String(restartCounter)} 次重启前的 Playwright trace`
-        })
+        if (!definition.nodeOneAcceptance)
+          await captureArtifact({
+            kind: 'trace',
+            relativePath: traceRelativePath,
+            message: `保存第 ${String(restartCounter)} 次重启前的 Playwright trace`
+          })
         currentApp = await launchElectronApp({
           serviceMode: definition.serviceMode,
           windowMode: definition.windowMode,
@@ -609,6 +664,7 @@ export const runE2ECase = async <TResult>(
           prepareUserData: input?.prepareUserData,
           sourceAppPath: definition.sourceAppPath,
           signalSink,
+          nodeOneAcceptance: definition.nodeOneAcceptance ? true : undefined,
           userDataDir: app.userDataDir
         })
         launchedApp = currentApp
@@ -717,7 +773,8 @@ export const runE2ECase = async <TResult>(
       extraEnv: resolvedExtraEnv,
       prepareUserData: definition.prepareUserData,
       sourceAppPath: definition.sourceAppPath,
-      signalSink
+      signalSink,
+      nodeOneAcceptance: definition.nodeOneAcceptance ? true : undefined
     })
     recordEvent({
       type: 'signal',
@@ -733,7 +790,19 @@ export const runE2ECase = async <TResult>(
     })
     status = 'passed'
   } catch (error) {
-    primaryError = error instanceof Error ? error : new Error(String(error))
+    definition.nodeOneAcceptance?.revoke()
+    if (definition.nodeOneAcceptance && error instanceof Error) {
+      // Only public source coordinates, never the exception message, arguments or cause.
+      nodeOneFailureSite =
+        /tests\/(?:harness\/e2e|case\/account)\/[a-zA-Z0-9/.-]+\.(?:ts|tsx):[0-9]+:[0-9]+/u.exec(
+          error.stack || ''
+        )?.[0]
+    }
+    primaryError = definition.nodeOneAcceptance
+      ? new Error(nodeOneError(error instanceof Error ? error : ''))
+      : error instanceof Error
+        ? error
+        : new Error(String(error))
     executionErrorName = executionErrorName || primaryError.name
     executionErrorMessage = executionErrorMessage || primaryError.message
     recordEvent({
@@ -748,7 +817,10 @@ export const runE2ECase = async <TResult>(
         failedAssertionId
       }
     })
-    if (!artifacts.some((artifact) => artifact.kind === 'screenshot')) {
+    if (
+      !definition.nodeOneAcceptance &&
+      !artifacts.some((artifact) => artifact.kind === 'screenshot')
+    ) {
       await captureScreenshot({
         name: 'run-failure',
         message: '保存失败截图',
@@ -867,11 +939,12 @@ export const runE2ECase = async <TResult>(
         await launchedApp.close({
           tracePath: traceAbsolutePath
         })
-        await captureArtifact({
-          kind: 'trace',
-          relativePath: traceRelativePath,
-          message: '保存 Playwright trace'
-        })
+        if (!definition.nodeOneAcceptance)
+          await captureArtifact({
+            kind: 'trace',
+            relativePath: traceRelativePath,
+            message: '保存 Playwright trace'
+          })
       } catch (error) {
         teardownErrors.push({
           name: 'electron-app-close',
@@ -997,7 +1070,7 @@ export const runE2ECase = async <TResult>(
       data: knowledgeCacheSummary
     })
 
-    if (status === 'failed') {
+    if (status === 'failed' && !definition.nodeOneAcceptance) {
       const reportRelativePath = path.posix.join('playwright', 'report', 'index.html')
       const reportAbsolutePath = path.join(logDirArtifacts, reportRelativePath)
       await mkdir(path.dirname(reportAbsolutePath), { recursive: true })
@@ -1057,7 +1130,8 @@ export const runE2ECase = async <TResult>(
     })
   }
 
-  if (primaryError) throw primaryError
+  if (primaryError)
+    throw definition.nodeOneAcceptance ? new Error(nodeOneError(primaryError)) : primaryError
 }
 
 export const runShowcaseCase = async <TResult>(

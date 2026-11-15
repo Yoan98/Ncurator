@@ -353,6 +353,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - `signal` 用于记录可观察到的外部信号，例如路由变化、IPC 调用、AI 事件。
 - 当失败事件存在明确证据时，优先把证据放进 `data` 或 artifact，不要在 `message` 中写大段解释。
 - e2e 下不把所有 Playwright 底层调用逐条倾倒进 timeline；底层重放依赖 `trace.zip`，timeline 只保留语义 step / assertion / signal。
+- 不得持久化真实完整凭据；保留足够的脱敏诊断用于排查。具体采集边界由对应测试计划定义，普通测试默认日志不变。
 - `run` 之外的业务状态不要塞进 `timeline.status`。
   - 例如 `blocked`、`completed`、`cancelled` 应保留在 `runtime-events.jsonl` 或写进 `data`。
 

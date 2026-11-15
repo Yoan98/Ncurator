@@ -1,6 +1,6 @@
 import path from 'node:path'
 import os from 'node:os'
-import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { access, chmod, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import electronPath from 'electron'
 import {
   _electron as electron,
@@ -286,7 +286,9 @@ const resolveAppTarget = (): E2EAppTarget => {
   throw new Error(`Unsupported NCURATOR_E2E_APP_TARGET: ${target}`)
 }
 
-const resolveElectronLaunch = async (sourceAppPath?: string): Promise<{
+const resolveElectronLaunch = async (
+  sourceAppPath?: string
+): Promise<{
   target: E2EAppTarget
   executablePath: string
   args: string[]
@@ -359,12 +361,30 @@ const buildElectronLaunchEnv = (
   userDataDir: string,
   serviceMode: E2EServiceMode,
   windowMode?: ElectronWindowMode,
-  extraEnv?: Readonly<Record<string, string>>
+  extraEnv?: Readonly<Record<string, string>>,
+  nodeOneAcceptance?: true
 ): NodeJS.ProcessEnv => {
   const env: NodeJS.ProcessEnv = {}
 
   for (const [key, value] of Object.entries(process.env)) {
     if (key.startsWith('npm_')) continue
+    if (
+      nodeOneAcceptance &&
+      ![
+        'PATH',
+        'HOME',
+        'TMPDIR',
+        'LANG',
+        'LC_ALL',
+        'SHELL',
+        'USER',
+        'DISPLAY',
+        'XAUTHORITY',
+        'SYSTEMROOT',
+        'WINDIR'
+      ].includes(key)
+    )
+      continue
     if (value !== undefined) {
       env[key] = value
     }
@@ -387,6 +407,11 @@ const buildElectronLaunchEnv = (
   // Cursor/agent shells may inject ELECTRON_RUN_AS_NODE=1, which makes the Electron
   // binary behave like Node and reject Chromium launch flags from Playwright.
   delete env.ELECTRON_RUN_AS_NODE
+  if (nodeOneAcceptance) {
+    env.AI_TEST_DISABLE_DOTENV = '1'
+    env.LANGCHAIN_TRACING_V2 = 'false'
+    env.LANGSMITH_TRACING = 'false'
+  }
 
   return env
 }
@@ -496,6 +521,7 @@ export const launchElectronApp = async (input: {
   serviceMode: E2EServiceMode
   windowMode?: ElectronWindowMode
   extraEnv?: Readonly<Record<string, string>>
+  nodeOneAcceptance?: true
   signalSink?: ElectronSignalSink
   userDataDir?: string
   prepareUserData?: (userDataDir: string) => Promise<void>
@@ -534,6 +560,7 @@ export const launchElectronApp = async (input: {
     ? path.resolve(input.userDataDir)
     : await mkdtemp(path.join(e2eTempRoot, 'ncurator-e2e-user-data-'))
   await mkdir(userDataDir, { recursive: true })
+  if (input.nodeOneAcceptance) await chmod(userDataDir, 0o700)
   try {
     await input.prepareUserData?.(userDataDir)
   } catch (error) {
@@ -546,7 +573,8 @@ export const launchElectronApp = async (input: {
     userDataDir,
     input.serviceMode,
     input.windowMode,
-    input.extraEnv
+    input.extraEnv,
+    input.nodeOneAcceptance
   )
   const desktopLaunch =
     launch.target === 'package'
@@ -576,9 +604,11 @@ export const launchElectronApp = async (input: {
   const electronProcess = electronApp.process()
   let applicationPid = electronProcess?.pid || 0
   electronProcess?.stdout?.on('data', (chunk) => {
+    if (input.nodeOneAcceptance) return
     pushProcessLog(consoleEntries, 'log', 'main:stdout', chunk, input.signalSink)
   })
   electronProcess?.stderr?.on('data', (chunk) => {
+    if (input.nodeOneAcceptance) return
     pushProcessLog(consoleEntries, 'error', 'main:stderr', chunk, input.signalSink)
   })
   electronProcess?.on('exit', (code, signal) => {
@@ -691,12 +721,14 @@ export const launchElectronApp = async (input: {
   electronApp.on('close', () => {
     recordLifecycle('electron-app-close')
   })
-  await page.context().tracing.start({
-    screenshots: true,
-    snapshots: true
-  })
+  if (!input.nodeOneAcceptance)
+    await page.context().tracing.start({
+      screenshots: true,
+      snapshots: true
+    })
 
   page.on('console', (message) => {
+    if (input.nodeOneAcceptance) return
     const entry = {
       ts: new Date().toISOString(),
       level: toConsoleLevel(message),
@@ -772,7 +804,7 @@ export const launchElectronApp = async (input: {
     close: async (closeInput) => {
       electronApplicationByPage.delete(page)
       recordLifecycle('electron-teardown-started')
-      if (!page.isClosed()) {
+      if (!page.isClosed() && !input.nodeOneAcceptance) {
         try {
           await page.context().tracing.stop({
             path: closeInput.tracePath
