@@ -1,6 +1,8 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TelemetryService } from '../../../../src/main/services/telemetry/TelemetryService'
@@ -96,7 +98,7 @@ describe('TelemetryService', () => {
       string,
       unknown
     >
-    const state = JSON.parse(await readFile(path.join(directory, 'telemetry.json'), 'utf8')) as {
+    const state = JSON.parse(await readFile(path.join(directory, 'telemetry-domestic.json'), 'utf8')) as {
       schemaVersion: number
       installationId: string
       pending: unknown[]
@@ -115,7 +117,7 @@ describe('TelemetryService', () => {
     expect(secondPayload).not.toHaveProperty('environment')
     expect(secondPayload.installationId).toBe(firstPayload.installationId)
     expect(state).toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 1, distribution: 'domestic',
       installationId: firstPayload.installationId,
       pending: []
     })
@@ -143,13 +145,15 @@ describe('TelemetryService', () => {
     const payload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
       installationId: string
     }
-    const state = JSON.parse(await readFile(path.join(directory, 'telemetry.json'), 'utf8')) as {
+    const state = JSON.parse(await readFile(path.join(directory, 'telemetry-domestic.json'), 'utf8')) as {
       schemaVersion: number
       installationId: string
     }
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.guanzhangai.cn/api/telemetry/events')
     expect(payload.installationId).toBe(legacyClientId)
-    expect(state).toMatchObject({ schemaVersion: 3, installationId: legacyClientId })
+    expect(state).toMatchObject({ schemaVersion: 1, distribution: 'domestic', installationId: legacyClientId })
+    const identity = JSON.parse(await readFile(path.join(directory, 'telemetry-installation.json'), 'utf8'))
+    expect(identity).toEqual({ installationId: legacyClientId })
   })
 
   it('drops the old queue while preserving the installation id', async () => {
@@ -191,6 +195,8 @@ describe('TelemetryService', () => {
       installationId: string
     }
     expect(payload.installationId).toBe(installationId)
+    const legacy = JSON.parse(await readFile(path.join(directory, 'telemetry.json'), 'utf8'))
+    expect(legacy).toMatchObject({ installationId, pending: [] })
   })
 
   it('keeps a completed run and its permitted attribution in the outbox and retries on launch', async () => {
@@ -207,8 +213,9 @@ describe('TelemetryService', () => {
     expect(model).toEqual({ modelSource: 'custom' })
     firstService.track('run_finished', { outcome: 'completed', model }, randomUUID())
     await firstService.flush()
+    await firstService.dispose()
     const failedState = JSON.parse(
-      await readFile(path.join(directory, 'telemetry.json'), 'utf8')
+      await readFile(path.join(directory, 'telemetry-domestic.json'), 'utf8')
     ) as {
       pending: unknown[]
     }
@@ -224,7 +231,7 @@ describe('TelemetryService', () => {
     secondService.track('app_started')
     await secondService.flush()
     const recoveredState = JSON.parse(
-      await readFile(path.join(directory, 'telemetry.json'), 'utf8')
+      await readFile(path.join(directory, 'telemetry-domestic.json'), 'utf8')
     ) as {
       pending: unknown[]
     }
@@ -239,4 +246,53 @@ describe('TelemetryService', () => {
     expect(JSON.stringify(replay)).not.toContain('private-')
     expect(recoveredState.pending).toEqual([])
   })
+
+  it('honors Retry-After while idle and stops retrying on disposal', async () => {
+    const requests: { eventId: string; at: number }[] = []
+    const server = createServer(async (request, response) => {
+      const chunks: Buffer[] = []
+      for await (const chunk of request) chunks.push(chunk)
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { eventId: string }
+      requests.push({ eventId: body.eventId, at: Date.now() })
+      if (requests.length !== 2) {
+        response.writeHead(429, { 'retry-after': '1' }).end()
+        return
+      }
+      response.writeHead(202, { 'content-type': 'application/json' }).end('{"accepted":true}')
+    })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', resolve)
+    })
+    const directory = await createDirectory()
+    const service = new TelemetryService({
+      userDataPath: directory,
+      appVersion: '2.0.0',
+      isPackaged: true,
+      endpoint: `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/telemetry/events`
+    })
+    try {
+      service.track('app_started')
+      await service.flush()
+      expect(requests).toHaveLength(1)
+      await expect.poll(() => requests.length, { timeout: 3_000 }).toBe(2)
+      expect(requests[1].eventId).toBe(requests[0].eventId)
+      expect(requests[1].at - requests[0].at).toBeGreaterThanOrEqual(1_000)
+      await service.flush()
+      const queue = path.join(directory, 'telemetry-domestic.json')
+      expect(JSON.parse(await readFile(queue, 'utf8')).pending).toEqual([])
+
+      service.track('message_submitted')
+      await service.flush()
+      expect(requests).toHaveLength(3)
+      await service.dispose()
+      await new Promise(resolve => setTimeout(resolve, 1_100))
+      expect(requests).toHaveLength(3)
+      expect(JSON.parse(await readFile(queue, 'utf8')).pending).toMatchObject([{ eventId: requests[2].eventId }])
+    } finally {
+      await service.dispose()
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    }
+  })
+
 })

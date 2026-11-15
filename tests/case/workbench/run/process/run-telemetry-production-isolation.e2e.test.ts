@@ -13,11 +13,13 @@ import {
 
 const CASE_ID = 'run-telemetry-production-isolation'
 const queued = '补充：最后只列出关键点。'
-const readOutbox = async (directory: string) =>
-  readFile(path.join(directory, 'telemetry.json'), 'utf8').catch(error => {
-    if (error?.code === 'ENOENT') return null
-    throw error
-  })
+const readOutbox = (directory: string) => Promise.all(
+  ['telemetry.json', 'telemetry-installation.json', 'telemetry-domestic.json', 'telemetry-international.json']
+    .map(filename => readFile(path.join(directory, filename), 'utf8').catch(error => {
+      if (error?.code === 'ENOENT') return null
+      throw error
+    }))
+)
 
 describe('workbench telemetry production isolation', () => {
   it(CASE_ID, async () => {
@@ -39,7 +41,7 @@ describe('workbench telemetry production isolation', () => {
         await page.locator('[data-message-pending="true"]').filter({ hasText: queued }).waitFor({ state: 'visible', timeout: 15_000 })
         await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
         const cancelled = await waitForWorkbenchAiEvent(runtime, { name: 'cancelled-run', matches: event => event.type === 'run_cancelled' && event.runId === running.runId })
-        return { completed: completed.type, cancelled: cancelled.type, queueUnchanged: before === await readOutbox(runtime.userDataDir) }
+        return { completed: completed.type, cancelled: cancelled.type, queueUnchanged: JSON.stringify(before) === JSON.stringify(await readOutbox(runtime.userDataDir)) }
       },
       assert: async (result, runtime) => {
         await runtime.assertThat(result.completed === 'run_completed' && result.cancelled === 'run_cancelled' && result.queueUnchanged, {

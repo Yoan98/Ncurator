@@ -552,7 +552,7 @@ if (!singleInstanceLock) {
     })
     shutdownCoordinator.register({
       name: 'telemetry',
-      dispose: () => telemetryService.flush()
+      dispose: () => telemetryService.dispose()
     })
     shutdownCoordinator.register({
       name: 'workbench-renderer-state',

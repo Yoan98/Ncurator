@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { officialApiUrl } from '../../../shared/appPreferences'
+import { officialApiUrl, type AppDistribution } from '../../../shared/appPreferences'
 import { freeModelEntryIdFromConfigId } from '../../../shared/freeModels'
 import type { WorkbenchSelectedModel } from '../../../shared/types'
 import { getAppRuntime } from '../app/AppRuntime'
@@ -37,15 +37,17 @@ type TelemetryEventPayload = {
 }
 
 type PersistedTelemetryState = {
-  schemaVersion: 3
+  schemaVersion: 1
+  distribution: AppDistribution
   installationId: string
   pending: TelemetryEventPayload[]
 }
 
-type DeliveryResult = 'accepted' | 'discard' | 'retry'
+type DeliveryResult = 'accepted' | 'discard' | { retryAfterMs: number }
 
 const MAX_PENDING_EVENTS = 500
 const RETRY_BACKOFF_MS = 30_000
+const MAX_TIMER_DELAY_MS = 2_147_483_647
 const DELIVERY_TIMEOUT_MS = 20_000
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const APP_VERSION_PATTERN = /^[0-9A-Za-z._+-]{1,64}$/
@@ -123,17 +125,39 @@ const isPendingEvent = (value: unknown): value is TelemetryEventPayload => {
   return event.failureCode === undefined
 }
 
+function retryDelay(response: Response): number {
+  const header = response.headers.get('retry-after')?.trim()
+  if (!header) return RETRY_BACKOFF_MS
+  const delay = /^\d+$/.test(header) ? Number(header) * 1_000 : Date.parse(header) - Date.now()
+  return Number.isFinite(delay) ? Math.min(MAX_TIMER_DELAY_MS, Math.max(1_000, delay)) : RETRY_BACKOFF_MS
+}
+
+async function readStateFile<T>(filename: string): Promise<T | null> {
+  try {
+    return JSON.parse(await readFile(filename, 'utf8')) as T
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) return null
+    throw error
+  }
+}
+
 export class TelemetryService {
+  private readonly distribution = getAppRuntime().distribution
   private readonly statePath: string
-  private readonly endpoint: string | undefined
+  private readonly identityPath: string
+  private readonly legacyPath: string
+  private readonly endpoint: string
   private readonly enabled: boolean
-  private statePromise: Promise<PersistedTelemetryState> | null = null
+  private readonly shutdown = new AbortController()
+  private state: PersistedTelemetryState | undefined
   private operationChain: Promise<void> = Promise.resolve()
-  private retryAfter = 0
+  private retryTimer: NodeJS.Timeout | undefined
 
   public constructor(private readonly options: TelemetryServiceOptions) {
-    this.statePath = path.join(options.userDataPath, 'telemetry.json')
-    this.endpoint = options.endpoint?.trim() || undefined
+    this.statePath = path.join(options.userDataPath, `telemetry-${this.distribution}.json`)
+    this.identityPath = path.join(options.userDataPath, 'telemetry-installation.json')
+    this.legacyPath = path.join(options.userDataPath, 'telemetry.json')
+    this.endpoint = options.endpoint?.trim() || officialApiUrl(this.distribution, '/api/telemetry/events')
     this.enabled = shouldEnableTelemetry(options.isPackaged)
   }
 
@@ -141,7 +165,7 @@ export class TelemetryService {
     if (!this.enabled || typeof selection.configId !== 'string') return undefined
     try {
       const managed = /^managed:([1-9][0-9]{0,18})$/.exec(selection.configId)?.[1]
-      if (managed && getAppRuntime().distribution === 'domestic' && BigInt(managed) <= 9_223_372_036_854_775_807n) {
+      if (managed && this.distribution === 'domestic' && BigInt(managed) <= 9_223_372_036_854_775_807n) {
         return { modelSource: 'managed', modelRef: managed }
       }
       const free = freeModelEntryIdFromConfigId(selection.configId)
@@ -160,7 +184,7 @@ export class TelemetryService {
   public track(eventName: 'app_started' | 'message_submitted'): void
   public track(eventName: 'run_finished', metadata: RunTelemetryMetadata, eventId: string): void
   public track(eventName: TelemetryEventName, metadata?: RunTelemetryMetadata, eventId?: string): void {
-    if (!this.enabled) return
+    if (!this.enabled || this.shutdown.signal.aborted) return
     if (eventName === 'run_finished' && (!metadata || !eventId)) return
     this.operationChain = this.operationChain
       .then(async () => await this.enqueueAndDrain(eventName, metadata, eventId))
@@ -182,19 +206,35 @@ export class TelemetryService {
     }
   }
 
+  public async dispose(): Promise<void> {
+    this.shutdown.abort()
+    clearTimeout(this.retryTimer)
+    this.retryTimer = undefined
+    await this.flush()
+  }
+
   private async enqueueAndDrain(
     eventName: TelemetryEventName,
     metadata?: RunTelemetryMetadata,
     eventId?: string
   ): Promise<void> {
-    const state = await this.getState()
+    const state = this.state ??= await this.loadState()
     const event = this.createPayload(state.installationId, eventName, metadata, eventId)
     if (!state.pending.some(item => item.eventId === event.eventId)) state.pending.push(event)
     if (state.pending.length > MAX_PENDING_EVENTS) {
       state.pending.splice(0, state.pending.length - MAX_PENDING_EVENTS)
     }
-    if (!(await this.persistState(state))) return
-    await this.drain(state)
+    await this.persistAndDrain(state)
+  }
+
+  private async persistAndDrain(state: PersistedTelemetryState): Promise<void> {
+    try {
+      await this.persistFile(this.statePath, state)
+    } catch {
+      this.scheduleRetry(state, RETRY_BACKOFF_MS)
+      return
+    }
+    if (!this.retryTimer) await this.drain(state)
   }
 
   private createPayload(
@@ -224,103 +264,103 @@ export class TelemetryService {
     }
   }
 
+  private scheduleRetry(state: PersistedTelemetryState, delay: number): void {
+    if (this.retryTimer || this.shutdown.signal.aborted || !state.pending.length) return
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined
+      this.operationChain = this.operationChain
+        .then(async () => await this.persistAndDrain(state))
+        .catch(() => undefined)
+    }, delay)
+    this.retryTimer.unref()
+  }
+
   private async drain(state: PersistedTelemetryState): Promise<void> {
-    if (Date.now() < this.retryAfter) return
-    while (state.pending.length > 0) {
+    while (!this.shutdown.signal.aborted && state.pending.length > 0) {
       const result = await this.deliver(state.pending[0])
-      if (result === 'retry') {
-        this.retryAfter = Date.now() + RETRY_BACKOFF_MS
+      if (typeof result === 'object') {
+        this.scheduleRetry(state, result.retryAfterMs)
         return
       }
       state.pending.shift()
-      if (!(await this.persistState(state))) return
+      try {
+        await this.persistFile(this.statePath, state)
+      } catch {
+        this.scheduleRetry(state, RETRY_BACKOFF_MS)
+        return
+      }
     }
   }
 
   private async deliver(event: TelemetryEventPayload): Promise<DeliveryResult> {
+    const fallback = { retryAfterMs: RETRY_BACKOFF_MS }
     try {
-      const endpoint =
-        this.endpoint || officialApiUrl(getAppRuntime().distribution, '/api/telemetry/events')
       const body = JSON.stringify(event)
-      const response = await fetch(endpoint, {
+      const response = await fetch(this.endpoint, {
         method: 'POST',
         redirect: 'error',
         headers: {
           'content-type': 'application/json',
           ...buildDesktopAppGatewayHeaders({
             method: 'POST',
-            url: endpoint,
+            url: this.endpoint,
             body
           })
         },
-        signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
+        signal: AbortSignal.any([this.shutdown.signal, AbortSignal.timeout(DELIVERY_TIMEOUT_MS)]),
         body
       })
       if (!response.ok) {
-        if (
-          response.status >= 400 &&
-          response.status < 500 &&
-          ![408, 429].includes(response.status)
-        ) {
+        await response.body?.cancel().catch(() => undefined)
+        if (response.status >= 400 && response.status < 500 && ![408, 429].includes(response.status)) {
           return 'discard'
         }
-        return 'retry'
+        return { retryAfterMs: retryDelay(response) }
       }
       const result = (await response.json().catch(() => null)) as { accepted?: unknown } | null
-      return result?.accepted === true ? 'accepted' : 'retry'
+      return result?.accepted === true ? 'accepted' : fallback
     } catch {
-      return 'retry'
+      return fallback
     }
-  }
-
-  private async getState(): Promise<PersistedTelemetryState> {
-    if (!this.statePromise) this.statePromise = this.loadState()
-    return await this.statePromise
   }
 
   private async loadState(): Promise<PersistedTelemetryState> {
-    try {
-      const raw = await readFile(this.statePath, 'utf8')
-      const parsed = JSON.parse(raw) as {
-        schemaVersion?: number
-        installationId?: unknown
-        clientId?: unknown
-        pending?: unknown
-      }
-      const installationId = isUuid(parsed.installationId)
-        ? parsed.installationId
-        : isUuid(parsed.clientId)
-          ? parsed.clientId
-          : randomUUID()
-      return {
-        schemaVersion: 3,
-        installationId,
-        pending: parsed.schemaVersion === 3 && Array.isArray(parsed.pending)
-          ? parsed.pending
-              .filter(isPendingEvent)
-              .filter((event) => event.installationId === installationId)
-          : []
-      }
-    } catch {
-      return {
-        schemaVersion: 3,
-        installationId: randomUUID(),
-        pending: []
-      }
+    const identity = await readStateFile<{ installationId?: string }>(this.identityPath)
+    const legacy = await readStateFile<{
+      schemaVersion?: number
+      installationId?: string
+      clientId?: string
+      pending?: TelemetryEventPayload[]
+    }>(this.legacyPath)
+    const installationId = [identity?.installationId, legacy?.installationId, legacy?.clientId].find(isUuid) ?? randomUUID()
+    if (identity?.installationId !== installationId) {
+      await this.persistFile(this.identityPath, { installationId })
+    }
+    if (legacy?.pending?.length) {
+      await this.persistFile(this.legacyPath, {
+        schemaVersion: legacy.schemaVersion, installationId, clientId: legacy.clientId, pending: []
+      })
+    }
+
+    const queue = await readStateFile<PersistedTelemetryState>(this.statePath)
+    return {
+      schemaVersion: 1,
+      distribution: this.distribution,
+      installationId,
+      pending: queue?.schemaVersion === 1 && queue.distribution === this.distribution && Array.isArray(queue.pending)
+        ? queue.pending.filter(isPendingEvent).filter(event => event.installationId === installationId)
+        : []
     }
   }
 
-  private async persistState(state: PersistedTelemetryState): Promise<boolean> {
-    const temporaryPath = `${this.statePath}.${process.pid}.${randomUUID()}.tmp`
+  private async persistFile(filename: string, state: object): Promise<void> {
+    const temporaryPath = `${filename}.${process.pid}.${randomUUID()}.tmp`
     try {
       await mkdir(this.options.userDataPath, { recursive: true })
       await writeFile(temporaryPath, JSON.stringify(state), { encoding: 'utf8', mode: 0o600 })
-      await rename(temporaryPath, this.statePath)
-      return true
-    } catch {
-      // Telemetry persistence must never affect product behavior.
+      await rename(temporaryPath, filename)
+    } finally {
       await rm(temporaryPath, { force: true }).catch(() => undefined)
-      return false
     }
   }
 }
