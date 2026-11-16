@@ -79,16 +79,6 @@ describe('application language and service region', () => {
             message: 'English settings layout without a service-region switch'
           })
           const englishLayout = await readSettingsLayout(runtime.page)
-          await runtime.page.getByTestId(settingsSelectors.helpButton).click()
-          const helpDialog = runtime.page.getByRole('dialog', { name: 'Open Contact us?' })
-          await helpDialog.waitFor({ state: 'visible' })
-          const englishHelpText = await helpDialog.textContent()
-          await runtime.captureScreenshot({
-            name: 'english-help-confirmation',
-            message: '英文确认框展示本发行版英文联系页地址'
-          })
-          await helpDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
-          await helpDialog.waitFor({ state: 'hidden' })
           await runtime.page.setViewportSize({ width: 720, height: 800 })
           const narrowLayout = await readSettingsLayout(runtime.page)
           await runtime.captureScreenshot({
@@ -137,21 +127,11 @@ describe('application language and service region', () => {
             routeControlAbsent,
             chineseLayout,
             englishLayout,
-            englishHelpText,
             narrowLayout,
             otherLayouts
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(
-            result.englishHelpText?.includes(result.initial.serviceRoute === 'international' ? 'https://www.ncurator.com/en/contact' : 'https://www.guanzhangai.cn/en/contact') &&
-              result.englishHelpText.includes('Open website'),
-            {
-              name: 'localized-help-confirmation-and-destination',
-              message: '英文帮助确认框应展示所属发行版的英文联系页和确认操作。',
-              data: { englishHelpText: result.englishHelpText }
-            }
-          )
           await runtime.assertThat(
             Math.abs(result.chineseLayout.width - 1080) <= CSS_LAYOUT_TOLERANCE_PX &&
               Math.abs(result.englishLayout.width - 1080) <= CSS_LAYOUT_TOLERANCE_PX &&

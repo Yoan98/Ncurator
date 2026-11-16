@@ -230,7 +230,7 @@ it('anonymous-existing-usage', async () => {
             }
             const login = async (email: string, web: Page, signedIn?: true) => {
               await accountPage()
-              await service.authorize(runtime, web, email, signedIn)
+              await service.authorize(runtime, web, email, { signedIn })
               await accountPanel(runtime.page).getByRole('button', { name: labels.refresh }).click()
               const next = await service.continueInBrowser(web)
               await service.userNumber(next)

@@ -147,8 +147,8 @@ type AccountRuntime = typeof globalThis & { __accountTestNetwork: Transport }
 
 export const labels = {
   login: /^(?:登\s*录|Sign in)$/u,
+  help: /^(?:帮助|Help)$/u,
   settings: /^(?:设置|Settings)$/u,
-  help: /^(?:查看使用帮助|View help)$/u,
   balance: /可用余额|Available balance/u,
   recharge: /^(?:充\s*值|Top up)$/u,
   billing: /^(?:账\s*单|Billing)$/u,
@@ -156,8 +156,7 @@ export const labels = {
   copy: /^(?:复\s*制|Copy)$/u,
   refresh: /刷新余额|Refresh balance/u,
   stale: /余额待更新|Balance awaiting update/u,
-  original:
-    /免费、自定义模型和本地工作仍可使用|Free models, custom models, and local work are still available/u,
+  signedOut: /^(?:尚未登录|Signed out)$/u,
   refund: /退款|Refund/iu
 }
 
@@ -259,7 +258,12 @@ type Service = {
   browserPage: () => Promise<Page>
   continueInBrowser: (page: Page) => Promise<Page>
   signIn: (page: Page, email: string, target: string) => Promise<void>
-  authorize: (runtime: Desktop, page: Page, email: string, signedIn?: true) => Promise<void>
+  authorize: (
+    runtime: Desktop,
+    page: Page,
+    email: string,
+    options?: { signedIn?: true; fromMenu?: true }
+  ) => Promise<void>
   userNumber: (page: Page) => Promise<string>
   recharge: (page: Page) => Promise<void>
   checkOverseas: () => Promise<void>
@@ -469,17 +473,25 @@ export async function withAccountFixture(
           await page.getByRole('button', { name: '登录', exact: true }).click()
           await page.waitForURL((url) => url.pathname === new URL(target).pathname)
         },
-        async authorize(desktop, page, email, signedIn) {
+        async authorize(desktop, page, email, options) {
+          const desktopPage = desktop.page
           const before = (await externalUrls(desktop)).length
-          await accountPanel(desktop.page).getByRole('button', { name: labels.login }).click()
+          const route = await desktopPage.evaluate(() => location.hash)
+          if (options?.fromMenu) {
+            await accountButton(desktopPage).click()
+            await menuItem(desktopPage, labels.login).click()
+          } else {
+            await accountPanel(desktopPage).getByRole('button', { name: labels.login }).click()
+          }
           await expect.poll(async () => (await externalUrls(desktop)).length).toBe(before + 1)
+          expect(await desktopPage.evaluate(() => location.hash)).toBe(route)
           const target = new URL((await externalUrls(desktop)).at(-1)!)
           expect(target.origin + target.pathname + target.search).toBe(site + '/desktop/authorize')
           expect([...new URLSearchParams(target.hash.slice(1)).keys()].sort()).toEqual([
             'flow',
             'state'
           ])
-          if (signedIn) await page.goto(target.href)
+          if (options?.signedIn) await page.goto(target.href)
           else await service.signIn(page, email, target.href)
           const [approval] = await Promise.all([
             page.waitForResponse(
@@ -498,7 +510,12 @@ export async function withAccountFixture(
             app.emit('open-url', { preventDefault() {} }, link)
           }, callbackUrl)
           await page.getByRole('heading', { name: '登录成功', exact: true }).waitFor()
-          await accountPanel(desktop.page).getByText(mask(email), { exact: true }).waitFor()
+          if (options?.fromMenu) {
+            await accountButton(desktopPage).getByText(mask(email), { exact: true }).waitFor()
+            await accountButton(desktopPage).click()
+            await menuItem(desktopPage, labels.balance).click()
+          }
+          await accountPanel(desktopPage).getByText(mask(email), { exact: true }).waitFor()
         },
         async userNumber(page) {
           await page.goto(site + '/account')

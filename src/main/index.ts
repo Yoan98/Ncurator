@@ -8,6 +8,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerHandlers, registerOpenExternalHandler } from './ipc/handlers'
 import { desktopProtocolLink } from './ipc/desktopAccount'
+import { cancelDomesticDesktopAuthorization } from './services/officialApi/desktopAccount'
 import { IngestionService } from './services/ingestion/loader'
 import { DEFAULT_EMBEDDING_MODEL_NAME, EmbeddingService } from './services/vector/EmbeddingService'
 import { EmbeddingRuntimeClient } from './services/vector/runtime/EmbeddingRuntimeClient'
@@ -39,6 +40,7 @@ if (!app.isPackaged) {
   loadRootEnvOnce()
 }
 
+const developmentRendererUrl = is.dev ? process.env.ELECTRON_RENDERER_URL : undefined
 const e2eUserDataPath = String(process.env.NCURATOR_USER_DATA_PATH || '').trim()
 if (e2eUserDataPath) {
   app.setPath('userData', e2eUserDataPath)
@@ -94,6 +96,7 @@ const requestRendererWorkbenchFlush = async (window: BrowserWindow): Promise<voi
 const prepareAppShutdown = async (): Promise<void> => {
   if (quitAfterShutdown) return
   shutdownRequested = true
+  if (developmentRendererUrl) cancelDomesticDesktopAuthorization()
   if (appStartupStatus.mode === 'normal') {
     await Promise.all(BrowserWindow.getAllWindows().map(requestRendererWorkbenchFlush))
   }
@@ -245,8 +248,8 @@ function createWindow(): BrowserWindow {
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  if (developmentRendererUrl) {
+    mainWindow.loadURL(developmentRendererUrl)
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
@@ -267,13 +270,18 @@ function createWindow(): BrowserWindow {
 if (!singleInstanceLock) {
   app.quit()
 } else {
+  function showDesktopWindow() {
+    if (shutdownRequested) return
+    focusAppWindow()
+    if (!mainAppWindow && deliverDesktopLink) createWindow()
+  }
+
   function openDesktopLink(args: string[]) {
     if (shutdownRequested) return
     const link = desktopProtocolLink(args)
     if (link && getAppRuntime().distribution === 'domestic') {
       deliverDesktopLink?.(link)
-      focusAppWindow()
-      if (!mainAppWindow && deliverDesktopLink) createWindow()
+      showDesktopWindow()
     }
   }
 
@@ -469,7 +477,8 @@ if (!singleInstanceLock) {
 
     deliverDesktopLink = registerHandlers({
       currentWindow: () => mainAppWindow,
-      rendererUrl: is.dev ? process.env.ELECTRON_RENDERER_URL : undefined,
+      rendererUrl: developmentRendererUrl,
+      onDevelopmentLogin: developmentRendererUrl ? showDesktopWindow : undefined,
       ingestionService,
       embeddingService,
       embeddingModelService,

@@ -33,10 +33,10 @@ it('account-menu-and-page', async () => {
         await trigger.focus()
         await trigger.press('Enter')
         await menuItem(page, labels.login).waitFor()
-        await menuItem(page, labels.settings).waitFor()
-        await menuItem(page, labels.help).waitFor()
-        expect(await menuItem(page, labels.balance).count()).toBe(0)
-        expect(await menuItem(page, labels.recharge).count()).toBe(0)
+        const menu = page.getByRole('menu')
+        expect(await menu.getByRole('menuitem').allTextContents()).toEqual(['登录', '设置', '帮助'])
+        expect(await menu.getByText('账号', { exact: true }).count()).toBe(0)
+        expect(await trigger.getByTestId('desktop-account-avatar').locator('svg').isVisible()).toBe(true)
         await trigger.press('Escape')
         await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('false')
         await trigger.click()
@@ -44,12 +44,16 @@ it('account-menu-and-page', async () => {
         await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('false')
 
         await trigger.click()
-        await menuItem(page, labels.login).click()
-        await accountPanel(page).getByText(labels.original).waitFor()
+        await menuItem(page, labels.settings).click()
+        await settingsAccount(page).click()
+        await accountPanel(page).getByText(labels.signedOut).waitFor()
         expect(await available(page).count()).toBe(0)
+        await page.getByTestId('settings-back-row').click()
         let web = await service.browserPage()
         const email = newTestEmail('overview')
-        await service.authorize(runtime, web, email)
+        await service.authorize(runtime, web, email, { fromMenu: true })
+        await expect.poll(() => accountPanel(page).getByTestId('desktop-account-avatar').innerText())
+          .toBe(email[0].toUpperCase())
         web = await service.continueInBrowser(web)
         const websiteNumber = await service.userNumber(web)
         expect(await readCopiedNumber(runtime)).toBe(websiteNumber)
@@ -64,22 +68,23 @@ it('account-menu-and-page', async () => {
         await menuItem(page, labels.recharge).waitFor()
         await menuItem(page, labels.billing).waitFor()
         await menuItem(page, labels.signOut).waitFor()
-        const menu = page.getByRole('menu')
         const items = await menu.getByRole('menuitem').allTextContents()
         expect(items.map((text) => text.replace(/\s/g, ''))).toEqual([
           expect.stringMatching(/可用余额.*¥5\.00/),
           '充值',
           '账单',
-          '使用帮助',
           '设置',
+          '帮助',
           '退出登录'
         ])
         expect(await menuItem(page, labels.signOut).locator('svg').count()).toBe(1)
-        const grouping = await menuItem(page, labels.settings).evaluate((item) => ({
-          before: item.previousElementSibling?.getAttribute('role'),
-          after: item.nextElementSibling?.getAttribute('role')
-        }))
-        expect(grouping).toEqual({ before: 'separator', after: 'separator' })
+        const grouping = (name: RegExp) =>
+          menuItem(page, name).evaluate((item) => ({
+            before: item.previousElementSibling?.getAttribute('role'),
+            after: item.nextElementSibling?.getAttribute('role')
+          }))
+        expect(await grouping(labels.settings)).toEqual({ before: 'separator', after: 'menuitem' })
+        expect(await grouping(labels.help)).toEqual({ before: 'menuitem', after: 'separator' })
         const version = page.getByTestId('workbench-app-version')
         const runningVersion = await runtime.electronApp.evaluate(({ app }) => app.getVersion())
         await expect.poll(() => version.innerText()).toBe('v' + runningVersion)
@@ -156,7 +161,7 @@ it('account-menu-and-page', async () => {
         const refreshed = await available(page).innerText()
         await trigger.click()
         await menuItem(page, labels.signOut).click()
-        await accountPanel(page).getByText(labels.original).waitFor()
+        await accountPanel(page).getByText(labels.signedOut).waitFor()
         expect(await service.userNumber(web)).toBe(websiteNumber)
         expect(await runtime.electronApp.evaluate(({ app }) => app.isReady())).toBe(true)
         return { retained, refreshed }

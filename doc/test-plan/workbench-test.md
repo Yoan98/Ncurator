@@ -161,7 +161,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：Workbench 左侧使用帮助入口。
 - Why：帮助入口必须独立于伙伴创建和模型运行保持可用。
-- How：打开 Workbench，国内从账号菜单点击使用帮助，海外从既有独立按钮进入；观察外链调用及当前路由。
+- How：打开 Workbench，国内在账号菜单的设置下方点击「帮助」，海外从底栏的独立按钮进入。观察外链调用及当前路由。
 - Oracle：入口可访问，打开所属站点当前语言的联系页，保留当前伙伴路由，覆盖 `WB-COMPOSER-011-AC1/AC2`。
 
 #### `sidebar-app-update`

@@ -8,6 +8,7 @@ import { MANAGED_MODELS_PATH, parseManagedModels, type ManagedModelsResult } fro
 import { getUserDataPath } from '../../utils/userDataPath'
 import { getAppRuntime } from '../app/AppRuntime'
 import { buildDesktopAppGatewayHeaders } from './appClient'
+import type { DesktopCallbackListener } from './desktopLoopback'
 
 const callbackUrl = 'ncurator://auth/callback'
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -32,10 +33,20 @@ type Dependencies = {
   profile(accessToken: string): Promise<Record<string, unknown>>
   managedCall(requestId: string, accessToken: string, signal?: AbortSignal): Promise<Record<string, unknown>>
   openBrowser(url: string): Promise<void>
+  listenForCallback?: DesktopCallbackListener
   changed?(snapshot: DesktopAccountSnapshot): void
   sessionEnded?(session: AbortSignal): void
 }
-type Pending = { state: string; verifier: string; id?: string; url?: string; exchange?: Promise<string>; timeout?: ReturnType<typeof setTimeout> }
+type Pending = {
+  state: string
+  verifier: string
+  redirectUri: string
+  closeCallback?: () => void
+  id?: string
+  url?: string
+  exchange?: Promise<string>
+  timeout?: ReturnType<typeof setTimeout>
+}
 
 export class DesktopAccountError extends Error {
   constructor(readonly code: 'invalid_grant' | 'unavailable' | 'cancelled' | 'restart_authorization' |
@@ -115,6 +126,7 @@ export class DesktopAccount {
     if (!pending || this.pending !== pending) return
     clearTimeout(pending.timeout)
     this.pending = undefined
+    pending.closeCallback?.()
   }
 
   async restore() {
@@ -250,7 +262,7 @@ export class DesktopAccount {
       flowId: pending.id,
       state: pending.state,
       instanceId: this.instanceId,
-      redirectUri: callbackUrl,
+      redirectUri: pending.redirectUri,
       codeVerifier: pending.verifier
     }
   }
@@ -258,12 +270,25 @@ export class DesktopAccount {
   async begin() {
     void this.cancel()
     this.advanceGeneration()
-    const pending = { state: randomBytes(32).toString('base64url'), verifier: randomBytes(32).toString('base64url') } as Pending
+    const pending: Pending = {
+      state: randomBytes(32).toString('base64url'),
+      verifier: randomBytes(32).toString('base64url'),
+      redirectUri: callbackUrl
+    }
     this.pending = pending
     this.publish({ status: 'authorizing' })
     try {
+      if (this.deps.listenForCallback) {
+        const listener = await this.deps.listenForCallback(raw => this.acceptCallback(raw))
+        if (this.pending !== pending) {
+          listener.close()
+          throw new DesktopAccountError('cancelled')
+        }
+        pending.redirectUri = listener.redirectUri
+        pending.closeCallback = listener.close
+      }
       const response = await this.deps.post('start', {
-        state: pending.state, instanceId: this.instanceId, redirectUri: callbackUrl,
+        state: pending.state, instanceId: this.instanceId, redirectUri: pending.redirectUri,
         clientLabel: process.platform === 'darwin' ? '馆长桌面端 · macOS' : process.platform === 'win32' ? '馆长桌面端 · Windows' : '馆长桌面端',
         codeChallenge: createHash('sha256').update(pending.verifier, 'ascii').digest('base64url')
       })
@@ -303,7 +328,7 @@ export class DesktopAccount {
 
   acceptCallback(raw: string): Promise<string | undefined> {
     const pending = this.pending
-    if (!pending?.id || raw.length > 512 || !raw.startsWith(callbackUrl + '?')) return Promise.resolve(undefined)
+    if (!pending?.id || raw.length > 512 || !raw.startsWith(pending.redirectUri + '?')) return Promise.resolve(undefined)
     let url: URL
     try { url = new URL(raw) } catch { return Promise.resolve(undefined) }
     const code = url.searchParams.get('code')
@@ -537,6 +562,10 @@ function installationId() {
 
 let activeDomesticAccount: DesktopAccount | undefined
 
+export function cancelDomesticDesktopAuthorization() {
+  void activeDomesticAccount?.cancel()
+}
+
 export function currentDomesticDesktopAccount() {
   if (!activeDomesticAccount || getAppRuntime().distribution !== 'domestic') throw new DesktopAccountError('invalid_grant')
   return activeDomesticAccount
@@ -572,7 +601,7 @@ export async function readManagedModels(account: DesktopAccount): Promise<Manage
 }
 
 export function createDomesticDesktopAccount(changed: (snapshot: DesktopAccountSnapshot) => void,
-  sessionEnded?: (session: AbortSignal) => void) {
+  sessionEnded?: (session: AbortSignal) => void, listenForCallback?: DesktopCallbackListener) {
   if (getAppRuntime().distribution !== 'domestic') throw new DesktopAccountError('unavailable')
   async function request(route: Route | 'profile' | 'wallet' | { requestId: string }, method: 'GET' | 'POST', input?: object,
     bearer?: string, signal?: AbortSignal) {
@@ -604,6 +633,7 @@ export function createDomesticDesktopAccount(changed: (snapshot: DesktopAccountS
     changed,
     sessionEnded,
     openBrowser: url => shell.openExternal(url),
+    listenForCallback,
     post: (route, input, refreshToken) => request(route, 'POST', input, refreshToken),
     profile: token => request('profile', 'GET', undefined, token),
     wallet: token => request('wallet', 'GET', undefined, token),

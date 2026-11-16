@@ -1,8 +1,8 @@
-import { t, getContactUrl, getRendererRuntime } from '../i18n'
+import { t, getRendererRuntime } from '../i18n'
 import React, { useEffect, useMemo, useState } from 'react'
-import { ConfigProvider, Modal, message } from 'antd'
+import { ConfigProvider } from 'antd'
 import { NavLink, Navigate, useLocation, useParams } from 'react-router-dom'
-import { HiArrowLeft, HiOutlineQuestionMarkCircle } from 'react-icons/hi2'
+import { HiArrowLeft } from 'react-icons/hi2'
 
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
 import VectorModelSettingsPanel from '../components/settings/VectorModelSettingsPanel'
@@ -51,8 +51,6 @@ const SettingsPage: React.FC = () => {
   const currentSection = normalizeSettingsSection(params.section)
   const [platform, setPlatform] = useState<string>(() => detectRendererPlatform())
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [helpUrl, setHelpUrl] = useState<string | null>(null)
-  const [openingHelp, setOpeningHelp] = useState(false)
   const [sidebarWidth] = useState<number>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY)
     return clampSettingsSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
@@ -65,20 +63,6 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     setPlatform(detectRendererPlatform())
   }, [])
-
-  const openHelpWebsite = async (): Promise<void> => {
-    if (!helpUrl || openingHelp) return
-    setOpeningHelp(true)
-    try {
-      const result = await window.api.openExternal(helpUrl)
-      if (!result.success) throw new Error('open_external_failed')
-      setHelpUrl(null)
-    } catch {
-      message.error(t(($) => $.settings.couldNotOpenHelpWebsite))
-    } finally {
-      setOpeningHelp(false)
-    }
-  }
 
   if (!params.section) {
     return <Navigate to={SETTINGS_SECTION_META[getLegacySection(location.search)].path} replace />
@@ -172,20 +156,6 @@ const SettingsPage: React.FC = () => {
                   </NavLink>
                 )
               })}
-              <button
-                type="button"
-                className="nc-sidebar-item flex items-center gap-2.5 px-2.5 py-2"
-                onClick={() => setHelpUrl(getContactUrl())}
-                aria-label={t(($) => $.common.viewHelp)}
-                data-testid={settingsSelectors.helpButton}
-              >
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#787774]">
-                  <HiOutlineQuestionMarkCircle className="h-5 w-5" />
-                </span>
-                <span className="truncate text-[13px] font-medium">
-                  {t(($) => $.settings.userHelp)}
-                </span>
-              </button>
             </div>
           </div>
           {getRendererRuntime().distribution === 'domestic' && <div className="flex px-2 py-2"><DesktopAccountMenu /></div>}
@@ -214,27 +184,6 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
         </main>
-        <Modal
-          title={t(($) => $.settings.openHelpWebsiteTitle)}
-          open={helpUrl !== null}
-          onOk={() => void openHelpWebsite()}
-          onCancel={() => setHelpUrl(null)}
-          okText={t(($) => $.settings.openHelpWebsite)}
-          cancelText={t(($) => $.common.cancel)}
-          confirmLoading={openingHelp}
-          cancelButtonProps={{ disabled: openingHelp }}
-          closable={!openingHelp}
-          maskClosable={!openingHelp}
-          keyboard={!openingHelp}
-          width={460}
-        >
-          <p className="text-[14px] leading-6 text-[#787774]">
-            {t(($) => $.settings.openHelpWebsiteDescription)}
-          </p>
-          <div className="break-all rounded-[6px] bg-[#F4F4F2] px-3 py-2 text-[13px] text-[#37352F]">
-            {helpUrl}
-          </div>
-        </Modal>
       </div>
     </ConfigProvider>
   )

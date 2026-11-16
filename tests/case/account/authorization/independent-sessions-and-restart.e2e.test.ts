@@ -26,20 +26,16 @@ it('independent-sessions-and-restart', async () => {
       windowMode: 'visible',
       runMode: 'single',
       execute: async (runtime) => {
-        await accountButton(runtime.page).click()
-        await menuItem(runtime.page, labels.login).click()
         let web = await service.browserPage()
         const email = newTestEmail('sessions')
-        await service.authorize(runtime, web, email)
+        await service.authorize(runtime, web, email, { fromMenu: true })
         web = await service.continueInBrowser(web)
         const userNo = await service.userNumber(web)
         const profile = await mkdtemp(join(tmpdir(), 'ncurator-second-session-'))
         let second: Awaited<ReturnType<typeof service.launchSecondDesktop>> | undefined
         try {
           second = await service.launchSecondDesktop({ userDataDir: profile })
-          await accountButton(second.page).click()
-          await menuItem(second.page, labels.login).click()
-          await service.authorize(second, web, email, true)
+          await service.authorize(second, web, email, { signedIn: true, fromMenu: true })
           web = await service.continueInBrowser(web)
           await second.close({ preserveUserData: true })
           second = await service.launchSecondDesktop({ userDataDir: profile })
@@ -53,7 +49,7 @@ it('independent-sessions-and-restart', async () => {
           ).toHaveLength(2)
           await accountButton(second.page).click()
           await menuItem(second.page, labels.signOut).click()
-          await accountPanel(second.page).getByText(labels.original).waitFor()
+          await accountPanel(second.page).getByText(labels.signedOut).waitFor()
           expect(await second.electronApp.evaluate(({ app }) => app.isReady())).toBe(true)
           await accountPanel(runtime.page).getByText(userNo, { exact: true }).waitFor()
           expect(await service.userNumber(web)).toBe(userNo)

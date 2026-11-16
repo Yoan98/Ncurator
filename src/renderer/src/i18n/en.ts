@@ -22,7 +22,6 @@ export const en = {
     reopen: "Reopen browser",
     cancel: "Cancel sign-in",
     restore: "Restoring sign-in…",
-    original: "Free models, custom models, and local work are still available.",
     userNo: "Account number",
     copy: "Copy",
     copied: "Account number copied",
@@ -34,7 +33,7 @@ export const en = {
     logoutHint: "Your browser and other devices stay signed in.",
     logoutRetry: "Sign-out could not be confirmed. Try again.",
     error: "Could not connect. Try again later.",
-    expired: "Your sign-in expired. Sign in again.",
+    openWebsiteError: "Could not open the website. Please try again.",
     restart: "Sign-in could not be completed. Start again.",
     storage: "System credential protection is unavailable. Try again later."
   },
@@ -203,6 +202,7 @@ export const en = {
     cancelled: 'Cancelled',
     settings: 'Settings',
     viewHelp: 'View help',
+    userHelp: 'Help',
     checkingForUpdates: 'Checking for updates',
     downloadLatestVersion: 'Download latest version',
     downloading4: 'Downloading {{value1}}%',
@@ -283,11 +283,6 @@ export const en = {
       requirement: 'Download a local model or select a configured remote model.',
       saved: 'Saved. Select Use in the list.'
     },
-    openHelpWebsiteTitle: 'Open Contact us?',
-    openHelpWebsiteDescription:
-      'The contact page will open in your default browser. Continue?',
-    openHelpWebsite: 'Open website',
-    couldNotOpenHelpWebsite: 'Could not open the website. Please try again.',
     serviceConnectionCount_one: '{{count}} configuration',
     serviceConnectionCount_other: '{{count}} configurations',
     applicationPreferences: 'App preferences',
@@ -528,8 +523,7 @@ export const en = {
     thisWebpageNeedsToBeIndexedOrUpdated: 'This webpage needs to be indexed or updated.',
     expandSettingsSidebar: 'Expand settings sidebar',
     collapseSettingsSidebar: 'Collapse settings sidebar',
-    backToWorkbench: 'Back to workbench',
-    userHelp: 'User help'
+    backToWorkbench: 'Back to workbench'
   },
   workbench: {
     loadingPartiallyFailed: 'Partially failed',

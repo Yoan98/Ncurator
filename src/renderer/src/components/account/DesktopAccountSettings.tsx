@@ -1,10 +1,10 @@
 import { App, Button } from 'antd'
 import { useEffect, useState } from 'react'
-import { HiOutlineUser } from 'react-icons/hi2'
 import { useDesktopAccount } from '../../contexts/DesktopAccountProvider'
 import type { DesktopAccountCommand } from '../../../../shared/desktopAccount'
 import { t } from '../../i18n'
 import { exactWalletAmount, walletAmount } from './walletAmount'
+import { DesktopAccountAvatar } from './DesktopAccountAvatar'
 
 export function DesktopAccountSettings() {
   const { snapshot: account, run, openAccountPage } = useDesktopAccount()
@@ -20,14 +20,13 @@ export function DesktopAccountSettings() {
   const failedLogout = account.status === 'logout_incomplete'
   const statusText: Partial<Record<typeof account.status, string>> = {
     unavailable: t(($) => $.account.error),
-    expired: t(($) => $.account.expired),
     restart_authorization: t(($) => $.account.restart),
     storage_unavailable: t(($) => $.account.storage),
     logout_incomplete: t(($) => $.account.logoutRetry)
   }
   const detail = statusText[account.status]
   const openPage = (page: 'recharge' | 'billing') =>
-    void openAccountPage(page).catch(() => message.error(t(($) => $.settings.couldNotOpenHelpWebsite)))
+    void openAccountPage(page).catch(() => message.error(t(($) => $.account.openWebsiteError)))
   async function command(value: DesktopAccountCommand) {
     if (busy && value !== 'cancel') return
     setBusy(value)
@@ -44,9 +43,7 @@ export function DesktopAccountSettings() {
     <div className="h-full overflow-y-auto pb-5" data-testid="desktop-account-settings">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--notion-line)] py-5">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#EFEFED]">
-            <HiOutlineUser />
-          </span>
+          <DesktopAccountAvatar signedIn={signedIn} maskedEmail={signedIn ? account.maskedEmail : undefined} large />
           <div className="min-w-0">
             <div className="break-all font-medium">
               {signedIn
@@ -59,15 +56,11 @@ export function DesktopAccountSettings() {
                       ? t(($) => $.account.unconfirmed)
                       : t(($) => $.account.signedOut)}
             </div>
-            <div className="mt-0.5 text-xs text-[#787774]">
-              {signedIn
-                ? t(($) => $.account.signedIn)
-                : waiting
-                  ? t(($) => $.account.waitHint)
-                  : restoring
-                    ? null
-                    : t(($) => $.account.original)}
-            </div>
+            {(signedIn || waiting) && (
+              <div className="mt-0.5 text-xs text-[#787774]">
+                {signedIn ? t(($) => $.account.signedIn) : t(($) => $.account.waitHint)}
+              </div>
+            )}
           </div>
         </div>
         {!signedIn && !restoring && (

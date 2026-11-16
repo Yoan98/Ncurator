@@ -17,12 +17,11 @@ export const zh = {
     signedIn: "已登录",
     signedOut: "尚未登录",
     login: "登录",
-    wait: "等待浏览器确认",
+    wait: "等待浏览器授权",
     waitHint: "请在打开的浏览器中确认登录。",
     reopen: "重新打开浏览器",
     cancel: "取消登录",
     restore: "正在恢复登录…",
-    original: "免费、自定义模型和本地工作仍可使用。",
     userNo: "用户编号",
     copy: "复制",
     copied: "已复制用户编号",
@@ -34,7 +33,7 @@ export const zh = {
     logoutHint: "不会退出网页或其他设备。",
     logoutRetry: "退出未确认，请重试。",
     error: "暂时无法连接，请稍后重试。",
-    expired: "登录已失效，请重新登录。",
+    openWebsiteError: "无法打开官网，请稍后重试。",
     restart: "未能完成登录，请重新发起。",
     storage: "系统凭据保护暂不可用，请稍后重试。"
   },
@@ -193,6 +192,7 @@ export const zh = {
     cancelled: '已取消',
     settings: '设置',
     viewHelp: '查看使用帮助',
+    userHelp: '帮助',
     checkingForUpdates: '正在检查更新',
     downloadLatestVersion: '下载最新版',
     downloading4: '正在下载 {{value1}}%',
@@ -269,10 +269,6 @@ export const zh = {
       requirement: '先下载本地模型，或选择已配置的远程模型。',
       saved: '已保存，请在列表中点击「使用」。'
     },
-    openHelpWebsiteTitle: '前往官网联系我们？',
-    openHelpWebsiteDescription: '将在系统默认浏览器中打开官网联系页，是否继续？',
-    openHelpWebsite: '打开官网',
-    couldNotOpenHelpWebsite: '无法打开官网，请稍后重试。',
     serviceConnectionCount_one: '{{count}} 个配置',
     serviceConnectionCount_other: '{{count}} 个配置',
     applicationPreferences: '应用偏好',
@@ -502,8 +498,7 @@ export const zh = {
     thisWebpageNeedsToBeIndexedOrUpdated: '网页需要建立或更新索引。',
     expandSettingsSidebar: '展开设置侧边栏',
     collapseSettingsSidebar: '收起设置侧边栏',
-    backToWorkbench: '返回工作台',
-    userHelp: '使用帮助'
+    backToWorkbench: '返回工作台'
   },
   workbench: {
     loadingPartiallyFailed: '部分失败',

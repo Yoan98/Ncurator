@@ -81,7 +81,6 @@ export const settingsSelectors = {
   backRow: 'settings-back-row',
   mainDragRegion: 'settings-main-drag-region',
   sidebarDragRegion: 'settings-sidebar-drag-region',
-  helpButton: 'settings-help-button',
   tabSwitch: 'settings-tab-switch',
   generalPanel: 'settings-general-panel',
   systemNotificationsSwitch: 'settings-system-notifications-switch',

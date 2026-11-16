@@ -35,20 +35,16 @@ it('account-web-navigation', async () => {
       execute: async (runtime) => {
         const { page } = runtime
         const trigger = accountButton(page)
-        await trigger.click()
-        await menuItem(page, labels.login).click()
         const desktopEmail = newTestEmail('desktop')
         let web = await service.browserPage()
-        await service.authorize(runtime, web, desktopEmail)
+        await service.authorize(runtime, web, desktopEmail, { fromMenu: true })
         web = await service.continueInBrowser(web)
         const desktopNumber = await service.userNumber(web)
         expect(await readCopiedNumber(runtime)).toBe(desktopNumber)
         await expect.poll(() => available(page).innerText()).toBe('¥0.00')
+        const locale = await page.locator('html').getAttribute('lang')
+        const contact = site + (locale === 'zh-CN' ? '/zh/contact' : '/en/contact')
         await trigger.click()
-        const contact =
-          (await page.locator('html').getAttribute('lang')) === 'zh-CN'
-            ? site + '/zh/contact'
-            : site + '/en/contact'
         await menuItem(page, labels.help).click()
         await expect.poll(async () => (await externalUrls(runtime)).at(-1)).toBe(contact)
         await trigger.click()

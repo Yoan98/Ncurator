@@ -31,11 +31,9 @@ it('balance-refresh-and-ordering', async () => {
       execute: async (runtime) => {
         const { page } = runtime
         const menu = accountButton(page)
-        await menu.click()
-        await menuItem(page, labels.login).click()
         let web = await service.browserPage()
         const email = newTestEmail('ordering')
-        await service.authorize(runtime, web, email)
+        await service.authorize(runtime, web, email, { fromMenu: true })
         web = await service.continueInBrowser(web)
         await service.recharge(web)
         const refresh = accountPanel(page).getByRole('button', { name: labels.refresh })
@@ -106,7 +104,7 @@ it('balance-refresh-and-ordering', async () => {
           .toBe('499989200')
         await menu.click()
         await menuItem(page, labels.signOut).click()
-        await accountPanel(page).getByText(labels.original).waitFor()
+        await accountPanel(page).getByText(labels.signedOut).waitFor()
         await releaseWallet(runtime)
         await expect.poll(async () => (await accountNetwork(runtime)).releasedWallets).toBe(2)
         expect(await available(page).count()).toBe(0)

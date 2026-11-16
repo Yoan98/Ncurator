@@ -33,7 +33,7 @@ describe('workbench conversation e2e', () => {
           if (serviceRoute === 'domestic') await page.getByTestId('desktop-account-menu').click()
           const helpButton =
             serviceRoute === 'domestic'
-              ? page.getByRole('menuitem', { name: '查看使用帮助', exact: true })
+              ? page.getByRole('menuitem', { name: /^(帮助|Help)$/u })
               : getWorkbenchLocator(page, workbenchSelectors.settingsHelpButton)
           await helpButton.waitFor({ state: 'visible' })
           const routeBeforeClick = await page.evaluate(() => window.location.hash)
@@ -56,7 +56,7 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            /使用帮助/u.test(result.accessibleName) &&
+            /帮助|(?:View )?Help/iu.test(result.accessibleName) &&
               result.routeAfterClick === result.routeBeforeClick &&
               result.openExternalCalls.some((entry) => entry.payload === result.contactUrl),
             {

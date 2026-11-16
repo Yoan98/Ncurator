@@ -7,6 +7,7 @@ import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createDomesticDesktopAccount, currentDomesticDesktopAccount, DesktopAccount, DesktopAccountError, readManagedModels } from '../../../../src/main/services/officialApi/desktopAccount'
+import { listenForDesktopCallback, type DesktopCallbackListener } from '../../../../src/main/services/officialApi/desktopLoopback'
 import { resolveManagedRuntimeConfig } from '../../../../src/main/services/officialApi/managedModel'
 import { createAiLlmExecutor } from '../../../../src/main/services/ai/llmExecutor'
 import { desktopProtocolLink, registerDesktopAccount } from '../../../../src/main/ipc/desktopAccount'
@@ -338,7 +339,7 @@ it('uses a distinct request ID for consecutive calls and the follow-up after a t
   } finally { fixture.cleanup() }
 })
 
-function fixture() {
+function fixture(listenForCallback?: DesktopCallbackListener) {
   let stored: { userNo: string; refreshToken: string } | null = null
   let blocked = false
   let state = ''
@@ -350,7 +351,8 @@ function fixture() {
     save: vi.fn((next: NonNullable<typeof stored>) => { stored = next; blocked = false }),
     clear: vi.fn(() => { stored = null })
   }
-  const post = vi.fn(async (route: string, input?: Record<string, unknown>, _token?: string): Promise<Record<string, unknown>> => {
+  const post = vi.fn<(route: string, input?: Record<string, unknown>, token?: string) =>
+    Promise<Record<string, unknown>>>(async (route, input) => {
     if (route === 'start') {
       state = String(input?.state)
       return { flowId: '23', expiresIn: 600, authorizationUrl: 'https://www.guanzhangai.cn/desktop/authorize#flow=23&state=' + state }
@@ -360,14 +362,16 @@ function fixture() {
   })
   const openBrowser = vi.fn(async (url: string) => { openUrl = url })
   const changed = vi.fn()
-  const profile = vi.fn(async (_token: string) => ({ userNo, maskedEmail: 's***@example.test' }))
-  const wallet = vi.fn(async (_token: string) => ({
+  const profile = vi.fn<(token: string) => Promise<Record<string, unknown>>>(async () =>
+    ({ userNo, maskedEmail: 's***@example.test' }))
+  const wallet = vi.fn<(token: string) => Promise<Record<string, unknown>>>(async () => ({
     currency: 'CNY', available: '1234000000', balance: '1234000000',
     usageFrozen: '0', refundFrozen: '0', debt: '0', version: '2', settlementPending: false
   }))
-  const managedCall = vi.fn(async (_requestId: string, _token: string, _signal?: AbortSignal): Promise<Record<string, unknown>> =>
+  const managedCall = vi.fn<(requestId: string, token: string, signal?: AbortSignal) =>
+    Promise<Record<string, unknown>>>(async () =>
     ({ status: 'settlement_pending' }))
-  const account = new DesktopAccount(randomUUID(), { store, post, profile, wallet, managedCall, openBrowser, changed })
+  const account = new DesktopAccount(randomUUID(), { store, post, profile, wallet, managedCall, openBrowser, changed, listenForCallback })
   const callback = (code = secret(), overrideState = state) => 'ncurator://auth/callback?code=' + code + '&state=' + overrideState
   return { account, store, post, profile, wallet, managedCall, openBrowser, changed, callback, url: () => openUrl, blocked: () => blocked }
 }
@@ -448,7 +452,7 @@ it('shares one logout prompt, preserves work on cancellation and ignores a late 
   const show = vi.fn(() => decision.promise)
   const close = vi.fn()
   const dialogs = { show, close } as unknown as ConfirmDialogWindowService
-  const stop = vi.fn(async (_session: AbortSignal) => {})
+  const stop = vi.fn<(session: AbortSignal) => Promise<void>>(async () => {})
   registerDesktopAccount(() => window, url, {
     hasManagedSessionWork: () => true, stopManagedSession: stop
   }, dialogs)
@@ -517,6 +521,7 @@ it('keeps the verifier in Main and coalesces matching callbacks until secure sto
   await account.begin()
   expect(url()).toMatch(/^https:\/\/www\.guanzhangai\.cn\/desktop\/authorize#flow=23&state=/)
   const start = post.mock.calls.find(call => call[0] === 'start')?.[1]
+  expect(start?.redirectUri).toBe('ncurator://auth/callback')
   expect(start).not.toHaveProperty('codeVerifier')
   expect(await account.acceptCallback(callback(secret(), secret()))).toBeUndefined()
   expect(await account.acceptCallback('https://example.invalid/?code=' + secret())).toBeUndefined()
@@ -527,6 +532,60 @@ it('keeps the verifier in Main and coalesces matching callbacks until secure sto
   expect(createHash('sha256').update(String(exchanges[0][1]?.codeVerifier)).digest('base64url')).toBe(start?.codeChallenge)
   expect(store.save).toHaveBeenCalledExactlyOnceWith({ userNo, refreshToken: value('first').refreshToken })
   expect(await account.acceptCallback(approved)).toBeUndefined()
+})
+
+it('binds development callbacks to the active loopback listener', async () => {
+  const focusWindow = vi.fn()
+  const { account, post, callback, store, url } = fixture(accept => listenForDesktopCallback(accept, 'zh-CN', focusWindow))
+  try {
+    await account.begin()
+    const start = post.mock.calls[0][1]!
+    const target = String(start.redirectUri)
+    expect(target).toMatch(/^http:\/\/127\.0\.0\.1:[1-9][0-9]*\/auth\/callback$/)
+    expect(new URL(url()).origin).toBe('https://www.guanzhangai.cn')
+    const approved = callback()
+    expect(await account.acceptCallback(approved)).toBeUndefined()
+    const bad = await fetch(target + '?code=' + secret() + '&state=' + secret())
+    expect(bad.status).toBe(400)
+    expect(store.save).not.toHaveBeenCalled()
+    const delivered = target + new URL(approved).search
+    const result = await fetch(delivered)
+    expect(result.status).toBe(200)
+    expect(result.headers.get('Referrer-Policy')).toBe('no-referrer')
+    expect(await result.text()).toContain('登录成功')
+    expect(account.getSnapshot()).toEqual({ status: 'signed_in', userNo })
+    expect(focusWindow).toHaveBeenCalledOnce()
+    expect(post.mock.calls.find(call => call[0] === 'exchange')?.[1]?.redirectUri).toBe(target)
+    await expect(fetch(delivered)).rejects.toThrow()
+  } finally {
+    await account.cancel()
+  }
+})
+
+it('closes the development listener on cancellation, expiry and start failure', async () => {
+  const { account, post } = fixture(accept => listenForDesktopCallback(accept, 'zh-CN', () => {}))
+  const lastStart = () => String(post.mock.calls.findLast(call => call[0] === 'start')?.[1]?.redirectUri)
+  try {
+    await account.begin()
+    const cancelled = lastStart()
+    await account.cancel()
+    expect(post).toHaveBeenLastCalledWith('cancel', expect.objectContaining({ redirectUri: cancelled }))
+    await expect(fetch(cancelled)).rejects.toThrow()
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    await account.begin()
+    const expired = lastStart()
+    vi.advanceTimersByTime(600_000)
+    vi.useRealTimers()
+    expect(account.getSnapshot()).toEqual({ status: 'expired' })
+    await expect(fetch(expired)).rejects.toThrow()
+
+    post.mockRejectedValueOnce(new Error('synthetic offline'))
+    await expect(account.begin()).rejects.toMatchObject({ code: 'unavailable' })
+    await expect(fetch(lastStart())).rejects.toThrow()
+  } finally {
+    await account.cancel()
+  }
 })
 
 it('does not replay an uncertain exchange or publish success on storage failure', async () => {

@@ -225,8 +225,8 @@ describe('retained release candidate', () => {
       'actual passed package'
     )
     result.tests = [result.tests[0]]
-    result.tests[0].file = 'tests/case/settings/settings-help-entry.e2e.test.ts'
-    result.tests[0].cases[0].caseId = 'settings-help-entry'
+    result.tests[0].file = 'tests/case/settings/general/language-and-service-route.e2e.test.ts'
+    result.tests[0].cases[0].caseId = 'language-and-service-route'
     await fs.writeFile(resultPath, JSON.stringify(result))
     await recordCandidateE2E({ ...request, status: 'passed', resultPath })
     result.tests[0].cases[0].app.target = 'source'

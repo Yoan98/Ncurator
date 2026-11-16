@@ -8,6 +8,7 @@ import {
 import { getAppRuntime } from '../services/app/AppRuntime'
 import { MANAGED_MODELS_GET, type ManagedModelsResult } from '../../shared/managedModels'
 import { createDomesticDesktopAccount, readManagedModels, type DesktopAccount } from '../services/officialApi/desktopAccount'
+import { listenForDesktopCallback, type DesktopCallbackListener } from '../services/officialApi/desktopLoopback'
 import type { ChatRunService } from '../services/ai/ChatRunService'
 import type { ConfirmDialogWindowService } from '../services/ConfirmDialogWindowService'
 import { mainText } from '../services/app/i18n'
@@ -24,9 +25,13 @@ export function registerDesktopAccount(
   currentWindow: () => BrowserWindow | undefined,
   rendererUrl: string | undefined,
   runs: Pick<ChatRunService, 'hasManagedSessionWork' | 'stopManagedSession'>,
-  dialogs: ConfirmDialogWindowService
+  dialogs: ConfirmDialogWindowService,
+  onDevelopmentLogin?: () => void
 ) {
   const entry = new URL(rendererUrl || pathToFileURL(join(__dirname, '../renderer/index.html')).href)
+  const developmentCallback: DesktopCallbackListener | undefined = onDevelopmentLogin
+    ? accept => listenForDesktopCallback(accept, getAppRuntime().locale, onDevelopmentLogin)
+    : undefined
   function isAccountPage(value: string) {
     try {
       const url = new URL(value)
@@ -83,7 +88,7 @@ export function registerDesktopAccount(
         if (!contents || contents.isDestroyed()) return
         const frame = contents.mainFrame
         if (isAccountPage(frame.url)) frame.send(DESKTOP_ACCOUNT_CHANGED, snapshot)
-      }, session => { void runs.stopManagedSession(session) })
+      }, session => { void runs.stopManagedSession(session) }, developmentCallback)
     } catch {
       return { status: 'storage_unavailable' }
     }

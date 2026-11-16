@@ -64,7 +64,7 @@
 - 测试类型：`e2e`
 - What：菜单、设置账号页、本人标识、余额及异常展示。
 - Why：入口不一致、读取失败或残留数据会展示错误账号或误导余额为零。
-- How：经正式授权登录后操作头像、设置导航、编号复制、外部点击及 Escape，核对登录前后菜单和页面；余额通过正式充值形成。核对账单之后紧跟使用帮助、设置独立分组、退出登录图标、只读版本行及底栏无重复入口。真实 Electron 在正常及原生最小 1400×800 窗口保存菜单、账号页和长编号截图，记录窗口及内容区尺寸、DPR 和缩放；不修改全局最小窗口。将 UI 及剪贴板中的用户编号与官网本人账号核对。在桌面网络边界中断余额读取，恢复后通过刷新按钮重试；无本会话馆长工作时通过菜单退出，核对应用仍在、网页有效及本桌面失效。
+- How：未登录时用键盘展开账号菜单，核对登录、设置、帮助和版本，分别通过外部点击及 Escape 收起。点击登录行，确认浏览器授权地址和桌面路由，授权后验证菜单、设置导航和本人编号，并核对未登录的轮廓头像与登录后的邮箱首字符。余额通过测试充值形成。核对设置和帮助相邻且同组、退出登录图标和只读版本行。真实 Electron 在正常及原生最小 1400×800 窗口保存菜单、账号页和长编号截图，记录窗口及内容区尺寸、DPR 和缩放。将 UI 及剪贴板中的用户编号与官网本人账号核对。在桌面网络边界中断余额读取，恢复后通过刷新按钮重试。无本会话馆长工作时通过菜单退出，核对应用仍在、网页有效及本桌面失效。
 - Oracle：菜单、键盘操作及登录前后范围正确，覆盖 `ACC-ENTRY-001-AC1/AC2/AC3`；两个入口到同一页面，本人邮箱、独立对外 `user_no` 和复制一致且无内部用户 ID 泄露，覆盖 `ACC-PAGE-001-AC1/AC2`；失败不伪装为零或他人数据，未登录不阻断原能力，覆盖 `ACC-PAGE-001-AC3/AC4`。
 
 #### `balance-display-and-funds-state`
@@ -88,7 +88,7 @@
 - 测试类型：`e2e`
 - What：官网跳转、退款边界及海外功能隔离。
 - Why：跳转可能泄漏凭证、假定网页登录或错误显示海外付费入口。
-- How：从菜单和账号页打开充值及账单，在系统浏览器调用边界核对公开地址。无网页会话时分别登录并检查原页面回跳，验证网页可使用不同于桌面的账号。打开充值后返回桌面，核对一次即时余额读取。检查桌面无退款入口、用户编号一致，并用海外发行配置确认无国内账号及资金入口。菜单帮助按联系页地址验收。海外入口使用现有源码发行配置验证，安装包发行标记另按包验收。
+- How：从菜单和账号页打开充值及账单，在系统浏览器调用边界核对公开地址。从菜单打开帮助，核对当前语言的联系页。无网页会话时分别登录并检查原页面回跳，验证网页可使用不同于桌面的账号。打开充值后返回桌面，核对一次即时余额读取。检查桌面无退款入口、用户编号一致，并用海外发行配置确认无国内账号及资金入口。海外入口使用现有源码发行配置验证，安装包发行标记另按包验收。
 - Oracle：目标和打开方式正确，不带桌面凭证、不假定网页登录，覆盖 `ACC-WEB-001-AC1/AC2`；桌面无退款入口、编号与官网一致，海外不展示国内资金能力，覆盖 `ACC-WEB-001-AC3/AC4`。
 
 ## 4. 执行与覆盖边界
@@ -113,11 +113,14 @@
 | --- | --- |
 | `ACC-LOGIN-001-AC1/AC2/AC4` | `keeps the verifier in Main and coalesces matching callbacks until secure storage succeeds` 检查授权地址、回跳校验、合并兑换和保存 |
 | `ACC-LOGIN-001-AC3` | `does not replay an uncertain exchange or publish success on storage failure` 检查兑换结果不明及保存失败 |
+| `ACC-LOGIN-001-AC5` | `binds development callbacks to the active loopback listener`、`closes the development listener on cancellation, expiry and start failure` 通过实际回环 HTTP 验证地址绑定、回跳和清理；原生协议仍由已安装应用接收 |
 | `ACC-SESSION-001-AC1` | `coalesces refresh, preserves the previous protected credential on failure, and rejects stale results after logout` 检查换新及退出时的迟到结果 |
 | `ACC-PAGE-001-AC3`、`ACC-BALANCE-002-AC2/AC5` | `shares wallet reads, retains the last good amount offline, and ignores results from an older context` 检查读取合并、短时间复用、失败保留及旧响应 |
 | `ACC-BALANCE-002-AC4` | `looks up the original managed call without a wallet round trip and applies only a newer snapshot` 检查按原请求读取及更新钱包 |
 | `ACC-SESSION-002-AC4` | `discards an exchange response after cancellation and after a newer authorization` 检查过时兑换不写入凭据 |
 
 人工待验收：用 macOS、Windows 安装包验证浏览器唤起、默认协议关联、回跳、系统凭据存储及剪贴板。Windows 核对安装器注册及回跳交给正在运行的实例。验证凭据保护不可用时拒绝保存，同一本地目录运行不同发行包时账号隔离且个人数据保留，补证 `ACC-LOGIN-001-AC1/AC4`、`ACC-SESSION-001-AC1`、`ACC-ACCESS-001-AC2`、`ACC-WEB-001-AC4`。
+
+开发联调使用 `pnpm dev` 和支持本机回跳的国内授权服务，从系统浏览器完成登录。在同一台机器上保留安装包并分别发起授权，检查各自登录状态和退出范围，以及开发版重复授权、取消或退出后旧端口释放，补证 `ACC-LOGIN-001-AC5`。
 
 真实渠道待验证：实际邮箱与微信登录、真实充值到账后回桌面及余额刷新，补证 `ACC-LOGIN-001-AC2`、`ACC-BALANCE-002-AC3`。

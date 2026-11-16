@@ -839,6 +839,10 @@ textarea,
   padding: 7px 10px;
   font-size: 13px;
 }
+.nc-account-dropdown .ant-dropdown-menu-item.nc-account-menu-compact {
+  min-height: 30px;
+  padding-block: 4px;
+}
 .nc-account-menu-label {
   display: flex;
   align-items: center;
@@ -848,6 +852,7 @@ textarea,
 .nc-account-menu-label > svg {
   width: 14px;
   height: 14px;
+  flex-shrink: 0;
   color: var(--notion-text-faint);
 }
 .nc-account-version {

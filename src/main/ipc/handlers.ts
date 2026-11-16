@@ -264,6 +264,7 @@ export function registerOpenExternalHandler(): void {
 export function registerHandlers(services: {
   currentWindow: () => BrowserWindow | undefined
   rendererUrl?: string
+  onDevelopmentLogin?: () => void
   ingestionService: IngestionService
   embeddingService: EmbeddingService
   embeddingModelService?: EmbeddingModelService
@@ -3797,5 +3798,7 @@ export function registerHandlers(services: {
       return scheduledTaskService.dismissBusyNotice(payload)
     }
   )
-  return registerDesktopAccount(services.currentWindow, services.rendererUrl, chatRunService, confirmDialogService)
+  return registerDesktopAccount(
+    services.currentWindow, services.rendererUrl, chatRunService, confirmDialogService, services.onDevelopmentLogin
+  )
 }
