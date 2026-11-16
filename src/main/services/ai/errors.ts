@@ -50,7 +50,7 @@ export class LlmOutputError extends Error {
   }
 }
 
-export const isLlmProviderError = (error: unknown): error is LlmProviderError =>
+const isLlmProviderError = (error: unknown): error is LlmProviderError =>
   error instanceof LlmProviderError
 
 export const isLlmOutputError = (error: unknown): error is LlmOutputError =>

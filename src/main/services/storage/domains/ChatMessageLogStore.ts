@@ -155,15 +155,6 @@ export class ChatMessageLogStore {
       .filter((record): record is ChatMessageLogRecord => record !== null)
   }
 
-  public async deleteByRunIds(runIds: string[]): Promise<void> {
-    const normalized = runIds.filter((runId) => String(runId || '').trim())
-    if (normalized.length === 0) return
-    const placeholders = normalized.map(() => '?').join(',')
-    this.sqlite
-      .prepare(`DELETE FROM chat_session_message_log WHERE run_id IN (${placeholders})`)
-      .run(...normalized)
-  }
-
   public async deleteByPartner(partnerId: string): Promise<void> {
     const safeId = String(partnerId || '').trim()
     if (!safeId) return

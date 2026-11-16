@@ -1,8 +1,9 @@
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import type { Page } from 'playwright'
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -10,6 +11,8 @@ import {
   assertNoWorkbenchFakeSignals,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
+  getWorkbenchReferenceTokenTexts,
+  insertWorkbenchReferenceToken,
   navigateToWorkbench,
   selectWorkbenchAttachmentThroughNativeDialog,
   setWorkbenchInput,
@@ -144,6 +147,8 @@ describe('workbench conversation e2e', () => {
               await navigateToWorkbench(page)
               await getWorkbenchLocator(page, workbenchSelectors.input).click()
               await page.keyboard.type(RUNNING_MESSAGE)
+              await page.keyboard.press('Space')
+              await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
               await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.markdownPath)
             }
           })
@@ -161,10 +166,13 @@ describe('workbench conversation e2e', () => {
           const fileCardBox = await fileComposerCard.boundingBox()
           const removeButtonVisible = await fileRemoveButton.isVisible().catch(() => false)
 
+          const originalReferences = await getWorkbenchReferenceTokenTexts(page)
+          expect(originalReferences).toEqual([expect.stringContaining('sample-edit.docx')])
           await submitWorkbenchCurrentDraft(page)
           const interruptedRunStarted = await waitForWorkbenchAiEvent(runtime, {
             name: 'user_message_edit_interrupted_run_started',
-            matches: (event) => event.type === 'run_started' && event.input === RUNNING_MESSAGE
+            matches: (event) =>
+              event.type === 'run_started' && event.input.includes(RUNNING_MESSAGE)
           })
           await page.waitForFunction(
             (input: { sendButtonTestId: string }) => {
@@ -269,14 +277,48 @@ describe('workbench conversation e2e', () => {
           const timeLabelText = ((await timeLabel.textContent().catch(() => '')) || '').trim()
           await copyButton.click()
           await waitForAntMessageText(page, '已复制')
+
+          const composer = getWorkbenchLocator(page, workbenchSelectors.input)
+          const otherDraft = '保留当前草稿'
+          await setWorkbenchInput(page, otherDraft)
+          await runningUser.hover()
           await editButton.click()
-          const editConfirmButton = getWorkbenchLocator(
-            page,
-            workbenchSelectors.editMessageConfirmButton
-          )
-          await editConfirmButton.waitFor({ state: 'visible' })
-          await editConfirmButton.click()
+          await getWorkbenchLocator(page, workbenchSelectors.editMessageConfirmCancelButton).click()
           await page.locator('.ant-modal-confirm').waitFor({ state: 'hidden' })
+          expect(await runningUser.isVisible()).toBe(true)
+          expect(await composer.textContent()).toContain(otherDraft)
+          expect(await fileComposerCard.count()).toBe(0)
+
+          const confirmRecall = async () => {
+            await runningUser.hover()
+            await editButton.click()
+            await getWorkbenchLocator(page, workbenchSelectors.editMessageConfirmButton).click()
+            await page.locator('.ant-modal-confirm').waitFor({ state: 'hidden' })
+          }
+          const database = new DatabaseSync(path.join(runtime.userDataDir, 'app.sqlite'))
+          try {
+            database.exec('PRAGMA busy_timeout = 3000')
+            database.exec(`CREATE TRIGGER test_recall_write_failure BEFORE DELETE ON chat_session_message_log
+              BEGIN SELECT RAISE(ABORT, 'isolated recall write failure'); END`)
+            await confirmRecall()
+            await waitForAntMessageText(page, 'isolated recall write failure')
+            expect(await runningUser.isVisible()).toBe(true)
+            expect(await composer.textContent()).toContain(otherDraft)
+            expect(await getWorkbenchReferenceTokenTexts(page)).toEqual([])
+            expect(await fileComposerCard.count()).toBe(0)
+            expect(
+              database
+                .prepare('SELECT COUNT(*) AS count FROM ai_run WHERE id = ?')
+                .get(interruptedRunStarted.runId)?.count
+            ).toBe(1)
+          } finally {
+            try {
+              database.exec('DROP TRIGGER IF EXISTS test_recall_write_failure')
+            } finally {
+              database.close()
+            }
+          }
+          await confirmRecall()
           await page.waitForFunction(
             (input: { testId: string; expected: string }) => {
               const element = document.querySelector(`[data-testid="${input.testId}"]`)
@@ -288,6 +330,8 @@ describe('workbench conversation e2e', () => {
             },
             { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
           )
+          await fileComposerCard.waitFor({ state: 'visible' })
+          expect(await getWorkbenchReferenceTokenTexts(page)).toEqual(originalReferences)
           const messageCountAfterEdit = await getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.userMessagePrefix

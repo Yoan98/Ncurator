@@ -526,6 +526,7 @@ export const launchElectronApp = async (input: {
   userDataDir?: string
   prepareUserData?: (userDataDir: string) => Promise<void>
   sourceAppPath?: string
+  prepareApplication?: (application: ElectronApplication) => Promise<void>
 }): Promise<LaunchedElectronApp> => {
   const launch = await resolveElectronLaunch(input.sourceAppPath)
 
@@ -588,10 +589,12 @@ export const launchElectronApp = async (input: {
   try {
     electronApp = await electron.launch({
       executablePath: desktopLaunch?.executablePath || launch.executablePath,
-      args:
-        process.platform === 'win32'
-          ? [WINDOWS_DESKTOP_MOUSE_ARGUMENT, ...launch.args]
-          : launch.args,
+      args: [
+        // Keep safeStorage encryption and restart coverage without using the login Keychain.
+        ...(process.platform === 'darwin' ? ['--use-mock-keychain'] : []),
+        ...(process.platform === 'win32' ? [WINDOWS_DESKTOP_MOUSE_ARGUMENT] : []),
+        ...launch.args
+      ],
       cwd: launch.cwd,
       env: (desktopLaunch?.env || launchEnv) as Record<string, string>,
       timeout: 90_000
@@ -631,6 +634,7 @@ export const launchElectronApp = async (input: {
   let page: Page
   try {
     page = await electronApp.firstWindow()
+    await input.prepareApplication?.(electronApp)
   } catch (error) {
     const diagnostics = consoleEntries
       .slice(-20)

@@ -166,7 +166,7 @@ export const projectMessagesForMainModel = async (
   )
 }
 
-export const estimateMessageImageTokens = (messages: BaseMessage[]): number => {
+const estimateMessageImageTokens = (messages: BaseMessage[]): number => {
   const occurrences: Occurrence[] = []
   messages.forEach((message, messageIndex) => {
     if (!Array.isArray(message.content)) return

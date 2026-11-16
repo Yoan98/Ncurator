@@ -3,6 +3,18 @@ import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 
+export const RELEASE_ACCOUNT_CASES = [
+  'account-menu-and-page',
+  'browser-login-outcomes',
+  'independent-sessions-and-restart',
+  'balance-display-and-funds-state',
+  'account-change-during-runs',
+  'account-change-pending-child',
+  'managed-model-catalog',
+  'managed-request-admission-and-recovery',
+  'managed-image-conversation'
+]
+
 export const readTestCaseIds = (filePath, source) => {
   const constants = new Map(
     [...source.matchAll(/\bconst\s+([A-Z][A-Z0-9_]*)\s*=\s*['"]([^'"]+)['"]/gu)].map((match) => [

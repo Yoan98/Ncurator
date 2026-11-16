@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
+import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { chromium, type Page } from 'playwright'
+import { chromium, type ElectronApplication, type Page } from 'playwright'
 import { expect } from 'vitest'
 import { launchElectronApp } from './electronApp'
 import type { E2ETestRuntime } from './run-e2e-case'
@@ -15,6 +16,13 @@ const api = 'https://api.guanzhangai.cn'
 const sourceBootstrap = String.raw`
 const { app, session, shell } = require('electron')
 const settings = JSON.parse(process.env.NCURATOR_ACCOUNT_TEST_INPUT)
+const { createHash, createHmac, timingSafeEqual } = require('node:crypto')
+const { readFileSync } = require('node:fs')
+const { join } = require('node:path')
+const packageKey = app.isPackaged
+  ? JSON.parse(readFileSync(join(process.resourcesPath, 'app-distribution.json'), 'utf8')).appKey
+  : undefined
+if (app.isPackaged && !packageKey) throw new Error('Package is missing its official application key')
 const origin = new URL(settings.api)
 if (origin.protocol !== 'http:' || origin.hostname !== '127.0.0.1') throw new Error('Expected a local test API')
 const fetchNetwork = globalThis.fetch
@@ -29,11 +37,8 @@ globalThis.fetch = async (input, init) => {
   const modelPost = path === '/api/v2/managed/chat/completions'
   const freePost = settings.acceptance && path === '/api/v2/free/chat/completions'
   if (settings.acceptance && url.origin === settings.acceptance.proxyOrigin) {
-    if (request.method === 'GET' && path === '/custom/models' && settings.acceptance.customBase)
+    if (request.method === 'GET' && path === '/custom/models')
       return fetchNetwork(settings.acceptance.customBase + '/models', {headers: request.headers, signal: request.signal, redirect: 'error'})
-    if (request.method === 'GET' && path === '/custom/models') return Response.json({
-      object: 'list', data: [{ id: 'gpt-6-luna', object: 'model', owned_by: 'synthetic-acceptance' }]
-    })
     if (request.method === 'POST' && path === '/custom/chat/completions') return fetchNetwork(request)
     return Response.json({error: 'isolated_test'}, {status: 503})
   }
@@ -54,8 +59,20 @@ globalThis.fetch = async (input, init) => {
   const modelRequestId = modelPost ? JSON.parse(Buffer.from(body).toString()).requestId : undefined
   if (modelRequestId) network.modelPosts.push(modelRequestId)
   if (lookup) network.modelLookups.push(lookup[1])
+  const headers = new Headers(request.headers)
+  if (packageKey) {
+    const actual = headers.get('x-ncurator-signature')
+    const payload = [request.method, path, headers.get('x-ncurator-timestamp'), headers.get('x-ncurator-nonce'),
+      createHash('sha256').update(Buffer.from(body || [])).digest('hex')].join('\n')
+    const signature = key => createHmac('sha256', key).update(payload).digest('hex')
+    if (!/^[a-f0-9]{64}$/.test(actual || '') ||
+        !timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(signature(packageKey), 'hex'))) {
+      throw new Error('Installed app sent an invalid gateway signature')
+    }
+    headers.set('x-ncurator-signature', signature(settings.fixtureKey))
+  }
   const response = await fetchNetwork(freePost ? settings.acceptance.proxyOrigin + '/free' : new URL(path + url.search, origin), {
-    method: request.method, headers: request.headers, signal: request.signal, redirect: 'error',
+    method: request.method, headers, signal: request.signal, redirect: 'error',
     ...(body && { body })
   })
   if (modelPost) network.modelResponses.push(response.status)
@@ -112,19 +129,19 @@ shell.openExternal = async (target) => {
   }
   network.urls.push(url.href)
 }
-app.on('ready', () => session.defaultSession.webRequest.onBeforeRequest(
+app.whenReady().then(() => session.defaultSession.webRequest.onBeforeRequest(
   { urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
     const target = new URL(details.url)
     if (settings.liveManaged && details.resourceType === 'image' &&
       target.href === 'https://www.guanzhangai.cn/llm/deepseek.png') return callback({})
-    const icon = /^\/llm\/(zhipu\.png|guanzhang\.png)$/.test(target.pathname)
+    const icon = /^\/llm\/(zhipu\.png|deepseek\.png)$/.test(target.pathname)
     if (icon && target.origin === settings.assets) return callback({})
     if (settings.assets && icon && target.origin === 'https://www.guanzhangai.cn')
       return callback({redirectURL: settings.assets + target.pathname})
     callback({ cancel: true })
   }
 ))
-require(settings.main)
+if (!app.isPackaged) require(settings.main)
 `
 
 type Fixture = {
@@ -135,7 +152,7 @@ type Fixture = {
   assets?: string
   model?: { id: string; label: string; visionLive?: true }
   acceptance?: {
-    mode: 'synthetic' | 'live'
+    mode: 'live'
     freeId: string
     customModel: string
     freeDescription: string
@@ -189,6 +206,18 @@ export async function readDesktopUserNo(page: Page) {
   const account = await page.evaluate(() => window.api.desktopAccount('profile'))
   return account.status === 'signed_in' ? account.userNo : undefined
 }
+export const readWebsiteWallet = (page: Page) =>
+  page.evaluate(async (url) => {
+    const response = await fetch(url, { credentials: 'include', cache: 'no-store' })
+    if (!response.ok) throw new Error('Unable to read the isolated website wallet')
+    return (await response.json()) as {
+      available: string
+      refundFrozen: string
+      usageFrozen: string
+      debt: string
+      settlementPending: boolean
+    }
+  }, api + '/api/account/wallet')
 export const externalUrls = (runtime: Desktop) =>
   runtime.electronApp.evaluate(() => [...(globalThis as AccountRuntime).__accountTestNetwork.urls])
 export const walletReads = (runtime: Desktop) =>
@@ -248,9 +277,10 @@ const isLoopback = (value: string) => {
     url.protocol === 'http:' && url.hostname === '127.0.0.1' && url.origin === value && !!url.port
   )
 }
-async function loadFixture(): Promise<Fixture> {
-  const path = process.env.NCURATOR_ACCOUNT_E2E_FIXTURE
-  if (!path) throw new Error('Configure the isolated Account E2E service using the test plan')
+async function loadFixture(vision: boolean): Promise<Fixture> {
+  const key = vision ? 'NCURATOR_ACCOUNT_VISION_E2E_FIXTURE' : 'NCURATOR_ACCOUNT_E2E_FIXTURE'
+  const path = process.env[key]
+  if (!path) throw new Error('Configure the isolated account service with ' + key)
   const fixture = JSON.parse(await readFile(path, 'utf8')) as Fixture
   if (
     !isLoopback(fixture.api) ||
@@ -288,6 +318,7 @@ type Service = {
     dropRefresh?: boolean
   }) => ReturnType<typeof launchElectronApp>
   evidence: (email: string) => Promise<AccountEvidence>
+  arrangeSettlement: (email: string, action: 'prepare' | 'settle') => Promise<void>
   model: Fixture['model']
   acceptance?: {
     proxy: Awaited<ReturnType<typeof startNodeOneProxy>>
@@ -371,12 +402,16 @@ export async function deliverDesktopAuthorization(desktop: Desktop, callback: UR
 
 export async function withAccountFixture(
   run: (
-    setup: { sourceAppPath: string; extraEnv: Record<string, string> },
+    setup: {
+      sourceAppPath?: string
+      extraEnv: Record<string, string>
+      prepareApplication?: (application: ElectronApplication) => Promise<void>
+    },
     service: Service
   ) => Promise<void>,
-  options?: { nodeOneAcceptance: true; realModels?: true }
+  options?: { nodeOneAcceptance?: true; realModels?: true; vision?: true }
 ) {
-  const fixture = await loadFixture()
+  const fixture = await loadFixture(options?.vision === true)
   if (options?.nodeOneAcceptance && (!options.realModels || fixture.acceptance?.mode !== 'live'))
     throw new Error('node-one:real-models-required-synthetic-paused')
   const target = options?.realModels ? resolveLiveLlmTarget() : undefined
@@ -397,19 +432,34 @@ export async function withAccountFixture(
       })
     : undefined
   const root = await mkdtemp(join(tmpdir(), 'ncurator-account-e2e-'))
+  const packaged = process.env.NCURATOR_E2E_APP_TARGET === 'package'
+  const denyProxy = createServer((_request, reply) => reply.writeHead(403).end())
+  denyProxy.on('connect', (_request, socket) => {
+    socket.end('HTTP/1.1 403 Forbidden\r\n\r\n')
+  })
+  const settings = {
+    api: fixture.api,
+    main: resolve('out/main/index.js'),
+    assets: fixture.assets,
+    liveManaged: fixture.model?.visionLive,
+    ...(packaged && { fixtureKey: fixture.appKey }),
+    ...(proxy && { acceptance: { proxyOrigin: proxy.origin, customBase: target!.baseUrl } })
+  }
+  const prepareApplication = packaged
+    ? async (application: ElectronApplication) => {
+        await application.evaluate(({ app }, source) => {
+          const createRequire = process.getBuiltinModule('node:module')!.createRequire
+          const localRequire = createRequire(app.getAppPath() + '/package.json')
+          new Function('require', source)(localRequire)
+        }, sourceBootstrap)
+        // On restart the blocked pre-test request can finish before fixture routing is attached.
+        // Reloading the renderer uses the application's own restore path.
+        const page = await application.firstWindow()
+        await page.reload()
+      }
+    : undefined
   const extraEnv = {
-    NCURATOR_ACCOUNT_TEST_INPUT: JSON.stringify({
-      api: fixture.api,
-      main: resolve('out/main/index.js'),
-      assets: fixture.assets,
-      liveManaged: fixture.model?.visionLive,
-      ...(proxy && {
-        acceptance: {
-          proxyOrigin: proxy.origin,
-          customBase: target!.baseUrl
-        }
-      })
-    }),
+    NCURATOR_ACCOUNT_TEST_INPUT: JSON.stringify(settings),
     NCURATOR_APP_SECRET_DESKTOP: fixture.appKey,
     NCURATOR_DISTRIBUTION: 'domestic'
   }
@@ -422,6 +472,28 @@ export async function withAccountFixture(
       headers: { authorization: 'Bearer ' + fixture.appKey, 'content-type': 'application/json' }
     })
   try {
+    const started = await post('/begin-case', {})
+    if (!started.ok) throw new Error(`Isolated account fixture could not start the case (${started.status})`)
+    if (packaged) {
+      const port = await new Promise<number>((done, fail) => {
+        denyProxy.once('error', fail)
+        denyProxy.listen(0, '127.0.0.1', () => {
+          const address = denyProxy.address()
+          if (!address || typeof address === 'string') fail(new Error('Missing test proxy port'))
+          else done(address.port)
+        })
+      })
+      const origin = 'http://127.0.0.1:' + port
+      Object.assign(extraEnv, {
+        NODE_USE_ENV_PROXY: '1',
+        HTTP_PROXY: origin,
+        HTTPS_PROXY: origin,
+        http_proxy: origin,
+        https_proxy: origin,
+        NO_PROXY: '127.0.0.1',
+        no_proxy: '127.0.0.1'
+      })
+    }
     const { version } = JSON.parse(await readFile(resolve('package.json'), 'utf8')) as {
       version: string
     }
@@ -472,19 +544,22 @@ export async function withAccountFixture(
         launchSecondDesktop: (input) =>
           launchElectronApp({
             serviceMode: 'real',
-            sourceAppPath: root,
+            sourceAppPath: packaged ? undefined : root,
+            prepareApplication,
             windowMode: 'visible',
             userDataDir: input?.userDataDir,
             extraEnv: {
               ...extraEnv,
               NCURATOR_ACCOUNT_TEST_INPUT: JSON.stringify({
-                api: fixture.api,
-                main: resolve('out/main/index.js'),
-                assets: fixture.assets,
+                ...settings,
                 dropRefresh: input?.dropRefresh
               })
             }
           }),
+        async arrangeSettlement(email, action) {
+          const response = await post('/test-settlement', { email, action })
+          expect(response.status).toBe(200)
+        },
         async evidence(email) {
           const response = await post('/evidence', { email })
           expect(response.status).toBe(200)
@@ -548,15 +623,14 @@ export async function withAccountFixture(
         },
         async userNumber(page) {
           await page.goto(site + '/account')
-          await page.getByRole('heading', { name: '账户概览', exact: true }).waitFor()
-          return (
-            await page
-              .getByText('用户编号', { exact: true })
-              .locator('..')
-              .locator('dd span')
-              .first()
-              .innerText()
-          ).trim()
+          await page.getByRole('heading', { name: '账户', exact: true }).waitFor()
+          const session = await page.evaluate(async (url) => {
+            const response = await fetch(url, { credentials: 'include', cache: 'no-store' })
+            if (!response.ok) throw new Error('Unable to read the signed-in account')
+            return (await response.json()) as { userNo: string }
+          }, api + '/api/auth/session')
+          expect(session.userNo).toMatch(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u)
+          return session.userNo
         },
         async recharge(page) {
           if (new URL(page.url()).pathname !== '/account/recharge')
@@ -636,12 +710,16 @@ export async function withAccountFixture(
           }
         }
       }
-      await run({ sourceAppPath: root, extraEnv }, service)
+      await run(
+        { sourceAppPath: packaged ? undefined : root, extraEnv, prepareApplication },
+        service
+      )
     } finally {
       await browser.close()
     }
   } finally {
     await proxy?.close()
+    if (denyProxy.listening) await new Promise<void>((done) => denyProxy.close(() => done()))
     await rm(root, { recursive: true, force: true })
   }
 }

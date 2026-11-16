@@ -436,9 +436,13 @@ export class AiRunStore {
     const ids = runIds.map((id) => String(id || '').trim()).filter(Boolean)
     if (ids.length === 0) return
     this.sqlite.transaction(() => {
-      const stmt = this.sqlite.prepare('DELETE FROM ai_run WHERE id = ?')
+      const deleteRun = this.sqlite.prepare('DELETE FROM ai_run WHERE id = ?')
+      const deleteMessages = this.sqlite.prepare(
+        'DELETE FROM chat_session_message_log WHERE run_id = ?'
+      )
       for (const id of ids) {
-        stmt.run(id)
+        deleteRun.run(id)
+        deleteMessages.run(id)
       }
     })
   }

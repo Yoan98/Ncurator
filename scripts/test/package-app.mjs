@@ -215,6 +215,7 @@ export const preparePackagedE2EApplication = async (bundlePath, { resultPath = '
     platform: process.platform,
     arch: process.arch,
     releaseTag: bundle.tag,
+    distribution: bundle.distribution || 'domestic',
     releaseCommit: bundle.commit,
     releasePlatform: bundle.platform,
     bundlePath: resolvedBundlePath,

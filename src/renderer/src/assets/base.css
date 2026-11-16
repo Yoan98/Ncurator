@@ -844,6 +844,9 @@ textarea,
   min-height: 30px;
   padding-block: 4px;
 }
+.nc-account-dropdown .ant-dropdown-menu-title-content {
+  min-width: 0;
+}
 .nc-account-menu-label {
   display: flex;
   align-items: center;

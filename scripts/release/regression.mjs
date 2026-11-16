@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { resolveBundleInstaller } from './artifact-bundle.mjs'
-import { passedPackageTest } from '../test/e2e-results.mjs'
+import { passedPackageTest, RELEASE_ACCOUNT_CASES } from '../test/e2e-results.mjs'
 
 const valueAfter = (args, name) => {
   const index = args.indexOf(name)
@@ -109,6 +109,11 @@ export const assertPackageRegressionPassed = (result, bundle, installer) => {
     !result.tests.every((test) => passedPackageTest(test, installer.sha256))
   ) {
     throw new Error('candidate requires actual passed package E2E case evidence')
+  }
+  if (bundle.distribution !== 'international') {
+    const passed = new Set(result.tests.flatMap((test) => test.cases.map(({ caseId }) => caseId)))
+    const missing = RELEASE_ACCOUNT_CASES.filter((caseId) => !passed.has(caseId))
+    if (missing.length) throw new Error(`missing required package E2E cases: ${missing.join(', ')}`)
   }
 }
 

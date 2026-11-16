@@ -44,6 +44,35 @@ it('account-menu-and-page', async () => {
           loginTitle
         )
         expect(offerBelowTitle).toBe(true)
+        const offerLayout = () =>
+          offer.evaluate((text) => {
+            const popup = text.closest('.nc-account-popup')!
+            const bounds = popup.getBoundingClientRect()
+            const badge = text.parentElement!.getBoundingClientRect()
+            const arrow = text.closest('.nc-account-menu-label')!.querySelector(':scope > svg')!
+            return {
+              gap: arrow.getBoundingClientRect().left - badge.right,
+              height: badge.height,
+              width: bounds.width,
+              fits:
+                bounds.left >= 0 &&
+                bounds.right <= innerWidth &&
+                popup.scrollWidth <= popup.clientWidth + 1
+            }
+          })
+        await expect.poll(async () => (await offerLayout()).gap).toBeCloseTo(12, 0)
+        const normalOffer = await offerLayout()
+        await expect
+          .poll(() =>
+            page
+              .locator('.nc-account-dropdown')
+              .evaluate((popup) => getComputedStyle(popup).opacity)
+          )
+          .toBe('1')
+        await runtime.captureScreenshot({
+          name: 'account-login-menu-normal',
+          message: '未登录菜单按内容定宽'
+        })
         const menu = page.getByRole('menu')
         expect(await menu.getByRole('menuitem').allTextContents()).toEqual([
           `登录🎁${offerText}`,
@@ -176,6 +205,23 @@ it('account-menu-and-page', async () => {
         await menuItem(page, labels.login).waitFor()
         expect(await service.userNumber(web)).toBe(websiteNumber)
         expect(await runtime.electronApp.evaluate(({ app }) => app.isReady())).toBe(true)
+        const viewport =
+          page.viewportSize() ??
+          (await page.evaluate(() => ({
+            width: innerWidth,
+            height: innerHeight
+          })))
+        try {
+          await page.setViewportSize({ width: 220, height: viewport.height })
+          await expect.poll(async () => (await offerLayout()).width).toBeLessThan(normalOffer.width)
+          await expect
+            .poll(async () => (await offerLayout()).height)
+            .toBeGreaterThan(normalOffer.height)
+          await expect.poll(async () => (await offerLayout()).fits).toBe(true)
+          await version.waitFor()
+        } finally {
+          await page.setViewportSize(viewport)
+        }
         return { retained, refreshed }
       },
       assert: async ({ retained, refreshed }, runtime) => {

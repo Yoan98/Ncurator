@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  RELEASE_ACCOUNT_CASES,
   readTestCaseIds,
   readE2ECaseResults,
   mergeE2ETestResults,
@@ -322,11 +323,21 @@ export const findTestFiles = async (input) => {
     return []
   }
 
+  const defaultPackage =
+    input.target === 'package' &&
+    !input.domain &&
+    !input.suite &&
+    !input.groups.length &&
+    !input.caseIds.length &&
+    input.domesticPackage !== false
+  const isReleaseAccountFile = (filePath) =>
+    defaultPackage && RELEASE_ACCOUNT_CASES.includes(toCaseId(filePath))
   const allFiles = await walk(scopeDir)
   const candidates = allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
     .filter((filePath) => {
       if (!filePath.startsWith(path.join(TEST_CASES_ROOT, 'account') + path.sep)) return true
+      if (isReleaseAccountFile(filePath)) return true
       if (toCaseId(filePath) === 'account-change-during-runs') {
         return input.caseIds.includes('account-change-during-runs')
       }
@@ -336,6 +347,7 @@ export const findTestFiles = async (input) => {
     .filter(
       (filePath) =>
         !filePath.startsWith(`${PROVIDER_MATRIX_ROOT}${path.sep}`) ||
+        isReleaseAccountFile(filePath) ||
         input.caseIds.includes(toCaseId(filePath))
     )
     .filter((filePath) => {
@@ -670,20 +682,29 @@ const runE2ETestFilesConcurrently = async (
   )
   const tasks = targets
     .flatMap((target) =>
-      fileTasks.map((task) => ({
-        ...task,
-        targetId: target.id,
-        env: target.env
-      }))
+      fileTasks
+        .filter(
+          ({ testFile }) =>
+            target.distribution !== 'international' ||
+            !RELEASE_ACCOUNT_CASES.includes(toCaseId(testFile))
+        )
+        .map((task) => ({
+          ...task,
+          targetId: target.id,
+          env: target.env
+        }))
     )
     .map((task, index) => ({ ...task, index }))
   const runnableTasks = tasks
   const gateTasks = runnableTasks.filter((task) => gateCaseIds.includes(toCaseId(task.testFile)))
+  const accountTasks = runnableTasks.filter((task) =>
+    task.env.NCURATOR_E2E_EXECUTABLE && RELEASE_ACCOUNT_CASES.includes(toCaseId(task.testFile))
+  )
   const concurrentTasks = runnableTasks.filter(
-    (task) => task.execution !== 'exclusive' && !gateTasks.includes(task)
+    (task) => task.execution !== 'exclusive' && !gateTasks.includes(task) && !accountTasks.includes(task)
   )
   const exclusiveTasks = runnableTasks.filter(
-    (task) => task.execution === 'exclusive' && !gateTasks.includes(task)
+    (task) => task.execution === 'exclusive' && !gateTasks.includes(task) && !accountTasks.includes(task)
   )
   const results = []
   let exitCode = 0
@@ -788,6 +809,11 @@ const runE2ETestFilesConcurrently = async (
     }
   }
 
+  for (const task of accountTasks) {
+    if (Date.now() >= deadlineAt) recordDeadline(task)
+    else await runTask(task)
+  }
+
   const pending = [...concurrentTasks]
   const active = new Set()
   while (pending.length > 0 || active.size > 0) {
@@ -872,6 +898,24 @@ const runTypeWorkflow = async (input) => {
     }
     process.stdout.write(`[test-workflow] no tests found for ${formatScope(input)}\n`)
     return { exitCode: 0, e2eResults: [] }
+  }
+
+  if (input.type === 'e2e' && input.caseIds.length > 0) {
+    const declared = new Set(
+      (
+        await Promise.all(
+          testFiles.map(async (filePath) =>
+            readTestCaseIds(filePath, await readFile(filePath, 'utf8'))
+          )
+        )
+      ).flat()
+    )
+    const missing = input.caseIds.filter((caseId) => !declared.has(caseId))
+    if (missing.length) {
+      throw new Error(
+        `no E2E cases match --case ${missing.join(', ')} within ${formatScope(input)}`
+      )
+    }
   }
 
   const nativeTarget = input.type === 'e2e' ? 'electron' : 'node'
@@ -1046,7 +1090,7 @@ const USAGE = `NCurator 测试 runner
 
 注意:
   不带任何过滤参数会执行全量测试（含 live 真实模型调用），会消耗真实 API 额度。
-  服务商矩阵默认排除，可用 --case 显式指定对应的用例名。
+  服务商矩阵按用例运行，国内正式包默认包含馆长模型必验用例。
   请使用 --domain/--suite/--case 缩小范围；未知参数会导致立即报错退出。
 `
 
@@ -1183,7 +1227,12 @@ export const runTestWorkflow = async (argv, options = {}) => {
       const result = await runTypeWorkflow({
         ...args,
         type: 'e2e',
-        e2eTargets: packageTargets.map(({ id, env }) => ({ id, env })),
+        domesticPackage: packageTargets.some(({ session }) => session.distribution === 'domestic'),
+        e2eTargets: packageTargets.map(({ id, env, session }) => ({
+          id,
+          env,
+          distribution: session.distribution
+        })),
         deadlineAt
       })
       exitCode = result.exitCode

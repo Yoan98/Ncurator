@@ -9,6 +9,7 @@ import {
   validateReleaseArgs
 } from '../../../../scripts/release/regression.mjs'
 import {
+  RELEASE_ACCOUNT_CASES,
   mergeE2ETestResults,
   passedPackageTest,
   readTestCaseIds,
@@ -41,6 +42,21 @@ describe('release regression selection', () => {
     const files = await findTestFiles({ ...defaultScope, ...scope })
     expect(files.length).toBeGreaterThan(0)
     expect(files).not.toContain(providerMatrixFile)
+  })
+
+  it('discovers every mandatory account case for a domestic package', async () => {
+    const domestic = await findTestFiles({ ...defaultScope, target: 'package' })
+    const international = await findTestFiles({
+      ...defaultScope,
+      target: 'package',
+      domesticPackage: false
+    })
+    for (const caseId of RELEASE_ACCOUNT_CASES) {
+      expect(domestic.some((file) => path.basename(file) === caseId + '.e2e.test.ts')).toBe(true)
+      expect(international.some((file) => path.basename(file) === caseId + '.e2e.test.ts')).toBe(
+        false
+      )
+    }
   })
 
   it('does not enable the provider matrix through a group filter', async () => {

@@ -170,6 +170,7 @@ export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   nodeOneAcceptance?: { revoke: () => void }
   prepareUserData?: (userDataDir: string) => Promise<void>
   sourceAppPath?: string
+  prepareApplication?: (application: ElectronApplication) => Promise<void>
   runMode: E2ETestRunMode
   execute: (runtime: E2ETestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: E2ETestRuntime) => Promise<void>
@@ -663,6 +664,7 @@ export const runE2ECase = async <TResult>(
           extraEnv: resolvedExtraEnv,
           prepareUserData: input?.prepareUserData,
           sourceAppPath: definition.sourceAppPath,
+          prepareApplication: definition.prepareApplication,
           signalSink,
           nodeOneAcceptance: definition.nodeOneAcceptance ? true : undefined,
           userDataDir: app.userDataDir
@@ -773,6 +775,7 @@ export const runE2ECase = async <TResult>(
       extraEnv: resolvedExtraEnv,
       prepareUserData: definition.prepareUserData,
       sourceAppPath: definition.sourceAppPath,
+      prepareApplication: definition.prepareApplication,
       signalSink,
       nodeOneAcceptance: definition.nodeOneAcceptance ? true : undefined
     })

@@ -5,6 +5,7 @@ import {
   available,
   newTestEmail,
   openAccountMenu,
+  readWebsiteWallet,
   withAccountFixture
 } from '../../../../harness/e2e/account'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -22,7 +23,7 @@ import {
 it('managed-request-admission-and-recovery', async () => {
   await withAccountFixture(async (setup, service) => {
     const model = service.model
-    if (!model?.visionLive) throw new Error('Configure the isolated managed model live profile')
+    if (!model || model.visionLive) throw new Error('Configure the isolated managed account profile')
     await runE2ECase({
       ...setup,
       caseId: 'managed-request-admission-and-recovery',
@@ -31,7 +32,7 @@ it('managed-request-admission-and-recovery', async () => {
       description: '真实桌面验证零余额、停止已受理请求和原请求结果恢复。',
       fixtures: [],
       serviceMode: 'real',
-      execution: 'live',
+      execution: 'exclusive',
       windowMode: 'visible',
       runMode: 'single',
       execute: async (runtime) => {
@@ -64,7 +65,7 @@ it('managed-request-admission-and-recovery', async () => {
         expect((await service.evidence(email)).calls).toHaveLength(0)
         await service.recharge(web)
 
-        const stopRunAt = await start('请从 1 开始逐行输出到 400，不调用任何工具。')
+        const stopRunAt = await start('保持流式输出，等待停止。 NCURATOR_E2E_HOLD_ADMITTED_REQUEST')
         const readStarted = async () =>
           (await collectWorkbenchAiRunEvents(runtime)).find(
             (event) => event.type === 'run_started' && event.createdAt >= stopRunAt
@@ -83,7 +84,7 @@ it('managed-request-admission-and-recovery', async () => {
           )
           .toBe(true)
         await expect
-          .poll(async () => (await service.evidence(email)).calls[0]?.feeDecision)
+          .poll(async () => (await service.evidence(email)).calls[0]?.feeDecision, { timeout: 10_000 })
           .toBe('waive')
         expect((await service.evidence(email)).calls[0].paidAmount).toBe('0')
 
@@ -111,14 +112,14 @@ it('managed-request-admission-and-recovery', async () => {
         })
         const charge = BigInt(evidence.calls[1].paidAmount)
         expect(charge).toBeGreaterThan(0n)
-        const wallet = evidence.vision?.wallet
-        expect(wallet).toEqual({
-          paidAvailableAmount: (500_000_000n - charge).toString(),
-          usageFrozenAmount: '0',
-          debtAmount: '0'
+        const wallet = await readWebsiteWallet(web)
+        expect(wallet).toMatchObject({
+          available: (500_000_000n - charge).toString(),
+          usageFrozen: '0',
+          debt: '0'
         })
         await openAccountMenu(page)
-        const balance = Number(wallet!.paidAvailableAmount) / 100_000_000
+        const balance = Number(wallet.available) / 100_000_000
         await expect.poll(() => available(page).getAttribute('title')).toBe(`${balance} CNY`)
         return { admitted: evidence.calls.length, recovered: droppedResults, balance }
       },

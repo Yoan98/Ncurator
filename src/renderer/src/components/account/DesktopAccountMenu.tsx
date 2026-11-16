@@ -159,7 +159,9 @@ export function DesktopAccountMenu() {
                         <span aria-hidden="true" className="shrink-0">
                           🎁
                         </span>
-                        <span className="min-w-0 whitespace-normal">{loginOffer}</span>
+                        <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+                          {loginOffer}
+                        </span>
                       </span>
                     )}
                   </span>
@@ -227,7 +229,11 @@ export function DesktopAccountMenu() {
       trigger={['click']}
       placement="topLeft"
       autoFocus
-      overlayStyle={{ width: loginOffer ? 292 : 260 }}
+      overlayStyle={{
+        width: loginOffer ? 'max-content' : 260,
+        minWidth: 0,
+        maxWidth: 'calc(100dvw - 24px)'
+      }}
       overlayClassName="nc-account-dropdown"
       dropdownRender={(menu) => (
         <div

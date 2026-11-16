@@ -34,7 +34,7 @@ const appendHumanTraceSteps = (input: {
     input.steps
   )
 
-export const appendHumanTraceStep = (input: {
+const appendHumanTraceStep = (input: {
   steps: HumanTraceStep[]
   item: HumanTraceItemInput
 }): HumanTraceStep[] => {

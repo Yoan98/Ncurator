@@ -269,7 +269,6 @@ export class ChatRunService {
         const orphanedContinuationId = `queued-${latestQueued.id}`
         const orphanedContinuation = await this.deps.aiRunStore.getRun(orphanedContinuationId)
         if (orphanedContinuation?.status === 'running') {
-          await this.deps.chatMessageLogStore.deleteByRunIds([orphanedContinuationId])
           await this.deps.aiRunStore.deleteRunsByIds([orphanedContinuationId])
           removedContinuations.add(orphanedContinuationId)
         }
@@ -391,7 +390,6 @@ export class ChatRunService {
     const assistantMessage = messages.find((message) => message.id === run.assistantMessageId)
 
     await this.deps.aiRunStore.deleteRunsByIds([run.id])
-    await this.deps.chatMessageLogStore.deleteByRunIds([run.id])
     const nextMessages = await this.loadProjectedPartnerMessages(partnerId)
 
     return {
@@ -1680,7 +1678,13 @@ export class ChatRunService {
     }
     const projectedEvent: AiRunEvent = isTerminalEvent && entry?.cancelled
       ? { type: 'run_cancelled', runId } : event
-    if (entry?.managed?.session.aborted && !isTerminalEvent && event.type !== 'run_started') return
+    const isCancelledChild = event.type === 'subagent_updated' && event.update.status === 'cancelled'
+    if (
+      entry?.managed?.session.aborted &&
+      !isTerminalEvent &&
+      !isCancelledChild &&
+      event.type !== 'run_started'
+    ) return
     if (entry && projectedEvent.type === 'run_completed' && run.status === 'continued' && !run.pendingMessages?.length) {
       run.status = 'running'
       entry.finalizing = false

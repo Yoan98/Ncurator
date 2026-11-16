@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -42,15 +42,25 @@ describe('workbench conversation e2e', () => {
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
-          const { page } = runtime
           const missingModelNotification = getWorkbenchLocator(
-            page,
+            runtime.page,
             workbenchSelectors.llmConfigMissingNotification
           )
           await missingModelNotification.waitFor({ state: 'visible', timeout: 1500 })
           const missingModelInitialText = (
             (await missingModelNotification.textContent()) || ''
           ).trim()
+          await missingModelNotification.getByRole('button', { name: '稍后' }).click()
+          await missingModelNotification.waitFor({ state: 'hidden' })
+
+          const { page } = await runtime.restartApp()
+          await navigateToWorkbench(page)
+          await expect(
+            getWorkbenchLocator(page, workbenchSelectors.llmConfigMissingNotification).waitFor({
+              state: 'visible',
+              timeout: 1500
+            })
+          ).rejects.toThrow(/Timeout 1500ms exceeded/)
 
           const env = loadWorkbenchLiveModelEnv()
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
@@ -67,7 +77,8 @@ describe('workbench conversation e2e', () => {
 
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName: 'Workbench Guard Workspace',
-            rootPath: workspace.rootPath
+            rootPath: workspace.rootPath,
+            prepareFiles: false
           })
           await createPartnerThroughWorkbenchUi(page, 'Guard Partner')
           await selectWorkbenchModel(page, env.modelName)
@@ -152,11 +163,15 @@ describe('workbench conversation e2e', () => {
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(result.missingModelInitialText.includes('未配置大模型 API'), {
-            name: 'missing-llm-notification-shows-quickly',
-            message: '没有模型配置时应快速提示未配置大模型 API。',
-            data: result
-          })
+          await runtime.assertThat(
+            result.missingModelInitialText.includes('尚未配置自定义模型') &&
+              result.missingModelInitialText.includes('免费模型'),
+            {
+              name: 'custom-model-notice-shows-once',
+              message: '首次提示说明免费模型可用，关闭后即使重启也不再出现。',
+              data: { initialText: result.missingModelInitialText }
+            }
+          )
 
           await runtime.assertThat(
             result.emptyWithoutPartner &&

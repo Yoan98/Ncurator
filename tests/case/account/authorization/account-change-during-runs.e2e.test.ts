@@ -11,7 +11,10 @@ import {
   releaseModelResult,
   withAccountFixture
 } from '../../../harness/e2e/account'
-import { dismissNativeConfirmation, openNativeConfirmation } from '../../../harness/e2e/nativeConfirm'
+import {
+  dismissNativeConfirmation,
+  openNativeConfirmation
+} from '../../../harness/e2e/nativeConfirm'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   createPartnerThroughWorkbenchUi,
@@ -25,7 +28,7 @@ import {
 it('account-change-during-runs', async () => {
   await withAccountFixture(async (setup, service) => {
     const model = service.model
-    if (!model?.visionLive) throw new Error('Configure the isolated managed model live profile')
+    if (!model) throw new Error('Configure the isolated managed model fixture')
     await runE2ECase({
       ...setup,
       caseId: 'account-change-during-runs',
@@ -34,7 +37,7 @@ it('account-change-during-runs', async () => {
       description: '真实桌面退出确认和换号不会迁移已受理的馆长调用及其费用。',
       fixtures: [],
       serviceMode: 'real',
-      execution: 'live',
+      execution: 'exclusive',
       windowMode: 'visible',
       runMode: 'single',
       execute: async (runtime) => {
@@ -72,17 +75,27 @@ it('account-change-during-runs', async () => {
             feeDecision: 'charge'
           })
           expect(BigInt(original[0].paidAmount)).toBeGreaterThan(0n)
+          const queuedInput = '这条追加消息只能留在原账号的任务里。'
+          await sendWorkbenchMessage(page, queuedInput)
+          const queued = page.locator('[data-message-pending="true"]').filter({ hasText: queuedInput })
+          await queued.waitFor({ state: 'visible' })
+          await expect.poll(() => queued.getAttribute('data-message-id')).not.toMatch(/^local-user-/u)
 
           const logout = async (choice: 'cancel' | 'confirm') => {
             await openAccountMenu(page)
             const title = '退出当前桌面'
-            const dialog = await openNativeConfirmation(runtime, menuItem(page, labels.signOut), title)
+            const dialog = await openNativeConfirmation(
+              runtime,
+              menuItem(page, labels.signOut),
+              title
+            )
             await dialog.getByText('退出将停止这些任务', { exact: true }).waitFor()
             await dismissNativeConfirmation(dialog, choice, title)
           }
           await logout('cancel')
           expect(await readDesktopUserNo(page)).toBe(originalUser)
           expect((await accountNetwork(runtime)).heldModelRequestId).toBe(original[0].requestId)
+          await queued.waitFor({ state: 'visible' })
           await page.getByRole('button', { name: '停止本次运行', exact: true }).waitFor()
 
           await logout('confirm')
@@ -102,6 +115,7 @@ it('account-change-during-runs', async () => {
           await openAccountMenu(page)
           await expect.poll(() => available(page).innerText()).toBe('¥0.00')
           expect(await readDesktopUserNo(page)).toBe(nextUser)
+          await queued.waitFor({ state: 'hidden' })
           expect((await service.evidence(nextEmail)).calls).toHaveLength(0)
           const originalAfter = await service.evidence(originalEmail)
           expect(originalAfter.calls).toEqual(original)

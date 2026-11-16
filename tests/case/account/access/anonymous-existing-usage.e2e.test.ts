@@ -165,7 +165,7 @@ it('anonymous-existing-usage', async () => {
               webB = await service.browserPage()
             const manager = await acceptance.manager()
             await manager.goto('https://www.guanzhangai.cn/account')
-            await manager.getByRole('heading', { name: '账户概览', exact: true }).waitFor()
+            await manager.getByRole('heading', { name: '账户', exact: true }).waitFor()
             await createModelConfigThroughSettingsUi(runtime.page, {
               name: '节点一个人连接',
               baseUrl: proxy.origin + '/custom',

@@ -3,6 +3,7 @@ import {
   available,
   newTestEmail,
   openAccountMenu,
+  readWebsiteWallet,
   refreshWallet,
   withAccountFixture
 } from '../../../harness/e2e/account'
@@ -26,7 +27,7 @@ it('balance-display-and-funds-state', async () => {
       caseId: 'balance-display-and-funds-state',
       domain: 'account',
       suite: 'overview',
-      description: '核对零额、小额、精确值和测试退款冻结的跨端展示。',
+      description: '核对零额、小额、精确值、退款冻结、结算中和欠费的跨端展示。',
       fixtures: [],
       serviceMode: 'real',
       execution: 'exclusive',
@@ -81,20 +82,37 @@ it('balance-display-and-funds-state', async () => {
         expect(calls[0]).toMatchObject({ paidAmount: '5400', feeDecision: 'charge' })
 
         await web.goto('https://www.guanzhangai.cn/account')
-        await web.getByRole('heading', { name: '账户概览', exact: true }).waitFor()
-        const frozen = web.getByText('退款处理中', { exact: true }).locator('..')
-        await frozen.getByText('¥4.99', { exact: true }).waitFor()
-        await web.getByText('精确余额', { exact: true }).click()
-        await web.locator('details').getByText('¥0.009946', { exact: true }).waitFor()
+        await web.getByRole('heading', { name: '账户', exact: true }).waitFor()
+        await web.getByText('退款处理中', { exact: true }).waitFor()
+        await web.getByText('＜¥0.01', { exact: true }).waitFor()
+        const wallet = await readWebsiteWallet(web)
+        expect(wallet).toMatchObject({ refundFrozen: '499000000', available: '994600' })
         await openAccountMenu(page)
         await runtime.captureScreenshot({
           name: 'nonzero-sub-cent-balance',
           message: '不足一分钱的可用金额保留为非零'
         })
-        return {
-          modelCharges: calls.length,
-          exactBalance: await available(page).getAttribute('title')
-        }
+        const exactBalance = await available(page).getAttribute('title')
+        await page.keyboard.press('Escape')
+        await service.arrangeSettlement(email, 'prepare')
+        await refreshWallet(page)
+        await openAccountMenu(page)
+        await page.getByText('费用结算中', { exact: true }).waitFor()
+        await web.reload()
+        await web.getByText('模型调用占用余额 · 退款处理中 · 费用结算中', { exact: true }).waitFor()
+        expect((await readWebsiteWallet(web)).settlementPending).toBe(true)
+
+        await service.arrangeSettlement(email, 'settle')
+        await refreshWallet(page)
+        await page.getByText('费用结算中', { exact: true }).waitFor({ state: 'hidden' })
+        await checkAmount('−¥0.01', '-0.01')
+        await web.reload()
+        await web.getByText('欠费', { exact: true }).waitFor()
+        expect(await readWebsiteWallet(web)).toMatchObject({
+          available: '-1000000',
+          settlementPending: false
+        })
+        return { modelCharges: calls.length, exactBalance }
       },
       assert: async ({ modelCharges, exactBalance }, runtime) =>
         runtime.assertThat(modelCharges === 1 && exactBalance === '0.009946 CNY', {

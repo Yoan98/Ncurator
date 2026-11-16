@@ -199,10 +199,10 @@ pnpm test:update:e2e
 #### `send-guard-and-preferences`
 
 - 测试类型：`e2e`
-- What：缺少模型时的配置提示（本机 localStorage 仅首次出现一次）、发送前置条件（已有伙伴 + 输入非空），以及模型 / AI 推进偏好 / 执行权限按伙伴恢复；创建伙伴后真实发送一次并完成 AI 运行。
+- What：未登录且没有个人连接时的一次性配置提示、发送前置条件（已有伙伴 + 输入非空），以及模型 / AI 推进偏好 / 执行权限按伙伴恢复；创建伙伴后真实发送一次并完成 AI 运行。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务或把任务发到错误伙伴。
-- How：先在无模型配置状态下检查提示，再通过 UI 配置真实模型并创建伙伴；覆盖无伙伴空态、输入保留、模型选择、AI 推进偏好、执行权限菜单的两条说明与完全访问高危风险弹窗确认/取消门禁、切换伙伴后的独立恢复和真实发送（Composer 提交，含 Enter 发送路径）。
-- Oracle：无模型且本机从未展示过该提示时快速显示配置提示（展示后写入 localStorage，之后即使仍无模型也不再弹出）；无伙伴时 Composer 空态且不出现发送按钮，对齐 `WB-CORE-001-AC2`、`WB-COMPOSER-001`（无伙伴空态 **只在本 case 硬断言**）；有伙伴、未插 `@` 且输入非空时可发送，对齐 `WB-CORE-001-AC1`；发送走 Composer 提交并完成真实 AI 运行，对齐 `WB-COMPOSER-002-AC1`、`WB-CORE-006-AC1`；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；切换“完全访问”触发风险二次确认弹窗（取消维持审核、确认切换成功，切回审核免二次确认），对齐 `WB-COMPOSER-007-AC13`；模型、推进偏好和执行权限按伙伴恢复，对齐 `WB-COMPOSER-007-AC5`、`WB-COMPOSER-007-AC9`、`WB-COMPOSER-007-AC12`、`WB-SESSION-008`。`WB-COMPOSER-002-AC2`、`WB-COMPOSER-002-AC3`（Shift+Enter 换行、中文输入法组词）不测。
+- How：在未登录且无个人连接时检查提示并关闭，重启同一测试档案后检查提示未再次出现，再通过 UI 配置真实模型、添加文件目录并创建伙伴。文件目录不准备知识库索引；本用例覆盖无伙伴空态、输入保留、模型选择、AI 推进偏好、执行权限菜单的两条说明与完全访问高危风险弹窗确认/取消门禁、切换伙伴后的独立恢复和真实发送（Composer 提交，含 Enter 发送路径）。
+- Oracle：首次打开工作台提示可配置个人连接或使用免费模型；关闭后保持无个人连接，重启不再提示，覆盖 `WB-COMPOSER-007-AC22` 的未登录路径；登录路径见 [Account 重启回归](account-test.md#independent-sessions-and-restart)。无伙伴时 Composer 空态且不出现发送按钮，对齐 `WB-CORE-001-AC2`、`WB-COMPOSER-001`（无伙伴空态 **只在本 case 硬断言**）；有伙伴、未插 `@` 且输入非空时可发送，对齐 `WB-CORE-001-AC1`；发送走 Composer 提交并完成真实 AI 运行，对齐 `WB-COMPOSER-002-AC1`、`WB-CORE-006-AC1`；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；切换“完全访问”触发风险二次确认弹窗（取消维持审核、确认切换成功，切回审核免二次确认），对齐 `WB-COMPOSER-007-AC13`；模型、推进偏好和执行权限按伙伴恢复，对齐 `WB-COMPOSER-007-AC5`、`WB-COMPOSER-007-AC9`、`WB-COMPOSER-007-AC12`、`WB-SESSION-008`。`WB-COMPOSER-002-AC2`、`WB-COMPOSER-002-AC3`（Shift+Enter 换行、中文输入法组词）不测。
 
 #### `partner-ui-state-isolation`
 
@@ -243,7 +243,7 @@ pnpm test:update:e2e
 - What：馆长目录登录边界、选择保持、动态折扣及公开信息展示。
 - Why：登录或充值后自动改模型、旧账号缓存及采购信息泄漏会造成误收费或隐私问题。
 - How：使用独立 Account 测试服务的馆长目录联调配置，按需执行 `pnpm test:e2e:source --case managed-model-catalog`。在真实桌面核对未登录引导，网页登录授权后以零余额打开馆长详情。经管理网页修改馆长条目的简介、价格档位和售价，在桌面刷新核对变化，随后显式选中条目、通过测试渠道充值、停用条目，再退出并以另一账号授权。选中免费与个人连接时的登录状态变化由 Account 的 `anonymous-existing-usage` 回归，复杂时段和数据输出由官网目录接口及管理 E2E 验证。
-- Oracle：登录前显示单行优惠入口，零余额可读馆长目录，登录、充值、刷新及失效不换型号或计费方式，旧账号受保护目录不再展示，覆盖 `WB-COMPOSER-007-AC20`。列表与侧栏的折扣随目录同步更新，侧栏显示馆长余额、当前条目的简介、动态调整说明及已配置的价格档位，省略单价、分时明细及采购信息，覆盖 `WB-COMPOSER-007-AC21`，并补充 `WB-COMPOSER-007-AC2/AC3` 的馆长区域。每次调用返回的费用与当前目录展示分别核对。
+- Oracle：登录前显示单行优惠入口，零余额可读馆长目录，登录、充值、刷新及失效不换型号或计费方式，旧账号受保护目录不再展示，覆盖 `WB-COMPOSER-007-AC20`。列表与侧栏的折扣随目录同步更新，侧栏显示馆长余额、目录返回的整段简介及已配置的价格档位。简介中配置的折扣说明随刷新出现，省略单价、分时明细及采购信息，覆盖 `WB-COMPOSER-007-AC21`，并补充 `WB-COMPOSER-007-AC2/AC3` 的馆长区域。每次调用返回的费用与当前目录展示分别核对。
 - `desktop-account.test.ts` 中的 `reads managed pricing with the active account and drops a response delivered after account change` 补证目录签名、折扣更新、公开字段投影和旧账号响应隔离。
 
 #### `managed-image-conversation`
@@ -445,11 +445,11 @@ pnpm test:update:e2e
 
 #### `managed-request-admission-and-recovery`
 
-- 测试类型：`e2e / live`
+- 测试类型：`e2e`，纳入国内正式包回归。
 - 桌面执行层另通过 `desktop-account.test.ts` 接入隔离测试 API，验证工具完成确认后才继续同一 run、换号丢弃迟到分片，以及完成确认丢失时按原请求查回。
 - What：馆长请求零余额拒绝、用户停止及完成确认丢失后的原请求恢复。
 - Why：直接套用通用 429、断流及超时重试可能重复执行、重复收费，或把用户身份和资金门禁误当作临时并发问题。
-- How：使用独立 Account 测试服务和真实上游，按需执行 `pnpm test:e2e:source --case managed-request-admission-and-recovery`。从桌面提交零余额请求，经测试渠道充值后发送并停止调用，再发送一轮并在网络边界丢弃已结算的完成确认。真实 Main 按原请求查回。使用 UI 和 API 证据核对费用、取消和请求编号。并发配额边界由接口回归覆盖，UI 重试共用交互由 `llm-retry-process-row` 补证。
+- How：使用实际桌面和隔离计费 API，通过受控流精确停在已受理、未完成的状态。桌面提交零余额请求，经测试渠道充值后发送并停止调用，再发送一轮，由网络边界丢弃已结算的完成确认。主进程按原请求查回，核对 UI、请求编号和钱包。并发配额由接口回归覆盖，重试交互见 `llm-retry-process-row`。
 - Oracle：零余额拒绝不执行模型或产生费用。停止后桌面结束运行，服务端未取得可信终态时免收。完成确认丢失后正文和运行仍可正常结案，桌面只对该请求查回，不重发、换号或重复收费，补证 `WB-COMPOSER-015-AC5`。
 
 #### `terminal-background-service-flow`
@@ -891,7 +891,7 @@ pnpm test:update:e2e
 
 产品埋点的完整规则见 `WB-TELEMETRY-001`。`WB-TELEMETRY-001-AC1/AC2/AC3/AC5/AC6` 的受理触发、终态、开始时的公开型号快照及去重由 `chat-run-service-contract` 验证。`telemetry-service` 验证字段、旧队列丢弃、私有型号隔离和重试复用事件 ID。E2E 验证真实用户行为和禁发，隔离回归验证上报。
 
-馆长目录、零余额门禁及请求恢复、两轮图文已登记为按需 E2E。退出与换号时的在途费用归属见 [Account 计划](account-test.md#account-change-during-runs)。运行中型号切换与所有三类模型的组合边界由对应场景补证。
+馆长目录、零余额门禁及请求恢复、两轮图文纳入国内正式包回归，源码可按用例执行。退出与换号时的在途费用归属见 [Account 计划](account-test.md#account-change-during-runs)。运行中型号切换与三类模型的组合边界由对应场景补证。
 
 - `WB-SKILL-002-AC3`：服务与工具层由 `skill-config-and-current-partner-binding`、`user-skills` Unit 验证最终预算和回滚；`user-skill-partner-budget` 提供界面超限拒绝证据，AI 触发失败后的全部界面组合需人工验收。
 
@@ -926,7 +926,7 @@ pnpm test:update:e2e
 | `WB-SESSION-002-AC1/AC2/AC4`                                                | 部分覆盖：`partner-ui-state-isolation` 检查草稿、权限和面板隔离；加载不闪空、历史消息切换与审批恢复没有覆盖全部分支的对应断言。                                                                                                                                                                                                           |
 | `WB-SESSION-003-AC3`                                                        | 部分覆盖：`partner-create-and-name` 检查侧栏名称；顶栏与 name 一致未单独断言。                                                                                                                                                                                                                                                            |
 | `WB-SESSION-004-AC2/AC3`                                                    | 部分覆盖：`partner-delete-confirmation` 检查列表删除与浏览器销毁；回落可继续操作和伙伴磁盘目录清理未逐项断言。                                                                                                                                                                                                                            |
-| `WB-SESSION-006-AC1/AC2/AC3/AC4`                                            | 部分覆盖：`user-message-actions` 检查入口、运行中无编辑、撤回消息和附件；复制反馈、取消确认、完整草稿恢复及失败恢复待补。                                                                                                                                                                                                                 |
+| `WB-SESSION-006-AC1/AC2/AC3/AC4`                                            | `user-message-actions` 检查入口、复制反馈、运行中无编辑、取消和持久化失败后保留原草稿及消息、撤回后恢复文字、附件和参考资料。 |
 | `WB-SESSION-008-AC5/AC6`                                                    | 部分覆盖：现有偏好/面板用例未对删除 UI 快照及失效模型、引用、附件修复逐项断言。                                                                                                                                                                                                                                                           |
 | `WB-SESSION-009-AC1/AC3/AC4`                                                | 部分覆盖：`partner-pin-toggle` 验证取消后图钉不常驻；图标样式、取消后区域排序及重启持久化待补。                                                                                                                                                                                                                                           |
 | `WB-SESSION-012-AC1/AC2`                                                    | 部分覆盖：`partner-edit` 验证名称回填、伙伴数量、新形象和侧栏；形象初始回填、顶栏及消息保留缺少独立断言。                                                                                                                                                                                                                                 |

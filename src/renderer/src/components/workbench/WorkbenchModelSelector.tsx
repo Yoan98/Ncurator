@@ -1339,10 +1339,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!model) return null
 
     const priceTier = 'priceTier' in model ? model.priceTier : undefined
-    const priceNotice = managed ? t(($) => $.workbench.managedPriceNotice) : undefined
-    const intro = [model.description, priceNotice]
-      .filter(Boolean)
-      .join(' ')
     const discount = managed && discountLabel(managed.pricing.discountRate)
     const free = inspectedModel.kind === 'free'
     const unavailable =
@@ -1377,7 +1373,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           </div>
         ) : (
           <>
-            {intro && <p className="mt-1.5 leading-[18px] text-[#5F5E5A]">{intro}</p>}
+            {model.description && (
+              <p className="mt-1.5 leading-[18px] text-[#5F5E5A]">{model.description}</p>
+            )}
             {free && (
               <p className="mt-1.5 leading-[18px] text-[#9B9A97]">
                 {t(($) => $.preferences.freeNotice)}

@@ -9,10 +9,12 @@ import {
   newTestEmail,
   openAccountMenu,
   readDesktopUserNo,
+  readWebsiteWallet,
   refreshWallet,
   withAccountFixture
 } from '../../../harness/e2e/account'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { workbenchSelectors } from '../../../harness/e2e/workbench'
 
 it('independent-sessions-and-restart', async () => {
   await withAccountFixture(async (setup, service) => {
@@ -28,9 +30,14 @@ it('independent-sessions-and-restart', async () => {
       windowMode: 'visible',
       runMode: 'single',
       execute: async (runtime) => {
+        const modelNotice = runtime.page.getByTestId(
+          workbenchSelectors.llmConfigMissingNotification
+        )
+        await expect.poll(() => modelNotice.isVisible()).toBe(true)
         let web = await service.browserPage()
         const email = newTestEmail('sessions')
         await service.authorize(runtime, web, email)
+        await expect.poll(() => modelNotice.count()).toBe(0)
         web = await service.continueInBrowser(web)
         const userNo = await service.userNumber(web)
         const profile = await mkdtemp(join(tmpdir(), 'ncurator-second-session-'))
@@ -54,12 +61,14 @@ it('independent-sessions-and-restart', async () => {
           expect(await second.electronApp.evaluate(({ app }) => app.isReady())).toBe(true)
           expect(await readDesktopUserNo(runtime.page)).toBe(userNo)
           expect(await service.userNumber(web)).toBe(userNo)
-          await web.getByText('无待结算费用', { exact: true }).waitFor()
+          expect((await readWebsiteWallet(web)).settlementPending).toBe(false)
+          expect(await web.getByText('费用结算中', { exact: true }).count()).toBe(0)
+          await web.getByRole('button', { name: '账户菜单', exact: true }).click()
           const [logout] = await Promise.all([
             web.waitForResponse(
               (response) => new URL(response.url()).pathname === '/api/auth/logout'
             ),
-            web.getByRole('button', { name: '退出当前网页', exact: true }).click()
+            web.getByRole('menuitem', { name: '退出登录', exact: true }).click()
           ])
           expect(logout.status()).toBe(200)
           await web.waitForURL((url) => url.pathname === '/login', {

@@ -263,6 +263,14 @@ Settings 顶层 suite 对齐 PRD 模块：
 - How：沿用本 case 已批准的两个本地 mock 下载端点：modelscope 返回 500，huggingface-mirror 提供模型元数据与文件。使用 runner 隔离的 Electron userData 和独立临时模型目录，保留系统用户主目录。真实 UI 下载失败后确认清理目录，打开换源弹窗并核对 modelscope 为最近失败源；选择 huggingface-mirror 后取消，确认失败状态保留且未重试；再次打开并选源，确认前仍无新下载，确认后等待安装完成。
 - Oracle：失败提示、换源入口与最近失败源标记正确，对齐 `SET-VECTOR-003-AC2/AC3/AC4`；取消后失败状态保留、确认前始终只有第一次下载请求，对齐 `SET-VECTOR-003-AC5/AC6`；确认后第二次 downloadModel 携带 huggingface-mirror 并完成安装，失败目录已清理。
 
+#### `remote-vector-rebuild-recovery`
+
+- 测试类型：`e2e`
+- What：远程向量索引重建失败、取消和中途重启后的恢复。
+- Why：新配置的索引未完整生成时，必须保留原索引并准确报告待重建状态。
+- How：从设置页切换真实工作区的嵌入配置，以回环向量服务控制错误和阻塞响应。通过实际界面重试、取消、重启应用及重新完成重建。
+- Oracle：失败、取消和重启期间保留失效状态，重启后可手动重建。成功重建后文件状态恢复且待重建数量归零，对齐 `SET-VECTOR-007-AC5/AC6` 的文件路径。
+
 ### 3.6 `general`
 
 #### `language-and-service-route`
@@ -319,7 +327,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 | 验收                                                                       | 当前证据与缺口                                                                                                                                                                                                                                                                                             |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SET-VECTOR-001-AC3`、`SET-VECTOR-005`、`SET-VECTOR-006`、`SET-VECTOR-007` | `vector-model-catalog-load` 覆盖同页分类、远程配置、预算、Key 投影，以及本地真实索引切换后的失效提示、待重建数量、仅导航、可点的深色重建按钮和完整切回。连接测试、跨应用重启和真实远程手动重建 UI 仍待补；Unit `embedding-service`、`sqlite-storage` 补充运行中保护、真实存储和取消，模拟 HTTP 不计 live。 |
+| `SET-VECTOR-001-AC3`、`SET-VECTOR-005`、`SET-VECTOR-006`、`SET-VECTOR-007` | `vector-model-catalog-load` 覆盖配置、预算和切换后待重建状态。`remote-vector-rebuild-recovery` 以回环向量服务覆盖实际文件重建、失败、取消与进程重启。生产远程服务及网页重建另按发布前真实检查验证。 |
 | `SET-VECTOR-005-AC2`                                                       | UI 待补：连接测试的成功维度、鉴权／网络／响应错误，以及测试不保存不选择。Unit `embedding-service` 仅提供执行器和配置边界证据，不能计为真实服务或 UI 验收。                                                                                                                                                 |
 | `SET-VECTOR-001-AC2`、`SET-VECTOR-004-AC2/AC7`                             | 待补：目录加载失败、删除失败、删除后再次完整下载没有对应 E2E。                                                                                                                                                                                                                                             |
 | `SET-VECTOR-002-AC1`                                                       | 部分覆盖：`tests/case/unit/knowledge/vector/vector-download-service-contract.test.ts` 检验下载互斥；其他模型按钮禁用缺少 UI 断言。                                                                                                                                                                         |

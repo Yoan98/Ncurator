@@ -40,6 +40,7 @@
 
 核对prd文档的每项功能与对应测试计划，对应测试代码是否对齐，如prd的workbench的每个功能点是要对应上test-plan下的workbench的每个测试点的。
 
+- [ ] Account
 - [ ] Settings
 - [ ] Workbench
 - [ ] AI 产品相关验收若落在 PRD，同样核对；
