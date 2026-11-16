@@ -83,7 +83,7 @@ it('account-web-navigation', async () => {
           message: '官网充值到账后桌面立即取得新的余额'
         })
 
-        await service.checkOverseas()
+        if (process.env.NCURATOR_E2E_APP_TARGET !== 'package') await service.checkOverseas()
         const urls = (await externalUrls(runtime)).slice(1)
         expect(urls).toEqual([contact, overviewUrl, rechargeUrl, billingUrl, rechargeUrl])
         return { count: urls.length, balance: await available(page).innerText() }

@@ -53,6 +53,7 @@ it(
           caseId: 'managed-image-conversation',
           domain: 'workbench',
           suite: 'conversation',
+          groups: ['provider-matrix'],
           description: '使用真实馆长模型连续读两张图片，核对图片顺序和实际费用。',
           fixtures: [],
           serviceMode: 'real',

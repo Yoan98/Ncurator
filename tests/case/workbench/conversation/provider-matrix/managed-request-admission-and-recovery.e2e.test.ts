@@ -29,6 +29,7 @@ it('managed-request-admission-and-recovery', async () => {
       caseId: 'managed-request-admission-and-recovery',
       domain: 'workbench',
       suite: 'conversation',
+      groups: ['provider-matrix'],
       description: '真实桌面验证零余额、停止已受理请求和原请求结果恢复。',
       fixtures: [],
       serviceMode: 'real',

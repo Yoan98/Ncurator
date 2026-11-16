@@ -26,6 +26,7 @@ it('managed-model-catalog', async () => {
       caseId: 'managed-model-catalog',
       domain: 'workbench',
       suite: 'conversation',
+      groups: ['provider-matrix'],
       description: '核对馆长目录的登录边界、动态折扣、启停和选择保留。',
       fixtures: [],
       serviceMode: 'real',
