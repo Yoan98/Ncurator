@@ -15,7 +15,7 @@ import {
   WEB_INGEST_TIMEOUT_MS
 } from '../../utils/constant'
 
-export const SUPPORTED_LOCAL_FILE_EXTENSIONS = [
+const SUPPORTED_LOCAL_FILE_EXTENSIONS = [
   '.pdf',
   '.doc',
   '.docx',
@@ -80,7 +80,7 @@ const extractSpreadsheetMetadata = async (
 export const isSupportedLocalFilePath = (filePath: string): boolean =>
   SUPPORTED_LOCAL_FILE_EXTENSION_SET.has(path.extname(filePath).toLowerCase())
 
-export const isSupportedTextFilePath = (filePath: string): boolean =>
+const isSupportedTextFilePath = (filePath: string): boolean =>
   SUPPORTED_TEXT_FILE_EXTENSION_SET.has(path.extname(filePath).toLowerCase())
 
 export type ProcessFileResult = {

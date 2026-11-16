@@ -37,7 +37,7 @@ export const isInternalBrowserErrorUrl = (url: string): boolean => {
   return value.startsWith('chrome-error://') || value.startsWith('chrome://')
 }
 
-export const NET_ERROR_ABORTED_CODE = -3
+const NET_ERROR_ABORTED_CODE = -3
 
 const NET_ERROR_CODE_NAMES: Record<number, string> = {
   [NET_ERROR_ABORTED_CODE]: 'ERR_ABORTED',

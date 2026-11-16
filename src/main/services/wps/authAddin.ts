@@ -35,7 +35,7 @@ const namesToRewrite = (): Set<string> => new Set([WPS_ADDON_NAME, ...WPS_ADDON_
 const normalizeAddonLoopbackUrl = (addonUrl: string): string =>
   addonUrl.endsWith('/') ? addonUrl : `${addonUrl}/`
 
-export const addonUrlsEquivalent = (left: string, right: string): boolean =>
+const addonUrlsEquivalent = (left: string, right: string): boolean =>
   left.trim().replace(/\/+$/, '').toLowerCase() === right.trim().replace(/\/+$/, '').toLowerCase()
 
 const eachAddonAuthEntry = (raw: string, visit: (entry: AuthEntry) => void): boolean => {

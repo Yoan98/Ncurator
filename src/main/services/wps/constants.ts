@@ -1,5 +1,5 @@
 export const WPS_ADDON_NAME = 'ncurator-sync'
-export const WPS_ADDON_VERSION = '1.0.0'
+const WPS_ADDON_VERSION = '1.0.0'
 export const WPS_ADDON_DIR_NAME = `${WPS_ADDON_NAME}_${WPS_ADDON_VERSION}`
 export const WPS_ADDON_LEGACY_NAMES = ['ncuratorsyncpoc']
 export const WPS_ADDON_HOSTS = ['wps', 'et', 'wpp'] as const
