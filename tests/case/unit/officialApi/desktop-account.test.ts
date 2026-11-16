@@ -116,9 +116,10 @@ it('reads managed pricing with the active account and drops a response delivered
   const late = Promise.withResolvers<Response>()
   const started = Promise.withResolvers<void>()
   const rates = { input: '2.000000000000', cachedInput: null, output: '4.000000000000' }
-  const response = (discountRate: string) => Response.json({ protocolVersion: 1, models: [{
+  const response = (discountRate: string, priceTier?: 'low' | null) => Response.json({ protocolVersion: 1, models: [{
     id: '9007199254740995', kind: 'managed', label: 'Fixture DeepSeek', description: 'Public description',
     capabilities: ['text'], iconUrl: 'https://www.guanzhangai.cn/llm/guanzhang.png',
+    priceTier,
     modelName: 'private-fixture-id', providerId: 'private-fixture-provider',
     pricing: { discountRate, referenceSource: 'private-fixture-reference', allDay: {
       reference: rates, sale: rates
@@ -132,8 +133,8 @@ it('reads managed pricing with the active account and drops a response delivered
     expect(headers.get('authorization')).toMatch(/^Bearer access\.part\./)
     expect(headers.get('x-ncurator-signature')).toMatch(/^[0-9a-f]{64}$/)
     requests++
-    if (requests === 1) return response('0.750000')
-    if (requests === 2) return response('0.820000')
+    if (requests === 1) return response('0.750000', 'low')
+    if (requests === 2) return response('0.820000', null)
     started.resolve()
     return late.promise
   }))
@@ -142,9 +143,14 @@ it('reads managed pricing with the active account and drops a response delivered
     expect(requests).toBe(0)
     await fixture.login()
     const first = await readManagedModels(fixture.account)
-    expect(first).toMatchObject({ status: 'ready', models: [{ id: '9007199254740995', pricing: { discountRate: '0.75' } }] })
+    expect(first).toMatchObject({ status: 'ready', models: [{
+      id: '9007199254740995', description: 'Public description', priceTier: 'low',
+      pricing: { discountRate: '0.75' }
+    }] })
     expect(JSON.stringify(first)).not.toContain('private-fixture')
-    expect(await readManagedModels(fixture.account)).toMatchObject({ status: 'ready', models: [{ pricing: { discountRate: '0.82' } }] })
+    const refreshed = await readManagedModels(fixture.account)
+    expect(refreshed).toMatchObject({ status: 'ready', models: [{ pricing: { discountRate: '0.82' } }] })
+    if (refreshed.status === 'ready') expect(refreshed.models[0]).not.toHaveProperty('priceTier')
     const previous = readManagedModels(fixture.account)
     await started.promise
     await fixture.account.logout()

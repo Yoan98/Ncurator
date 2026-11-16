@@ -1,4 +1,5 @@
 import { officialUrl } from './appPreferences'
+import type { LlmPriceTier } from './llmPresets'
 
 export const MANAGED_MODELS_GET = 'desktop-account:managed-models'
 export const MANAGED_MODELS_PATH = '/api/v1/managed-models'
@@ -33,6 +34,7 @@ export type ManagedModel = {
   description: string | null
   capabilities: ('text' | 'vision')[]
   iconUrl: string
+  priceTier?: LlmPriceTier
   pricing: Pricing
 }
 export type ManagedModelsResult =
@@ -82,7 +84,7 @@ export function parseManagedModels(value: unknown): ManagedModel[] {
   if (protocolVersion !== 1 || !Array.isArray(models)) throw new Error('Invalid managed model catalog')
   const ids = new Set<string>()
   return models.map(value => {
-    const { id, kind, label, description, capabilities, iconUrl, pricing } = record(value)
+    const { id, kind, label, description, capabilities, iconUrl, priceTier, pricing } = record(value)
     if (!validId(id) || ids.has(id) || kind !== 'managed' || typeof label !== 'string' || !label.trim() ||
       (description !== null && typeof description !== 'string') || !Array.isArray(capabilities) ||
       !capabilities.every(item => item === 'text' || item === 'vision') || typeof iconUrl !== 'string' ||
@@ -96,6 +98,10 @@ export function parseManagedModels(value: unknown): ManagedModel[] {
     const publicPrice = price.allDay
       ? { discountRate, allDay: period(price.allDay) }
       : { discountRate, offPeak: period(price.offPeak), peak: period(price.peak), timeRule: schedule(price.timeRule) }
-    return { id, label, description, capabilities, iconUrl, pricing: publicPrice }
+    return {
+      id, label, description, capabilities, iconUrl,
+      ...(priceTier === 'low' || priceTier === 'mid' || priceTier === 'high' ? { priceTier } : {}),
+      pricing: publicPrice
+    }
   })
 }

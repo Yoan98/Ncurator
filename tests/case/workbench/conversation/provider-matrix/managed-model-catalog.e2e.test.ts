@@ -64,7 +64,6 @@ it('managed-model-catalog', async () => {
         await option.getByText(/7\.5\s*折/u).waitFor()
         await option.hover()
         await inspector.getByText('馆长余额', { exact: true }).waitFor()
-        await inspector.getByText('价格档位', { exact: true }).waitFor()
         await inspector.getByText(/折扣随.+官方定价动态调整/u).waitFor()
         await inspector.getByText(/7\.5\s*折/u).waitFor()
         expect(await inspector.getByText(/百万 Token|参考价|峰时|谷时/u).count()).toBe(0)
@@ -82,6 +81,16 @@ it('managed-model-catalog', async () => {
           .getByRole('button', { name: '确认保存', exact: true })
           .click()
         await admin.getByText('新售价已保存。', { exact: true }).waitFor()
+        await admin.getByLabel('费用档位', { exact: true }).click()
+        await admin.locator('.ant-select-dropdown:visible').getByText('低', { exact: true }).click()
+        const description = '馆长目录条目的公开简介'
+        const descriptionField = admin.getByLabel('模型说明', { exact: true })
+        if (!(await descriptionField.isVisible())) {
+          await admin.getByText('更多设置', { exact: true }).click()
+        }
+        await descriptionField.fill(description)
+        await admin.getByRole('button', { name: '保存模型', exact: true }).click()
+        await admin.getByText('配置已保存。', { exact: true }).waitFor()
 
         await picker.click()
         await refresh.click()
@@ -89,6 +98,9 @@ it('managed-model-catalog', async () => {
         expect(await option.getAttribute('aria-selected')).toBe('true')
         await option.hover()
         await inspector.getByText(/8\s*折/u).waitFor()
+        await inspector.getByText(description, { exact: false }).waitFor()
+        await inspector.getByText('价格档位', { exact: true }).waitFor()
+        await inspector.getByText('较低', { exact: true }).waitFor()
         await page.keyboard.press('Escape')
         await service.recharge(web)
         await picker.getByText(modelName, { exact: true }).waitFor()

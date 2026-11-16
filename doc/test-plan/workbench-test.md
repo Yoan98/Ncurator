@@ -242,8 +242,8 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：馆长目录登录边界、选择保持、动态折扣及公开信息展示。
 - Why：登录或充值后自动改模型、旧账号缓存及采购信息泄漏会造成误收费或隐私问题。
-- How：使用独立 Account 测试服务的馆长目录联调配置，按需执行 `pnpm test:e2e:source --case managed-model-catalog`。在真实桌面核对未登录引导，网页登录授权后以零余额打开馆长详情。经管理网页修改售价并在桌面刷新，随后显式选中条目、通过测试渠道充值、停用条目，再退出并以另一账号授权。选中免费与个人连接时的登录状态变化由 Account 的 `anonymous-existing-usage` 回归，复杂时段和数据输出由官网目录接口及管理 E2E 验证。
-- Oracle：登录前显示单行优惠入口，零余额可读馆长目录，登录、充值、刷新及失效不换型号或计费方式，旧账号受保护目录不再展示，覆盖 `WB-COMPOSER-007-AC20`。列表与侧栏的折扣随目录同步更新，侧栏显示馆长余额、价格档位和动态调整说明，省略单价、分时明细及采购信息，覆盖 `WB-COMPOSER-007-AC21`，并补充 `WB-COMPOSER-007-AC2/AC3` 的馆长区域。每次调用返回的费用与当前目录展示分别核对。
+- How：使用独立 Account 测试服务的馆长目录联调配置，按需执行 `pnpm test:e2e:source --case managed-model-catalog`。在真实桌面核对未登录引导，网页登录授权后以零余额打开馆长详情。经管理网页修改馆长条目的简介、价格档位和售价，在桌面刷新核对变化，随后显式选中条目、通过测试渠道充值、停用条目，再退出并以另一账号授权。选中免费与个人连接时的登录状态变化由 Account 的 `anonymous-existing-usage` 回归，复杂时段和数据输出由官网目录接口及管理 E2E 验证。
+- Oracle：登录前显示单行优惠入口，零余额可读馆长目录，登录、充值、刷新及失效不换型号或计费方式，旧账号受保护目录不再展示，覆盖 `WB-COMPOSER-007-AC20`。列表与侧栏的折扣随目录同步更新，侧栏显示馆长余额、当前条目的简介、动态调整说明及已配置的价格档位，省略单价、分时明细及采购信息，覆盖 `WB-COMPOSER-007-AC21`，并补充 `WB-COMPOSER-007-AC2/AC3` 的馆长区域。每次调用返回的费用与当前目录展示分别核对。
 - `desktop-account.test.ts` 中的 `reads managed pricing with the active account and drops a response delivered after account change` 补证目录签名、折扣更新、公开字段投影和旧账号响应隔离。
 
 #### `managed-image-conversation`

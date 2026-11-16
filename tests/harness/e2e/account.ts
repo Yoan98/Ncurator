@@ -508,7 +508,7 @@ export async function withAccountFixture(
           await page.waitForURL((url) => url.pathname === '/login')
           expect(new URL(page.url()).searchParams.get('returnTo')).toBe(new URL(target).pathname)
           await page.getByLabel('邮箱', { exact: true }).fill(email)
-          await page.getByRole('button', { name: '获取邮箱验证码', exact: true }).click()
+          await page.getByRole('button', { name: /^(继续|获取邮箱验证码)$/u }).click()
           await page.getByLabel('图片验证码', { exact: true }).fill('abcde')
           const [sent] = await Promise.all([
             page.waitForResponse((response) => response.url() === api + '/api/auth/email/send'),

@@ -1338,25 +1338,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     const model = inspectedModel.kind === 'managed' ? managed : inspectedModel.model
     if (!model) return null
 
-    // Match the public display metadata only. Selection and billing use the entry's own identity.
-    const matchingPresets = managed
-      ? presetProviders.flatMap((provider) =>
-          provider.models
-            .filter((preset) => preset.label === managed.label.trim())
-            .map((preset) => ({ provider, preset }))
-        )
-      : []
-    const matched = matchingPresets.length === 1 ? matchingPresets[0] : undefined
-    const priceTier =
-      inspectedModel.kind === 'preset' ? inspectedModel.model.priceTier : matched?.preset.priceTier
-    const providerName =
-      matched && providerDisplayName(matched.provider.providerId, matched.provider.label)
-    const priceNotice = managed
-      ? providerName
-        ? t(($) => $.workbench.managedPriceNotice, { provider: providerName })
-        : t(($) => $.workbench.managedPriceNoticeGeneric)
-      : undefined
-    const intro = [matched?.preset.description || model.description, priceNotice]
+    const priceTier = 'priceTier' in model ? model.priceTier : undefined
+    const priceNotice = managed ? t(($) => $.workbench.managedPriceNotice) : undefined
+    const intro = [model.description, priceNotice]
       .filter(Boolean)
       .join(' ')
     const discount = managed && discountLabel(managed.pricing.discountRate)
@@ -1400,20 +1384,20 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               </p>
             )}
             <dl className="mt-2.5 border-t border-[#EEEEEC] pt-2.5">
-              <ModelInspectorDetail label={t(($) => $.workbench.priceTier2)}>
-                {priceTier ? (
-                  <>
-                    <span aria-hidden="true" className="flex items-center">
-                      <PriceTierCoins tier={priceTier} />
-                    </span>
-                    {priceTierLabel(priceTier)}
-                  </>
-                ) : free ? (
-                  t(($) => $.preferences.free)
-                ) : (
-                  '—'
-                )}
-              </ModelInspectorDetail>
+              {(priceTier || free) && (
+                <ModelInspectorDetail label={t(($) => $.workbench.priceTier2)}>
+                  {priceTier ? (
+                    <>
+                      <span aria-hidden="true" className="flex items-center">
+                        <PriceTierCoins tier={priceTier} />
+                      </span>
+                      {priceTierLabel(priceTier)}
+                    </>
+                  ) : (
+                    t(($) => $.preferences.free)
+                  )}
+                </ModelInspectorDetail>
+              )}
               <ModelInspectorDetail label={t(($) => $.workbench.vision)}>
                 {model.capabilities.includes('vision')
                   ? t(($) => $.workbench.supported)
