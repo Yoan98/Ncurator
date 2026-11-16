@@ -71,7 +71,7 @@ tests/case/workbench/
     message/
     scope/
     prefix-cache/      # 跨 run 前缀缓存
-    provider-matrix/   # 独立连通性冒烟，仅专用命令或显式 --case 执行
+    provider-matrix/   # 馆长目录、图文发版回归及独立连通性冒烟
   run/
     process/
     blocker/

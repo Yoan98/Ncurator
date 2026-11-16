@@ -20,7 +20,21 @@
 
 ### 执行
 
-在启动测试的终端设置 `NCURATOR_ACCOUNT_E2E_FIXTURE`，指向本轮隔离账号服务生成的描述文件。源码用 `pnpm test:e2e:source --domain account`，也可以用 `--case` 精确选择。国内正式包回归复用同一隔离服务，通过[候选包发布流程](../deploy/release.md#22-影响评估)执行。图文用例另用 `NCURATOR_ACCOUNT_VISION_E2E_FIXTURE` 指向允许调用实际馆长上游的描述文件。两个描述文件只在测试服务存续期间有效。
+**隔离源码回归。** 将 `NCURATOR_ACCOUNT_E2E_FIXTURE` 指向本轮仍在运行的隔离账号服务生成的描述文件。用 `--case` 选要回归的用例。下列命令执行账号、授权、换号、余额和网页跳转的八条隔离用例。
+
+```bash
+pnpm test:e2e:source --domain account \
+  --case account-menu-and-page --case account-web-navigation \
+  --case balance-refresh-and-ordering --case balance-display-and-funds-state \
+  --case independent-sessions-and-restart --case browser-login-outcomes \
+  --case account-change-during-runs --case account-change-pending-child
+```
+
+**免登录真实模型。** 用 `NCURATOR_ACCOUNT_E2E_PROFILE=node-one-free-live` 启动隔离账号服务，再将对应描述文件传给 `NCURATOR_ACCOUNT_E2E_FIXTURE`，执行 `pnpm test:e2e:source --case anonymous-existing-usage`。模型和授权要求见[真实模型与自动化覆盖边界](#4-真实模型与自动化覆盖边界)。
+
+**馆长图文。** 将 `NCURATOR_ACCOUNT_VISION_E2E_FIXTURE` 指向允许调用真实馆长模型的隔离服务描述文件，执行 `pnpm test:e2e:source --case managed-image-conversation`。验证范围见 [Workbench 馆长图文用例](workbench-test.md#managed-image-conversation)。
+
+**国内正式包。** 准备普通和图文两套隔离服务，按[候选包发布流程](../deploy/release.md#22-影响评估)执行。完整发版回归自动选中账号与馆长模型必验用例，按影响评估分批执行时需补齐同一制品的通过证据。
 
 ## 3. 回归清单
 
@@ -104,15 +118,15 @@
 - How：从菜单打开账户概览、充值及账单，在系统浏览器调用边界核对公开地址。从菜单打开帮助，核对当前语言的联系页。无网页会话时分别登录并检查原页面回跳，验证网页可使用不同于桌面的账号。打开充值后返回桌面，核对一次即时余额读取。检查桌面无退款入口、与网页会话 API 的用户编号一致，并用海外发行配置确认无国内账号及资金入口。海外入口使用现有源码发行配置验证，安装包发行标记另按包验收。
 - Oracle：目标和打开方式正确，不带桌面凭证、不假定网页登录，覆盖 `ACC-WEB-001-AC1/AC2`；桌面无退款入口、编号与官网一致，海外不展示国内资金能力，覆盖 `ACC-WEB-001-AC3/AC4`。
 
-## 4. 执行与自动化覆盖边界
+## 4. 真实模型与自动化覆盖边界
 
-菜单、余额与网页跳转的源码回归使用独立的回环测试服务。将该服务生成的测试描述文件路径设为 `NCURATOR_ACCOUNT_E2E_FIXTURE`，运行 `pnpm test:e2e:source --domain account --case account-menu-and-page --case account-web-navigation --case balance-refresh-and-ordering --case balance-display-and-funds-state --case independent-sessions-and-restart --case browser-login-outcomes`。隔离浏览器按桌面给出的地址操作，回跳与回到窗口的焦点事件由测试交给应用入口，后续处理走实际 Main、IPC、凭据存储和 UI。系统默认浏览器、真实焦点切换及安装协议关联由安装包验收。
+隔离源码回归中，浏览器按桌面给出的地址操作，回跳和焦点事件由测试交给应用入口，业务处理走实际 Main、IPC、凭据存储和 UI。系统默认浏览器、实际焦点切换和协议关联由安装包验收。
 
-`anonymous-existing-usage` 的节点验收只运行真实上游的 16 次矩阵：个人自定义经已授权的本机订阅代理使用 `gpt-6-luna`，平台免费专项使用现有产品目录中的智谱 `glm-4.7-flash` 或 `glm-4-flash-250414`。免费服务用 `NCURATOR_ACCOUNT_E2E_FREE_MODEL` 显式选定本轮型号，默认前者，不自动回退；执行前复核零价条件，复用已有个人智谱测试凭据。账号、钱包和授权复用既有隔离 PG／Fastify／受控邮件；两条模型回复与用量来自真实供应商，不使用固定回复或填补缺失 usage。新增模拟矩阵暂停，其历史结果不作为节点验收。
+`anonymous-existing-usage` 的 16 次调用均使用真实上游。个人自定义经已授权的本机订阅代理使用 `gpt-6-luna`，免费路径使用目录中的 `glm-4.7-flash` 或 `glm-4-flash-250414`。用 `NCURATOR_ACCOUNT_E2E_FREE_MODEL` 选择免费型号，默认 `glm-4.7-flash`，执行前核对零价条件。账号、钱包和授权使用隔离服务，回复及用量采用上游实际结果。
 
-执行真实矩阵时，隔离服务显式选 `NCURATOR_ACCOUNT_E2E_PROFILE=node-one-free-live`，免费 Key 只注入服务内存；桌面读取已有 custom live 配置，真实查询本机代理的模型列表并通过 UI 保存个人连接。控制描述位于 OS 私有临时目录并保持 0600；桌面使用同一 `NCURATOR_ACCOUNT_E2E_FIXTURE` 执行 `pnpm test:e2e:source --domain account --case anonymous-existing-usage`。测试资料和消息不含秘密。只记录阶段、发送 ID、状态、固定错误码、公开源码坐标、字节／时长及不变量，保留必要脱敏诊断，不保存完整凭据或原始认证报文。既有本机代理按其当前遮罩规则运行，不改共享配置，不读取／清理已有日志，不作绝对零风险承诺。网页登录有效时比较正式 usage／funds 返回，封禁后按权限拒绝，另以正式管理列表／钱包概要核对，不能将拒绝视为空账单。
+免费 Key 仅注入隔离服务内存。桌面使用本机已配置的 custom live 连接，通过模型列表和 UI 保存连接。控制描述保存在权限为 `0600` 的私有临时文件，测试仅留脱敏诊断。网页登录有效时比较正式 usage／funds，封禁后验证权限拒绝，再用管理查询核对资金事实。
 
-一条路径受阻时，可显式设 `NCURATOR_ACCOUNT_E2E_FAMILY=custom` 或 `free` 独立执行另一条尚未完成的八组；不调用对侧模型、不填模拟结果，只形成对应分支证据，不能据八次部分通过宣称完整矩阵完成。失败的已消费许可不自动补发，保留累计请求及失败证据，根据原因和实际可用性人工恢复，避免高频盲重试；不以自设累计次数上限阻止已授权的正常验证，已独审通过的分支不重跑。
+可设 `NCURATOR_ACCOUNT_E2E_FAMILY=custom` 或 `free` 仅执行一条路径的八组，结果只覆盖该路径。失败时保留实际请求和错误证据，按原因决定是否复跑。
 
 该 profile 逐次发放一次推理许可，免费／自定义各最多八次，异常、超时或关闭撤销后续许可；输入最多 64 KiB，流式累计到 16 KiB 立即中止，单次 30 秒、整例 10 分钟；禁止工具执行、重试、回退及额外探测。GPT 路径以已批准的字节／时限约束执行，不冒充实际生成 token 或费用硬限；免费参数硬限 256 token。该例从创建 context 起不启用 trace／HAR／视频／DOM snapshots，避免凭据表单进入产物；用脱敏状态、源码坐标和计数排查，临时产品凭据按正常流程保存于私有用户目录，收尾整体销毁。真实缺失 usage 保持缺失，不调整产品压缩行为。
 
@@ -134,4 +148,4 @@
 
 开发联调使用 `pnpm dev` 和支持本机回跳的国内授权服务，从系统浏览器完成登录。在同一台机器上保留安装包并分别发起授权，检查各自登录状态和退出范围，以及开发版重复授权、取消或退出后旧端口释放，补证 `ACC-LOGIN-001-AC5`。
 
-真实渠道待验证：实际邮箱与微信登录、真实充值到账后回桌面及余额刷新，补证 `ACC-LOGIN-001-AC2`、`ACC-BALANCE-002-AC3`。
+真实渠道验收记录邮箱及微信登录，以及充值到账回桌面后的余额刷新，对应 `ACC-LOGIN-001-AC2`、`ACC-BALANCE-002-AC3`。按候选影响范围沿用已有渠道回执或补充验证。
