@@ -64,11 +64,24 @@ import {
 } from '../../../../src/main/services/wps/wpsOfficeLaunch'
 import {
   WpsOpenDocumentRegistry,
-  WpsSyncService
+  WpsSyncService,
+  type WpsSyncServiceOptions
 } from '../../../../src/main/services/wps/WpsSyncService'
 
 const temporaryDirectories: string[] = []
 const services: WpsSyncService[] = []
+
+const createSyncService = (options: WpsSyncServiceOptions): WpsSyncService => {
+  const service = new WpsSyncService({
+    installer: {
+      install: async () => ({ installed: false }),
+      writePort: async () => undefined
+    },
+    ...options
+  })
+  services.push(service)
+  return service
+}
 
 const createTempDir = async (prefix: string): Promise<string> => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), prefix))
@@ -549,12 +562,11 @@ describe('WpsSyncService', () => {
   it('hands atomically replaced macOS documents to WPS without calling the native Open API', async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: 0
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()!
     const stream = readSseEvents(port, 'et')
@@ -586,7 +598,7 @@ describe('WpsSyncService', () => {
     openPath.mockRestore()
   })
   it('skips listening when WPS is not installed', async () => {
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       installer: {
@@ -594,14 +606,13 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     expect(service.getPort()).toBeUndefined()
   })
 
   it('closes an open document then opens it after write', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -610,7 +621,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()
     expect(port).toBeTruthy()
@@ -656,7 +666,7 @@ describe('WpsSyncService', () => {
 
   it('treats add-in disconnect during close as released', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -665,7 +675,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()
     expect(port).toBeTruthy()
@@ -686,7 +695,7 @@ describe('WpsSyncService', () => {
 
   it('refuses to write when the add-in reports the close failed', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -695,7 +704,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort() as number
 
@@ -729,7 +737,7 @@ describe('WpsSyncService', () => {
   it('sends close and open only to the add-in instance holding the document', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -738,7 +746,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort() as number
 
@@ -794,7 +801,7 @@ describe('WpsSyncService', () => {
 
   it('drops an instance documents when its stream disconnects', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -803,7 +810,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort() as number
 
@@ -824,7 +830,7 @@ describe('WpsSyncService', () => {
   it('flushes a pending excerpt when the add-in reconnects after last-document close', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -833,7 +839,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()
     expect(port).toBeTruthy()
@@ -885,7 +890,7 @@ describe('WpsSyncService', () => {
   it('reopens through the system when the closed document was the last of its component', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -894,7 +899,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()
     expect(port).toBeTruthy()
@@ -941,7 +945,7 @@ describe('WpsSyncService', () => {
   it('keeps using the add-in when a placeholder document held the component alive', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -950,7 +954,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort() as number
 
@@ -987,7 +990,7 @@ describe('WpsSyncService', () => {
   it('falls back to the system open when the add-in reports the open failed', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -996,7 +999,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()
     expect(port).toBeTruthy()
@@ -1041,7 +1043,7 @@ describe('WpsSyncService', () => {
 
   it('registers a successful reload-result so the next close can find the document', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -1050,7 +1052,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()
     expect(port).toBeTruthy()
@@ -1074,7 +1075,7 @@ describe('WpsSyncService', () => {
 
   it('sends open only to the matching office component', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -1083,7 +1084,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()
     expect(port).toBeTruthy()
@@ -1111,7 +1111,7 @@ describe('WpsSyncService', () => {
   it('broadcasts open to connected add-ins after an office file write', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     let writtenPort: number | undefined
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -1122,7 +1122,6 @@ describe('WpsSyncService', () => {
         }
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()
     expect(port).toBeTruthy()
@@ -1150,7 +1149,7 @@ describe('WpsSyncService', () => {
 
   it('records dispatches on GET /status even without connected add-ins', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: 0,
@@ -1159,7 +1158,6 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()
     expect(port).toBeTruthy()
@@ -1207,13 +1205,12 @@ describe('WpsSyncService', () => {
   it('starts the loopback server without installing when skipInstall is set', async () => {
     const install = vi.fn(async () => ({ installed: false as const }))
     const writePort = vi.fn(async () => undefined)
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: 0,
       installer: { install, writePort }
     })
-    services.push(service)
     await service.start()
     expect(service.getPort()).toBeTruthy()
     expect(install).not.toHaveBeenCalled()
@@ -1236,7 +1233,7 @@ describe('WpsSyncService', () => {
   })
 
   it('starts a fallback observer server and restores the live preferred port on stop', async () => {
-    const first = new WpsSyncService({
+    const first = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: 0,
@@ -1245,13 +1242,12 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(first)
     await first.start()
     const livePort = first.getPort()
     expect(livePort).toBeTruthy()
 
     const writePort = vi.fn(async () => undefined)
-    const second = new WpsSyncService({
+    const second = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: livePort,
@@ -1260,7 +1256,6 @@ describe('WpsSyncService', () => {
         writePort
       }
     })
-    services.push(second)
     await second.start()
     const fallbackPort = second.getPort()
     expect(fallbackPort).toBeTruthy()
@@ -1275,7 +1270,7 @@ describe('WpsSyncService', () => {
   })
 
   it('does not bind a fallback when a production instance finds the preferred port already serving', async () => {
-    const first = new WpsSyncService({
+    const first = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: 0,
@@ -1284,13 +1279,12 @@ describe('WpsSyncService', () => {
         writePort: async () => undefined
       }
     })
-    services.push(first)
     await first.start()
     const livePort = first.getPort()
     expect(livePort).toBeTruthy()
 
     const writePort = vi.fn(async () => undefined)
-    const second = new WpsSyncService({
+    const second = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: false,
       preferredPort: livePort,
@@ -1299,7 +1293,6 @@ describe('WpsSyncService', () => {
         writePort
       }
     })
-    services.push(second)
     await second.start()
     expect(second.getPort()).toBeUndefined()
     expect(writePort).toHaveBeenCalledWith(livePort)
@@ -1308,12 +1301,11 @@ describe('WpsSyncService', () => {
 
 describe('WPS review navigation', () => {
   it('routes a separate navigate command to the document owner and correlates the acknowledgement', async () => {
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: 0
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()!
     const owner = readSseEvents(port, 'wps', 'review-owner'),
@@ -1986,13 +1978,12 @@ describe('WPS integration feedback', () => {
     let availability: WpsAddonAvailability = 'disabled'
     const notices: WpsIntegrationNotice[] = []
     const readAvailability = vi.fn(async () => availability)
-    const service = new WpsSyncService({
+    const service = createSyncService({
       skipInstall: true,
       preferredPort: 0,
       readAvailability,
       onNotice: (notice) => notices.push(notice)
     })
-    services.push(service)
     await service.start()
     const owner = readSseEvents(service.getPort()!, 'wps', 'recovery-owner')
     await waitFor(() => owner.events.length > 0)
@@ -2032,13 +2023,12 @@ describe('WPS integration feedback', () => {
   it('requires the matching component connection before announcing recovery', async () => {
     let availability: WpsAddonAvailability = 'disabled'
     const notices: WpsIntegrationNotice[] = []
-    const service = new WpsSyncService({
+    const service = createSyncService({
       skipInstall: true,
       preferredPort: 0,
       readAvailability: async () => availability,
       onNotice: (notice) => notices.push(notice)
     })
-    services.push(service)
     await service.start()
     vi.useFakeTimers()
     try {
@@ -2069,13 +2059,12 @@ describe('WPS integration feedback', () => {
       wpp: 'disabled'
     }
     const notices: WpsIntegrationNotice[] = []
-    const service = new WpsSyncService({
+    const service = createSyncService({
       skipInstall: true,
       preferredPort: 0,
       readAvailability: async (host) => availability[host],
       onNotice: (notice) => notices.push(notice)
     })
-    services.push(service)
     await service.start()
     const word = readSseEvents(service.getPort()!, 'wps', 'word-isolation')
     const excel = readSseEvents(service.getPort()!, 'et', 'excel-isolation')
@@ -2104,13 +2093,12 @@ describe('WPS integration feedback', () => {
 
   it('respects explicit disable even when an old client is still connected', async () => {
     const notices: object[] = []
-    const service = new WpsSyncService({
+    const service = createSyncService({
       skipInstall: true,
       preferredPort: 0,
       readAvailability: async () => 'disabled',
       onNotice: (notice) => notices.push(notice)
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()!,
       owner = readSseEvents(port, 'wps', 'disabled-owner')
@@ -2146,13 +2134,12 @@ describe('WPS integration feedback', () => {
     'does not mistake a different connected component for %s Word availability',
     async (availability) => {
       const notices: object[] = []
-      const service = new WpsSyncService({
+      const service = createSyncService({
         skipInstall: true,
         preferredPort: 0,
         readAvailability: async () => availability,
         onNotice: (notice) => notices.push(notice)
       })
-      services.push(service)
       await service.start()
       const port = service.getPort()!,
         excel = readSseEvents(port, 'et', 'only-excel')
@@ -2182,13 +2169,12 @@ describe('WPS integration feedback', () => {
 describe('WPS refresh failure reporting', () => {
   it('reports a known-open document whose reload cannot be confirmed, without blaming authorization', async () => {
     const notices: object[] = []
-    const service = new WpsSyncService({
+    const service = createSyncService({
       skipInstall: true,
       preferredPort: 0,
       readAvailability: async () => 'enabled',
       onNotice: (notice) => notices.push(notice)
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()!,
       owner = readSseEvents(port, 'wps', 'reload-timeout')
@@ -2214,12 +2200,11 @@ describe('WPS refresh failure reporting', () => {
 
 describe('WPS review cold open', () => {
   it('opens once and keeps only the latest location while the document registers', async () => {
-    const service = new WpsSyncService({
+    const service = createSyncService({
       readAvailability: async () => 'enabled',
       skipInstall: true,
       preferredPort: 0
     })
-    services.push(service)
     await service.start()
     const port = service.getPort()!,
       owner = readSseEvents(port, 'wps', 'cold-review-owner')
