@@ -9,6 +9,7 @@ export interface AppRuntimeSnapshot {
   distribution: AppDistribution
   locale: AppLocale
   serviceRoute: ServiceRoute
+  accountWebOrigin?: string
 }
 
 export const isServiceRoute = (value: string | undefined | null): value is ServiceRoute =>

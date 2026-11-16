@@ -82,6 +82,10 @@ export function DesktopAccountMenu() {
     : waiting
       ? t(($) => $.account.wait)
       : t(($) => $.account.login)
+  const loginOffer =
+    snapshot.status === 'signed_out' || snapshot.status === 'expired'
+      ? t(($) => $.account.loginOffer)
+      : undefined
   const items: MenuProps['items'] = [
     ...(signedIn
       ? [
@@ -134,16 +138,31 @@ export function DesktopAccountMenu() {
           {
             key: 'login',
             disabled: restoring || startingLogin,
+            ...(loginOffer && { 'aria-label': loginLabel, 'aria-description': loginOffer }),
             label: (
               <span className="nc-account-menu-label">
-                <span className="flex min-w-0 items-center gap-2 font-medium">
+                <span
+                  className={`flex min-w-0 gap-2 font-medium ${loginOffer ? 'items-start' : 'items-center'}`}
+                >
                   {avatar}
-                  {logoutIncomplete
-                    ? t(($) => $.account.logout)
-                    : offline
-                      ? t(($) => $.account.retry)
-                      : loginLabel}
-                  {waiting && <span className="sr-only">{t(($) => $.account.reopen)}</span>}
+                  <span className="flex min-w-0 flex-col items-start gap-0.5 leading-[18px]">
+                    <span>
+                      {logoutIncomplete
+                        ? t(($) => $.account.logout)
+                        : offline
+                          ? t(($) => $.account.retry)
+                          : loginLabel}
+                    </span>
+                    {waiting && <span className="sr-only">{t(($) => $.account.reopen)}</span>}
+                    {loginOffer && (
+                      <span className="inline-flex max-w-full gap-1 rounded-[5px] bg-[var(--notion-yellow-bg)] px-1.5 py-px text-[11px] font-medium leading-4 text-[var(--model-offer-text)]">
+                        <span aria-hidden="true" className="shrink-0">
+                          🎁
+                        </span>
+                        <span className="min-w-0 whitespace-normal">{loginOffer}</span>
+                      </span>
+                    )}
+                  </span>
                 </span>
                 {!restoring && !offline && !logoutIncomplete && (
                   <HiOutlineArrowUpRight aria-hidden="true" />
@@ -208,7 +227,7 @@ export function DesktopAccountMenu() {
       trigger={['click']}
       placement="topLeft"
       autoFocus
-      overlayStyle={{ width: 260 }}
+      overlayStyle={{ width: loginOffer ? 292 : 260 }}
       overlayClassName="nc-account-dropdown"
       dropdownRender={(menu) => (
         <div

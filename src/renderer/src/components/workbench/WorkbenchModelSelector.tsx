@@ -11,6 +11,7 @@ import React, {
 import { createPortal } from 'react-dom'
 import { App as AntdApp, Input, Tooltip } from 'antd'
 import type { InputRef } from 'antd'
+import { Trans } from 'react-i18next'
 import {
   HiAdjustmentsHorizontal,
   HiArrowPath,
@@ -20,6 +21,7 @@ import {
   HiChevronRight,
   HiCpuChip,
   HiMagnifyingGlass,
+  HiOutlineArrowUpRight,
   HiXMark
 } from 'react-icons/hi2'
 import { PiCoinBold } from 'react-icons/pi'
@@ -46,11 +48,8 @@ import { getProviderLogo } from '../settings/constants'
 import { workbenchSelectors } from '../../testing/selectors'
 import { useDesktopAccount } from '../../contexts/DesktopAccountProvider'
 
-const PRICE_TIER_LABELS: Record<LlmPriceTier, string> = {
-  low: t(($) => $.workbench.low),
-  mid: t(($) => $.workbench.medium),
-  high: t(($) => $.workbench.high)
-}
+const PRICE_TIER_LABEL_KEYS = { low: 'low', mid: 'medium', high: 'high' } as const
+const priceTierLabel = (tier: LlmPriceTier) => t(($) => $.workbench[PRICE_TIER_LABEL_KEYS[tier]])
 
 const PRICE_TIER_COIN_COUNT: Record<LlmPriceTier, number> = {
   low: 1,
@@ -85,7 +84,6 @@ type CatalogRefreshStatus = 'idle' | 'loading' | 'success' | 'error'
 
 type PresetInspector = {
   kind: 'preset'
-  provider: LlmPresetProvider
   model: LlmPresetModel
   available: boolean
   top: number
@@ -100,6 +98,7 @@ type FreeInspector = {
 type ModelInspector = PresetInspector | FreeInspector | { kind: 'managed'; id: string; top: number }
 
 const discountLabel = (rate: string) => {
+  if (rate === '1') return null
   const ratio = Number(rate)
   if (getRendererRuntime().locale === 'en') {
     return t(($) => $.workbench.managedDiscount, {
@@ -181,13 +180,14 @@ const PriceTierCoins: React.FC<{ tier: LlmPriceTier }> = ({ tier }) => {
   const count = PRICE_TIER_COIN_COUNT[tier]
   return (
     <span
-      aria-label={t(($) => $.workbench.priceTier, { value1: PRICE_TIER_LABELS[tier] })}
+      aria-label={t(($) => $.workbench.priceTier, { value1: priceTierLabel(tier) })}
       className="relative top-[2px] inline-block shrink-0 overflow-visible"
       style={{ width: PRICE_TIER_COIN_SIZE, height: PRICE_TIER_TEXT_LINE_PX }}
     >
       {Array.from({ length: count }, (_, index) => (
         <PiCoinBold
           key={index}
+          aria-hidden="true"
           className="pointer-events-none absolute left-0 block text-[#9B9A97]"
           style={{
             width: PRICE_TIER_COIN_SIZE,
@@ -204,6 +204,25 @@ const PriceTierCoins: React.FC<{ tier: LlmPriceTier }> = ({ tier }) => {
 const CatalogModelIcon: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
   <img src={src} alt={alt} className="h-4 w-4 shrink-0 rounded-[3px] object-contain" />
 )
+
+function ModelDiscountTag({ children }: { children: string }) {
+  return (
+    <span className="shrink-0 rounded-full bg-[var(--notion-yellow-bg)] px-1.5 py-0.5 text-[11px] font-medium leading-4 tabular-nums text-[var(--model-offer-text)]">
+      {children}
+    </span>
+  )
+}
+
+function ModelInspectorDetail({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-0.5">
+      <dt className="text-[var(--notion-text-soft)]">{label}</dt>
+      <dd className="flex items-center gap-1.5 font-medium text-[var(--notion-text)]">
+        {children}
+      </dd>
+    </div>
+  )
+}
 
 const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   configs,
@@ -227,6 +246,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const { snapshot: account, managedCatalog, loadManagedCatalog, run } = useDesktopAccount()
   const signedIn = account.status === 'signed_in'
   const showManaged = getRendererRuntime().distribution === 'domestic'
+  const showLoginOffer = account.status === 'signed_out' || account.status === 'expired'
   const managedModels = managedCatalog?.models
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -535,7 +555,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     }
     const height = inspectorRef.current?.offsetHeight || INSPECTOR_FALLBACK_HEIGHT
     setInspectorTop(clampInspectorTop(inspectedModel.top, height))
-  }, [open, inspectedModel])
+  }, [open, inspectedModel, managedModels, presetProviders])
 
   useEffect(() => {
     if (!open) return
@@ -729,7 +749,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         onMouseEnter={(event) =>
           setInspectedModel({
             kind: 'preset',
-            provider,
             model,
             available,
             top: event.currentTarget.getBoundingClientRect().top
@@ -738,7 +757,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         onFocus={(event) =>
           setInspectedModel({
             kind: 'preset',
-            provider,
             model,
             available,
             top: event.currentTarget.getBoundingClientRect().top
@@ -816,6 +834,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const renderManagedModelOption = (model: ManagedModel, index: number): React.ReactNode => {
     const configId = managedModelConfigId(model.id)
     const selected = value.mainModel?.configId === configId
+    const discount = discountLabel(model.pricing.discountRate)
     const inspect = (event: React.SyntheticEvent<HTMLButtonElement>) =>
       setInspectedModel({ kind: 'managed', id: model.id, top: event.currentTarget.getBoundingClientRect().top })
     return (
@@ -836,13 +855,11 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <CatalogModelIcon src={model.iconUrl} alt={model.label} />
-          <span className="truncate text-[13px] font-medium text-[#37352F]">{model.label}</span>
-        </span>
-        {model.pricing.discountRate !== '1' && (
-          <span className="shrink-0 text-[11px] font-medium tabular-nums text-[#787774]">
-            {discountLabel(model.pricing.discountRate)}
+          <span className="truncate text-[13px] font-medium text-[var(--model-offer-text)]">
+            {model.label}
           </span>
-        )}
+        </span>
+        {discount && <ModelDiscountTag>{discount}</ModelDiscountTag>}
         {selected && <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" />}
       </button>
     )
@@ -1049,14 +1066,45 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               </>
             )}
             {showManaged && !signedIn && account.status !== 'restoring' && (
-              <button
-                type="button"
-                className="workbench-select-option text-[13px]"
-                onMouseEnter={() => setInspectedModel(null)}
-                onClick={() => void run('begin').catch(() => message.error(t(($) => $.account.error)))}
-              >
-                {t(($) => $.workbench.managedModelLogin)}
-              </button>
+              <div className={showLoginOffer ? 'mx-1.5 mt-1' : undefined}>
+                <button
+                  type="button"
+                  className={
+                    showLoginOffer
+                      ? 'flex min-h-9 w-full items-center gap-2 rounded-[7px] border border-[#F1DFB5] bg-[#FFFAF0] px-2 py-1 text-left text-[13px] font-medium text-[var(--notion-text)] hover:bg-[var(--notion-yellow-bg)]'
+                      : 'workbench-select-option text-[13px]'
+                  }
+                  onMouseEnter={() => setInspectedModel(null)}
+                  onFocus={() => setInspectedModel(null)}
+                  onClick={() =>
+                    void run('begin').catch(() => message.error(t(($) => $.account.error)))
+                  }
+                >
+                  {showLoginOffer ? (
+                    <>
+                      <span aria-hidden="true" className="shrink-0">
+                        🎁
+                      </span>
+                      <span>
+                        <Trans
+                          i18nKey={($) => $.workbench.managedModelLoginOffer}
+                          components={{
+                            discount: (
+                              <strong className="font-semibold text-[var(--model-offer-text)]" />
+                            )
+                          }}
+                        />
+                      </span>
+                      <HiOutlineArrowUpRight
+                        aria-hidden="true"
+                        className="size-3.5 shrink-0 text-[var(--model-offer-text)]"
+                      />
+                    </>
+                  ) : (
+                    t(($) => $.workbench.managedModelLogin)
+                  )}
+                </button>
+              </div>
             )}
             {catalogError && !showLoading ? (
               <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
@@ -1283,118 +1331,44 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
   const renderInspector = (): React.ReactNode => {
     if (view !== 'preset' || !inspectedModel) return null
-    if (inspectedModel.kind === 'managed') {
-      const model = managedModels?.find(model => model.id === inspectedModel.id)
-      if (!model) return null
-      const { pricing } = model
-      const periods = 'allDay' in pricing
-        ? [{ label: t(($) => $.workbench.managedAllDay), price: pricing.allDay }]
-        : [{ label: t(($) => $.workbench.managedOffPeak), price: pricing.offPeak },
-          { label: t(($) => $.workbench.managedPeak), price: pricing.peak }]
-      return (
-        <div
-          ref={inspectorRef}
-          data-testid={workbenchSelectors.inspector}
-          className="max-h-[calc(100vh-24px)] overflow-y-auto rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3 text-[12px]"
-          style={{ position: 'fixed', top: inspectorTop, left: inspectorLeft, width: INSPECTOR_WIDTH, zIndex: 1001 }}
-        >
-          <div data-testid={workbenchSelectors.inspectorTitle} className="text-[14px] font-semibold text-[#252521]">
-            {model.label}
-          </div>
-          {!!model.description && <p className="mt-1.5 leading-[18px] text-[#5F5E5A]">{model.description}</p>}
-          <p className="mt-1.5 leading-[18px] text-[#787774]">{t(($) => $.workbench.managedPriceNotice)}</p>
-          <div className="mt-2.5 space-y-2 border-t border-[#EEEEEC] pt-2.5 text-[#37352F]">
-            <div className="flex justify-between gap-2">
-              <span className="text-[#787774]">{t(($) => $.workbench.vision)}</span>
-              <span>{model.capabilities.includes('vision')
-                ? t(($) => $.workbench.supported) : t(($) => $.workbench.notSupported)}</span>
-            </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-[#787774]">{t(($) => $.workbench.managedPricing)}</span>
-              {pricing.discountRate !== '1' && <span>{discountLabel(pricing.discountRate)}</span>}
-            </div>
-            {periods.map(({ label, price }) => (
-              <div key={label} className="leading-[18px]">
-                <div className="font-medium">{label}</div>
-                <div className="text-[#5F5E5A]">{t(($) => $.workbench.managedInputOutputPrice, {
-                  input: price.sale.input, output: price.sale.output
-                })}</div>
-                {price.sale.cachedInput !== null && <div className="text-[#5F5E5A]">
-                  {t(($) => $.workbench.managedCachedPrice, { value: price.sale.cachedInput })}
-                </div>}
-                <div className="text-[#787774]">{t(($) => $.workbench.managedReferencePrice, {
-                  input: price.reference.input, output: price.reference.output
-                })}</div>
-              </div>
-            ))}
-            {'timeRule' in pricing && (
-              <p className="leading-[18px] text-[#787774]">
-                {t(($) => $.workbench.managedPeakSchedule, {
-                  days: new Intl.ListFormat(getRendererRuntime().locale, { style: 'short' }).format(
-                    pricing.timeRule.peakWeekdays.map(day => new Intl.DateTimeFormat(getRendererRuntime().locale, {
-                      weekday: 'short', timeZone: 'UTC'
-                    }).format(Date.UTC(2024, 0, day)))
-                  ),
-                  windows: pricing.timeRule.peakWindows.map(window => window.start + '–' + window.end).join(', '),
-                  zone: pricing.timeRule.timeZone
-                })}
-              </p>
-            )}
-          </div>
-        </div>
-      )
-    }
-    if (inspectedModel.kind === 'free') {
-      const supportsVision = inspectedModel.model.capabilities.includes('vision')
-      return (
-        <div
-          ref={inspectorRef}
-          data-testid={workbenchSelectors.inspector}
-          className="rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3"
-          style={{
-            position: 'fixed',
-            top: inspectorTop,
-            left: inspectorLeft,
-            width: INSPECTOR_WIDTH,
-            zIndex: 1001
-          }}
-        >
-          <div
-            data-testid={workbenchSelectors.inspectorTitle}
-            className="text-[14px] font-semibold text-[#252521]"
-          >
-            {inspectedModel.model.label}
-          </div>
-          <p className="mt-1.5 text-[12px] leading-[18px] text-[#5F5E5A]">
-            {inspectedModel.model.description}
-          </p>
-          <p className="mt-1.5 text-[12px] leading-[18px] text-[#9B9A97]">
-            {t(($) => $.preferences.freeNotice)}
-          </p>
-          <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
-            <div className="flex items-center justify-between gap-3 py-0.5">
-              <span className="shrink-0 text-[#9B9A97]">{t(($) => $.workbench.priceTier2)}</span>
-              <span className="font-medium text-[#37352F]">{t(($) => $.preferences.free)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3 py-0.5">
-              <span className="shrink-0 text-[#9B9A97]">{t(($) => $.workbench.vision)}</span>
-              <span className="font-medium text-[#37352F]">
-                {supportsVision
-                  ? t(($) => $.workbench.supported)
-                  : t(($) => $.workbench.notSupported)}
-              </span>
-            </div>
-          </div>
-        </div>
-      )
-    }
+    const managed =
+      inspectedModel.kind === 'managed'
+        ? managedModels?.find((model) => model.id === inspectedModel.id)
+        : undefined
+    const model = inspectedModel.kind === 'managed' ? managed : inspectedModel.model
+    if (!model) return null
 
-    const supportsVision = inspectedModel.model.capabilities.includes('vision')
+    // Match the public display metadata only. Selection and billing use the entry's own identity.
+    const matchingPresets = managed
+      ? presetProviders.flatMap((provider) =>
+          provider.models
+            .filter((preset) => preset.label === managed.label.trim())
+            .map((preset) => ({ provider, preset }))
+        )
+      : []
+    const matched = matchingPresets.length === 1 ? matchingPresets[0] : undefined
+    const priceTier =
+      inspectedModel.kind === 'preset' ? inspectedModel.model.priceTier : matched?.preset.priceTier
+    const providerName =
+      matched && providerDisplayName(matched.provider.providerId, matched.provider.label)
+    const priceNotice = managed
+      ? providerName
+        ? t(($) => $.workbench.managedPriceNotice, { provider: providerName })
+        : t(($) => $.workbench.managedPriceNoticeGeneric)
+      : undefined
+    const intro = [matched?.preset.description || model.description, priceNotice]
+      .filter(Boolean)
+      .join(' ')
+    const discount = managed && discountLabel(managed.pricing.discountRate)
+    const free = inspectedModel.kind === 'free'
+    const unavailable =
+      inspectedModel.kind === 'preset' && !inspectedModel.available ? inspectedModel.model : null
+
     return (
       <div
         ref={inspectorRef}
         data-testid={workbenchSelectors.inspector}
-        className="rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3"
+        className="max-h-[calc(100vh-24px)] overflow-y-auto rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3 text-[12px]"
         style={{
           position: 'fixed',
           top: inspectorTop,
@@ -1407,38 +1381,58 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           data-testid={workbenchSelectors.inspectorTitle}
           className="text-[14px] font-semibold text-[#252521]"
         >
-          {inspectedModel.model.label}
+          {model.label}
         </div>
-        {inspectedModel.available ? (
-          <>
-            <p className="mt-1.5 text-[12px] leading-[18px] text-[#5F5E5A]">
-              {inspectedModel.model.description}
-            </p>
-            <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
-              <div className="flex items-center justify-between gap-3 py-0.5">
-                <span className="shrink-0 text-[#9B9A97]">{t(($) => $.workbench.priceTier2)}</span>
-                <span className="font-medium text-[#37352F]">
-                  {PRICE_TIER_LABELS[inspectedModel.model.priceTier]}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3 py-0.5">
-                <span className="shrink-0 text-[#9B9A97]">{t(($) => $.workbench.vision)}</span>
-                <span className="font-medium text-[#37352F]">
-                  {supportsVision
-                    ? t(($) => $.workbench.supported)
-                    : t(($) => $.workbench.notSupported)}
-                </span>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px] leading-[18px] text-[#5F5E5A]">
+        {unavailable ? (
+          <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 leading-[18px] text-[#5F5E5A]">
             <div>{t(($) => $.workbench.thisModelDoesNotExist)}</div>
             <div className="mt-1.5 break-all text-[#9B9A97]">
               {t(($) => $.workbench.modelName)}
-              {inspectedModel.model.id}
+              {unavailable.id}
             </div>
           </div>
+        ) : (
+          <>
+            {intro && <p className="mt-1.5 leading-[18px] text-[#5F5E5A]">{intro}</p>}
+            {free && (
+              <p className="mt-1.5 leading-[18px] text-[#9B9A97]">
+                {t(($) => $.preferences.freeNotice)}
+              </p>
+            )}
+            <dl className="mt-2.5 border-t border-[#EEEEEC] pt-2.5">
+              <ModelInspectorDetail label={t(($) => $.workbench.priceTier2)}>
+                {priceTier ? (
+                  <>
+                    <span aria-hidden="true" className="flex items-center">
+                      <PriceTierCoins tier={priceTier} />
+                    </span>
+                    {priceTierLabel(priceTier)}
+                  </>
+                ) : free ? (
+                  t(($) => $.preferences.free)
+                ) : (
+                  '—'
+                )}
+              </ModelInspectorDetail>
+              <ModelInspectorDetail label={t(($) => $.workbench.vision)}>
+                {model.capabilities.includes('vision')
+                  ? t(($) => $.workbench.supported)
+                  : t(($) => $.workbench.notSupported)}
+              </ModelInspectorDetail>
+              {!free && (
+                <ModelInspectorDetail label={t(($) => $.workbench.modelBillingMethod)}>
+                  {managed
+                    ? t(($) => $.workbench.modelBillingBalance)
+                    : t(($) => $.workbench.modelBillingCustomApi)}
+                </ModelInspectorDetail>
+              )}
+              {discount && (
+                <ModelInspectorDetail label={t(($) => $.workbench.currentDiscount)}>
+                  <ModelDiscountTag>{discount}</ModelDiscountTag>
+                </ModelInspectorDetail>
+              )}
+            </dl>
+          </>
         )}
       </div>
     )

@@ -1,5 +1,4 @@
-import { getAppRuntime, getOfficialAppKey } from '../app/AppRuntime'
-import { routeForOfficialUrl } from '../../../shared/appPreferences'
+import { getAppRuntime, getOfficialAppKey, routeForServiceUrl, serviceApiUrl, usesLocalService } from '../app/AppRuntime'
 import { isFreeModelApiUrl, isFreeModelExecutionId } from '../../../shared/freeModels'
 import { createHmac, createHash, randomUUID } from 'node:crypto'
 
@@ -33,8 +32,8 @@ export const buildDesktopAppGatewayHeaders = (input: {
   url: string
   body?: string
 }): Record<string, string> => {
-  const route = routeForOfficialUrl(input.url)
-  if (route && route !== getAppRuntime().distribution)
+  const route = routeForServiceUrl(input.url)
+  if ((route || usesLocalService()) && route !== getAppRuntime().distribution)
     throw new Error('Official service region does not match this application')
   const secret = getDesktopAppSecret()
   let path = '/'
@@ -72,12 +71,12 @@ const readRequestBody = async (request: Request): Promise<string> => {
 
 export const createFreeModelFetch = (baseUrl?: string): typeof fetch => {
   const route = getAppRuntime().distribution
-  if (baseUrl && routeForOfficialUrl(baseUrl) !== route)
+  if (baseUrl && routeForServiceUrl(baseUrl) !== route)
     throw new Error('Invalid official model origin')
   const signedFetch: typeof fetch = async (input, init) => {
     const request = new Request(input, init)
     const url = request.url
-    if (!isFreeModelApiUrl(url) || routeForOfficialUrl(url) !== route)
+    if (!isFreeModelApiUrl(url, serviceApiUrl('domestic', '')) || routeForServiceUrl(url) !== route)
       throw new Error('免费模型调用地址无效')
     const method = request.method
     let body = await readRequestBody(request)

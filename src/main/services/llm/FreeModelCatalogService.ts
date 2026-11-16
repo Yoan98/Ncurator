@@ -1,6 +1,5 @@
-import { getAppRuntime } from '../app/AppRuntime'
+import { getAppRuntime, routeForServiceUrl, serviceApiUrl } from '../app/AppRuntime'
 import {
-  officialApiUrl,
   officialUrl,
   routeForOfficialUrl,
   type AppRuntimeSnapshot
@@ -67,13 +66,13 @@ const parseEntry = (value: unknown, current = false): FreeModelCatalogEntry | nu
   const iconUrl = String(row.iconUrl || '').trim()
   const rawBaseUrl = String(row.baseUrl || '').trim()
   const baseUrl = current && rawBaseUrl === officialUrl('domestic', '/api/v2/free')
-    ? officialApiUrl('domestic', '/api/v2/free')
+    ? serviceApiUrl('domestic', '/api/v2/free')
     : rawBaseUrl
   const apiKey = String(row.apiKey || '').trim()
   const capabilities = parseCapabilities(row.capabilities)
   const executionId = row.executionId
   const validRoute =
-    isFreeModelApiUrl(baseUrl) &&
+    isFreeModelApiUrl(baseUrl, serviceApiUrl('domestic', '')) &&
     new URL(baseUrl).pathname === (current ? '/api/v2/free' : '/api/v1/free')
   const validCredential = current
     ? isFreeModelExecutionId(executionId) && apiKey === ''
@@ -274,7 +273,7 @@ export class FreeModelCatalogService {
         const models: FreeModelCatalogEntry[] = []
         for (const item of parsed.models) {
           const entry = parseEntry(item, current)
-          if (!entry || routeForOfficialUrl(entry.baseUrl) !== this.context.serviceRoute)
+          if (!entry || routeForServiceUrl(entry.baseUrl) !== this.context.serviceRoute)
             throw new Error('免费模型缓存无效')
           models.push(entry)
         }
@@ -307,11 +306,11 @@ export class FreeModelCatalogService {
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
       const domestic = this.context.serviceRoute === 'domestic'
-      const url = officialApiUrl(
+      const url = serviceApiUrl(
         this.context.serviceRoute,
         domestic ? '/api/v1/model-catalog' : '/api/v1/free-models'
       )
-      const baseUrl = officialApiUrl(
+      const baseUrl = serviceApiUrl(
         this.context.serviceRoute,
         domestic ? '/api/v2/free' : '/api/v1/free'
       )

@@ -118,6 +118,22 @@ describe('ai unit run failure catalog', () => {
     })
   })
 
+  it('preserves the provider rejection hidden inside an SDK connection error', () => {
+    const rejected = new LlmProviderError({
+      message: '余额不足，请充值或缩短本次上下文',
+      httpStatus: 402,
+      providerCode: 'balance_insufficient',
+      retryable: false
+    })
+    const sdkError = new Error('Connection error.', { cause: rejected })
+    const failure = classifyThrownErrorToAiRunFailure(toProviderFailure(sdkError, false))
+    expect(failure).toMatchObject({
+      rawMessage: rejected.message,
+      httpStatus: 402,
+      providerCode: 'balance_insufficient'
+    })
+  })
+
   it('maps TimeoutError to llm_request_failed after provider wrap', () => {
     const timeout = new Error('Request timed out.')
     timeout.name = 'TimeoutError'

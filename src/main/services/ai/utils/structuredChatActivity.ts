@@ -17,7 +17,7 @@ import {
   emitLlmRetryProcessStarted
 } from '../events/processEvents'
 import { classifyThrownErrorToAiRunFailure, isCancelledError } from './runFailure'
-import { LlmProviderError, isLlmOutputError, isLlmProviderError } from '../errors'
+import { LlmProviderError, findLlmProviderError, isLlmOutputError } from '../errors'
 import { classifyLlmRetry, isLlmTransportError } from '../llmRetry'
 import { normalizeStructuredOutputError } from '../structuredOutput'
 
@@ -87,8 +87,9 @@ const reasonFromError = (error: unknown): string =>
   error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')
 
 export const toProviderFailure = (error: unknown, retryable?: boolean): unknown => {
-  if (isLlmProviderError(error) || isLlmOutputError(error)) return error
-  if (isCancelledError(error)) return error
+  if (isLlmOutputError(error) || isCancelledError(error)) return error
+  const providerError = findLlmProviderError(error)
+  if (providerError) return providerError
   const info = normalizeStructuredOutputError(error)
   if (!info.hasProviderSignal && !isLlmTransportError(error)) return error
   // Stamp retryable from the classify result at throw time; later classifyLlmRetry re-parses signals.

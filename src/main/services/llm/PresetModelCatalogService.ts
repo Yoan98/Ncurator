@@ -1,6 +1,5 @@
-import { getAppRuntime } from '../app/AppRuntime'
+import { getAppRuntime, serviceApiUrl } from '../app/AppRuntime'
 import {
-  officialApiUrl,
   officialUrl,
   routeForOfficialUrl,
   type AppRuntimeSnapshot
@@ -244,7 +243,7 @@ export class PresetModelCatalogService {
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
       const domestic = this.context.serviceRoute === 'domestic'
-      const url = officialApiUrl(
+      const url = serviceApiUrl(
         this.context.serviceRoute,
         domestic ? '/api/v1/model-catalog' : '/api/v1/preset-models'
       )

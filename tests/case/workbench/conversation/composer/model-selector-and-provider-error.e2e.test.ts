@@ -710,6 +710,12 @@ describe('workbench conversation e2e', () => {
           await failureCard.getByText(`失败：${runFailed.message}`, { exact: false }).waitFor({
             state: 'visible'
           })
+          expect(
+            await failureCard
+              .locator('..')
+              .getByText(`失败：${runFailed.message}`, { exact: true })
+              .count()
+          ).toBe(1)
           const detailToggle = failureCard.getByTestId(
             new RegExp(`^${workbenchSelectors.assistantRunFailureDetailTogglePrefix}-`, 'u')
           )

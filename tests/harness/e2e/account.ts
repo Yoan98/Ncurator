@@ -19,7 +19,7 @@ const origin = new URL(settings.api)
 if (origin.protocol !== 'http:' || origin.hostname !== '127.0.0.1') throw new Error('Expected a local test API')
 const fetchNetwork = globalThis.fetch
 const network = { walletReads: 0, blockWallet: false, urls: [], refreshStatuses: [],
-  modelPosts: [], modelLookups: [], droppedRefreshes: 0, droppedResults: 0, releasedWallets: 0,
+  modelPosts: [], modelResponses: [], modelLookups: [], droppedRefreshes: 0, droppedResults: 0, releasedWallets: 0,
   dropRefresh: settings.dropRefresh === true }
 globalThis.__accountTestNetwork = network
 globalThis.fetch = async (input, init) => {
@@ -51,12 +51,14 @@ globalThis.fetch = async (input, init) => {
     if (network.blockWallet) throw new Error('Isolated wallet transport interruption')
   }
   const body = request.body ? await request.arrayBuffer() : undefined
-  if (modelPost) network.modelPosts.push(JSON.parse(Buffer.from(body).toString()).requestId)
+  const modelRequestId = modelPost ? JSON.parse(Buffer.from(body).toString()).requestId : undefined
+  if (modelRequestId) network.modelPosts.push(modelRequestId)
   if (lookup) network.modelLookups.push(lookup[1])
   const response = await fetchNetwork(freePost ? settings.acceptance.proxyOrigin + '/free' : new URL(path + url.search, origin), {
     method: request.method, headers: request.headers, signal: request.signal, redirect: 'error',
     ...(body && { body })
   })
+  if (modelPost) network.modelResponses.push(response.status)
   if (holdWallet && response.ok) {
     const {available, version} = await response.clone().json()
     await new Promise(resolve => {
@@ -78,13 +80,23 @@ globalThis.fetch = async (input, init) => {
       throw new Error('Isolated refresh response was lost')
     }
   }
-  if (modelPost && response.ok && network.dropModelResult &&
+  if (modelPost && response.ok && (network.dropModelResult || network.holdModelResult) &&
     response.headers.get('content-type')?.startsWith('text/event-stream')) {
+    const hold = network.holdModelResult
+    network.holdModelResult = false
     network.dropModelResult = false
     const frames = await response.text()
     const delimiter = 'event: ncurator.result\n'
     const at = frames.indexOf(delimiter)
     if (at < 0) throw new Error('Missing settled model result in the fixture')
+    if (hold) {
+      await new Promise(resolve => {
+        const release = () => { clearTimeout(timer); network.heldModelResult = undefined; resolve() }
+        const timer = setTimeout(release, 30000)
+        network.heldModelResult = { requestId: modelRequestId, release }
+      })
+      return new Response(frames, { headers: { 'content-type': 'text/event-stream' } })
+    }
     network.droppedResults++
     return new Response(frames.slice(0, at) + 'data: [DONE]\n\n', { headers: {
       'content-type': 'text/event-stream'
@@ -103,10 +115,12 @@ shell.openExternal = async (target) => {
 app.on('ready', () => session.defaultSession.webRequest.onBeforeRequest(
   { urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
     const target = new URL(details.url)
+    if (settings.liveManaged && details.resourceType === 'image' &&
+      target.href === 'https://www.guanzhangai.cn/llm/deepseek.png') return callback({})
     const icon = /^\/llm\/(zhipu\.png|guanzhang\.png)$/.test(target.pathname)
-    if (settings.acceptance && icon && target.origin === settings.acceptance.assets) return callback({})
-    if (settings.acceptance && icon && target.origin === 'https://www.guanzhangai.cn')
-      return callback({redirectURL: settings.acceptance.assets + target.pathname})
+    if (icon && target.origin === settings.assets) return callback({})
+    if (settings.assets && icon && target.origin === 'https://www.guanzhangai.cn')
+      return callback({redirectURL: settings.assets + target.pathname})
     callback({ cancel: true })
   }
 ))
@@ -118,12 +132,12 @@ type Fixture = {
   control: string
   appKey: string
   browserArgs: string[]
-  model?: { id: string; reply: string }
+  assets?: string
+  model?: { id: string; label: string; visionLive?: true }
   acceptance?: {
     mode: 'synthetic' | 'live'
     freeId: string
     customModel: string
-    assets: string
     freeDescription: string
   }
 }
@@ -135,12 +149,15 @@ type Transport = {
   holdWallet?: boolean
   dropRefresh?: boolean
   dropModelResult?: boolean
+  holdModelResult?: boolean
+  heldModelResult?: { requestId: string; release: () => void }
   pendingWallet?: { available: string; version: string; release: () => void }
   releasedWallets: number
   droppedRefreshes: number
   droppedResults: number
   refreshStatuses: number[]
   modelPosts: string[]
+  modelResponses: number[]
   modelLookups: string[]
 }
 type AccountRuntime = typeof globalThis & { __accountTestNetwork: Transport }
@@ -166,7 +183,8 @@ export async function openAccountMenu(page: Page) {
   if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click()
   await page.getByRole('menu').waitFor()
 }
-export const refreshWallet = (page: Page) => page.evaluate(() => window.api.desktopAccount('refresh-wallet'))
+export const refreshWallet = (page: Page) =>
+  page.evaluate(() => window.api.desktopAccount('refresh-wallet'))
 export async function readDesktopUserNo(page: Page) {
   const account = await page.evaluate(() => window.api.desktopAccount('profile'))
   return account.status === 'signed_in' ? account.userNo : undefined
@@ -181,7 +199,10 @@ export const setWalletOffline = (runtime: Desktop, block: boolean) =>
   runtime.electronApp.evaluate((_electron, value) => {
     ;(globalThis as AccountRuntime).__accountTestNetwork.blockWallet = value
   }, block)
-export const armAccountFault = (runtime: Desktop, fault: 'holdWallet' | 'dropModelResult') =>
+export const armAccountFault = (
+  runtime: Desktop,
+  fault: 'holdWallet' | 'dropModelResult' | 'holdModelResult'
+) =>
   runtime.electronApp.evaluate((_electron, key) => {
     ;(globalThis as AccountRuntime).__accountTestNetwork[key] = true
   }, fault)
@@ -189,15 +210,21 @@ export const releaseWallet = (runtime: Desktop) =>
   runtime.electronApp.evaluate(() => {
     ;(globalThis as AccountRuntime).__accountTestNetwork.pendingWallet?.release()
   })
+export const releaseModelResult = (runtime: Desktop) =>
+  runtime.electronApp.evaluate(() => {
+    ;(globalThis as AccountRuntime).__accountTestNetwork.heldModelResult?.release()
+  })
 export const accountNetwork = (runtime: Desktop) =>
   runtime.electronApp.evaluate(() => {
     const {
       pendingWallet,
+      heldModelResult,
       releasedWallets,
       refreshStatuses,
       droppedRefreshes,
       droppedResults,
       modelPosts,
+      modelResponses,
       modelLookups
     } = (globalThis as AccountRuntime).__accountTestNetwork
     return {
@@ -205,11 +232,13 @@ export const accountNetwork = (runtime: Desktop) =>
         available: pendingWallet.available,
         version: pendingWallet.version
       },
+      heldModelRequestId: heldModelResult?.requestId,
       releasedWallets,
       refreshStatuses,
       droppedRefreshes,
       droppedResults,
       modelPosts,
+      modelResponses,
       modelLookups
     }
   })
@@ -226,6 +255,7 @@ async function loadFixture(): Promise<Fixture> {
   if (
     !isLoopback(fixture.api) ||
     !isLoopback(fixture.control) ||
+    (fixture.assets !== undefined && !isLoopback(fixture.assets)) ||
     !/^[a-f0-9]{64}$/u.test(fixture.appKey) ||
     fixture.browserArgs.length !== 2 ||
     fixture.browserArgs[0] !== '--no-proxy-server' ||
@@ -248,8 +278,10 @@ type Service = {
     email: string,
     options?: { signedIn?: true }
   ) => Promise<void>
+  approveDesktop: (page: Page) => Promise<URL>
   userNumber: (page: Page) => Promise<string>
-  recharge: (page: Page) => Promise<void>
+  recharge: (page: Page) => Promise<string>
+  manager: () => Promise<Page>
   checkOverseas: () => Promise<void>
   launchSecondDesktop: (input?: {
     userDataDir?: string
@@ -298,11 +330,44 @@ type AccountEvidence = {
     lastActivityAt: string
     refreshRetryExpiresAt: string | null
   }[]
-  calls: { requestId: string; paidAmount: string; feeDecision: string; executionStatus: string }[]
+  calls: {
+    requestId: string
+    paidAmount: string
+    feeDecision: string
+    executionStatus: string
+    inputTokens?: string | null
+    outputTokens?: string | null
+    finishReason?: string | null
+  }[]
+  vision?: {
+    imageRequests: string[][]
+    upstreamStatuses: number[]
+    wallet: { paidAvailableAmount: string; usageFrozenAmount: string; debtAmount: string }
+  }
 }
 
 export const newTestEmail = (prefix: string) => prefix + '-' + randomUUID() + '@example.test'
 export const mask = (email: string) => email[0] + '***@example.test'
+
+export async function openDesktopAuthorization(desktop: Desktop) {
+  const { page } = desktop
+  const before = (await externalUrls(desktop)).length
+  const route = await page.evaluate(() => location.hash)
+  await openAccountMenu(page)
+  await menuItem(page, labels.login).click()
+  await expect.poll(async () => (await externalUrls(desktop)).length).toBe(before + 1)
+  expect(await page.evaluate(() => location.hash)).toBe(route)
+  const target = new URL((await externalUrls(desktop)).at(-1)!)
+  expect(target.origin + target.pathname + target.search).toBe(site + '/desktop/authorize')
+  expect([...new URLSearchParams(target.hash.slice(1)).keys()].sort()).toEqual(['flow', 'state'])
+  return target
+}
+
+export async function deliverDesktopAuthorization(desktop: Desktop, callback: URL) {
+  await desktop.electronApp.evaluate(({ app }, link) => {
+    app.emit('open-url', { preventDefault() {} }, link)
+  }, callback.href)
+}
 
 export async function withAccountFixture(
   run: (
@@ -336,10 +401,11 @@ export async function withAccountFixture(
     NCURATOR_ACCOUNT_TEST_INPUT: JSON.stringify({
       api: fixture.api,
       main: resolve('out/main/index.js'),
+      assets: fixture.assets,
+      liveManaged: fixture.model?.visionLive,
       ...(proxy && {
         acceptance: {
           proxyOrigin: proxy.origin,
-          assets: fixture.acceptance!.assets,
           customBase: target!.baseUrl
         }
       })
@@ -371,6 +437,23 @@ export async function withAccountFixture(
     try {
       const service: Service = {
         model: fixture.model,
+        async manager() {
+          const result = await post('/manager', {})
+          expect(result.status).toBe(200)
+          const { session } = (await result.json()) as { session: string }
+          const page = await service.browserPage()
+          await page.context().addCookies([
+            {
+              name: 'ncurator_cn_session',
+              value: session,
+              url: api,
+              secure: true,
+              httpOnly: true,
+              sameSite: 'Lax'
+            }
+          ])
+          return page
+        },
         ...(proxy && {
           acceptance: {
             proxy,
@@ -383,26 +466,7 @@ export async function withAccountFixture(
               if (result.status !== 200) throw new Error('node-one:evidence')
               return (await result.json()) as ProfileEvidence
             },
-            async manager() {
-              const result = await post('/manager', {})
-              if (result.status !== 200) throw new Error('node-one:evidence')
-              const { raw } = (await result.json()) as { raw: string }
-              const context = await browser.newContext({
-                ignoreHTTPSErrors: true,
-                serviceWorkers: 'block'
-              })
-              await context.addCookies([
-                {
-                  name: 'ncurator_cn_session',
-                  value: raw,
-                  url: api,
-                  secure: true,
-                  httpOnly: true,
-                  sameSite: 'Lax'
-                }
-              ])
-              return context.newPage()
-            }
+            manager: () => service.manager()
           }
         }),
         launchSecondDesktop: (input) =>
@@ -416,6 +480,7 @@ export async function withAccountFixture(
               NCURATOR_ACCOUNT_TEST_INPUT: JSON.stringify({
                 api: fixture.api,
                 main: resolve('out/main/index.js'),
+                assets: fixture.assets,
                 dropRefresh: input?.dropRefresh
               })
             }
@@ -458,21 +523,14 @@ export async function withAccountFixture(
           await page.waitForURL((url) => url.pathname === new URL(target).pathname)
         },
         async authorize(desktop, page, email, options) {
-          const desktopPage = desktop.page
-          const before = (await externalUrls(desktop)).length
-          const route = await desktopPage.evaluate(() => location.hash)
-          await openAccountMenu(desktopPage)
-          await menuItem(desktopPage, labels.login).click()
-          await expect.poll(async () => (await externalUrls(desktop)).length).toBe(before + 1)
-          expect(await desktopPage.evaluate(() => location.hash)).toBe(route)
-          const target = new URL((await externalUrls(desktop)).at(-1)!)
-          expect(target.origin + target.pathname + target.search).toBe(site + '/desktop/authorize')
-          expect([...new URLSearchParams(target.hash.slice(1)).keys()].sort()).toEqual([
-            'flow',
-            'state'
-          ])
+          const target = await openDesktopAuthorization(desktop)
           if (options?.signedIn) await page.goto(target.href)
           else await service.signIn(page, email, target.href)
+          await deliverDesktopAuthorization(desktop, await service.approveDesktop(page))
+          await page.getByRole('heading', { name: '登录成功', exact: true }).waitFor()
+          await accountButton(desktop.page).getByText(mask(email), { exact: true }).waitFor()
+        },
+        async approveDesktop(page) {
           const [approval] = await Promise.all([
             page.waitForResponse(
               (response) => response.url() === api + '/api/auth/desktop/approve'
@@ -486,11 +544,7 @@ export async function withAccountFixture(
             'ncurator://auth/callback'
           )
           expect([...callback.searchParams.keys()].sort()).toEqual(['code', 'state'])
-          await desktop.electronApp.evaluate(({ app }, link) => {
-            app.emit('open-url', { preventDefault() {} }, link)
-          }, callbackUrl)
-          await page.getByRole('heading', { name: '登录成功', exact: true }).waitFor()
-          await accountButton(desktopPage).getByText(mask(email), { exact: true }).waitFor()
+          return callback
         },
         async userNumber(page) {
           await page.goto(site + '/account')
@@ -547,6 +601,7 @@ export async function withAccountFixture(
             expect((await post('/pay', { orderNo })).status).toBe(200)
             await page.getByRole('link', { name: '我已支付，查看结果' }).click()
             await page.getByRole('heading', { name: '已到账' }).waitFor()
+            return orderNo
           } catch (cause) {
             throw new Error('Isolated checkout failed: ' + JSON.stringify({ attempts, errors }), {
               cause

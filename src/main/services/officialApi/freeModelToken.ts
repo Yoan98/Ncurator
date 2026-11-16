@@ -1,5 +1,4 @@
-import { officialApiUrl, routeForOfficialUrl } from '../../../shared/appPreferences'
-import { getAppRuntime } from '../app/AppRuntime'
+import { getAppRuntime, routeForServiceUrl, serviceApiUrl } from '../app/AppRuntime'
 import { buildDesktopAppGatewayHeaders, getDesktopAppSecret } from './appClient'
 
 const REFRESH_SKEW_MS = 5 * 60_000
@@ -42,7 +41,7 @@ const remember = (origin: string, token: string, expiresAt?: number): string => 
 
 export const seedFreeModelToken = (
   token: string,
-  origin = officialApiUrl(getAppRuntime().distribution, '')
+  origin = serviceApiUrl(getAppRuntime().distribution, '')
 ): void => {
   const value = String(token || '').trim()
   if (!value) return
@@ -53,9 +52,9 @@ export const seedFreeModelToken = (
 }
 
 export const refreshFreeModelToken = async (
-  origin = officialApiUrl(getAppRuntime().distribution, '')
+  origin = serviceApiUrl(getAppRuntime().distribution, '')
 ): Promise<string> => {
-  if (routeForOfficialUrl(origin) !== getAppRuntime().distribution || new URL(origin).origin !== origin)
+  if (routeForServiceUrl(origin) !== getAppRuntime().distribution || new URL(origin).origin !== origin)
     throw new Error('免费模型取票地址无效')
   const pending = refreshPromises.get(origin)
   if (pending) return await pending
@@ -101,7 +100,7 @@ export const refreshFreeModelToken = async (
 
 export const ensureFreeModelToken = async (
   seedToken?: string,
-  origin = officialApiUrl(getAppRuntime().distribution, '')
+  origin = serviceApiUrl(getAppRuntime().distribution, '')
 ): Promise<string> => {
   if (seedToken) seedFreeModelToken(seedToken, origin)
   const entry = cached.get(origin)

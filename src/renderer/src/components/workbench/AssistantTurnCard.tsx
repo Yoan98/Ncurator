@@ -698,8 +698,17 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const streamingMarkdown = turn?.streamingMarkdown || ''
   const streamingRole = turn?.streamingRole || 'answer'
-  const visibleAnswerMarkdown =
+  let visibleAnswerMarkdown =
     finalAnswerMarkdown || (streamingRole === 'answer' ? streamingMarkdown : '')
+  if (turn?.status === 'failed' && turn.error) {
+    // Failed run snapshots may include the same title shown by the failure card.
+    const failureLine = `失败：${turn.error}`
+    const suffix = `\n\n${failureLine}`
+    if (visibleAnswerMarkdown === failureLine) visibleAnswerMarkdown = ''
+    else if (visibleAnswerMarkdown.endsWith(suffix)) {
+      visibleAnswerMarkdown = visibleAnswerMarkdown.slice(0, -suffix.length)
+    }
+  }
   const hasFinalAnswer = visibleAnswerMarkdown.trim().length > 0
   const hasStreamingThought = streamingRole === 'thought' && streamingMarkdown.trim().length > 0
   const hasNextAiContentForActivity =

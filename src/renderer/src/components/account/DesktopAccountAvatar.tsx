@@ -9,7 +9,7 @@ export function DesktopAccountAvatar({
 }) {
   const [initial] = maskedEmail?.trim().toUpperCase() ?? ''
   const color = signedIn
-    ? 'bg-[#F5F3EF] text-[#5F5B55]'
+    ? 'border border-[#C8E7D7] bg-[#DDF4E7] text-[#245741]'
     : 'bg-[var(--notion-surface-hover)] text-[var(--notion-text-soft)]'
 
   return (

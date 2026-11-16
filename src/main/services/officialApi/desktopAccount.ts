@@ -2,11 +2,10 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { safeStorage, shell } from 'electron'
-import { officialApiUrl, officialUrl } from '../../../shared/appPreferences'
 import type { DesktopAccountSnapshot, DesktopWallet } from '../../../shared/desktopAccount'
 import { MANAGED_MODELS_PATH, parseManagedModels, type ManagedModelsResult } from '../../../shared/managedModels'
 import { getUserDataPath } from '../../utils/userDataPath'
-import { getAppRuntime } from '../app/AppRuntime'
+import { getAppRuntime, serviceApiUrl, serviceWebUrl } from '../app/AppRuntime'
 import { buildDesktopAppGatewayHeaders } from './appClient'
 import type { DesktopCallbackListener } from './desktopLoopback'
 
@@ -15,7 +14,6 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const instanceUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const randomProof = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/
 const jwt = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
-const siteOrigin = officialUrl('domestic', '')
 type Route = 'start' | 'cancel' | 'exchange' | 'refresh' | 'logout' | 'receipt' | 'abandon'
 type Receipt = 'saved' | 'storage_unavailable'
 type Credentials = { userNo: string; refreshToken: string }
@@ -298,7 +296,7 @@ export class DesktopAccount {
         typeof authorizationUrl !== 'string' || expiresIn !== 600) throw new DesktopAccountError('unavailable')
       const url = new URL(authorizationUrl)
       const context = new URLSearchParams(url.hash.slice(1))
-      if (url.origin !== siteOrigin || url.pathname !== '/desktop/authorize' || url.search || url.username || url.password ||
+      if (url.origin !== serviceWebUrl('domestic', '') || url.pathname !== '/desktop/authorize' || url.search || url.username || url.password ||
         context.get('flow') !== flowId || context.get('state') !== pending.state || [...context].length !== 2)
         throw new DesktopAccountError('unavailable')
       pending.id = flowId
@@ -577,7 +575,7 @@ export async function readManagedModels(account: DesktopAccount): Promise<Manage
   }
   try {
     const scope = account.managedCallScope()
-    const url = officialApiUrl('domestic', MANAGED_MODELS_PATH)
+    const url = serviceApiUrl('domestic', MANAGED_MODELS_PATH)
     const get = (token: string) => fetch(url, {
       headers: { ...buildDesktopAppGatewayHeaders({ url, method: 'GET' }), authorization: 'Bearer ' + token },
       cache: 'no-store', redirect: 'error', signal: AbortSignal.any([scope.session, AbortSignal.timeout(10_000)])
@@ -606,7 +604,7 @@ export function createDomesticDesktopAccount(changed: (snapshot: DesktopAccountS
   async function request(route: Route | 'profile' | 'wallet' | { requestId: string }, method: 'GET' | 'POST', input?: object,
     bearer?: string, signal?: AbortSignal) {
     const lookup = typeof route !== 'string'
-    const url = officialApiUrl('domestic', lookup ? '/api/v2/managed/calls/' + route.requestId : '/api/auth/desktop/' + route)
+    const url = serviceApiUrl('domestic', lookup ? '/api/v2/managed/calls/' + route.requestId : '/api/auth/desktop/' + route)
     const body = input && JSON.stringify(input)
     try {
       const headers = new Headers(buildDesktopAppGatewayHeaders({ method, url, body }))

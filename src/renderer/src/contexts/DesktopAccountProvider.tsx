@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { officialUrl } from '../../../shared/appPreferences'
+import { OFFICIAL_ORIGINS } from '../../../shared/appPreferences'
 import type { DesktopAccountCommand, DesktopAccountSnapshot } from '../../../shared/desktopAccount'
 import type { ManagedModel } from '../../../shared/managedModels'
 import { getRendererRuntime } from '../i18n'
@@ -112,7 +112,7 @@ export function DesktopAccountProvider({ children }: { children: ReactNode }) {
     const returning = page === 'recharge' ? { userNo } : undefined
     if (returning) rechargeReturn.current = returning
     try {
-      const result = await window.api.openExternal(officialUrl('domestic', accountPages[page]))
+      const result = await window.api.openExternal((getRendererRuntime().accountWebOrigin ?? OFFICIAL_ORIGINS.domestic) + accountPages[page])
       if (!result.success) throw new Error('desktop_account_page_unavailable')
     } catch (error) {
       if (returning && rechargeReturn.current === returning) rechargeReturn.current = undefined

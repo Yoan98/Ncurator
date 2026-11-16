@@ -1,5 +1,5 @@
 import { initializeAppMenu } from './services/app/AppMenu'
-import { getAppRuntime, initializeAppRuntime } from './services/app/AppRuntime'
+import { configureLocalService, getAppRuntime, initializeAppRuntime, usesLocalService } from './services/app/AppRuntime'
 import { downloadPageUrl } from '../shared/appPreferences'
 import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
@@ -38,6 +38,7 @@ import { setOfficeFileWriteListener } from './services/wps/officeFileWriteNotify
 
 if (!app.isPackaged) {
   loadRootEnvOnce()
+  configureLocalService()
 }
 
 const developmentRendererUrl = is.dev ? process.env.ELECTRON_RENDERER_URL : undefined
@@ -47,7 +48,7 @@ if (e2eUserDataPath) {
 } else {
   app.setPath(
     'userData',
-    join(app.getPath('appData'), app.isPackaged ? 'ncurator' : 'ncurator-dev')
+    join(app.getPath('appData'), app.isPackaged ? 'ncurator' : usesLocalService() ? 'ncurator-local' : 'ncurator-dev')
   )
 }
 syncUserDataPathFromElectron()

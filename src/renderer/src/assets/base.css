@@ -22,6 +22,7 @@
   --notion-blue: #2f5f8f;
   --notion-blue-bg: #edf3f8;
   --notion-yellow-bg: #fbf3db;
+  --model-offer-text: #875016;
 
   /* 兼容旧 utility 命名，语义已切到 Notion-like */
   --ink-canvas: var(--notion-canvas);

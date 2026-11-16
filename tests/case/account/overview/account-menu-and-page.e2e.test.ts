@@ -33,9 +33,23 @@ it('account-menu-and-page', async () => {
         const trigger = accountButton(page)
         await trigger.focus()
         await trigger.press('Enter')
-        await menuItem(page, labels.login).waitFor()
+        const login = menuItem(page, labels.login)
+        const offerText = '享受 DeepSeek 模型超低折扣'
+        const offer = login.getByText(offerText, { exact: true })
+        await offer.waitFor()
+        const loginTitle = await login.getByText('登录', { exact: true }).elementHandle()
+        const offerBelowTitle = await offer.evaluate(
+          (element, title) =>
+            element.getBoundingClientRect().top >= title.getBoundingClientRect().bottom,
+          loginTitle
+        )
+        expect(offerBelowTitle).toBe(true)
         const menu = page.getByRole('menu')
-        expect(await menu.getByRole('menuitem').allTextContents()).toEqual(['登录', '设置', '帮助'])
+        expect(await menu.getByRole('menuitem').allTextContents()).toEqual([
+          `登录🎁${offerText}`,
+          '设置',
+          '帮助'
+        ])
         expect(await menu.getByText('账号', { exact: true }).count()).toBe(0)
         expect(await trigger.getByTestId('desktop-account-avatar').locator('svg').isVisible()).toBe(
           true
@@ -56,13 +70,17 @@ it('account-menu-and-page', async () => {
         await service.authorize(runtime, web, email)
         const avatar = trigger.getByTestId('desktop-account-avatar')
         await expect.poll(() => avatar.innerText()).toBe(email[0].toUpperCase())
-        expect(await avatar.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
-          'rgb(245, 243, 239)'
-        )
+        const readAvatarColors = (element: HTMLElement | SVGElement) => {
+          const { backgroundColor, borderTopColor, color } = getComputedStyle(element)
+          return [backgroundColor, borderTopColor, color]
+        }
+        const avatarColors = ['rgb(221, 244, 231)', 'rgb(200, 231, 215)', 'rgb(36, 87, 65)']
+        expect(await avatar.evaluate(readAvatarColors)).toEqual(avatarColors)
         await openAccountMenu(page)
-        expect(await menu.getByTestId('desktop-account-avatar').innerText()).toBe(
-          email[0].toUpperCase()
-        )
+        expect(await menu.getByText(offerText, { exact: true }).count()).toBe(0)
+        const menuAvatar = menu.getByTestId('desktop-account-avatar')
+        expect(await menuAvatar.innerText()).toBe(email[0].toUpperCase())
+        expect(await menuAvatar.evaluate(readAvatarColors)).toEqual(avatarColors)
         expect(await menu.getByText(email, { exact: true }).count()).toBe(0)
         web = await service.continueInBrowser(web)
         const websiteNumber = await service.userNumber(web)
@@ -148,7 +166,7 @@ it('account-menu-and-page', async () => {
         await refreshWallet(page)
         await page.getByRole('status').getByText(labels.stale).waitFor()
         const retained = await available(page).innerText()
-        expect(await menu.getByText(mask(email), { exact: true }).isVisible()).toBe(true)
+        await menu.getByText(mask(email), { exact: true }).waitFor({ state: 'visible' })
         await setWalletOffline(runtime, false)
         await refreshWallet(page)
         await page.getByRole('status').getByText(labels.stale).waitFor({ state: 'hidden' })

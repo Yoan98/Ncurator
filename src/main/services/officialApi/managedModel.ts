@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { officialApiUrl } from '../../../shared/appPreferences'
 import { isManagedModelConfigId, managedModelEntryId } from '../../../shared/managedModels'
 import type { LlmRuntimeConfig } from '../../../shared/types'
-import { getAppRuntime } from '../app/AppRuntime'
+import { getAppRuntime, serviceApiUrl } from '../app/AppRuntime'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS } from '../ai/constants'
 import { LlmProviderError } from '../ai/errors'
 import { classifyManagedLlmRetry, ManagedModelConcurrencyRejection } from '../ai/llmRetry'
@@ -33,7 +32,7 @@ export function resolveManagedRuntimeConfig(configId: string, name: string,
   const id = managedModelEntryId(configId)
   if (!id || getAppRuntime().distribution !== 'domestic') throw new Error('馆长模型暂不可用')
   scope.assertCurrent()
-  const config: LlmRuntimeConfig = { id: configId, name, providerKind: 'openai-compatible', base_url: officialApiUrl('domestic', endpoint),
+  const config: LlmRuntimeConfig = { id: configId, name, providerKind: 'openai-compatible', base_url: serviceApiUrl('domestic', endpoint),
     api_key: 'managed-placeholder', model_name: id }
   modelScopes.set(config, scope)
   return config
@@ -205,7 +204,7 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
 }): typeof fetch {
   const id = managedModelEntryId(config.id)
   if (!id || getAppRuntime().distribution !== 'domestic') throw failure('model_not_found')
-  const url = officialApiUrl('domestic', endpoint + '/chat/completions')
+  const url = serviceApiUrl('domestic', endpoint + '/chat/completions')
   const invocation = invocations.get(config)
   return async (input, init) => {
     const request = new Request(input, init)

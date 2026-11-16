@@ -327,6 +327,9 @@ export const findTestFiles = async (input) => {
     .filter((filePath) => filePath.endsWith('.test.ts'))
     .filter((filePath) => {
       if (!filePath.startsWith(path.join(TEST_CASES_ROOT, 'account') + path.sep)) return true
+      if (toCaseId(filePath) === 'account-change-during-runs') {
+        return input.caseIds.includes('account-change-during-runs')
+      }
       if (input.domain === 'account' || input.caseIds.includes(toCaseId(filePath))) return true
       return input.target !== 'package' && Boolean(process.env.NCURATOR_ACCOUNT_E2E_FIXTURE)
     })

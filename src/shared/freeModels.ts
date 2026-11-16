@@ -102,14 +102,15 @@ export const isFreeModelExecutionId = (value: unknown): value is string =>
   /^[1-9][0-9]{0,18}$/.test(value) &&
   (value.length < 19 || value <= '9223372036854775807')
 
-export const isFreeModelApiUrl = (value: string): boolean => {
+export const isFreeModelApiUrl = (value: string, domesticApiOrigin = officialApiUrl('domestic', '')): boolean => {
   try {
     const url = new URL(value)
-    const route = routeForOfficialUrl(value)
-    if (!route || url.username || url.password) return false
-    if (route === 'domestic' && url.origin === officialApiUrl(route, '')) {
+    if (url.username || url.password) return false
+    if (url.origin === domesticApiOrigin) {
       return ['/api/v2/free', '/api/v2/free/chat/completions'].includes(url.pathname)
     }
+    const route = routeForOfficialUrl(value)
+    if (!route) return false
     return url.origin === officialUrl(route, '') &&
       (url.pathname === '/api/v1/free' || url.pathname.startsWith('/api/v1/free/'))
   } catch {
