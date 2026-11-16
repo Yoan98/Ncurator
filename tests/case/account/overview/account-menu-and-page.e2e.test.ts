@@ -1,13 +1,14 @@
 import { expect, it } from 'vitest'
 import {
   accountButton,
-  accountPanel,
   available,
   labels,
   mask,
   menuItem,
   newTestEmail,
-  readCopiedNumber,
+  openAccountMenu,
+  readDesktopUserNo,
+  refreshWallet,
   setWalletOffline,
   settingsAccount,
   withAccountFixture
@@ -21,7 +22,7 @@ it('account-menu-and-page', async () => {
       caseId: 'account-menu-and-page',
       domain: 'account',
       suite: 'overview',
-      description: '验证账号菜单、设置入口、本人编号、剪贴板与余额读取失败。',
+      description: '验证账号菜单、官网头像样式、设置导航和余额读取失败。',
       fixtures: [],
       serviceMode: 'real',
       execution: 'exclusive',
@@ -36,7 +37,9 @@ it('account-menu-and-page', async () => {
         const menu = page.getByRole('menu')
         expect(await menu.getByRole('menuitem').allTextContents()).toEqual(['登录', '设置', '帮助'])
         expect(await menu.getByText('账号', { exact: true }).count()).toBe(0)
-        expect(await trigger.getByTestId('desktop-account-avatar').locator('svg').isVisible()).toBe(true)
+        expect(await trigger.getByTestId('desktop-account-avatar').locator('svg').isVisible()).toBe(
+          true
+        )
         await trigger.press('Escape')
         await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('false')
         await trigger.click()
@@ -45,25 +48,30 @@ it('account-menu-and-page', async () => {
 
         await trigger.click()
         await menuItem(page, labels.settings).click()
-        await settingsAccount(page).click()
-        await accountPanel(page).getByText(labels.signedOut).waitFor()
-        expect(await available(page).count()).toBe(0)
+        await page.getByTestId('settings-page').waitFor()
+        expect(await settingsAccount(page).count()).toBe(0)
         await page.getByTestId('settings-back-row').click()
         let web = await service.browserPage()
         const email = newTestEmail('overview')
-        await service.authorize(runtime, web, email, { fromMenu: true })
-        await expect.poll(() => accountPanel(page).getByTestId('desktop-account-avatar').innerText())
-          .toBe(email[0].toUpperCase())
+        await service.authorize(runtime, web, email)
+        const avatar = trigger.getByTestId('desktop-account-avatar')
+        await expect.poll(() => avatar.innerText()).toBe(email[0].toUpperCase())
+        expect(await avatar.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
+          'rgb(245, 243, 239)'
+        )
+        await openAccountMenu(page)
+        expect(await menu.getByTestId('desktop-account-avatar').innerText()).toBe(
+          email[0].toUpperCase()
+        )
+        expect(await menu.getByText(email, { exact: true }).count()).toBe(0)
         web = await service.continueInBrowser(web)
         const websiteNumber = await service.userNumber(web)
-        expect(await readCopiedNumber(runtime)).toBe(websiteNumber)
-        expect(await accountPanel(page).getByText(email, { exact: true }).count()).toBe(0)
+        expect(await readDesktopUserNo(page)).toBe(websiteNumber)
         await expect.poll(() => available(page).innerText()).toBe('¥0.00')
 
         await service.recharge(web)
-        await accountPanel(page).getByRole('button', { name: labels.refresh }).click()
+        await refreshWallet(page)
         await expect.poll(() => available(page).innerText()).toBe('¥5.00')
-        await trigger.click()
         expect(await menuItem(page, labels.balance).innerText()).toContain('¥5.00')
         await menuItem(page, labels.recharge).waitFor()
         await menuItem(page, labels.billing).waitFor()
@@ -132,36 +140,22 @@ it('account-menu-and-page', async () => {
         }
         await nativeWindow.evaluate((window, bounds) => window.setBounds(bounds), initial)
         await menuItem(page, labels.settings).click()
-        await settingsAccount(page).click()
-        expect(await page.evaluate(() => location.hash)).toBe('#/settings/account')
-        await accountPanel(page).getByText(websiteNumber, { exact: true }).waitFor()
-        await trigger.click()
-        await menuItem(page, labels.balance).click()
-        expect(await page.evaluate(() => location.hash)).toBe('#/settings/account')
+        expect(await page.evaluate(() => location.hash)).toBe('#/settings/general')
+        expect(await settingsAccount(page).count()).toBe(0)
+        await openAccountMenu(page)
 
         await setWalletOffline(runtime, true)
-        await accountPanel(page).getByRole('button', { name: labels.refresh }).click()
-        await accountPanel(page).getByText(labels.stale).waitFor()
+        await refreshWallet(page)
+        await page.getByRole('status').getByText(labels.stale).waitFor()
         const retained = await available(page).innerText()
-        expect(await accountPanel(page).getByText(mask(email), { exact: true }).isVisible()).toBe(
-          true
-        )
+        expect(await menu.getByText(mask(email), { exact: true }).isVisible()).toBe(true)
         await setWalletOffline(runtime, false)
-        await accountPanel(page).getByRole('button', { name: labels.refresh }).click()
-        await accountPanel(page).getByText(labels.stale).waitFor({ state: 'hidden' })
-        await runtime.captureScreenshot({
-          name: 'account-overview',
-          message: '登录账号、用户编号和刷新后的可用余额'
-        })
-        await nativeWindow.evaluate((window) => window.setSize(1400, 800))
-        await runtime.captureScreenshot({
-          name: 'account-settings-minimum',
-          message: '原生最小窗口的账号设置页、长编号及操作'
-        })
+        await refreshWallet(page)
+        await page.getByRole('status').getByText(labels.stale).waitFor({ state: 'hidden' })
         const refreshed = await available(page).innerText()
-        await trigger.click()
         await menuItem(page, labels.signOut).click()
-        await accountPanel(page).getByText(labels.signedOut).waitFor()
+        await openAccountMenu(page)
+        await menuItem(page, labels.login).waitFor()
         expect(await service.userNumber(web)).toBe(websiteNumber)
         expect(await runtime.electronApp.evaluate(({ app }) => app.isReady())).toBe(true)
         return { retained, refreshed }

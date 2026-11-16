@@ -7,7 +7,6 @@ import { HiArrowLeft } from 'react-icons/hi2'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
 import VectorModelSettingsPanel from '../components/settings/VectorModelSettingsPanel'
 import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPanel'
-import { DesktopAccountSettings } from '../components/account/DesktopAccountSettings'
 import { DesktopAccountMenu } from '../components/account/DesktopAccountMenu'
 import GeneralSettingsPanel from '../components/settings/GeneralSettingsPanel'
 import { SETTINGS_SECTION_META, SETTINGS_SECTION_ORDER } from '../components/settings/constants'
@@ -25,7 +24,6 @@ const normalizeSettingsSection = (value: string | undefined): SettingsSectionVal
   if (!value) return null
   if (value === 'web-sources') return 'workspace'
   if (value === 'model-download') return 'vector'
-  if (value === 'account' && getRendererRuntime().distribution === 'domestic') return 'account'
   if (value === 'general' || value === 'model' || value === 'workspace' || value === 'vector') {
     return value
   }
@@ -137,7 +135,7 @@ const SettingsPage: React.FC = () => {
               {t(($) => $.common.settings)}
             </div>
             <div className="space-y-1">
-              {SETTINGS_SECTION_ORDER.filter(section => section !== 'account' || getRendererRuntime().distribution === 'domestic').map((section) => {
+              {SETTINGS_SECTION_ORDER.map((section) => {
                 const item = SETTINGS_SECTION_META[section]
                 return (
                   <NavLink
@@ -158,7 +156,11 @@ const SettingsPage: React.FC = () => {
               })}
             </div>
           </div>
-          {getRendererRuntime().distribution === 'domestic' && <div className="flex px-2 py-2"><DesktopAccountMenu /></div>}
+          {getRendererRuntime().distribution === 'domestic' && (
+            <div className="flex px-2 py-2">
+              <DesktopAccountMenu />
+            </div>
+          )}
         </aside>
 
         <main className="nc-main-pane nc-settings-main-pane min-w-0 flex-1">
@@ -175,7 +177,6 @@ const SettingsPage: React.FC = () => {
               </header>
 
               <div className="min-h-0 flex-1 overflow-hidden">
-                {currentSection === 'account' ? <DesktopAccountSettings /> : null}
                 {currentSection === 'general' ? <GeneralSettingsPanel /> : null}
                 {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
                 {currentSection === 'model' ? <ModelSettingsPanel /> : null}

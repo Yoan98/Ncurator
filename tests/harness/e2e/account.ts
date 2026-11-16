@@ -95,7 +95,7 @@ globalThis.fetch = async (input, init) => {
 shell.openExternal = async (target) => {
   const url = new URL(target)
   if (url.origin !== 'https://www.guanzhangai.cn' ||
-      !['/desktop/authorize', '/account/recharge', '/account/billing', '/zh/contact', '/en/contact'].includes(url.pathname)) {
+      !['/desktop/authorize', '/account', '/account/recharge', '/account/billing', '/zh/contact', '/en/contact'].includes(url.pathname)) {
     throw new Error('Unexpected external address')
   }
   network.urls.push(url.href)
@@ -153,18 +153,24 @@ export const labels = {
   recharge: /^(?:充\s*值|Top up)$/u,
   billing: /^(?:账\s*单|Billing)$/u,
   signOut: /^(?:退出登录|Sign out)$/u,
-  copy: /^(?:复\s*制|Copy)$/u,
-  refresh: /刷新余额|Refresh balance/u,
   stale: /余额待更新|Balance awaiting update/u,
-  signedOut: /^(?:尚未登录|Signed out)$/u,
   refund: /退款|Refund/iu
 }
 
-export const accountPanel = (page: Page) => page.getByTestId('desktop-account-settings')
 export const accountButton = (page: Page) => page.getByTestId('desktop-account-menu')
 export const available = (page: Page) => page.getByTestId('desktop-account-available')
 export const menuItem = (page: Page, name: RegExp) => page.getByRole('menuitem', { name })
 export const settingsAccount = (page: Page) => page.locator('a[href="#/settings/account"]')
+export async function openAccountMenu(page: Page) {
+  const trigger = accountButton(page)
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click()
+  await page.getByRole('menu').waitFor()
+}
+export const refreshWallet = (page: Page) => page.evaluate(() => window.api.desktopAccount('refresh-wallet'))
+export async function readDesktopUserNo(page: Page) {
+  const account = await page.evaluate(() => window.api.desktopAccount('profile'))
+  return account.status === 'signed_in' ? account.userNo : undefined
+}
 export const externalUrls = (runtime: Desktop) =>
   runtime.electronApp.evaluate(() => [...(globalThis as AccountRuntime).__accountTestNetwork.urls])
 export const walletReads = (runtime: Desktop) =>
@@ -207,28 +213,6 @@ export const accountNetwork = (runtime: Desktop) =>
       modelLookups
     }
   })
-export async function readCopiedNumber(runtime: E2ETestRuntime) {
-  const previous = await runtime.electronApp.evaluate(({ clipboard }) => clipboard.readText())
-  try {
-    await accountPanel(runtime.page).getByRole('button', { name: labels.copy, exact: true }).click()
-    await accountPanel(runtime.page)
-      .getByText(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/u)
-      .waitFor()
-    const visible = await accountPanel(runtime.page)
-      .getByText(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/u)
-      .innerText()
-    await expect
-      .poll(() => runtime.electronApp.evaluate(({ clipboard }) => clipboard.readText()))
-      .toBe(visible)
-    return visible
-  } finally {
-    await runtime.electronApp.evaluate(
-      ({ clipboard }, value) => clipboard.writeText(value),
-      previous
-    )
-  }
-}
-
 const isLoopback = (value: string) => {
   const url = new URL(value)
   return (
@@ -262,7 +246,7 @@ type Service = {
     runtime: Desktop,
     page: Page,
     email: string,
-    options?: { signedIn?: true; fromMenu?: true }
+    options?: { signedIn?: true }
   ) => Promise<void>
   userNumber: (page: Page) => Promise<string>
   recharge: (page: Page) => Promise<void>
@@ -477,12 +461,8 @@ export async function withAccountFixture(
           const desktopPage = desktop.page
           const before = (await externalUrls(desktop)).length
           const route = await desktopPage.evaluate(() => location.hash)
-          if (options?.fromMenu) {
-            await accountButton(desktopPage).click()
-            await menuItem(desktopPage, labels.login).click()
-          } else {
-            await accountPanel(desktopPage).getByRole('button', { name: labels.login }).click()
-          }
+          await openAccountMenu(desktopPage)
+          await menuItem(desktopPage, labels.login).click()
           await expect.poll(async () => (await externalUrls(desktop)).length).toBe(before + 1)
           expect(await desktopPage.evaluate(() => location.hash)).toBe(route)
           const target = new URL((await externalUrls(desktop)).at(-1)!)
@@ -510,12 +490,7 @@ export async function withAccountFixture(
             app.emit('open-url', { preventDefault() {} }, link)
           }, callbackUrl)
           await page.getByRole('heading', { name: '登录成功', exact: true }).waitFor()
-          if (options?.fromMenu) {
-            await accountButton(desktopPage).getByText(mask(email), { exact: true }).waitFor()
-            await accountButton(desktopPage).click()
-            await menuItem(desktopPage, labels.balance).click()
-          }
-          await accountPanel(desktopPage).getByText(mask(email), { exact: true }).waitFor()
+          await accountButton(desktopPage).getByText(mask(email), { exact: true }).waitFor()
         },
         async userNumber(page) {
           await page.goto(site + '/account')
@@ -596,7 +571,6 @@ export async function withAccountFixture(
             await app.page.locator('a[href="#/settings/model"]').waitFor()
             expect(await settingsAccount(app.page).count()).toBe(0)
             expect(await accountButton(app.page).count()).toBe(0)
-            expect(await accountPanel(app.page).count()).toBe(0)
             expect(
               await app.electronApp.evaluate(
                 () => (globalThis as AccountRuntime).__accountTestNetwork.urls

@@ -1,11 +1,12 @@
 import { expect, it } from 'vitest'
 import {
   accountButton,
-  accountPanel,
   available,
   labels,
   menuItem,
   newTestEmail,
+  openAccountMenu,
+  refreshWallet,
   armAccountFault,
   accountNetwork,
   releaseWallet,
@@ -13,7 +14,11 @@ import {
   withAccountFixture
 } from '../../../harness/e2e/account'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
-import { setWorkbenchInput, submitWorkbenchCurrentDraft } from '../../../harness/e2e/workbench'
+import {
+  dismissWorkbenchLlmConfigMissingNotification,
+  setWorkbenchInput,
+  submitWorkbenchCurrentDraft
+} from '../../../harness/e2e/workbench'
 
 it('balance-refresh-and-ordering', async () => {
   await withAccountFixture(async (setup, service) => {
@@ -30,29 +35,30 @@ it('balance-refresh-and-ordering', async () => {
       runMode: 'single',
       execute: async (runtime) => {
         const { page } = runtime
-        const menu = accountButton(page)
+        const trigger = accountButton(page)
         let web = await service.browserPage()
         const email = newTestEmail('ordering')
-        await service.authorize(runtime, web, email, { fromMenu: true })
+        await service.authorize(runtime, web, email)
         web = await service.continueInBrowser(web)
         await service.recharge(web)
-        const refresh = accountPanel(page).getByRole('button', { name: labels.refresh })
-        await refresh.click()
+        await refreshWallet(page)
+        await openAccountMenu(page)
         await expect.poll(() => available(page).innerText()).toBe('¥5.00')
         const reads = await walletReads(runtime)
-        await menu.click()
-        await menuItem(page, labels.balance).click()
+        await trigger.press('Escape')
+        await openAccountMenu(page)
         expect(await walletReads(runtime)).toBe(reads)
+        await trigger.press('Escape')
         await armAccountFault(runtime, 'holdWallet')
-        await refresh.click()
+        const firstRefresh = refreshWallet(page)
         await expect
           .poll(async () => (await accountNetwork(runtime)).heldWallet?.available)
           .toBe('500000000')
-        await page.getByTestId('settings-back-row').click()
         await page.getByTestId('workbench-new-partner-button').click()
         await page.getByTestId('workbench-create-partner-name-input').fill('余额乱序测试')
         await page.getByTestId('workbench-create-partner-name-input').press('Enter')
         await page.getByTestId('workbench-create-partner-modal').waitFor({ state: 'hidden' })
+        await dismissWorkbenchLlmConfigMissingNotification(page)
         expect(service.model).toBeDefined()
         await page.getByTestId('workbench-model-select').getByRole('button').click()
         await page.getByTestId('workbench-model-managed-option-' + service.model!.id).click()
@@ -67,16 +73,14 @@ it('balance-refresh-and-ordering', async () => {
         await expect
           .poll(async () => (await service.evidence(email)).calls[0].executionStatus)
           .toBe('completed')
-        await menu.click()
-        await menuItem(page, labels.balance).click()
-        const precise = accountPanel(page).locator('details')
-        await precise.locator('summary').click()
-        await precise.getByText('4.999946 CNY', { exact: true }).waitFor()
+        await openAccountMenu(page)
+        await expect.poll(() => available(page).getAttribute('title')).toBe('4.999946 CNY')
         await releaseWallet(runtime)
+        await firstRefresh
         await expect.poll(async () => (await accountNetwork(runtime)).releasedWallets).toBe(1)
-        await precise.getByText('4.999946 CNY', { exact: true }).waitFor()
+        expect(await available(page).getAttribute('title')).toBe('4.999946 CNY')
         expect(await walletReads(runtime)).toBe(reads + 1)
-        await page.getByTestId('settings-back-row').click()
+        await trigger.press('Escape')
         await armAccountFault(runtime, 'dropModelResult')
         await send('执行第二条隔离计量请求。')
         await expect
@@ -85,11 +89,8 @@ it('balance-refresh-and-ordering', async () => {
         await expect
           .poll(async () => (await accountNetwork(runtime)).modelLookups.length)
           .toBeGreaterThan(0)
-        await menu.click()
-        await menuItem(page, labels.balance).click()
-        const details = accountPanel(page).locator('details')
-        await details.locator('summary').click()
-        await details.getByText('4.999892 CNY', { exact: true }).waitFor()
+        await openAccountMenu(page)
+        await expect.poll(() => available(page).getAttribute('title')).toBe('4.999892 CNY')
         const network = await accountNetwork(runtime)
         expect(network.modelPosts).toHaveLength(2)
         expect(new Set(network.modelPosts).size).toBe(2)
@@ -98,14 +99,15 @@ it('balance-refresh-and-ordering', async () => {
         expect(evidence.calls).toHaveLength(2)
         expect(evidence.calls.every((call) => call.paidAmount === '5400')).toBe(true)
         await armAccountFault(runtime, 'holdWallet')
-        await refresh.click()
+        const secondRefresh = refreshWallet(page)
         await expect
           .poll(async () => (await accountNetwork(runtime)).heldWallet?.available)
           .toBe('499989200')
-        await menu.click()
         await menuItem(page, labels.signOut).click()
-        await accountPanel(page).getByText(labels.signedOut).waitFor()
+        await openAccountMenu(page)
+        await menuItem(page, labels.login).waitFor()
         await releaseWallet(runtime)
+        await secondRefresh
         await expect.poll(async () => (await accountNetwork(runtime)).releasedWallets).toBe(2)
         expect(await available(page).count()).toBe(0)
         await runtime.captureScreenshot({

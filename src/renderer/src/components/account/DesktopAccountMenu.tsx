@@ -6,7 +6,6 @@ import {
   HiOutlineArrowUpRight,
   HiOutlineChartBar,
   HiOutlineChevronUp,
-  HiOutlineChevronRight,
   HiOutlineCog6Tooth,
   HiOutlinePlusCircle,
   HiOutlineQuestionMarkCircle,
@@ -14,7 +13,7 @@ import {
 } from 'react-icons/hi2'
 import { useDesktopAccount } from '../../contexts/DesktopAccountProvider'
 import { getContactUrl, t } from '../../i18n'
-import { walletAmount } from './walletAmount'
+import { exactWalletAmount, walletAmount } from './walletAmount'
 import { useAppUpdate } from '../../contexts/AppUpdateContext'
 import { workbenchSelectors } from '../../testing/selectors'
 import { DesktopAccountAvatar } from './DesktopAccountAvatar'
@@ -35,7 +34,14 @@ export function DesktopAccountMenu() {
   const offline = snapshot.status === 'unavailable' && !!snapshot.userNo
   const logoutIncomplete = snapshot.status === 'logout_incomplete'
   const identity = signedIn ? snapshot.maskedEmail || snapshot.userNo : t(($) => $.account.title)
-  const openSettings = () => navigate('/settings/account')
+  const wallet = signedIn ? snapshot.wallet : undefined
+  const balanceStatus = !signedIn
+    ? undefined
+    : snapshot.walletStale
+      ? t(($) => $.account.balanceStale)
+      : wallet?.settlementPending
+        ? t(($) => $.account.settlementPending)
+        : undefined
   const logOut = () =>
     void run('logout')
       .then((value) => {
@@ -47,7 +53,7 @@ export function DesktopAccountMenu() {
     setStartingLogin(true)
     trigger.current?.focus()
     try {
-      const result = await run('begin')
+      const result = await run(offline ? 'restore' : 'begin')
       if (result.status === 'unavailable') message.error(t(($) => $.account.error))
       if (result.status === 'storage_unavailable') message.error(t(($) => $.account.storage))
     } catch {
@@ -57,7 +63,7 @@ export function DesktopAccountMenu() {
     }
   }
   const showOpenWebsiteError = () => message.error(t(($) => $.account.openWebsiteError))
-  const openPage = (page: 'recharge' | 'billing') =>
+  const openPage = (page: 'overview' | 'recharge' | 'billing') =>
     void openAccountPage(page).catch(showOpenWebsiteError)
   const externalLabel = (label: string) => (
     <span className="nc-account-menu-label">
@@ -66,7 +72,10 @@ export function DesktopAccountMenu() {
     </span>
   )
   const avatar = (
-    <DesktopAccountAvatar signedIn={signedIn} maskedEmail={signedIn ? snapshot.maskedEmail : undefined} />
+    <DesktopAccountAvatar
+      signedIn={signedIn}
+      maskedEmail={signedIn ? snapshot.maskedEmail : undefined}
+    />
   )
   const loginLabel = restoring
     ? t(($) => $.account.restore)
@@ -96,12 +105,17 @@ export function DesktopAccountMenu() {
               <span className="flex justify-between gap-3">
                 {t(($) => $.account.balance)}
                 <span className="ml-auto flex items-center gap-2 tabular-nums">
-                  {snapshot.wallet ? walletAmount(snapshot.wallet.available) : '—'}
-                  <HiOutlineChevronRight aria-hidden="true" className="text-[#91918E]" />
+                  <span
+                    data-testid="desktop-account-available"
+                    title={wallet ? `${exactWalletAmount(wallet.available)} CNY` : undefined}
+                  >
+                    {wallet ? walletAmount(wallet.available) : '—'}
+                  </span>
+                  <HiOutlineArrowUpRight aria-hidden="true" className="text-[#91918E]" />
                 </span>
               </span>
             ),
-            onClick: openSettings
+            onClick: () => openPage('overview')
           },
           {
             key: 'recharge',
@@ -124,7 +138,11 @@ export function DesktopAccountMenu() {
               <span className="nc-account-menu-label">
                 <span className="flex min-w-0 items-center gap-2 font-medium">
                   {avatar}
-                  {logoutIncomplete ? t(($) => $.account.logout) : offline ? t(($) => $.account.retry) : loginLabel}
+                  {logoutIncomplete
+                    ? t(($) => $.account.logout)
+                    : offline
+                      ? t(($) => $.account.retry)
+                      : loginLabel}
                   {waiting && <span className="sr-only">{t(($) => $.account.reopen)}</span>}
                 </span>
                 {!restoring && !offline && !logoutIncomplete && (
@@ -135,6 +153,17 @@ export function DesktopAccountMenu() {
             onClick: logoutIncomplete ? logOut : () => void startLogin()
           }
         ]),
+    ...(waiting
+      ? [
+          {
+            key: 'cancel-login',
+            label: t(($) => $.account.cancel),
+            onClick: () => {
+              void run('cancel').catch(() => message.error(t(($) => $.account.error)))
+            }
+          }
+        ]
+      : []),
     { type: 'divider' },
     {
       key: 'settings',
@@ -192,6 +221,11 @@ export function DesktopAccountMenu() {
           }}
         >
           {menu}
+          {balanceStatus && (
+            <div className="px-3 py-1 text-xs text-[var(--notion-text-soft)]" role="status">
+              {balanceStatus}
+            </div>
+          )}
           <div className="nc-account-version">
             <span>{t(($) => $.account.currentVersion)}</span>
             <span className="tabular-nums" data-testid={workbenchSelectors.appVersion}>

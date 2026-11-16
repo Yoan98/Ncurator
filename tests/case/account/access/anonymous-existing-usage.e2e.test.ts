@@ -7,9 +7,10 @@ import type { Page } from 'playwright'
 import { expect, it } from 'vitest'
 import {
   accountButton,
-  accountPanel,
   labels,
   menuItem,
+  openAccountMenu,
+  refreshWallet,
   newTestEmail,
   withAccountFixture,
   type ProfileEvidence
@@ -223,25 +224,15 @@ it('anonymous-existing-usage', async () => {
                 .filter({ hasText: names[family] })
                 .click()
             }
-            const accountPage = async () => {
-              await accountButton(runtime.page).click()
-              await menuItem(runtime.page, labels.settings).click()
-              await runtime.page.locator('a[href="#/settings/account"]').click()
-            }
             const login = async (email: string, web: Page, signedIn?: true) => {
-              await accountPage()
               await service.authorize(runtime, web, email, { signedIn })
-              await accountPanel(runtime.page).getByRole('button', { name: labels.refresh }).click()
+              await refreshWallet(runtime.page)
               const next = await service.continueInBrowser(web)
               await service.userNumber(next)
               return next
             }
             const observeInvalid = async () => {
-              await accountPage()
-              const refresh = accountPanel(runtime.page).getByRole('button', {
-                name: labels.refresh
-              })
-              if (await refresh.count()) await refresh.click()
+              await refreshWallet(runtime.page)
               await expect
                 .poll(
                   async () =>
@@ -251,7 +242,9 @@ it('anonymous-existing-usage', async () => {
                   { timeout: 10_000 }
                 )
                 .toBe('expired')
-              await accountPanel(runtime.page).getByRole('button', { name: labels.login }).waitFor()
+              await openAccountMenu(runtime.page)
+              await menuItem(runtime.page, labels.login).waitFor()
+              await accountButton(runtime.page).press('Escape')
             }
             let userNoB = ''
             const query = async (stage: number) => {
@@ -406,10 +399,9 @@ it('anonymous-existing-usage', async () => {
                 check(money(before) === money(await acceptance.evidence()), 'platform-delta')
                 await accountButton(runtime.page).click()
                 await menuItem(runtime.page, labels.signOut).click()
-                await accountPage()
-                await accountPanel(runtime.page)
-                  .getByRole('button', { name: labels.login })
-                  .waitFor()
+                await openAccountMenu(runtime.page)
+                await menuItem(runtime.page, labels.login).waitFor()
+                await accountButton(runtime.page).press('Escape')
                 check(
                   (await formalBilling(webA)).every((v) => v.status === 200),
                   'independent-web-session'

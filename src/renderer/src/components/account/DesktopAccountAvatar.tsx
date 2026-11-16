@@ -2,26 +2,23 @@ import { HiOutlineUser } from 'react-icons/hi2'
 
 export function DesktopAccountAvatar({
   signedIn,
-  maskedEmail,
-  large = false
+  maskedEmail
 }: {
   signedIn: boolean
   maskedEmail?: string | null
-  large?: boolean
 }) {
-  const initial = signedIn ? Array.from(maskedEmail?.trim().toUpperCase() ?? '')[0] : undefined
-  const size = large ? 'size-10 text-base' : 'size-7 text-xs'
+  const [initial] = maskedEmail?.trim().toUpperCase() ?? ''
   const color = signedIn
-    ? 'bg-[var(--notion-blue-bg)] text-[var(--notion-blue)]'
+    ? 'bg-[#F5F3EF] text-[#5F5B55]'
     : 'bg-[var(--notion-surface-hover)] text-[var(--notion-text-soft)]'
 
   return (
     <span
       aria-hidden="true"
       data-testid="desktop-account-avatar"
-      className={`grid shrink-0 place-items-center rounded-full font-semibold ${size} ${color}`}
+      className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold ${color}`}
     >
-      {initial || <HiOutlineUser className={large ? 'size-5' : 'size-4'} />}
+      {signedIn && initial ? initial : <HiOutlineUser className="size-4" />}
     </span>
   )
 }

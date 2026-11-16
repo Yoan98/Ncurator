@@ -1,14 +1,14 @@
 import { expect, it } from 'vitest'
 import {
   accountButton,
-  accountPanel,
   available,
   externalUrls,
   labels,
   mask,
   menuItem,
   newTestEmail,
-  readCopiedNumber,
+  openAccountMenu,
+  readDesktopUserNo,
   returnToDesktop,
   walletReads,
   withAccountFixture
@@ -16,6 +16,7 @@ import {
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 
 const site = 'https://www.guanzhangai.cn'
+const overviewUrl = site + '/account'
 const rechargeUrl = site + '/account/recharge'
 const billingUrl = site + '/account/billing'
 
@@ -37,45 +38,43 @@ it('account-web-navigation', async () => {
         const trigger = accountButton(page)
         const desktopEmail = newTestEmail('desktop')
         let web = await service.browserPage()
-        await service.authorize(runtime, web, desktopEmail, { fromMenu: true })
+        await service.authorize(runtime, web, desktopEmail)
         web = await service.continueInBrowser(web)
         const desktopNumber = await service.userNumber(web)
-        expect(await readCopiedNumber(runtime)).toBe(desktopNumber)
+        expect(await readDesktopUserNo(page)).toBe(desktopNumber)
+        await openAccountMenu(page)
         await expect.poll(() => available(page).innerText()).toBe('¥0.00')
         const locale = await page.locator('html').getAttribute('lang')
         const contact = site + (locale === 'zh-CN' ? '/zh/contact' : '/en/contact')
-        await trigger.click()
         await menuItem(page, labels.help).click()
         await expect.poll(async () => (await externalUrls(runtime)).at(-1)).toBe(contact)
         await trigger.click()
         expect(await menuItem(page, labels.refund).count()).toBe(0)
+        await menuItem(page, labels.balance).click()
+        await expect.poll(async () => (await externalUrls(runtime)).at(-1)).toBe(overviewUrl)
+        await openAccountMenu(page)
         await menuItem(page, labels.recharge).click()
         await expect.poll(async () => (await externalUrls(runtime)).at(-1)).toBe(rechargeUrl)
         await trigger.click()
         await menuItem(page, labels.billing).click()
         await expect.poll(async () => (await externalUrls(runtime)).at(-1)).toBe(billingUrl)
-        expect(await accountPanel(page).getByRole('button', { name: labels.refund }).count()).toBe(
-          0
-        )
 
         const differentBrowser = await service.browserPage()
         await service.signIn(differentBrowser, newTestEmail('browser'), rechargeUrl)
         expect(await service.userNumber(differentBrowser)).not.toBe(desktopNumber)
-        expect(
-          await accountPanel(page).getByText(mask(desktopEmail), { exact: true }).isVisible()
-        ).toBe(true)
+        expect(await trigger.getByText(mask(desktopEmail), { exact: true }).isVisible()).toBe(true)
         const billingBrowser = await service.browserPage()
         await service.signIn(billingBrowser, newTestEmail('billing'), billingUrl)
         await billingBrowser.getByRole('heading', { name: '账单', exact: true }).waitFor()
 
-        await accountPanel(page).getByRole('button', { name: labels.billing, exact: true }).click()
-        await expect.poll(async () => (await externalUrls(runtime)).at(-1)).toBe(billingUrl)
-        await accountPanel(page).getByRole('button', { name: labels.recharge, exact: true }).click()
+        await openAccountMenu(page)
+        await menuItem(page, labels.recharge).click()
         await expect.poll(async () => (await externalUrls(runtime)).at(-1)).toBe(rechargeUrl)
         await service.recharge(web)
         const before = await walletReads(runtime)
         await returnToDesktop(runtime)
         await expect.poll(() => walletReads(runtime)).toBe(before + 1)
+        await openAccountMenu(page)
         await expect.poll(() => available(page).innerText()).toBe('¥5.00')
         await returnToDesktop(runtime)
         expect(await walletReads(runtime)).toBe(before + 1)
@@ -86,7 +85,7 @@ it('account-web-navigation', async () => {
 
         await service.checkOverseas()
         const urls = (await externalUrls(runtime)).slice(1)
-        expect(urls).toEqual([contact, rechargeUrl, billingUrl, billingUrl, rechargeUrl])
+        expect(urls).toEqual([contact, overviewUrl, rechargeUrl, billingUrl, rechargeUrl])
         return { count: urls.length, balance: await available(page).innerText() }
       },
       assert: async ({ count, balance }, runtime) => {

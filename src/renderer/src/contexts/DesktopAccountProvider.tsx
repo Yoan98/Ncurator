@@ -4,7 +4,7 @@ import type { DesktopAccountCommand, DesktopAccountSnapshot } from '../../../sha
 import type { ManagedModel } from '../../../shared/managedModels'
 import { getRendererRuntime } from '../i18n'
 
-const accountPages = { recharge: '/account/recharge', billing: '/account/billing' } as const
+const accountPages = { overview: '/account', recharge: '/account/recharge', billing: '/account/billing' } as const
 type Catalog = { userNo: string; models?: ManagedModel[]; status: 'loading' | 'ready' | 'unavailable' }
 type AccountContext = {
   snapshot: DesktopAccountSnapshot
