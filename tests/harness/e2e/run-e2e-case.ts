@@ -38,8 +38,8 @@ import {
   type E2EResourceDisposalError
 } from './resourceScope'
 
-export type E2ETestRunMode = 'single' | 'repeatable'
-export type E2EExecutionClass = 'normal' | 'live' | 'exclusive'
+type E2ETestRunMode = 'single' | 'repeatable'
+type E2EExecutionClass = 'normal' | 'live' | 'exclusive'
 
 type KnowledgeCacheStats = {
   splitCacheHits: number

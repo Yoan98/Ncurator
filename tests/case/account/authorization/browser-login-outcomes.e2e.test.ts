@@ -14,8 +14,9 @@ import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 
 it('browser-login-outcomes', async () => {
   if (process.env.NCURATOR_E2E_LOCAL_BACKEND === '1') {
-    const api = requiredLoopback(process.env.NCURATOR_API_ORIGIN)
-    const web = requiredLoopback(process.env.NCURATOR_WEB_ORIGIN)
+    if (process.env.NCURATOR_SERVICE_ENV !== 'local') throw new Error('Local backend E2E requires NCURATOR_SERVICE_ENV=local')
+    const api = requiredLoopback(process.env.NCURATOR_LOCAL_API_ORIGIN)
+    const web = requiredLoopback(process.env.NCURATOR_LOCAL_WEB_ORIGIN)
     await runE2ECase({
       caseId: 'browser-login-outcomes',
       domain: 'account',
@@ -45,9 +46,12 @@ it('browser-login-outcomes', async () => {
         const browser = await chromium.launch({ channel: process.env.NCURATOR_E2E_BROWSER_CHANNEL || 'chrome' })
         try {
           const page = await browser.newPage()
-          const request = page.waitForResponse(response => response.url() === api + '/api/auth/session')
-          expect((await page.goto(url.href))?.status()).toBe(200)
-          expect((await request).status()).toBe(401)
+          const [sessionResponse, pageResponse] = await Promise.all([
+            page.waitForResponse(response => response.url() === api + '/api/auth/session'),
+            page.goto(url.href)
+          ])
+          expect(pageResponse?.status()).toBe(200)
+          expect(sessionResponse.status()).toBe(401)
         } finally {
           await browser.close()
         }

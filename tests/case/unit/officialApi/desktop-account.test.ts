@@ -18,6 +18,8 @@ const electron = vi.hoisted(() => ({
   safeStorage: { isEncryptionAvailable: vi.fn(), getSelectedStorageBackend: vi.fn(() => 'synthetic'), encryptString: vi.fn(), decryptString: vi.fn() },
   shell: { openExternal: vi.fn() }, ipcMain: { handle: vi.fn() }
 }))
+vi.mock('../../../../src/main/services/app/ServiceEnvironment', () =>
+  import('../../../harness/core/desktopGatewayEnvironment'))
 vi.mock('electron', () => electron)
 const filesystem = vi.hoisted(() => ({ denyCredentialDeletion: false }))
 vi.mock('node:fs', async importOriginal => {

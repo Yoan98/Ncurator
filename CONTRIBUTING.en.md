@@ -24,7 +24,7 @@ Follow [AGENTS.md](./AGENTS.md) and the [documentation guidelines](./doc/doc-gui
 
 Use Node.js 22, pnpm 9.12.2, and Python 3.12. Install macOS Command Line Tools or Windows C++ Build Tools if native modules require compilation. First launch prepares native modules and builds the web crawling sidecar as needed, requiring a network connection. For desktop UI work, start with `pnpm dev:no-sidecar` if the sidecar is unnecessary.
 
-After cloning your fork, install dependencies and start the app from the project directory:
+After cloning your fork, install dependencies, prepare `.env` and the selected environment's key using the [domestic source configuration](./doc/deploy/design.md#国内源码环境配置), then start the app:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -47,7 +47,7 @@ Run checks appropriate to the change and record the commands and results in the 
 
 **Before opening a PR, you must run the app yourself and personally try out and test any feature you added or changed.** Record the steps and results in the PR. Seeing your own changes work in the app can be rewarding, too.
 
-Keep `.env-example` free of real credentials. Do not commit production shared secrets, model keys, signing certificates, user databases, or test logs. Normal development requires neither COS / R2 upload access nor official service keys. See the [release guide](./doc/deploy/release.md) for official publishing.
+Keep `.env-example` free of real credentials. `NCURATOR_SERVICE_ENV=local|production` selects a complete API and website pair; missing configuration fails without falling back to production. The local signing key is read only from `.env.local`, and the production signing key only from `.env`. Resynchronize the existing client configuration after rebuilding the local service, then restart the desktop and website separately. Do not commit production shared secrets, model keys, signing certificates, user databases, or test logs. Local service development requires neither production credentials nor COS / R2 upload access. Installed packages always use production. See the [release guide](./doc/deploy/release.md) for official publishing.
 
 ## Opening a Pull Request
 

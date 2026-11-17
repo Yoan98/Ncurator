@@ -1,34 +1,15 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { parseEnv } from 'node:util'
 
 let loaded = false
 
 const ROOT_ENV_FILES = ['.env.local', '.env'] as const
 
-const unquote = (value: string): string => {
-  const trimmed = value.trim()
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1)
-  }
-  return trimmed
-}
-
-const parseLine = (line: string): { key: string; value: string } | null => {
-  const trimmed = line.trim()
-  if (!trimmed || trimmed.startsWith('#')) return null
-  const index = trimmed.indexOf('=')
-  if (index <= 0) return null
-  const key = trimmed.slice(0, index).trim()
-  const value = unquote(trimmed.slice(index + 1))
-  if (!key) return null
-  return { key, value }
-}
-
 const expandEnvironmentReferences = (value: string): string =>
-  value.replace(/\$\{([A-Z][A-Z0-9_]*)\}/g, (_match, name: string) => String(process.env[name] || ''))
+  value.replace(/\$\{([A-Z][A-Z0-9_]*)\}/g, (_match, name: string) =>
+    String(process.env[name] || '')
+  )
 
 export const loadRootEnvOnce = (): void => {
   if (loaded) return
@@ -45,12 +26,11 @@ export const loadRootEnvOnce = (): void => {
       continue
     }
 
-    for (const line of raw.split('\n')) {
-      const parsed = parseLine(line)
-      if (!parsed) continue
-      const current = String(process.env[parsed.key] || '').trim()
+    for (const [key, value] of Object.entries(parseEnv(raw))) {
+      if (key === 'NCURATOR_APP_SECRET_DESKTOP' || value === undefined) continue
+      const current = String(process.env[key] || '').trim()
       if (current) continue
-      process.env[parsed.key] = expandEnvironmentReferences(parsed.value)
+      process.env[key] = expandEnvironmentReferences(value)
     }
   }
 }

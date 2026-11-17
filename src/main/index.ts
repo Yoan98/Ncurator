@@ -1,5 +1,5 @@
 import { initializeAppMenu } from './services/app/AppMenu'
-import { configureLocalService, getAppRuntime, initializeAppRuntime, usesLocalService } from './services/app/AppRuntime'
+import { configureServiceEnvironment, getAppRuntime, initializeAppRuntime, usesLocalService } from './services/app/AppRuntime'
 import { downloadPageUrl } from '../shared/appPreferences'
 import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
@@ -38,7 +38,7 @@ import { setOfficeFileWriteListener } from './services/wps/officeFileWriteNotify
 
 if (!app.isPackaged) {
   loadRootEnvOnce()
-  configureLocalService()
+  configureServiceEnvironment()
 }
 
 const developmentRendererUrl = is.dev ? process.env.ELECTRON_RENDERER_URL : undefined

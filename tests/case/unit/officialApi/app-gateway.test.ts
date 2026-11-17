@@ -13,6 +13,9 @@ import { readJwtExpiryMs } from '../../../../src/main/services/officialApi/freeM
 
 const originalSecret = process.env.NCURATOR_APP_SECRET_DESKTOP
 
+vi.mock('../../../../src/main/services/app/ServiceEnvironment', () =>
+  import('../../../harness/core/desktopGatewayEnvironment'))
+
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()

@@ -32,7 +32,7 @@ export type AppUpdateStatus =
   | 'not-available'
   | 'error'
 
-export type AppRuntimePlatform =
+type AppRuntimePlatform =
   | 'aix'
   | 'android'
   | 'cygwin'

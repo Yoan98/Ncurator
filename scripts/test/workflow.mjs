@@ -4,6 +4,7 @@ import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseEnv } from 'node:util'
 import {
   RELEASE_ACCOUNT_CASES,
   readTestCaseIds,
@@ -76,20 +77,10 @@ const loadRootEnv = () => {
     } catch {
       continue
     }
-    for (const line of raw.split(/\r?\n/u)) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) continue
-      const separator = trimmed.indexOf('=')
-      if (separator <= 0) continue
-      const key = trimmed.slice(0, separator).trim()
-      const value = trimmed.slice(separator + 1).trim()
-      if (!key || String(process.env[key] || '').trim()) continue
-      const unquoted =
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-          ? value.slice(1, -1)
-          : value
-      process.env[key] = expandEnvironmentReferences(unquoted)
+    for (const [key, value] of Object.entries(parseEnv(raw))) {
+      if (key === 'NCURATOR_APP_SECRET_DESKTOP' || value === undefined) continue
+      if (String(process.env[key] || '').trim()) continue
+      process.env[key] = expandEnvironmentReferences(value)
     }
   }
 }

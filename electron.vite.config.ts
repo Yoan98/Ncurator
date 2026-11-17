@@ -3,14 +3,11 @@ import { execFileSync } from 'node:child_process'
 import { defineConfig, type UserConfig } from 'electron-vite'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { loadEnv } from 'vite'
 import { createKnowledgeCacheIdentity } from './scripts/build/runtime/knowledge-cache-identity.mjs'
 
-export default defineConfig(async ({ mode }): Promise<UserConfig> => {
+export default defineConfig(async (): Promise<UserConfig> => {
   execFileSync(process.execPath, [resolve('scripts/build/vditor-assets.mjs')], { stdio: 'inherit' })
   const knowledgeIdentity = await createKnowledgeCacheIdentity()
-  const env = loadEnv(mode, process.cwd(), '')
-  if (mode === 'development' && env.NCURATOR_APP_SECRET_DESKTOP) process.env.NCURATOR_APP_SECRET_DESKTOP = env.NCURATOR_APP_SECRET_DESKTOP
 
   return {
     main: {

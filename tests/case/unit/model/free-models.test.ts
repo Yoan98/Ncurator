@@ -13,6 +13,9 @@ import {
 import { FreeModelCatalogService } from '../../../../src/main/services/llm/FreeModelCatalogService'
 import { PresetModelCatalogService } from '../../../../src/main/services/llm/PresetModelCatalogService'
 
+vi.mock('../../../../src/main/services/app/ServiceEnvironment', () =>
+  import('../../../harness/core/desktopGatewayEnvironment'))
+
 const sampleEntry = (overrides?: Partial<FreeModelCatalogEntry>): FreeModelCatalogEntry => ({
   id: 'free-glm-4.7-flash',
   providerKind: 'openai-compatible',
@@ -132,6 +135,7 @@ describe('catalog refresh failures', () => {
     async (kind) => {
       const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-catalog-error-'))
       vi.stubEnv('NCURATOR_USER_DATA_PATH', folder)
+      vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'synthetic-catalog-error-test-key')
       const body = JSON.stringify({ error: { message: 'Catalog gateway unavailable' } })
       vi.stubGlobal(
         'fetch',

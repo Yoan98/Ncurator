@@ -17,7 +17,7 @@ prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` 
 - electron-builder 以 `release-stage/app` 为唯一应用输入，开发工作区不直接进入安装包。
 - Vite 配置统一准备 Vditor 离线资源，开发、源码 E2E 和正式构建使用相同本地资源入口。
 - 安装包包含构建后的应用、生产依赖与运行资源，排除开发和测试资料、`.env`、私钥、Source Map 及其他平台文件。`app.asar` 与 `VITE_*` 可由用户读取，不作为凭证保护手段。
-- 国内源码运行可同时配置 `NCURATOR_API_ORIGIN` 和 `NCURATOR_WEB_ORIGIN` 指向带端口的 `http://127.0.0.1`，并使用同一套本地服务生成的桌面请求签名凭证。两项均未设置时使用发行版的生产服务。任何安装包都按发行版标记使用生产 API 与官网，环境变量无法覆盖地址。
+- 国内源码运行按下述环境配置选择整组 API、授权网页和账户网页；缺失配置明确失败。任何安装包都按发行版标记使用生产 API、官网和发行包 App Key，不读取开发选择器或开发凭证，环境变量无法覆盖地址。
 - 生产依赖按追踪结果裁剪，并验证关键读写路径；追踪触达待裁剪目录时构建失败，避免误删运行依赖。
 - 依赖内的运行时代码目录按精确路径保留，包括 ExcelJS 的 `lib/doc` 与 YAML 的 `dist/doc`；staging 校验 YAML 解析及序列化，实际安装包审计检查其关键运行时文件，不能按目录名将其当普通文档删除。
 - Windows x64 在 ONNX Runtime 与 Jieba 原生模块旁各自部署 VC++ 运行库，不要求用户预装系统运行库；安装包审计检查两处实际解包的二进制与 DLL，staging 实际加载 Jieba 默认词典并验证中文分词。
@@ -25,6 +25,30 @@ prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` 
 - 候选 bundle 绑定 Tag、commit、fragment、安装包、更新文件与哈希，测试和发布消费同一份可校验产物。
 
 具体文件排除规则与体积预算由[构建审计脚本](../../scripts/build/package/content-policy.mjs)维护，打包参数见 [electron-builder 配置](../../electron-builder.yml)。
+
+### 国内源码环境配置
+
+从 `.env-example` 复制 `.env`，文件权限设为 `0600`。桌面与网页开发进程各自读取各自项目的配置；两边使用相同的字段语义，切换后分别重启，不假定一个文件控制两个进程。
+
+| 字段 | 用途 |
+| --- | --- |
+| `NCURATOR_SERVICE_ENV` | 必填，`local` 或 `production`，没有默认值 |
+| `NCURATOR_LOCAL_API_ORIGIN` / `NCURATOR_LOCAL_WEB_ORIGIN` | 本地 API 与网页，必须为带端口的 `http://127.0.0.1` origin |
+| `NCURATOR_PRODUCTION_API_ORIGIN` / `NCURATOR_PRODUCTION_WEB_ORIGIN` | 生产 API 与网页，显式填写 `https://api.guanzhangai.cn` 与 `https://www.guanzhangai.cn` |
+
+选中组的两个地址均须完整、合法，不允许凭证、路径、查询参数或 fragment。未选中组可以留空。Main 在存储和业务服务初始化前加载、校验并固定本次配置，构建不把这些值注入 bundle。Main、服务配置读取和测试 runner 均使用 Node `parseEnv` 解析文件，支持引号和行尾注释，避免预加载产生不同的值。普通配置沿用非空进程变量优先于 `.env.local`、`.env` 的加载顺序；显式选择器可以用于单次启动，例如 `NCURATOR_SERVICE_ENV=production pnpm dev`。
+
+桌面请求签名仍使用 `NCURATOR_APP_SECRET_DESKTOP`，但按文件单独读取：`local` 只读取 `.env.local`，`production` 只读取 `.env`。不合并同名 Key，不采用继承进程中的 Key，不展开 Key 中的变量引用，也不从另一文件兜底。选中组 Key 缺失或非法时停止启动；实际服务不接受该 Key 时保留认证失败，不切换服务。生产 Key 应通过目标服务的只读签名接口安全核对，不能仅因本机有值便认定匹配。两环境的 Key 复用对应服务的现有值，不因切换重新生成。
+
+本地服务生成客户端配置后，在桌面项目运行：
+
+```bash
+node scripts/dev/sync-local-service-env.mjs <client.env> && pnpm dev
+```
+
+同步仅提取客户端 API、网页与桌面 Key，写入权限为 `0600` 的 `.env.local`，保留其他本地配置和 `.env`。脚本先使旧本地 Key 失效，再读取和校验新配置；每次原子替换前核对文件快照，检测到其他会话修改或删除文件时明确冲突退出，保留并发变更，不恢复或覆盖旧内容。源文件缺失、非法或同步失败时不启动桌面、不使用旧 Key，重新同步成功后才能启动。服务重建后必须重新同步并重启桌面；不要导入服务端完整 env、数据库或备份配置。源码本地环境使用 `ncurator-local` 用户目录，源码生产联调使用 `ncurator-dev`，正式包使用 `ncurator`，账号凭据和目录缓存分别保存。
+
+开发环境值、数据库和备份不得复制到构建资源；`.env` / `.env.local` 均不进入 staging 和安装包。发行包继续使用现有独立的发行 Key 配置和固定生产渠道。
 
 ## 2. 对象存储与公开通道
 
@@ -55,15 +79,11 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 ### GitHub Releases 手动下载
 
-公开仓库 `Yoan98/Ncurator` 的 Releases 作为安装包下载镜像，由现有平台发布命令通过 GitHub CLI 自动上传与 R2 上线国际版相同的文件；国内包完成正式包回归，国际包通过共用资源一致性绑定该证据，不重新构建。认证复用 CLI 保存的登录凭证，或使用发版机环境中的 `GH_TOKEN`；本地配置与验证见[发布流程](./release.md#31-github-releases-镜像)。Windows 与 macOS 沿用各自独立 Tag，每条 Release 包含对应平台的 EXE 或 DMG、`SHA256SUMS` 和中英文版本说明；新版本的双语变更内容固化于 annotated Tag，下载说明按语言生成，草稿恢复及公开前后校验正文。已公开说明可以独立修正，附件和 Tag 保持原身份。GitHub 安装包附件使用英文品牌 ASCII 文件名，命名见[品牌规范](../brand.md#下载与缓存命名)，自动更新文件由各发行包固定的 COS／R2 通道提供。
-
-Release 的公开 annotated Tag 必须与候选 bundle 的构建 commit 完全一致；公开源码后从该源码创建新的 Tag 和候选包。自动流程不代建 Tag，不把含凭证的私有历史推入公开仓库，也不处理历史包与公开快照的 commit 映射。GitHub 自动附带的 Source code 压缩包不替代安装包，也不替代核对完整对应源码的义务。
-
-Windows 和 macOS 独立发布，GitHub 的 Latest 标记不能代表两个平台都已更新。README 使用仓库 Releases 列表作为 GitHub 下载入口，不依赖跨平台共用的 `releases/latest/download` 地址。具体上传与恢复操作见[发布流程](./release.md#31-github-releases-镜像)。
+GitHub Releases 镜像与 R2 上线的国际安装包字节一致，附件使用[英文品牌文件名](../brand.md#下载与缓存命名)。公开 annotated Tag 指向候选包的完整构建提交，源码须满足公开仓库边界。Windows 和 macOS 各有独立 Tag，README 引用 Releases 列表。认证、附件、公布和恢复见[发布流程](./release.md#31-github-releases-镜像)。
 
 R2 发布配置为每次正式发布必需：设置 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_ACCOUNT_ID`、`R2_BUCKET_NAME`、`R2_PUBLIC_BASE_URL=https://download.ncurator.com`。平台发布入口固定处理两个存储；`RELEASE_STORAGE_TARGET=cos|r2` 仅选择底层上传 / finalize 恢复目标，默认 COS。
 
-publish 在写入前校验 COS / R2 配置与两个公开渠道的版本，再校验 GitHub 源码身份并准备草稿及附件；随后分别上传 COS 国内候选与 R2 国际候选及各自 fragment，分别更新该平台自动更新 metadata 与官网 manifest，验证公开 yml / 清单 / artifacts 的大小、sha512 与 manifest URL（安装包 URL 须以用户可见文件名结尾）；最后公开 GitHub Release，并通过匿名下载核对大小与 SHA-256。三个渠道成功后才标记 `published` 并清理本地 `tests/logs/**`；每个存储在自身公开验证完成后清理该平台更早 artifacts（含旧 `release-status/`）。失败、prepare-only、test-only 不清理 logs。跨服务发布不具备原子性；中断保留同一组双发行候选包，重跑 publish 时分别检查 COS 国内包及 R2 国际包的官网与更新通道状态、复验已完成渠道、补齐未完成渠道与 GitHub 草稿附件。已标记 `published` 的双候选包也可补齐各自缺失渠道；不重建、不覆盖已有附件，不把较新通道降级。
+三个公开渠道独立生效，候选包在三方验证通过后标记 `published`。中断时复用同一组候选，保留已验证的文件和版本指针。各渠道的发布顺序与中断恢复见[发布手册](release.md#4-中断与恢复)。
 
 ### 本地保留与清理
 
@@ -84,7 +104,7 @@ macOS 更新：https://download.guanzhangai.cn/updates/latest/latest-mac.yml
 
 官网下载页写死上述清单地址，`fetch` 后导航到 artifacts；不要 `fetch` 整包。
 
-模拟更新 E2E（`sidebar-app-update`、`database-version-update-required` 与 `pnpm test:update*`）见 `doc/test-plan/workbench-test.md`，不证明真实安装成功。
+模拟更新回归及执行入口见 [Workbench 测试计划](../test-plan/workbench-test.md)。实际覆盖安装按下节验证。
 
 ## 4. Windows 真实覆盖升级测试
 
@@ -95,8 +115,8 @@ macOS 更新：https://download.guanzhangai.cn/updates/latest/latest-mac.yml
 ```bash
 pnpm test:update:real:win -- \
   --source-installer <已发布旧版安装包.exe> \
-  --source-version 1.0.3 \
-  --expected-version 1.0.4 \
+  --source-version <已安装版本> \
+  --expected-version <目标版本> \
   --downgrade-installer <含禁止降级逻辑的较低版本候选包.exe>
 ```
 
@@ -105,7 +125,7 @@ pnpm test:update:real:win -- \
 - 脚本为 `scripts/test/update-real-windows.mjs`，不在 `tests/case/**`，不进入 runner、`test:update` 或发布命令。
 - 使用离线本地 HTTP feed 托管新版安装包与 `latest.yml`，不触碰生产通道。
 - 使用独立安装目录和 user-data；结束后卸载测试版本并恢复缓存。
-- `--source-installer` 应复现不含本次修复的已发布旧包；`--expected-version` 使用当前代码构建的更高版本。
+- `--source-installer` 使用已发布的源版本安装包，`--expected-version` 指定本次验证的更高版本。
 
 ### 通过条件
 

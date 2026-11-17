@@ -141,7 +141,10 @@ app.whenReady().then(() => session.defaultSession.webRequest.onBeforeRequest(
     callback({ cancel: true })
   }
 ))
-if (!app.isPackaged) require(settings.main)
+if (!app.isPackaged) {
+  process.chdir(app.getAppPath())
+  require(settings.main)
+}
 `
 
 type Fixture = {
@@ -460,7 +463,9 @@ export async function withAccountFixture(
     : undefined
   const extraEnv = {
     NCURATOR_ACCOUNT_TEST_INPUT: JSON.stringify(settings),
-    NCURATOR_APP_SECRET_DESKTOP: fixture.appKey,
+    NCURATOR_SERVICE_ENV: 'production',
+    NCURATOR_PRODUCTION_API_ORIGIN: api,
+    NCURATOR_PRODUCTION_WEB_ORIGIN: site,
     NCURATOR_DISTRIBUTION: 'domestic'
   }
   const post = (path: string, body: object) =>
@@ -502,6 +507,9 @@ export async function withAccountFixture(
       JSON.stringify({ name: 'ncurator-account-test', version, main: 'main.cjs' })
     )
     await writeFile(join(root, 'main.cjs'), sourceBootstrap)
+    if (!packaged) {
+      await writeFile(join(root, '.env'), `NCURATOR_APP_SECRET_DESKTOP=${fixture.appKey}\n`, { mode: 0o600 })
+    }
     const browser = await chromium.launch({
       channel: process.env.NCURATOR_E2E_BROWSER_CHANNEL,
       args: fixture.browserArgs

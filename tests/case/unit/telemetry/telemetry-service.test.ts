@@ -7,6 +7,9 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TelemetryService } from '../../../../src/main/services/telemetry/TelemetryService'
 
+vi.mock('../../../../src/main/services/app/ServiceEnvironment', () =>
+  import('../../../harness/core/desktopGatewayEnvironment'))
+
 const originalE2EObserver = process.env.NCURATOR_E2E_OBSERVER
 const directories: string[] = []
 

@@ -24,7 +24,7 @@
 
 使用 Node.js 22、pnpm 9.12.2、Python 3.12；原生模块需要本地编译时，安装 macOS Command Line Tools 或 Windows C++ Build Tools。首次启动会准备原生模块，并按需构建网页抓取 sidecar，需要联网。只开发桌面界面时可先使用 `pnpm dev:no-sidecar`。
 
-克隆自己的 Fork 后，在项目目录安装依赖并启动：
+克隆自己的 Fork 后，在项目目录安装依赖，按[国内源码环境配置](./doc/deploy/design.md#国内源码环境配置)准备 `.env` 和选中环境的 Key，再启动：
 
 ```bash
 pnpm install --frozen-lockfile
@@ -47,7 +47,7 @@ pnpm dev
 
 **提交 PR 前，请务必亲自运行软件，像用户一样完整体验并测试自己新增或修改的功能，并在 PR 中记录体验步骤与结果。** 亲眼看到自己的改动在软件里生效，也是一件很有成就感的事。
 
-`.env-example` 只放变量名和非敏感示例。生产共享密钥、模型 Key、签名证书、用户数据库及测试日志均不应提交。普通开发不需要 COS / R2 上传权限或官方服务密钥；官方发布流程见[发布文档](./doc/deploy/release.md)。
+`.env-example` 只放变量名和非敏感示例。`NCURATOR_SERVICE_ENV=local|production` 选择整组 API 与网页，缺配置不回退生产；本地签名 Key 只读取 `.env.local`，生产签名 Key 只读取 `.env`。本地服务重建后重新同步其客户端配置，桌面与网页分别重启。生产共享密钥、模型 Key、签名证书、用户数据库及测试日志均不应提交。使用本地服务开发不需要生产凭证或 COS / R2 上传权限；正式安装包始终固定生产，官方发布流程见[发布文档](./doc/deploy/release.md)。
 
 ## 提交 Pull Request
 
