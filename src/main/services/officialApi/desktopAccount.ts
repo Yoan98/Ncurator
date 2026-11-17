@@ -559,6 +559,11 @@ function installationId() {
 }
 
 let activeDomesticAccount: DesktopAccount | undefined
+type ReadyManagedCatalog = Extract<ManagedModelsResult, { status: 'ready' }>
+const managedCatalogs = new WeakMap<AbortSignal, {
+  ready?: ReadyManagedCatalog
+  pending?: Promise<ManagedModelsResult>
+}>()
 
 export function cancelDomesticDesktopAuthorization() {
   void activeDomesticAccount?.cancel()
@@ -569,33 +574,43 @@ export function currentDomesticDesktopAccount() {
   return activeDomesticAccount
 }
 
-export async function readManagedModels(account: DesktopAccount): Promise<ManagedModelsResult> {
+export async function readManagedModels(account: DesktopAccount, refresh = true): Promise<ManagedModelsResult> {
   if (getAppRuntime().distribution !== 'domestic' || account.getSnapshot().status !== 'signed_in') {
     return { status: 'signed_out' }
   }
   try {
     const scope = account.managedCallScope()
-    const url = serviceApiUrl('domestic', MANAGED_MODELS_PATH)
-    const get = (token: string) => fetch(url, {
-      headers: { ...buildDesktopAppGatewayHeaders({ url, method: 'GET' }), authorization: 'Bearer ' + token },
-      cache: 'no-store', redirect: 'error', signal: AbortSignal.any([scope.session, AbortSignal.timeout(10_000)])
-    })
-    const token = await scope.accessToken()
-    let response = await get(token)
-    if (response.status === 401) {
-      await response.body?.cancel()
-      response = await get(await scope.accessToken(token))
-    }
-    if (!response.ok) {
-      await response.body?.cancel()
-      return { status: 'unavailable' }
-    }
-    const models = parseManagedModels(await response.json())
-    scope.assertCurrent()
-    return { status: 'ready', models }
+    const catalog = managedCatalogs.get(scope.session) ?? {}
+    managedCatalogs.set(scope.session, catalog)
+    if (!refresh && !catalog.pending && catalog.ready) return catalog.ready
+    catalog.pending ??= fetchManagedModels(scope).then(result => {
+      scope.assertCurrent()
+      if (result.status === 'ready') catalog.ready = result
+      return result
+    }).finally(() => { delete catalog.pending })
+    return await catalog.pending
   } catch {
     return { status: account.getSnapshot().status === 'signed_in' ? 'unavailable' : 'signed_out' }
   }
+}
+
+async function fetchManagedModels(scope: ReturnType<DesktopAccount['managedCallScope']>): Promise<ManagedModelsResult> {
+  const url = serviceApiUrl('domestic', MANAGED_MODELS_PATH)
+  const get = (token: string) => fetch(url, {
+    headers: { ...buildDesktopAppGatewayHeaders({ url, method: 'GET' }), authorization: 'Bearer ' + token },
+    cache: 'no-store', redirect: 'error', signal: AbortSignal.any([scope.session, AbortSignal.timeout(10_000)])
+  })
+  const token = await scope.accessToken()
+  let response = await get(token)
+  if (response.status === 401) {
+    await response.body?.cancel()
+    response = await get(await scope.accessToken(token))
+  }
+  if (!response.ok) {
+    await response.body?.cancel()
+    return { status: 'unavailable' }
+  }
+  return { status: 'ready', models: parseManagedModels(await response.json()) }
 }
 
 export function createDomesticDesktopAccount(changed: (snapshot: DesktopAccountSnapshot) => void,

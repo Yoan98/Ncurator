@@ -592,7 +592,7 @@ Compaction 会重建消息前缀；Skill 首次加载、绑定或正文变化会
 `context_budget` 节点判定。有效窗口：
 
 ```text
-modelContext = 免费/推荐目录 contextWindowTokens | 缺失/自定义 → 256_000
+modelContext = 馆长/免费/推荐目录 contextWindowTokens | 缺失/自定义 → 256_000
 effectiveWindow = min(256_000, floor(modelContext × 0.8))
 ```
 

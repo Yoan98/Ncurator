@@ -10,6 +10,8 @@ import { createDomesticDesktopAccount, currentDomesticDesktopAccount, DesktopAcc
 import { listenForDesktopCallback, type DesktopCallbackListener } from '../../../../src/main/services/officialApi/desktopLoopback'
 import { resolveManagedRuntimeConfig } from '../../../../src/main/services/officialApi/managedModel'
 import { createAiLlmExecutor } from '../../../../src/main/services/ai/llmExecutor'
+import { lookupCatalogModelContextTokens } from '../../../../src/main/services/ai/modelContextWindow'
+import { managedModelConfigId } from '../../../../src/shared/managedModels'
 import { desktopProtocolLink, registerDesktopAccount } from '../../../../src/main/ipc/desktopAccount'
 import { ConfirmDialogWindowService } from '../../../../src/main/services/ConfirmDialogWindowService'
 import type { ConfirmDialogResponse } from '../../../../src/shared/types'
@@ -120,7 +122,8 @@ it('reads managed pricing with the active account and drops a response delivered
   const rates = { input: '2.000000000000', cachedInput: null, output: '4.000000000000' }
   const response = (discountRate: string, priceTier?: 'low' | null) => Response.json({ protocolVersion: 1, models: [{
     id: '9007199254740995', kind: 'managed', label: 'Fixture DeepSeek', description: 'Public description',
-    capabilities: ['text'], iconUrl: 'https://www.guanzhangai.cn/llm/guanzhang.png',
+    capabilities: ['text'], contextWindowTokens: discountRate === '0.750000' ? 131_072 : 96_000,
+    iconUrl: 'https://www.guanzhangai.cn/llm/guanzhang.png',
     priceTier,
     modelName: 'private-fixture-id', providerId: 'private-fixture-provider',
     pricing: { discountRate, referenceSource: 'private-fixture-reference', allDay: {
@@ -144,14 +147,21 @@ it('reads managed pricing with the active account and drops a response delivered
     expect(await readManagedModels(fixture.account)).toEqual({ status: 'signed_out' })
     expect(requests).toBe(0)
     await fixture.login()
+    const selection = { configId: managedModelConfigId('9007199254740995'), modelName: 'Fixture DeepSeek' }
+    const coldWindow = lookupCatalogModelContextTokens(selection)
     const first = await readManagedModels(fixture.account)
+    expect(await coldWindow).toBe(131_072)
+    expect(requests).toBe(1)
     expect(first).toMatchObject({ status: 'ready', models: [{
-      id: '9007199254740995', description: 'Public description', priceTier: 'low',
+      id: '9007199254740995', description: 'Public description', priceTier: 'low', contextWindowTokens: 131_072,
       pricing: { discountRate: '0.75' }
     }] })
     expect(JSON.stringify(first)).not.toContain('private-fixture')
     const refreshed = await readManagedModels(fixture.account)
     expect(refreshed).toMatchObject({ status: 'ready', models: [{ pricing: { discountRate: '0.82' } }] })
+    expect(await lookupCatalogModelContextTokens(selection)).toBe(96_000)
+    expect(await lookupCatalogModelContextTokens({ ...selection, configId: managedModelConfigId('42') })).toBe(256_000)
+    expect(requests).toBe(2)
     if (refreshed.status === 'ready') expect(refreshed.models[0]).not.toHaveProperty('priceTier')
     const previous = readManagedModels(fixture.account)
     await started.promise

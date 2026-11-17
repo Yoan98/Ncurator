@@ -17,6 +17,7 @@ describe('ai unit context window resolve', () => {
   it('applies 80% utilization and caps at 256k', () => {
     expect(resolveEffectiveContextWindowTokens()).toBe(204_800)
     expect(resolveEffectiveContextWindowTokens(32_000)).toBe(25_600)
+    expect(resolveEffectiveContextWindowTokens(131_072)).toBe(104_857)
     expect(resolveEffectiveContextWindowTokens(1_000_000)).toBe(256_000)
     expect(resolveEffectiveContextWindowTokens(256_000)).toBe(204_800)
   })

@@ -1451,7 +1451,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           {selectedManaged ? (
             <>
               <CatalogModelIcon src={selectedManaged.iconUrl} alt={selectedManaged.label} />
-              <span className="truncate">{selectedManaged.label}</span>
+              <span className="truncate text-[var(--model-offer-text)]">{selectedManaged.label}</span>
             </>
           ) : selectedPreset ? (
             <>

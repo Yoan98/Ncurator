@@ -1,4 +1,5 @@
 import { officialUrl } from './appPreferences'
+import { parseCatalogContextWindowTokens } from './freeModels'
 import type { LlmPriceTier } from './llmPresets'
 
 export const MANAGED_MODELS_GET = 'desktop-account:managed-models'
@@ -33,6 +34,7 @@ export type ManagedModel = {
   label: string
   description: string | null
   capabilities: ('text' | 'vision')[]
+  contextWindowTokens?: number
   iconUrl: string
   priceTier?: LlmPriceTier
   pricing: Pricing
@@ -100,6 +102,7 @@ export function parseManagedModels(value: unknown): ManagedModel[] {
       : { discountRate, offPeak: period(price.offPeak), peak: period(price.peak), timeRule: schedule(price.timeRule) }
     return {
       id, label, description, capabilities, iconUrl,
+      contextWindowTokens: parseCatalogContextWindowTokens(value.contextWindowTokens),
       ...(priceTier === 'low' || priceTier === 'mid' || priceTier === 'high' ? { priceTier } : {}),
       pricing: publicPrice
     }

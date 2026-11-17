@@ -2300,6 +2300,14 @@ const ChatPage: React.FC = () => {
     }
   }, [])
 
+  const selectedManagedWindow = selectedManagedId
+    ? managedCatalog?.models?.find((model) => managedModelConfigId(model.id) === selectedManagedId)
+        ?.contextWindowTokens
+    : undefined
+  useEffect(() => {
+    if (selectedManagedId) void refreshContextUsage(currentPartnerId)
+  }, [currentPartnerId, refreshContextUsage, selectedManagedId, selectedManagedWindow, signedIn])
+
   const loadWorkspaces = useCallback(async (): Promise<void> => {
     const requestId = ++workspaceLoadRequestRef.current
     setWorkspaceLoadState('loading')
@@ -2544,9 +2552,10 @@ const ChatPage: React.FC = () => {
       uiStateInteractionVersionRef.current += 1
       modelSelectionRef.current = selection
       setModelSelection(selection)
-      void persistCurrentUiStateNow({ requireReady: false })
+      const partnerId = currentPartnerIdRef.current
+      void persistCurrentUiStateNow({ requireReady: false }).then(() => refreshContextUsage(partnerId))
     },
-    [persistCurrentUiStateNow]
+    [persistCurrentUiStateNow, refreshContextUsage]
   )
 
   const handleAiPreferenceChange = useCallback(

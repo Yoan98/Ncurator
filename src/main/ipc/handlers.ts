@@ -446,8 +446,8 @@ export function registerHandlers(services: {
     telemetryService,
     errorLogService,
     recordLlmIo: services.recordLlmIo,
-    resolveHumanRuntimeOverrides: (run) => {
-      const modelContextWindowTokens = lookupCatalogModelContextTokens(run.mainModel)
+    resolveHumanRuntimeOverrides: async (run) => {
+      const modelContextWindowTokens = await lookupCatalogModelContextTokens(run.mainModel)
       if (!e2eGraphRecursionLimitOnce || e2eGraphRecursionLimitUsesRemaining <= 0) {
         return { modelContextWindowTokens }
       }

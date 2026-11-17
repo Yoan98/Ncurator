@@ -22,7 +22,7 @@ export const getAiContextUsage = async (input: {
   const usedContextTokens = estimateMessagesForContext(messages)
   const partnerState = await input.workbenchUiStore.getPartnerState(input.partnerId)
   const contextWindowTokens = resolveEffectiveContextWindowTokens(
-    lookupCatalogModelContextTokens(partnerState?.composer.modelSelection.mainModel)
+    await lookupCatalogModelContextTokens(partnerState?.composer.modelSelection.mainModel)
   )
   return {
     contextWindowTokens,

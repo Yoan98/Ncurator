@@ -1065,6 +1065,8 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 
 ##### `human-context-compaction-natural-trigger-live`
 
+馆长目录容量传入预算前的取值由 `desktop-account.test.ts` 按公开条目 ID 验证，阈值及压缩判断由 `context-window-resolve.test.ts`、`context-budget-node.test.ts` 覆盖。本场景验证真实 graph 的压缩行为。
+
 - 测试类型：`backend / live`
 - What：live 模式下 `human` 会先用普通短问铺出一条完整历史轮，再在风险周报长任务中自然触发压缩；压完后发给主模型的数组为 `[System] + [Compact User] + 原文 tail`。同一次可走历史 + 半截。Run 2 未压出 checkpoint 则不发 Run 3。续做再压，且 Run 3 首轮 brain 必须明显复用 Run 2 末次前缀缓存。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩、当前工作仍能做完”的能力；同时守住跨 run 只 append 新 user、历史前缀字节不变时 provider 前缀缓存应命中。

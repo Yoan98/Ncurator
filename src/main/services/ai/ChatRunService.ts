@@ -131,7 +131,7 @@ type ChatRunServiceDeps = {
   autoStartRuns?: boolean
   resolveHumanRuntimeOverrides?: (
     run: AiRunRecord
-  ) => AiRunDeps['humanRuntimeOverrides'] | undefined
+  ) => AiRunDeps['humanRuntimeOverrides'] | Promise<AiRunDeps['humanRuntimeOverrides']>
   bindManagedModel?: typeof bindManagedModel
   onRunTerminal?: (
     run: AiRunRecord,
@@ -1227,6 +1227,7 @@ export class ChatRunService {
         : this.deps.scheduledTaskService
 
     try {
+      const humanRuntimeOverrides = await this.deps.resolveHumanRuntimeOverrides?.(run)
       const execute = () => AiRunService.getInstance().run(
         {
           runId,
@@ -1278,7 +1279,7 @@ export class ChatRunService {
           webCrawlerService: this.deps.webCrawlerService,
           scheduledTaskService,
           userSkillService: this.deps.userSkillService,
-          humanRuntimeOverrides: this.deps.resolveHumanRuntimeOverrides?.(run)
+          humanRuntimeOverrides
         }
       )
 
