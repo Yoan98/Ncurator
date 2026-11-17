@@ -880,7 +880,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | --------------------- | -------------------------------------------- | ---------------- | ----------------------------------------------------- |
 | `user_cancelled`      | 已取消                                       | 可空             | 用户停止；事件为 `run_cancelled`                      |
 | `process_interrupted` | 任务已中断，可继续对话推进                   | 可空             | 进程/重启打断                                         |
-| `llm_request_failed`  | 模型请求失败                                 | **必留原文**     | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案  |
+| `llm_request_failed`  | 模型请求失败（已知 providerCode 时具体化）   | **必留原文**     | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案  |
 | `output_truncated`    | 模型输出达到长度限制，可发送「继续」接着完成 | 可选             | `finish_reason=length`                                |
 | `input_too_long`      | 当前输入超过模型上下文限制，请缩短后重试     | 可空             | 当前 user alone 超窗；不调 brain，日志边界见第 6.5 节 |
 | `runtime_limit`       | 已达到运行上限，可继续对话推进               | 可空             | 图递归上限                                            |
@@ -890,6 +890,8 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 落库：真正失败时 `ai_run.error` = 短标题，`ai_run.failure_raw_message` = 原文；UI：气泡「失败：{title}」+「查看详情」展开 `rawMessage`（及 HTTP / providerCode）。`user_cancelled` 只保留 `cancelled` 状态和 `failure_code`，不写 `error`、不合成 `final_answer`，UI 不生成失败气泡或「已取消」正文；已有 answer 片段与 `ai_file_change` 保留。
 
 `run_failed` 后：**零自动重试**。Resume（第 6 节）：新建 run；log append `user`；不自动重试 failed run。
+
+馆长模型的上游失败由服务端终止事件提供 `error` 与 `retryable`，桌面端转换成统一的 `LlmProviderError.providerCode`。`llm_request_failed` 的短标题按 providerCode 具体化，例如「上游模型超时」「上游连接中断」「上游模型服务出错」；`rawMessage` 使用统一文案并带上本次计费状态（已免收／已计费／待确认）。这些失败不自动重试；桌面端 5 分钟兜底超时只提示计费状态待确认，由用户重新发送或走 resume。
 
 #### LLM 调用层重试
 

@@ -6,6 +6,7 @@ import {
   isLlmOutputTruncatedError
 } from '../errors'
 import { normalizeStructuredOutputError } from '../structuredOutput'
+import { providerFailureMessage } from '../providerFailure'
 import { resolveAiRunFailurePresentation } from '../runFailureCatalog'
 
 const getErrorMessage = (error: unknown): string =>
@@ -75,7 +76,7 @@ export const createAiRunFailure = (input: {
   providerCode?: string
   lastHumanState?: HumanState
 }): AiRunFailure => {
-  const presentation = resolveAiRunFailurePresentation(input.failureCode, input.rawMessage)
+  const presentation = resolveAiRunFailurePresentation(input.failureCode, input.rawMessage, input.providerCode)
   const causeError =
     input.cause instanceof Error
       ? input.cause
@@ -95,11 +96,20 @@ export const createAiRunFailure = (input: {
   return error
 }
 
+const timeoutCopy = (message: string): string | undefined =>
+  message === 'llm_call_timeout' ? providerFailureMessage('timeout') : undefined
+
 const resolveProviderRawMessage = (error: unknown): string | undefined => {
   const providerError = findLlmProviderError(error)
-  if (providerError?.message.trim()) return providerError.message.trim()
+  if (providerError?.message.trim()) {
+    const message = providerError.message.trim()
+    return timeoutCopy(message) ?? message
+  }
   const info = normalizeStructuredOutputError(error)
-  if (info.hasProviderSignal && info.message.trim()) return info.message.trim()
+  if (info.hasProviderSignal && info.message.trim()) {
+    const message = info.message.trim()
+    return timeoutCopy(message) ?? message
+  }
   const message = getErrorMessage(error).trim()
   return message || undefined
 }
@@ -152,12 +162,14 @@ export const classifyThrownErrorToAiRunFailure = (
   const providerError = findLlmProviderError(error)
   const info = normalizeStructuredOutputError(error)
   if (providerError || info.hasProviderSignal) {
+    const timeout = (providerError?.message.trim() ?? info.message.trim()) === 'llm_call_timeout' ||
+      providerError?.providerCode === 'TIMEOUT' || info.code === 'TIMEOUT'
     return createAiRunFailure({
       failureCode: 'llm_request_failed',
       cause: error,
       rawMessage: resolveProviderRawMessage(error),
       httpStatus: providerError?.httpStatus ?? info.status,
-      providerCode: providerError?.providerCode ?? info.code,
+      providerCode: timeout ? 'timeout' : providerError?.providerCode ?? info.code,
       lastHumanState
     })
   }

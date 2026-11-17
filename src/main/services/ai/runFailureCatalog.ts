@@ -1,4 +1,5 @@
 import type { AiRunFailureCode, AiRunFailureSource } from '../../../shared/types'
+import { providerFailureTitle } from './providerFailure'
 
 export type AiRunFailureCatalogEntry = {
   source: AiRunFailureSource | 'user'
@@ -49,13 +50,17 @@ export type AiRunFailurePresentation = {
 
 export const resolveAiRunFailurePresentation = (
   code: AiRunFailureCode,
-  rawMessage?: string
+  rawMessage?: string,
+  providerCode?: string
 ): AiRunFailurePresentation => {
   const entry = AI_RUN_FAILURE_CATALOG[code]
+  const title = code === 'llm_request_failed'
+    ? providerFailureTitle(providerCode) ?? entry.title
+    : entry.title
   const normalizedRaw = rawMessage?.trim() ? rawMessage.trim() : undefined
   return {
-    title: entry.title,
-    message: entry.title,
+    title,
+    message: title,
     rawMessage: normalizedRaw,
     source: entry.source
   }

@@ -10,6 +10,7 @@ import { createDomesticDesktopAccount, currentDomesticDesktopAccount, DesktopAcc
 import { listenForDesktopCallback, type DesktopCallbackListener } from '../../../../src/main/services/officialApi/desktopLoopback'
 import { resolveManagedRuntimeConfig } from '../../../../src/main/services/officialApi/managedModel'
 import { createAiLlmExecutor } from '../../../../src/main/services/ai/llmExecutor'
+import { findLlmProviderError } from '../../../../src/main/services/ai/errors'
 import { lookupCatalogModelContextTokens } from '../../../../src/main/services/ai/modelContextWindow'
 import { managedModelConfigId } from '../../../../src/shared/managedModels'
 import { desktopProtocolLink, registerDesktopAccount } from '../../../../src/main/ipc/desktopAccount'
@@ -171,10 +172,19 @@ it('reads managed pricing with the active account and drops a response delivered
   }
 })
 
-function managedSse(requestId: string, scenario: 'text' | 'tools' | 'incomplete' | 'pending' | 'disconnected') {
+type ManagedSseScenario = 'text' | 'tools' | 'incomplete' | 'pending' | 'disconnected' | 'timeout' | 'interrupted'
+
+function managedSse(requestId: string, scenario: ManagedSseScenario) {
   const tools = scenario === 'tools' || scenario === 'incomplete' || scenario === 'pending'
   const frame = (delta: object, finish: string | null = null) => 'data: ' + JSON.stringify({ id: 'chat-synthetic',
     model: '9', object: 'chat.completion.chunk', created: 42, choices: [{ index: 0, delta, finish_reason: finish }] }) + '\n\n'
+  if (scenario === 'timeout' || scenario === 'interrupted') {
+    return new Response(frame({ role: 'assistant', content: '部分内容' }) +
+      'event: ncurator.result\ndata: ' + JSON.stringify({ requestId, result: 'unconfirmed',
+        error: scenario === 'timeout' ? 'upstream_timeout' : 'upstream_interrupted', retryable: true,
+        billing: { status: 'settled', feeDecision: 'waive', wallet: sampleWallet } }) + '\n\ndata: [DONE]\n\n',
+      { headers: { 'content-type': 'text/event-stream' } })
+  }
   let body = frame({ role: 'assistant', content: '测试内容' })
   if (tools) {
     body += frame({ tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'lookup', arguments: '{"name":' } }] })
@@ -182,7 +192,8 @@ function managedSse(requestId: string, scenario: 'text' | 'tools' | 'incomplete'
   }
   body += frame({}, tools ? 'tool_calls' : 'stop')
   if (scenario !== 'disconnected') body += 'event: ncurator.result\ndata: ' + JSON.stringify({ requestId, result: 'completed',
-    billing: scenario === 'pending' ? { status: 'settlement_pending' } : { status: 'settled', wallet: sampleWallet }
+    billing: scenario === 'pending' ? { status: 'settlement_pending' }
+      : { status: 'settled', feeDecision: scenario === 'incomplete' ? 'waive' : 'charge', wallet: sampleWallet }
   }) + '\n\ndata: [DONE]\n\n'
   return new Response(body, { headers: { 'content-type': 'text/event-stream' } })
 }
@@ -243,6 +254,26 @@ it.each(['tools', 'pending', 'incomplete', 'disconnected'] as const)('returns a 
     expect(fixture.lookedUp).toEqual(scenario === 'pending' || scenario === 'disconnected' ? [fixture.submitted[0].requestId] : [])
   } finally { fixture.cleanup() }
 })
+
+it.each([['timeout', 'upstream_timeout'], ['interrupted', 'upstream_interrupted']] as const)(
+  'maps a managed %s terminal to the unified provider failure',
+  async (scenario, code) => {
+    const fixture = managedDesktopFixture(requestId => managedSse(requestId, scenario))
+    try {
+      await fixture.login()
+      const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+        getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
+        checkCancelled: () => {} })
+      const error = await executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
+        streamingMode: 'force_stream' }).then(() => undefined, value => value)
+      const provider = findLlmProviderError(error)
+      expect(provider).toMatchObject({ providerCode: code, billing: 'waived' })
+      expect(provider?.message).toContain('本次未计费')
+      expect(fixture.submitted).toHaveLength(1)
+      expect(fixture.lookedUp).toEqual([])
+    } finally { fixture.cleanup() }
+  }
+)
 
 it.runIf(Boolean(process.env.NCURATOR_TEST_MANAGED_DIRECT))('uses the real API from the managed desktop execution layer', async () => {
   const direct = JSON.parse(process.env.NCURATOR_TEST_MANAGED_DIRECT!) as ManagedDirectFixture

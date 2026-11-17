@@ -1,11 +1,14 @@
 import { ZodError } from 'zod/v4'
 
+export type LlmBillingStatus = 'waived' | 'charged' | 'unknown'
+
 export type LlmProviderErrorInput = {
   message: string
   httpStatus?: number
   providerCode?: string
   providerType?: string
   retryable?: boolean
+  billing?: LlmBillingStatus
   cause?: unknown
 }
 
@@ -14,6 +17,7 @@ export class LlmProviderError extends Error {
   public readonly providerCode?: string
   public readonly providerType?: string
   public readonly retryable: boolean
+  public readonly billing?: LlmBillingStatus
 
   public constructor(input: LlmProviderErrorInput) {
     super(input.message, { cause: input.cause })
@@ -22,6 +26,7 @@ export class LlmProviderError extends Error {
     this.providerCode = input.providerCode
     this.providerType = input.providerType
     this.retryable = Boolean(input.retryable)
+    this.billing = input.billing
   }
 }
 

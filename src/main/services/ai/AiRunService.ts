@@ -145,7 +145,7 @@ export class AiRunService {
           input: payload.input
         })
       }
-      const presentation = resolveAiRunFailurePresentation(failure.failureCode, failure.rawMessage)
+      const presentation = resolveAiRunFailurePresentation(failure.failureCode, failure.rawMessage, failure.providerCode)
       const failureSource = presentation.source === 'user' ? 'internal' : presentation.source
       deps.sendEvent({
         type: 'run_failed',

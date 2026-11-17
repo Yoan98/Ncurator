@@ -79,12 +79,29 @@ describe('ai unit run failure catalog', () => {
     })
   })
 
-  it('maps timeout errors to llm_request_failed with original text', () => {
+  it('maps timeout errors to the unified timeout copy', () => {
     const timeout = Object.assign(new Error('llm_call_timeout'), { code: 'TIMEOUT' })
     const failure = classifyThrownErrorToAiRunFailure(toProviderFailure(timeout, false))
     expect(failure.failureCode).toBe('llm_request_failed')
-    expect(failure.message).toBe('模型请求失败')
-    expect(failure.rawMessage).toContain('llm_call_timeout')
+    expect(failure.message).toBe('模型响应超时')
+    expect(failure.rawMessage).toBe('等待模型响应超过 5 分钟，已中断。')
+  })
+
+  it('uses the provider failure title and billing copy for managed upstream failures', () => {
+    const provider = new LlmProviderError({
+      message: '上游模型超时未返回。本次未计费。',
+      providerCode: 'upstream_timeout',
+      retryable: true,
+      billing: 'waived'
+    })
+    const failure = classifyThrownErrorToAiRunFailure(provider)
+    expect(failure).toMatchObject({
+      failureCode: 'llm_request_failed',
+      message: '上游模型超时',
+      rawMessage: '上游模型超时未返回。本次未计费。',
+      providerCode: 'upstream_timeout'
+    })
+    expect(failure).not.toHaveProperty('failureCode', 'unexpected_error')
   })
 
   it('maps AbortError and ModelAbortError to user_cancelled', () => {

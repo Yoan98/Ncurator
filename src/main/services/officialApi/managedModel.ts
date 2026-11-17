@@ -4,7 +4,8 @@ import { isManagedModelConfigId, managedModelEntryId } from '../../../shared/man
 import type { LlmRuntimeConfig } from '../../../shared/types'
 import { getAppRuntime, serviceApiUrl } from '../app/AppRuntime'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS } from '../ai/constants'
-import { LlmProviderError } from '../ai/errors'
+import { LlmProviderError, type LlmBillingStatus } from '../ai/errors'
+import { isProviderFailureCode, providerFailure, providerFailureMessage } from '../ai/providerFailure'
 import { classifyManagedLlmRetry, ManagedModelConcurrencyRejection } from '../ai/llmRetry'
 import { buildDesktopAppGatewayHeaders } from './appClient'
 import { currentDomesticDesktopAccount } from './desktopAccount'
@@ -52,23 +53,15 @@ function completeToolCall(value: unknown) {
     record(value.function) && typeof value.function.name === 'string' && !!value.function.name && validArguments(value.function.arguments)
 }
 
-const messages: Record<string, string> = {
-  balance_insufficient: '余额不足，请充值或缩短本次上下文',
-  payment_required: '馆长账户有未付费用，请充值后再试',
-  settlement_in_progress: '上一笔费用仍在处理，请稍后再试',
-  settlement_pending: '本次费用仍在处理',
-  model_concurrency_limited: '馆长模型正在处理较多请求，请稍后再试',
-  unauthorized: '馆长账户登录已失效，请重新登录',
-  access_token_expired: '馆长账户登录已失效，请重新登录',
-  model_not_found: '该馆长模型已不可用，请重新选择',
-  context_limit: '本次上下文超过模型限制，请缩短后重试',
-  incomplete: '本次回答未完整接收',
-  output_truncated: '本次回答达到输出上限，内容未完整接收',
-  failed: '馆长模型调用失败，请稍后再试'
+function billingFrom(value: unknown): LlmBillingStatus {
+  if (!record(value) || value.status !== 'settled') return 'unknown'
+  if (value.feeDecision === 'waive') return 'waived'
+  if (value.feeDecision === 'charge') return 'charged'
+  return 'unknown'
 }
-const failure = (code: string, status?: number) => new LlmProviderError({
-  message: messages[code] || '馆长模型服务暂不可用', providerCode: code, httpStatus: status, retryable: false
-})
+
+const failure = (code: string, status?: number, billing?: LlmBillingStatus) =>
+  providerFailure(isProviderFailureCode(code) ? code : 'failed', { status, billing })
 
 type Scope = ReturnType<ReturnType<typeof currentDomesticDesktopAccount>['managedCallScope']>
 type Dependencies = {
@@ -111,21 +104,24 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
     }
   }
 
-  function assertCompleteOutput() {
-    if (finishReason === 'length') throw failure('output_truncated')
+  function assertCompleteOutput(billing?: LlmBillingStatus) {
+    if (finishReason === 'length') throw failure('output_truncated', undefined, billing)
     if (finishFrame && !invalidTool && ((finishReason === 'stop' && hasText && tools.size === 0) ||
       (finishReason === 'tool_calls' && tools.size > 0 && [...tools.values()].every(tool =>
         tool.id && tool.name && validArguments(tool.arguments))))) return
-    throw failure('incomplete')
+    throw failure('incomplete', undefined, billing)
   }
 
-  async function finishFromStatus(controller: ReadableStreamDefaultController<Uint8Array>) {
+  async function finishFromStatus(controller: ReadableStreamDefaultController<Uint8Array>, error?: string) {
     const status = await recover()
+    const billing = billingFrom(status)
     if (status.status !== 'settled' || status.executionStatus !== 'completed') {
-      throw failure(status.status === 'settlement_pending' ? 'settlement_pending' : 'incomplete')
+      const code = error && isProviderFailureCode(error) ? error
+        : status.status === 'settlement_pending' ? 'settlement_pending' : 'incomplete'
+      throw failure(code, undefined, billing)
     }
     settled = true
-    assertCompleteOutput()
+    assertCompleteOutput(billing)
     closeSuccess(controller)
   }
 
@@ -162,14 +158,19 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
           if (!record(value)) throw failure('incomplete')
           if (event === resultEvent) {
             if (value.requestId !== requestId || !record(value.billing)) throw failure('incomplete')
+            const billing = billingFrom(value.billing)
             if (value.billing.status === 'settled') {
               scope.applyWallet(value.billing.wallet)
               settled = true
-              if (value.result !== 'completed') throw failure(value.result === 'failed' ? 'failed' : 'incomplete')
-              assertCompleteOutput()
+              if (value.result !== 'completed') {
+                const code = typeof value.error === 'string' && isProviderFailureCode(value.error) ? value.error
+                  : value.result === 'failed' ? 'upstream_error' : 'incomplete'
+                throw failure(code, undefined, billing)
+              }
+              assertCompleteOutput(billing)
               closeSuccess(controller)
             } else {
-              await finishFromStatus(controller)
+              await finishFromStatus(controller, typeof value.error === 'string' ? value.error : undefined)
             }
             return
           }
@@ -245,14 +246,14 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
       }
       if (!response.ok) {
         const result: unknown = await response.json().catch(() => undefined)
-        const code = record(result) && typeof result.error === 'string' && Object.hasOwn(messages, result.error) ? result.error : 'failed'
+        const code = record(result) && typeof result.error === 'string' && isProviderFailureCode(result.error) ? result.error : 'failed'
         if (response.status === 401 && code === 'access_token_expired' && !refreshed) {
           refreshed = true
           access = await scope.accessToken(access)
           continue
         }
         if (response.status === 429 && code === 'model_concurrency_limited') {
-          const rejection = new ManagedModelConcurrencyRejection(messages[code])
+          const rejection = new ManagedModelConcurrencyRejection(providerFailureMessage('model_concurrency_limited'))
           if (invocation) throw rejection
           if (attempt < AI_LLM_CALL_MAX_RETRY_ATTEMPTS) {
             const retry = classifyManagedLlmRetry(rejection, ++attempt)
@@ -273,13 +274,20 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
         throw failure('incomplete')
       }
       const { ncurator, ...completion } = result
+      let billing = billingFrom(result.ncurator.billing)
       if (result.ncurator.billing.status === 'settled') scope.applyWallet(result.ncurator.billing.wallet)
       else {
         const recoveredStatus = await recover().catch(() => undefined)
-        if (recoveredStatus?.status !== 'settled' || recoveredStatus.executionStatus !== 'completed') throw failure('settlement_pending')
+        billing = billingFrom(recoveredStatus)
+        if (recoveredStatus?.status !== 'settled' || recoveredStatus.executionStatus !== 'completed') {
+          throw failure('settlement_pending', undefined, billing)
+        }
       }
       const firstChoice: unknown = Array.isArray(completion.choices) ? completion.choices[0] : undefined
-      if (ncurator.result !== 'completed' || !record(firstChoice) || !record(firstChoice.message)) throw failure('incomplete')
+      if (ncurator.result !== 'completed' || !record(firstChoice) || !record(firstChoice.message)) {
+        const code = typeof ncurator.error === 'string' && isProviderFailureCode(ncurator.error) ? ncurator.error : 'incomplete'
+        throw failure(code, undefined, billing)
+      }
       if (firstChoice.finish_reason === 'length') throw failure('output_truncated')
       const toolCalls = firstChoice.message.tool_calls
       const text = firstChoice.message.content
