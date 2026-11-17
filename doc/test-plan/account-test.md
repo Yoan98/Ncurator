@@ -36,7 +36,7 @@ pnpm test:e2e:source --domain account \
 
 **国内正式包。** 准备普通和图文两套隔离服务，按[候选包发布流程](../deploy/release.md#22-影响评估)执行。完整发版回归自动选中账号与馆长模型必验用例，按影响评估分批执行时需补齐同一制品的通过证据。
 
-**本地服务联调。** 按[源码环境配置](../deploy/design.md#国内源码环境配置)同步本地客户端配置，桌面与网页分别选择 `local` 并重启。执行 `NCURATOR_E2E_LOCAL_BACKEND=1 pnpm test:e2e:source --domain account --case browser-login-outcomes`，核对授权网页和浏览器会话请求均指向选中的本地服务。本分支仅验证真实授权入口和未登录会话请求，不代替完整登录、余额及模型调用验收。隔离源码账号 fixture 将自己的签名 Key 写入私有临时 `.env`，不会覆盖开发机的两个 env 文件；正式包仍使用包内 Key。
+**本地服务联调。** 按[环境变量示例](../../.env-example)同步本地客户端配置，桌面与网页分别选择 `local` 并重启。执行 `NCURATOR_E2E_LOCAL_BACKEND=1 pnpm test:e2e:source --domain account --case browser-login-outcomes`，核对授权网页和浏览器会话请求均指向选中的本地服务。本分支仅验证真实授权入口和未登录会话请求，不代替完整登录、余额及模型调用验收。隔离源码账号 fixture 将自己的签名 Key 写入私有临时 `.env`，不会覆盖开发机的两个 env 文件；正式包仍使用包内 Key。
 
 环境文件选择、Main 与 runner 实际预加载顺序中的行尾注释、两文件 Key 不同时的双向切换、继承 Key 不覆盖、缺失配置不回退、同步并发冲突退出、同步失败后旧 Key 失效及固定生产包路径由 `tests/case/unit/app/service-environment.test.ts` 补证。源码本地与生产联调目录隔离按现有目录规则验收，不将环境选择扩展为产品设置或新的账号功能。
 

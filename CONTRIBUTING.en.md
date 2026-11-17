@@ -24,7 +24,7 @@ Follow [AGENTS.md](./AGENTS.md) and the [documentation guidelines](./doc/doc-gui
 
 Use Node.js 22, pnpm 9.12.2, and Python 3.12. Install macOS Command Line Tools or Windows C++ Build Tools if native modules require compilation. First launch prepares native modules and builds the web crawling sidecar as needed, requiring a network connection. For desktop UI work, start with `pnpm dev:no-sidecar` if the sidecar is unnecessary.
 
-After cloning your fork, install dependencies, prepare `.env` and the selected environment's key using the [domestic source configuration](./doc/deploy/design.md#国内源码环境配置), then start the app:
+After cloning your fork, install dependencies, prepare `.env` and the selected environment's key using the [example environment file](./.env-example), then start the app:
 
 ```bash
 pnpm install --frozen-lockfile

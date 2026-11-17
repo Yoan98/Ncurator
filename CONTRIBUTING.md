@@ -24,7 +24,7 @@
 
 使用 Node.js 22、pnpm 9.12.2、Python 3.12；原生模块需要本地编译时，安装 macOS Command Line Tools 或 Windows C++ Build Tools。首次启动会准备原生模块，并按需构建网页抓取 sidecar，需要联网。只开发桌面界面时可先使用 `pnpm dev:no-sidecar`。
 
-克隆自己的 Fork 后，在项目目录安装依赖，按[国内源码环境配置](./doc/deploy/design.md#国内源码环境配置)准备 `.env` 和选中环境的 Key，再启动：
+克隆自己的 Fork 后，在项目目录安装依赖，按[环境变量示例](./.env-example)准备 `.env` 和选中环境的 Key，再启动：
 
 ```bash
 pnpm install --frozen-lockfile
