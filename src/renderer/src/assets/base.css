@@ -1100,6 +1100,21 @@ textarea,
   -webkit-app-region: drag;
 }
 
+/* 独立拖动层铺满整条标题栏，避免内部 flex 子项或空白把可拖动区域切碎 */
+.nc-topbar-drag-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: auto;
+  -webkit-app-region: drag;
+}
+
+.nc-topbar > .nc-topbar-collapsed-safe-zone,
+.nc-topbar > .nc-topbar-title-region {
+  position: relative;
+  z-index: 2;
+}
+
 .nc-resource-tabbar {
   position: relative;
   z-index: 4;

@@ -179,7 +179,13 @@ function createWindow(): BrowserWindow {
     // 使 macOS live-resize 时 OS 先填充的一帧与内容同色，消除拖动露白（对齐主流应用做法）。
     backgroundColor: '#ffffff',
     ...(process.platform === 'darwin'
-      ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 16 } }
+      ? {
+          titleBarStyle: 'hiddenInset',
+          trafficLightPosition: { x: 16, y: 16 },
+          // macOS 默认首击未激活窗口只激活窗口、不进入页面，标题栏拖动区因此拖不动
+          // （窗口又用 showInactive 显示）。开启首击透传，切回应用后直接按住顶部即可拖动。
+          acceptFirstMouse: true
+        }
       : {}),
     ...(process.platform === 'win32'
       ? {

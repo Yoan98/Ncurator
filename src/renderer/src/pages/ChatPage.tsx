@@ -5260,6 +5260,13 @@ const ChatPage: React.FC = () => {
                 ) : null}
                 {!isNewSession ? (
                   <div className="nc-topbar" data-testid={workbenchSelectors.topbar}>
+                    {/* 整条 44px 拖动层：不依赖内部 flex 子项，标题、留白和中部空白都能拖动窗口 */}
+                    <div
+                      className="nc-topbar-drag-layer"
+                      style={WORKBENCH_DRAG_REGION_STYLE}
+                      data-testid={workbenchSelectors.topbarDragRegion}
+                      aria-hidden="true"
+                    />
                     <div
                       className="nc-topbar-collapsed-safe-zone"
                       style={{
@@ -5277,12 +5284,7 @@ const ChatPage: React.FC = () => {
                       ) : null}
                     </div>
 
-                    <div
-                      className="nc-topbar-drag-spacer"
-                      style={WORKBENCH_DRAG_REGION_STYLE}
-                      data-testid={workbenchSelectors.topbarDragRegion}
-                      aria-hidden="true"
-                    />
+                    <div className="nc-topbar-drag-spacer" aria-hidden="true" />
 
                     {contentPanelCollapsed && !contentPanelShellMounted ? (
                       <button
