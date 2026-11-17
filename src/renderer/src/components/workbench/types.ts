@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type {
+  AiContextUsageBasis,
   AiPreference,
   AiExecutionPermission,
   AiRunEvent,
@@ -21,6 +22,7 @@ export type WorkbenchContextUsage = {
   contextWindowTokens: number
   usedContextTokens: number
   ratio: number
+  basis: AiContextUsageBasis
   updatedAt: number
   hasEffectiveImageContext: boolean
 }

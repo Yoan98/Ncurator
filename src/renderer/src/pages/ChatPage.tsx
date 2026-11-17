@@ -1469,12 +1469,6 @@ const ChatPage: React.FC = () => {
     return workspaces[0] || null
   }, [activeApplyRecord?.path, contentPanel, workspaces])
 
-  const selectedWorkspaceName = useMemo(() => {
-    if (!selectedWorkspace?.root_path) return null
-    const parts = selectedWorkspace.root_path.replace(/\\/g, '/').split('/').filter(Boolean)
-    return parts[parts.length - 1] || selectedWorkspace.root_path
-  }, [selectedWorkspace])
-
   const currentPartner = useMemo(
     () => partners.find((session) => session.id === currentPartnerId) || null,
     [currentPartnerId, partners]
@@ -2280,8 +2274,11 @@ const ChatPage: React.FC = () => {
     }
     try {
       const response = await window.api.aiContextUsageGet({ partnerId })
+      if (!response.success) {
+        console.warn('Failed to refresh context usage', response.error)
+        return
+      }
       if (
-        !response.success ||
         requestId !== contextUsageRequestRef.current ||
         partnerId !== currentPartnerIdRef.current
       ) {
@@ -2292,11 +2289,14 @@ const ChatPage: React.FC = () => {
         contextWindowTokens: response.contextWindowTokens || 0,
         usedContextTokens: response.usedContextTokens || 0,
         ratio: response.ratio || 0,
+        basis: response.basis || 'estimate',
         updatedAt: response.updatedAt || Date.now(),
         hasEffectiveImageContext: response.hasEffectiveImageContext === true
       })
-    } catch {
-      // Context usage is advisory; failures should not block chat.
+    } catch (error) {
+      // Context usage is advisory; failures should not block chat, but a silent
+      // failure leaves a stale ring on screen, so keep it observable.
+      console.warn('Failed to refresh context usage', error)
     }
   }, [])
 
@@ -3690,6 +3690,17 @@ const ChatPage: React.FC = () => {
       }
       const eventPartnerId = activeRunPartnerIdsRef.current[event.runId]
 
+      // 预算快照是上下文用量的真实来源：每轮 brain 前都会重算一次，
+      // 压缩完成后这里的刷新会把圆圈从阈值上方拉回压缩后的真实值。
+      // run 映射缺失时（如 resume）退化成刷新当前伙伴，不会串到别的会话。
+      if (
+        event.type === 'context_budget_evaluated' ||
+        event.type === 'context_compaction_completed'
+      ) {
+        const budgetPartnerId = eventPartnerId ?? currentPartnerIdRef.current
+        if (budgetPartnerId) void refreshContextUsage(budgetPartnerId)
+      }
+
       if (event.type === 'run_pending_messages_parked') {
         if (eventPartnerId === currentPartnerIdRef.current) {
           setCurrentMessages(previous => previous.map(item =>
@@ -4766,7 +4777,6 @@ const ChatPage: React.FC = () => {
           isStreaming={loading && Boolean(turn.runId && turn.runId === aiRunId)}
           onOpenApply={openFileChange}
           workspaces={workspaces}
-          fallbackWorkspaceName={selectedWorkspaceName}
           onOpenReference={handleOpenMarkdownReference}
           onPreviewImage={setPreviewImage}
         />
@@ -5590,7 +5600,6 @@ const ChatPage: React.FC = () => {
                         applyLoading={applyLoading}
                         applyReverting={applyReverting}
                         workspaces={workspaces}
-                        fallbackWorkspaceName={selectedWorkspaceName}
                         selectedWorkspace={selectedWorkspace || null}
                         workspaceLoadState={workspaceLoadState}
                         onOpenWorkspaceSettings={openWorkspaceSettings}

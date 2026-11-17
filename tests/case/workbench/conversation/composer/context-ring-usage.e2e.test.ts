@@ -77,7 +77,7 @@ describe('workbench conversation e2e', () => {
           ) {
             throw new Error('completed context usage unavailable')
           }
-          const expectedPercent = Math.max(0, Math.min(100, Math.round((after.ratio || 0) * 100)))
+          const expectedPercent = Math.max(0, Math.round((after.ratio || 0) * 100))
           const expectedLabel = `已用 ${expectedPercent}%`
           await page.waitForFunction(
             ({ testId, label }) =>
@@ -102,8 +102,15 @@ describe('workbench conversation e2e', () => {
             .isVisible()
             .catch(() => false)
 
+          const basisText = page
+            .getByText(/^(真实用量|估算)$/u)
+            .first()
+          await basisText.waitFor({ state: 'visible', timeout: 3000 })
+
           return {
             label,
+            afterBasis: after.basis,
+            basisText: await basisText.innerText(),
             beforeTokens: before.usedContextTokens || 0,
             afterTokens: after.usedContextTokens,
             tokenText: await tokens.innerText(),
@@ -122,6 +129,8 @@ describe('workbench conversation e2e', () => {
               !result.label.includes('剩余') &&
               result.tooltipVisible &&
               result.percentVisible &&
+              result.afterBasis === 'usage_plus_delta' &&
+              result.basisText === '真实用量' &&
               !result.remainingVisible &&
               result.finalAnswerText.trim().length > 0,
             {

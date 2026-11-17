@@ -54,7 +54,6 @@ type WorkbenchContentPanelProps = {
   applyLoading: boolean
   applyReverting: boolean
   workspaces: WorkspaceSource[]
-  fallbackWorkspaceName?: string | null
   selectedWorkspace: WorkspaceSource | null
   workspaceLoadState: WorkspaceLoadState
   onOpenWorkspaceSettings: () => void
@@ -175,12 +174,6 @@ const WorkbenchEmptyPanel: React.FC = () => (
             </span>
           }
         />
-        <div
-          className="mt-3 text-[11px] text-[#B0AEA8]"
-          data-testid={workbenchSelectors.supportedWritebackSummary}
-        >
-          {t(($) => $.workbench.directEditingDocxPptxXlsxPngJpegWebpAnd)}
-        </div>
       </div>
     </div>
   </div>
@@ -209,7 +202,6 @@ type WorkbenchDocumentPreviewPanelProps = {
   errorMessage?: string | null
   emptyText?: string
   workspaces: WorkspaceSource[]
-  fallbackWorkspaceName?: string | null
   backTarget?: WorkbenchContentPanelState
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
   onRevealPath: (filePath: string) => Promise<void>
@@ -239,7 +231,6 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   errorMessage,
   emptyText,
   workspaces,
-  fallbackWorkspaceName,
   backTarget,
   onBackToPanelState,
   onRevealPath,
@@ -408,7 +399,6 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
             <WorkspacePathLabel
               filePath={filePath}
               workspaces={workspaces}
-              fallbackWorkspaceName={fallbackWorkspaceName}
               className="min-w-0 text-[13px] font-semibold"
               prefixClassName="text-[#787774]"
               fileNameClassName="text-[#37352F]"
@@ -632,7 +622,6 @@ const arePreviewPanelPropsEqual = (
   previous.errorMessage === next.errorMessage &&
   previous.emptyText === next.emptyText &&
   previous.workspaces === next.workspaces &&
-  previous.fallbackWorkspaceName === next.fallbackWorkspaceName &&
   previous.backTarget === next.backTarget &&
   previous.displayMode === next.displayMode &&
   previous.onSwitchDisplayMode === next.onSwitchDisplayMode &&
@@ -652,7 +641,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   applyLoading,
   applyReverting,
   workspaces,
-  fallbackWorkspaceName,
   selectedWorkspace,
   workspaceLoadState,
   onOpenWorkspaceSettings,
@@ -1068,7 +1056,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                 }
                 canOpen={!state.file.isDirectory}
                 workspaces={workspaces}
-                fallbackWorkspaceName={fallbackWorkspaceName}
                 backTarget={state.backTarget}
                 onBackToPanelState={onBackToPanelState}
                 onRevealPath={onRevealPath}
@@ -1107,7 +1094,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   }
                   emptyText={applyEmptyText}
                   workspaces={workspaces}
-                  fallbackWorkspaceName={fallbackWorkspaceName}
                   onBackToPanelState={onBackToPanelState}
                   onRevealPath={onRevealPath}
                   onInfoMessage={onInfoMessage}
@@ -1206,7 +1192,6 @@ const areContentPanelPropsEqual = (
   previous.applyLoading === next.applyLoading &&
   previous.applyReverting === next.applyReverting &&
   previous.workspaces === next.workspaces &&
-  previous.fallbackWorkspaceName === next.fallbackWorkspaceName &&
   previous.selectedWorkspace === next.selectedWorkspace &&
   previous.workspaceLoadState === next.workspaceLoadState &&
   previous.onOpenWorkspaceSettings === next.onOpenWorkspaceSettings &&

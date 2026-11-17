@@ -260,6 +260,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const listboxId = useId()
   const manualModelNameId = useId()
   const [open, setOpen] = useState(false)
+  // 当前模型有可调强度时，弹层默认只显示强度卡片；点卡片里的模型名才展开列表。
+  // 两个视图互斥，不会同时出现（与设计稿 v4 一致）。
+  const [effortOnly, setEffortOnly] = useState(false)
   const [inlinePanel, setInlinePanel] = useState<InlinePanel | null>(null)
   const [manualDrafts, setManualDrafts] = useState<Record<string, string>>({})
   const [manualSaving, setManualSaving] = useState(false)
@@ -704,6 +707,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const effortValue = selectedEffort
     ? resolveEffort(selectedEffort, value.mainModel?.effort)
     : undefined
+  // 输入区胶囊上显示的当前档位名。没强度或未选中档位时不显示。
+  const effortPillLabel = selectedEffort && effortValue
+    ? selectedEffort.options.find(option => option.value === effortValue)?.label
+    : undefined
 
   // 换模型或目录刷新后，旧档位可能已不在开放范围，这时按该模型默认档回写快照。
   useEffect(() => {
@@ -1038,22 +1045,34 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       presetGroups.length === 0 &&
       freeModels.length === 0 && !managedModels?.length
 
-    return (
-      <>
-        {selectedEffort && effortValue && value.mainModel ? (
+    const showEffortCard = Boolean(selectedEffort && effortValue && value.mainModel)
+
+    // 方案 A：有强度时弹层只出卡片，列表让位；点卡片里的模型名才回到列表。
+    if (showEffortCard && effortOnly) {
+      return (
+        <div className="p-1.5">
           <WorkbenchEffortCard
-            effort={selectedEffort}
-            value={effortValue}
-            modelLabel={selectedManaged?.label || selectedPreset?.modelLabel || value.mainModel.modelName}
+            effort={selectedEffort!}
+            value={effortValue!}
+            modelLabel={selectedManaged?.label || selectedPreset?.modelLabel || value.mainModel!.modelName}
             disabled={disabled}
             onChange={(next) => onChange({ mainModel: { ...value.mainModel!, effort: next } })}
             onPickModel={() => {
-              // 模型名点击回到列表：收起侧栏，把焦点交给列表当前项。
+              setEffortOnly(false)
               setInspectedModel(null)
-              menuRef.current?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')?.focus()
+              window.requestAnimationFrame(() => {
+                menuRef.current
+                  ?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')
+                  ?.focus()
+              })
             }}
           />
-        ) : null}
+        </div>
+      )
+    }
+
+    return (
+      <>
         <div className="relative min-h-0 flex-1">
           <div className="pointer-events-none absolute right-1.5 top-1.5 z-10">
             <div className="pointer-events-auto rounded-[6px] bg-white/90 backdrop-blur-[2px]">
@@ -1475,7 +1494,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         )}
         onClick={() => {
           if (disabled) return
-          setOpen((current) => !current)
+          setOpen((current) => {
+            const next = !current
+            // 打开时若当前模型可调强度，先只展示强度卡片。
+            if (next) setEffortOnly(Boolean(selectedEffort && effortValue && value.mainModel))
+            return next
+          })
         }}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
@@ -1483,11 +1507,27 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             <>
               <CatalogModelIcon src={selectedManaged.iconUrl} alt={selectedManaged.label} />
               <span className="truncate text-[var(--model-offer-text)]">{selectedManaged.label}</span>
+              {effortPillLabel && (
+                <span
+                  data-testid={workbenchSelectors.effortPill}
+                  className="shrink-0 text-[13px] text-[#B9B8B4]"
+                >
+                  {effortPillLabel}
+                </span>
+              )}
             </>
           ) : selectedPreset ? (
             <>
               <CatalogModelIcon src={selectedPreset.iconUrl} alt={selectedPreset.modelLabel} />
               <span className="truncate">{selectedPreset.modelLabel}</span>
+              {effortPillLabel && (
+                <span
+                  data-testid={workbenchSelectors.effortPill}
+                  className="shrink-0 text-[13px] text-[#B9B8B4]"
+                >
+                  {effortPillLabel}
+                </span>
+              )}
             </>
           ) : selectedFree ? (
             <>

@@ -5,14 +5,20 @@ import { COMPOSER_REFERENCE_KINDS } from './constants'
 import ReferenceMentionPanel from './ReferenceMentionPanel'
 import type { ComposerDraftValue } from './types'
 import {
+  anchorCaretInTextNode,
+  clearCaretPlaceholders,
   createComposerNodesFromDraftValue,
   createScopeTokenElement,
   extractComposerDraftValue,
   getScopeKey,
+  hasComposerContent,
+  moveCaretToEnd,
   moveCaretToTextNode,
   readComposerNodesFromEditor,
   removeComposerTokenAtCaret,
-  renderComposerNodesToEditor
+  renderComposerNodesToEditor,
+  resolveCaretRange,
+  stripCaretPlaceholderChars
 } from './utils'
 
 type Props = {
@@ -85,6 +91,12 @@ const ComposerInputEditor: React.FC<Props> = ({
     const editor = editorRef.current
     if (!editor) return
     const nodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
+    if (hasComposerContent(nodes)) {
+      stripCaretPlaceholderChars(editor)
+      anchorCaretInTextNode(editor)
+    } else {
+      clearCaretPlaceholders(editor)
+    }
     const draft = extractComposerDraftValue(nodes)
     onChange({
       input: draft.input,
@@ -130,7 +142,11 @@ const ComposerInputEditor: React.FC<Props> = ({
     nodes.forEach((node) => {
       if (node.kind === 'scope') knownScopesRef.current.set(getScopeKey(node.scope), node.scope)
     })
-    if (editorRef.current) renderComposerNodesToEditor(editorRef.current, nodes)
+    const editor = editorRef.current
+    if (editor) {
+      renderComposerNodesToEditor(editor, nodes)
+      if (document.activeElement === editor) moveCaretToEnd(editor)
+    }
     lastEmittedSignatureRef.current = signature
   }, [contentNodes, input, selectedReferences])
 
@@ -177,6 +193,7 @@ const ComposerInputEditor: React.FC<Props> = ({
         data-placeholder={placeholder}
         className={`block whitespace-pre-wrap break-words text-[#37352F] outline-none empty:before:pointer-events-none empty:before:text-[#9B9A97] empty:before:content-[attr(data-placeholder)] ${variant === 'inline' ? 'min-h-[28px] px-2 py-[4px] text-[13px] leading-[20px]' : 'min-h-[72px] rounded-[6px] border border-[#E5E4E0] px-3 py-2 text-[14px] leading-6'} ${editorClassName || ''}`}
         onInput={() => {
+          if (composingRef.current) return
           editorRef.current
             ?.querySelectorAll('[data-role="composer-caret-anchor"]')
             .forEach((anchor) => anchor.remove())
@@ -248,23 +265,17 @@ const ComposerInputEditor: React.FC<Props> = ({
           }
           if (event.key === 'Enter' && event.shiftKey) {
             event.preventDefault()
+            const editor = editorRef.current
             const selection = window.getSelection()
-            if (!selection?.rangeCount || !editorRef.current?.contains(selection.anchorNode)) return
+            if (!editor || !selection?.rangeCount || !editor.contains(selection.anchorNode)) return
             const range = selection.getRangeAt(0)
             range.deleteContents()
             const newline = document.createElement('br')
             range.insertNode(newline)
-            // A trailing line break needs a second BR for Chromium to place the caret below it.
-            if (
-              !newline.nextSibling?.textContent &&
-              !(newline.nextSibling instanceof HTMLBRElement)
-            ) {
-              const anchor = document.createElement('br')
-              anchor.dataset.role = 'composer-caret-anchor'
-              newline.after(anchor)
-            }
             range.setStartAfter(newline)
             range.collapse(true)
+            // A caret after a <br> is on an element boundary; give the IME a text node to compose in.
+            resolveCaretRange(editor, range)
             selection.removeAllRanges()
             selection.addRange(range)
             sync()

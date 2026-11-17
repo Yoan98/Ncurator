@@ -1667,11 +1667,15 @@ export type AiContextUsageRequest = {
   partnerId: string
 }
 
+/** 上下文用量口径：`estimate` 表示尚无真实 brain usage，按消息估算。 */
+export type AiContextUsageBasis = BrainContextBudgetSnapshot['basis'] | 'estimate'
+
 export type AiContextUsageResponse = {
   success: boolean
   contextWindowTokens?: number
   usedContextTokens?: number
   ratio?: number
+  basis?: AiContextUsageBasis
   updatedAt?: number
   /** 压缩后仍会进入下次模型请求的上下文是否含图片。 */
   hasEffectiveImageContext?: boolean

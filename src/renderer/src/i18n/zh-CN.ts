@@ -629,6 +629,9 @@ export const zh = {
     used: '已用 {{value1}}%',
     contextUsageUnavailable: '暂无上下文用量',
     contextUsage: '上下文用量',
+    contextUsageThreshold: '压缩阈值',
+    contextUsageMeasured: '真实用量',
+    contextUsageEstimated: '估算',
     used2: '已用',
     stoppingThisRun: '正在停止本次运行',
     processingThePreviousRequest: '正在处理上一条请求',
@@ -651,8 +654,6 @@ export const zh = {
     originalFileName: '原文件名',
     currentFileName: '当前文件名',
     nothingOpenYet: '右侧暂无内容',
-    directEditingDocxPptxXlsxPngJpegWebpAnd:
-      '支持直接写回：DOCX、PPTX、XLSX、PNG、JPEG、WebP 和 UTF-8 文本',
     theFileWasDeletedAndCannotBeOpened: '文件已删除，不能打开',
     openWithSystemDefault: '系统默认打开',
     revertedFileDeleted: '已回退，文件已删除',

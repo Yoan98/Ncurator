@@ -130,6 +130,7 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       hasCompressibleHistory
     const createdAt = Date.now()
     const decision = shouldCompact ? 'compact' : 'continue'
+    input.ctx.recordContextBudget?.(contextBudgetSnapshot)
     input.ctx.sendEvent({
       type: 'context_budget_evaluated',
       runId: input.ctx.runId,

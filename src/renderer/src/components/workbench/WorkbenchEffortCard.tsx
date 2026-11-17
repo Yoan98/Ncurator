@@ -1,7 +1,14 @@
-import React, { useRef } from 'react'
-import { HiArrowPath, HiBolt } from 'react-icons/hi2'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { HiArrowPath } from 'react-icons/hi2'
 import { t } from '../../i18n'
 import type { LlmEffort } from '../../../../shared/llmPresets'
+import {
+  EFFORT_THUMB_RADIUS,
+  EFFORT_THUMB_SIZE,
+  effortFillWidth,
+  effortIndexFromOffset,
+  effortStopPositions
+} from '../../../../shared/effortSliderGeometry'
 import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkbenchEffortCardProps = {
@@ -13,9 +20,16 @@ type WorkbenchEffortCardProps = {
   disabled?: boolean
 }
 
+/** 点位、填充、拖拽换算共用 shared/effortSliderGeometry，因此圆点永远压在小点上。 */
+const THUMB_SIZE = EFFORT_THUMB_SIZE
+const THUMB_RADIUS = EFFORT_THUMB_RADIUS
+const stopPositions = effortStopPositions
+
 /**
- * 思考强度卡片：嵌在模型面板顶部。档位与顺序完全来自目录配置，
- * 目录给了几档就画几个点，不在客户端补齐或改名。
+ * 思考强度卡片。档位与顺序完全来自目录配置，目录给了几档就画几个点。
+ *
+ * 交互：按住圆点拖动（实时吸附最近档位）、点轨道跳档、点小点切档、
+ * ← → 逐档、Home / End 到首尾、右上角复位。
  */
 export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
   effort,
@@ -25,7 +39,11 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
   onPickModel,
   disabled
 }) => {
-  const stopsRef = useRef<HTMLDivElement>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef(false)
+  const [width, setWidth] = useState(0)
+  const [dragging, setDragging] = useState(false)
+
   const index = Math.max(
     0,
     effort.options.findIndex((option) => option.value === value)
@@ -33,108 +51,184 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
   const count = effort.options.length
   const current = effort.options[index] || effort.options[0]
   const selectedIsDefault = current.value === effort.default
-  const ratio = count > 1 ? index / (count - 1) : 0
+  const positions = stopPositions(width, count)
+  const activeX = positions[index] ?? 0
 
-  const move = (nextIndex: number): void => {
-    const option = effort.options[nextIndex]
-    if (!option) return
-    onChange(option.value)
-    window.requestAnimationFrame(() => {
-      const stops = stopsRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
-      stops?.[nextIndex]?.focus()
-    })
+  // 轨道宽度随面板宽度变化，用 ResizeObserver 保持点位随动。
+  useEffect(() => {
+    const node = trackRef.current
+    if (!node) return
+    const sync = (): void => setWidth(node.clientWidth)
+    sync()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(sync)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  const selectIndex = useCallback(
+    (nextIndex: number): void => {
+      const option = effort.options[nextIndex]
+      if (!option || disabled) return
+      if (option.value !== value) onChange(option.value)
+    },
+    [disabled, effort.options, onChange, value]
+  )
+
+  /** 把指针位置换算成最近的档位。 */
+  const indexFromClientX = useCallback(
+    (clientX: number): number => {
+      const node = trackRef.current
+      if (!node) return 0
+      const rect = node.getBoundingClientRect()
+      return effortIndexFromOffset(clientX - rect.left, rect.width, count)
+    },
+    [count]
+  )
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
+    if (disabled || event.button !== 0) return
+    draggingRef.current = true
+    setDragging(true)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    selectIndex(indexFromClientX(event.clientX))
+    event.preventDefault()
+  }
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
+    if (!draggingRef.current) return
+    selectIndex(indexFromClientX(event.clientX))
+    event.preventDefault()
+  }
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>): void => {
+    if (!draggingRef.current) return
+    draggingRef.current = false
+    setDragging(false)
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (disabled) return
+    if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      selectIndex(Math.min(index + 1, count - 1))
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+      event.preventDefault()
+      selectIndex(Math.max(index - 1, 0))
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      selectIndex(0)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      selectIndex(count - 1)
+    }
   }
 
   return (
     <div
       data-testid={workbenchSelectors.effortCard}
-      className="mx-1.5 mb-1.5 rounded-[12px] border border-[#E5E4E0] bg-white px-2.5 pb-2.5 pt-2"
+      className="rounded-[20px] border border-[#E0DFDC] bg-white px-[18px] pb-5 pt-3.5"
     >
-      <div className="flex items-center justify-between gap-2">
-        <HiBolt aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[#9B9A97]" />
-        <span
+      <div className="relative">
+        <div
           data-testid={workbenchSelectors.effortValue}
-          className="min-w-0 flex-1 truncate text-center text-[13px] font-semibold text-[#0B6BCB]"
+          className="truncate text-center text-[16px] font-semibold leading-[22px] text-[#0B6BCB]"
         >
           {current.label}
-        </span>
+        </div>
+        <button
+          type="button"
+          disabled={disabled}
+          data-testid={workbenchSelectors.effortModelName}
+          onClick={onPickModel}
+          className="mx-auto mt-0.5 flex max-w-full items-center justify-center gap-[3px] rounded-[5px] px-1.5 py-px text-[13px] text-[#787774] hover:bg-[#EFEFEE] hover:text-[#37352F] disabled:hover:bg-transparent disabled:hover:text-[#787774]"
+        >
+          <span className="min-w-0 truncate">{modelLabel}</span>
+          <span aria-hidden="true" className="shrink-0 text-[10px] text-[#91918E]">
+            ›
+          </span>
+        </button>
         <button
           type="button"
           aria-label={t(($) => $.workbench.effortReset)}
           data-testid={workbenchSelectors.effortReset}
           disabled={disabled || selectedIsDefault}
-          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[#9B9A97] transition hover:text-[#37352F] disabled:cursor-default disabled:opacity-30 disabled:hover:text-[#9B9A97]"
+          className="absolute -top-0.5 right-[-6px] inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[#B9B8B4] transition hover:bg-[#EFEFEE] hover:text-[#787774] disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#B9B8B4]"
           onClick={() => onChange(effort.default)}
         >
-          <HiArrowPath className="h-3.5 w-3.5" />
+          <HiArrowPath className="h-4 w-4" />
         </button>
       </div>
 
-      <button
-        type="button"
-        disabled={disabled}
-        data-testid={workbenchSelectors.effortModelName}
-        onClick={onPickModel}
-        className="mx-auto mt-0.5 flex max-w-full items-center justify-center gap-0.5 rounded-[6px] px-1 text-[12px] text-[#787774] hover:text-[#37352F] disabled:hover:text-[#787774]"
-      >
-        <span className="min-w-0 truncate">{modelLabel}</span>
-        <span aria-hidden="true" className="shrink-0 text-[10px]">
-          ›
-        </span>
-      </button>
-
       <div
-        ref={stopsRef}
+        ref={trackRef}
         role="radiogroup"
         aria-label={t(($) => $.workbench.effortSlider)}
         data-testid={workbenchSelectors.effortSlider}
-        className="relative mx-0.5 mt-2 h-6"
-        onKeyDown={(event) => {
-          if (disabled) return
-          if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
-            event.preventDefault()
-            move(Math.min(index + 1, count - 1))
-          } else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
-            event.preventDefault()
-            move(Math.max(index - 1, 0))
-          } else if (event.key === 'Home') {
-            event.preventDefault()
-            move(0)
-          } else if (event.key === 'End') {
-            event.preventDefault()
-            move(count - 1)
-          }
-        }}
+        tabIndex={disabled ? -1 : 0}
+        className="relative mt-[15px] h-7 cursor-pointer select-none outline-none"
+        style={{ touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
+        onKeyDown={handleKeyDown}
       >
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-[#EDEDEB]" />
+        {/* 轨道：24px 粗胶囊 */}
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 h-6 -translate-y-1/2 rounded-full bg-[#F4F4F2]" />
+        {/* 填充：轨道左端 → 滑块左缘 */}
         <div
-          className="pointer-events-none absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-[#2E7CF6] transition-[width] duration-150"
-          style={{ left: 0, width: `${ratio * 100}%` }}
+          className="pointer-events-none absolute left-0 top-1/2 h-6 -translate-y-1/2 rounded-full bg-[#0B6BCB] transition-[width] duration-150"
+          style={{ width: effortFillWidth(activeX) }}
         />
-        <div className="absolute inset-0 flex items-center justify-between">
-          {effort.options.map((option, optionIndex) => {
-            const active = optionIndex === index
-            const passed = optionIndex <= index
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                aria-label={option.label}
-                tabIndex={active ? 0 : -1}
-                disabled={disabled}
-                data-testid={`${workbenchSelectors.effortStopPrefix}-${option.value}`}
-                onClick={() => move(optionIndex)}
-                className={
-                  active
-                    ? 'h-5 w-5 shrink-0 rounded-full border-2 border-[#2E7CF6] bg-white shadow-[0_1px_2px_rgba(15,15,15,0.12)]'
-                    : `h-2 w-2 shrink-0 rounded-full ${passed ? 'bg-white/80' : 'bg-[#C9C7C1]'}`
-                }
-              />
-            )
-          })}
-        </div>
+        {/* 档位小点：4px，已过档位用浅蓝 */}
+        {effort.options.map((option, optionIndex) => {
+          const passed = optionIndex < index
+          const active = optionIndex === index
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              aria-label={option.label}
+              aria-hidden={active}
+              tabIndex={-1}
+              disabled={disabled}
+              data-testid={`${workbenchSelectors.effortStopPrefix}-${option.value}`}
+              onClick={(event) => {
+                event.stopPropagation()
+                selectIndex(optionIndex)
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              className="absolute top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{
+                left: positions[optionIndex] ?? 0,
+                background: active ? 'transparent' : passed ? '#7EAAFA' : '#BDBBBD',
+                cursor: 'pointer'
+              }}
+            />
+          )
+        })}
+        {/* 滑块圆点：盖在轨道上，靠阴影浮起 */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 rounded-full bg-white transition-[left] duration-150"
+          style={{
+            left: activeX,
+            width: THUMB_SIZE,
+            height: THUMB_SIZE,
+            marginLeft: -THUMB_RADIUS,
+            marginTop: -THUMB_RADIUS,
+            boxShadow: dragging
+              ? '0 2px 6px rgba(15,15,15,0.24), 0 0 0 0.5px rgba(15,15,15,0.04)'
+              : '0 1px 2.5px rgba(15,15,15,0.22), 0 0 0 0.5px rgba(15,15,15,0.04)'
+          }}
+        />
       </div>
     </div>
   )

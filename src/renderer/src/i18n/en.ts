@@ -659,6 +659,9 @@ export const en = {
     used: '{{value1}}% used',
     contextUsageUnavailable: 'Context usage unavailable',
     contextUsage: 'Context usage',
+    contextUsageThreshold: 'Compaction threshold',
+    contextUsageMeasured: 'Measured',
+    contextUsageEstimated: 'Estimated',
     used2: 'Used',
     stoppingThisRun: 'Stopping this run',
     processingThePreviousRequest: 'Processing the previous request',
@@ -682,8 +685,6 @@ export const en = {
     originalFileName: 'Original file name',
     currentFileName: 'Current file name',
     nothingOpenYet: 'Nothing open yet',
-    directEditingDocxPptxXlsxPngJpegWebpAnd:
-      'Direct editing: DOCX, PPTX, XLSX, PNG, JPEG, WebP, and UTF-8 text',
     theFileWasDeletedAndCannotBeOpened: 'The file was deleted and cannot be opened',
     openWithSystemDefault: 'Open with system default',
     revertedFileDeleted: 'Reverted; file deleted',

@@ -176,15 +176,21 @@ export const resolveCompactionThroughSeq = (
 /**
  * 把不可变日志投影为下一次模型调用需要的历史。
  * `compaction_checkpoint.throughSeq` 覆盖范围内的对话由 checkpoint 摘要替代，绝不同时发送摘要和完整旧历史。
+ * `includeUserEntries` 只给「上下文用量」这类展示口径用：brain 的 user 由
+ * `projectBrainMessagesFromLog` 按 content 单独还原，这里默认不投影。
  */
-export const projectMessageLogRecords = (records: ChatMessageLogRecord[]): MessageLogProjection => {
+export const projectMessageLogRecords = (
+  records: ChatMessageLogRecord[],
+  options?: { includeUserEntries?: boolean }
+): MessageLogProjection => {
   const ordered = orderMessageLogBySeq(records)
   const floor = resolveHistoryFloor(ordered)
   const projectedRecords = ordered.filter((record) => record.seq > floor.historyFloorSeq)
-  // 历史 user 由 projectBrainMessagesFromLog 按 content 还原；这里只投影过程 tail。
-  // 每次新 run 的当前 user 统一由 buildBrainUserMessage 构造。
+  const projectedEntries = projectedRecords.map((record) => record.entry)
   const messages = deriveMessageLogMessages({
-    entries: projectedRecords.map((record) => record.entry).filter((entry) => entry.kind !== 'user')
+    entries: options?.includeUserEntries
+      ? projectedEntries
+      : projectedEntries.filter((entry) => entry.kind !== 'user')
   })
   let plan: ChatMessageLogPlanItem[] = []
   let loadedToolsetIds: string[] = []

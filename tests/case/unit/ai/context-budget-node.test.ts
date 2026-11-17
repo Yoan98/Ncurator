@@ -7,6 +7,7 @@ import { resolveEffectiveContextWindowTokens } from '../../../../src/main/servic
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import type {
   AiRunEvent,
+  BrainContextBudgetSnapshot,
   ChatMessageContentNode,
   ChatMessageLogEntry,
   ChatMessageLogRecord,
@@ -426,5 +427,23 @@ describe('ai unit context budget node', () => {
       content: '<user_context>分析 Excel</user_context>',
       input: '分析 Excel'
     })
+  })
+
+  it('exposes the evaluated snapshot so callers can show the same numbers', async () => {
+    const events: AiRunEvent[] = []
+    const recorded: BrainContextBudgetSnapshot[] = []
+    const ctx = {
+      ...createBaseContext(events),
+      recordContextBudget: (snapshot: BrainContextBudgetSnapshot) => {
+        recorded.push(snapshot)
+      }
+    }
+    const node = createContextBudgetNode({ ctx, cache: createHumanRuntimeCache() })
+    const nextState = await node(
+      createInitialHumanState({ taskId: 'task-record', userInput: '帮我看下上下文' })
+    )
+
+    expect(recorded).toHaveLength(1)
+    expect(recorded[0]).toEqual(nextState.execution.contextBudget)
   })
 })

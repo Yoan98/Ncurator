@@ -2796,7 +2796,8 @@ export function registerHandlers(services: {
       const usage = await getAiContextUsage({
         partnerId,
         chatMessageLogStore,
-        workbenchUiStore
+        workbenchUiStore,
+        contextBudget: chatRunService.getLastContextBudget(partnerId)
       })
       return { success: true, ...usage }
     } catch (e) {

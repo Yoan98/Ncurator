@@ -1,56 +1,30 @@
 import React, { useMemo } from 'react'
 import type { WorkspaceSource } from '../../../../shared/types'
-import { formatWorkspacePathLabel, getWorkspacePathParts } from './pathDisplay'
+import {
+  getWorkspacePathLabelParts,
+  type WorkspacePathSeparator
+} from '../../../../shared/workbench/pathDisplay'
 
 type WorkspacePathLabelProps = {
   filePath: string | undefined
   workspaces: WorkspaceSource[]
-  fallbackWorkspaceName?: string | null
   className?: string
   prefixClassName?: string
   fileNameClassName?: string
-  separator?: ' > ' | '/'
-}
-
-const splitPathForDisplay = (
-  filePath: string | undefined,
-  workspaces: WorkspaceSource[],
-  fallbackWorkspaceName?: string | null,
-  separator: ' > ' | '/' = ' > '
-): {
-  label: string
-  prefix: string
-  fileName: string
-} => {
-  const parts = getWorkspacePathParts(filePath, workspaces)
-  const workspaceName = String(parts.workspaceName || fallbackWorkspaceName || '').trim()
-  const relativePath = String(parts.relativePath || parts.fileName || '').replace(/\\/g, '/')
-  const fileName = parts.fileName || relativePath.split('/').filter(Boolean).pop() || relativePath
-  const directoryPath = relativePath.endsWith(fileName)
-    ? relativePath.slice(0, Math.max(0, relativePath.length - fileName.length)).replace(/\/+$/g, '')
-    : ''
-  const prefix = [workspaceName, ...directoryPath.split('/').filter(Boolean)]
-    .filter(Boolean)
-    .join(separator)
-  return {
-    label: formatWorkspacePathLabel(filePath, workspaces, fallbackWorkspaceName),
-    prefix: prefix ? `${prefix}${separator}` : '',
-    fileName
-  }
+  separator?: WorkspacePathSeparator
 }
 
 const WorkspacePathLabel: React.FC<WorkspacePathLabelProps> = ({
   filePath,
   workspaces,
-  fallbackWorkspaceName,
   className,
   prefixClassName,
   fileNameClassName,
   separator = ' > '
 }) => {
   const display = useMemo(
-    () => splitPathForDisplay(filePath, workspaces, fallbackWorkspaceName, separator),
-    [fallbackWorkspaceName, filePath, separator, workspaces]
+    () => getWorkspacePathLabelParts(filePath, workspaces, separator),
+    [filePath, separator, workspaces]
   )
 
   if (!display.prefix) {

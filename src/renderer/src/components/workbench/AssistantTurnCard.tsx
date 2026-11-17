@@ -63,7 +63,6 @@ type AssistantTurnCardProps = {
   isStreaming?: boolean
   onOpenApply: (changeId: string) => void
   workspaces: WorkspaceSource[]
-  fallbackWorkspaceName?: string | null
   onOpenReference: (reference: OpenableMarkdownReference) => void
   onPreviewImage?: (image: ImageLightboxImage) => void
 }
@@ -686,7 +685,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   turn,
   onOpenApply,
   workspaces,
-  fallbackWorkspaceName,
   onOpenReference,
   onPreviewImage
 }) => {
@@ -962,7 +960,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                           <WorkspacePathLabel
                             filePath={apply.sourcePath || apply.title}
                             workspaces={workspaces}
-                            fallbackWorkspaceName={fallbackWorkspaceName}
                             className="text-[13px] font-medium"
                             fileNameClassName="text-[#37352F]"
                             prefixClassName="text-[#9B9A97]"

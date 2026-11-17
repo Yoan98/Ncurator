@@ -116,14 +116,6 @@ pnpm test:update:e2e
 
 ### 5.1 `conversation`
 
-#### `supported-writeback-format-summary`
-
-- 测试类型：`e2e`
-- What：Workbench 右侧空面板明确展示当前支持直接写回的文件格式。
-- Why：用户需要区分可直接写回并回退的正式能力与仅可预览或自行尝试处理的格式。
-- How：打开 Workbench 并展开右侧空面板，读取可见的支持格式说明。
-- Oracle：说明包含 DOCX、PPTX、XLSX、PNG、JPEG、WebP 和 UTF-8 文本，不包含 GIF、SVG，对齐 `WB-CORE-003-AC1`、`WB-CORE-003-AC2`。
-
 #### `partner-create-and-name`
 
 - 测试类型：`e2e`
@@ -183,10 +175,10 @@ pnpm test:update:e2e
 #### `context-ring-usage`
 
 - 测试类型：`e2e / live`
-- What：智能模式上下文用量在 run 后刷新，并可查看已用比例与 tokens。
-- Why：用量提示错误会误导用户对后续可用上下文的判断。
-- How：创建空工作地址，不准备资料或知识库索引；记录运行前圆环用量，执行含固定输入的真实 AI run。通过只读 aiContextUsageGet 获取生产摘要，核对共用圆环及 hover 的已用 / 最大 tokens 与摘要一致，并确认已用 tokens 更新。
-- Oracle：圆圈与 hover 展示的已用百分比及已用 / 最大 token 须与生产摘要一致，不展示剩余，对齐 `WB-COMPOSER-008-AC1`；百分比与中文标签之间空白不影响判定。run 后显示值随生产上下文摘要更新，且大于运行前值，对齐 `WB-COMPOSER-008-AC2`。仅存在“已用”文案不足以判定通过。
+- What：智能模式上下文用量在 run 后按真实模型用量刷新，并可查看已用比例、tokens 与口径标注。
+- Why：用量提示错误会误导用户对后续可用上下文的判断；显示与压缩各算一套时会给出错误的“还很空”信号。
+- How：创建空工作地址，不准备资料或知识库索引；记录运行前圆环用量，执行含固定输入的真实 AI run。通过只读 aiContextUsageGet 获取生产摘要，核对圆环及 hover 的已用 / 阈值 tokens、百分比与摘要一致，并确认已用 tokens 更新、摘要 `basis` 为 `usage_plus_delta`、hover 标注为「真实用量」。
+- Oracle：圆圈与 hover 展示的已用百分比及已用 / 阈值 token 须与生产摘要一致，不展示剩余，对齐 `WB-COMPOSER-008-AC1`；百分比与中文标签之间空白不影响判定。run 后显示值随生产上下文摘要更新、大于运行前值，标为真实用量，对齐 `WB-COMPOSER-008-AC2` 与 `WB-COMPOSER-008-AC5`。仅存在“已用”文案不足以判定通过。压缩后回落与越过阈值时的百分比不封顶由 `context-budget-node` 单测和 `context-usage-snapshot` 单测覆盖 `WB-COMPOSER-008-AC4`。
 
 #### `chat-without-knowledge-model`
 
@@ -713,7 +705,7 @@ pnpm test:update:e2e
 - What：AI 修改真实 docx 后，assistant 修改文件入口在未点击时显示真实非零修改数量，右侧修改文件工作区、当前记录预览和干净回退闭环。
 - Why：直接写回和回退是 Workbench 文件编辑能力的安全边界，只看 artifact 事件无法证明用户能检查和撤销修改。
 - How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回但不点击 assistant turn 中的修改文件入口，确认它显示真实非零 `+/-` 数量；再点击入口检查右侧文件面包屑、无模式标签状态、预览，以及系统应用下拉内的“打开所在文件夹”；通过 E2E no-op 成功分支选择关联应用，再执行回退并重新读取文件内容。
-- Oracle：受支持写回类型边界对齐 `WB-CORE-003`；修改后源文件成为最终净稿，Run 结束后入口在未点击时已显示真实非零数量；DOCX 已应用记录成功交给外部应用后显示“关闭后重新打开”提示；右侧默认选中、Review Docx、写回和回退闭环对齐 `WB-PANEL-003-AC19`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`。
+- Oracle：受支持写回类型边界对齐 `WB-CORE-003-AC1`、`WB-CORE-003-AC2`；修改后源文件成为最终净稿，Run 结束后入口在未点击时已显示真实非零数量；DOCX 已应用记录成功交给外部应用后显示“关闭后重新打开”提示；右侧默认选中、Review Docx、写回和回退闭环对齐 `WB-PANEL-003-AC19`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`。
 - 位置标记条验收：补充 `WB-PANEL-003-AC29`，通过真实 UI 验证切入预览与回退后保留 16px 滚动轨道且无审核标记；审核标记语义与导航由 `docx-review-position-and-inline-diff` 覆盖，历史批次切换列入人工验收。
 - 模式入口验收：补充 `WB-PANEL-003-AC13/AC14`，审核切预览后重复点击对话中的同一修改入口必须重回审核；从普通文件预览点击修改入口必须审核且复用原 Tab；切换其他 Tab 再回来保留预览；回退后再次点修改入口默认预览。文本文件的同一入口规则由 `text-file-apply-preview-and-revert` 补证，PPT/Excel 共用入口的逐格式重复点击保留人工验收边界。
 

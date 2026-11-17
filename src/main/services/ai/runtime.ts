@@ -140,6 +140,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     chatTools: resolveChatTools(),
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
+    recordContextBudget: payload.parentToolCallId ? undefined : deps.recordContextBudget,
     requestApprovalBatch: deps.requestApprovalBatch,
     requestUserQuestion:
       deps.requestUserQuestion ||

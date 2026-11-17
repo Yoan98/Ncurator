@@ -25,3 +25,4 @@ design/
 doc/ai-tool-prompt-audit.md
 
 .venv
+tmp-ui-preview

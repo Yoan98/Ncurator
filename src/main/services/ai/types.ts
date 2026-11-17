@@ -347,6 +347,8 @@ export type AiRunDeps = {
   abortSignal?: AbortSignal
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
+  /** 主会话每轮 brain 前的预算快照；子会话不写入。 */
+  recordContextBudget?: (snapshot: BrainContextBudgetSnapshot) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
   requestUserQuestion?: (request: {
     taskId: string
@@ -429,6 +431,8 @@ export type AiRunContext = {
   chatTools: (input: AiLlmToolCallRequest) => Promise<AiLlmToolCallResult>
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
+  /** 主会话每轮 brain 前的预算快照；子会话不写入。 */
+  recordContextBudget?: (snapshot: BrainContextBudgetSnapshot) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
   requestUserQuestion: (request: {
     taskId: string

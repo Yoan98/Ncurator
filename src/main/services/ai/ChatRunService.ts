@@ -40,6 +40,7 @@ import type {
   AiRunCancelResponse,
   AiRunEvent,
   AiRunRecord,
+  BrainContextBudgetSnapshot,
   ChatMessage,
   ChatMessageContentNode,
   PartnerClearContextResponse,
@@ -183,8 +184,15 @@ export class ChatRunService {
   private readonly activeQuestions = new Map<string, ActiveQuestion>()
   private readonly pendingPartnerSubmissions = new Set<string>()
   private readonly pendingManagedSubmissions = new Set<ManagedRunBinding>()
+  /** 最近一次主会话上下文预算快照；上下文用量展示的唯一真实来源。 */
+  private readonly lastContextBudgets = new Map<string, BrainContextBudgetSnapshot>()
 
   public constructor(private readonly deps: ChatRunServiceDeps) {}
+
+  public getLastContextBudget(partnerId: string): BrainContextBudgetSnapshot | undefined {
+    const normalizedPartnerId = String(partnerId || '').trim()
+    return normalizedPartnerId ? this.lastContextBudgets.get(normalizedPartnerId) : undefined
+  }
 
   private async loadProjectedPartnerMessages(partnerId: string): Promise<ChatMessage[]> {
     const [records, runs] = await Promise.all([
@@ -448,6 +456,7 @@ export class ChatRunService {
     }
     const clear = async (): Promise<PartnerClearContextResponse> => {
       await this.deps.partnerCacheService?.clearPartnerFiles(normalizedPartnerId, deleteFileChanges)
+      this.lastContextBudgets.delete(normalizedPartnerId)
       this.deps.subagentStore.deleteByPartner(normalizedPartnerId)
       await this.deps.chatMessageLogStore.deleteByPartner(normalizedPartnerId)
       await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
@@ -1272,6 +1281,9 @@ export class ChatRunService {
           abortSignal: this.activeRuns.get(runId)?.abortController.signal,
           sendEvent,
           recordLlmIo: this.deps.recordLlmIo,
+          recordContextBudget: (snapshot) => {
+            this.lastContextBudgets.set(run.partnerId, snapshot)
+          },
           llmDriver: this.deps.llmDriver,
           requestApprovalBatch: async (request) => await this.requestApprovalBatch(runId, request),
           requestUserQuestion: async (request) => await this.requestUserQuestion(runId, request),

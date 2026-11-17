@@ -38,8 +38,11 @@ import { isAttachmentDocumentPreviewable } from './composer/attachmentPresentati
 import ReferenceMentionPanel from './composer/ReferenceMentionPanel'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
 import {
+  anchorCaretInTextNode,
+  clearCaretPlaceholders,
   createComposerNodesFromDraftValue,
   createScopeTokenElement,
+  editorHasVisibleText,
   extractComposerDraftValue,
   getScopeKey,
   hasComposerContent,
@@ -48,6 +51,7 @@ import {
   readComposerNodesFromEditor,
   removeComposerTokenAtCaret,
   renderComposerNodesToEditor,
+  stripCaretPlaceholderChars,
   syncComposerTokens
 } from './composer/utils'
 import WorkbenchSelect from './WorkbenchSelect'
@@ -107,7 +111,7 @@ const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
 /** Native deletion can leave one empty BR; user line breaks are inserted as text. */
 const markEmptyCaretAnchor = (editor: HTMLElement): boolean => {
   if (
-    editor.textContent ||
+    editorHasVisibleText(editor) ||
     editor.querySelector('[data-role="scope-token"], [data-role="document-selection-token"]')
   )
     return false
@@ -359,6 +363,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const nodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
     // A trailing newline needs a caret anchor; retain native nodes for undo.
     ensureEditorHasCaretTarget()
+    if (hasComposerContent(nodes)) {
+      // Deleting text can leave the caret in an empty text node or on an element boundary.
+      stripCaretPlaceholderChars(editor)
+      anchorCaretInTextNode(editor)
+    } else {
+      clearCaretPlaceholders(editor)
+    }
     draftNodesRef.current = nodes
     setHasContent(hasComposerContent(nodes))
     const draft = extractComposerDraftValue(nodes)
@@ -488,15 +499,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       const caretMarker = document.createElement('span')
       caretMarker.textContent = '\u200b'
       caretMarker.style.cssText = 'display:inline-block;height:1lh;vertical-align:top'
-      const caretRange = nextSelection.getRangeAt(0)
+      const caretRange = nextSelection.getRangeAt(0).cloneRange()
       caretRange.insertNode(caretMarker)
       caretMarker.scrollIntoView({ block: 'nearest' })
-      caretRange.setStartBefore(caretMarker)
-      caretRange.collapse(true)
-      nextSelection.removeAllRanges()
-      nextSelection.addRange(caretRange)
       caretMarker.remove()
       editor.normalize()
+      // Inserting the marker split a text node; never leave the caret on that DOM boundary.
+      anchorCaretInTextNode(editor)
       refreshMentionContext()
     },
     [focusEditorAtEnd, refreshMentionContext, syncDraftFromEditor]
@@ -589,7 +598,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const handleEditorInput = (): void => {
     if (isComposingRef.current) {
       const editor = editorRef.current
-      const hasText = Boolean(editor?.textContent)
+      const hasText = editor ? editorHasVisibleText(editor) : false
       const hasToken = Boolean(
         editor?.querySelector('[data-role="scope-token"], [data-role="document-selection-token"]')
       )
@@ -853,10 +862,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     closeMention()
   }
 
-  const contextUsagePercent = Math.max(
-    0,
-    Math.min(100, Math.round((contextUsage?.ratio || 0) * 100))
-  )
+  // 不钳到 100：超过压缩阈值时（等待 compaction）要能看出已经越线。
+  const contextUsagePercent = Math.max(0, Math.round((contextUsage?.ratio || 0) * 100))
   const contextUsageTitle = contextUsage
     ? t(($) => $.workbench.used, { value1: contextUsagePercent })
     : t(($) => $.workbench.contextUsageUnavailable)
@@ -870,6 +877,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       <div className="text-[#787774]">
         {contextUsage.usedContextTokens.toLocaleString(getRendererRuntime().locale)} /{' '}
         {contextUsage.contextWindowTokens.toLocaleString(getRendererRuntime().locale)} tokens
+      </div>
+      <div className="text-[#787774]">
+        {t(($) => $.workbench.contextUsageThreshold)} ·{' '}
+        {contextUsage.basis === 'usage_plus_delta'
+          ? t(($) => $.workbench.contextUsageMeasured)
+          : t(($) => $.workbench.contextUsageEstimated)}
       </div>
     </div>
   ) : (

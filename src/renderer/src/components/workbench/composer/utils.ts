@@ -20,6 +20,53 @@ import {
   selectionFileName
 } from './referenceVisuals'
 
+/**
+ * Invisible text host for programmatic carets. Chromium anchors an IME composition at the
+ * exact DOM boundary where it starts; a caret on an element boundary after a <br>/token, or in
+ * an empty text node, commits the first preedit as raw letters. The placeholder is never part
+ * of the draft, but it keeps the caret inside a text node until real input arrives.
+ *
+ * A run of four U+200B distinguishes our host from a single zero-width character the user
+ * pastes or types; only the run is stripped, so the user's own invisible character stays input.
+ */
+const CARET_TEXT_PLACEHOLDER = '\u200b\u200b\u200b\u200b'
+const CARET_TEXT_PLACEHOLDER_PATTERN = /\u200b{4}/g
+const caretPlaceholderNodes = new WeakSet<Text>()
+
+const createCaretPlaceholderNode = (): Text => {
+  const node = document.createTextNode(CARET_TEXT_PLACEHOLDER)
+  caretPlaceholderNodes.add(node)
+  return node
+}
+
+const markCaretPlaceholderNode = (node: Text): Text => {
+  caretPlaceholderNodes.add(node)
+  if (!node.data) node.data = CARET_TEXT_PLACEHOLDER
+  return node
+}
+
+const isPlaceholderOnlyText = (node: Node | null): node is Text =>
+  node instanceof Text &&
+  caretPlaceholderNodes.has(node) &&
+  !node.data.replace(CARET_TEXT_PLACEHOLDER_PATTERN, '')
+
+const readCaretText = (node: Text): string =>
+  caretPlaceholderNodes.has(node)
+    ? node.data.replace(CARET_TEXT_PLACEHOLDER_PATTERN, '')
+    : node.data
+
+const caretEndOffset = (node: Text): number => {
+  if (!caretPlaceholderNodes.has(node)) return node.data.length
+  const placeholderIndex = node.data.lastIndexOf(CARET_TEXT_PLACEHOLDER)
+  return placeholderIndex >= 0 ? placeholderIndex : node.data.length
+}
+
+const isCaretAnchorElement = (node: Node | null): node is HTMLElement =>
+  node instanceof HTMLElement && node.dataset.role === 'composer-caret-anchor'
+
+const firstContentText = (node: Node | null): Text | null =>
+  node instanceof Text && node.data.length > 0 ? node : null
+
 const createTextNode = (text = ''): ComposerNode => ({
   id: crypto.randomUUID(),
   kind: 'text',
@@ -146,7 +193,8 @@ export const readComposerNodesFromEditor = (
     const nodes: ComposerNode[] = []
     parent.childNodes.forEach((child) => {
       if (child instanceof Text) {
-        if (child.data) nodes.push(createTextNode(child.data))
+        const text = readCaretText(child)
+        if (text) nodes.push(createTextNode(text))
         return
       }
       if (!(child instanceof HTMLElement)) return
@@ -334,6 +382,7 @@ export const removeComposerTokenAtCaret = (
   const range = document.createRange()
   range.setStart(parent, index)
   range.collapse(true)
+  resolveCaretRange(editor, range)
   selection.removeAllRanges()
   selection.addRange(range)
   return true
@@ -349,12 +398,163 @@ export const moveCaretToTextNode = (textNode: Text, offset: number): void => {
   selection.addRange(range)
 }
 
+/** Real editor text: our caret host is skipped, a user-entered zero-width character counts. */
+export const editorHasVisibleText = (editor: HTMLElement): boolean => {
+  const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+  while (walker.nextNode()) {
+    if (readCaretText(walker.currentNode as Text)) return true
+  }
+  return false
+}
+
+/**
+ * Chromium anchors an IME composition at the DOM boundary where it starts. Keep a collapsed
+ * caret inside a non-empty text node: a boundary after a <br>/token, or an empty text node,
+ * commits the first preedit as raw letters. A placeholder text node is only inserted when the
+ * caret has no editable text to land in.
+ */
+export const resolveCaretRange = (editor: HTMLElement, range: Range): void => {
+  if (!range.collapsed) return
+  const container = range.startContainer
+  if (container !== editor && !editor.contains(container)) return
+  const containerElement =
+    container instanceof Text
+      ? container.parentElement
+      : container instanceof HTMLElement
+        ? container
+        : null
+  if (containerElement?.closest('[contenteditable="false"]')) return
+
+  const collapseTo = (node: Text, offset: number): void => {
+    range.setStart(node, Math.max(0, Math.min(offset, node.data.length)))
+    range.collapse(true)
+  }
+
+  if (container instanceof Text) {
+    if (readCaretText(container)) return
+    const previous = firstContentText(container.previousSibling)
+    if (previous) return collapseTo(previous, caretEndOffset(previous))
+    const next = firstContentText(container.nextSibling)
+    if (next) return collapseTo(next, 0)
+    markCaretPlaceholderNode(container)
+    return collapseTo(container, 0)
+  }
+
+  if (!(container instanceof HTMLElement)) return
+  const offset = range.startOffset
+  const previousNode = container.childNodes[offset - 1] || null
+  const nextNode = container.childNodes[offset] || null
+  const previous = firstContentText(previousNode)
+  if (previous) return collapseTo(previous, caretEndOffset(previous))
+  const next = firstContentText(nextNode)
+  if (next) return collapseTo(next, 0)
+  // Before the first child is a native-safe IME position; keep it instead of adding a host.
+  if (offset === 0) return
+  if (previousNode instanceof Text) {
+    markCaretPlaceholderNode(previousNode)
+    return collapseTo(previousNode, 0)
+  }
+  if (nextNode instanceof Text) {
+    markCaretPlaceholderNode(nextNode)
+    return collapseTo(nextNode, 0)
+  }
+  const holder = createCaretPlaceholderNode()
+  container.insertBefore(holder, nextNode)
+  collapseTo(holder, 0)
+}
+
+/** Move the current selection back into a text node when it sits on an IME-hostile boundary. */
+export const anchorCaretInTextNode = (editor: HTMLElement): void => {
+  const selection = window.getSelection()
+  if (!selection?.rangeCount || !selection.isCollapsed) return
+  const range = selection.getRangeAt(0)
+  const container = range.startContainer
+  const offset = range.startOffset
+  resolveCaretRange(editor, range)
+  if (range.startContainer === container && range.startOffset === offset) return
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
+/** Drop placeholder hosts once the draft has no content; an empty editor's offset 0 is IME-safe. */
+export const clearCaretPlaceholders = (editor: HTMLElement): void => {
+  const placeholders: Text[] = []
+  const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+  while (walker.nextNode()) {
+    if (isPlaceholderOnlyText(walker.currentNode)) placeholders.push(walker.currentNode)
+  }
+  if (placeholders.length === 0) return
+  const selection = window.getSelection()
+  const selectionInside = Boolean(
+    selection?.anchorNode && placeholders.some((node) => node === selection.anchorNode)
+  )
+  placeholders.forEach((node) => node.remove())
+  if (!selection || (!selectionInside && document.activeElement !== editor)) return
+  const range = document.createRange()
+  range.setStart(editor, 0)
+  range.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
+/** Real input arrived next to a caret host: strip the host run so it never shows in innerText/copy. */
+export const stripCaretPlaceholderChars = (editor: HTMLElement): void => {
+  const placeholders: Text[] = []
+  const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+  while (walker.nextNode()) {
+    const node = walker.currentNode
+    if (node instanceof Text && caretPlaceholderNodes.has(node)) placeholders.push(node)
+  }
+  if (placeholders.length === 0) return
+  const selection = window.getSelection()
+  placeholders.forEach((node) => {
+    if (!node.data.replace(CARET_TEXT_PLACEHOLDER_PATTERN, '')) {
+      if (selection?.anchorNode !== node) node.remove()
+      return
+    }
+    // deleteData keeps the live Selection offset (assigning data resets it to 0).
+    let index = node.data.lastIndexOf(CARET_TEXT_PLACEHOLDER)
+    while (index >= 0) {
+      node.deleteData(index, CARET_TEXT_PLACEHOLDER.length)
+      index = node.data.lastIndexOf(CARET_TEXT_PLACEHOLDER, index - 1)
+    }
+  })
+}
+
 export const moveCaretToEnd = (editor: HTMLElement): void => {
   const selection = window.getSelection()
   if (!selection) return
   const range = document.createRange()
-  range.selectNodeContents(editor)
-  range.collapse(false)
+
+  let content: Node | null = null
+  for (let node = editor.lastChild; node; node = node.previousSibling) {
+    if (isCaretAnchorElement(node)) continue
+    if (node instanceof Text && !node.data) continue
+    content = node
+    break
+  }
+
+  if (!content) {
+    // Empty editor: before any trailing caret anchor, matching a native click.
+    range.setStart(editor, 0)
+    range.collapse(true)
+  } else if (content instanceof Text) {
+    // Stay inside the last text node rather than on the boundary after a trailing <br>.
+    range.setStart(content, caretEndOffset(content))
+    range.collapse(true)
+  } else {
+    // A token is the last content: caret anchors after it are not text the IME can compose in.
+    let trailing = editor.lastChild
+    while (isCaretAnchorElement(trailing)) {
+      trailing.remove()
+      trailing = editor.lastChild
+    }
+    const holder = createCaretPlaceholderNode()
+    editor.appendChild(holder)
+    range.setStart(holder, 0)
+    range.collapse(true)
+  }
+
   selection.removeAllRanges()
   selection.addRange(range)
 }
