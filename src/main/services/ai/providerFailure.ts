@@ -4,6 +4,9 @@ export type ProviderFailureCode =
   | 'upstream_timeout'
   | 'upstream_interrupted'
   | 'upstream_error'
+  | 'upstream_quota_exhausted'
+  | 'upstream_auth_failed'
+  | 'upstream_rate_limited'
   | 'incomplete'
   | 'timeout'
   | 'client_disconnected'
@@ -45,6 +48,21 @@ const FAILURES: Record<ProviderFailureCode, FailureCopy> = {
   upstream_error: {
     title: '上游模型服务出错',
     detail: '上游模型服务出错。',
+    retryable: true
+  },
+  upstream_quota_exhausted: {
+    title: '上游模型额度不足',
+    detail: '上游模型账户额度不足，请稍后再试。',
+    retryable: false
+  },
+  upstream_auth_failed: {
+    title: '上游模型鉴权失败',
+    detail: '上游模型鉴权失败，馆长服务暂时不可用。',
+    retryable: false
+  },
+  upstream_rate_limited: {
+    title: '上游模型限流',
+    detail: '上游模型请求过多，请稍后再试。',
     retryable: true
   },
   incomplete: {
@@ -162,15 +180,28 @@ export const isProviderFailureCode = (value: unknown): value is ProviderFailureC
 export const providerFailureTitle = (code?: string): string | undefined =>
   isProviderFailureCode(code) ? FAILURES[code].title : undefined
 
+/** Normalize an HTTP failure from either the managed gateway or a custom provider. */
+export const providerFailureCodeForHttp = (status?: number, message?: string): ProviderFailureCode | undefined => {
+  if (status === 401) return 'upstream_auth_failed'
+  if (status === 402) return 'upstream_quota_exhausted'
+  if (status === 403) {
+    return /quota|balance|insufficient|额度|余额/i.test(message ?? '')
+      ? 'upstream_quota_exhausted' : 'upstream_auth_failed'
+  }
+  if (status === 429) return 'upstream_rate_limited'
+  if (status !== undefined && status >= 500) return 'upstream_error'
+  return undefined
+}
+
 export const providerFailureMessage = (code: ProviderFailureCode,
   billing?: LlmBillingStatus): string => FAILURES[code].detail + billingText(billing)
 
 export const providerFailure = (code: ProviderFailureCode,
-  options: { billing?: LlmBillingStatus; status?: number; cause?: unknown } = {}): LlmProviderError =>
+  options: { billing?: LlmBillingStatus; status?: number; cause?: unknown; retryable?: boolean } = {}): LlmProviderError =>
   new LlmProviderError({
     providerCode: code,
     message: providerFailureMessage(code, options.billing),
-    retryable: FAILURES[code].retryable,
+    retryable: options.retryable ?? FAILURES[code].retryable,
     billing: options.billing,
     httpStatus: options.status,
     cause: options.cause

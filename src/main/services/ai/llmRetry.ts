@@ -129,6 +129,19 @@ export const classifyManagedLlmRetry = (error: unknown, attempt = 1): LlmRetryDe
     if (cause instanceof ManagedModelConcurrencyRejection) {
       return { retryable: true, message: cause.message, delayMs: resolveCapacityBackoffDelay(attempt) }
     }
+    if (cause instanceof LlmProviderError) {
+      // The managed stream already downgrades retryable to false once any
+      // assistant content reached the renderer. Unknown/charged billing and
+      // non-retryable terminal codes must not be retried.
+      if (cause.retryable && (cause.billing === undefined || cause.billing === 'waived')) {
+        return {
+          retryable: true,
+          message: cause.message,
+          ...(cause.providerCode === 'upstream_rate_limited' && { delayMs: resolveCapacityBackoffDelay(attempt) })
+        }
+      }
+      return { retryable: false, message: cause.message }
+    }
   }
   return { retryable: false, message: normalizeStructuredOutputError(error).message }
 }

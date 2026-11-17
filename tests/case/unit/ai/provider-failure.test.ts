@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isProviderFailureCode,
   providerFailure,
+  providerFailureCodeForHttp,
   providerFailureMessage,
   providerFailureTitle
 } from '../../../../src/main/services/ai/providerFailure'
@@ -31,6 +32,27 @@ describe('ai unit provider failure copy', () => {
       providerCode: 'balance_insufficient',
       retryable: false
     })
+    expect(providerFailure('upstream_quota_exhausted')).toMatchObject({
+      providerCode: 'upstream_quota_exhausted',
+      retryable: false
+    })
+    expect(providerFailure('upstream_auth_failed')).toMatchObject({
+      providerCode: 'upstream_auth_failed',
+      retryable: false
+    })
+    expect(providerFailure('upstream_rate_limited')).toMatchObject({
+      providerCode: 'upstream_rate_limited',
+      retryable: true
+    })
+  })
+
+  it('normalizes upstream HTTP failures without leaking the provider body', () => {
+    expect(providerFailureCodeForHttp(401, 'invalid api key')).toBe('upstream_auth_failed')
+    expect(providerFailureCodeForHttp(403, 'Not enough quota to pre-consume this request')).toBe('upstream_quota_exhausted')
+    expect(providerFailureCodeForHttp(403, 'invalid api key')).toBe('upstream_auth_failed')
+    expect(providerFailureCodeForHttp(429, 'rate limited')).toBe('upstream_rate_limited')
+    expect(providerFailureCodeForHttp(503, 'upstream unavailable')).toBe('upstream_error')
+    expect(providerFailureCodeForHttp(400, 'bad request')).toBeUndefined()
   })
 
   it('recognizes only known provider codes', () => {

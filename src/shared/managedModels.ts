@@ -1,6 +1,7 @@
 import { officialUrl } from './appPreferences'
 import { parseCatalogContextWindowTokens } from './freeModels'
-import type { LlmPriceTier } from './llmPresets'
+import { parseEffort } from './llmEffort'
+import type { LlmEffort, LlmPriceTier } from './llmPresets'
 
 export const MANAGED_MODELS_GET = 'desktop-account:managed-models'
 export const MANAGED_MODELS_PATH = '/api/v1/managed-models'
@@ -37,6 +38,7 @@ export type ManagedModel = {
   contextWindowTokens?: number
   iconUrl: string
   priceTier?: LlmPriceTier
+  effort?: LlmEffort
   pricing: Pricing
 }
 export type ManagedModelsResult =
@@ -87,6 +89,7 @@ export function parseManagedModels(value: unknown): ManagedModel[] {
   const ids = new Set<string>()
   return models.map(value => {
     const { id, kind, label, description, capabilities, iconUrl, priceTier, pricing } = record(value)
+    const effort = parseEffort(value.effort)
     if (!validId(id) || ids.has(id) || kind !== 'managed' || typeof label !== 'string' || !label.trim() ||
       (description !== null && typeof description !== 'string') || !Array.isArray(capabilities) ||
       !capabilities.every(item => item === 'text' || item === 'vision') || typeof iconUrl !== 'string' ||
@@ -104,6 +107,7 @@ export function parseManagedModels(value: unknown): ManagedModel[] {
       id, label, description, capabilities, iconUrl,
       contextWindowTokens: parseCatalogContextWindowTokens(value.contextWindowTokens),
       ...(priceTier === 'low' || priceTier === 'mid' || priceTier === 'high' ? { priceTier } : {}),
+      ...(effort && { effort }),
       pricing: publicPrice
     }
   })

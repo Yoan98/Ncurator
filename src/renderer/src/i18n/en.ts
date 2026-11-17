@@ -742,6 +742,8 @@ export const en = {
     noMatchingModels: 'No matching models',
     fetchModelListAgain: 'Fetch model list again',
     priceTier2: 'Price tier',
+    effortSlider: 'Thinking effort',
+    effortReset: 'Reset thinking effort',
     managedModelLogin: 'Sign in to use managed models',
     managedModelLoginOffer: 'Sign in for <discount>big discounts</discount> on DeepSeek models',
     managedModelLoginRequired: 'Sign in to use this model',

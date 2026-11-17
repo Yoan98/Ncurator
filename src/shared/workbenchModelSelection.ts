@@ -2,12 +2,58 @@ import type { LLMConfig, LlmRemoteModel, WorkbenchSelectedModel } from './types'
 import {
   getPresetModel,
   resolvePresetModeProvider,
+  type LlmEffort,
   type LlmPresetModel,
   type LlmPresetProvider
 } from './llmPresets'
 import { isFreeModelConfigId } from './freeModels'
 import type { FreeModelPublicEntry } from './freeModels'
 import { isManagedModelConfigId } from './managedModels'
+
+/**
+ * 取当前选中模型对外开放的思考强度选项。目录没有返回配置时返回 undefined，
+ * 界面据此不显示强度控件。
+ */
+export const findSelectionEffort = (input: {
+  selected: WorkbenchSelectedModel | null | undefined
+  configs: readonly LLMConfig[]
+  presetProviders?: readonly LlmPresetProvider[]
+  managedEfforts?: readonly { id: string; effort?: LlmEffort }[]
+}): LlmEffort | undefined => {
+  const selected = input.selected
+  if (!selected?.configId || !selected.modelName) return undefined
+  if (isManagedModelConfigId(selected.configId)) {
+    return input.managedEfforts?.find((model) => selected.configId === `managed:${model.id}`)?.effort
+  }
+  if (isFreeModelConfigId(selected.configId)) return undefined
+  const config = input.configs.find((item) => item.id === selected.configId)
+  if (!config) return undefined
+  const preset = resolvePresetModeProvider(config)
+  if (!preset) return undefined
+  const catalog = input.presetProviders?.find((provider) => provider.providerId === preset.providerId)
+  return catalog ? getPresetModel(catalog, selected.modelName)?.effort : undefined
+}
+
+/**
+ * 以当前模型可用的强度选项校正已保存的选择。换模型、目录刷新后旧档位可能不再可用，
+ * 这时回落到该模型默认档，不能把幽灵值发给服务端。
+ */
+export const normalizeSelectionEffort = (
+  selection: WorkbenchSelectedModel | null,
+  effort: LlmEffort | undefined
+): WorkbenchSelectedModel | null => {
+  if (!selection) return null
+  const value = effort
+    ? effort.options.some((option) => option.value === selection.effort)
+      ? selection.effort
+      : effort.default
+    : undefined
+  if (selection.effort === value) return selection
+  const next: WorkbenchSelectedModel = { configId: selection.configId, modelName: selection.modelName }
+  if (selection.manual) next.manual = true
+  if (value !== undefined) next.effort = value
+  return next
+}
 
 const isChatModelId = (modelId: string): boolean =>
   !/(image|audio|video|tts|asr|realtime|embedding|rerank|ocr|transcri|whisper|search|speech)/u.test(
@@ -60,13 +106,17 @@ export const resolveSelectedWorkbenchModel = (input: {
 }): WorkbenchSelectedModel | null => {
   const selected = input.selected
   if (!selected?.configId || !selected.modelName) return null
+  // 该函数只解析“选择身份”，身份成立时必须回带强度，否则重启、目录刷新和恢复快照都会丢档位。
+  const keep = (next: WorkbenchSelectedModel): WorkbenchSelectedModel =>
+    selected.effort === undefined ? next : { ...next, effort: selected.effort }
   if (isManagedModelConfigId(selected.configId)) {
-    return { configId: selected.configId, modelName: selected.modelName }
+    return keep({ configId: selected.configId, modelName: selected.modelName })
   }
   if (isFreeModelConfigId(selected.configId)) {
     const entry = input.freeModels?.find(
       (model) => model.configId === selected.configId && model.modelName === selected.modelName
     )
+    // 免费模型不提供强度开关，身份成立也不回带。
     return entry ? { configId: entry.configId, modelName: entry.modelName } : null
   }
   const config = input.configs.find((item) => item.id === selected.configId)
@@ -74,7 +124,7 @@ export const resolveSelectedWorkbenchModel = (input: {
 
   // An explicit manual choice does not depend on the discovery endpoint.
   if (selected.manual === true || config.manualModels?.includes(selected.modelName)) {
-    return { configId: config.id, modelName: selected.modelName, manual: true }
+    return keep({ configId: config.id, modelName: selected.modelName, manual: true })
   }
 
   const remoteModels = input.modelListsByConfigId[config.id] || []
@@ -82,7 +132,7 @@ export const resolveSelectedWorkbenchModel = (input: {
   // Exact id in the remote list is always valid — including custom picks under a
   // recommend config (e.g. dated snapshot ids chosen from the custom view).
   if (isExactRemoteModelAvailable(selected.modelName, remoteModels)) {
-    return { configId: config.id, modelName: selected.modelName }
+    return keep({ configId: config.id, modelName: selected.modelName })
   }
 
   // Empty remote list (fetch failed): keep selection if it is still a preset config
@@ -93,10 +143,10 @@ export const resolveSelectedWorkbenchModel = (input: {
     const catalog = findCatalogProvider(input.presetProviders, preset.providerId)
     if (!catalog) {
       // Catalog not loaded yet — keep selection on preset configs.
-      return { configId: config.id, modelName: selected.modelName }
+      return keep({ configId: config.id, modelName: selected.modelName })
     }
     if (getPresetModel(catalog, selected.modelName)) {
-      return { configId: config.id, modelName: selected.modelName }
+      return keep({ configId: config.id, modelName: selected.modelName })
     }
   }
 

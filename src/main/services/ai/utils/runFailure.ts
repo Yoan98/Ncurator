@@ -6,7 +6,7 @@ import {
   isLlmOutputTruncatedError
 } from '../errors'
 import { normalizeStructuredOutputError } from '../structuredOutput'
-import { providerFailureMessage } from '../providerFailure'
+import { isProviderFailureCode, providerFailureCodeForHttp, providerFailureMessage } from '../providerFailure'
 import { resolveAiRunFailurePresentation } from '../runFailureCatalog'
 
 const getErrorMessage = (error: unknown): string =>
@@ -164,12 +164,17 @@ export const classifyThrownErrorToAiRunFailure = (
   if (providerError || info.hasProviderSignal) {
     const timeout = (providerError?.message.trim() ?? info.message.trim()) === 'llm_call_timeout' ||
       providerError?.providerCode === 'TIMEOUT' || info.code === 'TIMEOUT'
+    const httpStatus = providerError?.httpStatus ?? info.status
+    const knownProviderCode = providerError?.providerCode && isProviderFailureCode(providerError.providerCode)
+      ? providerError.providerCode : undefined
+    const upstreamCode = timeout ? undefined : knownProviderCode ?? providerFailureCodeForHttp(
+      httpStatus, providerError?.message ?? info.message)
     return createAiRunFailure({
       failureCode: 'llm_request_failed',
       cause: error,
-      rawMessage: resolveProviderRawMessage(error),
-      httpStatus: providerError?.httpStatus ?? info.status,
-      providerCode: timeout ? 'timeout' : providerError?.providerCode ?? info.code,
+      rawMessage: knownProviderCode ? resolveProviderRawMessage(error) : upstreamCode ? providerFailureMessage(upstreamCode) : resolveProviderRawMessage(error),
+      httpStatus,
+      providerCode: timeout ? 'timeout' : upstreamCode ?? providerError?.providerCode ?? info.code,
       lastHumanState
     })
   }

@@ -224,7 +224,7 @@ export function DesktopAccountMenu() {
       open={open}
       onOpenChange={(value) => {
         setOpen(value)
-        if (value && signedIn) void run('wallet').catch(() => {})
+        if (value && signedIn) void run('refresh-wallet').catch(() => {})
       }}
       trigger={['click']}
       placement="topLeft"

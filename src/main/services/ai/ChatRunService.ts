@@ -154,7 +154,7 @@ function bindManagedModel(selection: NonNullable<ChatSubmitRequest['mainModel']>
   const scope = currentDomesticDesktopAccount().managedCallScope()
   return {
     session: scope.session,
-    modelConfig: resolveManagedRuntimeConfig(selection.configId, selection.modelName, scope)
+    modelConfig: resolveManagedRuntimeConfig(selection.configId, selection.modelName, scope, selection.effort)
   }
 }
 

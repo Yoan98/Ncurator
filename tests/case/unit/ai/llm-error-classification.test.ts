@@ -24,6 +24,21 @@ describe('ai unit llm error classification', () => {
     ).toBe('unknown')
   })
 
+  it('retries only safe managed failures with waived or absent billing', () => {
+    expect(classifyManagedLlmRetry(new LlmProviderError({
+      message: '上游模型超时未返回。本次未计费。', providerCode: 'upstream_timeout', retryable: true, billing: 'waived'
+    }))).toMatchObject({ retryable: true })
+    expect(classifyManagedLlmRetry(new LlmProviderError({
+      message: '上游模型超时未返回。本次已计费。', providerCode: 'upstream_timeout', retryable: true, billing: 'charged'
+    }))).toMatchObject({ retryable: false })
+    expect(classifyManagedLlmRetry(new LlmProviderError({
+      message: '上游模型账户额度不足，请稍后再试。', providerCode: 'upstream_quota_exhausted', retryable: false
+    }))).toMatchObject({ retryable: false })
+    expect(classifyManagedLlmRetry(new LlmProviderError({
+      message: '上游连接中断，回答未完整接收。本次未计费。', providerCode: 'upstream_interrupted', retryable: false, billing: 'waived'
+    }))).toMatchObject({ retryable: false })
+  })
+
   it('classifies insufficient balance errors as fatal', () => {
     expect(
       classifyLlmErrorKind({

@@ -880,7 +880,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | --------------------- | -------------------------------------------- | ---------------- | ----------------------------------------------------- |
 | `user_cancelled`      | 已取消                                       | 可空             | 用户停止；事件为 `run_cancelled`                      |
 | `process_interrupted` | 任务已中断，可继续对话推进                   | 可空             | 进程/重启打断                                         |
-| `llm_request_failed`  | 模型请求失败（已知 providerCode 时具体化）   | **必留原文**     | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案  |
+| `llm_request_failed`  | 模型请求失败（已知 providerCode 时具体化）   | 稳定 code 用统一文案；原始上游详情只进日志 | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案 |
 | `output_truncated`    | 模型输出达到长度限制，可发送「继续」接着完成 | 可选             | `finish_reason=length`                                |
 | `input_too_long`      | 当前输入超过模型上下文限制，请缩短后重试     | 可空             | 当前 user alone 超窗；不调 brain，日志边界见第 6.5 节 |
 | `runtime_limit`       | 已达到运行上限，可继续对话推进               | 可空             | 图递归上限                                            |
@@ -889,13 +889,22 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 落库：真正失败时 `ai_run.error` = 短标题，`ai_run.failure_raw_message` = 原文；UI：气泡「失败：{title}」+「查看详情」展开 `rawMessage`（及 HTTP / providerCode）。`user_cancelled` 只保留 `cancelled` 状态和 `failure_code`，不写 `error`、不合成 `final_answer`，UI 不生成失败气泡或「已取消」正文；已有 answer 片段与 `ai_file_change` 保留。
 
-`run_failed` 后：**零自动重试**。Resume（第 6 节）：新建 run；log append `user`；不自动重试 failed run。
+`run_failed` 后：**run 层零自动重试**；LLM 调用层的 5 次自动重试是唯一例外，耗尽后才落 `run_failed`。Resume（第 6 节）：新建 run；log append `user`；不自动重试 failed run。
 
-馆长模型的上游失败由服务端终止事件提供 `error` 与 `retryable`，桌面端转换成统一的 `LlmProviderError.providerCode`。`llm_request_failed` 的短标题按 providerCode 具体化，例如「上游模型超时」「上游连接中断」「上游模型服务出错」；`rawMessage` 使用统一文案并带上本次计费状态（已免收／已计费／待确认）。这些失败不自动重试；桌面端 5 分钟兜底超时只提示计费状态待确认，由用户重新发送或走 resume。
+馆长模型的上游失败由服务端终止事件提供 `error` 与 `retryable`，桌面端转换成统一的 `LlmProviderError.providerCode`。`llm_request_failed` 的短标题按 providerCode 具体化，例如「上游模型超时」「上游连接中断」「上游模型服务出错」「上游模型额度不足」「上游模型鉴权失败」「上游模型限流」；`rawMessage` 使用统一文案并带上本次计费状态（已免收／已计费／待确认），不展示上游原始金额或请求文本。
+
+`classifyManagedLlmRetry` 驱动馆长模型的自动重试，沿用 `AI_LLM_CALL_MAX_RETRY_ATTEMPTS=5`：
+
+- 只对 `upstream_timeout`、`upstream_interrupted`、`upstream_error`、`upstream_rate_limited`、`incomplete`、`failed`、`unavailable` 且 `retryable=true` 的失败重试；
+- 必须在尚未输出正文/工具调用、且 `billing` 为 `waived` 或缺失（未计费）时重试；已计费、结算中、已有正文不自动重试；
+- 上游额度 `upstream_quota_exhausted` 和鉴权 `upstream_auth_failed` 不重试，直接提示服务暂不可用；
+- 每次重试使用新的 requestId；429 并发准入拒绝保留原 requestId；
+- `finish_reason` 缺失按 `upstream_interrupted` 处理，不当作正常完成；
+- 5 次耗尽后按 `llm_request_failed` 落失败气泡，显示统一短标题和计费状态，由用户重新发送或 resume。
 
 #### LLM 调用层重试
 
-classifyLlmRetry（llmRetry.ts）驱动 runLlmCallWithActivity，以 HTTP、provider code 和异常类型分类，不直接依赖异常的 retryable 字段。
+`classifyLlmRetry`（自定义 API）与 `classifyManagedLlmRetry`（馆长）都由 `runLlmCallWithActivity` 驱动，沿用 5 次上限；前者按 HTTP/provider code/异常类型分类，后者只信任服务端稳定 `retryable`/`billing` 并叠加无正文保护。
 
 | 优先级 | 信号                | 判定                                                                                                                                                                                                                                                                                     |
 | ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

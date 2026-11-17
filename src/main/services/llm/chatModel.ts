@@ -20,6 +20,9 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
   })
   const managed = isManagedModelConfigId(cfg.id)
   if (managed && providerKind !== 'openai-compatible') throw new Error('馆长模型配置无效')
+  // 思考强度只能经 modelKwargs 下发：ChatOpenAI 的 reasoningEffort 选项只对 o*/gpt-5*
+  // 生效（isReasoningModel），deepseek/glm 型号会被静默丢弃。
+  const effortKwargs = cfg.effort ? { modelKwargs: { reasoning_effort: cfg.effort } } : {}
   if (providerKind === 'deepseek') {
     return new ChatDeepSeek({
       model: cfg.model_name,
@@ -27,7 +30,8 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
       temperature: opts?.temperature ?? 0.2,
       maxRetries: 0,
       timeout: opts?.timeout,
-      streaming: opts?.streaming === true
+      streaming: opts?.streaming === true,
+      ...effortKwargs
     })
   }
 
@@ -44,6 +48,7 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
     maxRetries: 0,
     timeout: opts?.timeout,
     streaming: opts?.streaming === true,
+    ...effortKwargs,
     configuration: {
       baseURL: runtimeOptions.baseURL,
       ...(managed ? { fetch: createManagedModelFetch(cfg) }

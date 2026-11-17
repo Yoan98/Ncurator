@@ -57,7 +57,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     if (!cfg) throw new Error(`${label}对应的大模型配置不存在，请重新选择`)
     return {
       ...cfg,
-      model_name: modelName
+      model_name: modelName,
+      ...(selection?.effort && { effort: selection.effort })
     } satisfies LlmRuntimeConfig
   }
 

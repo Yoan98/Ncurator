@@ -564,6 +564,8 @@ export type WorkbenchSelectedModel = {
   configId: string
   modelName: string
   manual?: true
+  /** 思考强度，取值即上游 reasoning_effort；不属于选中身份，仅随本次选择生效。 */
+  effort?: string
 }
 
 export type WorkbenchModelSelection = {
@@ -572,6 +574,7 @@ export type WorkbenchModelSelection = {
 
 export type LlmRuntimeConfig = LLMConfig & {
   model_name: string
+  effort?: string
 }
 
 export type LlmRemoteModel = {

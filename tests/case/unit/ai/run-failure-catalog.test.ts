@@ -104,6 +104,21 @@ describe('ai unit run failure catalog', () => {
     expect(failure).not.toHaveProperty('failureCode', 'unexpected_error')
   })
 
+  it('normalizes a custom upstream quota 403 into stable copy without the raw body', () => {
+    const failure = classifyThrownErrorToAiRunFailure(new LlmProviderError({
+      message: '403 Not enough quota to pre-consume for this request: ¥0.891556 remaining, ¥1.006230 required',
+      httpStatus: 403
+    }))
+    expect(failure).toMatchObject({
+      failureCode: 'llm_request_failed',
+      message: '上游模型额度不足',
+      rawMessage: '上游模型账户额度不足，请稍后再试。',
+      providerCode: 'upstream_quota_exhausted',
+      httpStatus: 403
+    })
+    expect(failure.rawMessage).not.toContain('Not enough quota')
+  })
+
   it('maps AbortError and ModelAbortError to user_cancelled', () => {
     const abortError = new Error('This operation was aborted')
     abortError.name = 'AbortError'

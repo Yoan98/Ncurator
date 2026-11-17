@@ -705,6 +705,8 @@ export const zh = {
     noMatchingModels: '暂无匹配模型',
     fetchModelListAgain: '重新获取模型列表',
     priceTier2: '价格档位',
+    effortSlider: '思考强度',
+    effortReset: '恢复默认思考强度',
     managedModelLogin: '登录使用馆长模型',
     managedModelLoginOffer: '登录享受 DeepSeek 模型<discount>超低折扣</discount>',
     managedModelLoginRequired: '请先登录馆长',

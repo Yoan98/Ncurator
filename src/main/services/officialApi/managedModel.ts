@@ -13,7 +13,7 @@ import { currentDomesticDesktopAccount } from './desktopAccount'
 const endpoint = '/api/v2/managed'
 const resultEvent = 'ncurator.result'
 const finishReasons = new Set(['stop', 'length', 'tool_calls', 'content_filter'])
-const invocations = new WeakMap<LlmRuntimeConfig, { requestId: string; scope: Scope }>()
+const invocations = new WeakMap<LlmRuntimeConfig, { requestId: string; retryRequestId?: string; scope: Scope }>()
 const modelScopes = new WeakMap<LlmRuntimeConfig, Scope>()
 
 export { isManagedModelConfigId } from '../../../shared/managedModels'
@@ -29,12 +29,12 @@ export function forManagedInvocation(config: LlmRuntimeConfig) {
 }
 
 export function resolveManagedRuntimeConfig(configId: string, name: string,
-  scope = currentDomesticDesktopAccount().managedCallScope()): LlmRuntimeConfig {
+  scope = currentDomesticDesktopAccount().managedCallScope(), effort?: string): LlmRuntimeConfig {
   const id = managedModelEntryId(configId)
   if (!id || getAppRuntime().distribution !== 'domestic') throw new Error('馆长模型暂不可用')
   scope.assertCurrent()
   const config: LlmRuntimeConfig = { id: configId, name, providerKind: 'openai-compatible', base_url: serviceApiUrl('domestic', endpoint),
-    api_key: 'managed-placeholder', model_name: id }
+    api_key: 'managed-placeholder', model_name: id, ...(effort && { effort }) }
   modelScopes.set(config, scope)
   return config
 }
@@ -60,13 +60,20 @@ function billingFrom(value: unknown): LlmBillingStatus {
   return 'unknown'
 }
 
-const failure = (code: string, status?: number, billing?: LlmBillingStatus) =>
-  providerFailure(isProviderFailureCode(code) ? code : 'failed', { status, billing })
+const failure = (code: string, status?: number, billing?: LlmBillingStatus, retryable?: boolean) =>
+  providerFailure(isProviderFailureCode(code) ? code : 'failed', { status, billing, retryable })
 
 type Scope = ReturnType<ReturnType<typeof currentDomesticDesktopAccount>['managedCallScope']>
 type Dependencies = {
   fetch: typeof fetch
   wait: (ms: number, signal: AbortSignal) => Promise<unknown>
+}
+
+function hasVisibleDelta(value: unknown) {
+  if (!record(value)) return false
+  return (typeof value.content === 'string' && value.content.length > 0) ||
+    (typeof value.reasoning_content === 'string' && value.reasoning_content.length > 0) ||
+    (Array.isArray(value.tool_calls) && value.tool_calls.length > 0)
 }
 
 function frameParts(raw: string) {
@@ -76,7 +83,8 @@ function frameParts(raw: string) {
   return { event, data }
 }
 
-function managedStream(response: Response, requestId: string, scope: Scope, recover: () => ReturnType<Scope['recover']>) {
+function managedStream(response: Response, requestId: string, scope: Scope,
+  recover: () => ReturnType<Scope['recover']>, onRetry: () => void) {
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
   const encoder = new TextEncoder()
@@ -84,6 +92,7 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
   let finishFrame: string | undefined
   let finishReason: string | undefined
   let hasText = false
+  let started = false
   let invalidTool = false
   let settled = false
   const tools = new Map<number, { id: string; name: string; arguments: string }>()
@@ -109,7 +118,7 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
     if (finishFrame && !invalidTool && ((finishReason === 'stop' && hasText && tools.size === 0) ||
       (finishReason === 'tool_calls' && tools.size > 0 && [...tools.values()].every(tool =>
         tool.id && tool.name && validArguments(tool.arguments))))) return
-    throw failure('incomplete', undefined, billing)
+    throw failure('incomplete', undefined, billing, !started && billing === 'waived')
   }
 
   async function finishFromStatus(controller: ReadableStreamDefaultController<Uint8Array>, error?: string) {
@@ -118,7 +127,7 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
     if (status.status !== 'settled' || status.executionStatus !== 'completed') {
       const code = error && isProviderFailureCode(error) ? error
         : status.status === 'settlement_pending' ? 'settlement_pending' : 'incomplete'
-      throw failure(code, undefined, billing)
+      throw failure(code, undefined, billing, code === 'incomplete' && !started && billing === 'waived')
     }
     settled = true
     assertCompleteOutput(billing)
@@ -165,7 +174,8 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
               if (value.result !== 'completed') {
                 const code = typeof value.error === 'string' && isProviderFailureCode(value.error) ? value.error
                   : value.result === 'failed' ? 'upstream_error' : 'incomplete'
-                throw failure(code, undefined, billing)
+                throw failure(code, undefined, billing,
+                  value.retryable === true && !started && billing === 'waived')
               }
               assertCompleteOutput(billing)
               closeSuccess(controller)
@@ -186,12 +196,19 @@ function managedStream(response: Response, requestId: string, scope: Scope, reco
           if (typeof choice.delta.content === 'string' && choice.delta.content.length > 0) hasText = true
           if (choice.delta.tool_calls !== undefined) collectTools(choice.delta.tool_calls)
           controller.enqueue(encoder.encode(raw + '\n\n'))
+          if (hasVisibleDelta(choice.delta)) started = true
           return
         }
       } catch (error) {
         if (!settled) void recover().catch(() => undefined)
         void reader.cancel().catch(() => undefined)
-        controller.error(error instanceof LlmProviderError ? error : failure('incomplete'))
+        if (started && error instanceof LlmProviderError && error.retryable) {
+          const code = error.providerCode && isProviderFailureCode(error.providerCode) ? error.providerCode : 'incomplete'
+          controller.error(failure(code, error.httpStatus, error.billing, false))
+        } else {
+          if (error instanceof LlmProviderError && error.retryable) onRetry()
+          controller.error(error instanceof LlmProviderError ? error : failure('incomplete', undefined, undefined, !started))
+        }
       }
     },
     async cancel() {
@@ -212,7 +229,9 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
     if (request.url !== url || request.method !== 'POST') throw failure('model_not_found')
     const parsed: unknown = JSON.parse(await request.text())
     if (!record(parsed)) throw failure('incomplete')
-    const requestId = invocation?.requestId ?? randomUUID()
+    // Each upstream attempt is a separate managed execution. A retry must not
+    // reuse a request id that the server may already have admitted.
+    const requestId = invocation?.retryRequestId ?? invocation?.requestId ?? randomUUID()
     const body = JSON.stringify({ ...parsed, model: id, requestId })
     const routeId = randomUUID()
     const scope = invocation?.scope ?? modelScopes.get(config)
@@ -242,7 +261,9 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
       if (response.status === 202) {
         await response.body?.cancel()
         await recover().catch(() => undefined)
-        throw failure('incomplete')
+        // The execution is already admitted but its outcome is unknown; replaying
+        // it would create a second admitted call. Recover instead of retrying.
+        throw failure('incomplete', undefined, undefined, false)
       }
       if (!response.ok) {
         const result: unknown = await response.json().catch(() => undefined)
@@ -263,10 +284,14 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
           }
         }
         if (response.status >= 500) void recover().catch(() => undefined)
-        throw failure(code, response.status)
+        // An unknown 429 is not the admission-safe concurrency rejection; do not
+        // replay a call whose admission/outcome may already exist.
+        throw failure(code, response.status, undefined, response.status === 429 ? false : undefined)
       }
       if (parsed.stream === true && response.body && response.headers.get('content-type')?.startsWith('text/event-stream')) {
-        return managedStream(response, requestId, scope, recover)
+        return managedStream(response, requestId, scope, recover, () => {
+          if (invocation) invocation.retryRequestId = randomUUID()
+        })
       }
       const result: unknown = await response.json().catch(() => undefined)
       if (!record(result) || !record(result.ncurator) || result.ncurator.requestId !== requestId || !record(result.ncurator.billing)) {

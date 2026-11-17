@@ -172,7 +172,7 @@ it('reads managed pricing with the active account and drops a response delivered
   }
 })
 
-type ManagedSseScenario = 'text' | 'tools' | 'incomplete' | 'pending' | 'disconnected' | 'timeout' | 'interrupted'
+type ManagedSseScenario = 'text' | 'tools' | 'incomplete' | 'pending' | 'disconnected' | 'timeout' | 'timeout-empty' | 'charged-timeout' | 'interrupted'
 
 function managedSse(requestId: string, scenario: ManagedSseScenario) {
   const tools = scenario === 'tools' || scenario === 'incomplete' || scenario === 'pending'
@@ -184,6 +184,12 @@ function managedSse(requestId: string, scenario: ManagedSseScenario) {
         error: scenario === 'timeout' ? 'upstream_timeout' : 'upstream_interrupted', retryable: true,
         billing: { status: 'settled', feeDecision: 'waive', wallet: sampleWallet } }) + '\n\ndata: [DONE]\n\n',
       { headers: { 'content-type': 'text/event-stream' } })
+  }
+  if (scenario === 'timeout-empty' || scenario === 'charged-timeout') {
+    return new Response('event: ncurator.result\ndata: ' + JSON.stringify({ requestId, result: 'unconfirmed',
+      error: 'upstream_timeout', retryable: true,
+      billing: { status: 'settled', feeDecision: scenario === 'charged-timeout' ? 'charge' : 'waive', wallet: sampleWallet } }) +
+      '\n\ndata: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } })
   }
   let body = frame({ role: 'assistant', content: '测试内容' })
   if (tools) {
@@ -253,6 +259,48 @@ it.each(['tools', 'pending', 'incomplete', 'disconnected'] as const)('returns a 
     expect(fixture.submitted).toHaveLength(1)
     expect(fixture.lookedUp).toEqual(scenario === 'pending' || scenario === 'disconnected' ? [fixture.submitted[0].requestId] : [])
   } finally { fixture.cleanup() }
+})
+
+it('retries an empty managed timeout once with a fresh request id', async () => {
+  const fixture = managedDesktopFixture((requestId, attempt) => attempt === 1
+    ? managedSse(requestId, 'timeout-empty') : managedSse(requestId, 'text'))
+  try {
+    await fixture.login()
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
+      checkCancelled: () => {} })
+    await expect(executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
+      streamingMode: 'force_stream' })).resolves.toBe('测试内容')
+    expect(fixture.submitted).toHaveLength(2)
+    expect(fixture.submitted[1].requestId).not.toBe(fixture.submitted[0].requestId)
+  } finally { fixture.cleanup() }
+})
+
+it('uses the five client attempts for empty timeouts but never retries a charged attempt', async () => {
+  const retrying = managedDesktopFixture((requestId, attempt) => attempt <= 5
+    ? managedSse(requestId, 'timeout-empty') : managedSse(requestId, 'text'))
+  try {
+    await retrying.login()
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
+      checkCancelled: () => {} })
+    await expect(executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
+      streamingMode: 'force_stream' })).resolves.toBe('测试内容')
+    expect(retrying.submitted).toHaveLength(6)
+    expect(new Set(retrying.submitted.map(entry => entry.requestId)).size).toBe(6)
+  } finally { retrying.cleanup() }
+
+  const charged = managedDesktopFixture(requestId => managedSse(requestId, 'charged-timeout'))
+  try {
+    await charged.login()
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
+      checkCancelled: () => {} })
+    const error = await executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
+      streamingMode: 'force_stream' }).then(() => undefined, value => value)
+    expect(findLlmProviderError(error)).toMatchObject({ providerCode: 'upstream_timeout', billing: 'charged', retryable: false })
+    expect(charged.submitted).toHaveLength(1)
+  } finally { charged.cleanup() }
 })
 
 it.each([['timeout', 'upstream_timeout'], ['interrupted', 'upstream_interrupted']] as const)(

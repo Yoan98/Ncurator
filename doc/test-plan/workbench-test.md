@@ -237,6 +237,15 @@ pnpm test:update:e2e
 - 失败反馈：同一回答的失败短标题只出现一次，失败气泡仍可展开查看详情（`WB-SESSION-007-AC8`）。
 - Oracle：入口、模型行、侧栏及精确选择覆盖 `WB-COMPOSER-007-AC1/AC2/AC3/AC4`；失效提示且不自动回退覆盖 `WB-COMPOSER-007-AC6`；个人自定义调用补证 `WB-COMPOSER-007-AC15`，免费目录错误／空态仅为负向反馈，不能计为 `AC14` 免费可用性通过。正向免费调用见 `published-free-model-smoke`；账号变化下的免费／自定义资料保持及正式平台零消费见 [Account 矩阵](account-test.md#anonymous-existing-usage)，受控上游与 live 证据分开。错误归组、原文复制、Key 脱敏、刷新及手填生命周期覆盖 `WB-COMPOSER-007-AC16/AC17/AC18`。入口图标及主模型选择覆盖 `WB-COMPOSER-007-AC7`、`WB-COMPOSER-013-AC1`；终态上下文补证 `WB-COMPOSER-013-AC5`，异常 cause 和持久化失败由 Unit 补充。
 
+#### `effort-slider`
+
+- 测试类型：`e2e`
+- What：思考强度卡片的档位来源、切换、复位、切模型回落与发送请求参数。
+- Why：客户端自行补齐档位或沿用上一个模型的档位会把不支持的 `reasoning_effort` 发给服务端，导致请求被拒或用户以为已生效。
+- How：用管理网页给测试馆长条目配置四档与两档两种强度，桌面刷新后打开模型面板，逐个点击档位、键盘左右移动、点复位，再换成未配置强度的条目。发送后核对实际请求体的 `reasoning_effort`。
+- Oracle：档位数量、顺序和展示名与目录一致，客户端不补齐；切到未配置强度的模型时卡片消失且请求不带该字段；两档模型只显示两个点；切换模型后不沿用上一模型档位，旧档位失效时回落到该模型默认档，覆盖 `WB-COMPOSER-018-AC1/AC2/AC3/AC4/AC5`。
+- 单元回归见桌面 `tests/case/unit/model/effort-selection.test.ts` 与 `tests/case/unit/model/chat-model-effort.test.ts`；目录下发与准入校验由官网 `MOD-07`、`MOD-05` 覆盖。
+
 #### `managed-model-catalog`
 
 - 测试类型：`e2e`

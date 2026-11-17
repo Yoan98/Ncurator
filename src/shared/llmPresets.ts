@@ -4,6 +4,13 @@ import { LLM_PROVIDER_REGISTRY, resolveLlmProvider } from './llmProvider'
 
 export type LlmPriceTier = 'low' | 'mid' | 'high'
 
+/**
+ * 思考强度档位。取值即上游 `reasoning_effort`，不做本地映射。
+ * 目录未开放或模型不支持时为 `undefined`，界面不显示强度控件。
+ */
+export type LlmEffortOption = { value: string; label: string }
+export type LlmEffort = { default: string; options: LlmEffortOption[] }
+
 export type LlmPresetModel = {
   id: string
   label: string
@@ -12,6 +19,7 @@ export type LlmPresetModel = {
   description: string
   capabilities: Array<'text' | 'vision'>
   contextWindowTokens?: number
+  effort?: LlmEffort
 }
 
 export type LlmPresetProviderId = Exclude<LlmProviderId, 'local' | 'custom'>

@@ -41,7 +41,9 @@ import {
 import { type FreeModelPublicEntry } from '../../../../shared/freeModels'
 import { isManagedModelConfigId, managedModelConfigId, type ManagedModel } from '../../../../shared/managedModels'
 import { resolveLlmProvider } from '../../../../shared/llmProvider'
-import { isPresetModelAvailableInRemoteList } from '../../../../shared/workbenchModelSelection'
+import { isPresetModelAvailableInRemoteList, normalizeSelectionEffort } from '../../../../shared/workbenchModelSelection'
+import { resolveEffort } from '../../../../shared/llmEffort'
+import WorkbenchEffortCard from './WorkbenchEffortCard'
 import { resolveFloatingPlacement } from './floatingPlacement'
 import { WORKBENCH_TITLEBAR_HEIGHT } from './constants'
 import { getProviderLogo } from '../settings/constants'
@@ -611,6 +613,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     manual = false,
     keepOpen = false
   ): void => {
+    // 换模型时清掉上一条的强度，由新模型的默认档重新回填（见 normalize 效果）。
     const selected: WorkbenchSelectedModel = { configId, modelName }
     if (manual || (isSameSelection(value.mainModel, selected) && value.mainModel?.manual)) {
       selected.manual = true
@@ -681,7 +684,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       .find((provider) => provider.providerId === preset.providerId)
       ?.models.find((item) => item.id === value.mainModel?.modelName)
     if (!model) return null
-    return { provider: preset, modelLabel: model.label, iconUrl: model.iconUrl }
+    return { provider: preset, modelLabel: model.label, iconUrl: model.iconUrl, effort: model.effort }
   }, [value.mainModel, configs, presetProviders])
 
   const selectedFree = useMemo(() => {
@@ -695,6 +698,20 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     )
   }, [value.mainModel, freeModels])
   const selectedManaged = managedModels?.find(model => managedModelConfigId(model.id) === value.mainModel?.configId)
+
+  // 当前选中模型对外开放的强度选项；目录未配置时不显示强度卡片。
+  const selectedEffort = selectedManaged?.effort ?? (selectedPreset ? selectedPreset.effort : undefined)
+  const effortValue = selectedEffort
+    ? resolveEffort(selectedEffort, value.mainModel?.effort)
+    : undefined
+
+  // 换模型或目录刷新后，旧档位可能已不在开放范围，这时按该模型默认档回写快照。
+  useEffect(() => {
+    if (!value.mainModel || value.mainModel.manual) return
+    const next = normalizeSelectionEffort(value.mainModel, selectedEffort)
+    if (!next || next === value.mainModel) return
+    onChange({ mainModel: next })
+  }, [onChange, selectedEffort, value.mainModel])
 
   const groupedModels = useMemo(() => {
     return configs
@@ -1023,6 +1040,20 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
     return (
       <>
+        {selectedEffort && effortValue && value.mainModel ? (
+          <WorkbenchEffortCard
+            effort={selectedEffort}
+            value={effortValue}
+            modelLabel={selectedManaged?.label || selectedPreset?.modelLabel || value.mainModel.modelName}
+            disabled={disabled}
+            onChange={(next) => onChange({ mainModel: { ...value.mainModel!, effort: next } })}
+            onPickModel={() => {
+              // 模型名点击回到列表：收起侧栏，把焦点交给列表当前项。
+              setInspectedModel(null)
+              menuRef.current?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')?.focus()
+            }}
+          />
+        ) : null}
         <div className="relative min-h-0 flex-1">
           <div className="pointer-events-none absolute right-1.5 top-1.5 z-10">
             <div className="pointer-events-auto rounded-[6px] bg-white/90 backdrop-blur-[2px]">

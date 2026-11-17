@@ -19,6 +19,7 @@ import {
   isLlmPresetProviderId
 } from '../../../shared/llmPresets'
 import { parseCatalogContextWindowTokens } from '../../../shared/freeModels'
+import { parseEffort } from '../../../shared/llmEffort'
 import { cacheModelIcons, resolveCachedIconUrls } from './modelIconCache'
 import { getUserDataPath } from '../../utils/paths'
 import { buildDesktopAppGatewayHeaders } from '../officialApi/appClient'
@@ -50,6 +51,7 @@ const parseRemoteModel = (value: unknown): PresetCatalogModelPayload | null => {
       )
     : []
   if (capabilities.length === 0) return null
+  const effort = parseEffort(row.effort)
   return {
     id,
     label,
@@ -57,7 +59,8 @@ const parseRemoteModel = (value: unknown): PresetCatalogModelPayload | null => {
     priceTier,
     description: typeof row.description === 'string' ? row.description.trim() : '',
     capabilities,
-    contextWindowTokens: parseCatalogContextWindowTokens(row.contextWindowTokens)
+    contextWindowTokens: parseCatalogContextWindowTokens(row.contextWindowTokens),
+    ...(effort && { effort })
   }
 }
 
