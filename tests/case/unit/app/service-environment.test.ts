@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { parseEnv } from 'node:util'
 import { build } from 'vite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -121,7 +122,7 @@ describe('domestic service environment selection', () => {
       )
       const output = execFileSync(
         process.execPath,
-        ['--import', probe, path.resolve('scripts/test/workflow.mjs'), '--help'],
+        ['--import', pathToFileURL(probe).href, path.resolve('scripts/test/workflow.mjs'), '--help'],
         {
           cwd: root,
           env: { ...process.env },

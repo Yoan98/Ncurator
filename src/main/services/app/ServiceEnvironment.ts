@@ -15,7 +15,7 @@ const productionKeyName = 'NCURATOR_APP_SECRET_DESKTOP'
 
 function readEnvironmentFile(root: string): NodeJS.Dict<string> {
   try {
-    return parseEnv(readFileSync(path.join(root, '.env'), 'utf8'))
+    return parseEnv(readFileSync(path.join(root, '.env'), 'utf8') + '\n')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
     throw new Error('Could not read .env')

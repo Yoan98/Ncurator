@@ -76,7 +76,7 @@ const loadRootEnv = () => {
   } catch {
     return
   }
-  for (const [key, value] of Object.entries(parseEnv(raw))) {
+  for (const [key, value] of Object.entries(parseEnv(raw + '\n'))) {
     if (key === 'NCURATOR_APP_SECRET_DESKTOP' || key === 'NCURATOR_LOCAL_APP_SECRET_DESKTOP')
       continue
     if (process.env[key]?.trim()) continue

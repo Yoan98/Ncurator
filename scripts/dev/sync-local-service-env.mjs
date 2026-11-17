@@ -19,7 +19,8 @@ function updateEnvironment(current, values) {
     Object.entries(values).map(([name, value]) => {
       for (const serialized of [value, `'${value}'`, `"${value}"`, `\`${value}\``]) {
         const line = `${name}=${serialized}`
-        if (parseEnv(line)[name] === value) return [name, line]
+        // Check the assignment as it will appear in the file, followed by a line break.
+        if (parseEnv(line + '\n')[name] === value) return [name, line]
       }
       throw new Error(`Could not write ${name} to .env; previous desktop key was invalidated`)
     })
@@ -77,7 +78,7 @@ export function syncLocalServiceEnvironment(source, root = process.cwd()) {
   replace({ [localKeyName]: '' })
   let client
   try {
-    client = parseEnv(readFileSync(source, 'utf8'))
+    client = parseEnv(readFileSync(source, 'utf8') + '\n')
   } catch {
     throw new Error(
       'Could not read local client configuration; previous desktop key was invalidated'
