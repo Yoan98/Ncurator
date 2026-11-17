@@ -1,6 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
 import {
   accountButton,
@@ -40,7 +39,7 @@ it('independent-sessions-and-restart', async () => {
         await expect.poll(() => modelNotice.count()).toBe(0)
         web = await service.continueInBrowser(web)
         const userNo = await service.userNumber(web)
-        const profile = await mkdtemp(join(tmpdir(), 'ncurator-second-session-'))
+        const profile = await mkdtemp(join(dirname(runtime.userDataDir), 'ncurator-second-session-'))
         let second: Awaited<ReturnType<typeof service.launchSecondDesktop>> | undefined
         try {
           second = await service.launchSecondDesktop({ userDataDir: profile })
@@ -59,6 +58,11 @@ it('independent-sessions-and-restart', async () => {
           await openAccountMenu(second.page)
           await menuItem(second.page, labels.login).waitFor()
           expect(await second.electronApp.evaluate(({ app }) => app.isReady())).toBe(true)
+          await second.close({ preserveUserData: true })
+          second = await service.launchSecondDesktop({ userDataDir: profile })
+          await openAccountMenu(second.page)
+          await menuItem(second.page, labels.login).waitFor()
+          expect(await readDesktopUserNo(second.page)).toBeUndefined()
           expect(await readDesktopUserNo(runtime.page)).toBe(userNo)
           expect(await service.userNumber(web)).toBe(userNo)
           expect((await readWebsiteWallet(web)).settlementPending).toBe(false)
@@ -86,14 +90,17 @@ it('independent-sessions-and-restart', async () => {
           })
           return { activeDesktopSessions: 1, userNo }
         } finally {
-          await second?.close().catch(() => {})
-          await rm(profile, { recursive: true, force: true })
+          try {
+            await second?.close({ preserveUserData: true })
+          } finally {
+            await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+          }
         }
       },
       assert: async (result, runtime) =>
         runtime.assertThat(result.activeDesktopSessions === 1, {
           name: 'independent-session-scope',
-          message: '重启恢复同一账号，退出作用范围只限当前会话',
+          message: '重启恢复同一账号，退出仅作用于当前会话且重启后保持退出',
           data: result
         })
     })

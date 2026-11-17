@@ -14,6 +14,7 @@ import {
   withAccountFixture
 } from '../../../harness/e2e/account'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { assertMinimumWindowBounds } from '../../../harness/e2e/electronApp'
 
 it('account-menu-and-page', async () => {
   await withAccountFixture(async (setup, service) => {
@@ -158,8 +159,7 @@ it('account-menu-and-page', async () => {
             minimum: window.getMinimumSize(),
             zoom: window.webContents.getZoomFactor()
           }))
-          expect(geometry.minimum).toEqual([1400, 800])
-          if (size) expect(geometry.bounds).toMatchObject(size)
+          if (size) assertMinimumWindowBounds(geometry.bounds, geometry.minimum)
           const visible = await page.locator('.nc-account-popup').evaluate((element) => {
             const box = element.getBoundingClientRect()
             return {

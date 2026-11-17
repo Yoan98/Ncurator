@@ -92,8 +92,7 @@ describe('workbench skills live', () => {
           const { body } = await page.evaluate((id) => window.api.userSkillsGet(id), skill.name)
           await fillSkillContent(
             page,
-            body +
-              '\n本规范更新：输出的 ruleVersion 固定改为 NC-SKILL-REPORT-EDITED，其他字段仍遵循资源规则。\n'
+            body.replace('NC-SKILL-REPORT-314', 'NC-SKILL-REPORT-EDITED')
           )
           await saveSkill(page)
           await page.getByTestId(`${workbenchSelectors.sessionItemPrefix}-${partnerId}`).click()
@@ -134,16 +133,19 @@ describe('workbench skills live', () => {
             originalPrompt: io.some((record) =>
               record.requestWire?.messages.some(
                 (message) =>
-                  message.role === 'system' && String(message.content).includes('# 周报归档规范')
+                  message.role === 'system' &&
+                  String(message.content).includes('NC-SKILL-REPORT-314')
               )
             ),
             updatedPrompt: io.some((record) =>
               record.requestWire?.messages.some(
                 (message) =>
-                  message.role === 'system' && String(message.content).includes('本规范更新')
+                  message.role === 'system' &&
+                  String(message.content).includes('NC-SKILL-REPORT-EDITED') &&
+                  !String(message.content).includes('NC-SKILL-REPORT-314')
               )
             ),
-            resourceRead: io.some((record) => record.user.includes('NC-SKILL-REPORT-314'))
+            resourceRead: io.some((record) => record.user.includes('waiting-external'))
           }
         },
         assert: async (result, runtime) => {

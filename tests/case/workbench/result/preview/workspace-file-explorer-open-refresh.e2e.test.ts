@@ -6,6 +6,7 @@ import type { Page } from 'playwright'
 import JSZip from 'jszip'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { accountButton, labels, menuItem, openAccountMenu } from '../../../../harness/e2e/account'
 import {
   addWorkspaceDirectoryThroughNativeDialog,
   getSettingsLocator,
@@ -557,7 +558,12 @@ describe('workbench result e2e', () => {
 
           await closeExplorerIfOpen(page)
           const previewTabId = await tabs.first().getAttribute('data-testid')
-          await page.getByRole('button', { name: '设置', exact: true }).click()
+          if (await accountButton(page).isVisible()) {
+            await openAccountMenu(page)
+            await menuItem(page, labels.settings).click()
+          } else {
+            await page.getByRole('button', { name: '设置', exact: true }).click()
+          }
           await page.getByRole('link', { name: '工作空间', exact: true }).click()
           await removeWorkspaceDirectoryThroughSettingsUi(page, workspace.rootPath)
           await getSettingsLocator(page, settingsSelectors.backRow).click()

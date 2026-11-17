@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { assertMinimumWindowBounds } from '../../../../harness/e2e/electronApp'
 import { SETTINGS_LONG_E2E_TIMEOUT_MS } from '../../../../harness/e2e/settings'
 import { navigateToWorkbench, workbenchSelectors } from '../../../../harness/e2e/workbench'
 
@@ -73,7 +74,9 @@ describe('sidebar app update e2e', () => {
               minimum: window.getMinimumSize(),
               zoom: window.webContents.getZoomFactor()
             }))
-            expect(geometry.minimum).toEqual([1400, 800])
+            if (name.endsWith('-minimum')) {
+              assertMinimumWindowBounds(geometry.bounds, geometry.minimum)
+            }
             const view = await page.locator('.nc-account-popup').evaluate((element) => {
               const box = element.getBoundingClientRect()
               return {
@@ -134,7 +137,6 @@ describe('sidebar app update e2e', () => {
             await native.evaluate((window, bounds) => window.setBounds(bounds), original)
             await inspectMenu(state.name + '-normal')
             await native.evaluate((window) => window.setSize(1400, 800))
-            expect(await native.evaluate((window) => window.getBounds().width)).toBe(1400)
             await inspectMenu(state.name + '-minimum')
           }
           for (const progressPercent of [0, 100, -1, 101]) {

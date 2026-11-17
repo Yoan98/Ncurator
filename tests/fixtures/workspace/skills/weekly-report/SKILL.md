@@ -10,5 +10,5 @@ metadata:
 
 整理周报时先读取相对路径 references/rules.json。
 将结果保存为用户指定的 JSON 文件，包含 ruleVersion、status、progress、risks、nextSteps 五个字段。
-ruleVersion 使用规则文件的 ruleVersion；存在外部阻塞时 status 使用规则文件的 blockedStatus。
+ruleVersion 固定为 NC-SKILL-REPORT-314。存在外部阻塞时 status 使用规则文件的 blockedStatus。
 progress、risks、nextSteps 使用数组，只写用户给出的事实，不虚构进度或负责人。

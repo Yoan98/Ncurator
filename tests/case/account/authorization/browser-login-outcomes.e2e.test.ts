@@ -1,3 +1,6 @@
+import { execFile } from 'node:child_process'
+import { dirname } from 'node:path'
+import { promisify } from 'node:util'
 import { expect, it } from 'vitest'
 import { chromium } from 'playwright'
 import {
@@ -10,7 +13,52 @@ import {
   readDesktopUserNo,
   withAccountFixture
 } from '../../../harness/e2e/account'
-import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { runE2ECase, type E2ETestRuntime } from '../../../harness/e2e/run-e2e-case'
+
+const execFileAsync = promisify(execFile)
+
+async function prepareWindowsCallback(
+  runtime: E2ETestRuntime,
+  extraEnv: Record<string, string>
+) {
+  const installed = await runtime.electronApp.evaluate(({ app }) => ({
+    executable: app.getPath('exe'),
+    registered: app.isDefaultProtocolClient('ncurator'),
+    hasLock: app.requestSingleInstanceLock()
+  }))
+  expect(installed.registered).toBe(true)
+  expect(installed.hasLock).toBe(true)
+  const { stdout } = await execFileAsync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      "[Console]::OutputEncoding = [Text.Encoding]::UTF8; (Get-Item -LiteralPath 'HKCU:\\Software\\Classes\\ncurator\\shell\\open\\command').GetValue('')"
+    ],
+    { windowsHide: true, timeout: 10_000 }
+  )
+  expect(stdout.trim()).toBe(`"${installed.executable}" "%1"`)
+
+  return async (callback: URL) => {
+    // Run the registered command with the test profile and deny proxy so Electron
+    // forwards the URL through its Windows single-instance handling.
+    const env = { ...process.env, ...extraEnv, NCURATOR_USER_DATA_PATH: runtime.userDataDir }
+    for (const key of Object.keys(env)) {
+      if (['ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS', 'NCURATOR_E2E_OBSERVER'].includes(key.toUpperCase())) {
+        delete env[key]
+      }
+    }
+    await execFileAsync(installed.executable, [callback.href], {
+      env,
+      cwd: dirname(installed.executable),
+      windowsHide: true,
+      timeout: 10_000
+    }).catch(() => {
+      throw new Error('The registered Windows protocol process did not exit cleanly')
+    })
+  }
+}
 
 it('browser-login-outcomes', async () => {
   if (process.env.NCURATOR_E2E_LOCAL_BACKEND === '1') {
@@ -78,6 +126,11 @@ it('browser-login-outcomes', async () => {
       runMode: 'single',
       execute: async (runtime) => {
         const { page } = runtime
+        const windowsProtocol =
+          process.platform === 'win32' && process.env.NCURATOR_E2E_APP_TARGET === 'package'
+        const deliverValidCallback = windowsProtocol
+          ? await prepareWindowsCallback(runtime, setup.extraEnv)
+          : (link: URL) => deliverDesktopAuthorization(runtime, link)
         const email = newTestEmail('callback')
         const activeDesktops = async () =>
           (await service.evidence(email)).sessions.filter(
@@ -122,7 +175,7 @@ it('browser-login-outcomes', async () => {
         expect(await readDesktopUserNo(page)).toBeUndefined()
         expect(await activeDesktops()).toBe(0)
 
-        await deliverDesktopAuthorization(runtime, valid)
+        await deliverValidCallback(valid)
         await web.getByRole('heading', { name: '登录成功', exact: true }).waitFor()
         await deliverDesktopAuthorization(runtime, valid)
         await deliverDesktopAuthorization(runtime, cancelledCallback)
@@ -131,12 +184,13 @@ it('browser-login-outcomes', async () => {
         await expect.poll(() => readDesktopUserNo(page)).toBe(owner)
         const activeSessions = await activeDesktops()
         expect(activeSessions).toBe(1)
-        return { activeSessions }
+        return { activeSessions, windowsProtocol }
       },
-      assert: async ({ activeSessions }, runtime) =>
-        runtime.assertThat(activeSessions === 1, {
+      assert: async (result, runtime) =>
+        runtime.assertThat(result.activeSessions === 1, {
           name: 'desktop-callback-with-one-session',
-          message: '取消、过期、错误及重复回跳不会创建额外桌面会话'
+          message: '取消、过期、错误及重复回跳不会创建额外桌面会话',
+          data: result
         })
     })
   })

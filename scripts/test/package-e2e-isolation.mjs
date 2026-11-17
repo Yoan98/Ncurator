@@ -188,6 +188,11 @@ if (Test-Path $softwareKey) {
     Remove-Item -LiteralPath $softwareKey -Recurse -Force
   }
 }
+$protocolKey = 'HKCU:\\Software\\Classes\\ncurator'
+$protocolCommand = Get-Item -LiteralPath "$protocolKey\\shell\\open\\command" -ErrorAction SilentlyContinue
+if ($protocolCommand -and $protocolCommand.GetValue('') -eq ('"' + (Join-Path $installRoot '${PACKAGE_PRODUCT_NAME}.exe') + '" "%1"')) {
+  Remove-Item -LiteralPath $protocolKey -Recurse -Force
+}
 Write-Output (@{
   removedShortcuts = $removedShortcuts
   removedUninstall = $removedUninstall

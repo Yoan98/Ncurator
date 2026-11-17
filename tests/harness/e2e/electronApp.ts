@@ -1,6 +1,7 @@
 import path from 'node:path'
 import os from 'node:os'
-import { access, chmod, mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { access, chmod, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { expect } from 'vitest'
 import electronPath from 'electron'
 import {
   _electron as electron,
@@ -181,8 +182,8 @@ export type LaunchedElectronApp = {
   userDataDir: string
   appInfo: E2EAppInfo
   collectSignals: () => Promise<E2ERuntimeSignals>
-  close: (input: {
-    tracePath: string
+  close: (input?: {
+    tracePath?: string
     preserveUserData?: boolean
     crash?: boolean
   }) => Promise<void>
@@ -357,6 +358,19 @@ const assertLaunchedWorkbenchApp = (page: Page): void => {
   }
 }
 
+export const assertMinimumWindowBounds = (
+  bounds: { width: number; height: number },
+  minimum: number[]
+): void => {
+  expect(minimum).toEqual([1400, 800])
+  // Windows converts native pixels back to DIP after enforcing the minimum.
+  const roundingAllowance = process.platform === 'win32' ? 2 : 0
+  expect(bounds.width).toBeGreaterThanOrEqual(minimum[0])
+  expect(bounds.width).toBeLessThanOrEqual(minimum[0] + roundingAllowance)
+  expect(bounds.height).toBeGreaterThanOrEqual(minimum[1])
+  expect(bounds.height).toBeLessThanOrEqual(minimum[1] + roundingAllowance)
+}
+
 const buildElectronLaunchEnv = (
   userDataDir: string,
   serviceMode: E2EServiceMode,
@@ -365,9 +379,10 @@ const buildElectronLaunchEnv = (
   nodeOneAcceptance?: true
 ): NodeJS.ProcessEnv => {
   const env: NodeJS.ProcessEnv = {}
+  const environmentKey = (key: string) => (process.platform === 'win32' ? key.toUpperCase() : key)
 
   for (const [key, value] of Object.entries(process.env)) {
-    if (key.startsWith('npm_')) continue
+    if (key.toLowerCase().startsWith('npm_')) continue
     if (
       nodeOneAcceptance &&
       ![
@@ -386,7 +401,7 @@ const buildElectronLaunchEnv = (
     )
       continue
     if (value !== undefined) {
-      env[key] = value
+      env[environmentKey(key)] = value
     }
   }
 
@@ -401,7 +416,7 @@ const buildElectronLaunchEnv = (
   env.NCURATOR_USER_DATA_PATH = userDataDir
 
   for (const [key, value] of Object.entries(extraEnv || {})) {
-    env[key] = value
+    env[environmentKey(key)] = value
   }
 
   // Cursor/agent shells may inject ELECTRON_RUN_AS_NODE=1, which makes the Electron
@@ -638,13 +653,18 @@ export const launchElectronApp = async (input: {
       .slice(-20)
       .map((entry) => entry.text)
       .join('\n')
+    const startupLog = await readFile(path.join(userDataDir, 'logs', 'app.log'), 'utf8').catch(
+      () => ''
+    )
     if (desktopLaunch) await desktopLaunch.dispose()
     else await electronApp.close().catch(() => undefined)
-    await rm(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    if (!input.userDataDir) {
+      await rm(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    }
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}${
         diagnostics ? `\nMain process diagnostics:\n${diagnostics}` : ''
-      }`
+      }${startupLog ? `\nApplication startup log:\n${startupLog.slice(-6000)}` : ''}`
     )
   }
   electronApplicationByPage.set(page, electronApp)
@@ -803,7 +823,7 @@ export const launchElectronApp = async (input: {
         lifecycleEntries
       }
     },
-    close: async (closeInput) => {
+    close: async (closeInput = {}) => {
       electronApplicationByPage.delete(page)
       recordLifecycle('electron-teardown-started')
       if (!page.isClosed() && !input.nodeOneAcceptance) {

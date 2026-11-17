@@ -48,7 +48,7 @@ describe('workbench skills', () => {
             .waitFor({ state: 'visible' })
           const resourcePreviewed = (
             await runtime.page.getByTestId(selectors.resourcePreview).innerText()
-          ).includes('NC-SKILL-REPORT-314')
+          ).includes('waiting-external')
           await runtime.page
             .getByTestId(selectors.resourcePreview)
             .getByRole('button', { name: /关\s*闭/, exact: true })
@@ -124,7 +124,7 @@ describe('workbench skills', () => {
               result.bound &&
               result.content.includes('新增替换规范') &&
               result.content.includes('preserve-this-field') &&
-              result.resource.includes('NC-SKILL-REPORT-314') &&
+              result.resource.includes('waiting-external') &&
               result.executable,
             {
               name: 'skill-import-replacement',
