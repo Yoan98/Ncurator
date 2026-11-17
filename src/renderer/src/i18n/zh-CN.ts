@@ -21,7 +21,7 @@ export const zh = {
     logoutRetry: "退出未确认，请重试。",
     error: "暂时无法连接，请稍后重试。",
     openWebsiteError: "无法打开官网，请稍后重试。",
-    storage: "系统凭据保护暂不可用，请稍后重试。"
+    storage: "暂时无法读取或保存登录凭证，请重试。"
   },
   userSkills: {
     contentChanged: 'skill 已更新。当前草稿已保留，重新打开可查看最新内容。',

@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HumanMessage, ToolMessage } from '@langchain/core/messages'
@@ -17,7 +17,6 @@ import { ConfirmDialogWindowService } from '../../../../src/main/services/Confir
 import type { ConfirmDialogResponse } from '../../../../src/shared/types'
 
 const electron = vi.hoisted(() => ({
-  safeStorage: { isEncryptionAvailable: vi.fn(), getSelectedStorageBackend: vi.fn(() => 'synthetic'), encryptString: vi.fn(), decryptString: vi.fn() },
   shell: { openExternal: vi.fn() }, ipcMain: { handle: vi.fn() }
 }))
 vi.mock('../../../../src/main/services/app/ServiceEnvironment', () =>
@@ -27,7 +26,7 @@ const filesystem = vi.hoisted(() => ({ denyCredentialDeletion: false }))
 vi.mock('node:fs', async importOriginal => {
   const real = await importOriginal<typeof import('node:fs')>()
   return { ...real, rmSync: (...args: Parameters<typeof real.rmSync>) => {
-    if (filesystem.denyCredentialDeletion && String(args[0]).endsWith('credentials.enc')) throw new Error('synthetic removal failure')
+    if (filesystem.denyCredentialDeletion && String(args[0]).endsWith('credentials.json')) throw new Error('synthetic removal failure')
     return real.rmSync(...args)
   } }
 })
@@ -57,9 +56,6 @@ function managedDesktopFixture(respond: (requestId: string, attempt: number) => 
   const dir = mkdtempSync(join(tmpdir(), 'ncurator-managed-call-'))
   vi.stubEnv('NCURATOR_USER_DATA_PATH', dir)
   vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', direct?.appSecret ?? 'synthetic-desktop-gateway-test-key')
-  electron.safeStorage.isEncryptionAvailable.mockReturnValue(true)
-  electron.safeStorage.encryptString.mockImplementation((plain: string) => Buffer.from(plain))
-  electron.safeStorage.decryptString.mockImplementation((encrypted: Buffer) => encrypted.toString())
   let state = ''
   let owner = userNo
   let loginCount = 0
@@ -443,8 +439,6 @@ it('rejects a main frame that leaves the trusted entry and suppresses its accoun
     }
     return Response.json(value('local'))
   }))
-  electron.safeStorage.isEncryptionAvailable.mockReturnValue(true)
-  electron.safeStorage.encryptString.mockReturnValue(Buffer.from('synthetic encrypted credential'))
   try {
     await expect(command({ sender, senderFrame: { ...frame } }, 'restore')).rejects.toThrow('desktop_account_forbidden')
     expect(await command(send, 'begin')).toEqual({ status: 'authorizing' })
@@ -452,7 +446,7 @@ it('rejects a main frame that leaves the trusted entry and suppresses its accoun
     frame.url = 'https://example.invalid/'
     deliver('ncurator://auth/callback?code=' + secret() + '&state=' + state)
     await expect(command(send, 'restore')).rejects.toThrow('desktop_account_forbidden')
-    await expect.poll(() => existsSync(join(dir, 'domestic-account', 'credentials.enc'))).toBe(true)
+    await expect.poll(() => existsSync(join(dir, 'domestic-account', 'credentials.json'))).toBe(true)
     frame.url = trustedUrl
     await expect.poll(() => command(send, 'restore')).toEqual({ status: 'signed_in', userNo })
     expect(frame.send.mock.calls).toEqual([['desktop-account:changed', { status: 'authorizing' }]])
@@ -698,18 +692,19 @@ it.each([true, false])('preserves a new login when a delayed old logout succeeds
   expect(store.clear).not.toHaveBeenCalled()
 })
 
-it('fails closed without system protection and writes only the encrypted result to disk', async () => {
+it('restores and revokes a file-backed session and keeps failed saves and logouts recoverable', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'ncurator-account-test-'))
-  const path = join(dir, 'domestic-account', 'credentials.enc')
+  const directory = join(dir, 'domestic-account')
+  const path = join(directory, 'credentials.json')
   vi.stubEnv('NCURATOR_USER_DATA_PATH', dir)
   vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'synthetic-desktop-gateway-test-key')
   let state = ''
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
-    const body = JSON.parse(String(init.body))
     if (url.endsWith('/start')) {
-      state = body.state
+      state = JSON.parse(String(init.body)).state
       return Response.json({ flowId: '10', expiresIn: 600, authorizationUrl: 'https://www.guanzhangai.cn/desktop/authorize#flow=10&state=' + state })
     }
+    if (url.endsWith('/receipt')) return Response.json({ ok: true })
     return Response.json(value('stored'))
   }))
   const complete = async () => {
@@ -718,31 +713,49 @@ it('fails closed without system protection and writes only the encrypted result 
     return account.acceptCallback('ncurator://auth/callback?code=' + secret() + '&state=' + state)
   }
   try {
-    electron.safeStorage.isEncryptionAvailable.mockReturnValue(false)
+    await expect(createDomesticDesktopAccount(() => {}).restore()).resolves.toEqual({ status: 'signed_out' })
+    mkdirSync(path, { recursive: true })
     await expect(complete()).rejects.toMatchObject({ code: 'storage_unavailable' })
-    expect(existsSync(path)).toBe(false)
-    expect(electron.safeStorage.encryptString).not.toHaveBeenCalled()
-    electron.safeStorage.isEncryptionAvailable.mockReturnValue(true)
-    const encrypted = randomBytes(64)
-    electron.safeStorage.encryptString.mockReturnValue(encrypted)
+    expect(readdirSync(directory).sort()).toEqual(['credentials.json', 'instance-id', 'restore-blocked'])
+    rmSync(path, { recursive: true })
+
     expect(await complete()).toBe(userNo)
-    expect(readFileSync(path).equals(encrypted)).toBe(true)
-    expect(readFileSync(path).includes(Buffer.from(value('stored').refreshToken))).toBe(false)
-    electron.safeStorage.decryptString.mockReturnValue(JSON.stringify({ userNo, refreshToken: value('stored').refreshToken }))
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ userNo, refreshToken: value('stored').refreshToken })
+    if (process.platform !== 'win32') expect(statSync(path).mode & 0o777).toBe(0o600)
+
+    const refresh = vi.fn(async (url: string, init: RequestInit) => {
+      expect(url).toMatch(/\/refresh$/u)
+      expect(new Headers(init.headers).get('authorization')).toBe('Bearer ' + value('stored').refreshToken)
+      return Response.json(value('rotated'))
+    })
+    vi.stubGlobal('fetch', refresh)
+    await expect(createDomesticDesktopAccount(() => {}).restore()).resolves.toEqual({ status: 'signed_in', userNo })
+    expect(refresh).toHaveBeenCalledTimes(1)
+    const rotated = readFileSync(path, 'utf8')
+    expect(JSON.parse(rotated)).toEqual({ userNo, refreshToken: value('rotated').refreshToken })
+
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: 'recovery_unavailable' }, { status: 503 })))
     await expect(createDomesticDesktopAccount(() => {}).accessToken()).rejects.toMatchObject({ code: 'recovery_unavailable' })
-    expect(readFileSync(path).equals(encrypted)).toBe(true)
-    const fetchLogout = vi.fn(async () => Response.json({ ok: true }))
+    expect(readFileSync(path, 'utf8')).toBe(rotated)
+    const fetchLogout = vi.fn(async (url: string, init: RequestInit) => {
+      expect(url).toMatch(/\/logout$/u)
+      expect(new Headers(init.headers).get('authorization')).toBe('Bearer ' + value('rotated').refreshToken)
+      return Response.json({ ok: true })
+    })
     vi.stubGlobal('fetch', fetchLogout)
     fetchLogout.mockRejectedValueOnce(new Error('synthetic network outage'))
     filesystem.denyCredentialDeletion = true
     await expect(createDomesticDesktopAccount(() => {}).logout()).rejects.toMatchObject({ code: 'logout_incomplete' })
-    expect(readFileSync(path).equals(encrypted)).toBe(true)
+    expect(readFileSync(path, 'utf8')).toBe(rotated)
     await expect(createDomesticDesktopAccount(() => {}).accessToken()).rejects.toMatchObject({ code: 'invalid_grant' })
     expect(fetchLogout).toHaveBeenCalledTimes(1)
     await expect(createDomesticDesktopAccount(() => {}).logout()).rejects.toMatchObject({ code: 'logout_incomplete' })
     await expect(createDomesticDesktopAccount(() => {}).accessToken()).rejects.toMatchObject({ code: 'invalid_grant' })
     expect(fetchLogout).toHaveBeenCalledTimes(2)
+    filesystem.denyCredentialDeletion = false
+    await expect(createDomesticDesktopAccount(() => {}).logout()).resolves.toBeUndefined()
+    expect(existsSync(path)).toBe(false)
+    await expect(createDomesticDesktopAccount(() => {}).restore()).resolves.toEqual({ status: 'signed_out' })
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 

@@ -590,8 +590,6 @@ export const launchElectronApp = async (input: {
     electronApp = await electron.launch({
       executablePath: desktopLaunch?.executablePath || launch.executablePath,
       args: [
-        // Keep safeStorage encryption and restart coverage without using the login Keychain.
-        ...(process.platform === 'darwin' ? ['--use-mock-keychain'] : []),
         ...(process.platform === 'win32' ? [WINDOWS_DESKTOP_MOUSE_ARGUMENT] : []),
         ...launch.args
       ],

@@ -148,7 +148,7 @@ Main 与 runner 对 `.env` 行尾注释的解析、两组 Key 的切换及隔离
 | `ACC-BALANCE-002-AC4` | `looks up the original managed call without a wallet round trip and applies only a newer snapshot` 检查按原请求读取及更新钱包 |
 | `ACC-SESSION-002-AC4` | `discards an exchange response after cancellation and after a newer authorization` 检查过时兑换不写入凭据 |
 
-人工待验收：用 macOS、Windows 安装包验证浏览器唤起、默认协议关联、回跳、系统凭据存储。Windows 核对安装器注册及回跳交给正在运行的实例。验证凭据保护不可用时拒绝保存，同一本地目录运行不同发行包时账号隔离且个人数据保留，补证 `ACC-LOGIN-001-AC1/AC4`、`ACC-SESSION-001-AC1`、`ACC-ACCESS-001-AC2`、`ACC-WEB-001-AC4`。
+人工待验收：用 macOS、Windows 安装包验证浏览器唤起、默认协议关联和回跳。Windows 核对安装器注册及回跳交给正在运行的实例。通过系统入口直接打开已安装应用，分别验证未登录启动、授权成功后完全退出再启动、账号退出后再启动。三个场景均无系统凭据授权弹窗，已登录时正常恢复，退出账号后保持未登录。凭据写入失败时应显示错误。同一本地目录运行不同发行包时账号隔离且个人数据保留。上述检查补证 `ACC-LOGIN-001-AC1/AC3/AC4`、`ACC-SESSION-001-AC1/AC2`、`ACC-ACCESS-001-AC2`、`ACC-WEB-001-AC4`。
 
 开发联调使用 `pnpm dev` 和支持本机回跳的国内授权服务，从系统浏览器完成登录。在同一台机器上保留安装包并分别发起授权，检查各自登录状态和退出范围，以及开发版重复授权、取消或退出后旧端口释放，补证 `ACC-LOGIN-001-AC5`。
 

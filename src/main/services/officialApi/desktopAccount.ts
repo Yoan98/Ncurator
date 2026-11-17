@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { safeStorage, shell } from 'electron'
+import { join } from 'node:path'
+import { shell } from 'electron'
 import type { DesktopAccountSnapshot, DesktopWallet } from '../../../shared/desktopAccount'
 import { MANAGED_MODELS_PATH, parseManagedModels, type ManagedModelsResult } from '../../../shared/managedModels'
 import { getUserDataPath } from '../../utils/userDataPath'
@@ -481,19 +481,13 @@ export class DesktopAccount {
   }
 }
 
-function systemStore(): CredentialStore {
-  const file = join(getUserDataPath(), 'domestic-account', 'credentials.enc')
-  const blocked = join(dirname(file), 'restore-blocked')
-  function available() {
-    if (!safeStorage.isEncryptionAvailable() ||
-      (process.platform === 'linux' && ['basic_text', 'unknown'].includes(safeStorage.getSelectedStorageBackend())))
-      throw new DesktopAccountError('storage_unavailable')
-  }
-  function readEncrypted() {
+function fileCredentialStore(): CredentialStore {
+  const directory = join(getUserDataPath(), 'domestic-account')
+  const file = join(directory, 'credentials.json')
+  const blocked = join(directory, 'restore-blocked')
+  function readCredentials() {
     try {
-      const encrypted = readFileSync(file)
-      available()
-      const value: unknown = JSON.parse(safeStorage.decryptString(encrypted))
+      const value: unknown = JSON.parse(readFileSync(file, 'utf8'))
       if (!validCredentials(value)) throw new Error()
       return value
     } catch (error) {
@@ -506,26 +500,24 @@ function systemStore(): CredentialStore {
       try { statSync(blocked); return null } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new DesktopAccountError('storage_unavailable')
       }
-      return readEncrypted()
+      return readCredentials()
     },
-    readForLogout: readEncrypted,
+    readForLogout: readCredentials,
     block() {
       try {
-        mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
+        mkdirSync(directory, { recursive: true, mode: 0o700 })
         writeFileSync(blocked, '', { flag: 'a', mode: 0o600, flush: true })
       } catch { throw new DesktopAccountError('storage_unavailable') }
     },
     save(value) {
       const temp = file + '.' + randomBytes(12).toString('hex')
       try {
-        available()
-        const encrypted = safeStorage.encryptString(JSON.stringify(value))
-        mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
-        writeFileSync(temp, encrypted, { flag: 'wx', mode: 0o600, flush: true })
+        mkdirSync(directory, { recursive: true, mode: 0o700 })
+        writeFileSync(temp, JSON.stringify(value), { flag: 'wx', mode: 0o600, flush: true })
         renameSync(temp, file)
         rmSync(blocked, { force: true })
       } catch {
-        try { rmSync(temp, { force: true }) } catch { /* The temporary file contains encrypted data only. */ }
+        try { rmSync(temp, { force: true }) } catch { /* Report the original storage failure. */ }
         throw new DesktopAccountError('storage_unavailable')
       }
     },
@@ -642,7 +634,7 @@ export function createDomesticDesktopAccount(changed: (snapshot: DesktopAccountS
     }
   }
   activeDomesticAccount = new DesktopAccount(installationId(), {
-    store: systemStore(),
+    store: fileCredentialStore(),
     changed,
     sessionEnded,
     openBrowser: url => shell.openExternal(url),

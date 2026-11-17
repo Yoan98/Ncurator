@@ -21,7 +21,7 @@ export const en = {
     logoutRetry: "Sign-out could not be confirmed. Try again.",
     error: "Could not connect. Try again later.",
     openWebsiteError: "Could not open the website. Please try again.",
-    storage: "System credential protection is unavailable. Try again later."
+    storage: "Couldn’t read or save your sign-in credentials. Try again."
   },
   userSkills: {
     contentChanged:
