@@ -47,7 +47,7 @@ pnpm dev
 
 **提交 PR 前，请务必亲自运行软件，像用户一样完整体验并测试自己新增或修改的功能，并在 PR 中记录体验步骤与结果。** 亲眼看到自己的改动在软件里生效，也是一件很有成就感的事。
 
-`.env-example` 只放变量名和非敏感示例。`NCURATOR_SERVICE_ENV=local|production` 选择整组 API 与网页，缺配置不回退生产；本地签名 Key 只读取 `.env.local`，生产签名 Key 只读取 `.env`。本地服务重建后重新同步其客户端配置，桌面与网页分别重启。生产共享密钥、模型 Key、签名证书、用户数据库及测试日志均不应提交。使用本地服务开发不需要生产凭证或 COS / R2 上传权限；正式安装包始终固定生产，官方发布流程见[发布文档](./doc/deploy/release.md)。
+`.env-example` 只放变量名和非敏感示例。国内源码只用根目录的 `.env`；`NCURATOR_SERVICE_ENV=local|production` 选择整组 API、网页和签名 Key，缺配置直接报错。本地用 `NCURATOR_LOCAL_APP_SECRET_DESKTOP`，生产用 `NCURATOR_APP_SECRET_DESKTOP`。初次配置或重建本地服务后，按示例运行同步脚本，桌面与网页分别重启。实际凭证、签名证书、用户数据库及测试日志均不应提交。使用本地服务开发不需要生产凭证或 COS / R2 上传权限；正式安装包始终固定生产，官方发布流程见[发布文档](./doc/deploy/release.md)。
 
 ## 提交 Pull Request
 

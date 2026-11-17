@@ -34,6 +34,8 @@ vi.mock('node:fs', async (importOriginal) => {
 
 const localKey = 'synthetic-local-file-key-only'
 const productionKey = 'synthetic-production-file-key-only'
+const localKeyName = 'NCURATOR_LOCAL_APP_SECRET_DESKTOP'
+const productionKeyName = 'NCURATOR_APP_SECRET_DESKTOP'
 const directories: string[] = []
 afterEach(() => {
   filesystem.beforeWrite = undefined
@@ -44,55 +46,42 @@ afterEach(() => {
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'ncurator-service-env-'))
   directories.push(root)
-  const production: Record<string, string> = {
+  const settings: Record<string, string> = {
     NCURATOR_SERVICE_ENV: 'production',
     NCURATOR_LOCAL_API_ORIGIN: 'http://127.0.0.1:6010',
     NCURATOR_LOCAL_WEB_ORIGIN: 'http://127.0.0.1:5998',
     NCURATOR_PRODUCTION_API_ORIGIN: 'https://api.guanzhangai.cn',
     NCURATOR_PRODUCTION_WEB_ORIGIN: 'https://www.guanzhangai.cn',
-    NCURATOR_APP_SECRET_DESKTOP: productionKey
+    [productionKeyName]: productionKey,
+    [localKeyName]: localKey
   }
-  const local: Record<string, string> = { NCURATOR_APP_SECRET_DESKTOP: localKey }
-  function save() {
-    for (const [file, values] of [
-      ['.env', production],
-      ['.env.local', local]
-    ] as const)
-      writeFileSync(
-        path.join(root, file),
-        Object.entries(values)
-          .map(([k, v]) => `${k}=${v}`)
-          .join('\n'),
-        { mode: 0o600 }
-      )
+  function save(comment = '') {
+    writeFileSync(
+      path.join(root, '.env'),
+      Object.entries(settings)
+        .map(([name, value]) => `${name}=${value}${comment}`)
+        .join('\n'),
+      { mode: 0o600 }
+    )
   }
   save()
-  return { root, production, local, save }
+  return { root, settings, save }
 }
 
-describe('domestic service file selection', () => {
+describe('domestic service environment selection', () => {
   function commentedFixture(environment: 'local' | 'production') {
     const test = fixture()
-    test.production.NCURATOR_SERVICE_ENV = environment
+    test.settings.NCURATOR_SERVICE_ENV = environment
     for (const name of [
-      ...Object.keys(test.production),
+      ...Object.keys(test.settings),
       'AI_TEST_DISABLE_DOTENV',
       'NCURATOR_DISTRIBUTION'
     ]) {
       vi.stubEnv(name, undefined)
     }
-    vi.stubEnv('NCURATOR_APP_SECRET_DESKTOP', 'inherited-wrong-environment-key')
-    for (const [file, values] of [
-      ['.env', test.production],
-      ['.env.local', test.local]
-    ] as const) {
-      writeFileSync(
-        path.join(test.root, file),
-        Object.entries(values)
-          .map(([name, value]) => `${name}=${value} # environment comment`)
-          .join('\n')
-      )
-    }
+    vi.stubEnv(productionKeyName, 'inherited-wrong-environment-key')
+    test.save(' # environment comment')
+    writeFileSync(path.join(test.root, '.env.local'), 'NCURATOR_SERVICE_ENV=invalid\n')
     return test
   }
   it.each(['local', 'production'] as const)(
@@ -105,7 +94,8 @@ describe('domestic service file selection', () => {
       loadRootEnvOnce()
       configureServiceEnvironment()
       expect(process.env.NCURATOR_SERVICE_ENV).toBe(environment)
-      expect(process.env.NCURATOR_APP_SECRET_DESKTOP).toBe('inherited-wrong-environment-key')
+      expect(process.env[productionKeyName]).toBe('inherited-wrong-environment-key')
+      expect(process.env[localKeyName]).toBeUndefined()
       expect(getOfficialAppKey()).toBe(environment === 'local' ? localKey : productionKey)
       expect(serviceApiUrl('domestic', '')).toBe(
         environment === 'local' ? 'http://127.0.0.1:6010' : 'https://api.guanzhangai.cn'
@@ -126,7 +116,8 @@ describe('domestic service file selection', () => {
       selector:process.env.NCURATOR_SERVICE_ENV,
       api:process.env.NCURATOR_${environment.toUpperCase()}_API_ORIGIN,
       web:process.env.NCURATOR_${environment.toUpperCase()}_WEB_ORIGIN,
-      inheritedKeyUnchanged:process.env.NCURATOR_APP_SECRET_DESKTOP==='inherited-wrong-environment-key'})));`
+      inheritedKeyUnchanged:process.env.${productionKeyName}==='inherited-wrong-environment-key',
+      localKeyNotExported:process.env.${localKeyName}===undefined}))); `
       )
       const output = execFileSync(
         process.execPath,
@@ -143,19 +134,21 @@ describe('domestic service file selection', () => {
         selector: environment,
         api: environment === 'local' ? 'http://127.0.0.1:6010' : 'https://api.guanzhangai.cn',
         web: environment === 'local' ? 'http://127.0.0.1:5998' : 'https://www.guanzhangai.cn',
-        inheritedKeyUnchanged: true
+        inheritedKeyUnchanged: true,
+        localKeyNotExported: true
       })
     }
   )
   it.each([
     ['local', 'production'],
     ['production', 'local']
-  ] as const)('switches %s to %s with different file keys', (first, second) => {
+  ] as const)('switches %s to %s with different keys in the same file', (first, second) => {
     const { root } = fixture()
     for (const environment of [first, second]) {
       const inherited = {
         NCURATOR_SERVICE_ENV: environment,
-        NCURATOR_APP_SECRET_DESKTOP: 'inherited-wrong-environment-key'
+        [productionKeyName]: 'inherited-wrong-environment-key',
+        [localKeyName]: 'inherited-wrong-environment-key'
       }
       const selected = readDesktopServiceEnvironment(root, inherited)
       expect(selected.appKey).toBe(environment === 'local' ? localKey : productionKey)
@@ -176,7 +169,7 @@ describe('domestic service file selection', () => {
   it('loads the project selector and allows an explicit selector without inheriting its key', () => {
     const test = fixture()
     expect(readDesktopServiceEnvironment(test.root, {}).appKey).toBe(productionKey)
-    test.local.NCURATOR_SERVICE_ENV = 'local'
+    test.settings.NCURATOR_SERVICE_ENV = 'local'
     test.save()
     expect(readDesktopServiceEnvironment(test.root, {}).appKey).toBe(localKey)
     expect(
@@ -194,33 +187,34 @@ describe('domestic service file selection', () => {
   )
   it('requires a selector even with both complete groups', () => {
     const test = fixture()
-    delete test.production.NCURATOR_SERVICE_ENV
+    delete test.settings.NCURATOR_SERVICE_ENV
     test.save()
     expect(() => readDesktopServiceEnvironment(test.root, {})).toThrow('NCURATOR_SERVICE_ENV')
   })
   it.each(['local', 'production'] as const)(
-    'never borrows the other file or inherited key for missing %s credentials',
+    'never borrows the other environment or inherited key for missing %s credentials',
     (environment) => {
       const test = fixture()
-      delete (environment === 'local' ? test.local : test.production).NCURATOR_APP_SECRET_DESKTOP
+      const keyName = environment === 'local' ? localKeyName : productionKeyName
+      delete test.settings[keyName]
       test.save()
       expect(() =>
         readDesktopServiceEnvironment(test.root, {
           NCURATOR_SERVICE_ENV: environment,
-          NCURATOR_APP_SECRET_DESKTOP: 'inherited-otherwise-valid-key'
+          [keyName]: 'inherited-otherwise-valid-key'
         })
-      ).toThrow(`NCURATOR_APP_SECRET_DESKTOP in ${environment === 'local' ? '.env.local' : '.env'}`)
+      ).toThrow(`${keyName} in .env`)
     }
   )
   it.each(['bad', 'a key containing spaces', '${NCURATOR_APP_SECRET_DESKTOP}'])(
     'rejects malformed keys without echoing %j',
     (key) => {
       const test = fixture()
-      test.local.NCURATOR_APP_SECRET_DESKTOP = key
+      test.settings[localKeyName] = key
       test.save()
       expect(() =>
         readDesktopServiceEnvironment(test.root, { NCURATOR_SERVICE_ENV: 'local' })
-      ).toThrow('Missing or invalid NCURATOR_APP_SECRET_DESKTOP in .env.local')
+      ).toThrow(`Missing or invalid ${localKeyName} in .env`)
     }
   )
   it.each([
@@ -241,8 +235,8 @@ describe('domestic service file selection', () => {
   })
   it('does not require the inactive group or consume legacy address overrides', () => {
     const test = fixture()
-    delete test.production.NCURATOR_PRODUCTION_API_ORIGIN
-    delete test.production.NCURATOR_PRODUCTION_WEB_ORIGIN
+    delete test.settings.NCURATOR_PRODUCTION_API_ORIGIN
+    delete test.settings.NCURATOR_PRODUCTION_WEB_ORIGIN
     test.save()
     expect(
       readDesktopServiceEnvironment(test.root, {
@@ -296,7 +290,8 @@ describe('domestic service file selection', () => {
           env: {
             ...process.env,
             NCURATOR_SERVICE_ENV: 'local',
-            NCURATOR_APP_SECRET_DESKTOP: localKey
+            [productionKeyName]: productionKey,
+            [localKeyName]: localKey
           },
           encoding: 'utf8'
         }
@@ -316,7 +311,7 @@ describe('local client configuration synchronization', () => {
     'preserves unrelated edits made before replacement %i and reports a conflict',
     (replacement) => {
       const { root } = fixture()
-      const destination = path.join(root, '.env.local')
+      const destination = path.join(root, '.env')
       const client = path.join(root, 'client.env')
       writeFileSync(
         client,
@@ -334,7 +329,7 @@ describe('local client configuration synchronization', () => {
         'changed during synchronization'
       )
       expect(readFileSync(destination, 'utf8')).toBe(concurrent)
-      expect(readdirSync(root).filter((name) => name.startsWith('.env.local.'))).toEqual([])
+      expect(readdirSync(root).filter((name) => name.startsWith('.env.'))).toEqual([])
       expect(concurrent).not.toContain('new-synthetic-client-key')
       if (replacement === 2) {
         expect(concurrent).not.toContain(localKey)
@@ -346,7 +341,7 @@ describe('local client configuration synchronization', () => {
   )
   it('does not overwrite another synchronization completed between the two replacements', () => {
     const { root } = fixture()
-    const destination = path.join(root, '.env.local')
+    const destination = path.join(root, '.env')
     const client = path.join(root, 'client.env')
     writeFileSync(
       client,
@@ -354,7 +349,9 @@ describe('local client configuration synchronization', () => {
     )
     let writes = 0
     const concurrent =
-      'NCURATOR_LOCAL_API_ORIGIN=http://127.0.0.1:6110\nNCURATOR_LOCAL_WEB_ORIGIN=http://127.0.0.1:6098\nNCURATOR_APP_SECRET_DESKTOP=concurrent-synthetic-client-key\nUNRELATED_SETTING=new\n'
+      readFileSync(destination, 'utf8') +
+      '\nNCURATOR_LOCAL_API_ORIGIN=http://127.0.0.1:6110\nNCURATOR_LOCAL_WEB_ORIGIN=http://127.0.0.1:6098\n' +
+      `${localKeyName}=concurrent-synthetic-client-key\nUNRELATED_SETTING=new\n`
     filesystem.beforeWrite = (file) => {
       if (!file.startsWith(destination + '.') || ++writes !== 2) return
       filesystem.beforeWrite = undefined
@@ -364,11 +361,11 @@ describe('local client configuration synchronization', () => {
       'changed during synchronization'
     )
     expect(readFileSync(destination, 'utf8')).toBe(concurrent)
-    expect(readdirSync(root).filter((name) => name.startsWith('.env.local.'))).toEqual([])
+    expect(readdirSync(root).filter((name) => name.startsWith('.env.'))).toEqual([])
   })
   it('does not recreate a configuration deleted concurrently after invalidation', () => {
     const { root } = fixture()
-    const destination = path.join(root, '.env.local')
+    const destination = path.join(root, '.env')
     const client = path.join(root, 'client.env')
     writeFileSync(
       client,
@@ -384,26 +381,32 @@ describe('local client configuration synchronization', () => {
       'changed during synchronization'
     )
     expect(() => readFileSync(destination)).toThrow()
-    expect(readdirSync(root).filter((name) => name.startsWith('.env.local.'))).toEqual([])
+    expect(readdirSync(root).filter((name) => name.startsWith('.env.'))).toEqual([])
     expect(() => readDesktopServiceEnvironment(root, { NCURATOR_SERVICE_ENV: 'local' })).toThrow()
   })
-  it('copies only client fields with private permissions and preserves the production file', () => {
-    const { root } = fixture()
-    const before = readFileSync(path.join(root, '.env'), 'utf8')
+  it('updates only local settings in the shared file and retains private permissions', () => {
+    const { root, settings } = fixture()
+    const destination = path.join(root, '.env')
+    const untouched = `\r\n# Existing unrelated settings\r\nUNRELATED="first line\r\n${localKeyName}=inside quoted value\r\nlast line"\r\n`
+    const before = readFileSync(destination, 'utf8').replaceAll('\n', '\r\n') + untouched
+    writeFileSync(destination, before)
     const client = path.join(root, 'client.env')
+    const rebuiltKey = 'rebuilt-synthetic#client-key'
     writeFileSync(
       client,
-      `NCURATOR_API_ORIGIN=http://127.0.0.1:6010\nNCURATOR_WEB_ORIGIN=http://127.0.0.1:5998\nNCURATOR_APP_SECRET_DESKTOP=${localKey}\nDATABASE_URL=must-not-copy\nBACKUP_SECRET=must-not-copy\n`
+      `NCURATOR_API_ORIGIN=http://127.0.0.1:6110\nNCURATOR_WEB_ORIGIN=http://127.0.0.1:6098\n${productionKeyName}="${rebuiltKey}"\nDATABASE_URL=must-not-copy\nBACKUP_SECRET=must-not-copy\n`
     )
     syncLocalServiceEnvironment(client, root)
-    expect(parseEnv(readFileSync(path.join(root, '.env.local'), 'utf8'))).toEqual({
-      NCURATOR_LOCAL_API_ORIGIN: 'http://127.0.0.1:6010',
-      NCURATOR_LOCAL_WEB_ORIGIN: 'http://127.0.0.1:5998',
-      NCURATOR_APP_SECRET_DESKTOP: localKey
+    const updated = readFileSync(destination, 'utf8')
+    expect(updated.endsWith(untouched)).toBe(true)
+    expect(parseEnv(updated)).toEqual({
+      ...settings,
+      UNRELATED: parseEnv(before).UNRELATED,
+      NCURATOR_LOCAL_API_ORIGIN: 'http://127.0.0.1:6110',
+      NCURATOR_LOCAL_WEB_ORIGIN: 'http://127.0.0.1:6098',
+      [localKeyName]: rebuiltKey
     })
-    expect(readFileSync(path.join(root, '.env'), 'utf8')).toBe(before)
-    if (process.platform !== 'win32')
-      expect(statSync(path.join(root, '.env.local')).mode & 0o777).toBe(0o600)
+    if (process.platform !== 'win32') expect(statSync(destination).mode & 0o777).toBe(0o600)
   })
   it.each(['missing', 'invalid'])(
     'invalidates the old key when rebuilt client configuration is %s',
@@ -418,7 +421,7 @@ describe('local client configuration synchronization', () => {
       expect(() => syncLocalServiceEnvironment(client, root)).toThrow(
         'previous desktop key was invalidated'
       )
-      expect(readFileSync(path.join(root, '.env.local'), 'utf8')).not.toContain(localKey)
+      expect(readFileSync(path.join(root, '.env'), 'utf8')).not.toContain(localKey)
       expect(() => readDesktopServiceEnvironment(root, { NCURATOR_SERVICE_ENV: 'local' })).toThrow()
       expect(
         readDesktopServiceEnvironment(root, { NCURATOR_SERVICE_ENV: 'production' }).appKey

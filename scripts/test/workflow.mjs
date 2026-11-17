@@ -70,18 +70,17 @@ const expandEnvironmentReferences = (value) =>
 
 const loadRootEnv = () => {
   if (String(process.env.AI_TEST_DISABLE_DOTENV || '').trim() === '1') return
-  for (const fileName of ['.env.local', '.env']) {
-    let raw = ''
-    try {
-      raw = readFileSync(path.resolve(ROOT, fileName), 'utf8')
-    } catch {
+  let raw
+  try {
+    raw = readFileSync(path.resolve(ROOT, '.env'), 'utf8')
+  } catch {
+    return
+  }
+  for (const [key, value] of Object.entries(parseEnv(raw))) {
+    if (key === 'NCURATOR_APP_SECRET_DESKTOP' || key === 'NCURATOR_LOCAL_APP_SECRET_DESKTOP')
       continue
-    }
-    for (const [key, value] of Object.entries(parseEnv(raw))) {
-      if (key === 'NCURATOR_APP_SECRET_DESKTOP' || value === undefined) continue
-      if (String(process.env[key] || '').trim()) continue
-      process.env[key] = expandEnvironmentReferences(value)
-    }
+    if (process.env[key]?.trim()) continue
+    process.env[key] = expandEnvironmentReferences(value)
   }
 }
 
