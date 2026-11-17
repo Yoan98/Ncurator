@@ -26,30 +26,6 @@ prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` 
 
 具体文件排除规则与体积预算由[构建审计脚本](../../scripts/build/package/content-policy.mjs)维护，打包参数见 [electron-builder 配置](../../electron-builder.yml)。
 
-### 国内源码环境配置
-
-从 `.env-example` 复制 `.env`，文件权限设为 `0600`。桌面与网页开发进程各自读取各自项目的配置；两边使用相同的字段语义，切换后分别重启，不假定一个文件控制两个进程。
-
-| 字段 | 用途 |
-| --- | --- |
-| `NCURATOR_SERVICE_ENV` | 必填，`local` 或 `production`，没有默认值 |
-| `NCURATOR_LOCAL_API_ORIGIN` / `NCURATOR_LOCAL_WEB_ORIGIN` | 本地 API 与网页，必须为带端口的 `http://127.0.0.1` origin |
-| `NCURATOR_PRODUCTION_API_ORIGIN` / `NCURATOR_PRODUCTION_WEB_ORIGIN` | 生产 API 与网页，显式填写 `https://api.guanzhangai.cn` 与 `https://www.guanzhangai.cn` |
-
-选中组的两个地址均须完整、合法，不允许凭证、路径、查询参数或 fragment。未选中组可以留空。Main 在存储和业务服务初始化前加载、校验并固定本次配置，构建不把这些值注入 bundle。Main、服务配置读取和测试 runner 均使用 Node `parseEnv` 解析文件，支持引号和行尾注释，避免预加载产生不同的值。普通配置沿用非空进程变量优先于 `.env.local`、`.env` 的加载顺序；显式选择器可以用于单次启动，例如 `NCURATOR_SERVICE_ENV=production pnpm dev`。
-
-桌面请求签名仍使用 `NCURATOR_APP_SECRET_DESKTOP`，但按文件单独读取：`local` 只读取 `.env.local`，`production` 只读取 `.env`。不合并同名 Key，不采用继承进程中的 Key，不展开 Key 中的变量引用，也不从另一文件兜底。选中组 Key 缺失或非法时停止启动；实际服务不接受该 Key 时保留认证失败，不切换服务。生产 Key 应通过目标服务的只读签名接口安全核对，不能仅因本机有值便认定匹配。两环境的 Key 复用对应服务的现有值，不因切换重新生成。
-
-本地服务生成客户端配置后，在桌面项目运行：
-
-```bash
-node scripts/dev/sync-local-service-env.mjs <client.env> && pnpm dev
-```
-
-同步仅提取客户端 API、网页与桌面 Key，写入权限为 `0600` 的 `.env.local`，保留其他本地配置和 `.env`。脚本先使旧本地 Key 失效，再读取和校验新配置；每次原子替换前核对文件快照，检测到其他会话修改或删除文件时明确冲突退出，保留并发变更，不恢复或覆盖旧内容。源文件缺失、非法或同步失败时不启动桌面、不使用旧 Key，重新同步成功后才能启动。服务重建后必须重新同步并重启桌面；不要导入服务端完整 env、数据库或备份配置。源码本地环境使用 `ncurator-local` 用户目录，源码生产联调使用 `ncurator-dev`，正式包使用 `ncurator`，账号凭据和目录缓存分别保存。
-
-开发环境值、数据库和备份不得复制到构建资源；`.env` / `.env.local` 均不进入 staging 和安装包。发行包继续使用现有独立的发行 Key 配置和固定生产渠道。
-
 ## 2. 对象存储与公开通道
 
 每平台独立目录；只保留最新一份 `artifacts`；官网与自动更新共用同一 artifacts URL：
