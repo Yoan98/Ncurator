@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { HiPhoto } from 'react-icons/hi2'
 import { workbenchSelectors } from '../../testing/selectors'
 import type { ImageLightboxImage } from './ImageLightbox'
 import {
-  guessImageMimeType,
   isReadImageRemotePath,
   readImageDisplayName
 } from '../../../../shared/workbench/readImageThumbUtils'
+import { loadLocalImageUrl } from '../../utils/localImageObjectUrl'
 
 type ReadImageThumbsProps = {
   paths: string[]
@@ -15,63 +15,31 @@ type ReadImageThumbsProps = {
 
 const ReadImageThumbs: React.FC<ReadImageThumbsProps> = ({ paths, onPreviewImage }) => {
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({})
-  const previewUrlsRef = useRef<Record<string, string>>({})
-  const blobUrlsRef = useRef<Set<string>>(new Set())
   const pathsKey = paths.join('\0')
 
   useEffect(() => {
     let cancelled = false
-    const nextPaths = pathsKey.length > 0 ? pathsKey.split('\0') : []
-    const pathSet = new Set(nextPaths)
+    const localPaths = pathsKey.length > 0 ? pathsKey.split('\0') : []
 
-    Object.entries(previewUrlsRef.current).forEach(([pathValue, url]) => {
-      if (pathSet.has(pathValue)) return
-      if (blobUrlsRef.current.has(url)) {
-        URL.revokeObjectURL(url)
-        blobUrlsRef.current.delete(url)
-      }
-      delete previewUrlsRef.current[pathValue]
+    void Promise.all(
+      localPaths
+        .filter((pathValue) => !isReadImageRemotePath(pathValue))
+        .map(async (pathValue) => ({ pathValue, url: await loadLocalImageUrl(pathValue) }))
+    ).then((entries) => {
+      if (cancelled) return
+      setPreviewUrls((previous) => {
+        const next = { ...previous }
+        for (const entry of entries) {
+          if (entry.url) next[entry.pathValue] = entry.url
+        }
+        return next
+      })
     })
-
-    nextPaths.forEach((pathValue) => {
-      if (previewUrlsRef.current[pathValue]) return
-      if (isReadImageRemotePath(pathValue)) {
-        previewUrlsRef.current = { ...previewUrlsRef.current, [pathValue]: pathValue }
-        if (!cancelled) setPreviewUrls({ ...previewUrlsRef.current })
-        return
-      }
-      void window.api
-        .readFile(pathValue)
-        .then((bytes) => {
-          if (cancelled || previewUrlsRef.current[pathValue]) return
-          const arrayBuffer = new ArrayBuffer(bytes.byteLength)
-          new Uint8Array(arrayBuffer).set(bytes)
-          const blob = new Blob([arrayBuffer], { type: guessImageMimeType(pathValue) })
-          const url = URL.createObjectURL(blob)
-          blobUrlsRef.current.add(url)
-          previewUrlsRef.current = { ...previewUrlsRef.current, [pathValue]: url }
-          setPreviewUrls({ ...previewUrlsRef.current })
-        })
-        .catch(() => {
-          // Preview failure should not block the activity row.
-        })
-    })
-
-    if (!cancelled) setPreviewUrls({ ...previewUrlsRef.current })
 
     return () => {
       cancelled = true
     }
   }, [pathsKey])
-
-  useEffect(() => {
-    const blobUrls = blobUrlsRef.current
-    return () => {
-      blobUrls.forEach((url) => URL.revokeObjectURL(url))
-      blobUrls.clear()
-      previewUrlsRef.current = {}
-    }
-  }, [])
 
   if (paths.length === 0) return null
 
@@ -79,7 +47,7 @@ const ReadImageThumbs: React.FC<ReadImageThumbsProps> = ({ paths, onPreviewImage
     <div className="mt-1 flex max-w-full flex-nowrap gap-2 overflow-x-auto overflow-y-hidden pb-0.5">
       {paths.map((pathValue, index) => {
         const name = readImageDisplayName(pathValue)
-        const src = previewUrls[pathValue]
+        const src = isReadImageRemotePath(pathValue) ? pathValue : previewUrls[pathValue]
         return (
           <button
             key={`${pathValue}-${String(index)}`}

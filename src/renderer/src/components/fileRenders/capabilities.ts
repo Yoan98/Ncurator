@@ -1,9 +1,23 @@
 import { t } from '../../i18n'
+import { IMAGE_FILE_EXTENSIONS, imageMimeFromExtension } from '../../../../shared/imageFiles'
 export const FILE_PREVIEW_SUPPORT_SUMMARY = t(
   ($) => $.editors.supportedFormatsPdfDocxPptxExcelMarkdownUtf8
 )
 
+const IMAGE_TYPE_ALIASES: Record<string, string> = Object.fromEntries([
+  ...IMAGE_FILE_EXTENSIONS.flatMap((extension) => {
+    const canonical = extension === 'jpeg' ? 'jpg' : extension
+    return [
+      [extension, canonical] as const,
+      [imageMimeFromExtension(extension), canonical] as const
+    ]
+  }),
+  // Non-standard but still emitted by some sources.
+  ['image/jpg', 'jpg'] as const
+])
+
 const TYPE_ALIASES: Record<string, string> = {
+  ...IMAGE_TYPE_ALIASES,
   pdf: 'pdf',
   'application/pdf': 'pdf',
   docx: 'docx',
@@ -22,21 +36,7 @@ const TYPE_ALIASES: Record<string, string> = {
   markdown: 'md',
   'text/markdown': 'md',
   txt: 'txt',
-  'text/plain': 'txt',
-  png: 'png',
-  'image/png': 'png',
-  jpg: 'jpg',
-  jpeg: 'jpg',
-  'image/jpg': 'jpg',
-  'image/jpeg': 'jpg',
-  gif: 'gif',
-  'image/gif': 'gif',
-  webp: 'webp',
-  'image/webp': 'webp',
-  bmp: 'bmp',
-  'image/bmp': 'bmp',
-  svg: 'svg',
-  'image/svg+xml': 'svg'
+  'text/plain': 'txt'
 }
 
 const KNOWN_UNSUPPORTED_BINARY_TYPES = new Set([
@@ -59,22 +59,14 @@ const KNOWN_UNSUPPORTED_BINARY_TYPES = new Set([
   'gz'
 ])
 
-export const IMAGE_PREVIEW_FILE_TYPES = [
-  'png',
-  'image/png',
-  'jpg',
-  'jpeg',
-  'image/jpg',
-  'image/jpeg',
-  'gif',
-  'image/gif',
-  'webp',
-  'image/webp',
-  'bmp',
-  'image/bmp',
-  'svg',
-  'image/svg+xml'
-]
+export const IMAGE_PREVIEW_FILE_TYPES = Array.from(
+  new Set(
+    IMAGE_FILE_EXTENSIONS.flatMap((extension) => [
+      extension,
+      imageMimeFromExtension(extension)
+    ]).concat('image/jpg')
+  )
+)
 
 export const getFileExtension = (fileName: string): string => {
   const name = fileName.split(/[\\/]/).pop() || ''

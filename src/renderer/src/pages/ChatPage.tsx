@@ -66,6 +66,7 @@ import { useNavigate } from 'react-router-dom'
 import { normalizeUserFacingError } from '../utils/userFacingError'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
+import UserMessageBody from '../components/workbench/UserMessageBody'
 import { FullAccessConfirmModal } from '../components/workbench/FullAccessConfirmModal'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import HumanInteractionCard from '../components/workbench/HumanInteractionCard'
@@ -97,7 +98,6 @@ import ImageLightbox from '../components/workbench/ImageLightbox'
 import AttachmentFileIcon from '../components/workbench/composer/AttachmentFileIcon'
 import { isAttachmentDocumentPreviewable } from '../components/workbench/composer/attachmentPresentation'
 import type { DroppedAttachmentItem } from '../components/workbench/WorkbenchComposer'
-import ChatContent from '../components/workbench/composer/ChatContent'
 import {
   DocumentSelectionContext,
   type DocumentSelectionState,
@@ -4704,45 +4704,41 @@ const ChatPage: React.FC = () => {
                 </div>
               </div>
             ) : null}
-            <div className="flex w-full min-w-0 flex-col items-end">
-              <div className="box-border w-fit max-w-[66%] min-w-0 rounded-[22px] bg-[#F4F4F2] px-4 py-2.5 text-[14px] leading-6 text-[#37352F] [overflow-wrap:anywhere]">
-                <div
-                  className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
-                  data-testid={workbenchSelectors.userMessageReferences}
-                >
-                  <ChatContent nodes={contentNodes} />
-                </div>
-              </div>
-              <div
-                className="mt-1 flex h-6 items-center justify-end gap-1.5 text-[12px] leading-none text-[#9B9A97] opacity-0 transition-opacity duration-150 group-hover/user-message:opacity-100"
-                data-testid={`${workbenchSelectors.userMessageActionsPrefix}-${messageItem.id}`}
-              >
-                <Tooltip title={t(($) => $.common.copy)}>
-                  <button
-                    type="button"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
-                    aria-label={t(($) => $.workbench.copyMessage)}
-                    data-testid={`${workbenchSelectors.userMessageCopyButtonPrefix}-${messageItem.id}`}
-                    onClick={() => void handleCopyUserMessage(messageItem)}
-                  >
-                    <HiOutlineClipboardDocument className="h-4 w-4" />
-                  </button>
-                </Tooltip>
-                {canEdit ? (
-                  <Tooltip title={t(($) => $.common.edit)}>
+            <UserMessageBody
+              messageId={messageItem.id}
+              contentNodes={contentNodes}
+              onToggle={() => {
+                shouldAutoScrollRef.current = false
+              }}
+              actions={
+                <>
+                  <Tooltip title={t(($) => $.common.copy)}>
                     <button
                       type="button"
                       className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
-                      aria-label={t(($) => $.workbench.editMessage)}
-                      data-testid={`${workbenchSelectors.userMessageEditButtonPrefix}-${messageItem.id}`}
-                      onClick={() => handleEditUserMessage(messageItem)}
+                      aria-label={t(($) => $.workbench.copyMessage)}
+                      data-testid={`${workbenchSelectors.userMessageCopyButtonPrefix}-${messageItem.id}`}
+                      onClick={() => void handleCopyUserMessage(messageItem)}
                     >
-                      <HiOutlinePencilSquare className="h-4 w-4" />
+                      <HiOutlineClipboardDocument className="h-4 w-4" />
                     </button>
                   </Tooltip>
-                ) : null}
-              </div>
-            </div>
+                  {canEdit ? (
+                    <Tooltip title={t(($) => $.common.edit)}>
+                      <button
+                        type="button"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+                        aria-label={t(($) => $.workbench.editMessage)}
+                        data-testid={`${workbenchSelectors.userMessageEditButtonPrefix}-${messageItem.id}`}
+                        onClick={() => handleEditUserMessage(messageItem)}
+                      >
+                        <HiOutlinePencilSquare className="h-4 w-4" />
+                      </button>
+                    </Tooltip>
+                  ) : null}
+                </>
+              }
+            />
           </div>
         </div>
       </div>
@@ -4763,6 +4759,7 @@ const ChatPage: React.FC = () => {
               content={messageItem.content}
               linkAccess={messageItem.linkAccess}
               onOpenReference={handleOpenMarkdownReference}
+              onOpenImage={setPreviewImage}
             />
           </div>
         </div>

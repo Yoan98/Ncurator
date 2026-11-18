@@ -1,9 +1,6 @@
 import { t } from '../../i18n'
-import {
-  basenamePath,
-  imageMimeFromPath,
-  resolveMarkdownImageLocalPath
-} from '../../../../shared/markdownImagePath'
+import { basenamePath, resolveMarkdownImageLocalPath } from '../../../../shared/markdownImagePath'
+import { imageMimeFromPath } from '../../../../shared/imageFiles'
 
 const LOCAL_PATH_ATTR = 'data-ncurator-local-path'
 

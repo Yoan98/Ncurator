@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   EFFORT_THUMB_RADIUS,
+  EFFORT_THUMB_SIZE,
+  EFFORT_TRACK_HEIGHT,
   effortFillWidth,
   effortIndexFromOffset,
   effortStopPositions
@@ -77,5 +79,14 @@ describe('effort slider geometry', () => {
 
   it('returns no stops when the model opens nothing', () => {
     expect(effortStopPositions(WIDTH, 0)).toEqual([])
+  })
+})
+
+describe('轨道与滑块的比例', () => {
+  it('轨道高写在几何常量里，不能靠 Tailwind h-6（根字号 14px 时只有 21px）', () => {
+    expect(EFFORT_TRACK_HEIGHT).toBe(24)
+    expect(EFFORT_THUMB_SIZE).toBe(27)
+    // 滑块只比轨道高 3px，视觉上是“贴在轨道上的圆片”，不是突起的球。
+    expect(EFFORT_THUMB_SIZE - EFFORT_TRACK_HEIGHT).toBe(3)
   })
 })

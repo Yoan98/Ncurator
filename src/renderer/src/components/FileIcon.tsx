@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { HiOutlineMusicalNote, HiOutlineVideoCamera } from 'react-icons/hi2'
+import { HiOutlineMusicalNote, HiOutlinePhoto, HiOutlineVideoCamera } from 'react-icons/hi2'
 import { PiFileMdLight, PiFileTextLight } from 'react-icons/pi'
 import { BsFolder, BsFolder2Open } from 'react-icons/bs'
 import { LuGlobe } from 'react-icons/lu'
@@ -49,11 +49,13 @@ const FileIcon: FC<FileIconProps> = ({ name = '', extension, kind, expanded, cla
         ? HiOutlineMusicalNote
         : iconKind === 'video'
           ? HiOutlineVideoCamera
-          : iconKind === 'web'
-            ? LuGlobe
-            : iconKind === 'markdown'
-              ? PiFileMdLight
-              : PiFileTextLight
+          : iconKind === 'image'
+            ? HiOutlinePhoto
+            : iconKind === 'web'
+              ? LuGlobe
+              : iconKind === 'markdown'
+                ? PiFileMdLight
+                : PiFileTextLight
   return <Icon {...iconProps} />
 }
 

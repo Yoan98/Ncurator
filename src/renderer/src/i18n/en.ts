@@ -918,6 +918,8 @@ export const en = {
     couldNotEdit: 'Could not edit',
     copyMessage: 'Copy message',
     editMessage: 'Edit message',
+    expandMessage: 'Show full message',
+    collapseMessage: 'Show less',
     unpin: 'Unpin',
     pin: 'Pin',
     editPartner: 'Edit partner',

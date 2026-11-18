@@ -197,7 +197,7 @@ export const CustomMarkdownRenderer: DocRenderer = ({ mainState }: DocRendererPr
             className="px-8 py-6"
             data-testid={workbenchSelectors.markdownViewer}
           >
-            <MarkdownRenderer content={text} />
+            <MarkdownRenderer content={text} sourceFilePath={currentDocument.filePath} />
           </div>
         )
       }

@@ -871,6 +871,8 @@ export const zh = {
     couldNotEdit: '编辑失败',
     copyMessage: '复制消息',
     editMessage: '编辑消息',
+    expandMessage: '展开全文',
+    collapseMessage: '收起',
     unpin: '取消置顶',
     pin: '置顶',
     editPartner: '编辑伙伴',

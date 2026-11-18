@@ -262,3 +262,147 @@ export const transformAssistantMarkdownUrl = (url: string): string => {
   }
   return value
 }
+
+const FENCE_LINE_RE = /^ {0,3}(`{3,}|~{3,})/u
+
+/**
+ * Mask positions that belong to fenced code blocks or inline code spans, so the
+ * destination repair below never rewrites code samples.
+ */
+const maskMarkdownCodeSegments = (markdown: string): Uint8Array => {
+  const mask = new Uint8Array(markdown.length)
+  let lineStart = 0
+  let openFence: { char: string; size: number } | null = null
+
+  while (lineStart <= markdown.length) {
+    const newlineIndex = markdown.indexOf('\n', lineStart)
+    const lineEnd = newlineIndex === -1 ? markdown.length : newlineIndex
+    const fenceMatch = FENCE_LINE_RE.exec(markdown.slice(lineStart, lineEnd))
+
+    if (openFence) {
+      mask.fill(1, lineStart, lineEnd)
+      if (
+        fenceMatch &&
+        fenceMatch[1][0] === openFence.char &&
+        fenceMatch[1].length >= openFence.size
+      ) {
+        openFence = null
+      }
+    } else if (fenceMatch) {
+      openFence = { char: fenceMatch[1][0], size: fenceMatch[1].length }
+      mask.fill(1, lineStart, lineEnd)
+    }
+
+    if (newlineIndex === -1) break
+    lineStart = newlineIndex + 1
+  }
+
+  let cursor = 0
+  while (cursor < markdown.length) {
+    if (mask[cursor] || markdown[cursor] !== '`') {
+      cursor += 1
+      continue
+    }
+
+    let runEnd = cursor
+    while (markdown[runEnd] === '`') runEnd += 1
+    const runLength = runEnd - cursor
+
+    let search = runEnd
+    let closingEnd = -1
+    while (search < markdown.length) {
+      if (markdown[search] !== '`') {
+        search += 1
+        continue
+      }
+      let end = search
+      while (markdown[end] === '`') end += 1
+      if (end - search === runLength) {
+        closingEnd = end
+        break
+      }
+      search = end
+    }
+
+    if (closingEnd === -1) {
+      cursor = runEnd
+      continue
+    }
+    mask.fill(1, cursor, closingEnd)
+    cursor = closingEnd
+  }
+
+  return mask
+}
+
+const looksLikeLinkTarget = (value: string): boolean => {
+  if (/^(?:[a-zA-Z]:[\\/]|\/|~[\\/]|\.{1,2}[\\/])/u.test(value)) return true
+  if (/^(?:https?|file):\/\//iu.test(value)) return true
+  return /\.[a-z0-9]{1,8}$/iu.test(value)
+}
+
+const wrapSpacedDestination = (destination: string): string => {
+  const trimmed = destination.trim()
+  if (!trimmed || !/\s/u.test(trimmed)) return destination
+  if (trimmed.startsWith('<') || trimmed.endsWith('>')) return destination
+  // `[label](path "title")` keeps its title; wrapping would swallow it.
+  if (/["'“”]/u.test(trimmed)) return destination
+  if (!looksLikeLinkTarget(trimmed)) return destination
+  return `<${trimmed}>`
+}
+
+/**
+ * Wrap link / image destinations that contain spaces but were not written in the
+ * `<…>` form, e.g. `[报告](/Users/me/My Docs/a.pdf)`.
+ *
+ * CommonMark rejects a bare destination with spaces, so such links silently
+ * degrade to plain text and the UI loses the reference. Repairing them here keeps
+ * the model contract to "write a normal Markdown link"; code samples are left
+ * untouched.
+ */
+export const repairMarkdownLinkDestinations = (markdown: string): string => {
+  if (!markdown.includes('](')) return markdown
+  const codeMask = maskMarkdownCodeSegments(markdown)
+  let output = ''
+  let cursor = 0
+
+  while (cursor < markdown.length) {
+    const markerIndex = markdown.indexOf('](', cursor)
+    if (markerIndex === -1) break
+
+    const destinationStart = markerIndex + 2
+    if (codeMask[markerIndex] || codeMask[destinationStart]) {
+      output += markdown.slice(cursor, destinationStart)
+      cursor = destinationStart
+      continue
+    }
+
+    if (markdown[destinationStart] === '<') {
+      output += markdown.slice(cursor, destinationStart + 1)
+      cursor = destinationStart + 1
+      continue
+    }
+
+    let destinationEnd = -1
+    for (let index = destinationStart; index < markdown.length; index += 1) {
+      const char = markdown[index]
+      if (char === '\n') break
+      if (char === ')' && !isEscapedAt(markdown, index)) {
+        destinationEnd = index
+        break
+      }
+    }
+
+    if (destinationEnd === -1) {
+      output += markdown.slice(cursor, destinationStart)
+      cursor = destinationStart
+      continue
+    }
+
+    const destination = markdown.slice(destinationStart, destinationEnd)
+    output += markdown.slice(cursor, destinationStart) + wrapSpacedDestination(destination)
+    cursor = destinationEnd
+  }
+
+  return output + markdown.slice(cursor)
+}

@@ -880,6 +880,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 content={visibleAnswerMarkdown}
                 linkAccess={turn.linkAccess}
                 onOpenReference={onOpenReference}
+                onOpenImage={onPreviewImage}
               />
             </div>
           ) : null}

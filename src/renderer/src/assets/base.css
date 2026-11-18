@@ -2164,6 +2164,10 @@ mark {
   color: #37352f !important;
 }
 
+.assistant-thought-collapsed .markdown-body--thought .markdown-image {
+  display: none !important;
+}
+
 .markdown-body a {
   color: var(--notion-accent-blue);
   text-decoration: none;
@@ -2255,10 +2259,22 @@ mark {
   box-shadow: none !important;
 }
 
-.markdown-body pre code {
+/* Block code: react-markdown v10 no longer passes `inline`, so every code node
+   also carries .markdown-inline-code. Strip that chrome again inside <pre>. */
+.markdown-body pre > code,
+.markdown-body pre > code.markdown-inline-code {
+  display: block;
+  margin: 0;
+  padding: 12px 14px;
   border: 0;
+  border-radius: 0;
   background: transparent;
-  padding: 0;
+  color: var(--ink-2);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  tab-size: 2;
+  white-space: pre;
 }
 
 .markdown-body blockquote {
@@ -2272,6 +2288,60 @@ mark {
 
 .markdown-body blockquote p {
   color: inherit;
+}
+
+.markdown-body .markdown-image {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 100%;
+  margin: 0.4rem 0;
+  vertical-align: top;
+}
+
+.markdown-body .markdown-image-frame {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--ink-line);
+  border-radius: 8px;
+  background: var(--ink-paper-soft);
+  line-height: 0;
+}
+
+.markdown-body button.markdown-image-frame {
+  cursor: zoom-in;
+}
+
+.markdown-body .markdown-image-frame--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 72px;
+  color: var(--ink-4);
+}
+
+.markdown-body .markdown-image-el {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
+
+.markdown-body--thought .markdown-image-el {
+  max-height: 260px;
+}
+
+.markdown-body .markdown-image-caption {
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
 }
 
 .markdown-body .markdown-table-wrap {
@@ -2677,6 +2747,23 @@ mark {
   font-size: 11px;
   line-height: 1;
   text-align: center;
+}
+
+/* 用户长消息折叠：底部渐隐，提示正文还有内容；按钮在气泡下方操作行。 */
+.nc-user-message-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 34px;
+  border-radius: 0 0 22px 22px;
+  background: linear-gradient(
+    180deg,
+    rgba(244, 244, 242, 0) 0%,
+    rgba(244, 244, 242, 0.62) 46%,
+    #f4f4f2 100%
+  );
+  pointer-events: none;
 }
 
 .nc-clear-context-capsule,

@@ -878,12 +878,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         {contextUsage.usedContextTokens.toLocaleString(getRendererRuntime().locale)} /{' '}
         {contextUsage.contextWindowTokens.toLocaleString(getRendererRuntime().locale)} tokens
       </div>
-      <div className="text-[#787774]">
-        {t(($) => $.workbench.contextUsageThreshold)} ·{' '}
-        {contextUsage.basis === 'usage_plus_delta'
-          ? t(($) => $.workbench.contextUsageMeasured)
-          : t(($) => $.workbench.contextUsageEstimated)}
-      </div>
     </div>
   ) : (
     t(($) => $.workbench.contextUsageUnavailable)

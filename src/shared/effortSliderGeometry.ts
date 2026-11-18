@@ -14,6 +14,11 @@
 export const EFFORT_THUMB_SIZE = 27
 /** 滑块圆点半径，同时是点位的内缩量。 */
 export const EFFORT_THUMB_RADIUS = EFFORT_THUMB_SIZE / 2
+/**
+ * 轨道高度。必须写像素：本项目根字号是 14px，Tailwind 的 h-6 = 1.5rem = 21px，
+ * 会让轨道明显细于 27px 的滑块，比例失衡。
+ */
+export const EFFORT_TRACK_HEIGHT = 24
 
 /** 每个档位中心点的横坐标（相对轨道左端）。 */
 export function effortStopPositions(width: number, count: number): number[] {
@@ -24,7 +29,12 @@ export function effortStopPositions(width: number, count: number): number[] {
   return Array.from({ length: count }, (_, index) => inset + (inner * index) / (count - 1))
 }
 
-/** 填充宽度：从轨道左端到滑块左缘，首档时为 0。 */
+/**
+ * 填充宽度：从轨道左端画到滑块左缘，首档时为 0。
+ *
+ * 与参考图一致：填充末端与滑块之间的 1px 缝就是滑块的 border，
+ * 所以不能把它当成间距去掉。
+ */
 export function effortFillWidth(activeX: number): number {
   return Math.max(0, activeX - EFFORT_THUMB_RADIUS)
 }

@@ -26,7 +26,19 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'user-message-actions'
-const RUNNING_MESSAGE = `请根据我刚附上的文件做一个简短说明。下面的网址仅用于界面换行验证，不需要打开：https://example.com/view/${'a'.repeat(36)}?token=${'b'.repeat(64)}`
+const RUNNING_MESSAGE = [
+  `请根据我刚附上的文件做一个简短说明。下面的网址仅用于界面换行验证，不需要打开：https://example.com/view/${'a'.repeat(36)}?token=${'b'.repeat(64)}`,
+  '',
+  '下面几行只用于验证用户消息的折叠高度，不需要逐条处理：',
+  '一、背景：这次会话同时包含附件、参考资料和长正文；',
+  '二、目标：确认折叠后气泡保持固定高度，展开后能看到完整内容；',
+  '三、范围：只检查用户消息气泡，不改变 assistant 的展示；',
+  '四、约束：复制仍然复制全文，编辑规则不变；',
+  '五、验收：折叠入口在气泡下方操作行，短消息不出现入口；',
+  '六、说明：这些行是合成文本，不包含真实业务数据；',
+  '七、补充：折叠时底部渐隐，展开后取消渐隐；',
+  '八、结束：请仍然只回复一句简短说明。'
+].join('\n')
 const EDITED_MESSAGE = '这是编辑后的全新任务，请只回复：编辑后新任务。'
 const ONE_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=',
@@ -113,7 +125,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['message'],
         description:
-          '验证用户消息 hover 操作、latest turn 编辑撤回、running 态隐藏编辑，以及用户消息附件独立展示和输入框附件关闭按钮无遮挡。',
+          '验证用户消息长文本折叠与展开、hover 操作、latest turn 编辑撤回、running 态隐藏编辑，以及用户消息附件独立展示和输入框附件关闭按钮无遮挡。',
         fixtures: ['tests/fixtures/workspace'],
         knowledge: 'cached',
         serviceMode: 'real',
@@ -146,7 +158,7 @@ describe('workbench conversation e2e', () => {
               if (!setup) throw new Error('workspace setup missing')
               await navigateToWorkbench(page)
               await getWorkbenchLocator(page, workbenchSelectors.input).click()
-              await page.keyboard.type(RUNNING_MESSAGE)
+              await setWorkbenchInput(page, RUNNING_MESSAGE)
               await page.keyboard.press('Space')
               await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
               await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.markdownPath)
@@ -193,6 +205,53 @@ describe('workbench conversation e2e', () => {
             { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
           )
           const runningUser = latestUserMessage(page)
+          const runningUserText = runningUser.locator(
+            `[data-testid="${workbenchSelectors.userMessageReferences}"]`
+          )
+          const foldToggle = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.userMessageFoldTogglePrefix
+          ).last()
+          await foldToggle.waitFor({ state: 'visible' })
+          const foldToggleTestId = await foldToggle.getAttribute('data-testid')
+          if (!foldToggleTestId) throw new Error('user message fold toggle missing test id')
+          const collapsedBubbleHeight = await runningUserText.evaluate(
+            (element) => (element.parentElement as HTMLElement).getBoundingClientRect().height
+          )
+          const collapsedTextHeight = await runningUserText.evaluate(
+            (element) => element.getBoundingClientRect().height
+          )
+          const collapsedTextScrollHeight = await runningUserText.evaluate(
+            (element) => element.scrollHeight
+          )
+          const collapseToggleLabel = ((await foldToggle.textContent()) || '').trim()
+          await foldToggle.click()
+          await page.waitForFunction(
+            (input: { testId: string; expected: string }) =>
+              document
+                .querySelector(`[data-testid="${input.testId}"]`)
+                ?.textContent?.includes(input.expected) === true,
+            { testId: foldToggleTestId, expected: '收起' },
+            { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
+          )
+          const expandedToggleLabel = ((await foldToggle.textContent()) || '').trim()
+          const expandedAria = await foldToggle.getAttribute('aria-expanded')
+          const expandedTextHeight = await runningUserText.evaluate(
+            (element) => element.getBoundingClientRect().height
+          )
+          await foldToggle.click()
+          await page.waitForFunction(
+            (input: { testId: string; expected: string }) =>
+              document
+                .querySelector(`[data-testid="${input.testId}"]`)
+                ?.textContent?.includes(input.expected) === true,
+            { testId: foldToggleTestId, expected: '展开全文' },
+            { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
+          )
+          const restoredTextHeight = await runningUserText.evaluate(
+            (element) => element.getBoundingClientRect().height
+          )
+          const restoredAria = await foldToggle.getAttribute('aria-expanded')
           await runningUser.hover()
           const runningEditButtons = await getWorkbenchPrefixLocator(
             page,
@@ -351,6 +410,13 @@ describe('workbench conversation e2e', () => {
             WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
             { page }
           )
+          const editedUserMessage = latestUserMessage(page)
+          const shortMessageFoldToggleCount = await editedUserMessage
+            .locator(`[data-testid^="${workbenchSelectors.userMessageFoldTogglePrefix}-"]`)
+            .count()
+          const shortMessageTextHeight = await editedUserMessage
+            .locator(`[data-testid="${workbenchSelectors.userMessageReferences}"]`)
+            .evaluate((element) => element.getBoundingClientRect().height)
           return {
             actionButtonsVisible,
             actionsHasHoverTime: /\d{1,2}:\d{2}/.test(actionsText),
@@ -374,7 +440,18 @@ describe('workbench conversation e2e', () => {
             bubbleGeometry,
             attachmentsAboveBubble: Boolean(
               firstAttachmentBox && bubbleBox && firstAttachmentBox.y < bubbleBox.y
-            )
+            ),
+            collapsedBubbleHeight,
+            collapsedTextHeight,
+            collapsedTextScrollHeight,
+            collapseToggleLabel,
+            expandedToggleLabel,
+            expandedAria,
+            expandedTextHeight,
+            restoredTextHeight,
+            restoredAria,
+            shortMessageFoldToggleCount,
+            shortMessageTextHeight
           }
         },
         assert: async (result, runtime) => {
@@ -397,11 +474,22 @@ describe('workbench conversation e2e', () => {
               result.bubbleGeometry.bubbleLeft >= result.bubbleGeometry.messageLeft - 1 &&
               result.bubbleGeometry.bubbleRight <= result.bubbleGeometry.messageRight + 1 &&
               result.bubbleGeometry.scrollWidth <= result.bubbleGeometry.clientWidth + 1 &&
-              result.attachmentsAboveBubble,
+              result.attachmentsAboveBubble &&
+              Math.abs(result.collapsedBubbleHeight - 188) <= 1 &&
+              Math.abs(result.collapsedTextHeight - 168) <= 1 &&
+              result.collapsedTextScrollHeight > result.collapsedTextHeight + 1 &&
+              result.collapseToggleLabel === '展开全文' &&
+              result.expandedToggleLabel === '收起' &&
+              result.expandedAria === 'true' &&
+              Math.abs(result.expandedTextHeight - result.collapsedTextScrollHeight) <= 2 &&
+              Math.abs(result.restoredTextHeight - 168) <= 1 &&
+              result.restoredAria === 'false' &&
+              result.shortMessageFoldToggleCount === 0 &&
+              result.shortMessageTextHeight < 168,
             {
               name: 'workbench-user-message-actions-and-attachments',
               message:
-                '用户消息气泡上方应居中展示时间条；hover 后应显示复制/编辑且不含时间；编辑会撤回 latest turn 及其消息日志并以新 run 重发；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示且顶边不被横滑裁切，只显示文件名、不显示副标题，输入框附件关闭按钮无遮挡。',
+                '用户消息气泡上方应居中展示时间条；长消息默认折叠到正文 168px、气泡 188px，底部渐隐，操作行可见「展开全文」；展开后显示完整文本并变为「收起」，收起后恢复 168px；短消息不出现折叠入口；hover 后应显示复制/编辑且不含时间；编辑会撤回 latest turn 及其消息日志并以新 run 重发；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示且顶边不被横滑裁切，只显示文件名、不显示副标题，输入框附件关闭按钮无遮挡。',
               data: result
             }
           )

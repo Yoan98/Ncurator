@@ -35,27 +35,6 @@ export const joinFsPath = (baseDir: string, relative: string): string => {
   return stack.join('/')
 }
 
-const guessImageMime = (filePath: string): string => {
-  const extension = filePath.split('.').pop()?.toLowerCase()
-  switch (extension) {
-    case 'png':
-      return 'image/png'
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg'
-    case 'gif':
-      return 'image/gif'
-    case 'webp':
-      return 'image/webp'
-    case 'bmp':
-      return 'image/bmp'
-    case 'svg':
-      return 'image/svg+xml'
-    default:
-      return 'application/octet-stream'
-  }
-}
-
 /**
  * Returns an absolute local path when `rawSrc` should be loaded from disk.
  * Returns null for http(s)/data/blob and other non-local destinations.
@@ -90,5 +69,3 @@ export const basenamePath = (filePath: string): string => {
   const index = normalized.lastIndexOf('/')
   return index < 0 ? normalized : normalized.slice(index + 1)
 }
-
-export const imageMimeFromPath = guessImageMime

@@ -5,6 +5,7 @@ import type { LlmEffort } from '../../../../shared/llmPresets'
 import {
   EFFORT_THUMB_RADIUS,
   EFFORT_THUMB_SIZE,
+  EFFORT_TRACK_HEIGHT,
   effortFillWidth,
   effortIndexFromOffset,
   effortStopPositions
@@ -178,12 +179,17 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
         onLostPointerCapture={endDrag}
         onKeyDown={handleKeyDown}
       >
-        {/* 轨道：24px 粗胶囊 */}
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 h-6 -translate-y-1/2 rounded-full bg-[#F4F4F2]" />
-        {/* 填充：轨道左端 → 滑块左缘 */}
+        {/* 轨道：24px 粗胶囊。
+            注意不能写 h-6 —— 本项目根字号是 14px，h-6 = 1.5rem = 21px，
+            会让轨道做细、跟 27px 的滑块比例失调。 */}
         <div
-          className="pointer-events-none absolute left-0 top-1/2 h-6 -translate-y-1/2 rounded-full bg-[#0B6BCB] transition-[width] duration-150"
-          style={{ width: effortFillWidth(activeX) }}
+          className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 rounded-full bg-[#F4F4F2]"
+          style={{ height: EFFORT_TRACK_HEIGHT }}
+        />
+        {/* 填充：从轨道左端到滑块左缘 */}
+        <div
+          className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 rounded-full bg-[#0B6BCB] transition-[width] duration-150"
+          style={{ height: EFFORT_TRACK_HEIGHT, width: effortFillWidth(activeX) }}
         />
         {/* 档位小点：4px，已过档位用浅蓝 */}
         {effort.options.map((option, optionIndex) => {
@@ -214,7 +220,9 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
             />
           )
         })}
-        {/* 滑块圆点：盖在轨道上，靠阴影浮起 */}
+        {/* 滑块圆点。参考图实测：白圆 + 1px 灰色硬边（#E4E4E5），无模糊阴影。
+            用 border 而不是 box-shadow：box-shadow 画在盒子外侧，会在填充与滑块之间
+            旦出 1px 缝；border 画在盒内，圆点外径保持 27px 不变。 */}
         <div
           aria-hidden="true"
           className="pointer-events-none absolute top-1/2 rounded-full bg-white transition-[left] duration-150"
@@ -224,9 +232,7 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
             height: THUMB_SIZE,
             marginLeft: -THUMB_RADIUS,
             marginTop: -THUMB_RADIUS,
-            boxShadow: dragging
-              ? '0 2px 6px rgba(15,15,15,0.24), 0 0 0 0.5px rgba(15,15,15,0.04)'
-              : '0 1px 2.5px rgba(15,15,15,0.22), 0 0 0 0.5px rgba(15,15,15,0.04)'
+            border: `1px solid ${dragging ? '#D8D8D9' : '#E4E4E5'}`
           }}
         />
       </div>

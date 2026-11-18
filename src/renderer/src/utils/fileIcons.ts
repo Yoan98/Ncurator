@@ -1,3 +1,5 @@
+import { isImageFileExtension } from '../../../shared/imageFiles'
+
 export type FileIconKind =
   | 'directory'
   | 'web'
@@ -7,6 +9,7 @@ export type FileIconKind =
   | 'ppt'
   | 'audio'
   | 'video'
+  | 'image'
   | 'markdown'
   | 'file'
 
@@ -83,6 +86,12 @@ const FILE_VISUAL_SPECS: Record<FileIconKind, FileVisualSpec> = {
     documentFillClassName: 'fill-none',
     documentAccentClassName: 'fill-none'
   },
+  image: {
+    kind: 'image',
+    iconClassName: 'text-[#0F766E]',
+    documentFillClassName: 'fill-none',
+    documentAccentClassName: 'fill-none'
+  },
   markdown: {
     kind: 'markdown',
     iconClassName: 'text-[#787774]',
@@ -112,6 +121,7 @@ export const getFileIconKind = (name: string, extension?: string): FileIconKind 
     normalizeFileExtension(extension) ||
     (dotIndex > -1 ? normalizeFileExtension(filename.slice(dotIndex + 1)) : '')
   if (fileExt === 'md' || fileExt === 'markdown') return 'markdown'
+  if (isImageFileExtension(fileExt)) return 'image'
   if (fileExt === 'pdf') return 'pdf'
   if (fileExt === 'docx') return 'docx'
   if (['xls', 'xlsx', 'xlsm', 'xltx', 'xltm', 'csv'].includes(fileExt)) return 'xlsx'

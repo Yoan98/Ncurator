@@ -260,6 +260,7 @@ export const workbenchSelectors = {
   userMessagePrefix: 'workbench-user-message',
   userMessageTimePrefix: 'workbench-user-message-time',
   userMessageActionsPrefix: 'workbench-user-message-actions',
+  userMessageFoldTogglePrefix: 'workbench-user-message-fold-toggle',
   userMessageCopyButtonPrefix: 'workbench-user-message-copy-button',
   userMessageEditButtonPrefix: 'workbench-user-message-edit-button',
   editMessageConfirmButton: 'workbench-edit-message-confirm-button',
