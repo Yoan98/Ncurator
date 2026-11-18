@@ -246,7 +246,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：馆长目录登录边界、选择保持、动态折扣及公开信息展示。
 - Why：登录或充值后自动改模型、旧账号缓存及采购信息泄漏会造成误收费或隐私问题。
-- How：使用独立 Account 测试服务的馆长目录联调配置，按需执行 `pnpm test:e2e:source --case managed-model-catalog`。在真实桌面核对未登录引导，网页登录授权后以零余额打开馆长详情。经管理网页修改馆长条目的简介、价格档位和售价，在桌面刷新核对变化，随后显式选中条目，比较列表与 Composer 名称的实际文字颜色，并核对圆圈最大值，再通过测试渠道充值、停用条目，再退出并以另一账号授权。选中免费与个人连接时的登录状态变化由 Account 的 `anonymous-existing-usage` 回归，复杂时段和数据输出由官网目录接口及管理 E2E 验证。
+- How：使用独立 Account 测试服务的馆长目录联调配置，按需执行 `pnpm test:e2e:source --case managed-model-catalog`。在真实桌面核对未登录引导，网页登录授权后以零余额打开馆长详情。经管理网页修改馆长条目的简介、价格档位和售价，重新打开桌面模型列表，由自动目录读取核对变化（不依赖普通列表已移除的常驻刷新按钮）；显式选中条目时比较列表与 Composer 名称的实际文字颜色，并核对圆圈最大值，目录更新后保持已选状态。再通过测试渠道充值、停用条目，重新打开列表核对停用结果，再退出并以另一账号授权。选中免费与个人连接时的登录状态变化由 Account 的 `anonymous-existing-usage` 回归，复杂时段和数据输出由官网目录接口及管理 E2E 验证。
 - Oracle：登录前显示单行优惠入口，零余额可读馆长目录，登录、充值、刷新及失效不换型号或计费方式，旧账号受保护目录不再展示，覆盖 `WB-COMPOSER-007-AC20`。列表与侧栏的折扣随目录同步更新，侧栏显示馆长余额、目录返回的整段简介及已配置的价格档位。简介中配置的折扣说明随刷新出现，省略单价、分时明细及采购信息，覆盖 `WB-COMPOSER-007-AC21`，并补充 `WB-COMPOSER-007-AC2/AC3` 的馆长区域。选中名称的实际文字颜色与暖棕色列表行一致，补证 `WB-COMPOSER-007-AC4`。圆圈最大值为测试馆长条目 131,072 Token 容量对应的 104,857 Token，覆盖 `WB-COMPOSER-008-AC3` 的 UI 部分。
 - `desktop-account.test.ts` 中的 `reads managed pricing with the active account and drops a response delivered after account change` 补证目录签名、折扣更新、按条目 ID 解析上下文窗口、运行和圆圈共用的窗口取值及旧账号响应隔离。
 
@@ -717,7 +717,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e / exclusive`
 - What：真实 AI 写回并回退已有 docx、xlsx、pptx 后，馆长回环 `GET /status` 对每条路径各记录至少一次 open dispatch。
 - Why：WPS 窗口刷新依赖加载项；若馆长写盘后没有 dispatch，窗口不可能更新。这条不打开 WPS，用来单独定位三种格式的挂钩。只测 docx 不能证明表格 / 演示写盘也会通知。回环优先端口 `18723`，并行包测会抢端口，因此独占执行。
-- How：通过真实 Workbench UI 依次选择 `sample-edit.docx`、`经营周报.xlsx`、`品牌策略提案.pptx`，编辑指令明确包含当前目标文件名和本轮标记。不连接 `/events`、不打开 WPS。每种格式写回后轮询 `127.0.0.1` 的 `/status`，确认 `lastDispatches` 含该路径；再确认回退后再增加一次。
+- How：从现有共享 fixture 创建隔离临时副本，在注册工作区前仅保留 `WPS_OFFICE_COVERAGE_TARGETS` 指定的 `sample-edit.docx`、`经营周报.xlsx`、`品牌策略提案.pptx`；不改公共样本、不生成替代数据。保留真实 UI 扫描与索引准备，不让无关大文档的冷向量化占用本专项前置预算。通过真实 Workbench UI 依次选择三份文件，编辑指令明确包含当前目标文件名和本轮标记。不连接 `/events`、不打开 WPS。每种格式写回后轮询 `127.0.0.1` 的 `/status`，确认 `lastDispatches` 含该路径；再确认回退后再增加一次。
 - Oracle：磁盘写回含标记、回退恢复原文；每种格式写回后该路径至少 1 次 dispatch，回退后次数继续增加，对齐 `WB-WPS-001-AC2`、`WB-WPS-001-AC3`。无客户端时仍记录 dispatch；未连接时不发 close，对齐 `WB-WPS-001-AC4`。
 
 #### `wps-office-review-navigation`

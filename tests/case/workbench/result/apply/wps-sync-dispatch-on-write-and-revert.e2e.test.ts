@@ -1,3 +1,4 @@
+import { access, readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -44,7 +45,21 @@ describe('workbench result e2e', () => {
           const { page } = runtime
           // Helpers without an explicit locator timeout must not wait for the whole release deadline.
           page.setDefaultTimeout(UI_TIMEOUT_MS)
-          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          const setup = await setupWorkbenchWithTempWorkspace(page, {
+            caseId: CASE_ID,
+            workspaceContents: 'shared-fixture',
+            prepareWorkspace: async (rootPath) => {
+              // Trim only this temporary copy before the real UI scan/index workflow.
+              // Unrelated large documents must not dominate the WPS dispatch setup.
+              const targetNames = new Set(WPS_OFFICE_COVERAGE_TARGETS.map((target) => target.fileName))
+              for (const fileName of targetNames) await access(path.join(rootPath, fileName))
+              for (const entry of await readdir(rootPath)) {
+                if (!targetNames.has(entry)) {
+                  await rm(path.join(rootPath, entry), { recursive: true, force: true })
+                }
+              }
+            }
+          })
           const files: Array<{
             kind: string
             fileName: string

@@ -43,7 +43,6 @@ it('managed-model-catalog', async () => {
         const option = page.getByTestId(
           `${workbenchSelectors.modelSelectManagedOptionPrefix}-${model.id}`
         )
-        const refresh = getWorkbenchLocator(page, workbenchSelectors.modelSelectCatalogRefresh)
         const inspector = getWorkbenchLocator(page, workbenchSelectors.inspector)
         await createPartnerThroughWorkbenchUi(page, '馆长目录回归')
         await dismissWorkbenchLlmConfigMissingNotification(page)
@@ -64,7 +63,9 @@ it('managed-model-catalog', async () => {
         await picker.click()
         await option.getByText('DeepSeek V4.1 Flash', { exact: true }).waitFor()
         const icon = option.getByRole('img', { name: 'DeepSeek V4.1 Flash', exact: true })
-        await expect.poll(() => icon.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+        await expect
+          .poll(() => icon.evaluate((image: HTMLImageElement) => image.naturalWidth))
+          .toBeGreaterThan(0)
         await option.getByText(/7\.5\s*折/u).waitFor()
         await option.hover()
         await inspector.getByText('馆长余额', { exact: true }).waitFor()
@@ -72,12 +73,15 @@ it('managed-model-catalog', async () => {
         await inspector.getByText(/7\.5\s*折/u).waitFor()
         expect(await inspector.getByText(/百万 Token|参考价|峰时|谷时/u).count()).toBe(0)
         expect(await inspector.getByText(/fixture-model|Synthetic supplier/u).count()).toBe(0)
-        const optionColor = await option.getByText(modelName, { exact: true })
+        const optionColor = await option
+          .getByText(modelName, { exact: true })
           .evaluate((element) => getComputedStyle(element).color)
         await option.click()
         const selectedLabel = picker.getByText(modelName, { exact: true })
         await selectedLabel.waitFor()
-        expect(await selectedLabel.evaluate((element) => getComputedStyle(element).color)).toBe(optionColor)
+        expect(await selectedLabel.evaluate((element) => getComputedStyle(element).color)).toBe(
+          optionColor
+        )
         await getWorkbenchLocator(page, workbenchSelectors.contextRing).hover()
         await page.getByText('0 / 104,857 tokens', { exact: true }).waitFor()
 
@@ -103,7 +107,6 @@ it('managed-model-catalog', async () => {
         await admin.getByText('配置已保存。', { exact: true }).waitFor()
 
         await picker.click()
-        await refresh.click()
         await option.getByText(/8\s*折/u).waitFor()
         expect(await option.getAttribute('aria-selected')).toBe('true')
         await option.hover()
@@ -113,7 +116,7 @@ it('managed-model-catalog', async () => {
         await inspector.getByText('较低', { exact: true }).waitFor()
         await runtime.captureScreenshot({
           name: 'managed-model-catalog-refreshed',
-          message: '桌面刷新后显示后台保存的馆长模型简介和价格档位'
+          message: '重新打开列表后显示后台保存的馆长模型简介和价格档位'
         })
         await page.keyboard.press('Escape')
         await service.recharge(web)
@@ -123,7 +126,6 @@ it('managed-model-catalog', async () => {
         await admin.getByRole('button', { name: '保存模型', exact: true }).click()
         await admin.getByRole('row').filter({ hasText: modelName }).getByText('已停用').waitFor()
         await picker.click()
-        await refresh.click()
         await option.waitFor({ state: 'hidden' })
         await page.keyboard.press('Escape')
         await picker.getByText('已下架，请重新选择', { exact: true }).waitFor()
