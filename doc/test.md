@@ -86,7 +86,7 @@ tests/
 
 Account / Settings / Workbench 每项 PRD 验收必须通过完整 AC 编号登记到具体 case 的 Oracle，或本域计划的人工验收 / 自动化覆盖边界；可使用同需求的 `AC1/AC2` 缩写与明确的闭区间。仅引用需求编号不能代替逐项登记。跨 AI / Unit 的证据须指明实际 case / 文件和覆盖层次。架构校验只检查验收登记及 case 文件关系，不证明行为已执行或断言充分。
 
-本地执行 `node scripts/test/validate-test-architecture.mjs` 可独立核对登记。测试 runner 与 GitHub Actions 共用该检查，文档变更也执行。用例是否通过以对应执行产物为准。
+本地执行 `node scripts/test/validate-test-architecture.mjs` 可独立核对登记。测试 runner（`scripts/test/workflow.mjs`）在执行前统一跑该检查，文档变更也执行。用例是否通过以对应执行产物为准。
 
 ### 2.3 backend 正式 case 规则
 

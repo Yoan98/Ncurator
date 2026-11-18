@@ -150,7 +150,7 @@ gh auth status --hostname github.com
 node --env-file=.env -e "require('node:child_process').execFileSync('gh', ['api', '--method', 'GET', 'repos/Yoan98/Ncurator', '--jq', '.permissions.push'], { stdio: 'inherit' })"
 ```
 
-本地 `.env` 中的 Token 不提交到仓库；macOS / Linux 文件权限设为 `600`。正式包 E2E 子进程移除 `GH_TOKEN` / `GITHUB_TOKEN`。本地发布不读取 GitHub Actions Secrets。每个平台继续使用原有发布命令，COS、R2、GitHub 不另设正常发布开关或上传步骤。
+本地 `.env` 中的 Token 不提交到仓库；macOS / Linux 文件权限设为 `600`。正式包 E2E 子进程移除 `GH_TOKEN` / `GITHUB_TOKEN`。本地发布只读取本地 `.env`，不读取远端仓库 Secrets。每个平台继续使用原有发布命令，COS、R2、GitHub 不另设正常发布开关或上传步骤。
 
 `--publish-only` 按以下规则执行：
 
