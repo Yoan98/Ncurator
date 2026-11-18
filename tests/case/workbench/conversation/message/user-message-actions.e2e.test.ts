@@ -2,7 +2,7 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Page } from 'playwright'
+import type { Locator, Page } from 'playwright'
 import { describe, expect, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -52,6 +52,14 @@ const latestUserMessage = (page: Page) =>
 
 const latestUserMessageActions = (page: Page) =>
   getWorkbenchPrefixLocator(page, workbenchSelectors.userMessageActionsPrefix).last()
+
+/** 运行期存活信号：文字尾部黑球、冷启动占位球或 Activity header 流光。 */
+const countProcessLiveSignals = (scope: Locator): Promise<number> =>
+  scope
+    .locator(
+      `[data-live-tail="true"], [data-testid="${workbenchSelectors.assistantLiveDot}"], .workbench-thinking-shimmer`
+    )
+    .count()
 
 const waitForAssistantProcessWithoutGap = async (page: Page, durationMs = 700): Promise<void> => {
   await page.waitForFunction(
@@ -196,8 +204,10 @@ describe('workbench conversation e2e', () => {
           )
           const assistantProcess = await waitForLatestAssistantProcess(page)
           const assistantProcessTextAfterSend = (await assistantProcess.textContent()) || ''
+          const assistantLiveSignalAfterSend = await countProcessLiveSignals(assistantProcess)
           await waitForAssistantProcessWithoutGap(page)
           const assistantProcessTextAfterWait = (await assistantProcess.textContent()) || ''
+          const assistantLiveSignalAfterWait = await countProcessLiveSignals(assistantProcess)
           await page.waitForFunction(
             (input: { prefix: string }) =>
               document.querySelectorAll(`[data-testid^="${input.prefix}-"]`).length >= 1,
@@ -436,6 +446,8 @@ describe('workbench conversation e2e', () => {
             messageAttachmentTexts,
             assistantProcessTextAfterSend,
             assistantProcessTextAfterWait,
+            assistantLiveSignalAfterSend,
+            assistantLiveSignalAfterWait,
             interruptedRunCancelled: interruptedRunCancelled.type === 'run_cancelled',
             bubbleGeometry,
             attachmentsAboveBubble: Boolean(
@@ -465,9 +477,9 @@ describe('workbench conversation e2e', () => {
               result.runningEditButtons === 0 &&
               result.messageAttachmentTexts.length > 0 &&
               result.messageAttachmentTexts.every((text) => text === 'message-note.md') &&
-              result.assistantProcessTextAfterSend.includes('让俺想想') &&
-              (result.assistantProcessTextAfterWait.includes('让俺想想') ||
-                result.assistantProcessTextAfterWait.includes('处理中')) &&
+              result.assistantProcessTextAfterSend.length > 0 &&
+              result.assistantLiveSignalAfterSend > 0 &&
+              result.assistantLiveSignalAfterWait > 0 &&
               result.interruptedRunCancelled &&
               result.bubbleGeometry !== null &&
               result.bubbleGeometry.bubbleWidth <= result.bubbleGeometry.messageWidth * 0.66 + 1 &&
@@ -489,7 +501,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-user-message-actions-and-attachments',
               message:
-                '用户消息气泡上方应居中展示时间条；长消息默认折叠到正文 168px、气泡 188px，底部渐隐，操作行可见「展开全文」；展开后显示完整文本并变为「收起」，收起后恢复 168px；短消息不出现折叠入口；hover 后应显示复制/编辑且不含时间；编辑会撤回 latest turn 及其消息日志并以新 run 重发；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示且顶边不被横滑裁切，只显示文件名、不显示副标题，输入框附件关闭按钮无遮挡。',
+                '用户消息气泡上方应居中展示时间条；长消息默认折叠到正文 168px、气泡 188px，底部渐隐，操作行可见「展开全文」；展开后显示完整文本并变为「收起」，收起后恢复 168px；短消息不出现折叠入口；hover 后应显示复制/编辑且不含时间；编辑会撤回 latest turn 及其消息日志并以新 run 重发；running 中不显示编辑；发送后运行期存活信号不能闪断；文件附件应在用户消息气泡上方独立展示且顶边不被横滑裁切，只显示文件名、不显示副标题，输入框附件关闭按钮无遮挡。',
               data: result
             }
           )

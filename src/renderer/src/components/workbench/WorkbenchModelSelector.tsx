@@ -24,6 +24,7 @@ import {
   HiOutlineArrowUpRight
 } from 'react-icons/hi2'
 import { PiCoinBold } from 'react-icons/pi'
+import type { PartnerAvatarColor, PartnerAvatarShape } from '../../../../shared/types'
 import type {
   LLMConfig,
   LlmRemoteModel,
@@ -69,6 +70,8 @@ type WorkbenchModelSelectorProps = {
   onRefreshModelLists?: () => void | Promise<void>
   onAddManualModel: (configId: string, modelName: string) => Promise<void>
   onFreeModelsChange?: (models: FreeModelPublicEntry[]) => void
+  /** 当前伙伴形象，用于强度滑块的滑块外观。 */
+  partnerAvatar?: { shape: PartnerAvatarShape; color: PartnerAvatarColor } | null
   disabled?: boolean
   noDrag?: boolean
   hideTriggerIcon?: boolean
@@ -117,8 +120,16 @@ type MenuPosition = {
   maxHeight: number
 }
 
-const PRESET_MENU_MIN_WIDTH = 200
-const PRESET_MENU_MAX_WIDTH = 300
+/**
+ * 预设面板（含强度卡片）的固定宽度。
+ *
+ * 之前用 max-content 量内容再夹到 [200,300]，于是强度卡片和模型列表宽度不同：
+ * 从列表点回卡片时会重算宽度 → 视觉上「卡一下 + 宽度变了 + 滑块位置漂移」。
+ * 强度卡片和列表用同一个固定宽度，切换时不再重算。
+ */
+const PRESET_MENU_WIDTH = 280
+const PRESET_MENU_MIN_WIDTH = PRESET_MENU_WIDTH
+const PRESET_MENU_MAX_WIDTH = PRESET_MENU_WIDTH
 const CUSTOM_MENU_MIN_WIDTH = 280
 const CUSTOM_MENU_MAX_WIDTH = 360
 const PRESET_LIST_MAX_HEIGHT = 300
@@ -236,6 +247,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   onRefreshModelLists,
   onAddManualModel,
   onFreeModelsChange,
+  partnerAvatar,
   disabled = false,
   noDrag = false,
   hideTriggerIcon = false,
@@ -464,7 +476,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     const trigger = triggerRef.current
     if (!trigger) return
     const rect = trigger.getBoundingClientRect()
-    const preferredWidth = view === 'custom' ? 320 : 240
+    const preferredWidth = view === 'custom' ? 320 : PRESET_MENU_WIDTH
     const placement = resolveFloatingPlacement({
       triggerRect: rect,
       viewportWidth: window.innerWidth,
@@ -492,15 +504,11 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   }, [open, updatePosition, view])
 
   useLayoutEffect(() => {
-    if (!open || !menuRef.current || !triggerRef.current) return
-    const menu = menuRef.current
-    const previousWidth = menu.style.width
-    menu.style.width = 'max-content'
-    const measured = Math.ceil(menu.getBoundingClientRect().width)
-    menu.style.width = previousWidth
+    if (!open || !triggerRef.current) return
+    // 预设面板用固定宽度，不再按内容测量：内容变化（卡片 ↔ 列表）不应该改变宽度。
+    const nextWidth = view === 'custom' ? CUSTOM_MENU_MAX_WIDTH : PRESET_MENU_WIDTH
     const minWidth = view === 'custom' ? CUSTOM_MENU_MIN_WIDTH : PRESET_MENU_MIN_WIDTH
     const maxWidth = view === 'custom' ? CUSTOM_MENU_MAX_WIDTH : PRESET_MENU_MAX_WIDTH
-    const nextWidth = Math.min(Math.max(measured, minWidth), maxWidth)
     const rect = triggerRef.current.getBoundingClientRect()
     const placement = resolveFloatingPlacement({
       triggerRect: rect,
@@ -726,6 +734,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const effortValue = selectedEffort
     ? resolveEffort(selectedEffort, value.mainModel?.effort)
     : undefined
+  // 当前是否处于「只看强度卡片」状态：有强度且用户还没切到列表。
+  const showEffortCard = Boolean(selectedEffort && effortValue && value.mainModel)
+
   // 输入区胶囊上显示的当前档位名。没强度或未选中档位时不显示。
   const effortPillLabel = selectedEffort && effortValue
     ? selectedEffort.options.find(option => option.value === effortValue)?.label
@@ -1038,7 +1049,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       presetGroups.length === 0 &&
       freeModels.length === 0 && !managedModels?.length
 
-    const showEffortCard = Boolean(selectedEffort && effortValue && value.mainModel)
 
     // 方案 A：有强度时弹层只出卡片，列表让位；点卡片里的模型名才回到列表。
     // 卡片不再自己画边框：菜单容器已有一层圆角描边，再套一层就是双层框。
@@ -1052,6 +1062,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             onChange={(next) => onChange({ mainModel: { ...value.mainModel!, effort: next } })}
             onRefresh={() => void refreshCatalog({ showOutcome: true })}
             refreshStatus={catalogRefreshStatus}
+            avatar={partnerAvatar}
             onPickModel={() => {
               setEffortOnly(false)
               setInspectedModel(null)
@@ -1369,6 +1380,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
   const renderInspector = (): React.ReactNode => {
     if (view !== 'preset' || !inspectedModel) return null
+    // 强度卡片模式只展示滑块，不显示右侧模型详情；否则会和卡片并排挤在一起。
+    if (showEffortCard && effortOnly) return null
     const managed =
       inspectedModel.kind === 'managed'
         ? managedModels?.find((model) => model.id === inspectedModel.id)

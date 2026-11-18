@@ -9,6 +9,7 @@ import {
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Input, Modal, Tooltip } from 'antd'
 import {
+  HiOutlineArrowDown,
   HiOutlineClipboardDocument,
   HiOutlineClock,
   HiOutlineBookOpen,
@@ -19,7 +20,6 @@ import {
   HiTrash
 } from 'react-icons/hi2'
 import { BsPinAngle, BsPinAngleFill } from 'react-icons/bs'
-import { PiEraser } from 'react-icons/pi'
 import type {
   AiArtifactRef,
   AiFileChangeRecord,
@@ -64,6 +64,9 @@ import MarkdownRenderer from '../components/MarkdownRenderer'
 import { NativeConfirmDialog } from '../components/NativeConfirmDialog'
 import { useNavigate } from 'react-router-dom'
 import { normalizeUserFacingError } from '../utils/userFacingError'
+import { shouldAnimateScroll } from '../utils/renderPreferences'
+import { nextScrollToLatestVisible } from '../utils/scrollToLatest'
+import { dismissBootSplash } from '../utils/bootSplash'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import UserMessageBody from '../components/workbench/UserMessageBody'
@@ -72,6 +75,11 @@ import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import HumanInteractionCard from '../components/workbench/HumanInteractionCard'
 import ApprovalInteractionCard from '../components/workbench/ApprovalInteractionCard'
 import { MessageTimeline } from '../components/workbench/MessageTimeline'
+import { ConversationOutline } from '../components/workbench/ConversationOutline'
+import {
+  buildConversationOutline,
+  type ConversationOutlineItem
+} from '../../../shared/workbench/conversationOutline'
 import {
   buildTimelineNodes,
   collectMessageDayStarts,
@@ -195,24 +203,39 @@ type ApplyRevertConfirmState = {
 }
 
 const SCROLL_BOTTOM_TOLERANCE = 72
+/** Below this scroll-viewport width the message column leaves no gutter for the outline rail. */
+const CONVERSATION_OUTLINE_MIN_WIDTH = 900
 
-const queryOldestMessageElementOfDay = (
+const queryDayJumpMessage = (
   dayStart: number,
   messages: readonly ChatMessage[]
-): HTMLElement | null => {
+): ChatMessage | null => {
   const dayEnd = dayStart + DAY_MS
   const ofDay = messages.filter((item) => item.timestamp >= dayStart && item.timestamp < dayEnd)
   if (ofDay.length === 0) return null
-  const oldest = ofDay.reduce((current, item) =>
-    item.timestamp < current.timestamp ? item : current
-  )
-  const element = document.querySelector(`[data-message-id="${oldest.id}"]`)
+  // 跳到当天第一条用户消息：它的时间标签就在顶部，读者能对上「这一天」；
+  // 只有助手消息（比如跨天收尾的轮次）时才退回当天最早的一条。
+  const ofDayUsers = ofDay.filter((item) => item.role === 'user')
+  const pool = ofDayUsers.length > 0 ? ofDayUsers : ofDay
+  return pool.reduce((current, item) => (item.timestamp < current.timestamp ? item : current))
+}
+
+const queryDayJumpElement = (
+  dayStart: number,
+  messages: readonly ChatMessage[]
+): HTMLElement | null => {
+  const target = queryDayJumpMessage(dayStart, messages)
+  if (!target) return null
+  const element = document.querySelector(`[data-message-id="${target.id}"]`)
   return element instanceof HTMLElement ? element : null
 }
 
 const WORKBENCH_DRAG_REGION_STYLE = {
   WebkitAppRegion: 'drag'
 } as React.CSSProperties
+/** composer 外壳上移量（px），与 base.css 的 --nc-composer-overlap 保持一致。 */
+const COMPOSER_OVERLAP_PX = 40
+
 const WORKBENCH_NO_DRAG_REGION_STYLE = {
   position: 'relative',
   zIndex: 2,
@@ -897,6 +920,8 @@ const ChatPage: React.FC = () => {
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
   const [switchingPartnerId, setSwitchingPartnerId] = useState<string | null>(null)
   const [hasMoreMessagesBefore, setHasMoreMessagesBefore] = useState(false)
+  /** 全量历史覆盖的日期（来自主进程），与「已加载到第几页」解耦。 */
+  const [historyDayStarts, setHistoryDayStarts] = useState<number[]>([])
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
   const [deleteConfirmPartner, setDeleteConfirmPartner] = useState<Partner | null>(null)
   const [clearConfirmPartner, setClearConfirmPartner] = useState<{
@@ -950,6 +975,9 @@ const ChatPage: React.FC = () => {
     Record<string, string>
   >({})
   const [previewImage, setPreviewImage] = useState<ImageLightboxImage | null>(null)
+  const [showScrollToLatest, setShowScrollToLatest] = useState(false)
+  const [outlineVisible, setOutlineVisible] = useState(false)
+  const [activeOutlineMessageId, setActiveOutlineMessageId] = useState<string | null>(null)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
   const [tabWorkspaces, setTabWorkspaces] = useState<Record<string, WorkbenchTabWorkspaceState>>({})
@@ -1059,8 +1087,11 @@ const ChatPage: React.FC = () => {
   const contentPanelDragSettlingFrameRef = useRef<number | null>(null)
   const contentPanelResizeFrameRef = useRef<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  /** 消息内容本体：打字机、图片和字体都会在 store 不更新时继续长高。 */
+  const messageListRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
   const scrollFrameRef = useRef<number | null>(null)
+  const scrollJumpFrameRef = useRef<number | null>(null)
   const messageAttachmentPreviewUrlsRef = useRef<Record<string, string>>({})
   const notifiedNoEffectiveChangeIdsRef = useRef<Set<string>>(new Set())
   const composerAiPreferenceRef = useRef<WorkbenchAiPreference>(composerAiPreference)
@@ -1082,6 +1113,8 @@ const ChatPage: React.FC = () => {
   const pendingTimelineJumpDayRef = useRef<number | null>(null)
   const timelinePinSpacerRef = useRef<HTMLDivElement>(null)
   const programmaticScrollRef = useRef(false)
+  /** Last scrollTop written by us; lets the scroll handler tell follow from user input. */
+  const programmaticScrollTopRef = useRef<number | null>(null)
   const backgroundPanelUpdatesRef = useRef<Record<string, Promise<void>>>({})
   const persistQueuesRef = useRef<Record<string, Promise<void>>>({})
   const persistRevisionsRef = useRef<Record<string, number>>({})
@@ -1487,8 +1520,10 @@ const ChatPage: React.FC = () => {
     [currentMessages]
   )
 
-  const selectedManagedId = modelSelection.mainModel && isManagedModelConfigId(modelSelection.mainModel.configId)
-    ? modelSelection.mainModel.configId : undefined
+  const selectedManagedId =
+    modelSelection.mainModel && isManagedModelConfigId(modelSelection.mainModel.configId)
+      ? modelSelection.mainModel.configId
+      : undefined
   const signedIn = account.status === 'signed_in'
   useEffect(() => {
     if (selectedManagedId && signedIn) void loadManagedCatalog()
@@ -1501,11 +1536,15 @@ const ChatPage: React.FC = () => {
     if (!modelSelection.mainModel) return t(($) => $.workbench.selectAMainModelFirst)
     if (selectedManagedId) {
       if (!signedIn) return t(($) => $.workbench.managedModelLoginRequired)
-      if (managedCatalog?.models && !managedCatalog.models.some(model => managedModelConfigId(model.id) === selectedManagedId)) {
+      if (
+        managedCatalog?.models &&
+        !managedCatalog.models.some((model) => managedModelConfigId(model.id) === selectedManagedId)
+      ) {
         return t(($) => $.workbench.managedModelRemoved)
       }
       if (!managedCatalog?.models) {
-        return managedCatalog?.status === 'unavailable' ? t(($) => $.workbench.managedModelsUnavailable)
+        return managedCatalog?.status === 'unavailable'
+          ? t(($) => $.workbench.managedModelsUnavailable)
           : t(($) => $.workbench.loadingManagedModels)
       }
     }
@@ -1549,12 +1588,13 @@ const ChatPage: React.FC = () => {
       return
     }
     const latestDayStart = startOfLocalDay(messages[messages.length - 1]!.timestamp)
-    const target = queryOldestMessageElementOfDay(latestDayStart, messages)
+    const target = queryDayJumpElement(latestDayStart, messages)
     if (!target) return
     const nextSpacerPx = measureTimelineJumpSpacerPx({
       scrollTop: scroller.scrollTop,
       scrollHeight: scroller.scrollHeight,
-      clientHeight: scroller.clientHeight,
+      // 底部被 composer 渐变盖住一段，按可见高度算，否则日跳转会差一段。
+      clientHeight: scroller.clientHeight - COMPOSER_OVERLAP_PX,
       targetTop: target.getBoundingClientRect().top,
       scrollerTop: scroller.getBoundingClientRect().top,
       currentSpacerPx: spacer.offsetHeight
@@ -1569,18 +1609,117 @@ const ChatPage: React.FC = () => {
       if (!force && !shouldAutoScrollRef.current) return
       if (scrollFrameRef.current !== null) {
         window.cancelAnimationFrame(scrollFrameRef.current)
-      }
-      scrollFrameRef.current = window.requestAnimationFrame(() => {
-        const scrollElement = scrollRef.current
         scrollFrameRef.current = null
+      }
+
+      const jumpToBottom = (): void => {
+        const scrollElement = scrollRef.current
         if (!scrollElement) return
         programmaticScrollRef.current = true
-        syncLatestDayPinSpacer(currentMessages)
         scrollElement.scrollTop = scrollElement.scrollHeight
+        programmaticScrollTopRef.current = scrollElement.scrollTop
         programmaticScrollRef.current = false
+      }
+
+      if (force) {
+        scrollFrameRef.current = window.requestAnimationFrame(() => {
+          scrollFrameRef.current = null
+          syncLatestDayPinSpacer(currentMessages)
+          jumpToBottom()
+        })
+        return
+      }
+
+      // Streaming follow: ease towards the bottom so bursty block growth (tables,
+      // images, code blocks) does not jump the viewport. A real user scroll moves
+      // scrollTop away from the value we wrote, which stops the loop below.
+      scrollFrameRef.current = window.requestAnimationFrame(() => {
+        scrollFrameRef.current = null
+        syncLatestDayPinSpacer(currentMessages)
+        const step = (): void => {
+          const scrollElement = scrollRef.current
+          if (!scrollElement || !shouldAutoScrollRef.current) {
+            scrollFrameRef.current = null
+            return
+          }
+          const distance =
+            scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight
+          if (distance <= 1) {
+            scrollFrameRef.current = null
+            return
+          }
+          programmaticScrollRef.current = true
+          scrollElement.scrollTop += Math.min(distance, 48, Math.max(1.5, distance * 0.22))
+          programmaticScrollTopRef.current = scrollElement.scrollTop
+          programmaticScrollRef.current = false
+          scrollFrameRef.current = window.requestAnimationFrame(step)
+        }
+        step()
       })
     },
     [currentMessages, syncLatestDayPinSpacer]
+  )
+
+  // Hysteresis keeps the button from flickering around a single threshold.
+  const updateScrollToLatestVisibility = useCallback((element: HTMLElement | null): void => {
+    // While the jump animation owns the scroll position the button must stay hidden.
+    if (!element || scrollJumpFrameRef.current !== null) return
+    const distanceToBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+    setShowScrollToLatest((previous) => nextScrollToLatestVisible(previous, distanceToBottom))
+  }, [])
+
+  const handleScrollToLatest = useCallback((): void => {
+    const element = scrollRef.current
+    if (!element) return
+    shouldAutoScrollRef.current = true
+    setShowScrollToLatest(false)
+    if (scrollJumpFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollJumpFrameRef.current)
+      scrollJumpFrameRef.current = null
+    }
+    if (scrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollFrameRef.current)
+      scrollFrameRef.current = null
+    }
+
+    if (!shouldAnimateScroll()) {
+      scrollToBottom(true)
+      return
+    }
+
+    const startTop = element.scrollTop
+    const startedAt = performance.now()
+    const durationMs = 320
+    const step = (timestamp: number): void => {
+      const node = scrollRef.current
+      if (!node || !shouldAutoScrollRef.current) {
+        scrollJumpFrameRef.current = null
+        return
+      }
+      const progress = Math.min(1, (timestamp - startedAt) / durationMs)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      programmaticScrollRef.current = true
+      node.scrollTop = startTop + (node.scrollHeight - node.clientHeight - startTop) * eased
+      programmaticScrollTopRef.current = node.scrollTop
+      programmaticScrollRef.current = false
+      if (progress >= 1) {
+        scrollJumpFrameRef.current = null
+        const latest = currentMessages[currentMessages.length - 1]
+        if (latest) setActiveTimelineDayStart(startOfLocalDay(latest.timestamp))
+        return
+      }
+      scrollJumpFrameRef.current = window.requestAnimationFrame(step)
+    }
+    scrollJumpFrameRef.current = window.requestAnimationFrame(step)
+  }, [currentMessages, scrollToBottom])
+
+  useEffect(
+    () => () => {
+      if (scrollJumpFrameRef.current !== null)
+        window.cancelAnimationFrame(scrollJumpFrameRef.current)
+      scrollJumpFrameRef.current = null
+    },
+    []
   )
 
   const loadOlderMessages = useCallback(async (): Promise<void> => {
@@ -1600,7 +1739,7 @@ const ChatPage: React.FC = () => {
     try {
       const opened = await window.api.partnerOpen({
         partnerId: requestPartnerId,
-        limit: 50,
+        limit: 30,
         beforeTimestamp
       })
       if (currentPartnerId !== requestPartnerId) return
@@ -1630,12 +1769,13 @@ const ChatPage: React.FC = () => {
     if (Math.abs(scroller.scrollTop - nextTop) < TIMELINE_PIN_TOLERANCE_PX) return
     programmaticScrollRef.current = true
     scroller.scrollTo({ top: nextTop })
+    programmaticScrollTopRef.current = scroller.scrollTop
     programmaticScrollRef.current = false
   }, [])
 
   const scrollToOldestMessageOfDay = useCallback(
     (dayStart: number, messages: ChatMessage[]): boolean => {
-      const element = queryOldestMessageElementOfDay(dayStart, messages)
+      const element = queryDayJumpElement(dayStart, messages)
       if (!element) return false
       shouldAutoScrollRef.current = false
       pinMessageToTop(element)
@@ -1669,7 +1809,22 @@ const ChatPage: React.FC = () => {
     [jumpToTimelineDay]
   )
 
-  const resolveActiveDayFromScroll = useCallback((): number | null => {
+  const handleOutlineSelect = useCallback(
+    (item: ConversationOutlineItem): void => {
+      const element = document.querySelector(`[data-message-id="${item.id}"]`)
+      if (!(element instanceof HTMLElement)) return
+      shouldAutoScrollRef.current = false
+      pinMessageToTop(element)
+      setActiveOutlineMessageId(item.id)
+      setActiveTimelineDayStart(startOfLocalDay(item.timestamp))
+    },
+    [pinMessageToTop]
+  )
+
+  const resolveActiveFromScroll = useCallback((): {
+    dayStart: number
+    messageId: string
+  } | null => {
     const scrollElement = scrollRef.current
     if (!scrollElement || currentMessages.length === 0) return null
     const containerTop = scrollElement.getBoundingClientRect().top
@@ -1685,7 +1840,7 @@ const ChatPage: React.FC = () => {
       if (!active) active = messageItem
       break
     }
-    return active ? startOfLocalDay(active.timestamp) : null
+    return active ? { dayStart: startOfLocalDay(active.timestamp), messageId: active.id } : null
   }, [currentMessages])
 
   useEffect(() => {
@@ -1710,15 +1865,26 @@ const ChatPage: React.FC = () => {
 
   const handleMessageScroll = (event: React.UIEvent<HTMLDivElement>): void => {
     const scrollElement = event.currentTarget
+    updateScrollToLatestVisibility(scrollElement)
     if (scrollElement.scrollTop <= 80) {
       void loadOlderMessages()
     }
     if (programmaticScrollRef.current) return
+    const lastProgrammaticTop = programmaticScrollTopRef.current
+    if (
+      lastProgrammaticTop !== null &&
+      Math.abs(scrollElement.scrollTop - lastProgrammaticTop) < 1.5
+    ) {
+      return
+    }
     const distanceToBottom =
       scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight
     shouldAutoScrollRef.current = distanceToBottom <= SCROLL_BOTTOM_TOLERANCE
-    const nextActiveDay = resolveActiveDayFromScroll()
-    if (nextActiveDay != null) setActiveTimelineDayStart(nextActiveDay)
+    const active = resolveActiveFromScroll()
+    if (active) {
+      setActiveTimelineDayStart(active.dayStart)
+      setActiveOutlineMessageId(active.messageId)
+    }
   }
 
   useLayoutEffect(() => {
@@ -1726,12 +1892,16 @@ const ChatPage: React.FC = () => {
     if (!scroller) return
 
     const sync = (): void => {
+      setOutlineVisible(scroller.clientWidth >= CONVERSATION_OUTLINE_MIN_WIDTH)
       const distanceToBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
       const stickToLatest =
         shouldAutoScrollRef.current || distanceToBottom <= SCROLL_BOTTOM_TOLERANCE
       programmaticScrollRef.current = true
       syncLatestDayPinSpacer(currentMessages)
-      if (stickToLatest) scroller.scrollTop = scroller.scrollHeight
+      if (stickToLatest) {
+        scroller.scrollTop = scroller.scrollHeight
+        programmaticScrollTopRef.current = scroller.scrollTop
+      }
       programmaticScrollRef.current = false
       if (!stickToLatest) return
       const latest = currentMessages[currentMessages.length - 1]
@@ -2233,7 +2403,7 @@ const ChatPage: React.FC = () => {
 
   const loadPartnerOpen = async (partnerId: string, requestId: number): Promise<void> => {
     try {
-      const opened = await window.api.partnerOpen({ partnerId, limit: 50 })
+      const opened = await window.api.partnerOpen({ partnerId, limit: 30 })
       if (partnerSwitchRequestRef.current !== requestId) return
       const uiState = partnerUiStatesRef.current[partnerId] || opened.uiState || null
       applyPartnerUiState(partnerId, uiState)
@@ -2251,6 +2421,7 @@ const ChatPage: React.FC = () => {
       }
       setCurrentMessages(opened.messages)
       setHasMoreMessagesBefore(opened.hasMoreBefore)
+      setHistoryDayStarts(opened.messageDayStarts || [])
       hydratePartnerView(partnerId, opened.messages, opened.activeRuns, opened.activeRuns)
       setSwitchingPartnerId(null)
 
@@ -2553,7 +2724,9 @@ const ChatPage: React.FC = () => {
       modelSelectionRef.current = selection
       setModelSelection(selection)
       const partnerId = currentPartnerIdRef.current
-      void persistCurrentUiStateNow({ requireReady: false }).then(() => refreshContextUsage(partnerId))
+      void persistCurrentUiStateNow({ requireReady: false }).then(() =>
+        refreshContextUsage(partnerId)
+      )
     },
     [persistCurrentUiStateNow, refreshContextUsage]
   )
@@ -2927,6 +3100,15 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     const bootstrapInteractionVersion = uiStateInteractionVersionRef.current
     void (async () => {
+      try {
+        await bootstrapWorkbench()
+      } finally {
+        // 首次会话（伙伴、消息、界面快照）就绪后收起启动画面。
+        dismissBootSplash()
+      }
+    })()
+
+    async function bootstrapWorkbench(): Promise<void> {
       const [, , list, workbenchStateResponse] = await Promise.all([
         loadWorkspaces(),
         loadModelConfigs(),
@@ -2951,7 +3133,7 @@ const ChatPage: React.FC = () => {
       }
       const firstPartner = list[0]
       if (firstPartner) await openExistingPartner(firstPartner, { saveCurrentDraft: false })
-    })()
+    }
     // Initial bootstrap is intentionally explicit. Later list refreshes must not reopen partners.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -3201,6 +3383,25 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     scrollToBottom()
   }, [assistantTurns, currentMessages, loading, pendingApprovalBatch, scrollToBottom])
+
+  // 流式正文由打字机在本地逐帧补齐，store 不会再发事件；只靠上面的 effect 会停在
+  // 最后一帧之前，末尾半行被压在可视区外。内容一长高就跟一次（是否跟随由 pin 状态决定）。
+  const scrollToBottomRef = useRef(scrollToBottom)
+  useLayoutEffect(() => {
+    scrollToBottomRef.current = scrollToBottom
+  }, [scrollToBottom])
+  useLayoutEffect(() => {
+    const content = messageListRef.current
+    if (!content || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => scrollToBottomRef.current())
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [])
+
+  // Content can grow while the user reads further up; refresh without waiting for a scroll event.
+  useEffect(() => {
+    updateScrollToLatestVisibility(scrollRef.current)
+  }, [assistantTurns, currentMessages, loading, updateScrollToLatestVisibility])
 
   useEffect(() => {
     let startTimer: number | null = null
@@ -3683,7 +3884,54 @@ const ChatPage: React.FC = () => {
   )
 
   useEffect(() => {
+    const pendingStreamDeltas = new Map<string, { roundId: string; text: string }>()
+    let streamFlushFrame: number | null = null
+
+    const flushStreamDeltas = (): void => {
+      if (streamFlushFrame !== null) {
+        window.cancelAnimationFrame(streamFlushFrame)
+        streamFlushFrame = null
+      }
+      if (pendingStreamDeltas.size === 0) return
+      const batch = Array.from(pendingStreamDeltas.entries())
+      pendingStreamDeltas.clear()
+      for (const [runId, entry] of batch) {
+        updateTurnForRun(runId, (current) =>
+          reduceAssistantTurnByRunEvent(current, {
+            type: 'assistant_brain_stream_delta',
+            runId,
+            roundId: entry.roundId,
+            text: entry.text,
+            createdAt: Date.now()
+          })
+        )
+      }
+    }
+
     const unsubscribe = window.api.onAiRunEvent((event) => {
+      // Internal per-chunk telemetry never affects the renderer model.
+      if (event.type === 'llm_stream_delta') return
+
+      // Provider chunks arrive in bursts (median gap 3ms); paint at most once per
+      // frame. Every other event flushes first so ordering never changes.
+      if (event.type === 'assistant_brain_stream_delta') {
+        if (!activeRunMessageIdsRef.current[event.runId]) return
+        const buffered = pendingStreamDeltas.get(event.runId)
+        pendingStreamDeltas.set(event.runId, {
+          roundId: event.roundId,
+          text:
+            buffered && buffered.roundId === event.roundId ? buffered.text + event.text : event.text
+        })
+        if (streamFlushFrame === null) {
+          streamFlushFrame = window.requestAnimationFrame(() => {
+            streamFlushFrame = null
+            flushStreamDeltas()
+          })
+        }
+        return
+      }
+      flushStreamDeltas()
+
       if (event.type === 'run_started') {
         activeRunPartnerIdsRef.current[event.runId] = event.partnerId
         setPartnerRunningState(event.partnerId, true)
@@ -3703,9 +3951,13 @@ const ChatPage: React.FC = () => {
 
       if (event.type === 'run_pending_messages_parked') {
         if (eventPartnerId === currentPartnerIdRef.current) {
-          setCurrentMessages(previous => previous.map(item =>
-            item.pending && event.messageIds.includes(item.id) ? { ...item, pending: false } : item
-          ))
+          setCurrentMessages((previous) =>
+            previous.map((item) =>
+              item.pending && event.messageIds.includes(item.id)
+                ? { ...item, pending: false }
+                : item
+            )
+          )
         }
         return
       }
@@ -3918,6 +4170,9 @@ const ChatPage: React.FC = () => {
       }
     })
     return () => {
+      if (streamFlushFrame !== null) window.cancelAnimationFrame(streamFlushFrame)
+      streamFlushFrame = null
+      pendingStreamDeltas.clear()
       unsubscribe()
     }
     // AI run listener is intentionally keyed by active run/session identity to avoid resubscribing on UI helper changes.
@@ -4796,10 +5051,14 @@ const ChatPage: React.FC = () => {
     [currentPartnerId, saveComposerDraftForPartner, submittingPartnerId]
   )
 
-  const timelineMessageDayStarts = useMemo(
-    () => collectMessageDayStarts(currentMessages.map((item) => item.timestamp)),
-    [currentMessages]
-  )
+  const timelineMessageDayStarts = useMemo(() => {
+    const days = new Set<number>(historyDayStarts)
+    // 已加载的消息可能带来新的一天（比如刚发送的今天），和全量历史合并。
+    for (const dayStart of collectMessageDayStarts(currentMessages.map((item) => item.timestamp))) {
+      days.add(dayStart)
+    }
+    return [...days].sort((left, right) => left - right)
+  }, [currentMessages, historyDayStarts])
 
   const timelineNodes = useMemo(
     () =>
@@ -4816,6 +5075,23 @@ const ChatPage: React.FC = () => {
         activeDayStart: activeTimelineDayStart
       }),
     [activeTimelineDayStart, timelineNodes]
+  )
+
+  const outlineItems = useMemo(
+    () =>
+      buildConversationOutline({
+        messages: currentMessages,
+        dayStart: activeTimelineDayStart
+      }),
+    [activeTimelineDayStart, currentMessages]
+  )
+
+  const outlineActiveId = useMemo(
+    () =>
+      activeOutlineMessageId && outlineItems.some((item) => item.id === activeOutlineMessageId)
+        ? activeOutlineMessageId
+        : null,
+    [activeOutlineMessageId, outlineItems]
   )
 
   useEffect(() => {
@@ -5293,6 +5569,25 @@ const ChatPage: React.FC = () => {
 
                     <div className="nc-topbar-drag-spacer" aria-hidden="true" />
 
+                    {clearContextVisible ? (
+                      <Tooltip
+                        placement="bottomRight"
+                        title={t(($) => $.workbench.clearAllMessagesForThisCannotBeUndone, {
+                          value1: currentPartner?.name || t(($) => $.common.partner)
+                        })}
+                      >
+                        <button
+                          type="button"
+                          className="nc-topbar-action workbench-no-drag"
+                          style={WORKBENCH_NO_DRAG_REGION_STYLE}
+                          onClick={handleClearPartnerContext}
+                          data-testid={workbenchSelectors.clearContextButton}
+                        >
+                          {t(($) => $.workbench.clearMessageHistory)}
+                        </button>
+                      </Tooltip>
+                    ) : null}
+
                     {contentPanelCollapsed && !contentPanelShellMounted ? (
                       <button
                         type="button"
@@ -5350,49 +5645,82 @@ const ChatPage: React.FC = () => {
                       />
                     ) : null}
                     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-                      <div
-                        className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
-                        ref={scrollRef}
-                        onScroll={handleMessageScroll}
-                      >
-                        <div className="nc-document" data-testid={workbenchSelectors.messageList}>
-                          {loadingOlderMessages ? (
-                            <div className="py-3 text-center text-xs text-[#8A8781]">
-                              {t(($) => $.workbench.loadingEarlierMessages)}
-                            </div>
-                          ) : null}
-                          {currentMessages.map((messageItem) =>
-                            messageItem.role === 'user'
-                              ? renderUserMessage(messageItem)
-                              : renderAssistantMessage(messageItem)
-                          )}
-                        </div>
+                      <div className="relative flex min-h-0 min-w-0 flex-1">
                         <div
-                          ref={timelinePinSpacerRef}
-                          className="nc-timeline-pin-spacer"
-                          aria-hidden="true"
-                        />
+                          className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
+                          ref={scrollRef}
+                          onScroll={handleMessageScroll}
+                        >
+                          <div
+                            className="nc-document"
+                            data-testid={workbenchSelectors.messageList}
+                            ref={messageListRef}
+                          >
+                            {loadingOlderMessages ? (
+                              <div className="py-3 text-center text-xs text-[#8A8781]">
+                                {t(($) => $.workbench.loadingEarlierMessages)}
+                              </div>
+                            ) : null}
+                            {currentMessages.map((messageItem) =>
+                              messageItem.role === 'user'
+                                ? renderUserMessage(messageItem)
+                                : renderAssistantMessage(messageItem)
+                            )}
+                          </div>
+                          <div
+                            ref={timelinePinSpacerRef}
+                            className="nc-timeline-pin-spacer"
+                            aria-hidden="true"
+                          />
+                        </div>
+
+                        {outlineVisible && !isNewSession && outlineItems.length > 1 ? (
+                          <ConversationOutline
+                            items={outlineItems}
+                            activeId={outlineActiveId}
+                            onSelect={handleOutlineSelect}
+                          />
+                        ) : null}
+
+                        {showScrollToLatest && !isNewSession ? (
+                          <button
+                            type="button"
+                            className="nc-scroll-to-latest"
+                            data-testid={workbenchSelectors.scrollToLatestButton}
+                            aria-label={t(($) => $.workbench.scrollToLatest)}
+                            title={t(($) => $.workbench.scrollToLatest)}
+                            onClick={handleScrollToLatest}
+                          >
+                            <HiOutlineArrowDown className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                        {!currentPartnerId ? (
+                          <div
+                            className="nc-empty-state"
+                            data-testid={workbenchSelectors.emptyState}
+                          >
+                            <p className="max-w-[760px] px-6 text-center text-[14px] leading-7 text-[#8A8781]">
+                              {partners.length === 0
+                                ? t(($) => $.workbench.noPartnersYetCreateOneFromTheSidebarTo)
+                                : t(($) => $.workbench.selectAPartnerToStartAConversation)}
+                            </p>
+                          </div>
+                        ) : null}
                       </div>
 
                       <div
                         className={`nc-floating-composer-shell ${
                           isNewSession ? 'flex flex-1 items-center justify-center pb-[18vh]' : ''
-                        }`}
+                        } ${currentPartnerId ? '' : 'hidden'}`}
                         data-testid={workbenchSelectors.composerShell}
                       >
-                        <div className="mx-auto w-full max-w-[760px]">
+                        <div className="mx-auto w-full max-w-[900px]">
                           {isNewSession && currentPartnerId ? (
                             <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
                               <span>{t(($) => $.workbench.whatWouldYouLikeToDo)}</span>
                             </div>
                           ) : null}
-                          {!currentPartnerId ? (
-                            <div className="px-6 py-16 text-center text-[14px] leading-7 text-[#8A8781]">
-                              {partners.length === 0
-                                ? t(($) => $.workbench.noPartnersYetCreateOneFromTheSidebarTo)
-                                : t(($) => $.workbench.selectAPartnerToStartAConversation)}
-                            </div>
-                          ) : pendingQuestion ? (
+                          {!currentPartnerId ? null : pendingQuestion ? (
                             <HumanInteractionCard
                               key={pendingQuestion.interaction.interactionId}
                               interaction={pendingQuestion.interaction}
@@ -5412,7 +5740,7 @@ const ChatPage: React.FC = () => {
                             />
                           ) : (
                             <div className="relative">
-                              {busyCancelTask || clearContextVisible ? (
+                              {busyCancelTask ? (
                                 <div className="mb-2 flex flex-col items-start gap-2">
                                   {busyCancelTask ? (
                                     <MessageActionCapsule
@@ -5435,24 +5763,18 @@ const ChatPage: React.FC = () => {
                                       }
                                     />
                                   ) : null}
-                                  {clearContextVisible ? (
-                                    <MessageActionCapsule
-                                      icon={<PiEraser className="h-3.5 w-3.5" />}
-                                      label={t(($) => $.workbench.clearMessageHistory)}
-                                      tooltip={t(
-                                        ($) => $.workbench.clearAllMessagesForThisCannotBeUndone,
-                                        {
-                                          value1: currentPartner?.name || t(($) => $.common.partner)
-                                        }
-                                      )}
-                                      onAction={handleClearPartnerContext}
-                                      actionTestId={workbenchSelectors.clearContextButton}
-                                    />
-                                  ) : null}
                                 </div>
                               ) : null}
                               <WorkbenchComposer
                                 partnerName={currentPartner?.name}
+                                partnerAvatar={
+                                  currentPartner
+                                    ? {
+                                        shape: currentPartner.avatar_shape,
+                                        color: currentPartner.avatar_color
+                                      }
+                                    : null
+                                }
                                 aiPreference={composerAiPreference}
                                 onAiPreferenceChange={handleAiPreferenceChange}
                                 executionPermission={composerExecutionPermission}

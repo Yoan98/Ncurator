@@ -81,7 +81,7 @@ const SubagentThought: React.FC<{
         {streaming ? (
           <span
             data-testid="subagent-stream-dot"
-            className="nc-subagent-stream-dot"
+            className="nc-live-dot nc-live-dot--tail"
             aria-label={t(($) => $.workbench.writing)}
           />
         ) : null}

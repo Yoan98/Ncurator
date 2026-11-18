@@ -110,6 +110,42 @@ export class ChatMessageLogStore {
     )
   }
 
+  /** 只取指定轮次的记录：命中 (partner_id, seq) 索引，避免为分页解析整段历史。 */
+  public async listByPartnerRunIds(
+    partnerId: string,
+    runIds: readonly string[]
+  ): Promise<ChatMessageLogRecord[]> {
+    const ids = runIds.map((id) => String(id || '').trim()).filter(Boolean)
+    if (ids.length === 0) return []
+    const placeholders = ids.map(() => '?').join(', ')
+    const rows = this.sqlite
+      .prepare(
+        `SELECT * FROM chat_session_message_log
+         WHERE partner_id = ? AND subagent_id IS NULL AND run_id IN (${placeholders})
+         ORDER BY seq ASC`
+      )
+      .all(partnerId, ...ids) as ChatMessageLogRow[]
+    return rows
+      .map(toMessageLogRecord)
+      .filter((record): record is ChatMessageLogRecord => record !== null)
+  }
+
+  /** 该伙伴消息覆盖的本地日起点：按天去重，不解析任何消息内容。 */
+  public async listDayStarts(partnerId: string): Promise<number[]> {
+    const rows = this.sqlite
+      .prepare(
+        `SELECT DISTINCT date(created_at / 1000, 'unixepoch', 'localtime') AS day
+         FROM chat_session_message_log
+         WHERE partner_id = ? AND subagent_id IS NULL
+           AND json_extract(entry_json, '$.kind') IN ('user', 'assistant')
+         ORDER BY day ASC`
+      )
+      .all(partnerId) as { day: string }[]
+    return rows
+      .map((row) => new Date(`${row.day}T00:00:00`).getTime())
+      .filter((value) => Number.isFinite(value))
+  }
+
   public async listPage(input: {
     partnerId: string
     subagentId?: string

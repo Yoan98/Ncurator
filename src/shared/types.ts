@@ -1492,6 +1492,8 @@ export type PartnerOpenResponse = {
   hasMoreBefore: boolean
   activeRuns: PartnerRunSnapshot[]
   uiState?: PartnerUiStateV1
+  /** 全部历史消息覆盖的本地日起点（不受分页影响），供左侧日期轴渲染。 */
+  messageDayStarts: number[]
 }
 
 export type PartnerRunSummariesRequest = {

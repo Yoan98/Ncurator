@@ -165,6 +165,17 @@ export const runLlmCallWithActivity = async <T>(input: {
   let chunkCount = 0
   let firstTokenAt: number | undefined
   let latestRawText = ''
+  /** 当前重试行是否还挂着：重试成功开始出内容就要立刻撤掉，不能等整次调用结束。 */
+  let retryRowVisible = false
+  const clearRetryRow = (): void => {
+    if (!retryRowVisible) return
+    retryRowVisible = false
+    emitLlmRetryProcessCompleted({
+      sendEvent: input.ctx.sendEvent,
+      runId: input.runId,
+      callId
+    })
+  }
   const contextBudgetSnapshot =
     input.telemetry.caller === 'human.brain' ? input.telemetry.contextBudgetSnapshot : undefined
 
@@ -193,6 +204,8 @@ export const runLlmCallWithActivity = async <T>(input: {
     onStart: () => undefined,
     onDelta: (text) => {
       if (!text) return
+      // 先撤重试行再推正文：同一批事件里不出现“正在重试”和流式正文并存。
+      clearRetryRow()
       const createdAt = Date.now()
       chunkCount += 1
       latestRawText += text
@@ -213,7 +226,10 @@ export const runLlmCallWithActivity = async <T>(input: {
       input.onTextDelta?.(text)
     },
     onReset: () => input.onTextReset?.(),
-    onToolCallDelta: () => input.onToolCallDelta?.(),
+    onToolCallDelta: () => {
+      clearRetryRow()
+      input.onToolCallDelta?.()
+    },
     onComplete: (payload) => {
       latestRawText = payload.rawText || latestRawText
     },
@@ -238,7 +254,6 @@ export const runLlmCallWithActivity = async <T>(input: {
   try {
     const maxRetries = Math.max(0, Math.floor(input.maxAttempts || 0))
     let retryCount = 0
-    let retryGroupStarted = false
     let result: LlmCallExecutionResult<T> | undefined
     for (;;) {
       try {
@@ -260,13 +275,8 @@ export const runLlmCallWithActivity = async <T>(input: {
             createdAt: Date.now()
           })
         }
-        if (retryGroupStarted) {
-          emitLlmRetryProcessCompleted({
-            sendEvent: input.ctx.sendEvent,
-            runId: input.runId,
-            callId
-          })
-        }
+        // 无流式片段的调用在这里收口；已经出过内容的早已撤掉。
+        clearRetryRow()
         break
       } catch (error) {
         const nextRetry = retryCount + 1
@@ -274,7 +284,20 @@ export const runLlmCallWithActivity = async <T>(input: {
           input.classifyRetry?.(error, nextRetry) ||
           ({ retryable: false, message: reasonFromError(error) } satisfies LlmCallRetryDecision)
         if (!retry.retryable || retryCount >= maxRetries) {
-          if (retryGroupStarted) {
+          if (retryCount > 0) {
+            // 重试行可能已在该次调用出内容时被撤掉；收口成失败行时要重新挂回去。
+            if (!retryRowVisible) {
+              retryRowVisible = true
+              emitLlmRetryProcessStarted({
+                sendEvent: input.ctx.sendEvent,
+                runId: input.runId,
+                callId,
+                attempt: retryCount,
+                maxAttempts: maxRetries,
+                message: retry.message
+              })
+            }
+            retryRowVisible = false
             emitLlmRetryProcessFailed({
               sendEvent: input.ctx.sendEvent,
               runId: input.runId,
@@ -289,7 +312,7 @@ export const runLlmCallWithActivity = async <T>(input: {
         chunkCount = 0
         firstTokenAt = undefined
         observer.onReset?.()
-        retryGroupStarted = true
+        retryRowVisible = true
         emitLlmRetryProcessStarted({
           sendEvent: input.ctx.sendEvent,
           runId: input.runId,

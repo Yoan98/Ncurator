@@ -18,6 +18,13 @@ const AVATAR_COLOR_HEX: Record<PartnerAvatarColor, string> = {
 
 export const PARTNER_AVATAR_COLOR_HEX = AVATAR_COLOR_HEX
 
+/**
+ * 表情状态。
+ * - idle：默认，完全静止（不蹦跳、不眨眼），符合「默认不动」的要求。
+ * - tickled：被抓住时的「被抓痒笑」——笑眼 + 腮红。
+ */
+type PartnerAvatarMood = 'idle' | 'tickled'
+
 type PartnerAvatarProps = {
   shape: PartnerAvatarShape
   color: PartnerAvatarColor
@@ -26,6 +33,10 @@ type PartnerAvatarProps = {
   title?: string
   animationSeed?: string
   animated?: boolean
+  /** 表情状态；不传等于 idle。 */
+  mood?: PartnerAvatarMood
+  /** 是否画腮红（tickled 时由内部自动打开，也可单独控制）。 */
+  blush?: boolean
 }
 
 type EyeGlance = {
@@ -159,18 +170,24 @@ const PartnerAvatar: React.FC<PartnerAvatarProps> = ({
   className,
   title,
   animationSeed,
-  animated = false
+  animated = false,
+  mood = 'idle',
+  blush
 }) => {
   const reactId = useId().replace(/:/g, '')
   const fill = AVATAR_COLOR_HEX[color]
   const seed = animationSeed || `${shape}-${color}`
   const hash = hashSeed(seed)
   const { glance, blinking } = usePartnerEyeMotion(seed, animated)
+  const tickled = mood === 'tickled'
+  const showBlush = blush ?? tickled
   const bodyClipId = `partner-body-${reactId}`
 
   return (
     <div
-      className={`nc-partner-avatar-stage ${animated ? 'nc-partner-avatar-animated' : ''} ${className || ''}`.trim()}
+      className={`nc-partner-avatar-stage ${animated ? 'nc-partner-avatar-animated' : ''} ${
+        tickled ? 'nc-partner-avatar-tickled' : ''
+      } ${className || ''}`.trim()}
       role="img"
       aria-hidden={title ? undefined : true}
       aria-label={title}
@@ -205,10 +222,52 @@ const PartnerAvatar: React.FC<PartnerAvatarProps> = ({
                     transition: blinking ? 'transform 80ms ease' : 'transform 220ms ease'
                   }}
                 >
-                  <rect x="23" y="26" width="6" height="11" rx="3" fill="#FFFFFF" />
-                  <rect x="36" y="26" width="6" height="11" rx="3" fill="#FFFFFF" />
+                  {tickled ? (
+                    // 笑眼：两条向上弯的弧线，替代默认的竖条。
+                    <>
+                      <path
+                        d="M21.5 32.5c1.4-2.6 2.9-3.9 4.5-3.9s3.1 1.3 4.5 3.9"
+                        fill="none"
+                        stroke="#FFFFFF"
+                        strokeWidth="2.6"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M33.5 32.5c1.4-2.6 2.9-3.9 4.5-3.9s3.1 1.3 4.5 3.9"
+                        fill="none"
+                        stroke="#FFFFFF"
+                        strokeWidth="2.6"
+                        strokeLinecap="round"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <rect x="23" y="26" width="6" height="11" rx="3" fill="#FFFFFF" />
+                      <rect x="36" y="26" width="6" height="11" rx="3" fill="#FFFFFF" />
+                    </>
+                  )}
                 </g>
               </g>
+              {showBlush ? (
+                <>
+                  <circle
+                    cx="20.5"
+                    cy="37.5"
+                    r="3.4"
+                    fill="#E8888A"
+                    className="nc-partner-avatar-blush"
+                    style={{ opacity: 0.38 }}
+                  />
+                  <circle
+                    cx="43.5"
+                    cy="37.5"
+                    r="3.4"
+                    fill="#E8888A"
+                    className="nc-partner-avatar-blush"
+                    style={{ opacity: 0.38 }}
+                  />
+                </>
+              ) : null}
             </g>
           </svg>
         </div>

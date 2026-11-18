@@ -140,16 +140,20 @@ const sampleRetryUi = async (
   processText: string
   rowCount: number
   attempts: number[]
-  retryAndThinkingCoexist: boolean
+  retryAndLiveSignalCoexist: boolean
 }> => {
   const processText = ((await root.textContent({ timeout: 2_000 }).catch(() => '')) || '').trim()
+  const liveSignalCount = await root
+    .locator(`[data-live-tail="true"], [data-testid="${workbenchSelectors.assistantLiveDot}"]`)
+    .count()
+    .catch(() => 0)
   return {
     processText,
     rowCount: await retryRowLocator(root).count(),
-    attempts: Array.from(processText.matchAll(RETRY_ATTEMPT_RE), (match) => Number(match[1])).filter(
-      (value) => Number.isInteger(value) && value > 0
-    ),
-    retryAndThinkingCoexist: /正在重试/u.test(processText) && /让俺想想/u.test(processText)
+    attempts: Array.from(processText.matchAll(RETRY_ATTEMPT_RE), (match) =>
+      Number(match[1])
+    ).filter((value) => Number.isInteger(value) && value > 0),
+    retryAndLiveSignalCoexist: /正在重试/u.test(processText) && liveSignalCount > 0
   }
 }
 
@@ -163,7 +167,7 @@ describe('workbench run e2e', () => {
         suite: 'run',
         groups: ['process'],
         description:
-          '受控 429 后验证 LLM 自动重试行从 1/5 就地更新、不叠多行，且不与「让俺想想」同时出现。',
+          '受控 429 后验证 LLM 自动重试行从 1/5 就地更新、不叠多行，且不与尾部黑球同时出现。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -231,14 +235,18 @@ describe('workbench run e2e', () => {
             ),
             stackedRetryRows:
               firstRetry.rowCount > 1 || secondRetry.rowCount > 1 || completedUi.rowCount > 0,
-            retryAndThinkingCoexist:
-              firstRetry.retryAndThinkingCoexist || secondRetry.retryAndThinkingCoexist,
-            maxRetryRowCount: Math.max(firstRetry.rowCount, secondRetry.rowCount, completedUi.rowCount),
+            retryAndLiveSignalCoexist:
+              firstRetry.retryAndLiveSignalCoexist || secondRetry.retryAndLiveSignalCoexist,
+            maxRetryRowCount: Math.max(
+              firstRetry.rowCount,
+              secondRetry.rowCount,
+              completedUi.rowCount
+            ),
             firstRetryText: firstRetry.processText,
             secondRetryText: secondRetry.processText,
             completedProcessText: completedUi.processText,
             retryGroupIds,
-            thinkingStuckAfterComplete: /让俺想想/u.test(completedUi.processText),
+            liveSignalStuckAfterComplete: completedUi.retryAndLiveSignalCoexist,
             retryLeftAfterComplete: /正在重试|已重试|重试失败/u.test(completedUi.processText),
             chatRequestCount: proxy.getChatRequestCount(),
             rateLimitedChatRequestCount: proxy.getRateLimitedChatRequestCount(),
@@ -256,8 +264,8 @@ describe('workbench run e2e', () => {
               result.maxRetryRowCount === 1 &&
               result.retryGroupIds.length === 1 &&
               result.retryGroupIds[0]?.endsWith(':llm-retry') === true &&
-              !result.retryAndThinkingCoexist &&
-              !result.thinkingStuckAfterComplete &&
+              !result.retryAndLiveSignalCoexist &&
+              !result.liveSignalStuckAfterComplete &&
               !result.retryLeftAfterComplete &&
               !/已重试/u.test(result.completedProcessText) &&
               result.eventTypes.includes('answer_completed') &&
@@ -266,7 +274,7 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-llm-retry-process-row',
               message:
-                '受控 429 后过程区必须出现正在重试 1/5 并在同一行更新到 2/5，不得叠多行或与让俺想想同时出现；成功后不得留下已重试，对齐 WB-COMPOSER-015。',
+                '受控 429 后过程区必须出现正在重试 1/5 并在同一行更新到 2/5，不得叠多行或与尾部黑球同时出现；成功后不得留下已重试，对齐 WB-COMPOSER-015。',
               data: result
             }
           )

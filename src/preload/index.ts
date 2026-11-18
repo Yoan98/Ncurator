@@ -598,6 +598,27 @@ const api: DesktopApi = {
       ipcRenderer.removeListener('ai-run-event', listener)
     }
   },
+
+  onWindowDisplayChanged: (cb: (payload: { from: number; to: number }) => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: { from: number; to: number }
+    ): void => {
+      cb(payload)
+    }
+    ipcRenderer.on('window-display-changed', listener)
+    return () => {
+      ipcRenderer.removeListener('window-display-changed', listener)
+    }
+  },
+  errorLogReport: (payload: { message: string; stack?: string }) => {
+    emitE2EIpcCall('errorLogReport')
+    return ipcRenderer.invoke('app-error-log-renderer', payload)
+  },
+  nudgeWindowCursor: () => {
+    emitE2EIpcCall('nudgeWindowCursor')
+    return ipcRenderer.invoke('window-cursor-nudge')
+  },
   onSystemNotificationOpenPartner: (cb: (partnerId: string) => void) => {
     systemNotificationPartnerListeners.add(cb)
     if (pendingSystemNotificationPartnerId) {

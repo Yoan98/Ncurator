@@ -174,8 +174,8 @@ describe('workbench conversation e2e', () => {
           const clearButton = getWorkbenchLocator(page, workbenchSelectors.clearContextButton)
           await clearButton.waitFor({ state: 'visible' })
           await runtime.captureScreenshot({
-            name: 'clear-messages-capsule',
-            message: '清空消息记录胶囊出现在 Composer 上方。'
+            name: 'clear-messages-topbar',
+            message: '清空消息记录入口位于主区标题栏右端。'
           })
           const clearLabel = ((await clearButton.textContent()) || '').replace(/\s+/g, '')
           await clearButton.hover()

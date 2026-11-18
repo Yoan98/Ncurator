@@ -3425,7 +3425,7 @@ export function registerHandlers(services: {
         return { ...opened, ...(uiState ? { uiState } : {}) }
       } catch (e: unknown) {
         console.error('[CHAT-SESSION-OPEN] Error:', e)
-        return { messages: [], hasMoreBefore: false, activeRuns: [] }
+        return { messages: [], hasMoreBefore: false, activeRuns: [], messageDayStarts: [] }
       }
     }
   )

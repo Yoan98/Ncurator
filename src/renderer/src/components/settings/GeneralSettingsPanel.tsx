@@ -8,6 +8,10 @@ import type { AppSettings } from '../../../../shared/types'
 import { settingsSelectors } from '../../testing/selectors'
 import PartnerCacheCleanupModal from './PartnerCacheCleanupModal'
 import SettingsGroup, { SettingsRow } from './SettingsGroup'
+import {
+  isStreamingMarkdownAnimationEnabled,
+  setStreamingMarkdownAnimationEnabled
+} from '../../utils/renderPreferences'
 
 const GeneralSettingsPanel: React.FC = () => {
   const { t } = useTranslation()
@@ -15,6 +19,9 @@ const GeneralSettingsPanel: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [openingLogDirectory, setOpeningLogDirectory] = useState(false)
   const [cacheCleanupOpen, setCacheCleanupOpen] = useState(false)
+  const [streamingAnimation, setStreamingAnimation] = useState<boolean>(() =>
+    isStreamingMarkdownAnimationEnabled()
+  )
 
   useEffect(() => {
     void window.api
@@ -117,6 +124,20 @@ const GeneralSettingsPanel: React.FC = () => {
               { value: 'en', label: t(($) => $.preferences.english) }
             ]}
             onChange={(language: AppSettings['language']) => void updatePreference({ language })}
+          />
+        </SettingsRow>
+        <SettingsRow
+          title={t(($) => $.settings.streamingTextAnimation)}
+          description={t(($) => $.settings.streamingTextAnimationDescription)}
+        >
+          <Switch
+            checked={streamingAnimation}
+            onChange={(enabled) => {
+              setStreamingAnimation(enabled)
+              setStreamingMarkdownAnimationEnabled(enabled)
+            }}
+            data-testid={settingsSelectors.streamingAnimationSwitch}
+            aria-label={t(($) => $.settings.streamingTextAnimation)}
           />
         </SettingsRow>
         <SettingsRow

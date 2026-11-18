@@ -1,6 +1,6 @@
 import { localizeSystemText } from '../../i18n/systemText'
 import { t } from '../../i18n'
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SubagentGroupView, { SubagentCloudProvider } from './SubagentGroupView'
 import { presentSubagentGroups } from './subagentPresentation'
 import { FaSpider, FaBook } from 'react-icons/fa'
@@ -48,9 +48,10 @@ import {
   isAssistantActivityToolGroup
 } from './utils'
 import {
-  shouldActivityHeaderShimmer,
-  shouldShowAssistantThinkingIndicator
-} from '../../../../shared/assistantThinkingWait'
+  isAssistantRunAlive,
+  resolveAssistantLiveTailOwner,
+  shouldActivityHeaderShimmer
+} from '../../../../shared/assistantProcessLiveness'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
 import ReadImageThumbs from './ReadImageThumbs'
@@ -214,97 +215,21 @@ const renderSegments = (
 
 const AssistantProcessThoughtView: React.FC<{
   thought: AssistantProcessThought
+  liveTail: boolean
   onOpenReference?: (reference: OpenableMarkdownReference) => void
-}> = ({ thought, onOpenReference }) => {
-  const [expanded, setExpanded] = useState(false)
-  const [isOverflowing, setIsOverflowing] = useState(false)
-  const contentRef = useRef<HTMLDivElement>(null)
-
-  const checkOverflow = useCallback(() => {
-    const text = thought.text || ''
-    if (text.includes('\n')) {
-      setIsOverflowing(true)
-      return
-    }
-
-    const el = contentRef.current
-    if (!el) return
-
-    if (!expanded) {
-      setIsOverflowing(el.scrollWidth > el.clientWidth + 1)
-    }
-  }, [thought.text, expanded])
-
-  useLayoutEffect(() => {
-    checkOverflow()
-  }, [checkOverflow])
-
-  useEffect(() => {
-    const el = contentRef.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(() => {
-      checkOverflow()
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [checkOverflow])
-
-  const canExpand = isOverflowing
-
-  return (
-    <div
-      className={`group/thought relative flex justify-between gap-2 rounded-[6px] transition-colors duration-150 ${
-        expanded
-          ? 'items-start bg-[#F7F7F5] px-2 py-1.5 -mx-2 cursor-pointer'
-          : canExpand
-            ? 'items-center px-2 py-0.5 -mx-2 hover:bg-[#F7F7F5] cursor-pointer'
-            : 'items-center px-2 py-0.5 -mx-2 cursor-default'
-      }`}
-      onClick={(e) => {
-        if (!canExpand) return
-        if ((e.target as HTMLElement).closest('a, button')) return
-        const selection = window.getSelection()
-        if (selection && selection.toString().length > 0) return
-        setExpanded((prev) => !prev)
-      }}
-      data-testid={workbenchSelectors.assistantThoughts}
-    >
-      <div
-        ref={contentRef}
-        className={`min-w-0 flex-1 text-[13.5px] leading-[22px] text-[#37352F] ${
-          expanded ? 'max-h-[320px] overflow-y-auto pr-1' : 'assistant-thought-collapsed'
-        }`}
-      >
-        <MarkdownRenderer
-          content={thought.text}
-          variant="thought"
-          onOpenReference={onOpenReference}
-        />
-      </div>
-      {canExpand ? (
-        <button
-          type="button"
-          className={`flex h-[22px] w-4 shrink-0 items-center justify-center rounded-[3px] text-[#9B9A97] transition-all duration-150 hover:text-[#37352F] ${
-            expanded ? 'opacity-100' : 'opacity-0 group-hover/thought:opacity-100'
-          }`}
-          aria-label={
-            expanded ? t(($) => $.workbench.hideReasoning) : t(($) => $.workbench.showReasoning)
-          }
-          onClick={(e) => {
-            e.stopPropagation()
-            setExpanded((prev) => !prev)
-          }}
-        >
-          {expanded ? (
-            <HiChevronDown className="h-3.5 w-3.5" />
-          ) : (
-            <HiChevronRight className="h-3.5 w-3.5" />
-          )}
-        </button>
-      ) : null}
-    </div>
-  )
-}
+}> = ({ thought, liveTail, onOpenReference }) => (
+  <div
+    className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#37352F]"
+    data-testid={workbenchSelectors.assistantThoughts}
+  >
+    <MarkdownRenderer
+      content={thought.text}
+      variant="thought"
+      liveTail={liveTail}
+      onOpenReference={onOpenReference}
+    />
+  </div>
+)
 
 const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
   if (group.subagents?.length) return <SubagentGroupView group={group} />
@@ -625,7 +550,8 @@ const AssistantActivityGroupView: React.FC<{
           : buildAssistantExecutionSummaryText(summaryGroups)
   const iconKind =
     waitingUser || reviewingCount > 0 ? 'terminal' : resolveAssistantExecutionIcon(groups)
-  const headerShimmer = waitingUser || reviewingCount > 0 || shimmerActive
+  // 等待用户操作时整轮停止动效：header 不再流光，文案回到中性灰。
+  const headerShimmer = !waitingUser && (reviewingCount > 0 || shimmerActive)
   return (
     <details
       className="group/execution"
@@ -685,6 +611,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   turn,
   onOpenApply,
   workspaces,
+  isStreaming,
   onOpenReference,
   onPreviewImage
 }) => {
@@ -718,20 +645,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
       ),
     [turn?.processGroups]
   )
-  const hasRunningRetry = processGroups.some(
-    (group) => group.kind === 'retry' && group.status === 'running'
-  )
-  const showThinkingIndicator = shouldShowAssistantThinkingIndicator({
-    isBrainThinking: turn?.isBrainThinking,
-    waitingApproval: Boolean(turn?.waitingApproval || turn?.waitingInteraction),
-    runFinished: Boolean(turn?.runFinished),
-    hasFinalAnswer,
-    hasRunningRetry
-  })
-  /** 运行未结束且尚无最终回答时预留固定行高，避免「让俺想想」显隐把页面顶抖 */
-  const reserveThinkingSlot =
-    showThinkingIndicator ||
-    (!turn?.runFinished && !turn?.waitingApproval && !turn?.waitingInteraction && !hasFinalAnswer)
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({
@@ -743,6 +656,27 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
       }),
     [messageId, processGroups, processThoughts, turn?.waitingApproval, turn?.waitingInteraction]
   )
+  const lastEntry = timeline[timeline.length - 1]
+  const runAlive = isAssistantRunAlive({
+    runFinished: turn?.runFinished,
+    waitingApproval: turn?.waitingApproval,
+    waitingInteraction: turn?.waitingInteraction,
+    status: turn?.status
+  })
+  /** 底部行自带动效（运行中的重试 / 压缩 / 子任务头像）时不再补球。 */
+  const lastEntrySelfAnimated = (() => {
+    if (!lastEntry || lastEntry.kind !== 'group') return false
+    const group = lastEntry.group
+    if (group.subagents?.length) return group.subagents.some((child) => child.status === 'running')
+    return group.status === 'running'
+  })()
+  /** 整轮只有这一处存活信号：文字尾部黑球 / header 流光 / 冷启动占位球。 */
+  const liveTailOwner = resolveAssistantLiveTailOwner({
+    runAlive,
+    hasFinalAnswer,
+    hasStreamingThought,
+    lastEntry: lastEntry ? { kind: lastEntry.kind, selfAnimated: lastEntrySelfAnimated } : undefined
+  })
   const approvalReviews = turn?.approvalReviews || []
   const applyTargets = turn?.applyTargets || []
   const applyTargetsCollapsed =
@@ -772,7 +706,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     <SubagentCloudProvider groups={processGroups}>
       <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
         <div className="space-y-4">
-          {timeline.length > 0 || hasStreamingThought || reserveThinkingSlot || turn.startedAt ? (
+          {timeline.length > 0 || hasStreamingThought || runAlive || turn.startedAt ? (
             <div data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}>
               {turn.startedAt ? (
                 turn.runFinished ? (
@@ -811,63 +745,71 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   </div>
                 )
               ) : null}
-              <div className={processExpanded ? 'space-y-2' : 'hidden'}>
-                {timeline.map((entry) => {
-                  if (entry.kind === 'decision') {
-                    return (
-                      <AssistantProcessThoughtView
-                        key={entry.id}
-                        thought={entry.thought}
+              {processExpanded ? (
+                <div className="space-y-2">
+                  {timeline.map((entry) => {
+                    if (entry.kind === 'decision') {
+                      return (
+                        <AssistantProcessThoughtView
+                          key={entry.id}
+                          thought={entry.thought}
+                          liveTail={
+                            liveTailOwner === 'thought' &&
+                            !hasStreamingThought &&
+                            entry.id === lastEntry?.id
+                          }
+                          onOpenReference={onOpenReference}
+                        />
+                      )
+                    }
+                    if (entry.kind === 'activity') {
+                      return (
+                        <AssistantActivityGroupView
+                          key={entry.id}
+                          id={entry.id}
+                          groups={entry.groups}
+                          waitingApproval={entry.waitingApproval}
+                          waitingInteraction={entry.waitingInteraction}
+                          approvalReviews={approvalReviews}
+                          onPreviewImage={onPreviewImage}
+                          shimmerActive={
+                            entry.id === lastEntry?.id &&
+                            shouldActivityHeaderShimmer({
+                              activityCreatedAt: entry.createdAt,
+                              thoughts: processThoughts,
+                              hasNextAiContent: hasNextAiContentForActivity,
+                              waitingForUser: Boolean(
+                                entry.waitingApproval || entry.waitingInteraction
+                              )
+                            })
+                          }
+                        />
+                      )
+                    }
+                    return <AssistantProcessGroupView key={entry.id} group={entry.group} />
+                  })}
+                  {streamingRole === 'thought' && streamingMarkdown.trim() ? (
+                    <div className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#37352F]">
+                      <MarkdownRenderer
+                        content={streamingMarkdown}
+                        variant="thought"
+                        streaming={Boolean(isStreaming)}
+                        liveTail={liveTailOwner === 'thought' && hasStreamingThought}
                         onOpenReference={onOpenReference}
                       />
-                    )
-                  }
-                  if (entry.kind === 'activity') {
-                    return (
-                      <AssistantActivityGroupView
-                        key={entry.id}
-                        id={entry.id}
-                        groups={entry.groups}
-                        waitingApproval={entry.waitingApproval}
-                        waitingInteraction={entry.waitingInteraction}
-                        approvalReviews={approvalReviews}
-                        onPreviewImage={onPreviewImage}
-                        shimmerActive={
-                          Boolean(entry.waitingApproval || entry.waitingInteraction) ||
-                          shouldActivityHeaderShimmer({
-                            activityCreatedAt: entry.createdAt,
-                            thoughts: processThoughts,
-                            hasNextAiContent: hasNextAiContentForActivity
-                          })
-                        }
-                      />
-                    )
-                  }
-                  return <AssistantProcessGroupView key={entry.id} group={entry.group} />
-                })}
-                {streamingRole === 'thought' && streamingMarkdown.trim() ? (
-                  <div className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#37352F]">
-                    <MarkdownRenderer
-                      content={streamingMarkdown}
-                      variant="thought"
-                      onOpenReference={onOpenReference}
-                    />
-                  </div>
-                ) : null}
-                {reserveThinkingSlot ? (
-                  <div
-                    className="flex h-6 items-center gap-1.5 text-[13px] leading-6 text-[#37352F]"
-                    data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${messageId}-thinking`}
-                    aria-hidden={!showThinkingIndicator}
-                  >
-                    {showThinkingIndicator ? (
-                      <span className="workbench-thinking-shimmer font-medium text-[#37352F]">
-                        {t(($) => $.workbench.thinking)}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+                    </div>
+                  ) : null}
+                  {liveTailOwner === 'placeholder' ? (
+                    <div
+                      className="flex h-6 items-center text-[13.5px]"
+                      data-testid={workbenchSelectors.assistantLiveDot}
+                      aria-hidden
+                    >
+                      <span className="nc-live-dot" />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -879,6 +821,8 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
               <MarkdownRenderer
                 content={visibleAnswerMarkdown}
                 linkAccess={turn.linkAccess}
+                streaming={Boolean(isStreaming) && !finalAnswerMarkdown}
+                liveTail={liveTailOwner === 'answer'}
                 onOpenReference={onOpenReference}
                 onOpenImage={onPreviewImage}
               />

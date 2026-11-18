@@ -31,7 +31,7 @@ import { terminalSessionManager } from './services/ai/human/tools/terminal/Termi
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 import { SystemNotificationService } from './services/SystemNotificationService'
 import { TelemetryService } from './services/telemetry/TelemetryService'
-import { AppErrorLogService } from './services/logging/AppErrorLogService'
+import { AppErrorLogService, type AppErrorLogContext } from './services/logging/AppErrorLogService'
 import { DatabaseVersionTooNewError, SqliteCore } from './services/storage/sqlite/SqliteCore'
 import { WpsSyncService } from './services/wps/WpsSyncService'
 import { setOfficeFileWriteListener } from './services/wps/officeFileWriteNotify'
@@ -64,6 +64,12 @@ let rendererFlushSequence = 0
 let mainAppWindow: BrowserWindow | undefined
 let deliverDesktopLink: ((link: string) => void) | undefined
 let focusOnShow = false
+/** Assigned once app services exist; temporary diagnostics for cross-display input. */
+let windowLogService: AppErrorLogService | null = null
+
+function logWindowStep(message: string, context?: AppErrorLogContext): void {
+  windowLogService?.write({ module: 'window', error: message, context })
+}
 
 function focusAppWindow() {
   if (!mainAppWindow) {
@@ -165,6 +171,62 @@ function attachDarwinLiveResizeThrottle(mainWindow: BrowserWindow): void {
   })
 }
 
+/** 可信指针移动：走原生输入管线，Blink 会据此更新 hover 与 cursor 状态。 */
+function injectTrustedPointerMove(win: BrowserWindow): boolean {
+  if (win.isDestroyed()) return false
+  const cursor = screen.getCursorScreenPoint()
+  const bounds = win.getContentBounds()
+  const x = Math.round(cursor.x - bounds.x)
+  const y = Math.round(cursor.y - bounds.y)
+  if (x < 0 || y < 0 || x >= bounds.width || y >= bounds.height) return false
+  // 同一坐标的移动可能被当 no-op 丢掉，先偏 1px 再回到原位。
+  const jitter = x + 1 < bounds.width ? 1 : -1
+  win.webContents.sendInputEvent({ type: 'mouseEnter', x, y })
+  win.webContents.sendInputEvent({ type: 'mouseMove', x: x + jitter, y })
+  win.webContents.sendInputEvent({ type: 'mouseMove', x, y })
+  return true
+}
+
+/**
+ * macOS 跨显示器拖动窗口后，Chromium 的几何与光标状态需要重新同步：
+ * Chrome 内核跨屏后要重算 DPI/窗口几何，而 macOS 的光标由 NSTrackingArea 的
+ * cursorUpdate 驱动，窗口换屏后可能不再收到该事件，表现为 hover 正常但鼠标
+ * 形状永远是箭头。这里先做 1px 位移强制重算几何，再补焦点与可信指针移动；
+ * 光标本身由渲染层通过 `window-cursor-nudge` 反复触发（见 main.tsx）。
+ */
+function resyncPointerTrackingAfterDisplayChange(
+  win: BrowserWindow,
+  options: { ensureWindowFocus: boolean } = { ensureWindowFocus: true }
+): void {
+  if (process.platform !== 'darwin' || win.isDestroyed()) return
+  if (win.isFullScreen() || win.isMinimized()) return
+
+  if (options.ensureWindowFocus && !win.isFocused()) win.focus()
+  logWindowStep('display-resync', {
+    focused: win.isFocused(),
+    boundsX: win.getBounds().x,
+    boundsY: win.getBounds().y
+  })
+
+  const bounds = win.getBounds()
+  try {
+    win.setBounds({ ...bounds, x: bounds.x + 1 })
+  } catch {
+    // 1px 位移只是强制重算，失败也不影响后续补焦点。
+  }
+  setTimeout(() => {
+    if (win.isDestroyed()) return
+    try {
+      win.setBounds(bounds)
+    } catch {
+      // Keep the nudged position; 1px is harmless.
+    }
+    injectTrustedPointerMove(win)
+    setTimeout(() => injectTrustedPointerMove(win), 320)
+    setTimeout(() => injectTrustedPointerMove(win), 980)
+  }, 40)
+}
+
 function createWindow(): BrowserWindow {
   const initialWindowBounds = getInitialWindowBounds()
 
@@ -177,7 +239,8 @@ function createWindow(): BrowserWindow {
     autoHideMenuBar: true,
     // 主内容区（右侧/底部边缘）为白色；窗口底色对齐为白，
     // 使 macOS live-resize 时 OS 先填充的一帧与内容同色，消除拖动露白（对齐主流应用做法）。
-    backgroundColor: '#ffffff',
+    // 米白与启动画面底色一致，冷启动首帧不会先闪一块纯白。
+    backgroundColor: '#fbfbfa',
     ...(process.platform === 'darwin'
       ? {
           titleBarStyle: 'hiddenInset',
@@ -261,6 +324,35 @@ function createWindow(): BrowserWindow {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  const resolveWindowDisplayId = (): number => {
+    const bounds = mainWindow.getBounds()
+    return screen.getDisplayNearestPoint({
+      x: bounds.x + Math.round(bounds.width / 2),
+      y: bounds.y + Math.round(bounds.height / 2)
+    }).id
+  }
+  let windowDisplayId = resolveWindowDisplayId()
+  mainWindow.on('moved', () => {
+    const nextDisplayId = resolveWindowDisplayId()
+    if (nextDisplayId === windowDisplayId) return
+    const previousDisplayId = windowDisplayId
+    windowDisplayId = nextDisplayId
+    mainWindow.webContents.send('window-display-changed', {
+      from: previousDisplayId,
+      to: nextDisplayId
+    })
+    setTimeout(() => resyncPointerTrackingAfterDisplayChange(mainWindow), 80)
+  })
+  // 启动时窗口可能恢复到副屏（上次的位置），同样需要重建一次鼠标跟踪。
+  // 这里不补窗口焦点，避免破坏开机自启 / 自动化时的静默显示。
+  mainWindow.on('show', () => {
+    setTimeout(
+      () =>
+        resyncPointerTrackingAfterDisplayChange(mainWindow, { ensureWindowFocus: false }),
+      120
+    )
+  })
+
   globalShortcut.register('F12', () => {
     const wc = mainWindow.webContents
 
@@ -330,6 +422,7 @@ if (!singleInstanceLock) {
       userDataPath: app.getPath('userData'),
       appVersion: app.getVersion()
     })
+    windowLogService = errorLogService
     process.on('uncaughtException', (error) => {
       errorLogService.write({
         module: 'main-process',
@@ -438,6 +531,12 @@ if (!singleInstanceLock) {
     await embeddingModelService.initialize()
 
     const mainWindow = createWindow()
+    ipcMain.handle('window-cursor-nudge', (event) => {
+      const target = BrowserWindow.fromWebContents(event.sender)
+      const sent = target ? injectTrustedPointerMove(target) : false
+      logWindowStep('cursor-nudge', { sent })
+      return { sent }
+    })
     mainWindow.webContents.on('render-process-gone', (_event, details) => {
       errorLogService.write({
         module: 'renderer',

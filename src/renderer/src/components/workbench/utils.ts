@@ -114,10 +114,8 @@ const getDisplayGroupText = (
   display: AssistantProcessDisplay,
   status: AssistantProcessStatus
 ): AssistantRichTextSegment[] => {
-  if (display.kind === 'thinking') {
-    if (status === 'running') return sentence(text(t(($) => $.workbench.thinking)))
-    return []
-  }
+  // 思考组只承接流式文本，不再产出「让俺想想」这类等待文案。
+  if (display.kind === 'thinking') return []
   if (display.kind === 'retry') {
     const progress = `${display.attempt}/${display.maxAttempts}`
     if (status === 'running')
@@ -956,7 +954,7 @@ export const shouldShowAssistantApplyTargets = (input: {
   runFinished: boolean
   applyTargetCount: number
 }): boolean => input.runFinished && input.applyTargetCount > 0
-export { isAssistantActivityToolGroup } from '../../../../shared/assistantThinkingWait'
+export { isAssistantActivityToolGroup } from '../../../../shared/assistantProcessLiveness'
 
 export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] => {
   const seen = new Set<string>()

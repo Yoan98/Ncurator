@@ -202,24 +202,34 @@ export class ChatRunService {
     return projectAiConversationMessages({ partnerId, records, runs })
   }
 
+  /**
+   * 一页消息 = 最近若干轮（run）。只读这一轮的记录再投影，历史再长也不影响单页成本；
+   * 日期轴单独用 SQL 统计，同样不吃全量投影。
+   */
   private async getProjectedMessagesPage(input: {
     partnerId: string
     limit: number
     beforeTimestamp?: number
-  }): Promise<{ messages: ChatMessage[]; hasMoreBefore: boolean }> {
-    const safeLimit = Math.max(1, Math.min(100, Number(input.limit || 50)))
-    const sorted = (await this.loadProjectedPartnerMessages(input.partnerId)).sort(
-      (left, right) => left.timestamp - right.timestamp
+  }): Promise<{ messages: ChatMessage[]; hasMoreBefore: boolean; dayStarts: number[] }> {
+    const safeLimit = Math.max(1, Math.min(100, Number(input.limit || 30)))
+    const [runPage, dayStarts] = await Promise.all([
+      this.deps.aiRunStore.listRunsPage({
+        partnerId: input.partnerId,
+        limit: safeLimit,
+        beforeCreatedAt: Number(input.beforeTimestamp)
+      }),
+      this.deps.chatMessageLogStore.listDayStarts(input.partnerId)
+    ])
+    const records = await this.deps.chatMessageLogStore.listByPartnerRunIds(
+      input.partnerId,
+      runPage.runs.map((run) => run.id)
     )
-    const beforeTimestamp = Number(input.beforeTimestamp)
-    const eligible = Number.isFinite(beforeTimestamp)
-      ? sorted.filter((message) => message.timestamp < beforeTimestamp)
-      : sorted
-    const hasMoreBefore = eligible.length > safeLimit
-    return {
-      messages: eligible.slice(-safeLimit),
-      hasMoreBefore
-    }
+    const messages = projectAiConversationMessages({
+      partnerId: input.partnerId,
+      records,
+      runs: runPage.runs
+    }).sort((left, right) => left.timestamp - right.timestamp)
+    return { messages, hasMoreBefore: runPage.hasMoreBefore, dayStarts }
   }
 
   public async listPartnerMessages(partnerId: string): Promise<ChatMessage[]> {
@@ -318,12 +328,13 @@ export class ChatRunService {
   public async openPartner(input: PartnerOpenRequest): Promise<PartnerOpenResponse> {
     const startedAt = Date.now()
     const normalizedPartnerId = String(input.partnerId || '').trim()
-    if (!normalizedPartnerId) return { messages: [], hasMoreBefore: false, activeRuns: [] }
+    if (!normalizedPartnerId)
+      return { messages: [], hasMoreBefore: false, activeRuns: [], messageDayStarts: [] }
     const [partner, page, activeRunRecords] = await Promise.all([
       this.deps.partnerStore.getPartner(normalizedPartnerId),
       this.getProjectedMessagesPage({
         partnerId: normalizedPartnerId,
-        limit: input.limit || 50,
+        limit: input.limit || 30,
         beforeTimestamp: input.beforeTimestamp
       }),
       this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId, [
@@ -338,7 +349,8 @@ export class ChatRunService {
       partner: partner || undefined,
       messages: page.messages,
       hasMoreBefore: page.hasMoreBefore,
-      activeRuns
+      activeRuns,
+      messageDayStarts: page.dayStarts
     }
     this.logSlowChatQuery('partner-open', startedAt, {
       partnerId: normalizedPartnerId,

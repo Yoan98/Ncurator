@@ -67,6 +67,81 @@ describe('ai unit structured chat activity', () => {
     expect(requests).toEqual([true, false, true, false])
   })
 
+  it('hides the retry row as soon as the retried call produces output', async () => {
+    const events: string[] = []
+    let attempt = 0
+    await runLlmCallWithActivity({
+      ctx: {
+        runId: 'retry-early-run',
+        sendEvent: (event) => {
+          if (event.type === 'assistant_process_group_started') events.push('retry-started')
+          if (event.type === 'assistant_process_group_completed') events.push('retry-completed')
+        }
+      },
+      runId: 'retry-early-run',
+      system: 'system',
+      user: 'user',
+      telemetry: {
+        actionType: 'llm_text_output',
+        caller: 'human.brain',
+        schemaName: 'brain',
+        modelName: 'model',
+        baseUrl: 'https://example.test/v1',
+        streamingMode: 'force_stream'
+      },
+      maxAttempts: 2,
+      classifyRetry: () => ({ retryable: true, message: 'retry', delayMs: 0 }),
+      execute: async (observer) => {
+        attempt += 1
+        if (attempt === 1) throw new Error('network')
+        observer.onDelta?.('fresh')
+        events.push('call-resolved')
+        return { output: 'fresh', rawText: 'fresh', streamed: true }
+      }
+    })
+
+    // 首个片段到达后就撤行，不等整次调用结束，否则正文在流、顶部还挂着“正在重试”。
+    expect(events).toEqual(['retry-started', 'retry-completed', 'call-resolved'])
+  })
+
+  it('keeps a failed retry row when the retried call dies after producing output', async () => {
+    const events: string[] = []
+    let attempt = 0
+    await expect(
+      runLlmCallWithActivity({
+        ctx: {
+          runId: 'retry-midstream-failure-run',
+          sendEvent: (event) => {
+            if (event.type === 'assistant_process_group_started') events.push('retry-started')
+            if (event.type === 'assistant_process_group_completed') events.push('retry-completed')
+            if (event.type === 'assistant_process_group_failed') events.push('retry-failed')
+          }
+        },
+        runId: 'retry-midstream-failure-run',
+        system: 'system',
+        user: 'user',
+        telemetry: {
+          actionType: 'llm_text_output',
+          caller: 'human.brain',
+          schemaName: 'brain',
+          modelName: 'model',
+          baseUrl: 'https://example.test/v1',
+          streamingMode: 'force_stream'
+        },
+        maxAttempts: 1,
+        classifyRetry: () => ({ retryable: true, message: 'retry', delayMs: 0 }),
+        execute: async (observer) => {
+          attempt += 1
+          if (attempt === 1) throw new Error('network')
+          observer.onDelta?.('half')
+          throw new Error('stream broke')
+        }
+      })
+    ).rejects.toBeTruthy()
+
+    expect(events).toEqual(['retry-started', 'retry-completed', 'retry-started', 'retry-failed'])
+  })
+
   it('aborts retry sleep when the run is cancelled', async () => {
     const controller = new AbortController()
     let attempt = 0
@@ -144,25 +219,39 @@ describe('ai unit structured chat activity', () => {
       await vi.advanceTimersByTimeAsync(1)
       await expect(result).resolves.toMatchObject({ output: 'success' })
       expect(callIds).toEqual([callIds[0], callIds[0]])
-    } finally { vi.useRealTimers() }
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it.each([
     new DOMException('response timed out', 'TimeoutError'),
-    new LlmProviderError({ message: 'upstream limit', httpStatus: 429, providerCode: 'rate_limit_exceeded' }),
-    new LlmProviderError({ message: 'permit response lost', httpStatus: 503, providerCode: 'lookup_required' })
+    new LlmProviderError({
+      message: 'upstream limit',
+      httpStatus: 429,
+      providerCode: 'rate_limit_exceeded'
+    }),
+    new LlmProviderError({
+      message: 'permit response lost',
+      httpStatus: 503,
+      providerCode: 'lookup_required'
+    })
   ])('ends the managed attempt on %s without executing again', async (error) => {
-    const execute = vi.fn(async () => { throw error })
-    await expect(runLlmCallWithActivity({
-      ctx: { runId: 'managed-unknown-run', sendEvent: () => undefined },
-      runId: 'managed-unknown-run',
-      system: 'system',
-      user: 'user',
-      telemetry: managedTelemetry,
-      maxAttempts: 2,
-      classifyRetry: classifyManagedLlmRetry,
-      execute
-    })).rejects.toThrow(error.message)
+    const execute = vi.fn(async () => {
+      throw error
+    })
+    await expect(
+      runLlmCallWithActivity({
+        ctx: { runId: 'managed-unknown-run', sendEvent: () => undefined },
+        runId: 'managed-unknown-run',
+        system: 'system',
+        user: 'user',
+        telemetry: managedTelemetry,
+        maxAttempts: 2,
+        classifyRetry: classifyManagedLlmRetry,
+        execute
+      })
+    ).rejects.toThrow(error.message)
     expect(execute).toHaveBeenCalledTimes(1)
   })
 

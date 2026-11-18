@@ -84,9 +84,22 @@ describe('normalizeSelectionEffort', () => {
   it('keeps a still-valid tier and drops it when the model closes the switch', () => {
     expect(normalizeSelectionEffort({ configId: 'c', modelName: 'm', effort: 'max' }, effort))
       .toEqual({ configId: 'c', modelName: 'm', effort: 'max' })
-    expect(normalizeSelectionEffort({ configId: 'c', modelName: 'm', effort: 'max' }, undefined))
-      .toEqual({ configId: 'c', modelName: 'm' })
+    // 模型确实不支持档位（目录给了空选项）时才清掉。
+    expect(normalizeSelectionEffort({ configId: 'c', modelName: 'm', effort: 'max' }, { default: 'low', options: [] }))
+      .toEqual({ configId: 'c', modelName: 'm', effort: 'low' })
     expect(normalizeSelectionEffort(null, effort)).toBeNull()
+  })
+
+  it('keeps the chosen tier when the model tiers are not known yet', () => {
+    // 目录未加载 / 切换伙伴的瞬间会传 undefined：这不是「不支持档位」，不能清掉用户的选择。
+    expect(normalizeSelectionEffort({ configId: 'c', modelName: 'm', effort: 'max' }, undefined))
+      .toEqual({ configId: 'c', modelName: 'm', effort: 'max' })
+    // manual 与普通选择都要保留。
+    expect(normalizeSelectionEffort({ configId: 'c', modelName: 'm', effort: 'xhigh', manual: true }, undefined))
+      .toEqual({ configId: 'c', modelName: 'm', effort: 'xhigh', manual: true })
+    // 引用相等：调用方靠它判断「没变化就不回写」，避免无谓的持久化。
+    const selection = { configId: 'c', modelName: 'm', effort: 'max' as const }
+    expect(normalizeSelectionEffort(selection, undefined)).toBe(selection)
   })
 
   it('preserves the manual flag so a typed model name keeps its identity', () => {

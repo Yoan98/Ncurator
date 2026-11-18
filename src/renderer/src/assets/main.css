@@ -81,33 +81,6 @@
   display: none;
 }
 
-.nc-subagent-stream-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-left: 5px;
-  border-radius: 50%;
-  background: #181818;
-  vertical-align: middle;
-  animation: nc-subagent-dot-breathe 1s ease-in-out infinite;
-}
-
-@keyframes nc-subagent-dot-breathe {
-  0%,
-  100% {
-    transform: scale(0.55);
-  }
-  50% {
-    transform: scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .nc-subagent-stream-dot {
-    animation: none;
-  }
-}
-
 .nc-cache-cleanup-modal .ant-modal-content {
   display: flex;
   flex-direction: column;

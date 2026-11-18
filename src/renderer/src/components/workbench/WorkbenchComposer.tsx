@@ -56,6 +56,7 @@ import {
 } from './composer/utils'
 import WorkbenchSelect from './WorkbenchSelect'
 import WorkbenchModelSelector from './WorkbenchModelSelector'
+import type { PartnerAvatarColor, PartnerAvatarShape } from '../../../../shared/types'
 import { AI_PREFERENCE_OPTIONS, EXECUTION_PERMISSION_OPTIONS } from './selectOptions'
 import type { ImageLightboxImage } from './ImageLightbox'
 import WorkbenchPlanProgress from './WorkbenchPlanProgress'
@@ -71,6 +72,8 @@ export type DroppedAttachmentItem = { file: File; kind: 'file' | 'directory' }
 
 type WorkbenchComposerProps = {
   partnerName?: string | null
+  /** 当前伙伴形象，用于强度滑块的滑块外观。 */
+  partnerAvatar?: { shape: PartnerAvatarShape; color: PartnerAvatarColor } | null
   aiPreference: WorkbenchAiPreference
   onAiPreferenceChange: (preference: WorkbenchAiPreference) => void
   executionPermission: WorkbenchExecutionPermission
@@ -123,6 +126,7 @@ const markEmptyCaretAnchor = (editor: HTMLElement): boolean => {
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   partnerName,
+  partnerAvatar,
   aiPreference,
   onAiPreferenceChange,
   executionPermission,
@@ -1201,6 +1205,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               onAfterChange={focusEditorAfterControlChange}
               onRefreshModelLists={onRefreshModelLists}
               onAddManualModel={onAddManualModel}
+              partnerAvatar={partnerAvatar}
               onFreeModelsChange={onFreeModelsChange}
               noDrag
               hideTriggerIcon

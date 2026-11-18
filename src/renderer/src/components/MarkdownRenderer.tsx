@@ -7,6 +7,7 @@ import 'katex/dist/katex.min.css'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import type { MarkdownLinkAccessEntry } from '../../../shared/types'
+import { splitStableMarkdown } from '../../../shared/streamingMarkdown'
 import {
   findMarkdownLinkAccess,
   normalizeRefMarkdownLinks,
@@ -19,6 +20,8 @@ import {
 } from './markdownReference'
 import MarkdownImage, { type MarkdownPreviewImage } from './markdownImage'
 import remarkGfmNoAutolink from './remarkGfmNoAutolink'
+import { useStreamingMarkdownAnimation } from '../utils/renderPreferences'
+import { useTypewriterText } from '../utils/streamingTypewriter'
 
 interface MarkdownRendererProps {
   content: string
@@ -27,11 +30,148 @@ interface MarkdownRendererProps {
   linkAccess?: MarkdownLinkAccessEntry[]
   /** Path of the Markdown file being rendered; enables relative image sources. */
   sourceFilePath?: string
+  /** Text is still arriving: render closed blocks once, type out the tail. */
+  streaming?: boolean
+  /** This block is the live tail of a running turn: paint the breathing dot after it. */
+  liveTail?: boolean
   onOpenReference?: (reference: OpenableMarkdownReference) => void
   onOpenImage?: (image: MarkdownPreviewImage) => void
 }
 
 const LANGUAGE_CLASS_RE = /language-([\w-]+)/
+
+type ComponentOptions = {
+  linkAccess?: MarkdownLinkAccessEntry[]
+  sourceFilePath?: string
+  onOpenReference?: (reference: OpenableMarkdownReference) => void
+  onOpenImage?: (image: MarkdownPreviewImage) => void
+  /** Streaming tail: skip syntax highlighting and image loading until closed. */
+  deferHeavy?: boolean
+}
+
+const createMarkdownComponents = (options: ComponentOptions): Components => ({
+  code(props) {
+    const language = LANGUAGE_CLASS_RE.exec(props.className || '')?.[1]
+    const text = String(props.children).replace(/\n$/, '')
+    if (!language || options.deferHeavy) {
+      // Block code keeps the <pre> shell from react-markdown; the stylesheet
+      // strips the inline-code chrome for `pre > code` (see base.css).
+      return <code className="markdown-inline-code">{text}</code>
+    }
+    return (
+      <SyntaxHighlighter
+        style={oneLight}
+        language={language}
+        PreTag="div"
+        className="markdown-code-block !my-0"
+      >
+        {text}
+      </SyntaxHighlighter>
+    )
+  },
+  a({ href, children }) {
+    const label = String(children)
+    const resolved = resolveMarkdownLinkForRender({
+      href,
+      linkAccess: options.linkAccess,
+      label
+    })
+
+    if (resolved.mode === 'unavailable') {
+      return (
+        <span
+          className="markdown-reference-unavailable"
+          title={t(($) => $.common.linkUnavailable)}
+          data-ref-access-status="unavailable"
+        >
+          <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
+        </span>
+      )
+    }
+
+    if (resolved.mode === 'openable') {
+      const { reference } = resolved
+      return (
+        <a
+          href={href}
+          className="markdown-reference-link"
+          data-ref-path={reference.path}
+          data-ref-resource-type={reference.resourceType}
+          onClick={(event) => {
+            // 即使回调缺失也要拦住默认导航，避免 Electron 整页闪白
+            event.preventDefault()
+            if (!options.onOpenReference) return
+            options.onOpenReference(reference)
+          }}
+        >
+          <span className="markdown-reference-icon">
+            {renderReferenceIcon({
+              resourceType: reference.resourceType,
+              path: reference.path
+            })}
+          </span>
+          <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
+        </a>
+      )
+    }
+
+    return (
+      <a
+        href={resolved.href}
+        className="markdown-normal-link"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {children}
+      </a>
+    )
+  },
+  img({ src, alt, title }) {
+    if (options.deferHeavy) {
+      // The destination may still be half-typed; never probe the disk for it.
+      return (
+        <span className="markdown-image-pending" title={title}>
+          {alt || t(($) => $.editors.image)}
+        </span>
+      )
+    }
+    const access = findMarkdownLinkAccess(options.linkAccess, src || '')
+    return (
+      <MarkdownImage
+        src={src}
+        alt={alt}
+        title={title}
+        sourceFilePath={options.sourceFilePath}
+        unavailable={access?.accessStatus === 'unavailable'}
+        onOpen={options.onOpenImage}
+      />
+    )
+  },
+  table({ children }) {
+    return (
+      <div className="markdown-table-wrap">
+        <table>{children}</table>
+      </div>
+    )
+  }
+})
+
+const MarkdownSegment: React.FC<{ text: string; components: Components }> = ({
+  text,
+  components
+}) => (
+  <ReactMarkdown
+    remarkPlugins={[remarkGfmNoAutolink, [remarkMath, { singleDollarTextMath: false }] as const]}
+    rehypePlugins={[rehypeKatex]}
+    urlTransform={transformAssistantMarkdownUrl}
+    components={components}
+  >
+    {text}
+  </ReactMarkdown>
+)
+
+/** Closed blocks are parsed once; re-renders only happen when they grow. */
+const StableMarkdownSegment = React.memo(MarkdownSegment)
 
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
@@ -39,6 +179,8 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   variant = 'default',
   linkAccess,
   sourceFilePath,
+  streaming = false,
+  liveTail = false,
   onOpenReference,
   onOpenImage
 }) => {
@@ -50,103 +192,27 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     [content]
   )
 
+  const animateStream = useStreamingMarkdownAnimation()
+  const split = useMemo(
+    () =>
+      streaming ? splitStableMarkdown(normalizedContent) : { stable: normalizedContent, tail: '' },
+    [normalizedContent, streaming]
+  )
+  const displayedTail = useTypewriterText(split.tail, streaming && animateStream)
+
   // Component identity must stay stable across renders: react-markdown turns this
   // map into element types, so a new map remounts the whole subtree (and re-reads
   // images) on every streamed token.
-  const components = useMemo<Components>(
+  const { full, light } = useMemo(
     () => ({
-      code(props) {
-        const language = LANGUAGE_CLASS_RE.exec(props.className || '')?.[1]
-        const text = String(props.children).replace(/\n$/, '')
-        if (!language) {
-          // Block code keeps the <pre> shell from react-markdown; the stylesheet
-          // strips the inline-code chrome for `pre > code` (see base.css).
-          return <code className="markdown-inline-code">{text}</code>
-        }
-        return (
-          <SyntaxHighlighter
-            style={oneLight}
-            language={language}
-            PreTag="div"
-            className="markdown-code-block !my-0"
-          >
-            {text}
-          </SyntaxHighlighter>
-        )
-      },
-      a({ href, children }) {
-        const label = String(children)
-        const resolved = resolveMarkdownLinkForRender({ href, linkAccess, label })
-
-        if (resolved.mode === 'unavailable') {
-          return (
-            <span
-              className="markdown-reference-unavailable"
-              title={t(($) => $.common.linkUnavailable)}
-              data-ref-access-status="unavailable"
-            >
-              <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
-            </span>
-          )
-        }
-
-        if (resolved.mode === 'openable') {
-          const { reference } = resolved
-          return (
-            <a
-              href={href}
-              className="markdown-reference-link"
-              data-ref-path={reference.path}
-              data-ref-resource-type={reference.resourceType}
-              onClick={(event) => {
-                // 即使回调缺失也要拦住默认导航，避免 Electron 整页闪白
-                event.preventDefault()
-                if (!onOpenReference) return
-                onOpenReference(reference)
-              }}
-            >
-              <span className="markdown-reference-icon">
-                {renderReferenceIcon({
-                  resourceType: reference.resourceType,
-                  path: reference.path
-                })}
-              </span>
-              <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
-            </a>
-          )
-        }
-
-        return (
-          <a
-            href={resolved.href}
-            className="markdown-normal-link"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {children}
-          </a>
-        )
-      },
-      img({ src, alt, title }) {
-        const access = findMarkdownLinkAccess(linkAccess, src || '')
-        return (
-          <MarkdownImage
-            src={src}
-            alt={alt}
-            title={title}
-            sourceFilePath={sourceFilePath}
-            unavailable={access?.accessStatus === 'unavailable'}
-            onOpen={onOpenImage}
-          />
-        )
-      },
-      table({ children }) {
-        return (
-          <div className="markdown-table-wrap">
-            <table>{children}</table>
-          </div>
-        )
-      }
+      full: createMarkdownComponents({ linkAccess, sourceFilePath, onOpenReference, onOpenImage }),
+      light: createMarkdownComponents({
+        linkAccess: undefined,
+        sourceFilePath,
+        onOpenReference,
+        onOpenImage,
+        deferHeavy: true
+      })
     }),
     [linkAccess, sourceFilePath, onOpenReference, onOpenImage]
   )
@@ -154,18 +220,14 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   return (
     <div
       className={`markdown-body ${variant === 'thought' ? 'markdown-body--thought' : ''} ${className || ''}`}
+      data-live-tail={liveTail ? 'true' : undefined}
     >
-      <ReactMarkdown
-        remarkPlugins={[
-          remarkGfmNoAutolink,
-          [remarkMath, { singleDollarTextMath: false }] as const
-        ]}
-        rehypePlugins={[rehypeKatex]}
-        urlTransform={transformAssistantMarkdownUrl}
-        components={components}
-      >
-        {normalizedContent}
-      </ReactMarkdown>
+      {split.stable ? <StableMarkdownSegment text={split.stable} components={full} /> : null}
+      {displayedTail ? (
+        <div className="markdown-stream-tail">
+          <MarkdownSegment text={displayedTail} components={light} />
+        </div>
+      ) : null}
     </div>
   )
 }

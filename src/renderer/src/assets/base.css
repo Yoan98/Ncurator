@@ -779,10 +779,79 @@ textarea,
   }
 }
 
+/* ── 被抓痒笑 ──────────────────────────────────────────────
+ * 抓住滑块时伙伴形象的反应，分两层：
+ * - hop 层：整只在原地被"挠得弹起来"，纵向小幅弹跳 + 轻微放大（被挠到的应激）。
+ * - tilt 层：身体左右扭动并带旋转，做出"被挠到翻过来"的翻滚感。
+ *   只做横向平移会显得像卡住抖动，加上旋转与纵向位移才有被挠到的重量感。
+ * 两层用不同周期，避免同频看起来像机器震动。
+ */
+.nc-partner-avatar-tickled .nc-partner-avatar-hop {
+  animation: nc-partner-avatar-tickle-hop 420ms ease-in-out infinite;
+  transform-origin: center;
+}
+
+.nc-partner-avatar-tickled .nc-partner-avatar-tilt {
+  animation: nc-partner-avatar-tickle-roll 560ms ease-in-out infinite;
+  /* 必须以自身中心为轴：默认 origin 会让倾斜绕左上角甩，看起来是歪的而不是翻滚。 */
+  transform-origin: center;
+}
+
+@keyframes nc-partner-avatar-tickle-hop {
+  0% {
+    transform: translateY(0) scale(0.93);
+  }
+  30% {
+    /* 被挠到的瞬间整只弹起来，同时放大，像被"揪"了一下 */
+    transform: translateY(-3px) scale(1.07);
+  }
+  62% {
+    transform: translateY(1px) scale(0.98);
+  }
+  100% {
+    transform: translateY(0) scale(0.93);
+  }
+}
+
+/*
+ * 「被抓到翻」的关键：绕中心大幅度来回翻滚。
+ * 幅度必须够大（±28°）才看得出是在被打滚，±10° 左右只会像轻微晃动；
+ * 同时加入纵向位移，让翻转有重量感，而不是原地摇头。
+ */
+@keyframes nc-partner-avatar-tickle-roll {
+  0% {
+    transform: rotate(-26deg) translate(-1.5px, 0.5px);
+  }
+  25% {
+    transform: rotate(28deg) translate(1.5px, -1px);
+  }
+  50% {
+    transform: rotate(-18deg) translate(-1px, 0.5px);
+  }
+  75% {
+    transform: rotate(22deg) translate(1px, -0.5px);
+  }
+  100% {
+    transform: rotate(-26deg) translate(-1.5px, 0.5px);
+  }
+}
+
+.nc-partner-avatar-blush {
+  transition: opacity 180ms ease;
+}
+
+/* 滑块上的伙伴形象：压住轨道，用极轻投影与蓝色填充分层，不加白底。 */
+.nc-effort-avatar {
+  position: relative;
+  filter: drop-shadow(0 1px 1.5px rgba(20, 20, 25, 0.18));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nc-partner-avatar-animated .nc-partner-avatar-hop,
   .nc-partner-avatar-animated .nc-partner-avatar-tilt,
-  .nc-partner-avatar-animated .nc-partner-avatar-orbit {
+  .nc-partner-avatar-animated .nc-partner-avatar-orbit,
+  .nc-partner-avatar-tickled .nc-partner-avatar-hop,
+  .nc-partner-avatar-tickled .nc-partner-avatar-tilt {
     animation: none;
   }
 }
@@ -1113,6 +1182,31 @@ textarea,
 .nc-topbar > .nc-topbar-title-region {
   position: relative;
   z-index: 2;
+}
+
+/* Topbar 里的低频会话操作：常态中性灰，hover / 聚焦才提亮，不抢标题。 */
+.nc-topbar-action {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--notion-text-faint, #9b9a97);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.nc-topbar-action:hover,
+.nc-topbar-action:focus-visible {
+  color: var(--notion-text, #37352f);
+  background: var(--notion-wash, #f4f4f2);
+  outline: none;
 }
 
 .nc-resource-tabbar {
@@ -1705,12 +1799,225 @@ textarea,
 }
 
 .nc-document {
-  @apply mx-auto flex w-full max-w-[760px] flex-col gap-5 pb-8;
+  @apply mx-auto flex w-full max-w-[760px] flex-col gap-5;
+  /* 底部留白 = composer 渐变重叠量 + 8px：贴底时最后一行完整露在渐变之上。 */
+  padding-bottom: calc(var(--nc-composer-overlap, 28px) + 8px);
 }
 
 .nc-timeline-pin-spacer {
   height: 0;
   pointer-events: none;
+}
+
+/* Floating "back to latest" affordance: centered over the scroll viewport, just
+   above the composer gradient. Appears past 320px from bottom, hides under 120px. */
+.nc-scroll-to-latest {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--notion-line-strong);
+  border-radius: 9999px;
+  background: var(--notion-page);
+  color: var(--notion-text);
+  box-shadow: 0 4px 12px rgba(15, 15, 15, 0.08);
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 120ms ease;
+  animation: nc-scroll-to-latest-in 140ms ease-out;
+}
+
+.nc-scroll-to-latest:hover {
+  background: var(--notion-surface);
+}
+
+.nc-scroll-to-latest:active {
+  transform: translateX(-50%) scale(0.96);
+}
+
+.nc-scroll-to-latest:focus-visible {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: 2px;
+}
+
+@keyframes nc-scroll-to-latest-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-scroll-to-latest {
+    animation: none;
+  }
+}
+
+/* ── 当天消息导航（右侧导轨） ─────────────────────────────────
+ * 条目长度按内容量分三档，当前项加长加粗；hover / focus 出预览卡。
+ * 只让刻度可点击，导轨容器本身不吃指针，避免挡住正文选择。
+ */
+.nc-conversation-outline {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  z-index: 15;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.nc-conversation-outline-ticks {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 0;
+  max-height: min(56vh, 520px);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 12px,
+    #000 calc(100% - 12px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 12px,
+    #000 calc(100% - 12px),
+    transparent 100%
+  );
+}
+
+.nc-conversation-outline.is-dense .nc-conversation-outline-ticks {
+  gap: 1px;
+  padding: 4px 0;
+}
+
+.nc-conversation-outline-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 34px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.nc-conversation-outline.is-dense .nc-conversation-outline-item {
+  height: 7px;
+}
+
+.nc-conversation-outline-tick {
+  display: block;
+  height: 2px;
+  border-radius: 2px;
+  background: #d8d7d3;
+  transition:
+    width 160ms ease,
+    background-color 160ms ease;
+}
+
+.nc-conversation-outline-item[data-kind='user'] .nc-conversation-outline-tick {
+  background: #b9b8b3;
+}
+
+.nc-conversation-outline-item[data-length='1'] .nc-conversation-outline-tick {
+  width: 8px;
+}
+
+.nc-conversation-outline-item[data-length='2'] .nc-conversation-outline-tick {
+  width: 15px;
+}
+
+.nc-conversation-outline-item[data-length='3'] .nc-conversation-outline-tick {
+  width: 22px;
+}
+
+.nc-conversation-outline-item:hover .nc-conversation-outline-tick {
+  width: 26px;
+  background: #787774;
+}
+
+.nc-conversation-outline-item.is-active .nc-conversation-outline-tick {
+  width: 28px;
+  background: #37352f;
+}
+
+.nc-conversation-outline-item:focus-visible {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: 2px;
+  border-radius: 9999px;
+}
+
+.nc-conversation-outline-preview {
+  position: absolute;
+  right: calc(100% + 10px);
+  width: 260px;
+  padding: 10px 12px;
+  border: 1px solid var(--notion-line-strong);
+  border-radius: 12px;
+  background: var(--notion-page);
+  box-shadow: 0 8px 24px rgba(15, 15, 15, 0.1);
+  transform: translateY(-50%);
+  pointer-events: none;
+  animation: nc-conversation-outline-preview-in 120ms ease-out;
+}
+
+.nc-conversation-outline-preview-title {
+  overflow: hidden;
+  color: var(--notion-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nc-conversation-outline-preview-snippet {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--notion-text-soft);
+  font-size: 12px;
+  line-height: 18px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@keyframes nc-conversation-outline-preview-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-conversation-outline-tick {
+    transition: none;
+  }
+
+  .nc-conversation-outline-preview {
+    animation: none;
+  }
 }
 
 .nc-empty-state {
@@ -1791,7 +2098,21 @@ textarea,
 }
 
 .nc-floating-composer-shell {
-  @apply shrink-0 bg-gradient-to-t from-white via-white/96 via-60% to-transparent px-6 pb-6 pt-7;
+  @apply shrink-0 bg-gradient-to-t from-white via-white/96 via-60% to-transparent px-6 pb-6;
+  /* 上移一截并补等高的顶部内边距：渐变盖住消息区最后一段，
+     内容从输入框后面淡出，不再在渐变上沿被硬裁出一条切线。
+     该数值与 ChatPage 里贴底/日跳转使用的 COMPOSER_OVERLAP_PX 必须一致。 */
+  padding-top: var(--nc-composer-overlap, 28px);
+  margin-top: calc(-1 * var(--nc-composer-overlap, 28px));
+}
+
+/* No partner selected: the empty state owns the message area instead of the composer slot. */
+.nc-empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .nc-floating-composer {
@@ -2148,26 +2469,6 @@ mark {
   background-color: rgba(0, 0, 0, 0.04);
 }
 
-.assistant-thought-collapsed {
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.assistant-thought-collapsed .markdown-body--thought,
-.assistant-thought-collapsed .markdown-body--thought * {
-  display: inline !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  white-space: nowrap !important;
-  color: #37352f !important;
-}
-
-.assistant-thought-collapsed .markdown-body--thought .markdown-image {
-  display: none !important;
-}
-
 .markdown-body a {
   color: var(--notion-accent-blue);
   text-decoration: none;
@@ -2342,6 +2643,79 @@ mark {
   font-size: 12px;
   line-height: 1.5;
   text-align: left;
+}
+
+/* Streaming tail: closed blocks above are parsed once, the growing tail is
+   re-parsed per tick. Keep it visually identical to the final markup. */
+.markdown-body .markdown-stream-tail {
+  display: block;
+}
+
+.markdown-body .markdown-image-pending {
+  color: var(--ink-3);
+  font-size: 0.92em;
+}
+
+/* Live tail: the run is still alive behind this text block. One breathing dot
+   per turn, painted after the last block so it rides the text itself. Sized in
+   `em` so the ball is exactly as tall as the text it follows. */
+.markdown-body[data-live-tail='true'] .markdown-stream-tail > :last-child::after,
+.markdown-body[data-live-tail='true'] > :not(.markdown-stream-tail):last-child::after {
+  content: '';
+  display: inline-block;
+  position: relative;
+  top: -0.12em;
+  width: 1em;
+  height: 1em;
+  margin-left: 0.12em;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: #181818;
+  box-shadow: 0 0 0.34em 0.06em rgba(24, 24, 24, 0.2);
+  animation: nc-live-dot-breathe 1s ease-in-out infinite;
+}
+
+/* Single live marker shared by the process tail, the subagent cloud and the
+   empty-process placeholder. Only one is mounted at a time. */
+.nc-live-dot {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  background: #181818;
+  box-shadow: 0 0 0.34em 0.06em rgba(24, 24, 24, 0.2);
+  animation: nc-live-dot-breathe 1s ease-in-out infinite;
+}
+
+/* Inline after text: nudge to the optical centre of the line. The gap is small
+   on purpose — CJK punctuation already carries a wide right side bearing. */
+.nc-live-dot--tail {
+  position: relative;
+  top: -0.12em;
+  margin-left: 0.12em;
+  vertical-align: middle;
+}
+
+/* The halo breathes with the ball: tight and slightly denser at the trough,
+   spread wide and thinner at the peak. */
+@keyframes nc-live-dot-breathe {
+  0%,
+  100% {
+    transform: scale(0.72);
+    box-shadow: 0 0 0.22em 0.03em rgba(24, 24, 24, 0.26);
+  }
+  50% {
+    transform: scale(1);
+    box-shadow: 0 0 0.4em 0.1em rgba(24, 24, 24, 0.16);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markdown-body[data-live-tail='true'] .markdown-stream-tail > :last-child::after,
+  .markdown-body[data-live-tail='true'] > :not(.markdown-stream-tail):last-child::after,
+  .nc-live-dot {
+    animation: none;
+  }
 }
 
 .markdown-body .markdown-table-wrap {

@@ -38,16 +38,23 @@ export const findSelectionEffort = (input: {
  * 以当前模型可用的强度选项校正已保存的选择。换模型、目录刷新后旧档位可能不再可用，
  * 这时回落到该模型默认档，不能把幽灵值发给服务端。
  */
+/**
+ * 校验已选档位是否仍可用；不可用则回落到该模型的默认档。
+ *
+ * 关键：`effort` 为 undefined 表示「还不知道该模型的档位」，不是「该模型没有档位」。
+ * 目录尚未加载、切换伙伴的瞬间都会传入 undefined，此时必须原样保留已选档位，
+ * 否则每次刷新/切换都会把用户选的档位清掉。
+ */
 export const normalizeSelectionEffort = (
   selection: WorkbenchSelectedModel | null,
   effort: LlmEffort | undefined
 ): WorkbenchSelectedModel | null => {
   if (!selection) return null
-  const value = effort
-    ? effort.options.some((option) => option.value === selection.effort)
-      ? selection.effort
-      : effort.default
-    : undefined
+  // 档位未知：保留现状，等目录加载完再判定。
+  if (!effort) return selection
+  const value = effort.options.some((option) => option.value === selection.effort)
+    ? selection.effort
+    : effort.default
   if (selection.effort === value) return selection
   const next: WorkbenchSelectedModel = { configId: selection.configId, modelName: selection.modelName }
   if (selection.manual) next.manual = true

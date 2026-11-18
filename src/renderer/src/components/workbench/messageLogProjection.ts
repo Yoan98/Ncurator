@@ -7,7 +7,7 @@ import type {
   IpcJsonObject
 } from '../../../../shared/types'
 import { normalizeThoughtText } from '../../../../shared/thoughtText'
-import { isBrainThinkingOpenInLog } from '../../../../shared/assistantThinkingWait'
+import { isBrainThinkingOpenInLog } from '../../../../shared/assistantProcessLiveness'
 import {
   reduceAssistantProcessGroups,
   createDisplayProcessGroup,

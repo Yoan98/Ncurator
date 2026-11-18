@@ -415,6 +415,9 @@ export type DesktopApi = {
     payload: OpenFileWithApplicationRequest
   ) => Promise<OpenFileWithApplicationResponse>
   onAiRunEvent: (cb: (event: AiRunEvent) => void) => () => void
+  onWindowDisplayChanged: (cb: (payload: { from: number; to: number }) => void) => () => void
+  errorLogReport: (payload: { message: string; stack?: string }) => Promise<{ success: boolean }>
+  nudgeWindowCursor: () => Promise<{ sent: boolean }>
   onSystemNotificationOpenPartner: (cb: (partnerId: string) => void) => () => void
   onWorkbenchUiFlushRequest: (cb: () => void | Promise<void>) => () => void
 }

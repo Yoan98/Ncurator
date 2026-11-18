@@ -298,6 +298,9 @@ export const en = {
     aiTaskNotifications: 'AI completion notifications',
     sendDesktopNotificationsWhenAiTasksSucceedFailOr:
       'Send system notifications when tasks succeed, fail, or are canceled.',
+    streamingTextAnimation: 'Streaming text animation',
+    streamingTextAnimationDescription:
+      'Reveal streamed answers smoothly; turn off to show text as soon as it arrives.',
     errorLog: 'Error log',
     runtimeAndIndexingErrorsAreLoggedLocallyShareApp:
       'Open the log folder to find app.log for troubleshooting.',
@@ -536,8 +539,6 @@ export const en = {
     commandDidNotRun: 'Command did not run ',
     mS: '{{value1}}m {{value2}}s',
     s: '{{value1}}s',
-    hideReasoning: 'Hide reasoning',
-    showReasoning: 'Show reasoning',
     waitingForYourInput: 'Waiting for your input',
     aiReview: 'AI review:',
     approved: 'Approved',
@@ -555,7 +556,6 @@ export const en = {
     expand: 'Expand',
     duration: 'Duration',
     handled: 'Handled',
-    thinking: 'Thinking',
     failed2: 'Failed:',
     viewDetails: 'View details',
     changedFiles: 'Changed files',
@@ -932,6 +932,8 @@ export const en = {
     createPartner: 'Create partner',
     scheduledTasksEnabled: 'Scheduled tasks, {{value1}} enabled',
     expandRightSidebar: 'Expand right sidebar',
+    scrollToLatest: 'Scroll to latest',
+    conversationOutline: 'Message navigation for this day',
     loadingEarlierMessages: 'Loading earlier messages',
     whatWouldYouLikeToDo: 'What would you like to do?',
     noPartnersYetCreateOneFromTheSidebarTo:
