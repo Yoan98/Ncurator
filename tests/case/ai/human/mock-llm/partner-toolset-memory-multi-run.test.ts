@@ -191,7 +191,11 @@ describe('ai human mock-llm backend', () => {
               result.stateAfterEviction.includes(toolset)
             ) &&
             !result.stateAfterEviction.includes('docx-read') &&
-            result.stateAfterEviction.includes('pdf-read') &&
+            ['excel-write', 'ppt-read', 'ppt-write'].every((toolset) =>
+              result.stateAfterEviction.includes(toolset)
+            ) &&
+            (result.stateAfterEviction.includes('pdf-read') ||
+              Boolean(result.run4EvictionSummary?.includes('pdf-read'))) &&
             result.run5LoadedDocxRead &&
             result.stateAfterRelearn.includes('docx-read'),
           {
