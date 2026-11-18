@@ -7,7 +7,6 @@ import {
   renderTerminalStopModelResult
 } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { TOOLSET_DEFINITIONS } from '../../../../src/main/services/ai/human/toolsets'
-import { TERMINAL_DEFAULT_WATCH_SECONDS } from '../../../../src/main/services/ai/human/tools/terminal/terminalConstants'
 import {
   TERMINAL_READ_SCHEMA,
   TERMINAL_RUN_SCHEMA,
@@ -74,13 +73,15 @@ describe('ai unit terminal tool contract', () => {
     ).toBe(false)
   })
 
-  it('documents the default watch time and the continuation path on maxWaitSeconds', () => {
+  it('documents the watch window and the continuation path on maxWaitSeconds', () => {
     const schema = toJSONSchema(TERMINAL_RUN_SCHEMA) as {
       properties: { maxWaitSeconds: { description?: string } }
     }
     const description = schema.properties.maxWaitSeconds.description || ''
-    expect(description).toContain(`${TERMINAL_DEFAULT_WATCH_SECONDS} 秒`)
-    expect(description).toContain('terminal_read')
+    // 描述只说明「本次调用盯多久、到点不中断命令」，具体续接方式见 terminal_read。
+    expect(description).toContain('最长盯着命令结束')
+    expect(description).toContain('命令继续执行')
+    expect(description).not.toContain('中断')
   })
 
   it('requires terminalId for terminal_read and accepts optional readEndPosition', () => {
