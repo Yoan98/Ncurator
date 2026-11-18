@@ -1,3 +1,4 @@
+import { prepareIsolatedKnowledgeSeed } from './knowledgeSeed'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Page } from 'playwright'
@@ -325,7 +326,7 @@ export const runE2ECase = async <TResult>(
     groups: definition.groups || [],
     caseId: definition.caseId
   })
-  const resolvedExtraEnv = await resolveE2EModelEnv({
+  let resolvedExtraEnv = await resolveE2EModelEnv({
     serviceMode: definition.serviceMode,
     extraEnv: {
       ...definition.extraEnv,
@@ -347,19 +348,21 @@ export const runE2ECase = async <TResult>(
     caseId: definition.caseId,
     runId
   })
-  const knowledgeCachePath = String(
-    process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || ''
-  ).trim()
-  const knowledgeCacheStatsPath = String(
+  let knowledgeCachePath = String(process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
+  let knowledgeCacheStatsPath = String(
     process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_STATS_PATH || ''
   ).trim()
-  const knowledgeCacheEnabled = definition.knowledge === 'cached' && Boolean(knowledgeCachePath)
-  const knowledgeCacheBaseline = knowledgeCacheEnabled
+  const knowledgeCacheEnabled =
+    definition.knowledge === 'cached' &&
+    Boolean(knowledgeCachePath) &&
+    process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE === '1'
+  let knowledgeCacheBaseline = knowledgeCacheEnabled
     ? await readKnowledgeCacheStats(knowledgeCacheStatsPath || knowledgeCachePath)
     : { ...EMPTY_KNOWLEDGE_CACHE_STATS }
   const emittedTimelineSignalKeys = new Set<string>()
   const emittedRuntimeEventKeys = new Set<string>()
   const emittedLlmIoKeys = new Set<string>()
+  let isolatedKnowledge: Awaited<ReturnType<typeof prepareIsolatedKnowledgeSeed>> | undefined
   let launchedApp: LaunchedElectronApp | null = null
   let status: TestRunStatus = 'failed'
   let stepCounter = 0
@@ -769,6 +772,30 @@ export const runE2ECase = async <TResult>(
   }
 
   try {
+    if (
+      definition.knowledge === 'cached' &&
+      process.env.NCURATOR_E2E_KNOWLEDGE_SEED_ROOT &&
+      process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE === '1'
+    ) {
+      if (definition.prepareUserData || definition.prepareApplication || definition.sourceAppPath)
+        throw new Error(
+          'Custom app/model setup requires an explicit seed identity adapter; do not reuse the default local fixture seed'
+        )
+      isolatedKnowledge = await prepareIsolatedKnowledgeSeed({
+        fixtures: definition.fixtures,
+        prepareMissing: process.env.NCURATOR_E2E_SEED_PREPARED !== '1',
+        env: resolvedExtraEnv || {},
+        sourceAppPath: definition.sourceAppPath
+      })
+      knowledgeCachePath = isolatedKnowledge.cachePath
+      knowledgeCacheStatsPath = path.join(knowledgeCachePath, 'stats.json')
+      knowledgeCacheBaseline = { ...EMPTY_KNOWLEDGE_CACHE_STATS }
+      resolvedExtraEnv = {
+        ...resolvedExtraEnv,
+        NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH: knowledgeCachePath,
+        NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_STATS_PATH: knowledgeCacheStatsPath
+      }
+    }
     launchedApp = await launchElectronApp({
       serviceMode: definition.serviceMode,
       windowMode: definition.windowMode,
@@ -1017,6 +1044,18 @@ export const runE2ECase = async <TResult>(
     }
 
     teardownErrors.push(...(await resourceScope.dispose('after-app-close')))
+    const knowledgeCacheCurrent = knowledgeCacheEnabled
+      ? await readKnowledgeCacheStats(knowledgeCacheStatsPath || knowledgeCachePath)
+      : { ...EMPTY_KNOWLEDGE_CACHE_STATS }
+    try {
+      await isolatedKnowledge?.dispose()
+    } catch (error) {
+      teardownErrors.push({
+        name: 'isolated-knowledge-cache',
+        phase: 'after-app-close',
+        error: error instanceof Error ? error : new Error(String(error))
+      })
+    }
     for (const teardownError of teardownErrors) {
       recordEvent({
         type: 'error',
@@ -1041,9 +1080,6 @@ export const runE2ECase = async <TResult>(
       status = 'failed'
     }
 
-    const knowledgeCacheCurrent = knowledgeCacheEnabled
-      ? await readKnowledgeCacheStats(knowledgeCacheStatsPath || knowledgeCachePath)
-      : { ...EMPTY_KNOWLEDGE_CACHE_STATS }
     const knowledgeCacheSummary: KnowledgeCacheSummary = {
       knowledgeCacheEnabled,
       knowledgeCachePath,

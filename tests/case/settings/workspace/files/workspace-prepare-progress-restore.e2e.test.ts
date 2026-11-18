@@ -8,25 +8,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-import { createWorkspaceWithFiles } from './realWorkspaceHelpers'
-
-const createSlowEnoughWorkspaceFiles = (): Array<{ relativePath: string; content: string }> => {
-  const runMarker = Date.now().toString(36)
-  const invalidDocxFiles = Array.from({ length: 20 }, (_, index) => ({
-    relativePath: `broken/broken-${String(index + 1).padStart(2, '0')}.docx`,
-    content: `not a valid docx archive ${runMarker}-${index + 1}`
-  }))
-  const markdownFiles = Array.from({ length: 10 }, (_, fileIndex) => ({
-    relativePath: `notes/index-source-${String(fileIndex + 1).padStart(2, '0')}.md`,
-    content: Array.from(
-      { length: 100 },
-      (_, paragraphIndex) =>
-        `# ${runMarker} file ${fileIndex + 1} paragraph ${paragraphIndex + 1}\n\n` +
-        `Unique indexing content ${runMarker}-${fileIndex + 1}-${paragraphIndex + 1}.`
-    ).join('\n\n')
-  }))
-  return [...invalidDocxFiles, ...markdownFiles]
-}
+import { copyScenarioWorkspaceFixture } from './realWorkspaceHelpers'
 
 describe('settings workspace e2e', () => {
   it(
@@ -38,7 +20,7 @@ describe('settings workspace e2e', () => {
         suite: 'workspace',
         groups: ['files'],
         description: '文件索引执行中离开并返回工作空间页后，应恢复持久化进度块和取消按钮状态。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace-scenarios/workspace-prepare-progress-restore'],
         knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
@@ -46,10 +28,7 @@ describe('settings workspace e2e', () => {
           const { page } = runtime
           let workspaceRoot = ''
 
-          workspaceRoot = await createWorkspaceWithFiles(
-            'workspace-prepare-progress-restore',
-            createSlowEnoughWorkspaceFiles()
-          )
+          workspaceRoot = await copyScenarioWorkspaceFixture('workspace-prepare-progress-restore')
           const workspace = await createRealWorkspaceWithRoot(page, {
             name: '文件进度恢复工作区',
             rootPath: workspaceRoot

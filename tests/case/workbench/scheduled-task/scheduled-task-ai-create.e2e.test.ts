@@ -32,7 +32,7 @@ describe('workbench scheduled-task e2e', () => {
         suite: 'scheduled-task',
         groups: [],
         description: '验证 AI 创建伙伴列表最多显示四项后滚动、名称截断、选择状态与草稿切换。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace'],
         knowledge: 'cached',
         serviceMode: 'real',
         windowMode: 'visible',

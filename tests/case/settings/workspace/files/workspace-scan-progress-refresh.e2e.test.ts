@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'vitest'
@@ -12,16 +12,7 @@ import {
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
 
-const createManyWorkspaceFiles = async (workspaceRoot: string): Promise<void> => {
-  const docsRoot = path.join(workspaceRoot, 'docs')
-  await mkdir(docsRoot, { recursive: true })
-  await Promise.all(
-    Array.from({ length: 600 }, async (_, index) => {
-      const fileName = `brief-${String(index + 1).padStart(3, '0')}.txt`
-      await writeFile(path.join(docsRoot, fileName), `hello workspace ${index + 1}`, 'utf8')
-    })
-  )
-}
+import { copyScenarioFixtureInto } from './realWorkspaceHelpers'
 
 describe('settings workspace e2e', () => {
   it(
@@ -33,8 +24,8 @@ describe('settings workspace e2e', () => {
         suite: 'workspace',
         groups: ['files'],
         description: '点击检查更新后，页面展示执行中状态，并在完成后刷新目录树和索引摘要。',
-        fixtures: [],
-        knowledge: 'cached',
+        fixtures: ['tests/fixtures/workspace-scenarios/workspace-scan-progress-refresh'],
+        knowledge: 'none',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
@@ -67,7 +58,7 @@ describe('settings workspace e2e', () => {
             name: 'create-real-file-changes',
             message: '在已绑定目录里写入真实文件，制造目录变化。',
             run: async () => {
-              await createManyWorkspaceFiles(workspaceRoot)
+              await copyScenarioFixtureInto('workspace-scan-progress-refresh', workspaceRoot)
             }
           })
 
@@ -183,7 +174,8 @@ describe('settings workspace e2e', () => {
                     page,
                     importSelectors.workspaceQuickPrepareButton
                   ).isDisabled())
-              }              scanProgressEvents = await progressEventsPromise
+              }
+              scanProgressEvents = await progressEventsPromise
               directoryCallsWhileRunning = Math.max(
                 0,
                 ...scanProgressEvents

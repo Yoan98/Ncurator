@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rm, mkdtemp } from 'node:fs/promises'
+import { cp, mkdir, rm, mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import type { WorkspaceTreeListResponse } from '../../../../../src/shared/types'
@@ -17,17 +17,28 @@ export const copySharedWorkspaceFixture = async (caseId: string): Promise<string
   return workspace.rootPath
 }
 
-export const createWorkspaceWithFiles = async (
-  caseId: string,
-  files: Array<{ relativePath: string; content: string }>
-): Promise<string> => {
-  const workspaceRoot = await mkWorkspaceRoot(caseId)
-  for (const file of files) {
-    const target = path.join(workspaceRoot, file.relativePath)
-    await mkdir(path.dirname(target), { recursive: true })
-    await writeFile(target, file.content, 'utf8')
-  }
+/** Fixed initial workspace contents; runtime test actions mutate only the copied workspace. */
+export const resolveScenarioFixture = (scenario: string): string => {
+  if (!/^[a-z0-9-]+$/.test(scenario)) throw new Error(`Invalid fixture scenario: ${scenario}`)
+  return path.resolve('tests/fixtures/workspace-scenarios', scenario)
+}
+
+export const copyScenarioWorkspaceFixture = async (scenario: string): Promise<string> => {
+  const workspaceRoot = await mkWorkspaceRoot(scenario)
+  await copyScenarioFixtureInto(scenario, workspaceRoot)
   return workspaceRoot
+}
+
+/** Used after workspace binding when adding files is itself the action under test. */
+export const copyScenarioFixtureInto = async (
+  scenario: string,
+  workspaceRoot: string
+): Promise<void> => {
+  await cp(resolveScenarioFixture(scenario), workspaceRoot, {
+    recursive: true,
+    force: true,
+    filter: (source) => path.basename(source) !== '.DS_Store'
+  })
 }
 
 export const toSupportedFileStatuses = (tree: WorkspaceTreeListResponse): SupportedFileStatus[] =>

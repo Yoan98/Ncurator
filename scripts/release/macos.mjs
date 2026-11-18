@@ -181,7 +181,19 @@ const createCandidate = async (sourceDirectory, platform, commit, distribution) 
 }
 
 const sanitizedTestEnvironment = () => {
-  const environment = { ...process.env }
+  const environment = {
+    ...process.env,
+    NCURATOR_TEST_KNOWLEDGE_LEGACY_CACHE:
+      process.env.NCURATOR_TEST_KNOWLEDGE_LEGACY_CACHE ||
+      path.join(
+        ROOT,
+        'tests',
+        '.cache',
+        'workspace-knowledge',
+        'v3',
+        `${process.platform}-${process.arch}`
+      )
+  }
   for (const name of [
     'GH_TOKEN',
     'GITHUB_TOKEN',

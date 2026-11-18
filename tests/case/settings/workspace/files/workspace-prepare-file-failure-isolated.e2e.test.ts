@@ -1,5 +1,3 @@
-import { cp, mkdir } from 'node:fs/promises'
-import path from 'node:path'
 import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -10,7 +8,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-import { createWorkspaceWithFiles, toSupportedFileStatuses } from './realWorkspaceHelpers'
+import { copyScenarioWorkspaceFixture, toSupportedFileStatuses } from './realWorkspaceHelpers'
 
 describe('settings workspace e2e', () => {
   it(
@@ -23,26 +21,15 @@ describe('settings workspace e2e', () => {
         groups: ['files'],
         description:
           '单个文件索引失败不应导致 Settings 页面或 Electron 应用退出，并应留下文件级失败状态。',
-        fixtures: ['tests/fixtures/workspace/sample-edit.docx'],
+        fixtures: ['tests/fixtures/workspace-scenarios/workspace-prepare-file-failure-isolated'],
         knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
           let workspaceRoot = ''
-          workspaceRoot = await createWorkspaceWithFiles(
-            'workspace-prepare-file-failure-isolated',
-            [
-              {
-                relativePath: 'broken.docx',
-                content: 'not a valid docx archive'
-              }
-            ]
-          )
-          await mkdir(path.join(workspaceRoot, 'ok'), { recursive: true })
-          await cp(
-            path.resolve('tests/fixtures/workspace/sample-edit.docx'),
-            path.join(workspaceRoot, 'ok', 'sample-edit.docx')
+          workspaceRoot = await copyScenarioWorkspaceFixture(
+            'workspace-prepare-file-failure-isolated'
           )
           const workspace = await createRealWorkspaceWithRoot(page, {
             name: '失败隔离工作区',

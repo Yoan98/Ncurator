@@ -11,7 +11,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-import { createWorkspaceWithFiles, toSupportedFileStatuses } from './realWorkspaceHelpers'
+import { copyScenarioWorkspaceFixture, toSupportedFileStatuses } from './realWorkspaceHelpers'
 
 type CompletedJob = Pick<
   WorkspaceIndexJobRecord,
@@ -28,28 +28,14 @@ describe('settings workspace e2e', () => {
         suite: 'workspace',
         groups: ['files'],
         description: '运行中打开取消确认框，任务自然成功后关闭确认框并保留完成结果。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace-scenarios/workspace-prepare-cancel-after-complete'],
         knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const marker = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-          const files = ['done-a.md', 'done-b.md'].map((relativePath) => ({
-            relativePath,
-            content: Array.from(
-              { length: 40 },
-              (_, index) =>
-                `# ${relativePath} ${marker} section ${index}\n\n` +
-                `Unique indexing source ${marker}-${relativePath}-${index}. ` +
-                'This real document continues indexing while the cancellation dialog is open. '.repeat(
-                  4
-                )
-            ).join('\n\n')
-          }))
-          const workspaceRoot = await createWorkspaceWithFiles(
-            'workspace-prepare-cancel-after-complete',
-            files
+          const workspaceRoot = await copyScenarioWorkspaceFixture(
+            'workspace-prepare-cancel-after-complete'
           )
           const workspace = await createRealWorkspaceWithRoot(page, {
             name: '完成后停止工作区',
@@ -137,7 +123,7 @@ describe('settings workspace e2e', () => {
             ).isVisible()),
             runningJobId: runningJob.id,
             completedJob: completedJob ?? null,
-            expectedPaths: files.map((file) => file.relativePath),
+            expectedPaths: ['done-a.md', 'done-b.md'],
             idleButtonName,
             statuses,
             summary: { ...idle.tree.summary }

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from 'playwright'
@@ -24,14 +24,7 @@ import {
 const UI_WAIT_MS = SETTINGS_E2E_TIMEOUT_MS
 const PREPARE_LOCK_WAIT_MS = 30_000
 
-const buildPendingIndexText = (label: string): string => {
-  const salt = `${Date.now()}-${Math.random().toString(16).slice(2)}`
-  const paragraphs = Array.from({ length: 400 }, (_, index) => {
-    const n = index + 1
-    return `${label} ${n} unique indexing block ${label}-${n} salt=${salt} ${'payload '.repeat(48)}`.trim()
-  })
-  return `${paragraphs.join('\n\n')}\n`
-}
+import { resolveScenarioFixture } from './realWorkspaceHelpers'
 
 const waitForPrepareEnabled = async (page: Page): Promise<void> => {
   await page.waitForFunction(
@@ -77,40 +70,43 @@ const waitForSpeedButtonsDisabled = async (page: Page, disabled: boolean): Promi
 }
 
 const dumpPrepareDiagnostics = async (page: Page): Promise<string> => {
-  const diagnostics = await page.evaluate(async (selectors) => {
-    const actionable = document.querySelector(`[data-testid="${selectors.actionable}"]`)
-    const prepare = document.querySelector(`[data-testid="${selectors.prepare}"]`)
-    const slow = document.querySelector(`[data-testid="${selectors.slow}"]`)
-    const fast = document.querySelector(`[data-testid="${selectors.fast}"]`)
-    const progress = document.querySelector(`[data-testid="${selectors.progress}"]`)
-    const embedding = await window.api.getEmbeddingStatus()
-    const workspaces = await window.api.workspaceList()
-    const jobs = await Promise.all(
-      workspaces.items.map(async (item) => {
-        const response = await window.api.workspaceIndexJobGet({
-          workspaceId: item.id,
-          sourceKind: 'file'
+  const diagnostics = await page.evaluate(
+    async (selectors) => {
+      const actionable = document.querySelector(`[data-testid="${selectors.actionable}"]`)
+      const prepare = document.querySelector(`[data-testid="${selectors.prepare}"]`)
+      const slow = document.querySelector(`[data-testid="${selectors.slow}"]`)
+      const fast = document.querySelector(`[data-testid="${selectors.fast}"]`)
+      const progress = document.querySelector(`[data-testid="${selectors.progress}"]`)
+      const embedding = await window.api.getEmbeddingStatus()
+      const workspaces = await window.api.workspaceList()
+      const jobs = await Promise.all(
+        workspaces.items.map(async (item) => {
+          const response = await window.api.workspaceIndexJobGet({
+            workspaceId: item.id,
+            sourceKind: 'file'
+          })
+          return { workspaceId: item.id, job: response.job || null }
         })
-        return { workspaceId: item.id, job: response.job || null }
-      })
-    )
-    return {
-      actionableCount: Number(actionable?.textContent || 0),
-      prepareDisabled: prepare instanceof HTMLButtonElement ? prepare.disabled : null,
-      prepareLabel: prepare instanceof HTMLElement ? prepare.innerText.trim() : null,
-      slowDisabled: slow instanceof HTMLButtonElement ? slow.disabled : null,
-      fastDisabled: fast instanceof HTMLButtonElement ? fast.disabled : null,
-      progressVisible: progress instanceof HTMLElement,
-      embedding,
-      jobs
+      )
+      return {
+        actionableCount: Number(actionable?.textContent || 0),
+        prepareDisabled: prepare instanceof HTMLButtonElement ? prepare.disabled : null,
+        prepareLabel: prepare instanceof HTMLElement ? prepare.innerText.trim() : null,
+        slowDisabled: slow instanceof HTMLButtonElement ? slow.disabled : null,
+        fastDisabled: fast instanceof HTMLButtonElement ? fast.disabled : null,
+        progressVisible: progress instanceof HTMLElement,
+        embedding,
+        jobs
+      }
+    },
+    {
+      actionable: importSelectors.workspaceActionableIndexCount,
+      prepare: importSelectors.workspaceQuickPrepareButton,
+      slow: importSelectors.workspaceIndexSpeedSlow,
+      fast: importSelectors.workspaceIndexSpeedFast,
+      progress: importSelectors.workspaceIndexJobProgress
     }
-  }, {
-    actionable: importSelectors.workspaceActionableIndexCount,
-    prepare: importSelectors.workspaceQuickPrepareButton,
-    slow: importSelectors.workspaceIndexSpeedSlow,
-    fast: importSelectors.workspaceIndexSpeedFast,
-    progress: importSelectors.workspaceIndexJobProgress
-  })
+  )
   return JSON.stringify(diagnostics)
 }
 
@@ -128,19 +124,22 @@ const scanPendingFileThenPrepare = async (input: {
   await waitForPrepareEnabled(input.page)
 }
 
-
 const waitForEmbeddingRuntimeAlive = async (page: Page, timeoutMs = 60_000): Promise<void> => {
   try {
     await page.waitForFunction(
       async () => {
         const snapshot = await window.api.getEmbeddingStatus()
-        return Boolean(snapshot && snapshot.status && snapshot.status !== 'uninitialized' && snapshot.pid)
+        return Boolean(
+          snapshot && snapshot.status && snapshot.status !== 'uninitialized' && snapshot.pid
+        )
       },
       undefined,
       { timeout: timeoutMs }
     )
   } catch (error) {
-    const snapshot = await page.evaluate(async () => await window.api.getEmbeddingStatus()).catch(() => null)
+    const snapshot = await page
+      .evaluate(async () => await window.api.getEmbeddingStatus())
+      .catch(() => null)
     throw new Error(
       `embedding runtime did not start after prepare lock: ${JSON.stringify(snapshot)}; ${
         error instanceof Error ? error.message : String(error)
@@ -191,7 +190,7 @@ describe('settings workspace e2e', () => {
         suite: 'workspace',
         groups: ['files'],
         description: '独立小目录两次真实更新索引，断言慢/高速嵌入进程的操作系统线程增量。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace-scenarios/workspace-index-speed'],
         knowledge: 'cold',
         serviceMode: 'real',
         execution: 'exclusive',
@@ -237,7 +236,10 @@ describe('settings workspace e2e', () => {
             page,
             workspaceId,
             filePath: path.join(workspaceRoot, 'slow.txt'),
-            content: buildPendingIndexText('slow')
+            content: await readFile(
+              path.join(resolveScenarioFixture('workspace-index-speed'), 'slow.txt'),
+              'utf8'
+            )
           })
           await clickPrepareUntilSpeedLocked(page)
           const speedLockedWhileIndexing = true
@@ -255,7 +257,10 @@ describe('settings workspace e2e', () => {
             page,
             workspaceId,
             filePath: path.join(workspaceRoot, 'fast.txt'),
-            content: buildPendingIndexText('fast')
+            content: await readFile(
+              path.join(resolveScenarioFixture('workspace-index-speed'), 'fast.txt'),
+              'utf8'
+            )
           })
           await selectWorkspaceIndexSpeedThroughSettingsUi(page, 'fast')
           await waitForEmbeddingRuntimeProcessGone({ pid: slowThreads.pid })
@@ -290,7 +295,8 @@ describe('settings workspace e2e', () => {
             result.defaultSlowSelected === true && result.knowledgeIndexSpeed === 'fast',
             {
               name: 'default-slow-then-switch-fast',
-              message: '默认选中慢速，第二次更新索引前切换并保存为高速，对齐 SET-WORKSPACE-009-AC1。',
+              message:
+                '默认选中慢速，第二次更新索引前切换并保存为高速，对齐 SET-WORKSPACE-009-AC1。',
               data: result
             }
           )
@@ -327,14 +333,11 @@ describe('settings workspace e2e', () => {
               }
             }
           )
-          await runtime.assertThat(
-            result.indexedFileCount >= 2 && result.needsIndexCount === 0,
-            {
-              name: 'both-index-runs-completed',
-              message: '慢速和高速两次更新索引都应把临时目录里的 txt 索引完成。',
-              data: result
-            }
-          )
+          await runtime.assertThat(result.indexedFileCount >= 2 && result.needsIndexCount === 0, {
+            name: 'both-index-runs-completed',
+            message: '慢速和高速两次更新索引都应把临时目录里的 txt 索引完成。',
+            data: result
+          })
         }
       })
     },

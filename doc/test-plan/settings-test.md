@@ -102,7 +102,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：点击“检查更新”后，页面会刷新文件树和需索引摘要。
 - Why：这是用户识别待更新文件的第一步。
-- How：通过原生目录选择添加真实临时目录，写入 600 个真实文件，通过 Settings UI 触发检查更新并读取刷新后的文件树。
+- How：通过原生目录选择绑定空隔离目录，再将 `workspace-scenarios/workspace-scan-progress-refresh` 中 600 个固定文件复制进去，制造被测的外部新增；通过 Settings UI 触发检查更新并读取刷新后的文件树。
 - Oracle：检查成功后页面可索引/摘要反映真实发现结果（如可索引数与树内容），对齐 `SET-WORKSPACE-003-AC2`；过程进度通过 job 事件或进度块可见，扫描很快完成时允许采不到中间 UI，但若采到事件则应包含目录扫描与索引比对两阶段结构，对齐 `SET-WORKSPACE-003-AC1`、`SET-WORKSPACE-003-AC5`；运行期间目录读取次数为 0；离开再返回时恢复当前进度和按钮状态，对齐 `SET-WORKSPACE-003-AC3`。
 
 #### `workspace-prepare-refresh`
@@ -118,7 +118,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e / exclusive`
 - What：独立小目录上，默认慢速真实更新索引一次，再补文件切高速再更新索引一次，比较两档嵌入进程的操作系统线程证据。
 - Why：档位是否生效，看的是更新索引时电脑上嵌入进程的线程数是否按 intraOp 增加，不是进程名里的数字，也不是共享索引 fixture。
-- How：通过原生目录选择添加空临时目录；每次更新索引前写入 ≥50KB / 400 段待索引 txt 并检查更新，确认可索引数 ≥ 1 且「更新索引」可点。点击检查更新或更新索引前，先将指针移出工具栏，让上一按钮的悬浮提示自然关闭，不使用强制点击或移除遮罩。点击后以慢/高速变为 disabled 为同步点（允许进度块可见作为并列信号，10–30s，失败 dump actionable / 按钮 / embedding / job）；不要把进度条可见当作唯一同步点，也不用 360s 去等它。锁定后再数嵌入进程线程。嵌入 runtime PID 由主进程只读 IPC 提供。线程数分别用 `ps -M` 与 `Get-Process.Threads.Count`。
+- How：通过原生目录选择添加空临时目录；每次更新索引前从 `workspace-scenarios/workspace-index-speed` 复制固定 ≥50KB / 400 段 txt 内容并检查更新，确认可索引数 ≥ 1 且「更新索引」可点。点击检查更新或更新索引前，先将指针移出工具栏，让上一按钮的悬浮提示自然关闭，不使用强制点击或移除遮罩。点击后以慢/高速变为 disabled 为同步点（允许进度块可见作为并列信号，10–30s，失败 dump actionable / 按钮 / embedding / job）；不要把进度条可见当作唯一同步点，也不用 360s 去等它。锁定后再数嵌入进程线程。嵌入 runtime PID 由主进程只读 IPC 提供。线程数分别用 `ps -M` 与 `Get-Process.Threads.Count`。
 - Oracle：默认慢速后可切换高速，对齐 `SET-WORKSPACE-009-AC1`；更新索引进行中禁用慢/高速，终态后恢复，对齐 `SET-WORKSPACE-009-AC4`；两次更新索引拉起不同嵌入进程，线程增量及 Windows 零增量时的稳态差按 [Knowledge 线程预算用例](knowledge-test.md#index-speed-thread-budget) 判定；两个 txt 均索引完成。
 
 #### `workspace-prepare-sequential-addresses`
@@ -150,7 +150,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：文件索引执行中离开并返回工作空间页后，进度块和按钮状态会恢复。
 - Why：索引任务已切换为持久化后台 job，页面生命周期不能影响用户对任务状态的判断。
-- How：添加真实文件地址并通过 UI 触发更新索引，执行中切到其他设置页，再返回工作空间页读取 active job 与 UI 状态。
+- How：复制 `workspace-scenarios/workspace-prepare-progress-restore` 固定文件到隔离目录并通过 UI 触发更新索引，执行中切到其他设置页，再返回工作空间页读取 active job 与 UI 状态。
 - Oracle：返回后仍能看到 running job 对应的进度块，「检查更新」可用，「更新索引」文案为「取消」且可点，对齐 `SET-WORKSPACE-004-AC4`、`SET-WORKSPACE-004-AC12`。
 
 #### `workspace-detail-status-and-error`
@@ -166,7 +166,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：更新索引进行中点「取消」，确认框说明尚未完成的不再继续；继续后进度仍可见，停止后按钮恢复且仍有未完成文件。
 - Why：用户需要能停掉长时间索引并关掉应用，不能把没做完的文件标成失败。
-- How：添加含多个真实文件的临时目录，进度可见且 `processed_count < total_count` 后点「取消」；先选「继续更新」检查进度仍可见，再点「取消」并「停止」。
+- How：复制 `workspace-scenarios/workspace-prepare-cancel` 的固定文件到隔离目录，不加入每轮随机正文；进度可见且 `processed_count < total_count` 后点「取消」；先选「继续更新」检查进度仍可见，再点「取消」并「停止」。
 - Oracle：进行中按钮文案为「取消」且可点，悬浮按钮不出现 Tooltip，对齐 `SET-WORKSPACE-004-AC12`；弹框不展示已完成/剩余数量，并说明尚未完成的将不会继续索引，继续后进度仍可见，对齐 `SET-WORKSPACE-004-AC13`；停止后按钮回到「更新索引」，仍有可索引或失败文件且未全部变成失败，部分覆盖 `SET-WORKSPACE-004-AC3/AC14`。已完成保留和未完成状态回退由 Knowledge `workspace-index-cancel-contract` 补充；地址顺序停止和当前批之后停由 `tests/case/unit/workspace/files/workspace-index-worker-contract.test.ts` 补充 `SET-WORKSPACE-004-AC15/AC16`，完整取消链路未逐项验证。
 
 #### `workspace-prepare-cancel-after-complete`
@@ -174,7 +174,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：运行中打开取消确认框，任务自然成功后确认框自动关闭，原任务和文件保持完成状态。
 - Why：避免任务已经完成后仍残留取消入口，或把已完成结果回退为取消。
-- How：添加含唯一内容的真实文件，通过 Settings UI 启动索引并记录 running prepare job ID；必须在运行中打开确认框，再等待任务自然完成和确认框关闭。只读查询同一 job 的 SQLite 终态，核对预期文件集合与索引状态；未打开确认框即失败，不跳过场景或吞掉操作错误。
+- How：复制 `workspace-scenarios/workspace-prepare-cancel-after-complete` 的固定文件到隔离目录，不通过时间或随机盐绕开缓存；通过 Settings UI 启动索引并记录 running prepare job ID；必须在运行中打开确认框，再等待任务自然完成和确认框关闭。只读查询同一 job 的 SQLite 终态，核对预期文件集合与索引状态；未打开确认框即失败，不跳过场景或吞掉操作错误。
 - Oracle：确认框实际在 running 期间可见；自然完成后确认框和进度隐藏，按钮恢复「更新索引」；同一 job 为 `succeeded`、目标数和处理数等于输入文件数、失败数为 0，预期文件集合非空且全部 `indexed`。这是 `SET-WORKSPACE-004-AC17` 的成功终态 UI 补充；终态状态判断由 `tests/case/unit/workspace/files/workspace-index-job-progress.test.ts` 补充，完整任务收口、失败终态和 UI 点击竞态未全覆盖。
 
 ### 3.4 `workspace / web`

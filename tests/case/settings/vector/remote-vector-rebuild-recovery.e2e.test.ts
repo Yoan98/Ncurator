@@ -8,7 +8,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../harness/e2e/settings'
-import { createWorkspaceWithFiles } from '../workspace/files/realWorkspaceHelpers'
+import { copyScenarioWorkspaceFixture } from '../workspace/files/realWorkspaceHelpers'
 
 it('remote-vector-rebuild-recovery', async () => {
   await runE2ECase({
@@ -16,7 +16,7 @@ it('remote-vector-rebuild-recovery', async () => {
     domain: 'settings',
     suite: 'vector',
     description: '通过真实设置界面复验远程文件索引失败、取消、重启和重建。',
-    fixtures: [],
+    fixtures: ['tests/fixtures/workspace-scenarios/remote-vector-rebuild-recovery'],
     serviceMode: 'real',
     execution: 'exclusive',
     windowMode: 'visible',
@@ -88,9 +88,7 @@ it('remote-vector-rebuild-recovery', async () => {
       if (!address || typeof address === 'string') throw new Error('Missing remote fixture port')
 
       let { page } = runtime
-      const rootPath = await createWorkspaceWithFiles('remote-vector-rebuild-recovery', [
-        { relativePath: 'index.txt', content: '保持原始内容的重新索引测试。' }
-      ])
+      const rootPath = await copyScenarioWorkspaceFixture('remote-vector-rebuild-recovery')
       const created = await createRealWorkspaceWithRoot(page, { name: '远程索引恢复', rootPath })
       const workspaceId = created.workspace!.id
       const readIndex = () => page.evaluate(() => window.api.embeddingModelsGet())

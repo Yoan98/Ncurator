@@ -1,3 +1,4 @@
+import { readE2ESeedFixtures } from './e2e-seed-metadata.mjs'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, realpathSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, stat, writeFile, rename } from 'node:fs/promises'
@@ -19,6 +20,11 @@ import {
   readPackagedKnowledgeCacheIdentity
 } from './package-app.mjs'
 import { createKnowledgeCacheIdentity } from '../build/runtime/knowledge-cache-identity.mjs'
+import {
+  resolveKnowledgeSeedRoot,
+  cloneKnowledgeEntries,
+  withSeedLock
+} from './knowledge-seed-store.mjs'
 import {
   captureBackendIdentity,
   importLegacyBackendReport,
@@ -211,28 +217,42 @@ const hashBuildDirectories = async (directories) => {
   return hash.digest('hex')
 }
 
-const readKnowledgeCacheStats = async (cachePath) => {
+const readCaseKnowledgeStats = async (tests) => {
   const totals = { ...EMPTY_KNOWLEDGE_CACHE_STATS }
-  let files = []
-  try {
-    files = await walk(cachePath)
-  } catch {
-    return totals
-  }
-  for (const filePath of files.filter((item) => path.basename(item) === 'stats.json')) {
+  let missingSummaries = 0
+  for (const item of tests.flatMap((test) => test.cases || [])) {
+    if (!item.logDir) continue
     try {
-      const parsed = JSON.parse(await readFile(filePath, 'utf8'))
-      for (const key of Object.keys(totals)) totals[key] += Number(parsed[key] || 0)
+      const summary = JSON.parse(
+        await readFile(
+          path.join(ROOT, item.logDir, 'artifacts', 'knowledge-cache-summary.json'),
+          'utf8'
+        )
+      )
+      for (const key of Object.keys(totals)) totals[key] += Number(summary[key] || 0)
     } catch {
-      // A failed case may leave no usable cache statistics.
+      missingSummaries += 1
     }
   }
-  return totals
+  return { ...totals, missingSummaries, scope: 'case-computations-only' }
 }
 
 const prepareKnowledgeCache = async (input) => {
   const cachePath = path.join(KNOWLEDGE_CACHE_ROOT, 'v3', `${process.platform}-${process.arch}`)
-  if (input.fresh) await rm(cachePath, { recursive: true, force: true })
+  const seedRoot = input.pipeline ? resolveKnowledgeSeedRoot() : ''
+  if (seedRoot) {
+    await withSeedLock(seedRoot, async () => {
+      if (input.fresh) {
+        await rm(path.join(seedRoot, 'entries'), { recursive: true, force: true })
+        await rm(path.join(seedRoot, 'manifests'), { recursive: true, force: true })
+      } else {
+        // Migrate only verified pure results, never runtime databases or locks.
+        const legacy = process.env.NCURATOR_TEST_KNOWLEDGE_LEGACY_CACHE || cachePath
+        await cloneKnowledgeEntries(legacy, path.join(seedRoot, 'entries'))
+      }
+    })
+    process.stdout.write(`[test-workflow] persistent knowledge seed: ${seedRoot}\n`)
+  } else if (input.fresh) await rm(cachePath, { recursive: true, force: true })
   await mkdir(cachePath, { recursive: true })
   return {
     knowledgeCacheEnabled: input.enabled !== false,
@@ -243,7 +263,9 @@ const prepareKnowledgeCache = async (input) => {
       NCURATOR_WORKSPACE_KNOWLEDGE_CACHE: input.enabled === false ? '0' : '1',
       NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH: cachePath,
       NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE: input.namespace,
-      NCURATOR_E2E_BUILD_FINGERPRINT: input.buildFingerprint
+      NCURATOR_E2E_BUILD_FINGERPRINT: input.buildFingerprint,
+      NCURATOR_E2E_KNOWLEDGE_SEED_ROOT: seedRoot,
+      NCURATOR_E2E_KNOWLEDGE_SEED_IDENTITY: input.pipeline ? JSON.stringify(input.pipeline) : ''
     }
   }
 }
@@ -871,6 +893,15 @@ const runE2ETestFilesConcurrently = async (
     }
     const startedAt = Date.now()
     const caseEnv = await buildDirectKnowledgeCacheEnv(task.env, task.testFile)
+    if (
+      caseEnv.NCURATOR_E2E_KNOWLEDGE_SEED_ROOT &&
+      caseEnv.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE === '1'
+    ) {
+      caseEnv.NCURATOR_E2E_SEED_FIXTURES = JSON.stringify(
+        readE2ESeedFixtures(task.testFile, await readFile(task.testFile, 'utf8'), testNamePattern)
+      )
+      caseEnv.NCURATOR_E2E_SEED_PREPARED = '1'
+    }
     let code = await runVitest({
       configPath: task.testFile.startsWith(`${PROVIDER_MATRIX_ROOT}${path.sep}`)
         ? 'vitest.provider-matrix.config.mts'
@@ -1107,6 +1138,9 @@ const runTypeWorkflow = async (input) => {
     ])
     const knowledgeCache = await prepareKnowledgeCache({
       namespace: 'source',
+      pipeline: JSON.parse(
+        await readFile(path.join(ROOT, 'out', 'main', 'knowledge-cache-identity.json'), 'utf8')
+      ),
       buildFingerprint,
       fresh: input.freshKnowledgeCache
     })
@@ -1377,6 +1411,7 @@ export const runTestWorkflow = async (argv, options = {}) => {
           namespace: `package/${session.releasePlatform}`,
           buildFingerprint: session.artifactSha256,
           enabled: Boolean(readPackagedKnowledgeCacheIdentity(session.installedAppPath)),
+          pipeline: readPackagedKnowledgeCacheIdentity(session.installedAppPath),
           fresh: args.freshKnowledgeCache
         })
         target.env = { ...session.env, ...knowledgeCache.env }
@@ -1425,7 +1460,8 @@ export const runTestWorkflow = async (argv, options = {}) => {
             knowledgeCachePath: target.knowledgeCache.knowledgeCachePath,
             knowledgeCacheNamespace: target.knowledgeCache.knowledgeCacheNamespace,
             buildFingerprint: target.knowledgeCache.buildFingerprint,
-            ...(await readKnowledgeCacheStats(target.knowledgeCache.knowledgeCachePath))
+            ...(await readCaseKnowledgeStats(targetTests)),
+            seedRoot: target.env.NCURATOR_E2E_KNOWLEDGE_SEED_ROOT || null
           }
         })
       }

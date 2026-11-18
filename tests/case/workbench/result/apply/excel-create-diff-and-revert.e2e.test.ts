@@ -29,7 +29,7 @@ describe('workbench result e2e', () => {
         suite: 'result',
         groups: ['apply'],
         description: '真实 AI 创建 Excel 后，验证全部新增单元格 Diff 和回退删除文件。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace'],
         knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',

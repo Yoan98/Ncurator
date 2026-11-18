@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EMBEDDING_MODEL_ID } from '../../../../src/shared/embeddingModels'
-import { createWorkspaceWithFiles } from '../workspace/files/realWorkspaceHelpers'
+import { copyScenarioWorkspaceFixture } from '../workspace/files/realWorkspaceHelpers'
 import { importSelectors, vectorSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
@@ -20,16 +20,14 @@ describe('settings vector e2e', () => {
         domain: 'settings',
         suite: 'vector',
         description: '向量模型同页分类，并通过真实 UI 新增、编辑、选择远程配置与删除非当前配置。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace-scenarios/vector-model-catalog-load'],
         serviceMode: 'real',
         knowledge: 'cached',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
 
-          const rootPath = await createWorkspaceWithFiles('vector-model-catalog-load', [
-            { relativePath: 'embedding-switch.txt', content: '向量模型切换后的手动索引入口测试。' }
-          ])
+          const rootPath = await copyScenarioWorkspaceFixture('vector-model-catalog-load')
           const created = await createRealWorkspaceWithRoot(page, {
             name: '模型切换资料',
             rootPath

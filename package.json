@@ -156,6 +156,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "javascript-obfuscator": "5.5.0",
+    "jiti": "2.7.0",
     "jsdom": "^26.1.0",
     "knip": "^6.33.0",
     "less": "^4.5.1",

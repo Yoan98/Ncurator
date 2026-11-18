@@ -9,7 +9,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-import { createWorkspaceWithFiles, toSupportedFileStatuses } from './realWorkspaceHelpers'
+import { copyScenarioWorkspaceFixture, toSupportedFileStatuses } from './realWorkspaceHelpers'
 
 describe('settings workspace e2e', () => {
   it(
@@ -21,19 +21,14 @@ describe('settings workspace e2e', () => {
         suite: 'workspace',
         groups: ['files'],
         description: '已有失败文件再次点击更新索引时，应被纳入本次处理范围。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace-scenarios/workspace-prepare-failed-retry'],
         knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
           let workspaceRoot = ''
-          workspaceRoot = await createWorkspaceWithFiles('workspace-prepare-failed-retry', [
-            {
-              relativePath: 'broken.docx',
-              content: 'not a valid docx archive'
-            }
-          ])
+          workspaceRoot = await copyScenarioWorkspaceFixture('workspace-prepare-failed-retry')
           const workspace = await createRealWorkspaceWithRoot(page, {
             name: '失败重试工作区',
             rootPath: workspaceRoot
