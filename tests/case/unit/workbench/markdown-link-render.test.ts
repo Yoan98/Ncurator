@@ -5,7 +5,7 @@ import {
   imageMimeFromPath,
   isImageFilePath
 } from '../../../../src/shared/imageFiles'
-import { getFileIconKind } from '../../../../src/renderer/src/utils/fileIcons'
+import { getFileIconKind } from '../../../../src/shared/fileIconKind'
 
 describe('repairMarkdownLinkDestinations', () => {
   it('wraps destinations that contain spaces', () => {

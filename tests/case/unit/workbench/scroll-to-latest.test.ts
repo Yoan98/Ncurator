@@ -3,7 +3,7 @@ import {
   nextScrollToLatestVisible,
   SCROLL_TO_LATEST_HIDE_PX,
   SCROLL_TO_LATEST_SHOW_PX
-} from '../../../../src/renderer/src/utils/scrollToLatest'
+} from '../../../../src/shared/scrollToLatest'
 
 describe('scroll to latest visibility', () => {
   it('shows only after passing the show threshold', () => {

@@ -1,16 +1,9 @@
 /**
- * Visibility rule for the floating "back to latest" button.
- * Two thresholds (show / hide) so the button does not flicker while the user
- * rests right around one value.
+ * 判定规则已移到 `src/shared/scrollToLatest.ts`（纯逻辑，便于 unit 覆盖）。
+ * 这里保留原导出路径，组件不需要改 import。
  */
-
-export const SCROLL_TO_LATEST_SHOW_PX = 320
-export const SCROLL_TO_LATEST_HIDE_PX = 120
-
-export const nextScrollToLatestVisible = (
-  previousVisible: boolean,
-  distanceToBottom: number
-): boolean =>
-  previousVisible
-    ? distanceToBottom > SCROLL_TO_LATEST_HIDE_PX
-    : distanceToBottom > SCROLL_TO_LATEST_SHOW_PX
+export {
+  SCROLL_TO_LATEST_SHOW_PX,
+  SCROLL_TO_LATEST_HIDE_PX,
+  nextScrollToLatestVisible
+} from '../../../shared/scrollToLatest'

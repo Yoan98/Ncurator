@@ -1,17 +1,11 @@
-import { isImageFileExtension } from '../../../shared/imageFiles'
+import { getFileIconKind, type FileIconKind } from '../../../shared/fileIconKind'
 
-export type FileIconKind =
-  | 'directory'
-  | 'web'
-  | 'pdf'
-  | 'docx'
-  | 'xlsx'
-  | 'ppt'
-  | 'audio'
-  | 'video'
-  | 'image'
-  | 'markdown'
-  | 'file'
+/**
+ * 分类规则在 `src/shared/fileIconKind.ts`；这里保留原导出路径，
+ * 继续承担图标与配色这类 renderer 专有的展示定义。
+ */
+export type { FileIconKind }
+export { getFileIconKind }
 
 export const FILE_ICON_SIZE_CLASSES = {
   sm: 'h-[18px] w-[18px]',
@@ -104,35 +98,6 @@ const FILE_VISUAL_SPECS: Record<FileIconKind, FileVisualSpec> = {
     documentFillClassName: 'fill-[#787774]',
     documentAccentClassName: 'fill-[#787774]'
   }
-}
-
-const normalizeFileExtension = (value: string | undefined): string => {
-  const trimmed = String(value || '')
-    .trim()
-    .toLowerCase()
-  if (!trimmed) return ''
-  return trimmed.startsWith('.') ? trimmed.slice(1) : trimmed
-}
-
-export const getFileIconKind = (name: string, extension?: string): FileIconKind => {
-  const filename = name.split(/[\\/]/u).pop() || name
-  const dotIndex = filename.lastIndexOf('.')
-  const fileExt =
-    normalizeFileExtension(extension) ||
-    (dotIndex > -1 ? normalizeFileExtension(filename.slice(dotIndex + 1)) : '')
-  if (fileExt === 'md' || fileExt === 'markdown') return 'markdown'
-  if (isImageFileExtension(fileExt)) return 'image'
-  if (fileExt === 'pdf') return 'pdf'
-  if (fileExt === 'docx') return 'docx'
-  if (['xls', 'xlsx', 'xlsm', 'xltx', 'xltm', 'csv'].includes(fileExt)) return 'xlsx'
-  if (fileExt === 'ppt' || fileExt === 'pptx') return 'ppt'
-  if (['aac', 'flac', 'm4a', 'mp3', 'oga', 'ogg', 'opus', 'wav', 'weba'].includes(fileExt)) {
-    return 'audio'
-  }
-  if (['avi', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ogv', 'webm', 'wmv'].includes(fileExt)) {
-    return 'video'
-  }
-  return 'file'
 }
 
 export const getFileVisualSpec = (kind: FileIconKind): FileVisualSpec => FILE_VISUAL_SPECS[kind]

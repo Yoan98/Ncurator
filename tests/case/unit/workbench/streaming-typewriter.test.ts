@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   nextTypedLength,
   TYPING_TICK_MS
-} from '../../../../src/renderer/src/utils/streamingTypewriter'
+} from '../../../../src/shared/typewriterPacing'
 
 describe('nextTypedLength', () => {
   it('stays at the target when caught up', () => {

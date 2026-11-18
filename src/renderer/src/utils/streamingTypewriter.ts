@@ -9,31 +9,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-/** One display tick; ~30fps is enough for text and halves the parse cost. */
-export const TYPING_TICK_MS = 32
+/**
+ * 节奏计算已移到 `src/shared/typewriterPacing.ts`（纯逻辑，便于 unit 覆盖）。
+ * 这里保留原导出路径，并把同一份常量与函数用于下面的 hook。
+ */
+import { TYPING_TICK_MS, nextTypedLength } from '../../../shared/typewriterPacing'
 
-const MIN_CHARS_PER_MS = 0.02
-const MAX_CHARS_PER_MS = 0.25
-const BACKLOG_FACTOR = 0.015
-/** When the display falls this far behind, stop animating and snap. */
-const SNAP_BACKLOG_CHARS = 900
-
-export const nextTypedLength = (input: {
-  displayed: number
-  target: number
-  elapsedMs: number
-}): number => {
-  const { displayed, target, elapsedMs } = input
-  if (displayed >= target) return target
-  const backlog = target - displayed
-  if (backlog >= SNAP_BACKLOG_CHARS) return target
-  const charsPerMs = Math.min(
-    MAX_CHARS_PER_MS,
-    Math.max(MIN_CHARS_PER_MS, backlog * BACKLOG_FACTOR)
-  )
-  const step = Math.max(1, Math.round(charsPerMs * Math.max(elapsedMs, 16)))
-  return Math.min(target, displayed + step)
-}
+export { TYPING_TICK_MS, nextTypedLength }
 
 /**
  * Returns `target` progressively. When disabled the full text is returned
