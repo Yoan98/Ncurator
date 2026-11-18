@@ -713,8 +713,11 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     : undefined
 
   // 换模型或目录刷新后，旧档位可能已不在开放范围，这时按该模型默认档回写快照。
+  // 注意：目录刷新期间 selectedEffort 会短暂为 undefined（请求未回），
+  // 此时不能清掉已选档位，否则用户每次刷新都得重选。
   useEffect(() => {
     if (!value.mainModel || value.mainModel.manual) return
+    if (!selectedEffort) return
     const next = normalizeSelectionEffort(value.mainModel, selectedEffort)
     if (!next || next === value.mainModel) return
     onChange({ mainModel: next })
@@ -1048,10 +1051,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     const showEffortCard = Boolean(selectedEffort && effortValue && value.mainModel)
 
     // 方案 A：有强度时弹层只出卡片，列表让位；点卡片里的模型名才回到列表。
+    // 卡片不再自己画边框：菜单容器已有一层圆角描边，再套一层就是双层框。
     if (showEffortCard && effortOnly) {
       return (
-        <div className="p-1.5">
-          <WorkbenchEffortCard
+        <WorkbenchEffortCard
             effort={selectedEffort!}
             value={effortValue!}
             modelLabel={selectedManaged?.label || selectedPreset?.modelLabel || value.mainModel!.modelName}
@@ -1067,10 +1070,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               })
             }}
           />
-        </div>
       )
     }
-
     return (
       <>
         <div className="relative min-h-0 flex-1">

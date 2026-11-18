@@ -1,6 +1,11 @@
 {
   "schemaVersion": 1,
-  "traceIgnore": ["node_modules/electron/**", "node_modules/.pnpm/electron@*/**"],
+  "traceIgnore": [
+    "node_modules/electron/**",
+    "node_modules/.pnpm/electron@*/**",
+    ".env",
+    "**/.env"
+  ],
   "explicitIncludes": [],
   "warningRules": [
     {
@@ -65,6 +70,13 @@
       "package": "sharp",
       "specifierPattern": "^@img/sharp-",
       "reason": "Sharp probes optional binary packages for other libc and CPU targets."
+    },
+    {
+      "id": "local-environment-file",
+      "kind": "parse",
+      "packagePattern": "^$",
+      "pathPattern": "(?:^|/)\\.env$",
+      "reason": "Local environment files are configuration assets, not JavaScript, and are excluded from the packaged application."
     }
   ],
   "requiredFiles": [

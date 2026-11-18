@@ -69,13 +69,6 @@ type Dependencies = {
   wait: (ms: number, signal: AbortSignal) => Promise<unknown>
 }
 
-function hasVisibleDelta(value: unknown) {
-  if (!record(value)) return false
-  return (typeof value.content === 'string' && value.content.length > 0) ||
-    (typeof value.reasoning_content === 'string' && value.reasoning_content.length > 0) ||
-    (Array.isArray(value.tool_calls) && value.tool_calls.length > 0)
-}
-
 function frameParts(raw: string) {
   const lines = raw.split(/\r?\n/)
   const event = lines.find(line => line.startsWith('event:'))?.slice(6).trim()
@@ -92,7 +85,6 @@ function managedStream(response: Response, requestId: string, scope: Scope,
   let finishFrame: string | undefined
   let finishReason: string | undefined
   let hasText = false
-  let started = false
   let invalidTool = false
   let settled = false
   const tools = new Map<number, { id: string; name: string; arguments: string }>()
@@ -118,7 +110,7 @@ function managedStream(response: Response, requestId: string, scope: Scope,
     if (finishFrame && !invalidTool && ((finishReason === 'stop' && hasText && tools.size === 0) ||
       (finishReason === 'tool_calls' && tools.size > 0 && [...tools.values()].every(tool =>
         tool.id && tool.name && validArguments(tool.arguments))))) return
-    throw failure('incomplete', undefined, billing, !started && billing === 'waived')
+    throw failure('incomplete', undefined, billing, billing === 'waived')
   }
 
   async function finishFromStatus(controller: ReadableStreamDefaultController<Uint8Array>, error?: string) {
@@ -127,7 +119,7 @@ function managedStream(response: Response, requestId: string, scope: Scope,
     if (status.status !== 'settled' || status.executionStatus !== 'completed') {
       const code = error && isProviderFailureCode(error) ? error
         : status.status === 'settlement_pending' ? 'settlement_pending' : 'incomplete'
-      throw failure(code, undefined, billing, code === 'incomplete' && !started && billing === 'waived')
+      throw failure(code, undefined, billing, code === 'incomplete' && billing === 'waived')
     }
     settled = true
     assertCompleteOutput(billing)
@@ -175,7 +167,7 @@ function managedStream(response: Response, requestId: string, scope: Scope,
                 const code = typeof value.error === 'string' && isProviderFailureCode(value.error) ? value.error
                   : value.result === 'failed' ? 'upstream_error' : 'incomplete'
                 throw failure(code, undefined, billing,
-                  value.retryable === true && !started && billing === 'waived')
+                  value.retryable === true && billing === 'waived')
               }
               assertCompleteOutput(billing)
               closeSuccess(controller)
@@ -196,19 +188,13 @@ function managedStream(response: Response, requestId: string, scope: Scope,
           if (typeof choice.delta.content === 'string' && choice.delta.content.length > 0) hasText = true
           if (choice.delta.tool_calls !== undefined) collectTools(choice.delta.tool_calls)
           controller.enqueue(encoder.encode(raw + '\n\n'))
-          if (hasVisibleDelta(choice.delta)) started = true
           return
         }
       } catch (error) {
         if (!settled) void recover().catch(() => undefined)
         void reader.cancel().catch(() => undefined)
-        if (started && error instanceof LlmProviderError && error.retryable) {
-          const code = error.providerCode && isProviderFailureCode(error.providerCode) ? error.providerCode : 'incomplete'
-          controller.error(failure(code, error.httpStatus, error.billing, false))
-        } else {
-          if (error instanceof LlmProviderError && error.retryable) onRetry()
-          controller.error(error instanceof LlmProviderError ? error : failure('incomplete', undefined, undefined, !started))
-        }
+        if (error instanceof LlmProviderError && error.retryable) onRetry()
+        controller.error(error instanceof LlmProviderError ? error : failure('incomplete'))
       }
     },
     async cancel() {

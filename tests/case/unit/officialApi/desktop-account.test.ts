@@ -256,7 +256,7 @@ it.each(['tools', 'pending', 'incomplete', 'disconnected'] as const)('returns a 
       expect(executeTool).not.toHaveBeenCalled()
     }
     expect(onTextDelta).toHaveBeenCalledWith('测试内容')
-    expect(fixture.submitted).toHaveLength(1)
+    expect(fixture.submitted).toHaveLength(scenario === 'incomplete' ? 6 : 1)
     expect(fixture.lookedUp).toEqual(scenario === 'pending' || scenario === 'disconnected' ? [fixture.submitted[0].requestId] : [])
   } finally { fixture.cleanup() }
 })
@@ -317,11 +317,32 @@ it.each([['timeout', 'upstream_timeout'], ['interrupted', 'upstream_interrupted'
       const provider = findLlmProviderError(error)
       expect(provider).toMatchObject({ providerCode: code, billing: 'waived' })
       expect(provider?.message).toContain('本次未计费')
-      expect(fixture.submitted).toHaveLength(1)
+      expect(fixture.submitted).toHaveLength(6)
       expect(fixture.lookedUp).toEqual([])
     } finally { fixture.cleanup() }
   }
 )
+
+it('retries a partial timeout and resets the visible attempt before the retry', async () => {
+  const fixture = managedDesktopFixture((requestId, attempt) => attempt === 1
+    ? managedSse(requestId, 'timeout') : managedSse(requestId, 'tools'))
+  try {
+    await fixture.login()
+    const onTextDelta = vi.fn()
+    const onTextReset = vi.fn()
+    const executeTool = vi.fn(async () => 'found')
+    const lookup = tool(executeTool, { name: 'lookup', description: 'Lookup a fixture', schema: z.object({ name: z.string() }) })
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {}, checkCancelled: () => {} })
+    const result = await executor.chatTools({ caller: 'test', messages: [new HumanMessage('查资料')], tools: [lookup],
+      streamingMode: 'force_stream', onTextDelta, onTextReset })
+    expect(result).toMatchObject({ finishReason: 'tool_calls', message: { tool_calls: [{ name: 'lookup', args: { name: 'doc' } }] } })
+    expect(onTextReset).toHaveBeenCalledTimes(1)
+    expect(fixture.submitted).toHaveLength(2)
+    expect(fixture.submitted[1].requestId).not.toBe(fixture.submitted[0].requestId)
+    expect(fixture.lookedUp).toEqual([])
+  } finally { fixture.cleanup() }
+})
 
 it.runIf(Boolean(process.env.NCURATOR_TEST_MANAGED_DIRECT))('uses the real API from the managed desktop execution layer', async () => {
   const direct = JSON.parse(process.env.NCURATOR_TEST_MANAGED_DIRECT!) as ManagedDirectFixture

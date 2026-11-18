@@ -130,9 +130,9 @@ export const classifyManagedLlmRetry = (error: unknown, attempt = 1): LlmRetryDe
       return { retryable: true, message: cause.message, delayMs: resolveCapacityBackoffDelay(attempt) }
     }
     if (cause instanceof LlmProviderError) {
-      // The managed stream already downgrades retryable to false once any
-      // assistant content reached the renderer. Unknown/charged billing and
-      // non-retryable terminal codes must not be retried.
+      // Unknown/charged billing and non-retryable terminal codes must not be
+      // retried. Visible content is reset by the brain stream before a retry,
+      // so partial output is not a reason to suppress the retry.
       if (cause.retryable && (cause.billing === undefined || cause.billing === 'waived')) {
         return {
           retryable: true,

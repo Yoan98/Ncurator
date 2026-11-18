@@ -130,7 +130,7 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
   return (
     <div
       data-testid={workbenchSelectors.effortCard}
-      className="rounded-[20px] border border-[#E0DFDC] bg-white px-[18px] pb-5 pt-3.5"
+      className="px-[18px] pb-5 pt-3.5"
     >
       <div className="relative">
         <div
