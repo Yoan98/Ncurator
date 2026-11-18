@@ -2428,19 +2428,18 @@ const ChatPage: React.FC = () => {
     try {
       const opened = await window.api.partnerOpen({ partnerId, limit: 30 })
       if (partnerSwitchRequestRef.current !== requestId) return
-      const uiState = partnerUiStatesRef.current[partnerId] || opened.uiState || null
-      {
-        const g = globalThis as unknown as { __effortOpenDebug?: string[] }
-        g.__effortOpenDebug = g.__effortOpenDebug || []
-        g.__effortOpenDebug.push(
-          JSON.stringify({
-            partnerId,
-            hasOpenedUiState: Boolean(opened.uiState),
-            mem: opened.uiState?.composer?.modelSelection?.effortMemory ?? null,
-            model: opened.uiState?.composer?.modelSelection?.mainModel?.modelName ?? null
-          })
-        )
-      }
+      /*
+       * 优先用服务端读到的快照，内存缓存只作兜底。
+       *
+       * 内存缓存在同一次会话内可能是「已被校正过」的旧值；启动时若先被写入一份
+       * 默认/回退状态，再用它覆盖，就会把数据库里正确的模型与档位一起冲掉。
+       */
+      const cached = partnerUiStatesRef.current[partnerId] || null
+      const fromServer = opened.uiState || null
+      const uiState =
+        fromServer && fromServer.composer?.modelSelection
+          ? fromServer
+          : cached || fromServer
       applyPartnerUiState(partnerId, uiState)
       setActiveTimelineDayStart(null)
       pendingTimelineJumpDayRef.current = null
@@ -2616,6 +2615,9 @@ const ChatPage: React.FC = () => {
         /* 配置列表为空时不能判定原选择有效性：resolveSelectedWorkbenchModel 拿不到
            config 会返回 null，随后回退到「第一个可用模型」，把用户存下的选择换掉。
            此时保留原选择，等配置加载完成后再校正。 */
+        /* 恢复快照还没落地时不要校正：此时 modelSelectionRef 可能还是初始空值，
+           拿它去判定会把用户存下的选择覆盖掉。 */
+        if (uiStateReadyKeyRef.current !== currentPartnerIdRef.current) return
         const nextSelection: WorkbenchModelSelection = {
           mainModel:
             modelSelectionRef.current.mainModel
@@ -2725,20 +2727,6 @@ const ChatPage: React.FC = () => {
       ...(modelSelection.effortMemory && { effortMemory: modelSelection.effortMemory })
     }
     if (JSON.stringify(nextSelection) === JSON.stringify(modelSelection)) return
-    {
-      const g = globalThis as unknown as { __effortDebug?: string[] }
-      g.__effortDebug = g.__effortDebug || []
-      g.__effortDebug.push(
-        JSON.stringify({
-          beforeModel: modelSelection.mainModel?.modelName,
-          beforeMem: modelSelection.effortMemory,
-          afterModel: nextSelection.mainModel?.modelName,
-          afterMem: nextSelection.effortMemory,
-          remoteCount: (modelListsByConfigId[selectedConfigId] || []).length,
-          presetProviders: presetProviders.map((provider) => provider.providerId)
-        })
-      )
-    }
     modelSelectionRef.current = nextSelection
     setModelSelection(nextSelection)
     void persistUiStateForKey(key, {
@@ -2794,7 +2782,6 @@ const ChatPage: React.FC = () => {
         previous || selection.effortMemory
           ? { ...selection, effortMemory: { ...previous, ...selection.effortMemory } }
           : selection
-      console.log('[effort-debug] merged selection =', JSON.stringify(merged))
       modelSelectionRef.current = merged
       setModelSelection(merged)
       const partnerId = currentPartnerIdRef.current

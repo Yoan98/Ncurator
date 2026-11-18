@@ -231,10 +231,10 @@ pnpm test:update:e2e
 
 #### `effort-slider`
 
-- 测试类型：`e2e`
-- What：思考强度卡片的档位来源、切换、复位、切模型回落与发送请求参数。
+- 测试类型：`e2e`；suite `conversation`，group `composer`。
+- What：思考强度卡片的档位来源、切换、切模型回落，以及切走再切回与重启后的档位恢复。
 - Why：客户端自行补齐档位或沿用上一个模型的档位会把不支持的 `reasoning_effort` 发给服务端，导致请求被拒或用户以为已生效。
-- How：用管理网页给测试馆长条目配置四档与两档两种强度，桌面刷新后打开模型面板，逐个点击档位、键盘左右移动、点复位，再换成未配置强度的条目。发送后核对实际请求体的 `reasoning_effort`。
+- How：`pnpm test:e2e:source --case effort-slider`。以 `AI_LIVE_PROVIDER=dashscope AI_LIVE_MODEL=qwen3.8-flash` 运行：在真实桌面选中内置渠道的目录型号，读初始档位并与胶囊比对；逐个数出 `low/medium/xhigh` 三个小点；点小点切到与初始档不同的档位；点卡片内模型名进面板换成 `qwen3.8-max`，确认档位不沿用；再切回 `qwen3.8-flash`，确认恢复原档；最后重启应用，确认模型与档位一并恢复。
 - Oracle：档位数量、顺序和展示名与目录一致，客户端不补齐；切到未配置强度的模型时卡片消失且请求不带该字段；两档模型只显示两个点；切换模型后不沿用上一模型档位，旧档位失效时回落到该模型默认档；切走再切回同一模型时恢复该模型上次选定的档位；胶囊回显当前档位名且无强度模型不渲染该段，覆盖 `WB-COMPOSER-018-AC1/AC2/AC3/AC4/AC5/AC6/AC8`。滑块拖动跟手、松手吸附不回跳、填充止于滑块中心、末档铺满轨道由 `WB-COMPOSER-018-AC7/AC9` 覆盖；目录下发的每个档位均带可读展示名、文案缺失时服务端补内置词表由 `WB-COMPOSER-018-AC10` 覆盖。
 - 滑块几何与吸附行为（拖动跟手、填充止于滑块中心、末档铺满轨道、松手不回跳）由 `tests/case/unit/model/effort-slider-geometry.test.ts` 覆盖，对应 `WB-COMPOSER-018-AC7/AC9`。
 - 档位记忆与回落规则由 `tests/case/unit/model/effort-memory.test.ts` 覆盖，对应 `WB-COMPOSER-018-AC3/AC4`。

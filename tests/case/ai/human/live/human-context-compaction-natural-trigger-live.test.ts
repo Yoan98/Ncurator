@@ -4,6 +4,7 @@ import type { AiLlmIoRecord, AiRunEvent } from '../../../../../src/shared/types'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+import type { QuestionResolver } from '../../../../harness/backend/test-types'
 import {
   CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH,
   HUMAN_CONTEXT_COMPACTION_RUN1_USER_INPUT,
@@ -28,6 +29,32 @@ const LIVE_COMPACTION_TRIGGER_TOKENS = 45_000
 const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = Math.ceil(
   LIVE_COMPACTION_TRIGGER_TOKENS / CONTEXT_WINDOW_UTILIZATION_RATIO
 )
+
+/**
+ * 这条 case 只验证压缩链路，不评估提问质量。模型若在 Run 1 反问（例如问周报在哪），
+ * 用「自己看工作目录」把它推回任务，避免 interaction 节点把整轮 run 判失败。
+ */
+const liveQuestionResolver: QuestionResolver = async (request) => {
+  console.error(
+    '[context-compaction-live] AI 提问：',
+    JSON.stringify({ taskId: request.taskId, questions: request.questions })
+  )
+  return {
+    accepted: true as const,
+    result: {
+      answers: request.questions.map((question) => {
+        const firstOption = question.options?.[0]
+        return firstOption
+          ? { questionId: question.id, selectedOptionIds: [firstOption.id] }
+          : {
+              questionId: question.id,
+              selectedOptionIds: [],
+              userText: '按工作目录里已有的文件直接继续，不要向我确认。'
+            }
+      })
+    }
+  }
+}
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '## 目标',
@@ -231,6 +258,7 @@ describe('ai human live backend', () => {
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const runnerOptions = {
             partnerId: PARTNER_ID,
+            questionResolver: liveQuestionResolver,
             humanRuntimeOverrides: {
               modelContextWindowTokens: LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS
             }

@@ -746,8 +746,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const selectedManaged = managedModels?.find(model => managedModelConfigId(model.id) === value.mainModel?.configId)
 
   // 当前选中模型对外开放的强度选项；目录未配置时不显示强度卡片。
-  /* 临时调试：把记忆内容暴露到 DOM，便于 E2E 断言真实值。 */
-  const debugMemory = JSON.stringify({ mem: effortMemory ?? null })
   const selectedEffort = selectedManaged?.effort ?? (selectedPreset ? selectedPreset.effort : undefined)
   const effortValue = selectedEffort
     ? resolveEffort(selectedEffort, value.mainModel?.effort)
@@ -1088,7 +1086,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                 effortMemory: { ...value.effortMemory, [`${model.configId}::${model.modelName}`]: next }
               })
             }}
-            debugMemory={debugMemory}
             onRefresh={() => void refreshCatalog({ showOutcome: true })}
             refreshStatus={catalogRefreshStatus}
             avatar={partnerAvatar}

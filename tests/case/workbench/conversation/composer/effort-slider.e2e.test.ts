@@ -19,18 +19,25 @@ import {
 const CASE_ID = 'effort-slider'
 const PRIMARY = 'qwen3.8-flash'
 const SECONDARY = 'qwen3.8-max'
-/** 目录里该型号的展示名，用于回读胶囊文本。 */
+/** 目录里主型号的展示名，用于回读胶囊文本。 */
 const PRIMARY_LABEL = 'Qwen3.8 Flash'
+const STOPS = ['low', 'medium', 'xhigh'] as const
 
-const fail = (message: string): never => {
-  throw new Error(message)
+type EffortResult = {
+  initialTier: string
+  chosenTier: string
+  secondaryTier: string
+  stopCountOk: boolean
+  switchedBackTier: string
+  restoredTier: string
+  restoredModel: string
 }
 
 describe('workbench conversation e2e', () => {
   it(
     CASE_ID,
     async () => {
-      await runE2ECase({
+      await runE2ECase<EffortResult>({
         caseId: CASE_ID,
         domain: 'workbench',
         suite: 'conversation',
@@ -54,15 +61,15 @@ describe('workbench conversation e2e', () => {
           const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
           const effortCard = page.getByTestId(workbenchSelectors.effortCard)
           const effortModelName = page.getByTestId(workbenchSelectors.effortModelName)
-          const tierOf = async (target = page) =>
+          const tierOf = async (target = page): Promise<string> =>
             (await target.getByTestId(workbenchSelectors.effortValue).innerText()).trim()
-          const waitTier = async (tier: string, target = page): Promise<void> => {
-            await target.waitForFunction(
-              (input: { testId: string; tier: string }) =>
-                document.querySelector(`[data-testid="${input.testId}"]`)?.textContent?.trim() ===
-                input.tier,
-              { testId: workbenchSelectors.effortValue, tier },
-              { timeout: 30_000 }
+          const pillOf = async (target = page): Promise<string> =>
+            (await target.getByTestId(workbenchSelectors.effortPill).innerText()).trim()
+          const waitNode = async (testId: string, timeout = 30_000): Promise<void> => {
+            await page.waitForFunction(
+              (id: string) => Boolean(document.querySelector(`[data-testid="${id}"]`)),
+              testId,
+              { timeout }
             )
           }
           const pickModel = async (modelName: string): Promise<void> => {
@@ -76,27 +83,31 @@ describe('workbench conversation e2e', () => {
           // 1) 目录配了强度：卡片出现，档位名与胶囊一致。
           await effortCard.waitFor({ state: 'visible', timeout: 30_000 })
           const initialTier = await tierOf()
-          if (!initialTier) fail('初始档位名为空')
-          await page.waitForFunction(
-            (input: { testId: string; tier: string }) =>
-              document.querySelector(`[data-testid="${input.testId}"]`)?.textContent?.trim() ===
-              input.tier,
-            { testId: workbenchSelectors.effortPill, tier: initialTier },
-            { timeout: 15_000 }
-          )
+          if (!initialTier) throw new Error('初始档位名为空')
+          if ((await pillOf()) !== initialTier) {
+            throw new Error(`胶囊档位与卡片不一致：${await pillOf()} / ${initialTier}`)
+          }
 
           // 2) 档位集合与目录一致：三档齐全，客户端不补齐。
-          for (const stop of ['low', 'medium', 'xhigh']) {
+          let stopCountOk = true
+          for (const stop of STOPS) {
             const count = await page
               .getByTestId(`${workbenchSelectors.effortStopPrefix}-${stop}`)
               .count()
-            if (count !== 1) fail(`档位 ${stop} 的小点数量为 ${count}`)
+            if (count !== 1) stopCountOk = false
           }
 
           // 3) 点档位小点切到与初始档不同的档位。
           const targetTier = initialTier === 'XHigh' ? 'low' : 'xhigh'
           await page.getByTestId(`${workbenchSelectors.effortStopPrefix}-${targetTier}`).click()
-          await waitTier(targetTier === 'low' ? 'Low' : 'XHigh')
+          const expectedChosen = targetTier === 'low' ? 'Low' : 'XHigh'
+          await page.waitForFunction(
+            (input: { testId: string; tier: string }) =>
+              document.querySelector(`[data-testid="${input.testId}"]`)?.textContent?.trim() ===
+              input.tier,
+            { testId: workbenchSelectors.effortValue, tier: expectedChosen },
+            { timeout: 20_000 }
+          )
           const chosenTier = await tierOf()
 
           // 4) 切到另一个开放强度的模型：档位不能沿用上一模型。
@@ -104,41 +115,68 @@ describe('workbench conversation e2e', () => {
           await pickModel(SECONDARY)
           await effortCard.waitFor({ state: 'visible', timeout: 30_000 })
           const secondaryTier = await tierOf()
-          if (!secondaryTier) fail('切换到第二模型后档位为空')
-          if (secondaryTier === chosenTier) fail(`切换模型后沿用了上一模型的档位 ${chosenTier}`)
+          if (!secondaryTier) throw new Error('切换到第二模型后档位为空')
+          if (secondaryTier === chosenTier) {
+            throw new Error(`切换模型后沿用了上一模型的档位 ${chosenTier}`)
+          }
 
           // 5) 切回原模型：恢复它上次选定的档位（WB-COMPOSER-018-AC3）。
           await effortModelName.click()
           await pickModel(PRIMARY)
           await effortCard.waitFor({ state: 'visible', timeout: 30_000 })
-          await waitTier(chosenTier)
+          await page.waitForFunction(
+            (input: { testId: string; tier: string }) =>
+              document.querySelector(`[data-testid="${input.testId}"]`)?.textContent?.trim() ===
+              input.tier,
+            { testId: workbenchSelectors.effortValue, tier: chosenTier },
+            { timeout: 20_000 }
+          )
+          const switchedBackTier = await tierOf()
 
-          {
-            const { execFileSync } = await import('node:child_process')
-            try {
-              const out = execFileSync('/usr/bin/sqlite3', [
-                `${runtime.userDataDir}/app.sqlite`,
-                'select substr(state_json,1,700) from partner_ui_state;'
-              ]).toString()
-              console.log('[E2E] DB(重启前) =', out.replace(/\s+/g, ' ').slice(0, 700))
-            } catch (error) {
-              console.log('[E2E] DB 读取失败 =', String(error).slice(0, 200))
-            }
-          }
-          const memBeforeRestart = await effortCard.getAttribute('data-debug-memory')
-          console.log('[E2E] 重启前 memory =', memBeforeRestart, '| chosenTier =', chosenTier)
           // 6) 重启后模型与档位随伙伴恢复（WB-COMPOSER-018-AC3）。
           const restarted = await runtime.restartApp()
           const page2 = restarted.page
           await navigateToWorkbench(page2, { waitForSessionListText: false })
-          // 胶囊按「模型名 + 档位名」拼接，中间没有空格节点，直接比对拼接结果。
           await page2.waitForFunction(
-            (input: { testId: string; expected: string }) =>
-              (document.querySelector(`[data-testid="${input.testId}"]`)?.textContent || '')
-                .replace(/\s+/g, '')
-                .includes(input.expected.replace(/\s+/g, '')),
-            { testId: workbenchSelectors.modelSelect, expected: `${PRIMARY_LABEL}${chosenTier}` },
-            { timeout: 60_000 }
+            (testId: string) => Boolean(document.querySelector(`[data-testid="${testId}"]`)),
+            workbenchSelectors.effortPill,
+            { timeout: 90_000 }
+          )
+          const restoredTier = (await page2.getByTestId(workbenchSelectors.effortPill).innerText())
+            .trim()
+          const restoredModel = (
+            await getWorkbenchLocator(page2, workbenchSelectors.modelSelect).innerText()
+          )
+            .replace(/\s+/g, ' ')
+            .trim()
+
+          return {
+            initialTier,
+            chosenTier,
+            secondaryTier,
+            stopCountOk,
+            switchedBackTier,
+            restoredTier,
+            restoredModel
+          }
+        },
+        assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.stopCountOk &&
+              result.chosenTier !== result.initialTier &&
+              result.secondaryTier !== result.chosenTier &&
+              result.switchedBackTier === result.chosenTier &&
+              result.restoredTier === result.chosenTier &&
+              result.restoredModel.includes(PRIMARY_LABEL),
+            {
+              message: [
+                '思考强度：档位来源、切档、切模型回落与切走再切回/重启恢复',
+                `初始=${result.initialTier} 选中=${result.chosenTier} 第二模型=${result.secondaryTier}`,
+                `切回=${result.switchedBackTier} 重启后=${result.restoredTier}`,
+                `重启后模型=${result.restoredModel}`
+              ].join('；'),
+              data: { ...result }
+            }
           )
         }
       })
