@@ -891,20 +891,23 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 `run_failed` 后：**run 层零自动重试**；LLM 调用层的 5 次自动重试是唯一例外，耗尽后才落 `run_failed`。Resume（第 6 节）：新建 run；log append `user`；不自动重试 failed run。
 
-馆长模型的上游失败由服务端终止事件提供 `error` 与 `retryable`，桌面端转换成统一的 `LlmProviderError.providerCode`。`llm_request_failed` 的短标题按 providerCode 具体化，例如「上游模型超时」「上游连接中断」「上游模型服务出错」「上游模型额度不足」「上游模型鉴权失败」「上游模型限流」；`rawMessage` 使用统一文案并带上本次计费状态（已免收／已计费／待确认），不展示上游原始金额或请求文本。
+馆长模型的上游失败由服务端终止事件提供 `error` 与 `retryable`，桌面端转换成统一的 `LlmProviderError.providerCode`。`llm_request_failed` 的短标题按 providerCode 具体化，例如「上游模型超时」「上游连接中断」「上游模型服务出错」「上游模型额度不足」「上游模型鉴权失败」「上游模型限流」「模型返回内容不完整」「内容安全拦截」；`rawMessage` 使用统一文案并带上本次计费状态（已免收／已计费／待确认）及紧凑的机制事实（结束原因、是否有正文、工具调用数量），不展示上游原始金额、请求文本或 requestId。
+
+服务端只做中转并按 `finish_reason` 结算；**客户端判断这次响应是否可用，并决定是否重试**。`billing` 只用于展示和成本提示，不作为重试门禁。
 
 `classifyManagedLlmRetry` 驱动馆长模型的自动重试，沿用 `AI_LLM_CALL_MAX_RETRY_ATTEMPTS=5`：
 
-- 只对 `upstream_timeout`、`upstream_interrupted`、`upstream_error`、`upstream_rate_limited`、`incomplete`、`failed`、`unavailable` 且 `retryable=true` 的失败重试；
-- 必须在尚未输出正文/工具调用、且 `billing` 为 `waived` 或缺失（未计费）时重试；已计费、结算中、已有正文不自动重试；
-- 上游额度 `upstream_quota_exhausted` 和鉴权 `upstream_auth_failed` 不重试，直接提示服务暂不可用；
-- 每次重试使用新的 requestId；429 并发准入拒绝保留原 requestId；
+- 与自定义 API 共用客户端的同一套重试决策、上限、退避和重试行 UI；分类信号按服务商事实输入，计费不参与判定；
+- 只对 `upstream_timeout`、`upstream_interrupted`、`upstream_error`、`upstream_rate_limited`、`incomplete`、`invalid_output`、`failed`、`unavailable` 且 `retryable=true` 的失败重试；已计费同样可重试，重试是新的模型调用、新的 requestId，可能再次计费；
+- `settlement_pending`、`settlement_in_progress`、`client_disconnected` 不重放；202/结果不明时只按原 requestId 查回，不重新生成；429 并发准入拒绝保留原 requestId；
+- 流正常结束且存在正文或 tool-call 分片时，客户端不判失败：tool call 交给 brain 的既有修复/回错逻辑；只有「没有任何可用内容」「传输在完成前中断」才进入统一重试；
+- 纯文本请求出现 tool call 属于协议违规，不重试；`content_filter` 在 tool-enabled 请求中交给 brain 生成内容安全兜底，在纯文本请求中以 `content_filter` 终止且不重试；
 - `finish_reason` 缺失按 `upstream_interrupted` 处理，不当作正常完成；
 - 5 次耗尽后按 `llm_request_failed` 落失败气泡，显示统一短标题和计费状态，由用户重新发送或 resume。
 
 #### LLM 调用层重试
 
-`classifyLlmRetry`（自定义 API）与 `classifyManagedLlmRetry`（馆长）都由 `runLlmCallWithActivity` 驱动，沿用 5 次上限；前者按 HTTP/provider code/异常类型分类，后者只信任服务端稳定 `retryable`/`billing` 并叠加无正文保护。
+`classifyLlmRetry`（自定义 API）与 `classifyManagedLlmRetry`（馆长）都由 `runLlmCallWithActivity` 驱动，沿用同一套 5 次上限、退避和重试行；前者按 HTTP/provider code/异常类型分类，后者信任服务端稳定 `retryable` 作为准入/终态信号，并额外把 `settlement_pending`、`settlement_in_progress`、`client_disconnected` 视为不可重放。`billing` 不参与重试判定。
 
 | 优先级 | 信号                | 判定                                                                                                                                                                                                                                                                                     |
 | ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

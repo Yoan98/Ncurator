@@ -267,12 +267,13 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const inspectorRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   /**
-   * 每个模型上次选中的档位，键是 configId + modelName。
+   * 各模型上次选定的档位，来自持久化的 value.effortMemory。
    *
-   * 只用于「切走再切回」时恢复用户的选择；模型当前支持的档位仍以目录为准，
-   * 目录里没有这个档位时 normalizeSelectionEffort 会回落到默认档。
+   * 放在伙伴状态里而不是组件内存：切走再切回要恢复，重启后同样要恢复。
+   * 模型当前支持的档位仍以目录为准，目录里没有该档位时
+   * normalizeSelectionEffort 会回落到默认档。
    */
-  const effortMemoryRef = useRef<Map<string, string>>(new Map())
+  const effortMemory = value.effortMemory
   const manualModelInputRef = useRef<InputRef>(null)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const listboxId = useId()
@@ -637,7 +638,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
      * 切到别的模型 → 再切回来」档位变回默认，用户以为没保存。
      * 档位是「每个模型各自的偏好」，按模型身份记住即可。
      */
-    const remembered = effortMemoryRef.current.get(`${configId}\u0000${modelName}`)
+    const remembered = effortMemory?.[`${configId}\u0000${modelName}`]
     const selected: WorkbenchSelectedModel = { configId, modelName }
     if (manual || (isSameSelection(value.mainModel, selected) && value.mainModel?.manual)) {
       selected.manual = true
@@ -1075,10 +1076,14 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             modelLabel={selectedManaged?.label || selectedPreset?.modelLabel || value.mainModel!.modelName}
             disabled={disabled}
             onChange={(next) => {
-              // 记住该模型选过的档位，切走再切回时能原样恢复。
+              /* 记住该模型选过的档位：切走再切回、重启之后都要能恢复，
+                 所以写进随伙伴保存的 selection，而不是组件内存。 */
               const model = value.mainModel
-              if (model) effortMemoryRef.current.set(`${model.configId}\u0000${model.modelName}`, next)
-              onChange({ mainModel: { ...model!, effort: next } })
+              if (!model) return
+              onChange({
+                mainModel: { ...model, effort: next },
+                effortMemory: { ...value.effortMemory, [`${model.configId}\u0000${model.modelName}`]: next }
+              })
             }}
             onRefresh={() => void refreshCatalog({ showOutcome: true })}
             refreshStatus={catalogRefreshStatus}

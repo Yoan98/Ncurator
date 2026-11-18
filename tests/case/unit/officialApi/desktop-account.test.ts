@@ -172,10 +172,10 @@ it('reads managed pricing with the active account and drops a response delivered
   }
 })
 
-type ManagedSseScenario = 'text' | 'tools' | 'incomplete' | 'pending' | 'disconnected' | 'timeout' | 'timeout-empty' | 'charged-timeout' | 'interrupted'
+type ManagedSseScenario = 'text' | 'tools' | 'stop-with-tools' | 'incomplete' | 'empty' | 'pending' | 'disconnected' | 'timeout' | 'timeout-empty' | 'charged-timeout' | 'interrupted'
 
 function managedSse(requestId: string, scenario: ManagedSseScenario) {
-  const tools = scenario === 'tools' || scenario === 'incomplete' || scenario === 'pending'
+  const tools = scenario === 'tools' || scenario === 'stop-with-tools' || scenario === 'incomplete' || scenario === 'pending'
   const frame = (delta: object, finish: string | null = null) => 'data: ' + JSON.stringify({ id: 'chat-synthetic',
     model: '9', object: 'chat.completion.chunk', created: 42, choices: [{ index: 0, delta, finish_reason: finish }] }) + '\n\n'
   if (scenario === 'timeout' || scenario === 'interrupted') {
@@ -191,12 +191,17 @@ function managedSse(requestId: string, scenario: ManagedSseScenario) {
       billing: { status: 'settled', feeDecision: scenario === 'charged-timeout' ? 'charge' : 'waive', wallet: sampleWallet } }) +
       '\n\ndata: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } })
   }
+  if (scenario === 'empty') {
+    return new Response(frame({}, 'stop') + 'event: ncurator.result\ndata: ' + JSON.stringify({ requestId, result: 'completed',
+      billing: { status: 'settled', feeDecision: 'charge', wallet: sampleWallet } }) + '\n\ndata: [DONE]\n\n',
+      { headers: { 'content-type': 'text/event-stream' } })
+  }
   let body = frame({ role: 'assistant', content: '测试内容' })
   if (tools) {
     body += frame({ tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'lookup', arguments: '{"name":' } }] })
     if (scenario !== 'incomplete') body += frame({ tool_calls: [{ index: 0, function: { arguments: '"doc"}' } }] })
   }
-  body += frame({}, tools ? 'tool_calls' : 'stop')
+  body += frame({}, tools ? (scenario === 'stop-with-tools' ? 'stop' : 'tool_calls') : 'stop')
   if (scenario !== 'disconnected') body += 'event: ncurator.result\ndata: ' + JSON.stringify({ requestId, result: 'completed',
     billing: scenario === 'pending' ? { status: 'settlement_pending' }
       : { status: 'settled', feeDecision: scenario === 'incomplete' ? 'waive' : 'charge', wallet: sampleWallet }
@@ -233,33 +238,47 @@ it.each(['same login', 'different account', 'same account after logging in again
   } finally { fixture.cleanup() }
 }, 10_000)
 
-it.each(['tools', 'pending', 'incomplete', 'disconnected'] as const)('returns a managed tool decision only after complete output and confirmed billing (%s)', async (scenario) => {
-  const fixture = managedDesktopFixture(requestId => managedSse(requestId, scenario))
-  try {
-    await fixture.login()
-    const onTextDelta = vi.fn()
-    const executeTool = vi.fn(async () => 'found')
-    const lookup = tool(executeTool, { name: 'lookup', description: 'Lookup a fixture', schema: z.object({ name: z.string() }) })
-    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
-      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {}, checkCancelled: () => {} })
-    const result = executor.chatTools({ caller: 'test', messages: [new HumanMessage('查资料')], tools: [lookup],
-      streamingMode: 'force_stream', onTextDelta }).then(async output => {
-      const [call] = output.message.tool_calls ?? []
-      if (call) await lookup.invoke(call.args)
-      return output
-    })
-    if (scenario === 'tools') {
-      expect(await result).toMatchObject({ finishReason: 'tool_calls', message: { tool_calls: [{ name: 'lookup', args: { name: 'doc' } }] } })
-      expect(executeTool).toHaveBeenCalledTimes(1)
-    } else {
-      await expect(result).rejects.toThrow()
-      expect(executeTool).not.toHaveBeenCalled()
-    }
-    expect(onTextDelta).toHaveBeenCalledWith('测试内容')
-    expect(fixture.submitted).toHaveLength(scenario === 'incomplete' ? 6 : 1)
-    expect(fixture.lookedUp).toEqual(scenario === 'pending' || scenario === 'disconnected' ? [fixture.submitted[0].requestId] : [])
-  } finally { fixture.cleanup() }
-})
+it.each(['tools', 'stop-with-tools', 'pending', 'incomplete', 'disconnected'] as const)(
+  'passes managed tool responses to the client and rejects only unusable terminal states (%s)',
+  async (scenario) => {
+    const fixture = managedDesktopFixture(requestId => managedSse(requestId, scenario))
+    try {
+      await fixture.login()
+      const onTextDelta = vi.fn()
+      const executeTool = vi.fn(async () => 'found')
+      const lookup = tool(executeTool, { name: 'lookup', description: 'Lookup a fixture', schema: z.object({ name: z.string() }) })
+      const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+        getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {}, checkCancelled: () => {} })
+      const result = executor.chatTools({ caller: 'test', messages: [new HumanMessage('查资料')], tools: [lookup],
+        streamingMode: 'force_stream', onTextDelta }).then(async output => {
+        const [call] = output.message.tool_calls ?? []
+        if (call && scenario !== 'incomplete') await lookup.invoke(call.args)
+        return output
+      })
+      if (scenario === 'tools' || scenario === 'stop-with-tools') {
+        expect(await result).toMatchObject({
+          finishReason: scenario === 'stop-with-tools' ? 'stop' : 'tool_calls',
+          message: { tool_calls: [{ name: 'lookup', args: { name: 'doc' } }] }
+        })
+        expect(executeTool).toHaveBeenCalledTimes(1)
+      } else if (scenario === 'incomplete') {
+        // Incomplete tool arguments stay client-side and are handed to the brain;
+        // the wrapper must not turn them into a retryable provider failure.
+        const output = await result
+        expect(
+          (output.message.tool_calls?.length ?? 0) + (output.message.invalid_tool_calls?.length ?? 0)
+        ).toBeGreaterThan(0)
+        expect(executeTool).not.toHaveBeenCalled()
+      } else {
+        await expect(result).rejects.toThrow()
+        expect(executeTool).not.toHaveBeenCalled()
+      }
+      expect(onTextDelta).toHaveBeenCalledWith('测试内容')
+      expect(fixture.submitted).toHaveLength(1)
+      expect(fixture.lookedUp).toEqual(scenario === 'pending' || scenario === 'disconnected' ? [fixture.submitted[0].requestId] : [])
+    } finally { fixture.cleanup() }
+  }
+)
 
 it('retries an empty managed timeout once with a fresh request id', async () => {
   const fixture = managedDesktopFixture((requestId, attempt) => attempt === 1
@@ -276,7 +295,7 @@ it('retries an empty managed timeout once with a fresh request id', async () => 
   } finally { fixture.cleanup() }
 })
 
-it('uses the five client attempts for empty timeouts but never retries a charged attempt', async () => {
+it('uses the unified client attempts for empty timeouts, including charged attempts', async () => {
   const retrying = managedDesktopFixture((requestId, attempt) => attempt <= 5
     ? managedSse(requestId, 'timeout-empty') : managedSse(requestId, 'text'))
   try {
@@ -290,17 +309,73 @@ it('uses the five client attempts for empty timeouts but never retries a charged
     expect(new Set(retrying.submitted.map(entry => entry.requestId)).size).toBe(6)
   } finally { retrying.cleanup() }
 
-  const charged = managedDesktopFixture(requestId => managedSse(requestId, 'charged-timeout'))
+  const charged = managedDesktopFixture((requestId, attempt) => attempt <= 5
+    ? managedSse(requestId, 'charged-timeout') : managedSse(requestId, 'text'))
   try {
     await charged.login()
     const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
       getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
       checkCancelled: () => {} })
+    await expect(executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
+      streamingMode: 'force_stream' })).resolves.toBe('测试内容')
+    expect(charged.submitted).toHaveLength(6)
+    expect(new Set(charged.submitted.map(entry => entry.requestId)).size).toBe(6)
+  } finally { charged.cleanup() }
+})
+
+it('retries a completed but empty charged response through the unified client attempts', async () => {
+  const fixture = managedDesktopFixture((requestId, attempt) => attempt <= 5
+    ? managedSse(requestId, 'empty') : managedSse(requestId, 'text'))
+  try {
+    await fixture.login()
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
+      checkCancelled: () => {} })
+    await expect(executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
+      streamingMode: 'force_stream' })).resolves.toBe('测试内容')
+    expect(fixture.submitted).toHaveLength(6)
+    expect(new Set(fixture.submitted.map(entry => entry.requestId)).size).toBe(6)
+  } finally { fixture.cleanup() }
+})
+
+it('reports an exhausted empty completion as invalid_output with mechanism facts', async () => {
+  const fixture = managedDesktopFixture(requestId => managedSse(requestId, 'empty'))
+  try {
+    await fixture.login()
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
+      checkCancelled: () => {} })
     const error = await executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
       streamingMode: 'force_stream' }).then(() => undefined, value => value)
-    expect(findLlmProviderError(error)).toMatchObject({ providerCode: 'upstream_timeout', billing: 'charged', retryable: false })
-    expect(charged.submitted).toHaveLength(1)
-  } finally { charged.cleanup() }
+    expect(findLlmProviderError(error)).toMatchObject({
+      providerCode: 'invalid_output',
+      billing: 'charged',
+      retryable: true
+    })
+    expect(error.message).toContain('模型本次没有返回可用内容')
+    expect(error.message).toContain('本次已计费')
+    expect(error.message).toContain('正文：无')
+    expect(fixture.submitted).toHaveLength(6)
+  } finally { fixture.cleanup() }
+})
+
+it('rejects tool calls from a text-only request without retrying', async () => {
+  const fixture = managedDesktopFixture(requestId => managedSse(requestId, 'tools'))
+  try {
+    await fixture.login()
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
+      checkCancelled: () => {} })
+    const error = await executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
+      streamingMode: 'force_stream' }).then(() => undefined, value => value)
+    expect(findLlmProviderError(error)).toMatchObject({
+      providerCode: 'invalid_output',
+      billing: 'charged',
+      retryable: false
+    })
+    expect(error.message).toContain('本次已计费')
+    expect(fixture.submitted).toHaveLength(1)
+  } finally { fixture.cleanup() }
 })
 
 it.each([['timeout', 'upstream_timeout'], ['interrupted', 'upstream_interrupted']] as const)(
@@ -899,8 +974,12 @@ it('looks up the original managed call without a wallet round trip and applies o
   expect(managedCall).toHaveBeenCalledExactlyOnceWith(requestId, value('first').accessToken, signal)
   const snapshot = await wallet('fixture')
   wallet.mockClear()
-  managedCall.mockResolvedValueOnce({ status: 'settled', executionStatus: 'completed', wallet: snapshot })
-  await expect(scope.recover(requestId)).resolves.toEqual({ status: 'settled', executionStatus: 'completed' })
+  managedCall.mockResolvedValueOnce({ status: 'settled', executionStatus: 'completed', feeDecision: 'charge', wallet: snapshot })
+  await expect(scope.recover(requestId)).resolves.toEqual({
+    status: 'settled',
+    executionStatus: 'completed',
+    feeDecision: 'charge'
+  })
   scope.applyWallet({ ...snapshot, version: '1', available: '0' })
   await expect(account.readWallet()).resolves.toMatchObject({ wallet: snapshot, walletStale: false })
   expect(wallet).not.toHaveBeenCalled()

@@ -4,9 +4,9 @@ import { isManagedModelConfigId, managedModelEntryId } from '../../../shared/man
 import type { LlmRuntimeConfig } from '../../../shared/types'
 import { getAppRuntime, serviceApiUrl } from '../app/AppRuntime'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS } from '../ai/constants'
-import { LlmProviderError, type LlmBillingStatus } from '../ai/errors'
+import { LlmProviderError, type LlmBillingStatus, type LlmProviderDiagnostics } from '../ai/errors'
 import { isProviderFailureCode, providerFailure, providerFailureMessage } from '../ai/providerFailure'
-import { classifyManagedLlmRetry, ManagedModelConcurrencyRejection } from '../ai/llmRetry'
+import { classifyManagedLlmRetry, ManagedModelConcurrencyRejection, NON_REPLAYABLE_MANAGED_CODES } from '../ai/llmRetry'
 import { buildDesktopAppGatewayHeaders } from './appClient'
 import { currentDomesticDesktopAccount } from './desktopAccount'
 
@@ -60,8 +60,36 @@ function billingFrom(value: unknown): LlmBillingStatus {
   return 'unknown'
 }
 
-const failure = (code: string, status?: number, billing?: LlmBillingStatus, retryable?: boolean) =>
-  providerFailure(isProviderFailureCode(code) ? code : 'failed', { status, billing, retryable })
+function diagnosticSuffix(diagnostics: LlmProviderDiagnostics): string {
+  const parts = [
+    `结束原因：${String(diagnostics.finishReason ?? '无')}`,
+    `正文：${diagnostics.hasText ? '有' : '无'}`,
+    `工具调用：${String(diagnostics.toolCount ?? 0)}`
+  ]
+  if (!diagnostics.finishFrame) parts.push('结束帧：无')
+  if (diagnostics.invalidTool) parts.push('工具分片：异常')
+  return `（${parts.join('；')}）`
+}
+
+const failure = (
+  code: string,
+  options: {
+    status?: number
+    billing?: LlmBillingStatus
+    retryable?: boolean
+    diagnostics?: LlmProviderDiagnostics
+    suffix?: string
+  } = {}
+) => {
+  if (options.diagnostics) console.warn('[managed-model]', code, options.diagnostics)
+  return providerFailure(isProviderFailureCode(code) ? code : 'failed', {
+    status: options.status,
+    billing: options.billing,
+    retryable: options.retryable,
+    diagnostics: options.diagnostics,
+    messageSuffix: options.suffix ?? (options.diagnostics ? diagnosticSuffix(options.diagnostics) : undefined)
+  })
+}
 
 type Scope = ReturnType<ReturnType<typeof currentDomesticDesktopAccount>['managedCallScope']>
 type Dependencies = {
@@ -76,7 +104,7 @@ function frameParts(raw: string) {
   return { event, data }
 }
 
-function managedStream(response: Response, requestId: string, scope: Scope,
+function managedStream(response: Response, requestId: string, scope: Scope, allowToolCalls: boolean,
   recover: () => ReturnType<Scope['recover']>, onRetry: () => void) {
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
@@ -85,8 +113,10 @@ function managedStream(response: Response, requestId: string, scope: Scope,
   let finishFrame: string | undefined
   let finishReason: string | undefined
   let hasText = false
+  let sawToolCall = false
   let invalidTool = false
   let settled = false
+  let latestBilling: LlmBillingStatus | undefined
   const tools = new Map<number, { id: string; name: string; arguments: string }>()
 
   function collectTools(value: unknown) {
@@ -105,12 +135,43 @@ function managedStream(response: Response, requestId: string, scope: Scope,
     }
   }
 
+  function streamDiagnostics(billing?: LlmBillingStatus): LlmProviderDiagnostics {
+    const completeToolCount = [...tools.values()].filter(tool =>
+      tool.id && tool.name && validArguments(tool.arguments)).length
+    const effectiveBilling = billing ?? latestBilling
+    return {
+      requestId,
+      finishReason: finishReason ?? '无',
+      hasText,
+      sawToolCall,
+      toolCount: tools.size,
+      completeToolCount,
+      invalidTool,
+      finishFrame: Boolean(finishFrame),
+      ...(effectiveBilling ? { billing: effectiveBilling } : {})
+    }
+  }
+
   function assertCompleteOutput(billing?: LlmBillingStatus) {
-    if (finishReason === 'length') throw failure('output_truncated', undefined, billing)
-    if (finishFrame && !invalidTool && ((finishReason === 'stop' && hasText && tools.size === 0) ||
-      (finishReason === 'tool_calls' && tools.size > 0 && [...tools.values()].every(tool =>
-        tool.id && tool.name && validArguments(tool.arguments))))) return
-    throw failure('incomplete', undefined, billing, billing === 'waived')
+    const diagnostics = streamDiagnostics(billing)
+    if (finishReason === 'length') throw failure('output_truncated', { billing, diagnostics })
+    if (finishReason === 'content_filter') {
+      // Tool-enabled calls go to the brain so it can produce the content-safety fallback.
+      if (allowToolCalls && finishFrame) return
+      if (!finishFrame) throw failure('incomplete', { billing, retryable: true, diagnostics })
+      throw failure('content_filter', { billing, retryable: false, diagnostics })
+    }
+    // A missing finish frame is a transport interruption, not a payload judgment.
+    if (!finishFrame) throw failure('incomplete', { billing, retryable: true, diagnostics })
+    // Transport-level completion only: any text or tool-call attempt is usable.
+    // Incomplete tool calls are repaired or returned to the model by the brain.
+    const usable = allowToolCalls ? hasText || sawToolCall : hasText && !sawToolCall
+    if (usable) return
+    throw failure('invalid_output', {
+      billing,
+      retryable: allowToolCalls || !sawToolCall,
+      diagnostics
+    })
   }
 
   async function finishFromStatus(controller: ReadableStreamDefaultController<Uint8Array>, error?: string) {
@@ -119,7 +180,17 @@ function managedStream(response: Response, requestId: string, scope: Scope,
     if (status.status !== 'settled' || status.executionStatus !== 'completed') {
       const code = error && isProviderFailureCode(error) ? error
         : status.status === 'settlement_pending' ? 'settlement_pending' : 'incomplete'
-      throw failure(code, undefined, billing, code === 'incomplete' && billing === 'waived')
+      const admitted = status.status !== 'settled' && status.status !== 'not_found'
+      const terminal = 'executionStatus' in status ? status.executionStatus : undefined
+      const retryable = admitted || terminal === 'cancelled' || terminal === 'lost' ||
+          NON_REPLAYABLE_MANAGED_CODES.has(code)
+        ? false
+        : undefined
+      throw failure(code, {
+        billing,
+        retryable,
+        diagnostics: streamDiagnostics(billing)
+      })
     }
     settled = true
     assertCompleteOutput(billing)
@@ -160,14 +231,16 @@ function managedStream(response: Response, requestId: string, scope: Scope,
           if (event === resultEvent) {
             if (value.requestId !== requestId || !record(value.billing)) throw failure('incomplete')
             const billing = billingFrom(value.billing)
+            latestBilling = billing
             if (value.billing.status === 'settled') {
               scope.applyWallet(value.billing.wallet)
               settled = true
               if (value.result !== 'completed') {
                 const code = typeof value.error === 'string' && isProviderFailureCode(value.error) ? value.error
                   : value.result === 'failed' ? 'upstream_error' : 'incomplete'
-                throw failure(code, undefined, billing,
-                  value.retryable === true && billing === 'waived')
+                const retryable = NON_REPLAYABLE_MANAGED_CODES.has(code) ? false
+                  : typeof value.retryable === 'boolean' ? value.retryable : undefined
+                throw failure(code, { billing, retryable, diagnostics: streamDiagnostics(billing) })
               }
               assertCompleteOutput(billing)
               closeSuccess(controller)
@@ -186,7 +259,12 @@ function managedStream(response: Response, requestId: string, scope: Scope,
           }
           if (finishFrame || !record(choice.delta)) throw failure('incomplete')
           if (typeof choice.delta.content === 'string' && choice.delta.content.length > 0) hasText = true
-          if (choice.delta.tool_calls !== undefined) collectTools(choice.delta.tool_calls)
+          if (choice.delta.tool_calls !== undefined) {
+            // Any tool-call attempt belongs to the client's brain, even when
+            // individual argument fragments are incomplete.
+            if (!Array.isArray(choice.delta.tool_calls) || choice.delta.tool_calls.length > 0) sawToolCall = true
+            collectTools(choice.delta.tool_calls)
+          }
           controller.enqueue(encoder.encode(raw + '\n\n'))
           return
         }
@@ -215,6 +293,7 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
     if (request.url !== url || request.method !== 'POST') throw failure('model_not_found')
     const parsed: unknown = JSON.parse(await request.text())
     if (!record(parsed)) throw failure('incomplete')
+    const allowToolCalls = Array.isArray(parsed.tools) && parsed.tools.length > 0
     // Each upstream attempt is a separate managed execution. A retry must not
     // reuse a request id that the server may already have admitted.
     const requestId = invocation?.retryRequestId ?? invocation?.requestId ?? randomUUID()
@@ -236,9 +315,14 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
       let response: Response
       try { response = await deps.fetch(url, { method: 'POST', body, headers, signal: request.signal, redirect: 'error', cache: 'no-store' }) }
       catch {
-        void recover().catch(() => undefined)
+        // A transport failure may happen after admission. Recover first: a settled
+        // execution is finished and safe to retry as a new call; an accepted or
+        // in-flight execution must be recovered instead of replayed.
+        const status = await recover().catch(() => undefined)
         request.signal.throwIfAborted()
-        throw failure('incomplete')
+        throw failure('incomplete', {
+          retryable: status?.status === 'not_found' || status?.status === 'settled'
+        })
       }
       try { scope.assertCurrent() } catch (error) {
         await response.body?.cancel().catch(() => undefined)
@@ -249,7 +333,7 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
         await recover().catch(() => undefined)
         // The execution is already admitted but its outcome is unknown; replaying
         // it would create a second admitted call. Recover instead of retrying.
-        throw failure('incomplete', undefined, undefined, false)
+        throw failure('incomplete', { retryable: false })
       }
       if (!response.ok) {
         const result: unknown = await response.json().catch(() => undefined)
@@ -272,10 +356,13 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
         if (response.status >= 500) void recover().catch(() => undefined)
         // An unknown 429 is not the admission-safe concurrency rejection; do not
         // replay a call whose admission/outcome may already exist.
-        throw failure(code, response.status, undefined, response.status === 429 ? false : undefined)
+        throw failure(code, {
+          status: response.status,
+          retryable: response.status === 429 ? false : undefined
+        })
       }
       if (parsed.stream === true && response.body && response.headers.get('content-type')?.startsWith('text/event-stream')) {
-        return managedStream(response, requestId, scope, recover, () => {
+        return managedStream(response, requestId, scope, allowToolCalls, recover, () => {
           if (invocation) invocation.retryRequestId = randomUUID()
         })
       }
@@ -291,21 +378,59 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
         const recoveredStatus = await recover().catch(() => undefined)
         billing = billingFrom(recoveredStatus)
         if (recoveredStatus?.status !== 'settled' || recoveredStatus.executionStatus !== 'completed') {
-          throw failure('settlement_pending', undefined, billing)
+          throw failure('settlement_pending', { billing, retryable: false })
         }
       }
       const firstChoice: unknown = Array.isArray(completion.choices) ? completion.choices[0] : undefined
       if (ncurator.result !== 'completed' || !record(firstChoice) || !record(firstChoice.message)) {
-        const code = typeof ncurator.error === 'string' && isProviderFailureCode(ncurator.error) ? ncurator.error : 'incomplete'
-        throw failure(code, undefined, billing)
+        const code = typeof ncurator.error === 'string' && isProviderFailureCode(ncurator.error)
+          ? ncurator.error : 'incomplete'
+        throw failure(code, {
+          billing,
+          retryable: NON_REPLAYABLE_MANAGED_CODES.has(code) ? false : undefined,
+          diagnostics: {
+            requestId,
+            finishReason: '无',
+            hasText: false,
+            sawToolCall: false,
+            toolCount: 0,
+            completeToolCount: 0,
+            invalidTool: false,
+            finishFrame: false,
+            billing
+          }
+        })
       }
-      if (firstChoice.finish_reason === 'length') throw failure('output_truncated')
+      const finishReason = typeof firstChoice.finish_reason === 'string' ? firstChoice.finish_reason : '无'
       const toolCalls = firstChoice.message.tool_calls
       const text = firstChoice.message.content
-      const complete = firstChoice.finish_reason === 'tool_calls' && Array.isArray(toolCalls) && toolCalls.length > 0 && toolCalls.every(completeToolCall) ||
-        firstChoice.finish_reason === 'stop' && typeof text === 'string' && text.length > 0 &&
-        (toolCalls == null || Array.isArray(toolCalls) && toolCalls.length === 0)
-      if (!complete) throw failure('incomplete')
+      const hasText = typeof text === 'string' && text.length > 0
+      const toolCallCount = Array.isArray(toolCalls) ? toolCalls.length : 0
+      const completeToolCount = Array.isArray(toolCalls) ? toolCalls.filter(completeToolCall).length : 0
+      const diagnostics: LlmProviderDiagnostics = {
+        requestId,
+        finishReason,
+        hasText,
+        sawToolCall: toolCallCount > 0,
+        toolCount: toolCallCount,
+        completeToolCount,
+        invalidTool: false,
+        finishFrame: true,
+        billing
+      }
+      if (finishReason === 'length') throw failure('output_truncated', { billing, diagnostics })
+      if (finishReason === 'content_filter') {
+        if (allowToolCalls) return Response.json(completion, { headers: { 'cache-control': 'no-store' } })
+        throw failure('content_filter', { billing, retryable: false, diagnostics })
+      }
+      const usable = allowToolCalls ? hasText || toolCallCount > 0 : hasText && toolCallCount === 0
+      if (!usable) {
+        throw failure('invalid_output', {
+          billing,
+          retryable: allowToolCalls || toolCallCount === 0,
+          diagnostics
+        })
+      }
       return Response.json(completion, { headers: { 'cache-control': 'no-store' } })
     }
   }

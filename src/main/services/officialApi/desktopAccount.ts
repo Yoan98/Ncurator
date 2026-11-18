@@ -242,14 +242,15 @@ export class DesktopAccount {
         const token = await accessToken()
         const result = await this.deps.managedCall(requestId, token, signal)
         assertCurrent()
-        const { status, executionStatus } = result
+        const { status, executionStatus, feeDecision } = result
         if (status === 'settled') {
           if (executionStatus !== 'completed' && executionStatus !== 'cancelled' &&
               executionStatus !== 'failed' && executionStatus !== 'lost') throw new DesktopAccountError('unavailable')
           applyWallet(result.wallet)
-          return { status, executionStatus } as const
+          return { status, executionStatus, feeDecision } as const
         }
-        if (status === 'accepted' || status === 'settlement_pending' || status === 'not_found') return { status } as const
+        if (status === 'accepted' || status === 'settlement_pending' || status === 'not_found')
+          return { status, feeDecision } as const
         throw new DesktopAccountError('unavailable')
       }
     }

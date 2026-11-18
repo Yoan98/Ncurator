@@ -1,4 +1,4 @@
-import { LlmProviderError, type LlmBillingStatus } from './errors'
+import { LlmProviderError, type LlmBillingStatus, type LlmProviderDiagnostics } from './errors'
 
 export type ProviderFailureCode =
   | 'upstream_timeout'
@@ -22,6 +22,8 @@ export type ProviderFailureCode =
   | 'context_limit'
   | 'image_not_supported'
   | 'invalid_request'
+  | 'invalid_output'
+  | 'content_filter'
   | 'output_truncated'
   | 'failed'
   | 'unavailable'
@@ -140,6 +142,16 @@ const FAILURES: Record<ProviderFailureCode, FailureCopy> = {
     detail: '请求参数不符合要求，请调整后重试。',
     retryable: false
   },
+  invalid_output: {
+    title: '模型返回内容不完整',
+    detail: '模型本次没有返回可用内容。',
+    retryable: true
+  },
+  content_filter: {
+    title: '内容安全拦截',
+    detail: '本次请求被模型内容安全策略拦截，无法继续。',
+    retryable: false
+  },
   output_truncated: {
     title: '输出达到上限',
     detail: '本次回答达到输出上限，内容未完整接收。',
@@ -197,12 +209,21 @@ export const providerFailureMessage = (code: ProviderFailureCode,
   billing?: LlmBillingStatus): string => FAILURES[code].detail + billingText(billing)
 
 export const providerFailure = (code: ProviderFailureCode,
-  options: { billing?: LlmBillingStatus; status?: number; cause?: unknown; retryable?: boolean } = {}): LlmProviderError =>
+  options: {
+    billing?: LlmBillingStatus
+    status?: number
+    cause?: unknown
+    retryable?: boolean
+    diagnostics?: LlmProviderDiagnostics
+    /** Compact, user-readable facts appended to the stable detail. */
+    messageSuffix?: string
+  } = {}): LlmProviderError =>
   new LlmProviderError({
     providerCode: code,
-    message: providerFailureMessage(code, options.billing),
+    message: providerFailureMessage(code, options.billing) + (options.messageSuffix ?? ''),
     retryable: options.retryable ?? FAILURES[code].retryable,
     billing: options.billing,
     httpStatus: options.status,
+    diagnostics: options.diagnostics,
     cause: options.cause
   })

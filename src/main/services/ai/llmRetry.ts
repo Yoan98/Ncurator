@@ -123,6 +123,15 @@ export class ManagedModelConcurrencyRejection extends LlmProviderError {
   }
 }
 
+// A new requestId may be replayed only after the previous execution is
+// definitively finished. Accepted/in-flight settlement states must be recovered
+// instead of replayed; billing is a display/cost fact, not a retry gate.
+export const NON_REPLAYABLE_MANAGED_CODES = new Set([
+  'settlement_pending',
+  'settlement_in_progress',
+  'client_disconnected'
+])
+
 export const classifyManagedLlmRetry = (error: unknown, attempt = 1): LlmRetryDecision => {
   let cause = error
   for (let depth = 0; cause && depth < 5; depth++, cause = readCause(cause)) {
@@ -130,10 +139,10 @@ export const classifyManagedLlmRetry = (error: unknown, attempt = 1): LlmRetryDe
       return { retryable: true, message: cause.message, delayMs: resolveCapacityBackoffDelay(attempt) }
     }
     if (cause instanceof LlmProviderError) {
-      // Unknown/charged billing and non-retryable terminal codes must not be
-      // retried. Visible content is reset by the brain stream before a retry,
-      // so partial output is not a reason to suppress the retry.
-      if (cause.retryable && (cause.billing === undefined || cause.billing === 'waived')) {
+      if (cause.providerCode && NON_REPLAYABLE_MANAGED_CODES.has(cause.providerCode)) {
+        return { retryable: false, message: cause.message }
+      }
+      if (cause.retryable) {
         return {
           retryable: true,
           message: cause.message,

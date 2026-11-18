@@ -2,6 +2,9 @@ import { ZodError } from 'zod/v4'
 
 export type LlmBillingStatus = 'waived' | 'charged' | 'unknown'
 
+/** Stable, non-secret facts kept with a provider failure for local diagnosis. */
+export type LlmProviderDiagnostics = Record<string, string | number | boolean>
+
 export type LlmProviderErrorInput = {
   message: string
   httpStatus?: number
@@ -9,6 +12,7 @@ export type LlmProviderErrorInput = {
   providerType?: string
   retryable?: boolean
   billing?: LlmBillingStatus
+  diagnostics?: LlmProviderDiagnostics
   cause?: unknown
 }
 
@@ -18,6 +22,7 @@ export class LlmProviderError extends Error {
   public readonly providerType?: string
   public readonly retryable: boolean
   public readonly billing?: LlmBillingStatus
+  public readonly diagnostics?: LlmProviderDiagnostics
 
   public constructor(input: LlmProviderErrorInput) {
     super(input.message, { cause: input.cause })
@@ -27,6 +32,7 @@ export class LlmProviderError extends Error {
     this.providerType = input.providerType
     this.retryable = Boolean(input.retryable)
     this.billing = input.billing
+    this.diagnostics = input.diagnostics
   }
 }
 

@@ -24,12 +24,21 @@ describe('ai unit llm error classification', () => {
     ).toBe('unknown')
   })
 
-  it('retries only safe managed failures with waived or absent billing', () => {
+  it('retries client-owned failures regardless of billing but keeps settlement states non-replayable', () => {
     expect(classifyManagedLlmRetry(new LlmProviderError({
       message: '上游模型超时未返回。本次未计费。', providerCode: 'upstream_timeout', retryable: true, billing: 'waived'
     }))).toMatchObject({ retryable: true })
     expect(classifyManagedLlmRetry(new LlmProviderError({
       message: '上游模型超时未返回。本次已计费。', providerCode: 'upstream_timeout', retryable: true, billing: 'charged'
+    }))).toMatchObject({ retryable: true })
+    expect(classifyManagedLlmRetry(new LlmProviderError({
+      message: '模型本次没有返回可用内容。本次已计费。', providerCode: 'invalid_output', retryable: true, billing: 'charged'
+    }))).toMatchObject({ retryable: true })
+    expect(classifyManagedLlmRetry(new LlmProviderError({
+      message: '本次费用仍在处理。', providerCode: 'settlement_pending', retryable: true
+    }))).toMatchObject({ retryable: false })
+    expect(classifyManagedLlmRetry(new LlmProviderError({
+      message: '上一笔费用仍在处理，请稍后再试。', providerCode: 'settlement_in_progress', retryable: true
     }))).toMatchObject({ retryable: false })
     expect(classifyManagedLlmRetry(new LlmProviderError({
       message: '上游模型账户额度不足，请稍后再试。', providerCode: 'upstream_quota_exhausted', retryable: false

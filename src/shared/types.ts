@@ -570,6 +570,14 @@ export type WorkbenchSelectedModel = {
 
 export type WorkbenchModelSelection = {
   mainModel: WorkbenchSelectedModel | null
+  /**
+   * 各模型上次选定的思考强度，键为 `configId\u0000modelName`。
+   *
+   * 档位是「每个模型各自的偏好」：切走再切回、以及重启之后都要恢复，
+   * 所以必须随伙伴状态持久化，不能只放在组件内存里。
+   * 键用复合串而不是嵌套对象，方便旧快照原样通过而不需要迁移。
+   */
+  effortMemory?: Record<string, string>
 }
 
 export type LlmRuntimeConfig = LLMConfig & {
