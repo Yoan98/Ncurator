@@ -31,7 +31,7 @@ import { terminalSessionManager } from './services/ai/human/tools/terminal/Termi
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 import { SystemNotificationService } from './services/SystemNotificationService'
 import { TelemetryService } from './services/telemetry/TelemetryService'
-import { AppErrorLogService, type AppErrorLogContext } from './services/logging/AppErrorLogService'
+import { AppErrorLogService } from './services/logging/AppErrorLogService'
 import { DatabaseVersionTooNewError, SqliteCore } from './services/storage/sqlite/SqliteCore'
 import { WpsSyncService } from './services/wps/WpsSyncService'
 import { setOfficeFileWriteListener } from './services/wps/officeFileWriteNotify'
@@ -64,12 +64,6 @@ let rendererFlushSequence = 0
 let mainAppWindow: BrowserWindow | undefined
 let deliverDesktopLink: ((link: string) => void) | undefined
 let focusOnShow = false
-/** Assigned once app services exist; temporary diagnostics for cross-display input. */
-let windowLogService: AppErrorLogService | null = null
-
-function logWindowStep(message: string, context?: AppErrorLogContext): void {
-  windowLogService?.write({ module: 'window', error: message, context })
-}
 
 function focusAppWindow() {
   if (!mainAppWindow) {
@@ -194,7 +188,7 @@ function injectTrustedPointerMove(win: BrowserWindow): boolean {
  * 形状永远是箭头。这里先做 1px 位移强制重算几何，再补焦点与可信指针移动；
  * 光标本身由渲染层通过 `window-cursor-nudge` 反复触发（见 main.tsx）。
  */
-function resyncPointerTrackingAfterDisplayChange(
+function resyncPointerTracking(
   win: BrowserWindow,
   options: { ensureWindowFocus: boolean } = { ensureWindowFocus: true }
 ): void {
@@ -202,11 +196,6 @@ function resyncPointerTrackingAfterDisplayChange(
   if (win.isFullScreen() || win.isMinimized()) return
 
   if (options.ensureWindowFocus && !win.isFocused()) win.focus()
-  logWindowStep('display-resync', {
-    focused: win.isFocused(),
-    boundsX: win.getBounds().x,
-    boundsY: win.getBounds().y
-  })
 
   const bounds = win.getBounds()
   try {
@@ -335,22 +324,18 @@ function createWindow(): BrowserWindow {
   mainWindow.on('moved', () => {
     const nextDisplayId = resolveWindowDisplayId()
     if (nextDisplayId === windowDisplayId) return
-    const previousDisplayId = windowDisplayId
     windowDisplayId = nextDisplayId
-    mainWindow.webContents.send('window-display-changed', {
-      from: previousDisplayId,
-      to: nextDisplayId
-    })
-    setTimeout(() => resyncPointerTrackingAfterDisplayChange(mainWindow), 80)
+    mainWindow.webContents.send('window-pointer-resync', { reason: 'display-move' })
+    setTimeout(() => resyncPointerTracking(mainWindow), 80)
   })
-  // 启动时窗口可能恢复到副屏（上次的位置），同样需要重建一次鼠标跟踪。
+  // 启动时窗口可能恢复到副屏（上次的位置），同样可能带着失效的光标状态。
   // 这里不补窗口焦点，避免破坏开机自启 / 自动化时的静默显示。
   mainWindow.on('show', () => {
-    setTimeout(
-      () =>
-        resyncPointerTrackingAfterDisplayChange(mainWindow, { ensureWindowFocus: false }),
-      120
-    )
+    if (resolveWindowDisplayId() === screen.getPrimaryDisplay().id) return
+    setTimeout(() => {
+      resyncPointerTracking(mainWindow, { ensureWindowFocus: false })
+      mainWindow.webContents.send('window-pointer-resync', { reason: 'show' })
+    }, 120)
   })
 
   globalShortcut.register('F12', () => {
@@ -422,7 +407,6 @@ if (!singleInstanceLock) {
       userDataPath: app.getPath('userData'),
       appVersion: app.getVersion()
     })
-    windowLogService = errorLogService
     process.on('uncaughtException', (error) => {
       errorLogService.write({
         module: 'main-process',
@@ -533,9 +517,7 @@ if (!singleInstanceLock) {
     const mainWindow = createWindow()
     ipcMain.handle('window-cursor-nudge', (event) => {
       const target = BrowserWindow.fromWebContents(event.sender)
-      const sent = target ? injectTrustedPointerMove(target) : false
-      logWindowStep('cursor-nudge', { sent })
-      return { sent }
+      return { sent: target ? injectTrustedPointerMove(target) : false }
     })
     mainWindow.webContents.on('render-process-gone', (_event, details) => {
       errorLogService.write({

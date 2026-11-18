@@ -599,21 +599,14 @@ const api: DesktopApi = {
     }
   },
 
-  onWindowDisplayChanged: (cb: (payload: { from: number; to: number }) => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      payload: { from: number; to: number }
-    ): void => {
+  onWindowPointerResync: (cb: (payload: { reason: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { reason: string }): void => {
       cb(payload)
     }
-    ipcRenderer.on('window-display-changed', listener)
+    ipcRenderer.on('window-pointer-resync', listener)
     return () => {
-      ipcRenderer.removeListener('window-display-changed', listener)
+      ipcRenderer.removeListener('window-pointer-resync', listener)
     }
-  },
-  errorLogReport: (payload: { message: string; stack?: string }) => {
-    emitE2EIpcCall('errorLogReport')
-    return ipcRenderer.invoke('app-error-log-renderer', payload)
   },
   nudgeWindowCursor: () => {
     emitE2EIpcCall('nudgeWindowCursor')

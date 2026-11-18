@@ -234,7 +234,7 @@ const WORKBENCH_DRAG_REGION_STYLE = {
   WebkitAppRegion: 'drag'
 } as React.CSSProperties
 /** composer 外壳上移量（px），与 base.css 的 --nc-composer-overlap 保持一致。 */
-const COMPOSER_OVERLAP_PX = 40
+const COMPOSER_OVERLAP_PX = 20
 
 const WORKBENCH_NO_DRAG_REGION_STYLE = {
   position: 'relative',
@@ -5714,7 +5714,7 @@ const ChatPage: React.FC = () => {
                         } ${currentPartnerId ? '' : 'hidden'}`}
                         data-testid={workbenchSelectors.composerShell}
                       >
-                        <div className="mx-auto w-full max-w-[900px]">
+                        <div className="mx-auto w-full max-w-[800px]">
                           {isNewSession && currentPartnerId ? (
                             <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
                               <span>{t(($) => $.workbench.whatWouldYouLikeToDo)}</span>

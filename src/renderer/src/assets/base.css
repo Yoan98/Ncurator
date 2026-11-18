@@ -1801,7 +1801,7 @@ textarea,
 .nc-document {
   @apply mx-auto flex w-full max-w-[760px] flex-col gap-5;
   /* 底部留白 = composer 渐变重叠量 + 8px：贴底时最后一行完整露在渐变之上。 */
-  padding-bottom: calc(var(--nc-composer-overlap, 28px) + 8px);
+  padding-bottom: calc(var(--nc-composer-overlap, 20px) + 8px);
 }
 
 .nc-timeline-pin-spacer {
@@ -2102,8 +2102,8 @@ textarea,
   /* 上移一截并补等高的顶部内边距：渐变盖住消息区最后一段，
      内容从输入框后面淡出，不再在渐变上沿被硬裁出一条切线。
      该数值与 ChatPage 里贴底/日跳转使用的 COMPOSER_OVERLAP_PX 必须一致。 */
-  padding-top: var(--nc-composer-overlap, 28px);
-  margin-top: calc(-1 * var(--nc-composer-overlap, 28px));
+  padding-top: var(--nc-composer-overlap, 20px);
+  margin-top: calc(-1 * var(--nc-composer-overlap, 20px));
 }
 
 /* No partner selected: the empty state owns the message area instead of the composer slot. */
@@ -2116,7 +2116,8 @@ textarea,
 }
 
 .nc-floating-composer {
-  @apply mx-auto w-full max-w-[760px] overflow-visible rounded-[18px] border border-[#E0DFDC] bg-white;
+  /* 宽度交给 composer 外壳的 wrapper：消息列 760，输入框 800，两侧各内收 20px。 */
+  @apply mx-auto w-full overflow-visible rounded-[18px] border border-[#E0DFDC] bg-white;
   box-shadow: 0 10px 28px rgba(15, 15, 15, 0.08);
 }
 

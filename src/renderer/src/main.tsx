@@ -17,10 +17,6 @@ window.addEventListener('unhandledrejection', (event) => {
 })
 
 /**
- * 跨显示器诊断：窗口落到另一块屏后，采样 6 秒的渲染活跃度、指针事件与 hover 命中，
- * 写进 app.log。用于区分「主线程卡住」与「Chromium 鼠标跟踪失效」。
- */
-/**
  * Chromium 在 macOS 上会缓存「已设置的光标」：窗口跨屏后系统把光标重置为箭头，
  * 而 Chromium 仍认为当前是手型，于是不再下发 cursor 更新，表现为 hover 正常但
  * 鼠标形状永远不变。这里把指针下元素的 cursor 临时改成另一个值再恢复，
@@ -56,95 +52,38 @@ const forceCursorResend = async (): Promise<void> => {
     const computed = window.getComputedStyle(target).cursor || 'default'
     const opposite = computed === 'default' ? 'pointer' : 'default'
     target.style.setProperty('cursor', opposite, 'important')
+    try {
+      await nextFrame()
+      await window.api.nudgeWindowCursor()
+      await delay(45)
+    } finally {
+      target.style.removeProperty('cursor')
+    }
     await nextFrame()
-    await window.api.nudgeWindowCursor()
-    await delay(45)
-    target.style.removeProperty('cursor')
-    await nextFrame()
-    await window.api.nudgeWindowCursor()
+    await window.api.nudgeWindowCursor().catch(() => undefined)
     await delay(150)
   }
 }
 
-const installDisplayChangeProbe = (): void => {
+/**
+ * 窗口换屏（或恢复到副屏）后，主进程会通知渲染层重建指针跟踪；这里把指针下
+ * 元素的 cursor 翻转几次并请求主进程注入可信鼠标移动，强制 Chromium 重新下发
+ * 光标状态。详见 forceCursorResend 的注释。
+ */
+const installPointerResyncHandler = (): void => {
   try {
     if (window.api.isE2EMode()) return
   } catch {
     return
   }
 
-  window.api.onWindowDisplayChanged((payload) => {
+  window.api.onWindowPointerResync(() => {
     window.setTimeout(() => void forceCursorResend(), 250)
-    const startedAt = performance.now()
-    const longTasks: number[] = []
-    const hovered: string[] = []
-    let frames = 0
-    let worstGapMs = 0
-    let lastFrameAt = startedAt
-    let pointerMoves = 0
-    let pointerDowns = 0
-
-    const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) longTasks.push(Math.round(entry.duration))
-    })
-    try {
-      observer.observe({ type: 'longtask' })
-    } catch {
-      // Optional: runtimes without longtask support report the rest only.
-    }
-
-    const onPointerMove = (): void => {
-      pointerMoves += 1
-    }
-    const onPointerDown = (): void => {
-      pointerDowns += 1
-    }
-    window.addEventListener('pointermove', onPointerMove, true)
-    window.addEventListener('pointerdown', onPointerDown, true)
-
-    const tick = (now: number): void => {
-      frames += 1
-      worstGapMs = Math.max(worstGapMs, now - lastFrameAt)
-      lastFrameAt = now
-      if (performance.now() - startedAt < 6000) requestAnimationFrame(tick)
-    }
-    requestAnimationFrame(tick)
-
-    window.setTimeout(() => {
-      observer.disconnect()
-      window.removeEventListener('pointermove', onPointerMove, true)
-      window.removeEventListener('pointerdown', onPointerDown, true)
-      try {
-        for (const element of document.querySelectorAll(':hover')) {
-          hovered.push(element.tagName.toLowerCase())
-        }
-      } catch {
-        // :hover query is best effort.
-      }
-      try {
-        void window.api.errorLogReport?.({
-          message: '[display-probe]',
-          stack: JSON.stringify({
-            payload,
-            hasFocus: document.hasFocus(),
-            dpr: window.devicePixelRatio,
-            frames,
-            worstGapMs: Math.round(worstGapMs),
-            pointerMoves,
-            pointerDowns,
-            hovered: hovered.slice(-4),
-            longTasks
-          })
-        })
-      } catch {
-        // Diagnostics must never affect the app.
-      }
-    }, 6000)
   })
 }
 
 const start = async (): Promise<void> => {
-  installDisplayChangeProbe()
+  installPointerResyncHandler()
   const startup = await window.api.appStartupGetStatus()
   await initializeI18n(startup)
   if (startup.locale === 'zh-CN') await import('monaco-editor/nls/lang/zh-cn.js')
