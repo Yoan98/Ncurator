@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { HiArrowPath } from 'react-icons/hi2'
+import { HiArrowPath, HiCheck, HiXMark } from 'react-icons/hi2'
 import { t } from '../../i18n'
 import type { LlmEffort } from '../../../../shared/llmPresets'
 import {
@@ -18,6 +18,9 @@ type WorkbenchEffortCardProps = {
   modelLabel: string
   onChange: (value: string) => void
   onPickModel: () => void
+  /** 右上角刷新：拉取模型列表接口（与原先列表右上角是同一个动作）。 */
+  onRefresh?: () => void
+  refreshStatus?: 'idle' | 'loading' | 'success' | 'error'
   disabled?: boolean
 }
 
@@ -38,6 +41,8 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
   modelLabel,
   onChange,
   onPickModel,
+  onRefresh,
+  refreshStatus = 'idle',
   disabled
 }) => {
   const trackRef = useRef<HTMLDivElement>(null)
@@ -51,7 +56,6 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
   )
   const count = effort.options.length
   const current = effort.options[index] || effort.options[0]
-  const selectedIsDefault = current.value === effort.default
   const positions = stopPositions(width, count)
   const activeX = positions[index] ?? 0
 
@@ -136,7 +140,7 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
       <div className="relative">
         <div
           data-testid={workbenchSelectors.effortValue}
-          className="truncate text-center text-[16px] font-semibold leading-[22px] text-[#0B6BCB]"
+          className="truncate text-center text-[16px] font-semibold leading-[22px] text-[#3983F7]"
         >
           {current.label}
         </div>
@@ -154,13 +158,21 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
         </button>
         <button
           type="button"
-          aria-label={t(($) => $.workbench.effortReset)}
-          data-testid={workbenchSelectors.effortReset}
-          disabled={disabled || selectedIsDefault}
-          className="absolute -top-0.5 right-[-6px] inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[#B9B8B4] transition hover:bg-[#EFEFEE] hover:text-[#787774] disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#B9B8B4]"
-          onClick={() => onChange(effort.default)}
+          aria-label={t(($) => $.workbench.refreshModelCatalogs)}
+          data-testid={workbenchSelectors.modelSelectCatalogRefresh}
+          disabled={disabled || refreshStatus === 'loading'}
+          className="absolute -top-0.5 right-[-6px] inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[#B9B8B4] transition hover:bg-[#EFEFEE] hover:text-[#787774] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-[#B9B8B4]"
+          onClick={onRefresh}
         >
-          <HiArrowPath className="h-4 w-4" />
+          {refreshStatus === 'success' ? (
+            <HiCheck className="h-3.5 w-3.5 text-[#356B5A]" />
+          ) : refreshStatus === 'error' ? (
+            <HiXMark className="h-3.5 w-3.5 text-[#B3261E]" />
+          ) : (
+            <HiArrowPath
+              className={`h-3.5 w-3.5${refreshStatus === 'loading' ? ' animate-spin' : ''}`}
+            />
+          )}
         </button>
       </div>
 
@@ -183,12 +195,12 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
             注意不能写 h-6 —— 本项目根字号是 14px，h-6 = 1.5rem = 21px，
             会让轨道做细、跟 27px 的滑块比例失调。 */}
         <div
-          className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 rounded-full bg-[#F4F4F2]"
+          className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 rounded-full bg-[#E8E7E7]"
           style={{ height: EFFORT_TRACK_HEIGHT }}
         />
         {/* 填充：从轨道左端到滑块左缘 */}
         <div
-          className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 rounded-full bg-[#0B6BCB] transition-[width] duration-150"
+          className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 rounded-full bg-[#3983F7] transition-[width] duration-150"
           style={{ height: EFFORT_TRACK_HEIGHT, width: effortFillWidth(activeX) }}
         />
         {/* 档位小点：4px，已过档位用浅蓝 */}
@@ -214,7 +226,7 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
               className="absolute top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full"
               style={{
                 left: positions[optionIndex] ?? 0,
-                background: active ? 'transparent' : passed ? '#7EAAFA' : '#BDBBBD',
+                background: active ? 'transparent' : passed ? '#7EAAFA' : '#B4B4B5',
                 cursor: 'pointer'
               }}
             />

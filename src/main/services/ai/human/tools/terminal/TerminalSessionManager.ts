@@ -10,6 +10,7 @@ import { getTerminalPlatformAdapter, type TerminalPlatformAdapter } from './plat
 import { TerminalProtocol, type TerminalProtocolEvent } from './protocol/TerminalProtocol'
 import { isTerminalTerminationCommand } from './commandPolicy'
 import {
+  TERMINAL_DEFAULT_WATCH_SECONDS,
   TERMINAL_MAX_CONCURRENT_SESSIONS,
   TERMINAL_READ_MAX_CHARS,
   TERMINAL_RETAINED_SCROLLBACK_CHARS
@@ -130,6 +131,31 @@ const createDeferred = () => {
   return { promise, resolve }
 }
 
+// 与超时竞争，先到者生效；无论谁先到都清掉计时器，避免长等待时长在进程里留挂起的定时器。
+const raceWithTimeout = async <T>(input: {
+  promise: Promise<T>
+  timeoutMs: number
+  onTimeout: () => T
+}): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      input.promise,
+      new Promise<T>((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          try {
+            resolve(input.onTimeout())
+          } catch (error) {
+            reject(error)
+          }
+        }, input.timeoutMs)
+      })
+    ])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}
+
 const decodeCwd = (encoded: string): string | null => {
   try {
     const decoded = Buffer.from(encoded, 'base64').toString('utf8').trim()
@@ -159,7 +185,10 @@ export class TerminalSessionManager {
   private readonly environment?: Record<string, string>
 
   public constructor(options: TerminalSessionManagerOptions = {}) {
-    this.yieldMs = Math.max(MIN_WATCH_MS, Number(options.yieldMs || 8000))
+    this.yieldMs = Math.max(
+      MIN_WATCH_MS,
+      Number(options.yieldMs || TERMINAL_DEFAULT_WATCH_SECONDS * 1000)
+    )
     this.stopGraceMs = Math.max(50, Number(options.stopGraceMs || 2000))
     this.retainedScrollbackChars = Math.max(
       1024,
@@ -247,12 +276,11 @@ export class TerminalSessionManager {
       throw error
     }
 
-    await Promise.race([
-      commandState.completion,
-      new Promise<void>((resolve) =>
-        setTimeout(resolve, resolveWatchMs(input.maxWaitSeconds, this.yieldMs))
-      )
-    ])
+    await raceWithTimeout({
+      promise: commandState.completion,
+      timeoutMs: resolveWatchMs(input.maxWaitSeconds, this.yieldMs),
+      onTimeout: () => undefined
+    })
 
     const completed = commandState.returnReason !== undefined
     const commandOutput = this.readOutput(session, commandState.outputStartCursor)
@@ -336,17 +364,19 @@ export class TerminalSessionManager {
           `${session.adapter.buildStopProbe(command.commandId)}${session.adapter.shell.lineEnding}`
         )
       }
-      await Promise.race([
-        command.completion,
-        new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
-      ])
+      await raceWithTimeout({
+        promise: command.completion,
+        timeoutMs: this.stopGraceMs,
+        onTimeout: () => undefined
+      })
       if (!command.returnReason) {
         forced = true
         await this.forceTerminateSession(session)
-        await Promise.race([
-          command.completion,
-          new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
-        ])
+        await raceWithTimeout({
+          promise: command.completion,
+          timeoutMs: this.stopGraceMs,
+          onTimeout: () => undefined
+        })
         if (!isSessionClosed(session)) {
           session.status = 'closed'
           this.sessions.delete(session.terminalId)
@@ -470,12 +500,13 @@ export class TerminalSessionManager {
     terminalProcess.onExit(({ exitCode }) => this.finalizeSessionExit(session, exitCode))
     try {
       terminalProcess.write(adapter.buildBootstrapCommand(protocol))
-      await Promise.race([
-        session.ready,
-        new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error('terminal_start_timeout')), 10_000)
-        )
-      ])
+      await raceWithTimeout({
+        promise: session.ready,
+        timeoutMs: 10_000,
+        onTimeout: () => {
+          throw new Error('terminal_start_timeout')
+        }
+      })
     } catch (error) {
       await this.closeSession(session)
       throw error
@@ -493,10 +524,11 @@ export class TerminalSessionManager {
     if (!session.currentCommand && session.status === 'idle') {
       try {
         session.process.write(session.adapter.buildExitCommand())
-        await Promise.race([
-          session.exited,
-          new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
-        ])
+        await raceWithTimeout({
+          promise: session.exited,
+          timeoutMs: this.stopGraceMs,
+          onTimeout: () => undefined
+        })
       } catch {
         // Fall through to forced process termination.
       }
@@ -504,10 +536,11 @@ export class TerminalSessionManager {
 
     if (!isSessionClosed(session)) {
       await this.forceTerminateSession(session)
-      await Promise.race([
-        session.exited,
-        new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
-      ])
+      await raceWithTimeout({
+        promise: session.exited,
+        timeoutMs: this.stopGraceMs,
+        onTimeout: () => undefined
+      })
     }
 
     session.status = 'closed'
@@ -517,10 +550,11 @@ export class TerminalSessionManager {
 
   private async forceTerminateSession(session: ManagedTerminalSession): Promise<void> {
     await session.adapter.forceTerminate(session.process)
-    await Promise.race([
-      session.exited,
-      new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
-    ])
+    await raceWithTimeout({
+      promise: session.exited,
+      timeoutMs: this.stopGraceMs,
+      onTimeout: () => undefined
+    })
     if (!isSessionClosed(session)) {
       this.finalizeSessionExit(session, session.currentCommand ? 130 : 1)
     }

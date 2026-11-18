@@ -116,7 +116,6 @@ export const buildBrainSystemPrompt = (input: {
 特别说明规则：
 - Word、Excel、PPT文件必须使用我们已提供的工具组处理,禁止用terminal或脚本的形式直接修改这些文件。
 - .doc 是只读旧格式，禁止编辑；遇到 .doc 编辑请求时保留原文件并继续处理其他事项。
-- 合理使用终端等待命令，来应对需要等待的情况。
 - 网页操作碰到验证码、登录、支付等需要用户协助时，可停下来像用户说明情况。
 
 ${renderLocalContextText(input.ctx)}

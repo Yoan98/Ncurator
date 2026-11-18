@@ -21,8 +21,7 @@ import {
   HiChevronRight,
   HiCpuChip,
   HiMagnifyingGlass,
-  HiOutlineArrowUpRight,
-  HiXMark
+  HiOutlineArrowUpRight
 } from 'react-icons/hi2'
 import { PiCoinBold } from 'react-icons/pi'
 import type {
@@ -622,10 +621,30 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       selected.manual = true
     }
     onChange({ mainModel: selected })
-    if (!keepOpen) {
-      setOpen(false)
-      onAfterChange?.()
-    }
+    if (keepOpen) return
+    // 选完不立刻关面板：若新模型可调强度，应回到强度卡片让用户接着选档；
+    // 新模型的能力要等 onChange 生效后才解析出来，所以放到下一帧判断。
+    window.requestAnimationFrame(() => {
+      if (modelSupportsEffort(configId, modelName)) {
+        setEffortOnly(true)
+      } else {
+        setOpen(false)
+        onAfterChange?.()
+      }
+    })
+  }
+
+  /** 某个模型是否开放了思考强度。用于选中后决定回到强度卡片还是关闭面板。 */
+  const modelSupportsEffort = (configId: string, modelName: string): boolean => {
+    const managed = managedModels?.find(model => managedModelConfigId(model.id) === configId)
+    if (managed) return Boolean(managed.effort && managed.effort.options.length > 0)
+    const config = configs.find(item => item.id === configId)
+    const preset = config ? resolvePresetModeProvider(config) : null
+    if (!preset) return false
+    const model = presetProviders
+      .find(provider => provider.providerId === preset.providerId)
+      ?.models.find(item => item.id === modelName)
+    return Boolean(model?.effort && model.effort.options.length > 0)
   }
 
   const openManualInput = (configId: string): void => {
@@ -1011,35 +1030,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     </div>
   )
 
-  const renderCatalogRefreshButton = (): React.ReactNode => {
-    const busy = catalogRefreshStatus === 'loading'
-    const iconClass = joinClassNames(
-      'h-3.5 w-3.5 transition-opacity duration-150',
-      catalogRefreshStatus === 'loading' ? 'animate-spin' : ''
-    )
-    return (
-      <button
-        type="button"
-        aria-label={t(($) => $.workbench.refreshModelCatalogs)}
-        data-testid={workbenchSelectors.modelSelectCatalogRefresh}
-        disabled={busy}
-        className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] hover:bg-[#F4F4F2] hover:text-[#37352F] disabled:pointer-events-none"
-        onClick={(event) => {
-          event.stopPropagation()
-          void refreshCatalog({ showOutcome: true })
-        }}
-      >
-        {catalogRefreshStatus === 'success' ? (
-          <HiCheck className={joinClassNames(iconClass, 'text-[#356b5a]')} />
-        ) : catalogRefreshStatus === 'error' ? (
-          <HiXMark className={joinClassNames(iconClass, 'text-[#B3261E]')} />
-        ) : (
-          <HiArrowPath className={iconClass} />
-        )}
-      </button>
-    )
-  }
-
   const renderPresetView = (): React.ReactNode => {
     const showLoading = catalogLoadStatus === 'loading'
     const showEmpty =
@@ -1060,6 +1050,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             modelLabel={selectedManaged?.label || selectedPreset?.modelLabel || value.mainModel!.modelName}
             disabled={disabled}
             onChange={(next) => onChange({ mainModel: { ...value.mainModel!, effort: next } })}
+            onRefresh={() => void refreshCatalog({ showOutcome: true })}
+            refreshStatus={catalogRefreshStatus}
             onPickModel={() => {
               setEffortOnly(false)
               setInspectedModel(null)
@@ -1075,11 +1067,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     return (
       <>
         <div className="relative min-h-0 flex-1">
-          <div className="pointer-events-none absolute right-1.5 top-1.5 z-10">
-            <div className="pointer-events-auto rounded-[6px] bg-white/90 backdrop-blur-[2px]">
-              {renderCatalogRefreshButton()}
-            </div>
-          </div>
           <div
             className="overflow-y-auto py-1.5"
             style={{ maxHeight: PRESET_LIST_MAX_HEIGHT, minHeight: 0 }}

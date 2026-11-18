@@ -1,12 +1,16 @@
-import { renderTerminalRunModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
-import { renderTerminalReadModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { describe, expect, it } from 'vitest'
+import { toJSONSchema } from 'zod/v4'
+import {
+  renderTerminalReadModelResult,
+  renderTerminalRunModelResult
+} from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { TOOLSET_DEFINITIONS } from '../../../../src/main/services/ai/human/toolsets'
-import { TERMINAL_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
+import { TERMINAL_DEFAULT_WATCH_SECONDS } from '../../../../src/main/services/ai/human/tools/terminal/terminalConstants'
 import {
   TERMINAL_READ_SCHEMA,
   TERMINAL_RUN_SCHEMA
 } from '../../../../src/main/services/ai/human/tools/terminal/toolSchemas'
+import { TERMINAL_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
 import {
   mapTerminalReadStatus,
   mapTerminalRunStatus
@@ -57,6 +61,15 @@ describe('ai unit terminal tool contract', () => {
         maxWaitSeconds: 1.5
       }).success
     ).toBe(false)
+  })
+
+  it('documents the default watch time and the continuation path on maxWaitSeconds', () => {
+    const schema = toJSONSchema(TERMINAL_RUN_SCHEMA) as {
+      properties: { maxWaitSeconds: { description?: string } }
+    }
+    const description = schema.properties.maxWaitSeconds.description || ''
+    expect(description).toContain(`${TERMINAL_DEFAULT_WATCH_SECONDS} 秒`)
+    expect(description).toContain('terminal_read')
   })
 
   it('requires terminalId for terminal_read and accepts optional readEndPosition', () => {
