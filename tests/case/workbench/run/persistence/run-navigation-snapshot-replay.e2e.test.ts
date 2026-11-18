@@ -60,15 +60,27 @@ describe('workbench run persistence e2e', () => {
           await navigateToWorkbench(page)
 
           const finalAnswerText = await waitForLatestAssistantFinalAnswerText(page)
-          const processItemCount = await getWorkbenchPrefixLocator(
+          const processToggle = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantProcessTogglePrefix
+          ).last()
+          await processToggle.waitFor({ state: 'visible' })
+          const restoredProcessCollapsed = (await processToggle.getAttribute('aria-expanded')) === 'false'
+          await processToggle.click()
+          const processItems = getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.assistantProcessItemPrefix
-          ).count()
+          )
+          await processItems.first().waitFor({ state: 'visible' })
+          const processItemCount = await processItems.count()
+          const finalAnswerAfterExpand = await waitForLatestAssistantFinalAnswerText(page)
           recordWorkbenchAiEvidence(runtime, evidence, 0.85)
 
           return {
             processTextBeforeNavigation,
             processItemCount,
+            restoredProcessCollapsed,
+            finalAnswerAfterExpand,
             finalAnswerText,
             eventTypes: evidence.events.map((event) => event.type)
           }
@@ -76,7 +88,9 @@ describe('workbench run persistence e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.processTextBeforeNavigation.length > 0 &&
+              result.restoredProcessCollapsed &&
               result.processItemCount > 0 &&
+              result.finalAnswerAfterExpand === result.finalAnswerText &&
               result.eventTypes.includes('answer_completed') &&
               result.eventTypes.includes('run_completed') &&
               /Alice|合规负责人/u.test(result.finalAnswerText) &&

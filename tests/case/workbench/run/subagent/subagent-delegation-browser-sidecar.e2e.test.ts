@@ -405,7 +405,7 @@ describe('subagent browser and sidecar real UI', () => {
             automaticSnapshot = await readCloudSnapshot(automaticCloud)
           }
           expect(automaticSnapshot.inside).toBe(true)
-          expect(automaticSnapshot.streamAnimation).toBe('nc-subagent-dot-breathe')
+          expect(automaticSnapshot.streamAnimation).toBe('nc-live-dot-breathe')
           await runtime.captureScreenshot({
             name: 'subagent-cloud-auto',
             message: '未悬浮时最新公开消息自动显示，文字及黑球位于云内'

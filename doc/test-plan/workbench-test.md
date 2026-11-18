@@ -175,10 +175,10 @@ pnpm test:update:e2e
 #### `context-ring-usage`
 
 - 测试类型：`e2e / live`
-- What：智能模式上下文用量在 run 后按真实模型用量刷新，并可查看已用比例、tokens 与口径标注。
+- What：智能模式上下文用量在 run 后按真实模型用量刷新，并可查看已用比例与 tokens，不额外展示口径行。
 - Why：用量提示错误会误导用户对后续可用上下文的判断；显示与压缩各算一套时会给出错误的“还很空”信号。
-- How：创建空工作地址，不准备资料或知识库索引；记录运行前圆环用量，执行含固定输入的真实 AI run。通过只读 aiContextUsageGet 获取生产摘要，核对圆环及 hover 的已用 / 阈值 tokens、百分比与摘要一致，并确认已用 tokens 更新、摘要 `basis` 为 `usage_plus_delta`、hover 标注为「真实用量」。
-- Oracle：圆圈与 hover 展示的已用百分比及已用 / 阈值 token 须与生产摘要一致，不展示剩余，对齐 `WB-COMPOSER-008-AC1`；百分比与中文标签之间空白不影响判定。run 后显示值随生产上下文摘要更新、大于运行前值，标为真实用量，对齐 `WB-COMPOSER-008-AC2` 与 `WB-COMPOSER-008-AC5`。仅存在“已用”文案不足以判定通过。压缩后回落与越过阈值时的百分比不封顶由 `context-budget-node` 单测和 `context-usage-snapshot` 单测覆盖 `WB-COMPOSER-008-AC4`。
+- How：创建含固定标记文本的工作地址，不准备知识库索引；记录运行前圆环用量，通过真实工具读取该文件，使同一 run 的下一次模型调用使用真实 usage 加工具输出增量的预算，并核对最终回复包含文件标记。通过只读 aiContextUsageGet 获取生产摘要，核对圆环及 hover 的已用 / 阈值 tokens、百分比与摘要一致，并确认已用 tokens 更新、摘要 `basis` 为 `usage_plus_delta`，hover 不展示「真实用量／估算」口径行。
+- Oracle：圆圈与 hover 展示的已用百分比及已用 / 阈值 token 须与生产摘要一致，不展示剩余，对齐 `WB-COMPOSER-008-AC1`；百分比与中文标签之间空白不影响判定。run 后显示值随生产上下文摘要更新、大于运行前值，不展示额外口径行，对齐 `WB-COMPOSER-008-AC2` 与 `WB-COMPOSER-008-AC5`。仅存在“已用”文案不足以判定通过。压缩后回落与越过阈值时的百分比不封顶由 `context-budget-node` 单测和 `context-usage-snapshot` 单测覆盖 `WB-COMPOSER-008-AC4`。
 
 #### `chat-without-knowledge-model`
 
@@ -225,7 +225,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`
 - What：三类模型入口、自定义精确型号选择、手填及错误反馈。
 - Why：目录更新或自动回退可能改变用户选择及计费方式。
-- How：未登录检查馆长引导、免费及自定义入口；通过 Settings 创建模板及手动连接，使用新版目录中不同的条目 ID 和 `modelName`，选择精确型号完成真实调用，核对出站使用实际型号且重启保留原选择。用转发代理的无效路径形成真实服务错误，核对分组、展开、收起、复制及刷新，覆盖部分成功和搜索无匹配。检查手填的空白、取消、保存、去重及跨伙伴选择；刷新、编辑、重启和目录停用后核对原选择，再删除连接检查失效。成功、取消及失败后的上下文用量与本地日志投影核对。
+- How：未登录检查馆长引导、免费及自定义入口；通过 Settings 创建模板及手动连接，使用新版目录中不同的条目 ID 和 `modelName`，选择精确型号完成真实调用，核对出站使用实际型号且重启保留原选择。用转发代理的无效路径形成真实服务错误，核对分组、展开、收起、复制及刷新，覆盖部分成功和搜索无匹配。核对普通模型列表不显示常驻右上刷新按钮，自定义视图的刷新入口仍可用；检查手填的空白、取消、保存、去重及跨伙伴选择；刷新、编辑、重启和目录停用后核对原选择，再删除连接检查失效。成功、取消及失败后的上下文用量与本地日志投影核对。
 - 失败反馈：同一回答的失败短标题只出现一次，失败气泡仍可展开查看详情（`WB-SESSION-007-AC8`）。
 - Oracle：入口、模型行、侧栏及精确选择覆盖 `WB-COMPOSER-007-AC1/AC2/AC3/AC4`；失效提示且不自动回退覆盖 `WB-COMPOSER-007-AC6`；个人自定义调用补证 `WB-COMPOSER-007-AC15`，免费目录错误／空态仅为负向反馈，不能计为 `AC14` 免费可用性通过。正向免费调用见 `published-free-model-smoke`；账号变化下的免费／自定义资料保持及正式平台零消费见 [Account 矩阵](account-test.md#anonymous-existing-usage)，受控上游与 live 证据分开。错误归组、原文复制、Key 脱敏、刷新及手填生命周期覆盖 `WB-COMPOSER-007-AC16/AC17/AC18`。入口图标及主模型选择覆盖 `WB-COMPOSER-007-AC7`、`WB-COMPOSER-013-AC1`；终态上下文补证 `WB-COMPOSER-013-AC5`，异常 cause 和持久化失败由 Unit 补充。
 
@@ -234,7 +234,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`；suite `conversation`，group `composer`。
 - What：思考强度卡片的档位来源、切换、切模型回落，以及切走再切回与重启后的档位恢复。
 - Why：客户端自行补齐档位或沿用上一个模型的档位会把不支持的 `reasoning_effort` 发给服务端，导致请求被拒或用户以为已生效。
-- How：`pnpm test:e2e:source --case effort-slider`。以 `AI_LIVE_PROVIDER=dashscope AI_LIVE_MODEL=qwen3.8-flash` 运行：在真实桌面选中内置渠道的目录型号，读初始档位并与胶囊比对；逐个数出 `low/medium/xhigh` 三个小点；点小点切到与初始档不同的档位；点卡片内模型名进面板换成 `qwen3.8-max`，确认档位不沿用；再切回 `qwen3.8-flash`，确认恢复原档；最后重启应用，确认模型与档位一并恢复。
+- How：`pnpm test:e2e:source --case effort-slider`。准备本地 `AI_LIVE_KEY_DASHSCOPE`；用例通过 Settings UI 显式配置 DashScope 并选择 `qwen3.8-flash`，不依赖全局 live 模型选择：点击模型胶囊打开强度卡片，读初始档位并与胶囊比对；逐个数出 `low/medium/xhigh` 三个小点；点小点切到与初始档不同的档位；点卡片内模型名进面板换成 `qwen3.8-max`，确认档位不沿用；再切回 `qwen3.8-flash`，确认恢复原档；最后重启应用，确认模型与档位一并恢复。
 - Oracle：档位数量、顺序和展示名与目录一致，客户端不补齐；切到未配置强度的模型时卡片消失且请求不带该字段；两档模型只显示两个点；切换模型后不沿用上一模型档位，旧档位失效时回落到该模型默认档；切走再切回同一模型时恢复该模型上次选定的档位；胶囊回显当前档位名且无强度模型不渲染该段，覆盖 `WB-COMPOSER-018-AC1/AC2/AC3/AC4/AC5/AC6/AC8`。滑块拖动跟手、松手吸附不回跳、填充止于滑块中心、末档铺满轨道由 `WB-COMPOSER-018-AC7/AC9` 覆盖；目录下发的每个档位均带可读展示名、文案缺失时服务端补内置词表由 `WB-COMPOSER-018-AC10` 覆盖。
 - 滑块几何与吸附行为（拖动跟手、填充止于滑块中心、末档铺满轨道、松手不回跳）由 `tests/case/unit/model/effort-slider-geometry.test.ts` 覆盖，对应 `WB-COMPOSER-018-AC7/AC9`。
 - 档位记忆与回落规则由 `tests/case/unit/model/effort-memory.test.ts` 覆盖，对应 `WB-COMPOSER-018-AC3/AC4`。
@@ -477,7 +477,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：真实 AI 输出过程中切到 Settings，完成后回到 Workbench 能通过伙伴消息记录投影恢复过程流和最终 assistant 回答。
 - Why：Workbench route 切换会导致 renderer 重新挂载；如果运行态只存在 renderer 内存中，用户离开页面后会丢失 AI 过程和最终回答。
-- How：通过 UI 配置真实模型、创建伙伴，必要时添加文件地址；发送真实 AI 请求，等待过程流出现后切到 Settings；停留到 AI run 完成，再回到 Workbench 读取恢复后的过程流和最终回答。
+- How：通过 UI 配置真实模型、创建伙伴，必要时添加文件地址；发送真实 AI 请求，等待过程流出现后切到 Settings；停留到 AI run 完成，再回到 Workbench，先核对完成态过程默认收起，点击用时行展开后读取恢复的过程流，并确认最终回答保持可见。
 - Oracle：切换后恢复目标历史、过程流、最终回答和自身运行态，上一伙伴状态不泄漏，对齐 `WB-SESSION-002`；run event 包含 `answer_completed` 与 `run_completed`，对齐 `WB-COMPOSER-003-AC7`。恢复后的用时基于同一 run 的持久化开始和结束时间，完成态过程默认收起，对齐 `WB-COMPOSER-016-AC3`。
 
 #### `session-skill-memory-persistence`
@@ -678,7 +678,7 @@ pnpm test:update:e2e
 
 #### `excel-update-diff-and-revert`
 
-- 测试类型：`e2e / live`
+- 测试类型：`e2e / exclusive`（真实网格复制读取系统剪贴板，需独占桌面焦点；包含真实 AI 调用）
 - What：真实 AI 修改已有 Excel 后，用户在同一个只读网格中查看红绿单元格边框，并能回退到原始文件。
 - Why：Excel 修改预览不能依赖模型描述，也不适合 PPT 式左右画面对比，必须直接验证工作簿数据、公式和单元格级 diff。
 - How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改，限定使用 Excel 工具且无需终端备份，清空含公式的明细行，保留汇总行原位置；整行插入/删除的逻辑对齐另由 AI backend 矩阵覆盖；打开修改记录，显式切换“预览/审核”，在两种模式下尝试编辑并用原生复制核对单元格原值，切换工作表和拖列宽；通过 E2E no-op 成功分支打开关联应用，再执行回退。测试进程将正式工作表重命名为 External C，以界面实际 Sheet 标签验证预览 C、历史审核仍为 B，并确认强制回退。在隔离输入增加共享样式和含公式的清空区域，真实 AI 局部修改后以网格复制取证核对普通预览与固定审核结果，并解析目标范围之外的值、样式和审核边框。

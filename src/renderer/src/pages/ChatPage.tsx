@@ -1843,11 +1843,10 @@ const ChatPage: React.FC = () => {
     for (const element of scrollElement.querySelectorAll<HTMLElement>('[data-message-id]')) {
       const message = byId.get(element.dataset.messageId || '')
       if (!message) continue
-      if (element.getBoundingClientRect().top <= containerTop + 12) {
-        active = message
-        continue
-      }
-      if (!active) active = message
+      // 已完全滚出视口的上一条消息不能占住高亮；跨过顶部的长消息仍保持选中。
+      // 内容下方的阅读留白里则沿用最后一条消息。
+      active = message
+      if (element.getBoundingClientRect().bottom <= containerTop + 12) continue
       break
     }
     return active ? { dayStart: startOfLocalDay(active.timestamp), messageId: active.id } : null

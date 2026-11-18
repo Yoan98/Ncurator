@@ -1,9 +1,12 @@
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { listConfiguredLiveLlmTargets } from '../../../../harness/core/liveProviders'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+  configureLiveModelThroughSettingsUi,
   getWorkbenchLocator,
   navigateToWorkbench,
+  selectWorkbenchModel,
   setupWorkbenchWithTempWorkspace,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -51,27 +54,28 @@ describe('workbench conversation e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const target = listConfiguredLiveLlmTargets().find(
+            (entry) => entry.providerId === 'dashscope'
+          )
+          if (!target) {
+            throw new Error('effort-slider 需要 AI_LIVE_KEY_DASHSCOPE 以配置真实目录渠道')
+          }
+          await configureLiveModelThroughSettingsUi(page, target)
           await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
             workspaceContents: 'empty',
-            configureModel: true
+            configureModel: false
           })
           await navigateToWorkbench(page, { waitForSessionListText: false })
 
-          const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
+          // 全量回归的默认连接可能是 custom；本用例必须显式选择目录中的目标型号。
+          await selectWorkbenchModel(page, PRIMARY, { preferCustom: false })
           const effortCard = page.getByTestId(workbenchSelectors.effortCard)
           const effortModelName = page.getByTestId(workbenchSelectors.effortModelName)
           const tierOf = async (target = page): Promise<string> =>
             (await target.getByTestId(workbenchSelectors.effortValue).innerText()).trim()
           const pillOf = async (target = page): Promise<string> =>
             (await target.getByTestId(workbenchSelectors.effortPill).innerText()).trim()
-          const waitNode = async (testId: string, timeout = 30_000): Promise<void> => {
-            await page.waitForFunction(
-              (id: string) => Boolean(document.querySelector(`[data-testid="${id}"]`)),
-              testId,
-              { timeout }
-            )
-          }
           const pickModel = async (modelName: string): Promise<void> => {
             const option = page.getByTestId(
               `${workbenchSelectors.modelSelectPresetOptionPrefix}-${modelName}`
@@ -142,8 +146,9 @@ describe('workbench conversation e2e', () => {
             workbenchSelectors.effortPill,
             { timeout: 90_000 }
           )
-          const restoredTier = (await page2.getByTestId(workbenchSelectors.effortPill).innerText())
-            .trim()
+          const restoredTier = (
+            await page2.getByTestId(workbenchSelectors.effortPill).innerText()
+          ).trim()
           const restoredModel = (
             await getWorkbenchLocator(page2, workbenchSelectors.modelSelect).innerText()
           )

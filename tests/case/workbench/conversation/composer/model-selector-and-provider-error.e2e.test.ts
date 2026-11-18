@@ -876,7 +876,7 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             result.presetOptionCount === 0 &&
               catalogSettled &&
-              result.catalogRefreshVisible &&
+              !result.catalogRefreshVisible &&
               result.freeSectionTitleAbsent &&
               inspectorOk &&
               result.freeRowHasBadge &&
@@ -887,7 +887,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'main-model-selector-search',
               message:
-                '未配置预设服务商时不展示付费预设行；统一列表无「免费模型」标题；右上角刷新可见；有免费行时悬浮显示信息侧栏（含稳定性提示），自定义视图侧栏关闭；免费目录或空/失败态之一成立；自定义搜索无结果只显示空状态。',
+                '未配置预设服务商时不展示付费预设行；统一列表无「免费模型」标题；普通模型列表不展示常驻右上刷新按钮；有免费行时悬浮显示信息侧栏（含稳定性提示），自定义视图侧栏关闭；免费目录或空/失败态之一成立；自定义搜索无结果只显示空状态。',
               data: {
                 presetOptionCount: result.presetOptionCount,
                 freeOptionCount: result.freeOptionCount,
@@ -931,7 +931,8 @@ describe('workbench conversation e2e', () => {
               result.runFailed.source === 'provider' &&
               result.runFailed.code === 'llm_request_failed' &&
               Number(result.runFailed.httpStatus || 0) >= 400 &&
-              result.runFailed.message.trim() === '模型请求失败' &&
+              result.runFailed.providerCode === 'model_not_found' &&
+              result.runFailed.message.trim() === '模型不可用' &&
               Boolean(result.runFailed.rawMessage?.trim()) &&
               result.pageText.includes(`失败：${result.runFailed.message}`) &&
               result.detailText.includes(String(result.runFailed.httpStatus)) &&
@@ -942,7 +943,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'provider-error-is-not-reentered-into-graph',
               message:
-                '模型服务错误应只请求一次；气泡短标题为「模型请求失败」，详情保留 HTTP/原文，不得泄露内部实现信息。',
+                '不存在的模型应只请求一次并归类 model_not_found；气泡短标题为「模型不可用」，详情保留 HTTP/原文，不得泄露内部实现信息。',
               data: {
                 chatRequestCount: result.chatRequestCount,
                 runFailed: result.runFailed,

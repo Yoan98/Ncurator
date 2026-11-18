@@ -76,7 +76,8 @@ describe('workbench result e2e', () => {
         extraEnv: {
           NCURATOR_E2E_OPEN_WITH_NOOP: '1'
         },
-        execution: 'live',
+        // Native grid copy/readback uses the system clipboard and must own desktop focus.
+        execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

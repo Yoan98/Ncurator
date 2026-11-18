@@ -27,6 +27,17 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
   const [pageNumber, setPageNumber] = useState(1)
   const [selectionContainer, setSelectionContainer] = useState<HTMLDivElement | null>(null)
   const filePath = currentDocument?.filePath
+  const fileData = currentDocument?.fileData
+  const documentUri = currentDocument?.uri
+  const documentFile = currentDocument?.file
+  const file = useMemo(() => {
+    // PDF.js transfers binary input to its worker. Keep a private copy and a stable
+    // Document input so page/selection state updates do not reload a detached buffer.
+    if (fileData instanceof Uint8Array || fileData instanceof ArrayBuffer) {
+      return { data: fileData.slice(0) }
+    }
+    return documentUri || documentFile
+  }, [fileData, documentUri, documentFile])
   const selectionAdapter = useMemo(
     () => (selectionContainer && filePath ? pdfAdapter(selectionContainer, filePath) : null),
     [selectionContainer, filePath]
@@ -57,12 +68,6 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
   }, [numPages, pageNumber])
 
   if (!currentDocument) return null
-
-  const file =
-    currentDocument.fileData instanceof Uint8Array ||
-    currentDocument.fileData instanceof ArrayBuffer
-      ? { data: currentDocument.fileData }
-      : currentDocument.uri || currentDocument.file
 
   if (!file) return null
 

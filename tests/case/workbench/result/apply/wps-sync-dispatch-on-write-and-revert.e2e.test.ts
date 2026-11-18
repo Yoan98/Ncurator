@@ -19,6 +19,7 @@ import { WPS_OFFICE_COVERAGE_TARGETS, waitForWpsDispatch } from '../../../../har
 
 const CASE_ID = 'wps-sync-dispatch-on-write-and-revert'
 const MARKER = 'wps-dispatch-e2e-914'
+const UI_TIMEOUT_MS = 30_000
 const CASE_TIMEOUT_MS = WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS * WPS_OFFICE_COVERAGE_TARGETS.length
 
 describe('workbench result e2e', () => {
@@ -41,6 +42,8 @@ describe('workbench result e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          // Helpers without an explicit locator timeout must not wait for the whole release deadline.
+          page.setDefaultTimeout(UI_TIMEOUT_MS)
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
           const files: Array<{
             kind: string
@@ -53,6 +56,15 @@ describe('workbench result e2e', () => {
             revertDispatchCount: number
           }> = []
           for (const target of WPS_OFFICE_COVERAGE_TARGETS) {
+            const step = <T>(name: string, message: string, run: () => Promise<T>): Promise<T> => {
+              const input = {
+                name: `${target.kind}-${name}`,
+                message,
+                data: { fileName: target.fileName }
+              }
+              runtime.signal({ ...input, name: `${input.name}-started` })
+              return runtime.step({ ...input, run })
+            }
             const targetPath = path.join(setup.workspace.rootPath, target.fileName)
             const marker = `${MARKER}-${target.kind}`
             const beforeText = await readOfficePlainText(targetPath)
@@ -67,26 +79,51 @@ describe('workbench result e2e', () => {
               { page, blockerPolicy: 'auto_approve' }
             )
             recordWorkbenchAiEvidence(runtime, evidence, 0.8)
-            const afterApplyText = await readOfficePlainText(targetPath)
-            const applyDispatch = await waitForWpsDispatch({
-              filePath: targetPath,
-              afterAt: startedAtMs
+            const afterApplyText = await step(
+              'read-written-file',
+              '读取 AI 写回后的真实文件。',
+              () => readOfficePlainText(targetPath)
+            )
+            const applyDispatch = await step(
+              'wait-write-dispatch',
+              '核对写回后的 WPS dispatch。',
+              () => waitForWpsDispatch({ filePath: targetPath, afterAt: startedAtMs })
+            )
+            await step('open-review', '打开本次修改入口和审核面板。', async () => {
+              const applyEntry = await waitForApplyEntryByFileName(page, target.fileName)
+              await applyEntry.click({ timeout: UI_TIMEOUT_MS })
+              await getWorkbenchLocator(page, workbenchSelectors.applyPanel).waitFor({
+                state: 'visible',
+                timeout: UI_TIMEOUT_MS
+              })
             })
-            const applyEntry = await waitForApplyEntryByFileName(page, target.fileName)
-            await applyEntry.click()
-            await getWorkbenchLocator(page, workbenchSelectors.applyPanel).waitFor({
-              state: 'visible'
+            await step('open-revert-confirmation', '点击回退并等待确认弹窗。', async () => {
+              await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click({
+                timeout: UI_TIMEOUT_MS
+              })
+              await page
+                .getByText('回退这次修改？')
+                .waitFor({ state: 'visible', timeout: UI_TIMEOUT_MS })
             })
-            await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
-            await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
-            await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
-            await waitForWorkbenchApplyRecordStatus(page, 'reverted')
-            const afterRevertText = await readOfficePlainText(targetPath)
-            const revertDispatch = await waitForWpsDispatch({
-              filePath: targetPath,
-              afterAt: startedAtMs,
-              minCount: applyDispatch.count + 1
+            await step('confirm-revert', '确认回退并核对回退终态。', async () => {
+              await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click({
+                timeout: UI_TIMEOUT_MS
+              })
+              await waitForWorkbenchApplyRecordStatus(page, 'reverted')
             })
+            const afterRevertText = await step('read-reverted-file', '读取回退后的真实文件。', () =>
+              readOfficePlainText(targetPath)
+            )
+            const revertDispatch = await step(
+              'wait-revert-dispatch',
+              '核对回退后的新增 WPS dispatch。',
+              () =>
+                waitForWpsDispatch({
+                  filePath: targetPath,
+                  afterAt: startedAtMs,
+                  minCount: applyDispatch.count + 1
+                })
+            )
             files.push({
               kind: target.kind,
               fileName: target.fileName,

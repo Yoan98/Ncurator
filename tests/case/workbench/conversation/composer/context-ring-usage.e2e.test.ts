@@ -1,3 +1,5 @@
+import { writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -32,7 +34,14 @@ describe('workbench conversation e2e', () => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
-            workspaceContents: 'empty'
+            workspaceContents: 'empty',
+            prepareWorkspace: (rootPath) =>
+              writeFile(
+                path.join(rootPath, 'context-sample.txt'),
+                'CONTEXT-731\n' +
+                  Array.from({ length: 160 }, (_, i) => `上下文样本${i}`).join('；'),
+                'utf8'
+              )
           })
           const partner = (await page.evaluate(() => window.api.partnerList())).find(
             (item) => item.name === setup.workspaceName
@@ -44,9 +53,11 @@ describe('workbench conversation e2e', () => {
           )
           if (!before.success) throw new Error('context usage baseline unavailable')
           const startedAtMs = Date.now()
+          // A direct one-call answer only has an initial pre-call estimate. Read a
+          // real file so the next brain step evaluates actual usage plus tool output.
           await sendWorkbenchMessage(
             page,
-            `请阅读以下编号，只回复已收到：${Array.from({ length: 160 }, (_, i) => `上下文样本${i}`).join('；')}`
+            '请使用文本文件工具读取工作区 context-sample.txt，不使用知识检索，读完只回复文件首行标记。'
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
@@ -102,15 +113,14 @@ describe('workbench conversation e2e', () => {
             .isVisible()
             .catch(() => false)
 
-          const basisText = page
-            .getByText(/^(真实用量|估算)$/u)
-            .first()
-          await basisText.waitFor({ state: 'visible', timeout: 3000 })
+          const basisLabelVisible = /真实用量|估算|自动压缩阈值/u.test(
+            await tooltipTitle.locator('..').innerText()
+          )
 
           return {
             label,
             afterBasis: after.basis,
-            basisText: await basisText.innerText(),
+            basisLabelVisible,
             beforeTokens: before.usedContextTokens || 0,
             afterTokens: after.usedContextTokens,
             tokenText: await tokens.innerText(),
@@ -130,9 +140,9 @@ describe('workbench conversation e2e', () => {
               result.tooltipVisible &&
               result.percentVisible &&
               result.afterBasis === 'usage_plus_delta' &&
-              result.basisText === '真实用量' &&
+              !result.basisLabelVisible &&
               !result.remainingVisible &&
-              result.finalAnswerText.trim().length > 0,
+              result.finalAnswerText.includes('CONTEXT-731'),
             {
               name: 'workbench-context-ring-usage',
               message:
