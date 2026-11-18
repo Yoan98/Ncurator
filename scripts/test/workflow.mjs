@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, realpathSync } from 'node:fs'
-import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, stat, writeFile, rename } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +19,13 @@ import {
   readPackagedKnowledgeCacheIdentity
 } from './package-app.mjs'
 import { createKnowledgeCacheIdentity } from '../build/runtime/knowledge-cache-identity.mjs'
+import {
+  captureBackendIdentity,
+  importLegacyBackendReport,
+  importVitestBackendReport,
+  planBackendResume,
+  backendEnvironmentHash
+} from './backend-evidence.mjs'
 
 const ROOT = process.cwd()
 const require = createRequire(import.meta.url)
@@ -48,6 +55,7 @@ const NODE_PTY_NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'build', 'nati
 const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING'
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const BACKEND_WORKERS = 6
+const BACKEND_PERFORMANCE_FILES = new Set([path.join(ROOT, 'tests/case/unit/ai/docx-diff.test.ts')])
 const E2E_WORKERS = 3
 const LIVE_WORKERS = 3
 const RUNNER_DEADLINE_MS = 60 * 60 * 1000
@@ -107,6 +115,7 @@ const parseArgs = (argv) => {
     showcase: false,
     bundles: [],
     results: [],
+    backendEvidence: '',
     freshKnowledgeCache: false,
     help: false,
     unknownArgs: [],
@@ -122,7 +131,8 @@ const parseArgs = (argv) => {
     '--runs',
     '--target',
     '--bundle',
-    '--result'
+    '--result',
+    '--backend-evidence'
   ])
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -142,6 +152,7 @@ const parseArgs = (argv) => {
       if (current === '--target') parsed.target = next
       if (current === '--bundle') parsed.bundles.push(next)
       if (current === '--result') parsed.results.push(next)
+      if (current === '--backend-evidence') parsed.backendEvidence = next
       if (current === '--runs') {
         const runs = Number(next)
         if (!Number.isInteger(runs) || runs < 1) {
@@ -597,6 +608,9 @@ const runVitest = async (input) => {
     input.configPath,
     ...extraArgs,
     ...caseArgs,
+    ...(input.reportPath
+      ? ['--reporter=default', '--reporter=json', `--outputFile=${input.reportPath}`]
+      : []),
     ...input.testFiles
   ]
   return await runSpawnAsync(
@@ -608,11 +622,121 @@ const runVitest = async (input) => {
   )
 }
 
-const partitionBackendTestFiles = async (testFiles) => {
+const backendEvidenceRuntime = () => ({
+  platform: process.platform,
+  arch: process.arch,
+  nodeVersion: process.version,
+  environmentSha256: backendEnvironmentHash(
+    process.env,
+    readFileSync(path.join(ROOT, '.env'), 'utf8')
+  )
+})
+
+const openBackendEvidence = async (manifestPath, files) => {
+  const status = spawnSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' })
+  if (status.status !== 0 || String(status.stdout || '').trim()) {
+    throw new Error('backend evidence requires a clean tracked worktree')
+  }
+  const absolutePath = path.resolve(manifestPath)
+  const manifest = JSON.parse(await readFile(absolutePath, 'utf8'))
+  if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.attempts)) {
+    throw new Error('invalid backend evidence manifest')
+  }
+  const currentIdentity = await captureBackendIdentity({
+    root: ROOT,
+    runtime: backendEvidenceRuntime()
+  })
+  const attempts = []
+  for (const record of manifest.attempts) {
+    const historical = await captureBackendIdentity({
+      root: ROOT,
+      ref: record.identity.commit,
+      runtime: record.identity.runtime
+    })
+    const ordered = (values) =>
+      JSON.stringify(Object.entries(values).sort(([a], [b]) => a.localeCompare(b)))
+    if (ordered(historical.files) !== ordered(record.identity.files)) {
+      throw new Error('backend evidence source snapshot does not match its original commit')
+    }
+    const text = await readFile(path.resolve(path.dirname(absolutePath), record.reportPath), 'utf8')
+    const input = {
+      text,
+      expectedSha256: record.reportSha256,
+      identity: record.identity,
+      expectedFiles: record.expectedFiles,
+      provenance: record.provenance,
+      root: ROOT,
+      processExitCode: record.processExitCode
+    }
+    const attempt =
+      record.format === 'legacy-text'
+        ? importLegacyBackendReport(input)
+        : record.format === 'vitest-json'
+          ? importVitestBackendReport(input)
+          : null
+    if (!attempt) throw new Error('unsupported backend evidence report format')
+    attempts.push(attempt)
+  }
+  const plan = () =>
+    planBackendResume({
+      attempts,
+      currentIdentity,
+      files,
+      approvedSchedulingChanges: manifest.approvedSchedulingChanges || [],
+      legacyEnvironmentAudits: manifest.legacyEnvironmentAudits || []
+    })
+  // Validate every original report and source binding before selecting anything to skip.
+  plan()
+  return {
+    plan,
+    async record(reportPath, expectedFiles, processExitCode) {
+      const after = await captureBackendIdentity({ root: ROOT, runtime: backendEvidenceRuntime() })
+      if (JSON.stringify(after) !== JSON.stringify(currentIdentity)) {
+        throw new Error(
+          'backend source or environment changed during execution; evidence not accepted'
+        )
+      }
+      const text = await readFile(reportPath, 'utf8')
+      const reportSha256 = createHash('sha256').update(text).digest('hex')
+      const attempt = importVitestBackendReport({
+        text,
+        expectedSha256: reportSha256,
+        identity: currentIdentity,
+        expectedFiles,
+        root: ROOT,
+        processExitCode
+      })
+      attempts.push(attempt)
+      manifest.attempts.push({
+        format: 'vitest-json',
+        reportPath,
+        reportSha256,
+        identity: currentIdentity,
+        expectedFiles,
+        processExitCode
+      })
+      manifest.coverage = plan()
+      const temporary = `${absolutePath}.${randomUUID()}.tmp`
+      await writeFile(temporary, `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' })
+      await rename(temporary, absolutePath)
+    },
+    async reportPath() {
+      const directory = `${absolutePath}.reports`
+      await mkdir(directory, { recursive: true })
+      return path.join(directory, `${Date.now()}-${randomUUID()}.json`)
+    }
+  }
+}
+
+export const partitionBackendTestFiles = async (testFiles) => {
   const pptBrowserFlags = await Promise.all(testFiles.map(requiresBackendPptBrowser))
   return {
+    performanceFiles: testFiles.filter((filePath) => BACKEND_PERFORMANCE_FILES.has(filePath)),
     nonLiveFiles: testFiles.filter(
-      (filePath, index) => !isLiveBackendFile(filePath) && !pptBrowserFlags[index]
+      (filePath, index) =>
+        !isLiveBackendFile(filePath) &&
+        !pptBrowserFlags[index] &&
+        !BACKEND_PERFORMANCE_FILES.has(filePath)
     ),
     pptBrowserFiles: testFiles.filter((_filePath, index) => pptBrowserFlags[index]),
     liveFiles: testFiles.filter((filePath) => isLiveBackendFile(filePath))
@@ -687,14 +811,17 @@ const runE2ETestFilesConcurrently = async (
     .map((task, index) => ({ ...task, index }))
   const runnableTasks = tasks
   const gateTasks = runnableTasks.filter((task) => gateCaseIds.includes(toCaseId(task.testFile)))
-  const accountTasks = runnableTasks.filter((task) =>
-    task.env.NCURATOR_E2E_EXECUTABLE && RELEASE_ACCOUNT_CASES.includes(toCaseId(task.testFile))
+  const accountTasks = runnableTasks.filter(
+    (task) =>
+      task.env.NCURATOR_E2E_EXECUTABLE && RELEASE_ACCOUNT_CASES.includes(toCaseId(task.testFile))
   )
   const concurrentTasks = runnableTasks.filter(
-    (task) => task.execution !== 'exclusive' && !gateTasks.includes(task) && !accountTasks.includes(task)
+    (task) =>
+      task.execution !== 'exclusive' && !gateTasks.includes(task) && !accountTasks.includes(task)
   )
   const exclusiveTasks = runnableTasks.filter(
-    (task) => task.execution === 'exclusive' && !gateTasks.includes(task) && !accountTasks.includes(task)
+    (task) =>
+      task.execution === 'exclusive' && !gateTasks.includes(task) && !accountTasks.includes(task)
   )
   const results = []
   let exitCode = 0
@@ -1002,11 +1129,38 @@ const runTypeWorkflow = async (input) => {
 
   let exitCode = 0
   const e2eResults = []
+  const backendEvidence = input.backendEvidence
+    ? await openBackendEvidence(
+        input.backendEvidence,
+        testFiles.map((file) => path.relative(ROOT, file).split(path.sep).join('/'))
+      )
+    : null
   for (let iteration = 0; iteration < input.runs; iteration += 1) {
     if (input.type === 'backend') {
-      const { nonLiveFiles, pptBrowserFiles, liveFiles } =
-        await partitionBackendTestFiles(testFiles)
+      const evidencePlan = backendEvidence?.plan()
+      const pending = evidencePlan ? new Set(evidencePlan.pending) : null
+      if (evidencePlan) {
+        process.stdout.write(
+          `[backend-evidence] ${evidencePlan.reuse.length} files retained with original evidence; ${pending.size} files require execution\n`
+        )
+      }
+      const { performanceFiles, nonLiveFiles, pptBrowserFiles, liveFiles } =
+        await partitionBackendTestFiles(
+          pending
+            ? testFiles.filter((file) =>
+                pending.has(path.relative(ROOT, file).split(path.sep).join('/'))
+              )
+            : testFiles
+        )
       const groups = [
+        {
+          configPath: 'vitest.backend.config.mts',
+          testFiles: performanceFiles,
+          env: runtimeEnv,
+          testNamePattern,
+          workers: 1,
+          deadlineAt: input.deadlineAt
+        },
         {
           configPath: 'vitest.backend.config.mts',
           testFiles: nonLiveFiles,
@@ -1034,11 +1188,20 @@ const runTypeWorkflow = async (input) => {
       ].filter((group) => group.testFiles.length > 0)
 
       for (const group of groups) {
+        if (backendEvidence) group.reportPath = await backendEvidence.reportPath()
         const code = await runVitest(group)
+        if (backendEvidence) {
+          await backendEvidence.record(
+            group.reportPath,
+            group.testFiles.map((file) => path.relative(ROOT, file).split(path.sep).join('/')),
+            code
+          )
+        }
         if (code !== 0) {
           exitCode = code
         }
       }
+      if (backendEvidence && !backendEvidence.plan().complete) exitCode ||= 1
     } else {
       const runResult = await runE2ETestFilesConcurrently(
         testFiles,
@@ -1075,6 +1238,7 @@ const USAGE = `NCurator 测试 runner
   --showcase                             仅供独立 Showcase 采集命令使用
   --bundle <release-bundle.json>         正式包 bundle，可重复传入
   --result <path>                        bundle 结果路径，可重复传入
+  --backend-evidence <path>              完整 non-live backend 的校验证据续跑清单
   --fresh-knowledge-cache                删除知识库缓存强制重建
   -h, --help                             显示本帮助并退出
 
@@ -1128,6 +1292,22 @@ export const runTestWorkflow = async (argv, options = {}) => {
   }
   if (args.type && !['backend', 'e2e'].includes(args.type)) {
     throw new Error(`unsupported --type: ${args.type}`)
+  }
+  if (
+    args.backendEvidence &&
+    (args.type !== 'backend' ||
+      args.domain ||
+      args.suite ||
+      args.groups.length ||
+      args.caseIds.length ||
+      args.runs !== 1 ||
+      args.target !== 'source' ||
+      args.excludeGroups.length !== 1 ||
+      args.excludeGroups[0] !== 'live')
+  ) {
+    throw new Error(
+      '--backend-evidence requires an unfiltered --type backend --exclude-group live run'
+    )
   }
 
   if (!['source', 'package'].includes(args.target)) {

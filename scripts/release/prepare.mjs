@@ -24,7 +24,13 @@ const valueAfter = (name) => {
   return value
 }
 
-const VALUE_OPTIONS = new Set(['--platform', '--version', '--notes', '--notes-file'])
+const VALUE_OPTIONS = new Set([
+  '--platform',
+  '--version',
+  '--notes',
+  '--notes-file',
+  '--backend-evidence'
+])
 for (let index = 0; index < args.length; index += 1) {
   const argument = args[index]
   if (VALUE_OPTIONS.has(argument)) {
@@ -148,7 +154,10 @@ await run(process.execPath, [
   '--type',
   'backend',
   '--exclude-group',
-  'live'
+  'live',
+  ...(valueAfter('--backend-evidence')
+    ? ['--backend-evidence', valueAfter('--backend-evidence')]
+    : [])
 ])
 
 await run(process.execPath, [sqliteMigrationLockScript, '--promote-current'])

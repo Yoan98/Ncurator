@@ -28,7 +28,7 @@
 1. 校验双语更新日志，缺少有效内容时在网络操作和耗时检查前失败。
 2. 校验 `released-migrations.json` 中已锁定 migration 的版本、名称、文件名和 SHA-256。
 3. 并行执行 `typecheck:node`、`typecheck:web`，并准备网页抓取 sidecar。
-4. 使用 6 个 worker 执行全部非 live backend（AI、Knowledge、Unit，包含 update backend；其中由 `requiresBackendPptBrowser` 识别的 PPT 浏览器用例 `pptBrowserFiles` 固定 1 个 worker 串行）。
+4. 验证全部非 live backend（AI、Knowledge、Unit，包含 update backend）。普通用例使用 6 个 worker；DOCX 性能用例先独占 1 个 worker 执行，PPT 浏览器用例也固定 1 个 worker 串行。可通过 `--backend-evidence <manifest.json>` 续跑，只执行失败、变更、新增或缺少可信证据的文件；完整覆盖规则见 [`test.md`](../test.md)。
 5. 全部通过后，把当前连续 migration 纳入发布锁，与 `package.json` 版本一并提交，创建含双语日志的 annotated Tag，并原子推送 `main` 和 Tag。
 
 第一个平台执行 `release:start` 时锁定本次新增 migration；另一平台使用同一份已锁源码。已锁 migration 不能合并、重排或修改，只能新增更高版本。
@@ -36,6 +36,8 @@
 ```bash
 pnpm release:start --platform windows --version X.Y.Z --notes-file <release-notes.md>
 pnpm release:start --platform mac --version X.Y.Z --notes-file <release-notes.md>
+# 复用未受影响的 backend 原始证据，并补齐未通过或变更项
+pnpm release:start --platform mac --version X.Y.Z --notes-file <release-notes.md> --backend-evidence <manifest.json>
 ```
 
 必须通过 `--notes-file <path>` 或 `--notes <text>` 提供双语更新日志，两者只能选一项。文件使用 UTF-8，临时草稿可放在 `.codex-tmp/`；完整内容写入 annotated Tag，后续发布从 Tag 读取，无需保留临时文件。缺少说明、语言章节缺失或无有效变更条目时，在网络操作和耗时检查前失败，不再以版本名兜底。

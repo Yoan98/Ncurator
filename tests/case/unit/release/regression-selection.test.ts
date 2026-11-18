@@ -15,7 +15,7 @@ import {
   readTestCaseIds,
   runE2EGates
 } from '../../../../scripts/test/e2e-results.mjs'
-import { findTestFiles } from '../../../../scripts/test/workflow.mjs'
+import { findTestFiles, partitionBackendTestFiles } from '../../../../scripts/test/workflow.mjs'
 
 const providerMatrixFile = path.resolve(
   'tests/case/workbench/conversation/provider-matrix/live-preset-provider-smoke.e2e.test.ts'
@@ -32,6 +32,34 @@ const defaultScope = {
 }
 
 describe('release regression selection', () => {
+  it('rejects backend evidence for narrowed or E2E selections before execution', () => {
+    for (const args of [
+      ['--type', 'e2e'],
+      ['--type', 'backend', '--exclude-group', 'live', '--domain', 'unit'],
+      ['--type', 'backend', '--exclude-group', 'live', '--case', 'docx-diff'],
+      ['--type', 'backend', '--exclude-group', 'live', '--runs', '2'],
+      ['--type', 'backend']
+    ]) {
+      expect(() =>
+        execFileSync(
+          process.execPath,
+          ['scripts/test/workflow.mjs', ...args, '--backend-evidence', '/not-read.json'],
+          { encoding: 'utf8', stdio: 'pipe' }
+        )
+      ).toThrow(/Command failed/)
+    }
+  })
+  it('isolates only the exact DOCX performance file from ordinary backend workers', async () => {
+    const performanceFile = path.resolve('tests/case/unit/ai/docx-diff.test.ts')
+    const ordinaryFile = path.resolve('tests/case/unit/ai/docx-content-tree-visuals.test.ts')
+    const groups = await partitionBackendTestFiles([ordinaryFile, performanceFile])
+    expect(groups.performanceFiles).toEqual([performanceFile])
+    expect(groups.nonLiveFiles).toEqual([ordinaryFile])
+    expect(groups.pptBrowserFiles).toEqual([])
+    expect(groups.liveFiles).toEqual([])
+    expect((await partitionBackendTestFiles([ordinaryFile])).performanceFiles).toEqual([])
+  })
+
   it.each([
     { name: 'full workflow', scope: { type: '' } },
     { name: 'source E2E', scope: {} },
