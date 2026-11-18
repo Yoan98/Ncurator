@@ -273,7 +273,7 @@ describe('temporary subagents through production AiRunService', () => {
               childCalls.set(name, count)
               if (name === 'FIRST' && count === 1)
                 return buildToolDecision({
-                  toolName: 'text_file_edit',
+                  toolName: 'file_edit',
                   args: {
                     action: 'edit',
                     sourcePath: baseline,
@@ -616,7 +616,7 @@ describe('temporary subagents through production AiRunService', () => {
               return count % 3 === 0
                 ? complete(`PUBLIC_RESULT_${task}`)
                 : buildToolDecision({
-                    toolName: 'text_file_read',
+                    toolName: 'file_read',
                     args: { sourcePath: files[task.endsWith('A') ? 0 : 1] },
                     summary: `PUBLIC_ACTION_${task}`
                   })
@@ -649,7 +649,7 @@ describe('temporary subagents through production AiRunService', () => {
                 childRound += 1
                 if (childRound === 1)
                   return buildToolDecision({
-                    toolName: 'text_file_read',
+                    toolName: 'file_read',
                     args: { sourcePath: files[0] },
                     summary: '读取资料'
                   })
@@ -841,7 +841,7 @@ describe('temporary subagents through production AiRunService', () => {
                   })
                 if (parentStep === 3)
                   return buildToolDecision({
-                    toolName: 'text_file_read',
+                    toolName: 'file_read',
                     args: { sourcePath: file },
                     summary: '主伙伴先读文本'
                   })
@@ -900,7 +900,7 @@ describe('temporary subagents through production AiRunService', () => {
                 })
               return count === 1
                 ? buildToolDecision({
-                    toolName: 'text_file_edit',
+                    toolName: 'file_edit',
                     args: {
                       action: 'edit',
                       sourcePath: file,

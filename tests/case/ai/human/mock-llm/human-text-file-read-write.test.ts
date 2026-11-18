@@ -37,14 +37,14 @@ describe('ai human mock-llm text backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'text_file_read',
+                  toolName: 'file_read',
                   args: { sourcePath },
                   summary: '读取原文'
                 })
               },
               {
                 output: buildToolDecision({
-                  toolName: 'text_file_edit',
+                  toolName: 'file_edit',
                   args: {
                     sourcePath,
                     action: 'edit',
@@ -55,7 +55,7 @@ describe('ai human mock-llm text backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'text_file_read',
+                  toolName: 'file_read',
                   args: { sourcePath },
                   summary: '复读确认'
                 })
@@ -81,8 +81,8 @@ describe('ai human mock-llm text backend', () => {
         const fileArtifacts = filterAiRunEventsByType(result.events, 'file_artifact')
         runtime.assertThat(
           result.output.status === 'completed' &&
-            starts.filter((event) => event.toolName === 'text_file_read').length === 2 &&
-            starts.some((event) => event.toolName === 'text_file_edit') &&
+            starts.filter((event) => event.toolName === 'file_read').length === 2 &&
+            starts.some((event) => event.toolName === 'file_edit') &&
             result.content.includes('Owner: Alice') &&
             !result.content.includes('Owner: TBD') &&
             fileArtifacts.some((event) => event.capability === 'text_file'),

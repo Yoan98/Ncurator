@@ -62,7 +62,7 @@ describe('Skill file discovery production flow', () => {
                   })
                 },
                 {
-                  output: decision('text_file_edit', {
+                  output: decision('file_edit', {
                     action: 'create',
                     sourcePath: filename,
                     content: markdown('RULE-ORIGINAL')
@@ -78,7 +78,7 @@ describe('Skill file discovery production flow', () => {
                 { output: decision('skill_config', { action: 'list' }) },
                 { output: decision('load_skill', { skillNames: ['report'] }) },
                 {
-                  output: decision('text_file_edit', {
+                  output: decision('file_edit', {
                     action: 'rewrite',
                     sourcePath: filename,
                     content: markdown('RULE-UPDATED')

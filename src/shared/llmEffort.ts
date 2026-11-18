@@ -21,8 +21,16 @@ export const parseEffort = (value: unknown): LlmEffort | undefined => {
     const { value: rawValue, label } = item as Record<string, unknown>
     if (typeof rawValue !== 'string' || !rawValue) return undefined
     if (options.some((option) => option.value === rawValue)) return undefined
-    if (typeof label !== 'string' || !label.trim() || label.trim().length > MAX_LABEL_LENGTH) return undefined
-    options.push({ value: rawValue, label: label.trim() })
+    /*
+     * label 缺失或为 null 时不能整份丢弃，退回 value 本身。
+     *
+     * 后端曾经在运营没填展示名时下发 "label": null，而这里把 label 当必填，
+     * 结果一个 null 就让整份档位配置失效——后台配了强度、桌面却完全不显示。
+     * 展示名只是文案，缺失时用 value 兜底比丢掉整个能力合理得多。
+     */
+    const rawLabel = typeof label === 'string' ? label.trim() : ''
+    if (rawLabel.length > MAX_LABEL_LENGTH) return undefined
+    options.push({ value: rawValue, label: rawLabel || rawValue })
   }
   return options.some((option) => option.value === fallback) ? { default: fallback, options } : undefined
 }

@@ -14,7 +14,7 @@ describe('ai human mock-llm text-file search', () => {
       suite: 'human',
       groups: ['mock-llm'],
       description:
-        '验证通过 text_file_search 的行号定位大文本，再用 text_file_read 的 startLine 精确读取。',
+        '验证通过 file_search 的行号定位大文本，再用 file_read 的 startLine 精确读取。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -41,7 +41,7 @@ describe('ai human mock-llm text-file search', () => {
                   thought: { next: '直接搜索目标行。' },
                   toolCalls: [
                     {
-                      name: 'text_file_search',
+                      name: 'file_search',
                       args: { sourcePath, query: '第 5000 行' }
                     }
                   ]
@@ -53,7 +53,7 @@ describe('ai human mock-llm text-file search', () => {
                   thought: { next: '按命中行号精确读取。' },
                   toolCalls: [
                     {
-                      name: 'text_file_read',
+                      name: 'file_read',
                       args: {
                         sourcePath,
                         startLine: 5000,
@@ -92,7 +92,7 @@ describe('ai human mock-llm text-file search', () => {
             result.modelReadLocatedSegment,
           {
             name: 'human-text-file-search-locate-read-chain',
-            message: '应通过 text_file_search 定位行号，再用 startLine 精确读取成功。',
+            message: '应通过 file_search 定位行号，再用 startLine 精确读取成功。',
             data: {
               modelSearchedLog: result.modelSearchedLog,
               modelReadLocatedSegment: result.modelReadLocatedSegment

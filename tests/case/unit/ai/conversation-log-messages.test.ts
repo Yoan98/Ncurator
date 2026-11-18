@@ -249,12 +249,12 @@ describe('ai unit tool feedback text', () => {
     (errorMessage) => {
       const entry = buildToolFeedback({
         toolCallId: 'fallback',
-        toolName: 'text_file_read',
+        toolName: 'file_read',
         ok: false,
         errorMessage
       })
-      expect(entry.content).toBe('Error: Tool text_file_read failed.')
-      expect(entry.error).toBe('Tool text_file_read failed.')
+      expect(entry.content).toBe('Error: Tool file_read failed.')
+      expect(entry.error).toBe('Tool file_read failed.')
     }
   )
 
@@ -296,7 +296,7 @@ describe('ai unit tool feedback text', () => {
     'keeps execution diagnostics unchanged: %s',
     (error) => {
       expect(
-        renderGenericModelError({ toolName: 'text_file_read', args: {}, data: { error } })
+        renderGenericModelError({ toolName: 'file_read', args: {}, data: { error } })
       ).toBe(`Error: ${error}`)
     }
   )

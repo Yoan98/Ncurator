@@ -63,8 +63,8 @@ describe('ai human live text-file backend', () => {
           )
           runtime.assertThat(
             result.output.status === 'completed' &&
-              toolNames.includes('text_file_read') &&
-              !toolNames.includes('text_file_edit') &&
+              toolNames.includes('file_read') &&
+              !toolNames.includes('file_edit') &&
               result.beforeHash === result.afterHash,
             {
               name: 'human-live-text-file-read-is-read-only',
@@ -110,8 +110,8 @@ describe('ai human live text-file backend', () => {
           )
           runtime.assertThat(
             result.output.status === 'completed' &&
-              toolNames.includes('text_file_read') &&
-              toolNames.includes('text_file_edit') &&
+              toolNames.includes('file_read') &&
+              toolNames.includes('file_edit') &&
               !result.finalContent.includes('OLD_API_URL') &&
               result.finalContent.includes("primaryEndpoint = 'API_BASE_URL'") &&
               result.finalContent.includes("fallbackEndpoint = 'API_BASE_URL'") &&

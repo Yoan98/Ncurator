@@ -47,8 +47,8 @@ describe('ai human mock-llm bounded text file reading', () => {
                 output: {
                   thought: { next: '同轮读取大小两个文件。' },
                   toolCalls: [
-                    { name: 'text_file_read', args: { sourcePath } },
-                    { name: 'text_file_read', args: { sourcePath: smallSourcePath } }
+                    { name: 'file_read', args: { sourcePath } },
+                    { name: 'file_read', args: { sourcePath: smallSourcePath } }
                   ]
                 }
               },
@@ -63,7 +63,7 @@ describe('ai human mock-llm bounded text file reading', () => {
                   thought: { next: '从返回的下一行继续读取。' },
                   toolCalls: [
                     {
-                      name: 'text_file_read',
+                      name: 'file_read',
                       args: { sourcePath, startLine: nextStartLine }
                     }
                   ]

@@ -1,6 +1,7 @@
 import { renderTextFileReadModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { renderTextFileEditModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 import { describe, expect, it } from 'vitest'
+import { resolveRuntimeToolName } from '../../../../src/shared/runtimeCapabilities'
 import { TOOLSET_DEFINITIONS } from '../../../../src/main/services/ai/human/toolsets'
 import { TEXT_FILE_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/textFile/toolSpecs'
 import {
@@ -15,20 +16,35 @@ import {
 describe('ai unit text-file tool contract', () => {
   it('binds three tools to the text-file toolset', () => {
     expect(TEXT_FILE_TOOL_SPECS.map((spec) => spec.name)).toEqual([
-      'text_file_read',
-      'text_file_search',
-      'text_file_edit'
+      'file_read',
+      'file_search',
+      'file_edit'
     ])
     expect(TOOLSET_DEFINITIONS['text-file'].toolNames).toEqual([
-      'text_file_read',
-      'text_file_search',
-      'text_file_edit'
+      'file_read',
+      'file_search',
+      'file_edit'
     ])
     TEXT_FILE_TOOL_SPECS.forEach((spec) => {
       expect(spec.toolsetIds).toEqual(['text-file'])
       expect(spec.familyId).toBe('text-file')
       expect(typeof spec.modelResult.renderSuccess).toBe('function')
     })
+  })
+
+  it('resolves legacy text_file names for historical display', () => {
+    expect(resolveRuntimeToolName('text_file_read')).toBe('file_read')
+    expect(resolveRuntimeToolName('text_file_search')).toBe('file_search')
+    expect(resolveRuntimeToolName('text_file_edit')).toBe('file_edit')
+    expect(resolveRuntimeToolName('file_read')).toBe('file_read')
+    expect(resolveRuntimeToolName('unknown_tool')).toBeUndefined()
+  })
+
+  it('keeps code and config in the model-facing text file descriptions', () => {
+    for (const spec of TEXT_FILE_TOOL_SPECS) {
+      expect(spec.promptSpec.description).toContain('代码')
+      expect(spec.promptSpec.description).toContain('配置')
+    }
   })
 
   it('rejects structured document paths', () => {
@@ -115,9 +131,9 @@ describe('ai unit text-file tool contract', () => {
 })
 
 describe('tool result data fidelity', () => {
-  it('preserves text_file_read data', () => {
+  it('preserves file_read data', () => {
     const rendered = renderTextFileReadModelResult({
-      toolName: 'text_file_read',
+      toolName: 'file_read',
       args: { sourcePath: '/workspace/readme.md' },
       data: {
         content: 'alpha\nbeta',
@@ -132,9 +148,9 @@ describe('tool result data fidelity', () => {
     expect(rendered).toContain('beta')
   })
 
-  it('preserves text_file_edit data', () => {
+  it('preserves file_edit data', () => {
     const rendered = renderTextFileEditModelResult({
-      toolName: 'text_file_edit',
+      toolName: 'file_edit',
       args: { sourcePath: '/workspace/app.ts', action: 'edit' },
       data: {}
     })

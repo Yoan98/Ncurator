@@ -28,7 +28,7 @@ describe('ai tool text-file search backend', () => {
       suite: 'tool',
       groups: ['text-file'],
       description:
-        '验证 text_file_search 的 literal/regex 行号、单行超长日志的上下文裁剪、命中数上限和无效正则报错。',
+        '验证 file_search 的 literal/regex 行号、单行超长日志的上下文裁剪、命中数上限和无效正则报错。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -40,12 +40,12 @@ describe('ai tool text-file search backend', () => {
           ['hello world', 'second hello here', '尾部 hello 结束'].join('\n'),
           'utf8'
         )
-        const literalResult = await harness.invoke<SearchResult>('text_file_search', {
+        const literalResult = await harness.invoke<SearchResult>('file_search', {
           sourcePath: multiPath,
           query: 'hello'
         })
 
-        const regexResult = await harness.invoke<SearchResult>('text_file_search', {
+        const regexResult = await harness.invoke<SearchResult>('file_search', {
           sourcePath: multiPath,
           query: 'h\\w+',
           mode: 'regex'
@@ -53,14 +53,14 @@ describe('ai tool text-file search backend', () => {
 
         const emojiPath = path.join(runtime.workspaceRoot, 'emoji-search.txt')
         await fs.writeFile(emojiPath, 'a😀b hello', 'utf8')
-        const emojiResult = await harness.invoke<SearchResult>('text_file_search', {
+        const emojiResult = await harness.invoke<SearchResult>('file_search', {
           sourcePath: emojiPath,
           query: 'hello'
         })
 
         const manyPath = path.join(runtime.workspaceRoot, 'many.txt')
         await fs.writeFile(manyPath, 'x\n'.repeat(50_000), 'utf8')
-        const manyResult = await harness.invoke<SearchResult>('text_file_search', {
+        const manyResult = await harness.invoke<SearchResult>('file_search', {
           sourcePath: manyPath,
           query: 'x'
         })
@@ -75,14 +75,14 @@ describe('ai tool text-file search backend', () => {
         const longLine = `${'x'.repeat(2_000)}TARGET_KEY${'y'.repeat(20_000)}`
         await fs.mkdir(path.dirname(logPath), { recursive: true })
         await fs.writeFile(logPath, longLine, 'utf8')
-        const logResult = await harness.invoke<SearchResult>('text_file_search', {
+        const logResult = await harness.invoke<SearchResult>('file_search', {
           sourcePath: logPath,
           query: 'TARGET_KEY'
         })
 
         let invalidRegexError = ''
         try {
-          await harness.invoke('text_file_search', {
+          await harness.invoke('file_search', {
             sourcePath: multiPath,
             query: '[',
             mode: 'regex'
@@ -93,7 +93,7 @@ describe('ai tool text-file search backend', () => {
 
         let noMatchResult: SearchResult
         try {
-          noMatchResult = await harness.invoke<SearchResult>('text_file_search', {
+          noMatchResult = await harness.invoke<SearchResult>('file_search', {
             sourcePath: multiPath,
             query: 'missing-keyword'
           })

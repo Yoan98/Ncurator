@@ -8,7 +8,7 @@ import { buildCompleteTaskDecision, buildToolDecision } from '../testUtils'
 
 const edit = (sourcePath: string, oldText: string, newText: string) =>
   buildToolDecision({
-    toolName: 'text_file_edit',
+    toolName: 'file_edit',
     args: { sourcePath, action: 'edit', edits: [{ oldText, newText }] },
     summary: '保存文本'
   })
@@ -34,7 +34,7 @@ describe('owner run file review lifecycle', () => {
           userInput: '修改文本后处理追加消息',
           hasPendingUserMessages: () => queued,
           observeEvent: (event) => {
-            if (event.type === 'tool_call_result' && event.toolName === 'text_file_edit')
+            if (event.type === 'tool_call_result' && event.toolName === 'file_edit')
               queued = true
           },
           llmScript: { 'human.brain': [{ output: edit(source, 'A', 'B') }] }

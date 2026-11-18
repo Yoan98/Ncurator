@@ -49,8 +49,8 @@ const generateCache = async (
   const started = Date.now()
   await sendWorkbenchMessage(
     runtime.page,
-    `请使用 text_file 工具创建 ${file}，内容为 cache-data。` +
-      (source ? `再使用 text_file 工具将 ${source} 的全文替换为 updated formal file。` : '') +
+    `请使用 file_edit 工具创建 ${file}，内容为 cache-data。` +
+      (source ? `再使用 file_edit 工具将 ${source} 的全文替换为 updated formal file。` : '') +
       '请实际完成文件写入，最后只回复完成。'
   )
   const evidence = await waitForWorkbenchAiRunCompletion(runtime, started, model)

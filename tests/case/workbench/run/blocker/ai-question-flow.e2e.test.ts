@@ -261,7 +261,7 @@ describe('workbench AI question e2e', () => {
             (event) => event.runId === required.runId
           )
           const mutatingTools = new Set([
-            'text_file_edit',
+            'file_edit',
             'docx_content_edit',
             'docx_format',
             'docx_table_edit',

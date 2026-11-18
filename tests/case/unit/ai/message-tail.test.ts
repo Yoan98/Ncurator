@@ -39,8 +39,8 @@ describe('renderMessagesForCompaction', () => {
       new AIMessage({
         content: '读取并写入',
         tool_calls: [
-          toolCall('1', 'text_file_read', { sourcePath: 'a.txt' }),
-          toolCall('2', 'text_file_edit', { action: 'create', sourcePath: 'b.txt' })
+          toolCall('1', 'file_read', { sourcePath: 'a.txt' }),
+          toolCall('2', 'file_edit', { action: 'create', sourcePath: 'b.txt' })
         ]
       }),
       new ToolMessage({ content: 'hello', tool_call_id: '1' }),
@@ -54,8 +54,8 @@ describe('renderMessagesForCompaction', () => {
     expect(rendered).toBe(
       [
         '[ai] 读取并写入',
-        '[tool_call] text_file_read(sourcePath="a.txt")',
-        '[tool_call] text_file_edit(action="create", sourcePath="b.txt")',
+        '[tool_call] file_read(sourcePath="a.txt")',
+        '[tool_call] file_edit(action="create", sourcePath="b.txt")',
         '[tool] hello',
         '[tool] created',
         '[tool_call] terminal_run(command="ls")',

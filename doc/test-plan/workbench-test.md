@@ -19,7 +19,7 @@
 - Workbench UI E2E 测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖列表打开/焦点刷新、右键行内新建和确认移到回收站，以及删除后禁止自动保存重建。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；用户行为见 `WB-WPS-001`。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
-- text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
+- text-file apply case 需要真实 Markdown 或代码文件、真实 `file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先加载外置 `image-generation` 工具包、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；必须在无进程级远程调试口下完成。同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 使用正文由 JavaScript 渲染的真实本地页面，验证冻结网页后台进程连接浏览器并取得正文，不设置本地地址绕过抓取的测试配置。两类 case 均验证结果只回模型、不自动展开右侧面板，对齐 `WB-CORE-007-AC4`；正式包从系统真实入口启动，规则见 `doc/test.md`。
@@ -235,8 +235,11 @@ pnpm test:update:e2e
 - What：思考强度卡片的档位来源、切换、复位、切模型回落与发送请求参数。
 - Why：客户端自行补齐档位或沿用上一个模型的档位会把不支持的 `reasoning_effort` 发给服务端，导致请求被拒或用户以为已生效。
 - How：用管理网页给测试馆长条目配置四档与两档两种强度，桌面刷新后打开模型面板，逐个点击档位、键盘左右移动、点复位，再换成未配置强度的条目。发送后核对实际请求体的 `reasoning_effort`。
-- Oracle：档位数量、顺序和展示名与目录一致，客户端不补齐；切到未配置强度的模型时卡片消失且请求不带该字段；两档模型只显示两个点；切换模型后不沿用上一模型档位，旧档位失效时回落到该模型默认档，覆盖 `WB-COMPOSER-018-AC1/AC2/AC3/AC4/AC5`。
-- 单元回归见桌面 `tests/case/unit/model/effort-selection.test.ts` 与 `tests/case/unit/model/chat-model-effort.test.ts`；目录下发与准入校验由官网 `MOD-07`、`MOD-05` 覆盖。
+- Oracle：档位数量、顺序和展示名与目录一致，客户端不补齐；切到未配置强度的模型时卡片消失且请求不带该字段；两档模型只显示两个点；切换模型后不沿用上一模型档位，旧档位失效时回落到该模型默认档；切走再切回同一模型时恢复该模型上次选定的档位；胶囊回显当前档位名且无强度模型不渲染该段，覆盖 `WB-COMPOSER-018-AC1/AC2/AC3/AC4/AC5/AC6/AC8`。滑块拖动跟手、松手吸附不回跳、填充止于滑块中心、末档铺满轨道由 `WB-COMPOSER-018-AC7/AC9` 覆盖；目录下发的每个档位均带可读展示名、文案缺失时服务端补内置词表由 `WB-COMPOSER-018-AC10` 覆盖。
+- 滑块几何与吸附行为（拖动跟手、填充止于滑块中心、末档铺满轨道、松手不回跳）由 `tests/case/unit/model/effort-slider-geometry.test.ts` 覆盖，对应 `WB-COMPOSER-018-AC7/AC9`。
+- 档位记忆与回落规则由 `tests/case/unit/model/effort-memory.test.ts` 覆盖，对应 `WB-COMPOSER-018-AC3/AC4`。
+- 目录下发（含空标签补文案、未配置不下发）与准入校验由官网 `MOD-14`（并入 `tests/case/models/catalog/mod-07-fastify.http.test.ts`）与 `MOD-05` 覆盖，对应 `WB-COMPOSER-018-AC10`。
+- 目录载荷解析容错见 `tests/case/unit/model/e2e-effort-payload.test.ts`；合并链路不得丢弃 `effort` 见 `tests/case/unit/model/merge-effort-regression.test.ts`。
 
 #### `managed-model-catalog`
 
@@ -277,7 +280,7 @@ pnpm test:update:e2e
 - What：同一伙伴经真实 Workbench UI 连续三轮短任务（Run1 `@` 选中极短笔记抽出事实，Run2/Run3 同选中文件追问），相邻跨 run 首轮 brain 均须明显复用上一 run 末次前缀缓存，且 `toolsHash` 一致。
 - Why：验证真实发送链路中的前缀缓存。纯闲聊测不到 tool 历史投影与 tools 前缀稳态；backend 直调 `AiRunService` 也绕过 Composer `@` 选中与生产发送组装。若消息重建或工具表漂移导致缓存丢失，会拖高成本并放大续接不稳定。
 - How：发布时通过 `--target package` 在隔离安装的国内候选包执行；源码执行仅用于开发排查。创建空临时 workspace，仅写入 `cache-retain-note.txt`，经 Settings 添加文件地址并建伙伴、选 live 模型。每轮用 `@` 选中该文件再发送（不得 `sendWorkbenchMessage` 清空 token）。Run1 要求读笔记说出项目代号（硬断言文本读工具）；Run2 问发布窗口；Run3 问负责人。e2e observer 只采集生产 `recordLlmIo` 并写入 `llm-io.jsonl`。两段跨 run 缓存用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）；硬断言相邻段 `toolsHash` 相等；按实际 runId 选择完成日志中的请求，禁止按数组长度切分；断言 data 附带双方 runId/callId、历史前缀是否一致和 `requestWireDiff` 供排障。
-- Oracle：三轮均 `completed`，对齐 `WB-SESSION-005`；Run1 有 `text_file_read` / `text_file_search` 证据，且发送带 `@` 选中，对齐 `WB-CORE-002`；Run2 首次 brain 相对 Run1 末次、以及 Run3 首次 brain 相对 Run2 末次，均满足 `cachedInputTokens / 上一末次 inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，且两段 `toolsHash` 分别一致。没有 live key 必须失败，不能跳过。
+- Oracle：三轮均 `completed`，对齐 `WB-SESSION-005`；Run1 有 `file_read` / `file_search` 证据，且发送带 `@` 选中，对齐 `WB-CORE-002`；Run2 首次 brain 相对 Run1 末次、以及 Run3 首次 brain 相对 Run2 末次，均满足 `cachedInputTokens / 上一末次 inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，且两段 `toolsHash` 分别一致。没有 live key 必须失败，不能跳过。
 
 #### `user-message-actions`
 
@@ -420,7 +423,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：智能模式真实发送后，验证 run 用时、过程记录折叠、Thought / Activity 过程层渲染与最终 markdown 收口（过程流主 case）。
 - Why：重构后过程层是用户扫进度的主界面；需覆盖 Activity 折叠 header、展开平铺、加载/工具统一渲染，以及最终回答，而不是只断言“有过程块”。
-- How：真实文件地址内准备带唯一事实的文件；先创建伙伴；用户通过 UI 发送自然语言总结请求，明确要求用 `text_file_read` 读取实际存在的对外口径文本，再读取工作区内一个不存在的文本文件，不能以知识库搜索或终端存在性检查替代这两次读取，使真实只读工具分别返回成功和失败；run 运行期间检查已处理时间出现并递增，完成后检查固定用时、默认收起和最终回答可见；通过界面点击展开过程记录与全部 Activity 面板，采集 header / body 文案；加载项采用“加载 + 名称”的统一文案。
+- How：真实文件地址内准备带唯一事实的文件；先创建伙伴；用户通过 UI 发送自然语言总结请求，明确要求用 `file_read` 读取实际存在的对外口径文本，再读取工作区内一个不存在的文本文件，不能以知识库搜索或终端存在性检查替代这两次读取，使真实只读工具分别返回成功和失败；run 运行期间检查已处理时间出现并递增，完成后检查固定用时、默认收起和最终回答可见；通过界面点击展开过程记录与全部 Activity 面板，采集 header / body 文案；加载项采用“加载 + 名称”的统一文案。
 - Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；用户与 assistant 消息不展示头像，用户消息右对齐气泡，assistant 过程流/最终输出与 composer 内容 rail 对齐，最终 markdown 无独立背景卡片，对齐 `WB-COMPOSER-009-AC1`、`WB-COMPOSER-009-AC2`、`WB-COMPOSER-009-AC3`、`WB-COMPOSER-009-AC4`。运行中过程流可见；本轮推进期间过程区底部只有一处存活信号（文字尾部 `data-live-tail` 或冷启动占位 `workbench-assistant-live-dot`，二者不同时出现），run 完成 / 失败 / 取消或等待用户操作后两者都不得残留，对齐 `WB-COMPOSER-003-AC3`。若本轮碰巧出现自动重试，重试行流光期间不得同时出现尾部黑球；强制打出重试行、单行就地更新与 429 退避由 `llm-retry-process-row` 覆盖，对齐 `WB-COMPOSER-015`。决策层（Thought）短摘要可见且不暴露原始长推理，以正常正文色（#37352F）完整展示且不截断、不折叠、无内部滚动，运行中与完成后保持相同强调度，对齐 `WB-COMPOSER-003-AC5`、`WB-COMPOSER-009-AC10`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」），根据单一动作或混合工具精准呈现对应专属语义图标（询问用户使用困惑表情图标；浏览器打开/查看/操作/提取/截图/滚动/标签、网页抓取/搜索、图片读取/生成或工作流闪电图标；截取页面并读取图片的成对视觉动作统一呈现为照片图标，不退化为闪电；浏览器操作不产生审批卡片与展开行审核绿勾）；展开行为带对象的工具原句且不含冒号强调；若含 `read_image`：展开行含「读取图片」文案且按入参 `paths` 展示可点击缩略图（`workbench-read-image-thumb-*`），点击后打开与附件相同的 `ImageLightbox`；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`、`WB-BLOCKER-001-AC8`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用顿号 `、` 拼接（两侧无空格）；>3 类 summary 为「已完成 n 项」。若事件含 `load_toolset` / `load_skill`：展开行文案含“正在加载 / 已加载”，且不作为独立加载层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。文件名、query、命令、URL 和工具包或说明技能名不使用粗体或冒号强调，对齐 `WB-COMPOSER-009-AC7`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试行由 `llm-retry-process-row` 覆盖；`WB-COMPOSER-014-AC3` 的截断提示和半截回答上下文边界、`WB-COMPOSER-014-AC4` 的计划进度环交互没有专门 UI 断言，见自动化覆盖边界。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。仅切换伙伴或新建干净对话时不得凭空出现“正在 / 已检索知识库”，对齐 `WB-COMPOSER-009-AC12`。
 
 - Oracle：run 开始后过程内容出现前也显示「已处理」计时和分隔线，且运行至少 1 秒后用时递增；不足一分钟只显示秒数，不出现「0分钟」。完成后用时固定，且不足一分钟只显示秒数；运行中计时和 Thought 内容使用正常正文色；完成后「用时」文字及展开/收起箭头为中性灰色（#9B9A97），文字 13px、箭头 14px，Thought 保持正常正文色；Activity header 与展开面板内容保持灰色层级，已完成过程不整体降低透明度；过程默认收起。展开过程后 Thought / Activity 可见，再次收起不影响最终回答。对齐 `WB-COMPOSER-016-AC1` 至 `WB-COMPOSER-016-AC3`。
@@ -433,7 +436,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e / live`
 - What：真实模型读取资料期间从 Composer 追加消息，验证单一主按钮、浅灰待处理气泡、安全续接、模型选择生效边界，以及交接后旧过程固定用时和消息显示顺序。
 - Why：AI backend case 不覆盖 Renderer 输入、运行态单按钮切换、pending 气泡投影和 IPC 续接；发送草稿时停止入口暂时切换为排队发送，发送后必须恢复。
-- How：在临时工作区创建三个文本输入，通过真实 UI 发送跨文件汇总请求；观察 `text_file_read` 开始后检查空草稿时唯一主按钮为停止，输入第一条消息后同一按钮切换为发送并提交排队，再输入第二条消息重复提交；确认每次清空草稿后按钮恢复为停止；等待原 run 正常结束及续接 run 完成，并检查原 user 气泡位于对应助手过程卡之前。在工具执行时从模型 A 切到 B，核对原 run 及子任务仍用 A；以 B 提交追加消息后再改未提交选择，核对接续仍用 B，以上游目标和 run 记录取证。记录真实模型、run 事件与最终回答。
+- How：在临时工作区创建三个文本输入，通过真实 UI 发送跨文件汇总请求；观察 `file_read` 开始后检查空草稿时唯一主按钮为停止，输入第一条消息后同一按钮切换为发送并提交排队，再输入第二条消息重复提交；确认每次清空草稿后按钮恢复为停止；等待原 run 正常结束及续接 run 完成，并检查原 user 气泡位于对应助手过程卡之前。在工具执行时从模型 A 切到 B，核对原 run 及子任务仍用 A；以 B 提交追加消息后再改未提交选择，核对接续仍用 B，以上游目标和 run 记录取证。记录真实模型、run 事件与最终回答。
 - Oracle：原过程固定用时必须含数值及秒单位，中文标签与数字之间空白不影响判定；任一时刻 Composer 仅有一个主按钮；空草稿时标签为停止，有可发送内容时同一按钮标签为发送；发送后草稿清空且标签恢复为停止。两条待处理消息都按 FIFO 显示为浅灰气泡且无编辑入口；续接使用第二条消息作为最新诉求并完成。初始 run 交接后原过程行显示固定“用时”，对应用户气泡排在其助手过程行之前。工具结果先于追加消息由 AI live `human-queued-message-safe-boundary-live` 覆盖；FIFO transcript、停止 / 中断后不自动启动由 unit `chat-run-service-contract` 覆盖，对齐 `WB-COMPOSER-017`、`WB-COMPOSER-006`。 已核对的具体验收：`WB-COMPOSER-006-AC1`；只改选择器不改变原 run 及子任务的模型，追加消息保存提交时选择，安全交接后的接续模型不受后来未提交选择影响，覆盖 `WB-COMPOSER-007-AC19`。
 
 #### `llm-retry-process-row`
@@ -516,7 +519,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：文件修改已经落地后取消运行，终态不展示取消或失败内容，但仍保留修改文件入口和审核模式。
 - Why：取消只应停止后续 AI 执行，不能隐藏已经发生的文件修改，否则用户无法检查和回退副作用。
-- How：真实 AI 使用 `text_file_edit` 修改 Markdown，随后执行真实的 60 秒终端等待以保留停止操作窗口；只读等待源文件内容实际更新后点击停止，再打开本轮修改记录。
+- How：真实 AI 使用 `file_edit` 修改 Markdown，随后执行真实的 60 秒终端等待以保留停止操作窗口；只读等待源文件内容实际更新后点击停止，再打开本轮修改记录。
 - Oracle：assistant turn 不显示失败气泡或“已取消”正文，Activity 不残留「等待用户处理」；修改文件入口仍存在，文件内容已经更新，文本审核模式可打开；对齐 `WB-BLOCKER-001-AC10`。
 
 #### `browser-use-task-panel`
@@ -907,13 +910,14 @@ pnpm test:update:e2e
 | `WB-PANEL-003-AC29`                        | 部分覆盖：`docx-review-position-and-inline-diff` 与 `docx-apply-panel-preview-and-revert` 已验证同轨叠层、红删绿增、格式语义、点击定位、预览与回退无残留；轨道滚动交互由 `docx-selection-reference` 验证共用组件。密集循环、重复文字、图片/表格、延迟加载、首尾长区域和历史批次切换保留人工验收边界。                     |
 | `WB-CORE-004-AC2/AC3`、`WB-CORE-007-AC3`   | 待补：默认 / 宽松补充和严谨资料边界没有专门真实模型场景。偏好选择、持久化或 prompt 格式检查不能代替行为验证。                                                                                                                                                                                                             |
 | `WB-COMPOSER-014-AC3`                      | 部分覆盖：重试行见 `llm-retry-process-row`；输出截断、半截回答与网络中断上下文的完整 UI 断言待补。                                                                                                                                                                                                                        |
-| `WB-CORE-008-AC5`                          | 部分覆盖：跨屏后的指针跟踪恢复依赖主进程可信鼠标事件与渲染层光标翻转，无法单测；双屏拖拽、拖回主屏、启动恢复到副屏三种路径需真实 macOS 人工验收。                                                                                                                                            |
-| `WB-SESSION-016-AC1..AC4`                  | 部分覆盖：`conversation-outline` unit 覆盖当天过滤、标题/摘要清洗、长度分档、40 条抽样保留首尾，以及组件的活跃态、hover 预览延迟与点击回调；导轨几何位置、跨天整组替换、窄窗口隐藏与真实滚动高亮仍需真实窗口人工验收。                                                                                                    |
+| `WB-CORE-008-AC5`                          | 部分覆盖：跨屏后的指针跟踪恢复依赖主进程可信鼠标事件与渲染层光标翻转，无法单测；双屏拖拽、拖回主屏、启动恢复到副屏三种路径需真实 macOS 人工验收。
+| `WB-CORE-009-AC1/AC2/AC3`                  | 待补：启动加载画面（首帧米白底 + 居中 logo、会话加载后淡出、最迟 8s 移除、不拦截点击与滚动）依赖真实冷启动时序与窗口首帧，现有 E2E 都在应用启动完成后接管页面，无法断言首帧内容；需要窗口级截图取证，列入人工验收。                                                                                                                                            |
+| `WB-SESSION-016-AC1/AC2/AC3/AC4`           | 部分覆盖：`conversation-outline` unit 覆盖当天过滤、标题/摘要清洗、长度分档（对应 AC2 刻度三档）、40 条抽样保留首尾，以及组件的活跃态、hover 预览延迟与点击回调（对应 AC3 预览卡）；导轨几何位置、跨天整组替换、窄窗口隐藏（AC4）与真实滚动高亮仍需真实窗口人工验收。                                                                                                    |
 | `WB-COMPOSER-003-AC11`                     | 部分覆盖：单元测试未覆盖 DOM 滚动视口，按钮显示阈值、迟滞隐藏、点击缓动与中断、reduced-motion/e2e 瞬移需真实窗口人工验收；按钮文案与 selector 已固定，可直接补 UI 断言。                                                                                                                                                  |
 | `WB-COMPOSER-003-AC10`                     | 部分覆盖：`streaming-markdown` 与 `streaming-typewriter` unit 覆盖块切分、闭合块/末块划分、打字机速度与追赶；按帧合并渲染只做了单测级验证，真实长回答的掉帧率、滚动跟随手感、动效开关与 reduced-motion 分支需人工验收。                                                                                                   |
 | `WB-COMPOSER-003-AC8`（图片部分）          | 部分覆盖：`markdown-link-render` unit 覆盖含空格路径自动补齐、图片扩展名/类型图标与代码块不被改写；正文图片直显、加载失败降级为引用文字、点击放大与按类型图标的真实窗口断言待补（需要真实模型输出图片链接）。                                                                                                             |
 | `WB-COMPOSER-014-AC4`                      | 部分覆盖：`stop-running-or-approval-run` 通过真实模型和 UI 验证 doing loading 的旋转、停止后暂停、hover、中断保留与新会话清空；完成比例、正常完成隐藏和恢复后旋转仍需专项验收。                                                                                                                                           |
-| `WB-SESSION-001-AC6`、`WB-SESSION-012-AC3` | 部分覆盖：已有创建 / 编辑用例走正常路径，UI 重名拦截与历史重名记录只改形象分支待补。                                                                                                                                                                                                                                      |
+| `WB-SESSION-001-AC6/AC7`、`WB-SESSION-012-AC3` | 部分覆盖：已有创建 / 编辑用例走正常路径，UI 重名拦截与历史重名记录只改形象分支待补；AC7 的空名称、超长名称等边界输入同样没有专门 UI 断言，列入人工验收。                                                                                                                                                                                                                                      |
 | `WB-COMPOSER-013-AC5`                      | 部分覆盖：unit `message-log-vision-context` 检验有效图片判断和免费无 vision gate；`model-selector-and-provider-error` 验证成功、失败、取消后无需切换伙伴即刷新上下文用量。含图片历史下的真实 UI 禁用、提示与发送拦截，以及跨伙伴查询不串状态仍需人工验收。                                                                |
 | `WB-COMPOSER-013-AC6`                      | AI backend `human-read-image-no-vision` 覆盖工具能力反馈、无图片请求与 graph 继续交付；unit `read-image-multimodal` 覆盖支持视觉、目录未命中和非免费模型。真实免费模型的解释及文字续聊列入人工验收。                                                                                                                      |
 | `ST-RUN-003-AC1/AC2`                       | 部分覆盖：`tests/case/unit/scheduled-task-service.test.ts` 以依赖时钟检验启动错过 / 容忍窗口后顺延且不补跑；真实应用关闭 / 系统休眠恢复需桌面人工验收。                                                                                                                                                                   |

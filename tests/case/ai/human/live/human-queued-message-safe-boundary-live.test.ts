@@ -39,7 +39,7 @@ describe('ai human live backend', () => {
             runId: `${runtime.runId}-first`,
             hasPendingUserMessages: () => queuedDuringRead,
             observeEvent: (event) => {
-              if (event.type === 'tool_call_started' && event.toolName === 'text_file_read') {
+              if (event.type === 'tool_call_started' && event.toolName === 'file_read') {
                 queuedDuringRead = true
               }
             }
@@ -71,7 +71,7 @@ describe('ai human live backend', () => {
           const firstToolLog = firstLog.find(
             (record) =>
               record.entry.kind === 'tool' &&
-              record.entry.toolName === 'text_file_read' &&
+              record.entry.toolName === 'file_read' &&
               record.entry.content.includes(LIVE_MARKER)
           )
           const secondToolResultIndex = secondBrainMessages?.findIndex(
@@ -108,7 +108,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.queuedDuringRead &&
               result.firstOutput.status === 'yielded' &&
-              result.toolNames.includes('text_file_read') &&
+              result.toolNames.includes('file_read') &&
               result.firstToolLog?.kind === 'tool' &&
               result.firstToolLog.content.includes(LIVE_MARKER) &&
               result.secondOutput.status === 'completed' &&

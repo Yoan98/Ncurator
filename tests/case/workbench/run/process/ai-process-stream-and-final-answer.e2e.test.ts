@@ -253,7 +253,7 @@ describe('workbench run e2e', () => {
           const missingReadPath = path.join(setup.workspace.rootPath, 'activity-header-missing.txt')
           await sendWorkbenchMessage(
             page,
-            `${PROMPT}\n请先用 text_file_read 读取实际存在的文本文件：${existingReadPath}，再读取这个工作区内不存在的文本文件：${missingReadPath}。这两次读取不要用知识库搜索或终端存在性检查替代；收到缺失文件的读取失败后继续总结已有资料。`
+            `${PROMPT}\n请先用 file_read 读取实际存在的文本文件：${existingReadPath}，再读取这个工作区内不存在的文本文件：${missingReadPath}。这两次读取不要用知识库搜索或终端存在性检查替代；收到缺失文件的读取失败后继续总结已有资料。`
           )
           const processLocator = await waitForLatestAssistantProcess(page)
           const durationLocator = getWorkbenchPrefixLocator(
@@ -358,13 +358,13 @@ describe('workbench run e2e', () => {
           const failedTextReads = evidence.events.filter(
             (event) =>
               event.type === 'tool_call_result' &&
-              event.toolName === 'text_file_read' &&
+              event.toolName === 'file_read' &&
               event.result?.ok === false
           )
           const successfulReads = evidence.events.filter(
             (event) =>
               event.type === 'tool_call_result' &&
-              ['text_file_read', 'docx_read_nodes'].includes(event.toolName) &&
+              ['file_read', 'docx_read_nodes'].includes(event.toolName) &&
               event.result?.ok === true
           )
           return {

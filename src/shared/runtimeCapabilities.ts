@@ -23,9 +23,9 @@ type RuntimeToolCatalogEntry = {
 export const RUNTIME_TOOL_CATALOG = {
   terminal_run: { familyId: 'terminal', toolsetId: 'terminal' },
   terminal_read: { familyId: 'terminal', toolsetId: 'terminal' },
-  text_file_read: { familyId: 'text-file', toolsetId: 'text-file' },
-  text_file_search: { familyId: 'text-file', toolsetId: 'text-file' },
-  text_file_edit: { familyId: 'text-file', toolsetId: 'text-file' },
+  file_read: { familyId: 'text-file', toolsetId: 'text-file' },
+  file_search: { familyId: 'text-file', toolsetId: 'text-file' },
+  file_edit: { familyId: 'text-file', toolsetId: 'text-file' },
   kb_search: { familyId: 'kb', toolsetId: 'kb-retrieval' },
   kb_list_documents: { familyId: 'kb', toolsetId: 'kb-retrieval' },
   docx_read_outline: { familyId: 'docx', toolsetId: 'docx-read' },
@@ -68,6 +68,25 @@ export const RUNTIME_TOOL_NAMES = Object.keys(RUNTIME_TOOL_CATALOG) as RuntimeTo
 export const RUNTIME_TOOLSET_IDS = [
   ...new Set(RUNTIME_TOOL_NAMES.map((toolName) => RUNTIME_TOOL_CATALOG[toolName].toolsetId))
 ] as RuntimeToolsetId[]
+
+/**
+ * 历史记录里仍可能保存旧工具名；展示层通过该别名表还原到当前工具，
+ * 避免旧会话的步骤因为目录里找不到名字而退化成 generic。
+ */
+const LEGACY_RUNTIME_TOOL_NAME_ALIASES = {
+  text_file_read: 'file_read',
+  text_file_search: 'file_search',
+  text_file_edit: 'file_edit'
+} as const satisfies Record<string, RuntimeToolName>
+
+export const resolveRuntimeToolName = (toolName: string): RuntimeToolName | undefined => {
+  const normalized =
+    LEGACY_RUNTIME_TOOL_NAME_ALIASES[toolName as keyof typeof LEGACY_RUNTIME_TOOL_NAME_ALIASES] ??
+    toolName
+  return Object.prototype.hasOwnProperty.call(RUNTIME_TOOL_CATALOG, normalized)
+    ? (normalized as RuntimeToolName)
+    : undefined
+}
 
 const RUNTIME_TOOLSET_DISPLAY_NAMES = {
   terminal: '命令执行器',

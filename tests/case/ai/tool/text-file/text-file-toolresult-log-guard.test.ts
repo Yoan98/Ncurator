@@ -26,7 +26,7 @@ describe('ai tool text-file bounded line reader', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['text-file'],
-      description: '验证 text_file_read 的 2000 行、约 50KiB、长行裁剪和 startLine 续读契约。',
+      description: '验证 file_read 的 2000 行、约 50KiB、长行裁剪和 startLine 续读契约。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -38,15 +38,15 @@ describe('ai tool text-file bounded line reader', () => {
         )
         await fs.writeFile(sourcePath, sourceLines.join('\n'), 'utf8')
 
-        const first = await harness.invoke<ReadResult>('text_file_read', { sourcePath })
-        const second = await harness.invoke<ReadResult>('text_file_read', {
+        const first = await harness.invoke<ReadResult>('file_read', { sourcePath })
+        const second = await harness.invoke<ReadResult>('file_read', {
           sourcePath,
           startLine: first.nextStartLine
         })
 
         const manyShortLinesPath = path.join(runtime.workspaceRoot, 'many-short-lines.txt')
         await fs.writeFile(manyShortLinesPath, Array(2_500).fill('x').join('\n'), 'utf8')
-        const lineLimited = await harness.invoke<ReadResult>('text_file_read', {
+        const lineLimited = await harness.invoke<ReadResult>('file_read', {
           sourcePath: manyShortLinesPath
         })
 
@@ -56,13 +56,13 @@ describe('ai tool text-file bounded line reader', () => {
           `${'a'.repeat(TEXT_FILE_READ_MAX_LINE_CHARS - 1)}😀尾部`,
           'utf8'
         )
-        const longLine = await harness.invoke<ReadResult>('text_file_read', {
+        const longLine = await harness.invoke<ReadResult>('file_read', {
           sourcePath: longLinePath
         })
 
         let excessiveLineCountError = ''
         try {
-          await harness.invoke('text_file_read', {
+          await harness.invoke('file_read', {
             sourcePath,
             lineCount: TEXT_FILE_READ_MAX_LINES + 1
           })

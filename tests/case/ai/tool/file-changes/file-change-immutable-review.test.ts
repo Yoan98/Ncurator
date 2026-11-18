@@ -80,7 +80,7 @@ describe('owner file review', () => {
           range: 'A1',
           values: [['Excel B']]
         })
-        await text.invoke('text_file_edit', {
+        await text.invoke('file_edit', {
           sourcePath: textPath,
           action: 'edit',
           edits: [{ oldText: 'Text A', newText: 'Text B' }]

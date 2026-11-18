@@ -161,7 +161,7 @@ export const executeToolCall = async (input: {
     }
     releaseRunFiles(input.ctx.runId)
   }
-  if (/^(docx_|ppt_|excel_|text_file_|image_generate)/.test(input.toolName)) {
+  if (/^(docx_|ppt_|excel_|file_(read|search|edit)|image_generate)/.test(input.toolName)) {
     for (const key of ['sourcePath', 'outputPath']) {
       const sourcePath = input.args[key]
       if (typeof sourcePath === 'string' && !/^https?:/.test(sourcePath))

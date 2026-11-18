@@ -110,12 +110,12 @@ const applyUniqueEdits = (
     const occurrences = countOccurrences(content, oldText)
     if (occurrences === 0) {
       throw new Error(
-        `edits[${editIndex}].oldText was not found in ${sourcePath}. An exact match is required.`
+        `edits[${editIndex}].oldText was not found in ${sourcePath}. Use the exact file text; line numbers from file_read are display-only and must not be included.`
       )
     }
     if (occurrences > 1) {
       throw new Error(
-        `edits[${editIndex}].oldText matches ${occurrences} locations in ${sourcePath}. Each oldText must match exactly one location.`
+        `edits[${editIndex}].oldText matches ${occurrences} locations in ${sourcePath}. Use replaceAll for all matches, or include more surrounding text so it matches exactly once.`
       )
     }
     const start = content.indexOf(oldText)
@@ -154,7 +154,9 @@ const applyReplaceAll = (input: {
   if (oldText === newText) throw new Error(`No changes were made to ${input.sourcePath}.`)
   const matches = findAllOccurrences(input.content, oldText)
   if (matches.length === 0) {
-    throw new Error(`The specified oldText was not found in ${input.sourcePath}.`)
+    throw new Error(
+      `The specified oldText was not found in ${input.sourcePath}. Use the exact file text; line numbers from file_read are display-only and must not be included.`
+    )
   }
   const replacements = matches.map((start) => ({
     start,
@@ -331,6 +333,7 @@ export const buildTextFileCapabilityTools = (
     taskId: buildInput.taskId
   })
 
+  // Activity 的 actionType 是内部稳定键，保留 text_file_*；模型可见工具名已改为 file_*。
   const fileRead = tool(
     async (rawArgs) => {
       const args = rawArgs as FileReadInput

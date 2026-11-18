@@ -1718,6 +1718,10 @@ const ChatPage: React.FC = () => {
       if (scrollJumpFrameRef.current !== null)
         window.cancelAnimationFrame(scrollJumpFrameRef.current)
       scrollJumpFrameRef.current = null
+      if (activeResolveFrameRef.current !== null) {
+        window.cancelAnimationFrame(activeResolveFrameRef.current)
+        activeResolveFrameRef.current = null
+      }
     },
     []
   )
@@ -1775,10 +1779,15 @@ const ChatPage: React.FC = () => {
 
   const scrollToOldestMessageOfDay = useCallback(
     (dayStart: number, messages: ChatMessage[]): boolean => {
-      const element = queryDayJumpElement(dayStart, messages)
-      if (!element) return false
+      const target = queryDayJumpMessage(dayStart, messages)
+      if (!target) return false
+      const element = document.querySelector(`[data-message-id="${target.id}"]`)
+      if (!(element instanceof HTMLElement)) return false
       shouldAutoScrollRef.current = false
       pinMessageToTop(element)
+      // 一次性把左侧节点和右侧波浪条都对齐到落点，不依赖随后的 scroll 事件。
+      setActiveTimelineDayStart(dayStart)
+      setActiveOutlineMessageId(target.id)
       return true
     },
     [pinMessageToTop]
@@ -1827,21 +1836,39 @@ const ChatPage: React.FC = () => {
   } | null => {
     const scrollElement = scrollRef.current
     if (!scrollElement || currentMessages.length === 0) return null
+    const byId = new Map(currentMessages.map((item) => [item.id, item]))
     const containerTop = scrollElement.getBoundingClientRect().top
     let active: ChatMessage | null = null
-    for (const messageItem of currentMessages) {
-      const element = document.querySelector(`[data-message-id="${messageItem.id}"]`)
-      if (!(element instanceof HTMLElement)) continue
-      const rect = element.getBoundingClientRect()
-      if (rect.top <= containerTop + 12) {
-        active = messageItem
+    // 一次查询取本页全部消息节点并按 DOM 顺序扫，避免按 id 逐个 querySelector。
+    for (const element of scrollElement.querySelectorAll<HTMLElement>('[data-message-id]')) {
+      const message = byId.get(element.dataset.messageId || '')
+      if (!message) continue
+      if (element.getBoundingClientRect().top <= containerTop + 12) {
+        active = message
         continue
       }
-      if (!active) active = messageItem
+      if (!active) active = message
       break
     }
     return active ? { dayStart: startOfLocalDay(active.timestamp), messageId: active.id } : null
   }, [currentMessages])
+
+  /** 滚动高亮按帧节流：一帧最多解析一次，且值没变不写 state。 */
+  const activeResolveFrameRef = useRef<number | null>(null)
+  const scheduleActiveFromScroll = useCallback((): void => {
+    if (activeResolveFrameRef.current !== null) return
+    activeResolveFrameRef.current = window.requestAnimationFrame(() => {
+      activeResolveFrameRef.current = null
+      const active = resolveActiveFromScroll()
+      if (!active) return
+      setActiveTimelineDayStart((previous) =>
+        previous === active.dayStart ? previous : active.dayStart
+      )
+      setActiveOutlineMessageId((previous) =>
+        previous === active.messageId ? previous : active.messageId
+      )
+    })
+  }, [resolveActiveFromScroll])
 
   useEffect(() => {
     const dayStart = pendingTimelineJumpDayRef.current
@@ -1880,11 +1907,7 @@ const ChatPage: React.FC = () => {
     const distanceToBottom =
       scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight
     shouldAutoScrollRef.current = distanceToBottom <= SCROLL_BOTTOM_TOLERANCE
-    const active = resolveActiveFromScroll()
-    if (active) {
-      setActiveTimelineDayStart(active.dayStart)
-      setActiveOutlineMessageId(active.messageId)
-    }
+    scheduleActiveFromScroll()
   }
 
   useLayoutEffect(() => {
@@ -3109,8 +3132,9 @@ const ChatPage: React.FC = () => {
     })()
 
     async function bootstrapWorkbench(): Promise<void> {
-      const [, , list, workbenchStateResponse] = await Promise.all([
-        loadWorkspaces(),
+      // 工作地址只影响侧栏路径标签，不挡首屏；模型配置要在恢复界面快照前就绪。
+      void loadWorkspaces()
+      const [, list, workbenchStateResponse] = await Promise.all([
         loadModelConfigs(),
         loadPartners(),
         window.api.workbenchUiStateGet()
@@ -5645,7 +5669,11 @@ const ChatPage: React.FC = () => {
                       />
                     ) : null}
                     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-                      <div className="relative flex min-h-0 min-w-0 flex-1">
+                      <div
+                        className={`relative flex min-h-0 min-w-0 flex-1 ${
+                          isNewSession && currentPartnerId ? '!hidden' : ''
+                        }`}
+                      >
                         <div
                           className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
                           ref={scrollRef}
@@ -5710,8 +5738,9 @@ const ChatPage: React.FC = () => {
 
                       <div
                         className={`nc-floating-composer-shell ${
-                          isNewSession ? 'flex flex-1 items-center justify-center pb-[18vh]' : ''
+                          isNewSession ? 'flex flex-1 items-center justify-center' : ''
                         } ${currentPartnerId ? '' : 'hidden'}`}
+                        data-empty={isNewSession ? 'true' : undefined}
                         data-testid={workbenchSelectors.composerShell}
                       >
                         <div className="mx-auto w-full max-w-[800px]">

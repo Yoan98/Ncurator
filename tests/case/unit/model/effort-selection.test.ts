@@ -61,7 +61,11 @@ describe('parseEffort', () => {
     expect(parseEffort(undefined)).toBeUndefined()
     expect(parseEffort({ ...effort, default: 'medium' })).toBeUndefined()
     expect(parseEffort({ ...effort, options: [...effort.options, { value: 'max', label: '重复' }] })).toBeUndefined()
-    expect(parseEffort({ default: 'low', options: [{ value: 'low', label: '' }] })).toBeUndefined()
+    // 空 label 不算坏配置：退回 value 当文案，而不是丢掉整个档位能力。
+    expect(parseEffort({ default: 'low', options: [{ value: 'low', label: '' }] })).toEqual({
+      default: 'low',
+      options: [{ value: 'low', label: 'low' }]
+    })
     expect(parseEffort({ default: 'low', options: [] })).toBeUndefined()
   })
 })

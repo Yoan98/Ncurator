@@ -109,7 +109,7 @@ describe('workbench result e2e', () => {
             name: 'text_file_saved_before_run_completion',
             matches: (event) =>
               event.type === 'tool_call_result' &&
-              event.toolName === 'text_file_edit' &&
+              event.toolName === 'file_edit' &&
               event.result?.ok === true
           })
           const applyEntryCountDuringRun = await getWorkbenchPrefixLocator(

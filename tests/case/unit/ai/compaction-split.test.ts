@@ -34,7 +34,7 @@ const assistant = (id: string, content: string, extraCalls = 0): ChatMessageLogE
     { id, name: 'docx_read_nodes', args: { sourcePath: `${id}.docx` } },
     ...Array.from({ length: extraCalls }, (_, index) => ({
       id: `${id}-${index + 2}`,
-      name: 'text_file_read',
+      name: 'file_read',
       args: { sourcePath: `${id}-${index + 2}.txt` }
     }))
   ]
@@ -84,7 +84,7 @@ describe('splitLogForCompactionTail', () => {
       logRecord(4, {
         kind: 'tool',
         toolCallId: '1-2',
-        toolName: 'text_file_read',
+        toolName: 'file_read',
         ok: true,
         content: 'bbb'
       })

@@ -45,7 +45,7 @@ describe('AI runs independent of knowledge configuration', () => {
               if (childCalls > 1) childReadConfirmed = call.user.includes('LOCAL_READ_EVIDENCE')
               return childCalls === 1
                 ? buildToolDecision({
-                    toolName: 'text_file_read',
+                    toolName: 'file_read',
                     args: { sourcePath },
                     summary: '读取明确指定的文件'
                   })
@@ -153,7 +153,7 @@ describe('AI runs independent of knowledge configuration', () => {
                   expect(call.user).toContain(EMBEDDING_MODEL_NOT_INSTALLED_ERROR)
                   expect(call.user).toContain('Do not call KB tools again')
                   return buildToolDecision({
-                    toolName: 'text_file_read',
+                    toolName: 'file_read',
                     args: { sourcePath },
                     summary: '读取明确指定的文件'
                   })
@@ -172,7 +172,7 @@ describe('AI runs independent of knowledge configuration', () => {
             )
           ).toBe(true)
           expect(
-            readLatestToolResultDataFromEvents<{ content: string }>(runner.events, 'text_file_read')
+            readLatestToolResultDataFromEvents<{ content: string }>(runner.events, 'file_read')
               .content
           ).toContain('KB_FAILURE_CONTINUED')
           expect(runner.events.some((e) => e.type === 'run_failed')).toBe(false)

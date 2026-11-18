@@ -24,14 +24,14 @@ export const RUNTIME_TOOLSET_CATALOG = {
     countsTowardToolBudget: false,
     title: 'terminal',
     description:
-      '在用户工作区根目录执行和读取命令，并返回终端状态、增量输出、退出状态和用户工作区域文件产物。'
+      '在用户工作区执行命令、运行脚本、构建和测试，并可查找文件位置；返回终端状态、增量输出、退出状态和文件产物。'
   },
   'text-file': {
     familyId: 'text-file',
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'text-file',
-    description: '读取和写入 Markdown、TXT、代码等 UTF-8 普通文本文件。'
+    description: '读取、搜索和修改代码、配置、Markdown、TXT 等 UTF-8 文本文件。'
   },
   'kb-retrieval': {
     familyId: 'kb',

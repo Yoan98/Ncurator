@@ -34,7 +34,7 @@ const RUN1_INPUT =
   '请打开我选中的 cache-retain-note.txt，用一句话告诉我项目代号是什么。不要改文件，也不要学与阅读无关的新技能。'
 const RUN2_INPUT = '还是这份笔记：发布窗口写的是哪一周？一句话回答即可，不要改文件。'
 const RUN3_INPUT = '继续同一份笔记：负责人是谁？一句话确认即可，不要改文件。'
-const TEXT_READ_TOOL_NAMES = new Set(['text_file_read', 'text_file_search'])
+const TEXT_READ_TOOL_NAMES = new Set(['file_read', 'file_search'])
 
 const runUsedTextReadTool = (events: readonly AiRunEvent[]): boolean =>
   events.some(

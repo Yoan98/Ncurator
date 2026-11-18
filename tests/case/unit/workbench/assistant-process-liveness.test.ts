@@ -159,7 +159,7 @@ describe('isBrainThinkingOpenInLog', () => {
 })
 
 describe('activity grouping after toolset naming', () => {
-  it.each(['load_skill', 'load_toolset', 'text_file_read'])(
+  it.each(['load_skill', 'load_toolset', 'file_read'])(
     'groups production %s events into Activity',
     (toolName) => {
       const groups = reduceAssistantProcessGroups([], {

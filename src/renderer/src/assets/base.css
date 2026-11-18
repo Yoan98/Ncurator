@@ -2106,6 +2106,15 @@ textarea,
   margin-top: calc(-1 * var(--nc-composer-overlap, 20px));
 }
 
+/* 新会话没有任何消息需要被渐变遮住：去掉重叠和渐变，让「标题 + 输入框」相对主区真正居中。
+   还原本地对称内边距，避免外壳上下内边距不等导致内容整体下沉。 */
+.nc-floating-composer-shell[data-empty='true'] {
+  margin-top: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  background-image: none;
+}
+
 /* No partner selected: the empty state owns the message area instead of the composer slot. */
 .nc-empty-state {
   position: absolute;

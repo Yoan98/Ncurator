@@ -9,7 +9,7 @@ import type {
   IpcJsonValue,
   RuntimeToolsetId
 } from '../../../../shared/types'
-import { RUNTIME_TOOL_CATALOG, type RuntimeToolName } from '../../../../shared/runtimeCapabilities'
+import { resolveRuntimeToolName } from '../../../../shared/runtimeCapabilities'
 import {
   getAssistantMixedStatus as getMixedStatus,
   getAssistantToolIconKind as getToolIconKind,
@@ -62,11 +62,8 @@ const readNestedObject = (value: IpcJsonObject, key: string): IpcJsonObject | un
     : undefined
 }
 
-const isRuntimeToolName = (toolName: string): toolName is RuntimeToolName =>
-  Object.prototype.hasOwnProperty.call(RUNTIME_TOOL_CATALOG, toolName)
-
 const normalizeToolName = (toolName: string): AssistantToolName =>
-  isRuntimeToolName(toolName) ? toolName : 'unnamed'
+  resolveRuntimeToolName(toolName) ?? 'unnamed'
 
 const text = (
   value: string,

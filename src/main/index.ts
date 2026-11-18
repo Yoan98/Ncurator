@@ -382,6 +382,17 @@ if (!singleInstanceLock) {
   // initialization and is ready to create browser windows.
   // Some APIs can only be used after this event occurs.
   app.whenReady().then(async () => {
+    const startupStartedAt = Date.now()
+    /** 启动耗时打点：`[STARTUP] <ms> <label>` 打在终端里，用来定位冷启动慢在哪一段。 */
+    const markStartup = (label: string): void => {
+      console.log('[STARTUP]', `${Date.now() - startupStartedAt}ms`, label)
+    }
+    // 渲染层会 await 这个 promise：业务 IPC 未注册前不跑启动加载，但窗口和启动画面可以先生出来。
+    let resolveServicesReady = (): void => undefined
+    const servicesReady = new Promise<void>((resolve) => {
+      resolveServicesReady = resolve
+    })
+
     initializeAppRuntime(app.getPreferredSystemLanguages())
     if (getAppRuntime().distribution === 'domestic') {
       if (app.isPackaged && process.platform === 'win32') app.setAsDefaultProtocolClient('ncurator')
@@ -436,10 +447,16 @@ if (!singleInstanceLock) {
     })
     const appUpdateService = new AppUpdateService({ shutdownApp: prepareAppShutdown })
     appUpdateService.initialize()
-    ipcMain.handle(APP_STARTUP_GET_STATUS_CHANNEL, () => ({
-      ...appStartupStatus,
-      ...getAppRuntime()
-    }))
+    ipcMain.handle(APP_STARTUP_GET_STATUS_CHANNEL, async () => {
+      // 兜底：初始化途中抛错时不让渲染层永远等下去，超时后照常放行（业务 IPC 缺失会各自报错）。
+      await Promise.race([
+        servicesReady,
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 15000)
+        })
+      ])
+      return { ...appStartupStatus, ...getAppRuntime() }
+    })
     ipcMain.handle(APP_QUIT_CHANNEL, async () => {
       await prepareAppShutdown()
       app.quit()
@@ -463,13 +480,19 @@ if (!singleInstanceLock) {
         context: { event: 'database-version-too-new' }
       })
       registerOpenExternalHandler()
+      resolveServicesReady()
       createWindow()
+      markStartup('window created (update required)')
       appUpdateService.checkForUpdatesOnLaunch()
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow()
       })
       return
     }
+
+    const mainWindow = createWindow()
+    markStartup('window created')
+    mainWindow.once('ready-to-show', () => markStartup('window ready-to-show'))
 
     const ingestionService = IngestionService.getInstance()
     const embeddingRuntimeClient = new EmbeddingRuntimeClient({
@@ -491,6 +514,7 @@ if (!singleInstanceLock) {
 
     console.log('Starting background initialization of services...')
     await storageService.initialize()
+    markStartup('storage initialized')
     const appSettings = await storageService.appSettings.get()
     initializeAppRuntime(app.getPreferredSystemLanguages(), appSettings)
     appStartupStatus = { mode: 'normal', ...getAppRuntime() }
@@ -513,8 +537,8 @@ if (!singleInstanceLock) {
         })
     })
     await embeddingModelService.initialize()
+    markStartup('embedding model service initialized')
 
-    const mainWindow = createWindow()
     ipcMain.handle('window-cursor-nudge', (event) => {
       const target = BrowserWindow.fromWebContents(event.sender)
       return { sent: target ? injectTrustedPointerMove(target) : false }
@@ -589,6 +613,9 @@ if (!singleInstanceLock) {
             }
           : undefined
     })
+    resolveServicesReady()
+    markStartup('ipc handlers ready')
+
     const wpsSyncService = new WpsSyncService({
       onNotice: (notice) =>
         BrowserWindow.getAllWindows().forEach((window) => {
@@ -665,6 +692,10 @@ if (!singleInstanceLock) {
       // dock icon is clicked and there are no other windows open.
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })
+  }).catch((error) => {
+    // 打一条明确的启动失败标记，再抛回去让全局 unhandledRejection 落到 app.log。
+    console.error('[STARTUP] initialization failed', error)
+    throw error
   })
 
   // Quit when all windows are closed, except on macOS. There, it's common

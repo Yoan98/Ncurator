@@ -266,6 +266,13 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const menuRef = useRef<HTMLDivElement | null>(null)
   const inspectorRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  /**
+   * 每个模型上次选中的档位，键是 configId + modelName。
+   *
+   * 只用于「切走再切回」时恢复用户的选择；模型当前支持的档位仍以目录为准，
+   * 目录里没有这个档位时 normalizeSelectionEffort 会回落到默认档。
+   */
+  const effortMemoryRef = useRef<Map<string, string>>(new Map())
   const manualModelInputRef = useRef<InputRef>(null)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const listboxId = useId()
@@ -623,11 +630,19 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     manual = false,
     keepOpen = false
   ): void => {
-    // 换模型时清掉上一条的强度，由新模型的默认档重新回填（见 normalize 效果）。
+    /*
+     * 换模型时带回该模型上次选过的档位。
+     *
+     * 以前这里一律清空 effort，靠新模型的默认档回填。结果是「选好 max →
+     * 切到别的模型 → 再切回来」档位变回默认，用户以为没保存。
+     * 档位是「每个模型各自的偏好」，按模型身份记住即可。
+     */
+    const remembered = effortMemoryRef.current.get(`${configId}\u0000${modelName}`)
     const selected: WorkbenchSelectedModel = { configId, modelName }
     if (manual || (isSameSelection(value.mainModel, selected) && value.mainModel?.manual)) {
       selected.manual = true
     }
+    if (remembered) selected.effort = remembered
     onChange({ mainModel: selected })
     if (keepOpen) return
     // 选完不立刻关面板：若新模型可调强度，应回到强度卡片让用户接着选档；
@@ -1059,7 +1074,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             value={effortValue!}
             modelLabel={selectedManaged?.label || selectedPreset?.modelLabel || value.mainModel!.modelName}
             disabled={disabled}
-            onChange={(next) => onChange({ mainModel: { ...value.mainModel!, effort: next } })}
+            onChange={(next) => {
+              // 记住该模型选过的档位，切走再切回时能原样恢复。
+              const model = value.mainModel
+              if (model) effortMemoryRef.current.set(`${model.configId}\u0000${model.modelName}`, next)
+              onChange({ mainModel: { ...model!, effort: next } })
+            }}
             onRefresh={() => void refreshCatalog({ showOutcome: true })}
             refreshStatus={catalogRefreshStatus}
             avatar={partnerAvatar}

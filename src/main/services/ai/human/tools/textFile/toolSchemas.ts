@@ -16,13 +16,13 @@ const textFilePathSchema = z
   .min(1)
   .refine((value) => !STRUCTURED_FILE_EXTENSION_PATTERN.test(value), {
     message:
-      'text_file tools only support UTF-8 plain text, not structured documents such as DOCX, PPT/PPTX, PDF or XLS/XLSX'
+      'file tools only support UTF-8 text, not structured documents such as DOCX, PDF, PPTX or XLSX'
   })
   .meta({
     'x-constraint':
-      'text_file tools only support UTF-8 plain text, not structured documents such as DOCX, PPT/PPTX, PDF or XLS/XLSX'
+      'file tools only support UTF-8 text, not structured documents such as DOCX, PDF, PPTX or XLSX'
   })
-  .describe('UTF-8 普通文本文件本机绝对路径；不支持 docx、pptx、pdf、xlsx 等结构化文件')
+  .describe('UTF-8 文本文件绝对路径；不支持 docx、pdf、pptx、xlsx')
 
 const textFileSourcePathField = textFilePathSchema
 
@@ -40,7 +40,7 @@ export const TEXT_FILE_READ_SCHEMA = z.object({
 
 const fileEditItemSchema = z
   .object({
-    oldText: z.string().min(1).describe('被替换的原文片段'),
+    oldText: z.string().min(1).describe('被替换的原文片段，必须唯一匹配；'),
     newText: z.string().describe('替换后的文字')
   })
   .strict()
@@ -59,12 +59,15 @@ export const TEXT_FILE_EDIT_SCHEMA = z.discriminatedUnion('action', [
   z.object({
     sourcePath: textFileSourcePathField,
     action: z.literal('edit').describe('批量文本替换'),
-    edits: z.array(fileEditItemSchema).min(1).describe('替换项列表')
+    edits: z
+      .array(fileEditItemSchema)
+      .min(1)
+      .describe('替换项列表；每项 oldText 必须唯一匹配且互不重叠')
   }),
   z.object({
     sourcePath: textFileSourcePathField,
     action: z.literal('replaceAll').describe('全文替换所有匹配'),
-    oldText: z.string().min(1).describe('被替换的原文片段'),
+    oldText: z.string().min(1).describe('被替换的原文片段，会替换文件中全部匹配；'),
     newText: z.string().describe('替换后的文字')
   })
 ])

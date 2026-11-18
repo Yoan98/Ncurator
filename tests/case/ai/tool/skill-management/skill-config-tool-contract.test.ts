@@ -63,7 +63,7 @@ describe('Skill configuration real tools', () => {
           service.setEnabled('a', ['other', 'report'])
           service.setEnabled('b', ['report'])
           await fs.writeFile(filename, markdown('Updated'))
-          const detail = await reader.invoke('text_file_read', { sourcePath: filename })
+          const detail = await reader.invoke('file_read', { sourcePath: filename })
           const body = service.loadEnabled('a', 'report').body
           await fs.writeFile(filename, 'invalid')
           const error = await tools
@@ -91,7 +91,7 @@ describe('Skill configuration real tools', () => {
                 '\nTAIL-MARKER'
             )
           )
-          const tail = await reader.invoke('text_file_read', {
+          const tail = await reader.invoke('file_read', {
             sourcePath: filename,
             startLine: 990,
             lineCount: 20
@@ -138,7 +138,7 @@ describe('Skill configuration real tools', () => {
               body: 'Read'
             })
           const list = await tools.invoke<{ filePath: string }>('skill_config', { action: 'list' })
-          const listed = await reader.invoke('text_file_read', {
+          const listed = await reader.invoke('file_read', {
             sourcePath: list.filePath,
             startLine: 790,
             lineCount: 20

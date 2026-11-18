@@ -127,7 +127,7 @@ describe('assistant process icons and activity summary', () => {
         completedText: [{ text: '搜索网页 ' }, { text: 'React', param: true }],
         headerShortText: '搜索网页'
       }),
-      ...createToolGroup('text_file_read', 2, {
+      ...createToolGroup('file_read', 2, {
         status: 'failed',
         failedText: [{ text: '读取文件 ' }, { text: 'notes.md', param: true }],
         headerShortText: '读取文件'
@@ -157,7 +157,7 @@ describe('assistant process icons and activity summary', () => {
       'load_toolset',
       'web_search',
       'terminal_run',
-      'text_file_read'
+      'file_read'
     ])
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已完成 4 项')
   })

@@ -91,7 +91,7 @@ describe('ask_user_question contract', () => {
     const queue = buildDispatchQueue([
       { id: 'q1', name: 'ask_user_question', args: { questions: [] } },
       { id: 'q2', name: 'ask_user_question', args: { questions: [] } },
-      { id: 'w', name: 'text_file_edit', args: {} }
+      { id: 'w', name: 'file_edit', args: {} }
     ])
 
     const first = peekDispatchGroup(queue)
@@ -116,7 +116,7 @@ describe('ask_user_question contract', () => {
 
     const handFirst = peekDispatchGroup(
       buildDispatchQueue([
-        { id: 'w', name: 'text_file_edit', args: {} },
+        { id: 'w', name: 'file_edit', args: {} },
         { id: 'q', name: 'ask_user_question', args: { questions: [] } }
       ])
     )

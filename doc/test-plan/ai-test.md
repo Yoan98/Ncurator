@@ -195,7 +195,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend`
 - What：普通文本创建、范围读取、多个唯一编辑、replaceAll、AI-facing 简短结果、修改记录和结构化 diff。
 - Why：普通文本工具是代码、Markdown 和配置文件处理的基础，必须保证 AI 不需要生成或解析 unified diff。
-- How：真实调用 `text_file_read/text_file_edit`，连续执行 create、edit、replaceAll，再从统一修改记录读取 diff artifact 并用 before 内容重放。
+- How：真实调用 `file_read/file_edit`，连续执行 create、edit、replaceAll，再从统一修改记录读取 diff artifact 并用 before 内容重放。
 - Oracle：文件内容正确；结果只包含简短文本；每次写入产生 `text_file` 修改记录与 artifact；结构化 diff 重放等于真实 after。
 
 ##### `text-file-atomic-guards-and-format-preservation`
@@ -209,7 +209,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `text-file-bounded-line-window`
 
 - 测试类型：`backend`
-- What：`text_file_read` 只按行返回有界窗口，覆盖最多 2,000 行、约 51,200 UTF-8 bytes、单行 2,000 字符和 `nextStartLine`。
+- What：`file_read` 只按行返回有界窗口，覆盖最多 2,000 行、约 51,200 UTF-8 bytes、单行 2,000 字符和 `nextStartLine`。
 - Why：工具结果日志已经是多行渲染文本；生产者直接分页比“全量返回后再次 spill”更简单，也不会形成递归落盘。
 - How：真实读取 3,000 行中英文文件、2,500 行短文件、超长单行和越界 `lineCount`，使用返回的 `nextStartLine` 连续读取。
 - Oracle：窗口停在完整行边界；短行最多返回 2,000 行；超长行追加英文裁剪标记且不破坏 Unicode；续读位置连续；超过最大 `lineCount` 被 schema 拒绝。模型 delivery 为 `<content>` 原始行文本 + `totalLines` + 可选 `nextStartLine`，不含路径、行号前缀或英文 footer。
@@ -217,9 +217,9 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `text-file-search-contract`
 
 - 测试类型：`backend`
-- What：`text_file_search` 的 literal/regex 检索返回准确行号、单行超长文本的上下文裁剪与 truncated 标记、命中数上限和无效正则错误。
-- Why：模型可先用搜索定位目标行，再用 `text_file_read(startLine)` 获取最小必要范围。
-- How：真实调用 `text_file_search` 搜索多行文件（literal/regex）、含 emoji 文件（验证码点对齐）、单行超长 toolresult 日志、超过 10 个命中的文件，并构造无效正则。
+- What：`file_search` 的 literal/regex 检索返回准确行号、单行超长文本的上下文裁剪与 truncated 标记、命中数上限和无效正则错误。
+- Why：模型可先用搜索定位目标行，再用 `file_read(startLine)` 获取最小必要范围。
+- How：真实调用 `file_search` 搜索多行文件（literal/regex）、含 emoji 文件（验证码点对齐）、单行超长 toolresult 日志、超过 10 个命中的文件，并构造无效正则。
 - Oracle：行号为 1-based；命中行未超长时 `textContext` 返回整行且 `truncated=false`；单行超长文本裁剪上下文并标记 `truncated`；5 万个命中只保留前 10 条详情，`totalMatchCount` 仍为全量、`returnedMatchCount` 为 10；无效正则报错。
 
 #### pdf 类别
@@ -252,7 +252,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 
 - 测试类型：`backend`
 - What：PDF 工具返回完整正文，统一结果投递层按 `doc/ai-harness/tool-design.md` 第 5 节判定拒绝、全文落盘或内联返回。
-- Why：结果大小由统一投递层判断；仅超过内联字符预算且未超过字节或行数拒绝上限时，全文落盘并提供首尾预览与 `text_file_read` 续读指引。工具层不重复实现大小守卫。
+- Why：结果大小由统一投递层判断；仅超过内联字符预算且未超过字节或行数拒绝上限时，全文落盘并提供首尾预览与 `file_read` 续读指引。工具层不重复实现大小守卫。
 - How：构造 PDF 读取结果，调用 `pdf_read_pages` 检查完整正文正常返回。
 - Oracle：工具层返回完整 `pages` 正文（不携带 `error`），不生成伪造内容，源 PDF 不变。
 
@@ -470,7 +470,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 
 - 测试类型：`backend`
 - What：`web_search` type=fetch 结果过大时不再在工具层硬失败，完整正文直接返回，由 hand 层统一截断并落盘。
-- Why：网页正文可能很长；统一大小守卫上移到 hand 层处理（完整多行文本落盘 `.txt` + 首尾预览 + `text_file_read` 续读），工具层不再对超长正文直接报错。
+- Why：网页正文可能很长；统一大小守卫上移到 hand 层处理（完整多行文本落盘 `.txt` + 首尾预览 + `file_read` 续读），工具层不再对超长正文直接报错。
 - How：启动本地 HTTP server 和测试 Electron CDP host，通过真实冻结 sidecar bin 在专用非持久化 partition 中抓取超长正文页，调用 `web_search({ type: 'fetch', url })`。
 - Oracle：结果返回完整 `markdown`（不携带 `error`），`requestedUrl/finalUrl` 保留，后续截断落盘由 hand 层负责。
 
@@ -547,7 +547,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：提问工具校验 1 至 3 个问题，支持单选、多选、无选项纯文本和用户协作请求；每题允许 0 至 4 个选项，省略或为空均可，单个候选项也可提交；回答前阻止排在其后的副作用工具。
 - Why：信息澄清和用户协作需要可靠等待与反馈；审批权限不能替用户回答或确认操作已完成。
-- How：`ask-user-question.test.ts` 通过生产 `createAiRunContext -> human graph -> real text_file_edit`，只脚本化 brain 输出；另用真实 dispatch 验证多个提问及提问与副作用工具混合时严格按原顺序执行，混合工具与连续提问包含单个候选项，并在 `full_access` 策略下不提供 resolver。
+- How：`ask-user-question.test.ts` 通过生产 `createAiRunContext -> human graph -> real file_edit`，只脚本化 brain 输出；另用真实 dispatch 验证多个提问及提问与副作用工具混合时严格按原顺序执行，混合工具与连续提问包含单个候选项，并在 `full_access` 策略下不提供 resolver。
 - Oracle：run 进入 `waiting_human`；回答前排在提问后的写操作不会执行；结构化 `{ answers: [...] }` tool result 回到下一轮 brain；任一时刻只有一个 pending interaction；`full_access` 不会自动回答。
 
 ##### `hand-invalid-tool-input`
@@ -696,7 +696,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 ##### `human-text-file-search-locate-read`
 
 - 测试类型：`backend / mock-llm`
-- What：通过 `text_file_search` 定位大文本目标行，再用 `text_file_read(startLine/lineCount)` 精确读取目标片段。
+- What：通过 `file_search` 定位大文本目标行，再用 `file_read(startLine/lineCount)` 精确读取目标片段。
 - Why：搜索行号 + 按行窗口是现行大文本定位闭环，不依赖字符偏移和单行序列化结果。
 - How：脚本化 LLM 决策：搜索“第 5000 行” → 从英文结果取得行号 → 从 `startLine=5000` 读取 1 行 → 交付。
 - Oracle：任务完成；真实出现 search 和基于命中行号的 read；模型结果包含目标行内容。
@@ -721,7 +721,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 
 - 测试类型：`backend / mock-llm`
 - What：human 同轮读取大小两个文本文件，大文件收到有界窗口和 `nextStartLine`，小文件保持完整，随后按返回行号续读。
-- Why：`text_file_read` 在工具执行层按行分页；若投影后仍超统一 spill 阈值，则与其他工具一样走 render 后落盘管道。
+- Why：`file_read` 在工具执行层按行分页；若投影后仍超统一 spill 阈值，则与其他工具一样走 render 后落盘管道。
 - How：脚本化 LLM 决策同轮读取两个文件，从大文件 delivery 的 `nextStartLine` 字段提取续读位置后继续读取。
 - Oracle：任务完成；两个独立结果都到达模型；第二次调用使用返回的续读行。
 
@@ -818,7 +818,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：提问与写文件工具同时返回时，按模型返回顺序执行。
 - Why：同一 assistant 消息的每个 `tool_call_id` 都必须得到结果，提问也不能让整轮直接失败。
-- How：生产 graph 收到同一轮 `ask_user_question + text_file_edit`，回答提问后继续消费 dispatch。
+- How：生产 graph 收到同一轮 `ask_user_question + file_edit`，回答提问后继续消费 dispatch。
 - Oracle：先出现提问，回答后文件修改成功；两项结果齐全后才继续 brain 并正常完成。
 
 ##### `human-ask-user-question-runs-multiple-calls-sequentially`
@@ -932,7 +932,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / live`
 - What：真实模型读取临时工作区文件期间收到追加消息，验证读结果先进入 transcript，再按原始 user、工具结果、追加 user 顺序续接。
 - Why：mock 决策可守住图边，但仍需真实模型与生产工具确认工具调用中途的追加会正确停在安全边界，且历史事实能被续接使用。
-- How：让真实模型读取唯一标记文件；真实 `text_file_read` 开始时将 pending callback 设为真。第一轮必须 yielded 且读结果日志包含标记；第二轮携带追加诉求，捕获首个 brain messages 并真实完成。
+- How：让真实模型读取唯一标记文件；真实 `file_read` 开始时将 pending callback 设为真。第一轮必须 yielded 且读结果日志包含标记；第二轮携带追加诉求，捕获首个 brain messages 并真实完成。
 - Oracle：第一轮 `yielded`、确实读取文件、tool log 含唯一标记；第二轮 `completed`，标记所在历史 tool message 位于尾部追加 user 之前；保留 raw LLM I/O 与真实工具事件供人工评估。
 
 ##### `human-clarification-multi-run-live`
@@ -1142,7 +1142,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / live`
 - What：真实模型在上线前阅读 checkout 配置，并直接向用户说明主备地址、超时、重试和 telemetry 是否具备切换条件。
 - Why：读配置是常见的上线前审查场景，用户不需要了解底层工具或要求生成额外文件。
-- How：只给出自然语言的审查诉求；只开放真实 `text_file_read`。
+- How：只给出自然语言的审查诉求；只开放真实 `file_read`。
 - Oracle：任务完成；发生真实读取；源文件 hash 不变；结论质量由 raw logs 人工评估。
 
 ##### `human-text-file-write-checkout-cutover-live`

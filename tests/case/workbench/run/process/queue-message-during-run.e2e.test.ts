@@ -63,7 +63,7 @@ describe('workbench run e2e', () => {
             matches: (event) =>
               event.type === 'tool_call_started' &&
               event.runId === firstRunStarted.runId &&
-              event.toolName === 'text_file_read'
+              event.toolName === 'file_read'
           })
           const firstRunDurationTestId = await runtime.page
             .waitForFunction(
@@ -268,7 +268,7 @@ describe('workbench run e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.readToolName === 'text_file_read' &&
+            result.readToolName === 'file_read' &&
               result.pendingCount === 2 &&
               result.pendingTexts[0]?.includes(FIRST_QUEUED_INPUT) &&
               result.pendingTexts[1]?.includes(SECOND_QUEUED_INPUT) &&
@@ -281,7 +281,7 @@ describe('workbench run e2e', () => {
               result.continuationInput === SECOND_QUEUED_INPUT &&
               /^用时\s*(?:[1-9]\d*分钟)?\d+秒$/u.test(result.firstRunDurationText.trim()) &&
               result.firstRunUserBeforeAssistant &&
-              result.toolResults.some((event) => event.toolName === 'text_file_read' && event.ok),
+              result.toolResults.some((event) => event.toolName === 'file_read' && event.ok),
             {
               name: 'workbench-queues-messages-during-ai-run',
               message:

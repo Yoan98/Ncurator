@@ -15,7 +15,7 @@ describe('ai unit tool schema serialization', () => {
     ])
     const editTool = tool(
       async (args) => String(args.sourcePath),
-      { name: 'text_file_edit', description: 'edit text file', schema: editSchema }
+      { name: 'file_edit', description: 'edit text file', schema: editSchema }
     )
 
     attachProviderToolDefinitions([editTool])
@@ -27,7 +27,7 @@ describe('ai unit tool schema serialization', () => {
         }
       | undefined
     expect(definition?.type).toBe('function')
-    expect(definition?.function.name).toBe('text_file_edit')
+    expect(definition?.function.name).toBe('file_edit')
     expect(definition?.function.parameters.type).toBe('object')
     expect(Array.isArray(definition?.function.parameters.oneOf)).toBe(true)
     expect(definition?.function.parameters.oneOf).toHaveLength(2)
@@ -37,7 +37,7 @@ describe('ai unit tool schema serialization', () => {
     const readSchema = z.object({ sourcePath: z.string() }).strict()
     const readTool = tool(
       async (args) => String(args.sourcePath),
-      { name: 'text_file_read', description: 'read text file', schema: readSchema }
+      { name: 'file_read', description: 'read text file', schema: readSchema }
     )
 
     attachProviderToolDefinitions([readTool])
@@ -51,7 +51,7 @@ describe('ai unit tool schema serialization', () => {
     ])
     const editTool = tool(
       async (args) => String(args.sourcePath),
-      { name: 'text_file_edit', description: 'edit text file', schema: editSchema }
+      { name: 'file_edit', description: 'edit text file', schema: editSchema }
     )
 
     attachProviderToolDefinitions([editTool])

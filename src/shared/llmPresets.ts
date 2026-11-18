@@ -1,5 +1,6 @@
 import type { LLMConfig, LlmProviderId } from './types'
 import { parseCatalogContextWindowTokens } from './freeModels'
+import { parseEffort } from './llmEffort'
 import { LLM_PROVIDER_REGISTRY, resolveLlmProvider } from './llmProvider'
 
 export type LlmPriceTier = 'low' | 'mid' | 'high'
@@ -130,6 +131,14 @@ export const mergePresetCatalogProviders = (
           )
         : []
       if (capabilities.length === 0) continue
+      /*
+       * effort 必须一起带过来。
+       *
+       * 这里原先是逐个字段重建对象，漏掉了 effort —— 后端下发了档位、
+       * 解析层也读到了，但在这里被丢掉。表现就是「馆长模型有强度、
+       * 自定义模型全都没有」，而且缓存里查不到任何 effort 痕迹。
+       */
+      const effort = parseEffort((model as { effort?: unknown }).effort)
       models.push({
         id,
         label,
@@ -137,7 +146,8 @@ export const mergePresetCatalogProviders = (
         priceTier,
         description: typeof model.description === 'string' ? model.description.trim() : '',
         capabilities,
-        contextWindowTokens: parseCatalogContextWindowTokens(model.contextWindowTokens)
+        contextWindowTokens: parseCatalogContextWindowTokens(model.contextWindowTokens),
+        ...(effort && { effort })
       })
     }
     if (models.length === 0) continue

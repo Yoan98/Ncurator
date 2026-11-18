@@ -273,7 +273,7 @@ describe('workbench subagent prefix cache e2e', () => {
             const reads = updates.filter(
               (item) =>
                 item.update.agentId === event.update.agentId &&
-                item.update.action?.toolName === 'text_file_read' &&
+                item.update.action?.toolName === 'file_read' &&
                 item.update.action.status === 'completed'
             )
             expect(reads.length).toBeGreaterThanOrEqual(2)

@@ -55,7 +55,7 @@ export const renderSkillConfigModelResult: ModelResultRenderer = ({ args, data }
       : '暂无可配置的 skill。'
   const output = isObject(data) ? data : {}
   if (typeof output.filePath === 'string')
-    return `完整 Skill 配置清单：${output.filePath}\n可使用 text_file_read 读取。`
+    return `完整 Skill 配置清单：${output.filePath}\n可使用 file_read 读取。`
   return '暂无可配置的 skill。'
 }
 

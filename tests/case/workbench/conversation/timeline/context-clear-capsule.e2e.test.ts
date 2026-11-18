@@ -72,7 +72,7 @@ describe('workbench conversation e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请使用 text_file 工具将 ${source} 的全文替换为 after clear。请实际写入，最后只回复完成。`
+            `请使用 file_edit 工具将 ${source} 的全文替换为 after clear。请实际写入，最后只回复完成。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,

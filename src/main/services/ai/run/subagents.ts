@@ -1,5 +1,5 @@
 import { getAssistantToolItemCopy } from '../../../../shared/assistantToolCopy'
-import { RUNTIME_TOOL_CATALOG, type RuntimeToolName } from '../../../../shared/runtimeCapabilities'
+import { resolveRuntimeToolName } from '../../../../shared/runtimeCapabilities'
 import { randomUUID } from 'node:crypto'
 import { SUBAGENT_EXECUTION_CONCURRENCY } from '../constants'
 import type { AiRunDeps, AiRunStartPayload, AiRunState, SubagentAssignment } from '../types'
@@ -216,12 +216,7 @@ export const createSubagentDispatcher = (
                   } else if (event.type === 'assistant_process_thought') {
                     publicToolText = event.text
                   } else if (event.type === 'tool_call_started') {
-                    const toolName = Object.prototype.hasOwnProperty.call(
-                      RUNTIME_TOOL_CATALOG,
-                      event.toolName
-                    )
-                      ? (event.toolName as RuntimeToolName)
-                      : 'unnamed'
+                    const toolName = resolveRuntimeToolName(event.toolName) ?? 'unnamed'
                     const text = publicToolText.trim()
                       ? publicToolText
                       : getAssistantToolItemCopy(toolName, 'running', event.input)

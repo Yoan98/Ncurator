@@ -109,7 +109,7 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 | 条件                                   | 行为                                                                                                                   |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | > 51,200 UTF-8 bytes **或** > 2,000 行 | `ok: false`，提示缩小范围                                                                                              |
-| 否则 > 32,000 字符                     | 全文落盘 `userData/partners/{id}/runtime/toolresult/<runId>/` 目录，返回 head/tail 预览 + 路径 + `text_file_read` 指引 |
+| 否则 > 32,000 字符                     | 全文落盘 `userData/partners/{id}/runtime/toolresult/<runId>/` 目录，返回 head/tail 预览 + 路径 + `file_read` 指引 |
 | 否则                                   | 整段直出 ToolMessage                                                                                                   |
 
 实现：`buildModelToolResultDelivery`（`shared/modelToolResult.ts`）。
@@ -128,7 +128,7 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 | 族                    | 典型工具                                         | 格式要点                                              |
 | --------------------- | ------------------------------------------------ | ----------------------------------------------------- |
 | **A** 纯 prose        | 各类 edit / mutation                             | 单行确认，如文件已更新                                |
-| **B** XML envelope    | `text_file_read`、`pdf_read_pages`、`read_image` | `<file path="…">` + 行号或正文                        |
+| **B** XML envelope    | `file_read`、`pdf_read_pages`、`read_image` | `<file path="…">` + 行号或正文                        |
 | **C** 终端流 + marker | `terminal_run`、`terminal_read`                  | 输出正文 + `[status: …]` 等方括号标记                 |
 | **D** 分组纯文本      | search / list / outline；`web_search`（search）  | 标题 + 分组列表；SERP 用 rank / title / url / snippet |
 | **E** Markdown/Web    | `web_search`（fetch）、`browser_use`（extract）  | 不可信内容前缀 + Markdown 正文                        |

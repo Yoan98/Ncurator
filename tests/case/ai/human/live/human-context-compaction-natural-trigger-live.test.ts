@@ -187,7 +187,7 @@ const collectDocxEvidence = (input: {
   const textCreateSourcePaths = filterAiRunEventsByType(input.events, 'tool_call_started')
     .filter(
       (event) =>
-        event.toolName === 'text_file_edit' &&
+        event.toolName === 'file_edit' &&
         successfulToolCallIds.has(event.toolCallId) &&
         event.input.action === 'create'
     )
@@ -347,7 +347,7 @@ describe('ai human live backend', () => {
           const run2TaskCompletionSatisfied =
             result.run2Output?.status === 'completed' &&
             (run2Docx.toolNames.some((toolName) => toolName.startsWith('docx_')) ||
-              run2Docx.toolNames.includes('text_file_edit'))
+              run2Docx.toolNames.includes('file_edit'))
           const run3PrefixCache = collectContinuationPrefixCacheReuse({
             previousRunId: `${runtime.runId}-run-2`,
             nextRunId: `${runtime.runId}-run-3`,

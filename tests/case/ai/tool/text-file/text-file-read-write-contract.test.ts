@@ -35,7 +35,7 @@ describe('ai tool text-file backend', () => {
         ].join('\n')
         await fs.mkdir(path.dirname(sourcePath), { recursive: true })
         await fs.writeFile(sourcePath, original, 'utf-8')
-        const createResult = await harness.invoke<string>('text_file_edit', {
+        const createResult = await harness.invoke<string>('file_edit', {
           sourcePath: path.join(runtime.workspaceRoot, 'notes', 'generated.txt'),
           action: 'create',
           content: 'generated\n'
@@ -45,12 +45,12 @@ describe('ai tool text-file backend', () => {
           startLine: number
           endLine: number
           totalLines: number
-        }>('text_file_read', {
+        }>('file_read', {
           sourcePath,
           startLine: 2,
           lineCount: 2
         })
-        const editResult = await harness.invoke<string>('text_file_edit', {
+        const editResult = await harness.invoke<string>('file_edit', {
           sourcePath,
           action: 'edit',
           edits: [
@@ -58,7 +58,7 @@ describe('ai tool text-file backend', () => {
             { oldText: 'const retries = 1', newText: 'const retries = 3' }
           ]
         })
-        const replaceAllResult = await harness.invoke<string>('text_file_edit', {
+        const replaceAllResult = await harness.invoke<string>('file_edit', {
           sourcePath,
           action: 'replaceAll',
           oldText: 'OLD_API_URL',
@@ -144,7 +144,7 @@ describe('ai tool text-file backend', () => {
 
         let duplicateError = ''
         try {
-          await harness.invoke('text_file_edit', {
+          await harness.invoke('file_edit', {
             sourcePath: path.join(runtime.workspaceRoot, 'keywords.txt'),
             action: 'edit',
             edits: [{ oldText: 'key=aa', newText: 'key=bb' }]
@@ -153,7 +153,7 @@ describe('ai tool text-file backend', () => {
           duplicateError = error instanceof Error ? error.message : String(error)
         }
         const afterFailedEdit = await fs.readFile(sourcePath)
-        const replaceResult = await harness.invoke<string>('text_file_edit', {
+        const replaceResult = await harness.invoke<string>('file_edit', {
           sourcePath: path.join(runtime.workspaceRoot, 'keywords.txt'),
           action: 'replaceAll',
           oldText: 'aa',
@@ -162,7 +162,7 @@ describe('ai tool text-file backend', () => {
         const afterReplace = await fs.readFile(sourcePath)
         let noMatchError = ''
         try {
-          await harness.invoke('text_file_edit', {
+          await harness.invoke('file_edit', {
             sourcePath: path.join(runtime.workspaceRoot, 'keywords.txt'),
             action: 'replaceAll',
             oldText: 'missing',
@@ -172,7 +172,7 @@ describe('ai tool text-file backend', () => {
           noMatchError = error instanceof Error ? error.message : String(error)
         }
         const afterNoMatch = await fs.readFile(sourcePath)
-        const rewriteResult = await harness.invoke<string>('text_file_edit', {
+        const rewriteResult = await harness.invoke<string>('file_edit', {
           sourcePath: path.join(runtime.workspaceRoot, 'keywords.txt'),
           action: 'rewrite',
           content: 'first\nsecond\n'
@@ -199,12 +199,14 @@ describe('ai tool text-file backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.duplicateError.includes('matches 2 locations') &&
+            result.duplicateError.includes('Use replaceAll') &&
             result.unchangedAfterFailedEdit &&
             result.replaceResult ===
               `已在 ${path.join(runtime.workspaceRoot, 'keywords.txt')} 中替换 2 处内容。` &&
             result.hasBom &&
             result.preservedCrlf &&
             result.noMatchError.includes('oldText was not found') &&
+            result.noMatchError.includes('file_read') &&
             result.unchangedAfterNoMatch &&
             result.rewriteResult ===
               `已完整改写文件：${path.join(runtime.workspaceRoot, 'keywords.txt')}。` &&

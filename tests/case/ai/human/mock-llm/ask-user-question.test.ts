@@ -133,7 +133,7 @@ describe('ai human question backend', () => {
                   throw new Error('提问结果没有回到下一轮模型上下文')
                 }
                 return buildToolDecision({
-                  toolName: 'text_file_edit',
+                  toolName: 'file_edit',
                   args: {
                     sourcePath: filePath,
                     action: 'edit',
@@ -199,7 +199,7 @@ describe('ai human question backend', () => {
             Array.isArray(resolved[0]?.result.answers) &&
             resolved[0].result.answers.length === 3 &&
             result.content === '主色：蓝绿色\n' &&
-            toolResults.some((event) => event.toolName === 'text_file_edit') &&
+            toolResults.some((event) => event.toolName === 'file_edit') &&
             questionEntry?.entry.kind === 'tool' &&
             questionEntry.entry.ok === true &&
             questionEntry.entry.content.includes('userText="蓝绿色"') &&
@@ -248,7 +248,7 @@ describe('ai human question backend', () => {
                   toolCalls: [
                     { name: 'ask_user_question', args: questionArgs },
                     {
-                      name: 'text_file_edit',
+                      name: 'file_edit',
                       args: {
                         sourcePath: filePath,
                         action: 'edit',
@@ -297,7 +297,7 @@ describe('ai human question backend', () => {
             result.content === '主色：蓝色\n' &&
             filterAiRunEventsByType(result.events, 'human_interaction_required').length === 1 &&
             filterAiRunEventsByType(result.events, 'tool_call_result').some(
-              (event) => event.toolName === 'text_file_edit'
+              (event) => event.toolName === 'file_edit'
             ),
           {
             name: 'question-and-side-effect-run-in-order',

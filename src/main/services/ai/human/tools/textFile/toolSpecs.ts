@@ -16,16 +16,16 @@ const fileResourceKey = (args: JsonObject): string | undefined => readStringArg(
 
 export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
   import('zod/v4').infer<typeof TEXT_FILE_READ_SCHEMA>,
-  'text_file_read',
+  'file_read',
   'text-file'
 > = {
-  name: 'text_file_read',
+  name: 'file_read',
   familyId: 'text-file',
   toolsetIds: ['text-file'],
   inputSchema: TEXT_FILE_READ_SCHEMA,
   promptSpec: {
-    name: 'text_file_read',
-    description: '按行读取 UTF-8 普通文本。'
+    name: 'file_read',
+    description: '读取代码、配置、Markdown、TXT 等 UTF-8 文本文件，按行返回内容并支持续读。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
@@ -38,16 +38,16 @@ export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
 
 export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
   import('zod/v4').infer<typeof TEXT_FILE_SEARCH_SCHEMA>,
-  'text_file_search',
+  'file_search',
   'text-file'
 > = {
-  name: 'text_file_search',
+  name: 'file_search',
   familyId: 'text-file',
   toolsetIds: ['text-file'],
   inputSchema: TEXT_FILE_SEARCH_SCHEMA,
   promptSpec: {
-    name: 'text_file_search',
-    description: '在文本文件中按文字或正则搜索。'
+    name: 'file_search',
+    description: '在代码、配置、Markdown、TXT 等 UTF-8 文本文件中按文字或正则搜索。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
@@ -58,16 +58,17 @@ export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
 
 export const TEXT_FILE_EDIT_TOOL_SPEC: HumanToolSpec<
   import('zod/v4').infer<typeof TEXT_FILE_EDIT_SCHEMA>,
-  'text_file_edit',
+  'file_edit',
   'text-file'
 > = {
-  name: 'text_file_edit',
+  name: 'file_edit',
   familyId: 'text-file',
   toolsetIds: ['text-file'],
   inputSchema: TEXT_FILE_EDIT_SCHEMA,
   promptSpec: {
-    name: 'text_file_edit',
-    description: '创建或修改 UTF-8 普通文本文件。'
+    name: 'file_edit',
+    description:
+      '创建或修改代码、配置、Markdown、TXT 等 UTF-8 文本文件；支持新建、整体改写、精确替换和全文替换。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'mutating',

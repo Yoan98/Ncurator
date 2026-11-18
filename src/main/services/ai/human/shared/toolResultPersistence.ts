@@ -34,7 +34,7 @@ export const buildTruncatedToolResultMessage = (input: {
   [
     'Result too large to include inline.',
     `Full result: ${input.filePath}`,
-    `You MUST call text_file_read tool to read the full result. Do not use the terminal to open or search this file.`,
+    `You MUST call file_read tool to read the full result. Do not use the terminal to open or search this file.`,
     `Size: ${input.totalChars.toLocaleString('en-US')} characters; ${input.totalBytes.toLocaleString('en-US')} UTF-8 bytes; ${input.totalLines.toLocaleString('en-US')} lines.`,
     'Preview (head):',
     input.head,

@@ -158,6 +158,7 @@ export const buildTextFileSearchTool = (
     taskId: buildInput.taskId
   })
 
+  // Activity 的 actionType 是内部稳定键，保留 text_file_*；模型可见工具名已改为 file_*。
   return tool(
     async (rawArgs) => {
       const args = rawArgs as FileSearchInput
