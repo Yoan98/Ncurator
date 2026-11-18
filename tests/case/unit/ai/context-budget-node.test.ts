@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createContextBudgetNode } from '../../../../src/main/services/ai/human/node/contextBudgetNode'
+import { projectBrainMessagesFromLog } from '../../../../src/main/services/ai/human/memory/brainMessageProjection'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { isWorkspaceInstructionsMessage } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
@@ -157,6 +158,50 @@ describe('ai unit context budget node', () => {
       await node(state)
       expect(cache.messages).toHaveLength(3)
       expect(cache.messages?.[1] && isWorkspaceInstructionsMessage(cache.messages[1])).toBe(true)
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('projects the run history and inserts workspace instructions before the current user', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'ncurator-context-budget-graph-'))
+    try {
+      await writeFile(join(directory, 'AGENTS.md'), '# Graph rules\n\nRead docs first.')
+      const events: AiRunEvent[] = []
+      const userMessageId = 'user-graph'
+      const records: ChatMessageLogRecord[] = [
+        budgetLogRecord(1, {
+          kind: 'user',
+          messageId: userMessageId,
+          content: '<user_context>改代码</user_context>',
+          input: '改代码',
+          context: { selectedReferences: [], attachments: [] }
+        })
+      ]
+      const ctx = {
+        ...createBaseContext(events),
+        workspaceRoots: [directory],
+        userMessageId,
+        loadMessageLog: async () => records,
+        appendMessageLog: async () => undefined
+      } satisfies AiRunContext
+      const state = createInitialHumanState({
+        taskId: 'task-workspace-agents-graph',
+        userInput: '改代码'
+      })
+      const projection = projectBrainMessagesFromLog({ records, ctx, state })
+      const cache = createHumanRuntimeCache()
+      cache.messages = [new SystemMessage('system'), ...projection.messages]
+      cache.currentUserLogAppended = true
+      const node = createContextBudgetNode({ ctx, cache })
+
+      await node(state)
+
+      expect(cache.messages).toHaveLength(3)
+      expect(cache.messages?.[0]?.getType()).toBe('system')
+      expect(String(cache.messages?.[0]?.content)).not.toContain('# Graph rules')
+      expect(cache.messages?.[1] && isWorkspaceInstructionsMessage(cache.messages[1])).toBe(true)
+      expect(String(cache.messages?.[2]?.content)).toContain('改代码')
     } finally {
       await rm(directory, { recursive: true, force: true })
     }

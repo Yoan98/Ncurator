@@ -27,7 +27,12 @@ export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error'] as const
 
 export const HUMAN_MAX_ACTIVE_TOOLS = 30
 export const HUMAN_GRAPH_RECURSION_LIMIT = 2000
-export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 256_000
+/**
+ * 目录没下发 `contextWindowTokens` 时的模型窗口假设，同时是 effectiveWindow 的上限。
+ * 已知窗口：只当上限，窗口 ≥ 593_750 时封顶到 475_000。
+ * 未知窗口：当窗口假设，实际预算 = floor(475_000 × 0.8) = 380_000。
+ */
+export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 475_000
 export const CONTEXT_WINDOW_UTILIZATION_RATIO = 0.8
 export const CONTEXT_COMPACTION_TAIL_RATIO = 0.1
 export const HUMAN_ROUND_EXECUTION_KINDS = ['toolset_loading', 'skill_loading', 'hand'] as const

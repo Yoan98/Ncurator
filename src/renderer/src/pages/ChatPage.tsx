@@ -2429,6 +2429,18 @@ const ChatPage: React.FC = () => {
       const opened = await window.api.partnerOpen({ partnerId, limit: 30 })
       if (partnerSwitchRequestRef.current !== requestId) return
       const uiState = partnerUiStatesRef.current[partnerId] || opened.uiState || null
+      {
+        const g = globalThis as unknown as { __effortOpenDebug?: string[] }
+        g.__effortOpenDebug = g.__effortOpenDebug || []
+        g.__effortOpenDebug.push(
+          JSON.stringify({
+            partnerId,
+            hasOpenedUiState: Boolean(opened.uiState),
+            mem: opened.uiState?.composer?.modelSelection?.effortMemory ?? null,
+            model: opened.uiState?.composer?.modelSelection?.mainModel?.modelName ?? null
+          })
+        )
+      }
       applyPartnerUiState(partnerId, uiState)
       setActiveTimelineDayStart(null)
       pendingTimelineJumpDayRef.current = null
@@ -2601,20 +2613,15 @@ const ChatPage: React.FC = () => {
             freeModels,
             presetProviders: nextPresetProviders
           })
-        const firstModel = pickFallbackWorkbenchModel({
-          configs: [],
-          modelListsByConfigId: {},
-          freeModels,
-          presetProviders: nextPresetProviders
-        })
-        /* 目录加载后重建选择时必须带上 effortMemory：
-           否则每次刷新模型列表都会把各模型记住的档位清空。 */
+        /* 配置列表为空时不能判定原选择有效性：resolveSelectedWorkbenchModel 拿不到
+           config 会返回 null，随后回退到「第一个可用模型」，把用户存下的选择换掉。
+           此时保留原选择，等配置加载完成后再校正。 */
         const nextSelection: WorkbenchModelSelection = {
           mainModel:
-            resolveModel(modelSelectionRef.current.mainModel) ||
-            (isFreeModelConfigId(modelSelectionRef.current.mainModel?.configId || '')
-              ? null
-              : firstModel),
+            modelSelectionRef.current.mainModel
+              ? resolveModel(modelSelectionRef.current.mainModel) ||
+                modelSelectionRef.current.mainModel
+              : null,
           ...(modelSelectionRef.current.effortMemory && {
             effortMemory: modelSelectionRef.current.effortMemory
           })
@@ -2692,6 +2699,17 @@ const ChatPage: React.FC = () => {
         freeModels,
         presetProviders
       })
+    /*
+     * 配置尚未加载完时不要校正：此时 resolveSelectedWorkbenchModel 找不到 config
+     * 会返回 null，进而回退到「第一个可用模型」，把用户存下的选择换成别的模型。
+     * 表现就是重启后模型和档位都变了。等配置到位再判定。
+     */
+    const selectedConfigId = modelSelection.mainModel.configId
+    const configKnown =
+      isManagedModelConfigId(selectedConfigId) ||
+      isFreeModelConfigId(selectedConfigId) ||
+      modelConfigs.some((config) => config.id === selectedConfigId)
+    if (!configKnown) return
     const nextSelection: WorkbenchModelSelection = {
       mainModel:
         resolveModel(modelSelection.mainModel) ||
@@ -2707,6 +2725,20 @@ const ChatPage: React.FC = () => {
       ...(modelSelection.effortMemory && { effortMemory: modelSelection.effortMemory })
     }
     if (JSON.stringify(nextSelection) === JSON.stringify(modelSelection)) return
+    {
+      const g = globalThis as unknown as { __effortDebug?: string[] }
+      g.__effortDebug = g.__effortDebug || []
+      g.__effortDebug.push(
+        JSON.stringify({
+          beforeModel: modelSelection.mainModel?.modelName,
+          beforeMem: modelSelection.effortMemory,
+          afterModel: nextSelection.mainModel?.modelName,
+          afterMem: nextSelection.effortMemory,
+          remoteCount: (modelListsByConfigId[selectedConfigId] || []).length,
+          presetProviders: presetProviders.map((provider) => provider.providerId)
+        })
+      )
+    }
     modelSelectionRef.current = nextSelection
     setModelSelection(nextSelection)
     void persistUiStateForKey(key, {

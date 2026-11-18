@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { isWorkspaceInstructionsMessage } from '../../../../src/main/services/ai/human/node/utils/messageTail'
+import { projectMessagesForMainModel } from '../../../../src/main/services/ai/human/memory/multimodal'
 import { ensureWorkspaceInstructionsMessage } from '../../../../src/main/services/ai/human/workspaceInstructionContext'
 
 const temporaryDirectories: string[] = []
@@ -43,6 +44,8 @@ describe('ai unit workspace instruction context', () => {
     expect(inserted && isWorkspaceInstructionsMessage(inserted)).toBe(true)
     expect(String(inserted?.content)).toContain(join(root, 'AGENTS.md'))
     expect(String(inserted?.content)).toContain('Read docs first.')
+    const projected = await projectMessagesForMainModel(cache.messages || [])
+    expect(projected[1]).toBe(inserted)
 
     await ensureWorkspaceInstructionsMessage({ ctx: { workspaceRoots: [root] }, cache })
     expect(cache.messages).toHaveLength(3)
@@ -80,6 +83,32 @@ describe('ai unit workspace instruction context', () => {
       cache: secondCache
     })
     expect(String(secondCache.messages?.[1]?.content)).toContain('Version two')
+  })
+
+  it('does not rescan when AGENTS.md appears after the run started', async () => {
+    const root = await createTemporaryDirectory()
+    const cache = createHumanRuntimeCache()
+    cache.messages = [new SystemMessage('system'), createCurrentUser('do work')]
+
+    await ensureWorkspaceInstructionsMessage({ ctx: { workspaceRoots: [root] }, cache })
+    await writeFile(join(root, 'AGENTS.md'), '# Late file')
+    await ensureWorkspaceInstructionsMessage({ ctx: { workspaceRoots: [root] }, cache })
+
+    expect(cache.messages?.some(isWorkspaceInstructionsMessage)).toBe(false)
+  })
+
+  it('keeps the cached message when AGENTS.md disappears mid-run', async () => {
+    const root = await createTemporaryDirectory()
+    await writeFile(join(root, 'AGENTS.md'), '# Initial rules')
+    const cache = createHumanRuntimeCache()
+    cache.messages = [new SystemMessage('system'), createCurrentUser('do work')]
+
+    await ensureWorkspaceInstructionsMessage({ ctx: { workspaceRoots: [root] }, cache })
+    await rm(join(root, 'AGENTS.md'))
+    await ensureWorkspaceInstructionsMessage({ ctx: { workspaceRoots: [root] }, cache })
+
+    expect(cache.messages?.[1] && isWorkspaceInstructionsMessage(cache.messages[1])).toBe(true)
+    expect(String(cache.messages?.[1]?.content)).toContain('# Initial rules')
   })
 
   it('reinserts the cached message after the array is rebuilt without it', async () => {

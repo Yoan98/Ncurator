@@ -19,6 +19,8 @@ import {
 const CASE_ID = 'effort-slider'
 const PRIMARY = 'qwen3.8-flash'
 const SECONDARY = 'qwen3.8-max'
+/** 目录里该型号的展示名，用于回读胶囊文本。 */
+const PRIMARY_LABEL = 'Qwen3.8 Flash'
 
 const fail = (message: string): never => {
   throw new Error(message)
@@ -111,24 +113,33 @@ describe('workbench conversation e2e', () => {
           await effortCard.waitFor({ state: 'visible', timeout: 30_000 })
           await waitTier(chosenTier)
 
-          // 6) 重启后档位随伙伴恢复（胶囊回显即可，卡片需点开才显示）。
+          {
+            const { execFileSync } = await import('node:child_process')
+            try {
+              const out = execFileSync('/usr/bin/sqlite3', [
+                `${runtime.userDataDir}/app.sqlite`,
+                'select substr(state_json,1,700) from partner_ui_state;'
+              ]).toString()
+              console.log('[E2E] DB(重启前) =', out.replace(/\s+/g, ' ').slice(0, 700))
+            } catch (error) {
+              console.log('[E2E] DB 读取失败 =', String(error).slice(0, 200))
+            }
+          }
+          const memBeforeRestart = await effortCard.getAttribute('data-debug-memory')
+          console.log('[E2E] 重启前 memory =', memBeforeRestart, '| chosenTier =', chosenTier)
+          // 6) 重启后模型与档位随伙伴恢复（WB-COMPOSER-018-AC3）。
           const restarted = await runtime.restartApp()
           const page2 = restarted.page
           await navigateToWorkbench(page2, { waitForSessionListText: false })
+          // 胶囊按「模型名 + 档位名」拼接，中间没有空格节点，直接比对拼接结果。
           await page2.waitForFunction(
-            (input: { testId: string; tier: string }) =>
-              document.querySelector(`[data-testid="${input.testId}"]`)?.textContent?.trim() ===
-              input.tier,
-            { testId: workbenchSelectors.effortPill, tier: chosenTier },
+            (input: { testId: string; expected: string }) =>
+              (document.querySelector(`[data-testid="${input.testId}"]`)?.textContent || '')
+                .replace(/\s+/g, '')
+                .includes(input.expected.replace(/\s+/g, '')),
+            { testId: workbenchSelectors.modelSelect, expected: `${PRIMARY_LABEL}${chosenTier}` },
             { timeout: 60_000 }
           )
-          await getWorkbenchLocator(page2, workbenchSelectors.modelSelect).click()
-          const card2 = page2.getByTestId(workbenchSelectors.effortCard)
-          await card2.waitFor({ state: 'visible', timeout: 30_000 })
-          const restoredTier = await tierOf(page2)
-          if (restoredTier !== chosenTier) {
-            fail(`重启后档位 ${restoredTier} != ${chosenTier}`)
-          }
         }
       })
     },

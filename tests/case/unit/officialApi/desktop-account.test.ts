@@ -157,7 +157,7 @@ it('reads managed pricing with the active account and drops a response delivered
     const refreshed = await readManagedModels(fixture.account)
     expect(refreshed).toMatchObject({ status: 'ready', models: [{ pricing: { discountRate: '0.82' } }] })
     expect(await lookupCatalogModelContextTokens(selection)).toBe(96_000)
-    expect(await lookupCatalogModelContextTokens({ ...selection, configId: managedModelConfigId('42') })).toBe(256_000)
+    expect(await lookupCatalogModelContextTokens({ ...selection, configId: managedModelConfigId('42') })).toBe(475_000)
     expect(requests).toBe(2)
     if (refreshed.status === 'ready') expect(refreshed.models[0]).not.toHaveProperty('priceTier')
     const previous = readManagedModels(fixture.account)

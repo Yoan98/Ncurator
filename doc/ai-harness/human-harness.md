@@ -617,8 +617,8 @@ Compaction 会重建消息前缀；Skill 首次加载、绑定或正文变化会
 `context_budget` 节点判定。有效窗口：
 
 ```text
-modelContext = 馆长/免费/推荐目录 contextWindowTokens | 缺失/自定义 → 256_000
-effectiveWindow = min(256_000, floor(modelContext × 0.8))
+modelContext = 馆长/免费/推荐目录 contextWindowTokens | 缺失/自定义 → 475_000
+effectiveWindow = min(475_000, floor(modelContext × 0.8))
 ```
 
 - 预算 > **effectiveWindow** 才压。没到线不压。有真实 brain usage 时用 `usage + delta`；compaction 后需等下一轮真实 usage（`post_compaction`）。
@@ -631,7 +631,7 @@ effectiveWindow = min(256_000, floor(modelContext × 0.8))
 
 只认伙伴 log。可见行：`seq > historyFloorSeq` 且 `kind` 为 `user | assistant | tool`。已压进 checkpoint 的原文不再进压缩模型。按 **组**（一条 `user` 一组，或一条 `assistant` 带上紧随的 `tool`，含挂在 tool 上的图）从末尾往回累加 token；一条 `tool` 若带 `images[]`，按「ToolMessage + 图片 Human」估，与 `messagesFromLogEntries` 一致。
 
-- 额度：`floor(effectiveWindow × 10%)`（`CONTEXT_COMPACTION_TAIL_RATIO`）。默认 `modelContext=256k` 时 effectiveWindow 204_800、tail 20_480。测试 / live 只 override `modelContextWindowTokens`（真实窗），effective 与 tail 由同一公式算出。历史压缩无上限。
+- 额度：`floor(effectiveWindow × 10%)`（`CONTEXT_COMPACTION_TAIL_RATIO`）。`modelContext` 缺失/自定义时 effectiveWindow 380_000、tail 38_000；目录窗口 ≥ 593_750 时封顶到 effectiveWindow 475_000、tail 47_500；更小的窗口只按 80% 缩放。测试 / live 只 override `modelContextWindowTokens`（真实窗），effective 与 tail 由同一公式算出。历史压缩无上限。
 - 真 User = `kind === 'user'`。图片不是 log 行，Compact User 不是 log 行，都不能当切点。碰到 User **不停**（整组可留在 tail）。
 - 切断必须落在完整组上，禁止拆开一对 tool_call / result。单轮自己大于 keep 时允许切在轮中间（split）。
 - 刀落在 `user`：只做历史压缩（该 user 起为 tail）。刀落在 `assistant|tool`：往前最近 `user` 到刀 = 当前轮压缩；再往前 = 历史压缩。

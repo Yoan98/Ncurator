@@ -626,6 +626,14 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - How：生产 `AiRunService.run`、真实文本工具、正式文件与 Store；只脚本化模型决策，沿用追加消息测试的调度回调，在真实工具结果后通知待处理消息。续接使用同一 ownerRunId；另一轮在保存后由脚本模型返回不可重试错误。
 - Oracle：yield 后正式 B 已保存但无审核；续接最终 B2 的审核以 v4 完整文本保存 A/B2，且仅一条 owner 记录，不保留中间 B；主 run 失败后审核完整保存首次 A 与成功保存的 B，临时输入清理、正式文件保留。
 
+##### `human-workspace-agents-injection`
+
+- 测试类型：backend / mock-llm；suite `human`，group `mock-llm`。
+- What：每轮 brain 请求在 System 后恰好携带一条工作区根 `AGENTS.md` 的 user 消息；指令内容含来源绝对路径，不写 transcript，System 不含工作区正文。
+- Why：项目规则不能依赖模型主动读文件，也不能写进 log 或 System；同时守住消息位置、轮次间不重复写入。
+- How：生产 `createHumanTestRunner`、真实 graph、context budget、存储与文本工具；临时工作区根写 `AGENTS.md`，只脚本化 brain 为 `load_toolset` 后交付，通过 `chatToolsWrapper` 捕获每轮 `request.messages`，运行后读回 message log。
+- Oracle：至少两轮 brain 请求；每轮 `messages[0]` 为 System、索引 1 为 workspace instructions、当前 user 在其后，且指令数量恰好一条；指令含 `AGENTS.md` 绝对路径和正文；System 不含正文；log 的 user 行不含 `AGENTS.md` 正文。发现、大小写、多根、截断和缓存重插由 `workspace-instructions` 与 `workspace-instruction-context` unit 补充。
+
 ##### `human-subagent-isolation`
 
 - 测试类型：backend / mock-llm。
