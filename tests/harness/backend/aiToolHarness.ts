@@ -59,6 +59,7 @@ type TerminalToolHarnessOptions = {
   retainedScrollbackChars?: number
   readMaxChars?: number
   maxConcurrentSessions?: number
+  maxSessionsPerChat?: number
 }
 
 const createToolInvoker = (tools: readonly ToolLike[]) => {
@@ -185,7 +186,8 @@ export const createTerminalToolHarness = (
     yieldMs: Math.max(50, Number(options.yieldMs || 3000)),
     retainedScrollbackChars: Math.max(1024, Number(options.retainedScrollbackChars || 120_000)),
     readMaxChars: options.readMaxChars,
-    maxConcurrentSessions: options.maxConcurrentSessions
+    maxConcurrentSessions: options.maxConcurrentSessions,
+    maxSessionsPerChat: options.maxSessionsPerChat
   })
   const built = buildTerminalCapabilityTools({
     ctx,

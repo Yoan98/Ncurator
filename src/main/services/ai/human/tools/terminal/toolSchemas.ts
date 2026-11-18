@@ -20,4 +20,18 @@ export const TERMINAL_READ_SCHEMA = z.object({
     .describe('上次读取结束位置；省略时从会话起始位置读取')
 })
 
-export type { TerminalReadOutput, TerminalRunOutput, TerminalToolStatus } from './outputTypes'
+export const TERMINAL_STOP_SCHEMA = z.object({
+  terminalId: z
+    .string()
+    .trim()
+    .min(1)
+    .describe('要中断并关闭的终端会话 ID（terminal_run 返回的 terminalId）')
+})
+
+export type {
+  TerminalReadOutput,
+  TerminalRunOutput,
+  TerminalSessionLimitOutput,
+  TerminalStopOutput,
+  TerminalToolStatus
+} from './outputTypes'

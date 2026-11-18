@@ -23,6 +23,7 @@ type RuntimeToolCatalogEntry = {
 export const RUNTIME_TOOL_CATALOG = {
   terminal_run: { familyId: 'terminal', toolsetId: 'terminal' },
   terminal_read: { familyId: 'terminal', toolsetId: 'terminal' },
+  terminal_stop: { familyId: 'terminal', toolsetId: 'terminal' },
   file_read: { familyId: 'text-file', toolsetId: 'text-file' },
   file_search: { familyId: 'text-file', toolsetId: 'text-file' },
   file_edit: { familyId: 'text-file', toolsetId: 'text-file' },

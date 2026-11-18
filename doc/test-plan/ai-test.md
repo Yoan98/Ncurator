@@ -432,6 +432,14 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - How：通过 tool harness 在隔离目录构建生产终端工具，分别执行 `pwd`、单命令内 `cd + pwd`、写文件后的长命令、持续输出与非零退出；携带返回的 `readEndPosition` 调用 `terminal_read`。以 `sleep … & wait`（Windows `Start-Process … -Wait`）验证分离执行，以 `echo redirect-ok 2>&1` 验证输出流合并；指定 `maxWaitSeconds` 观察到点后命令仍运行。
 - Oracle：目录查询和切换成功；长命令返回 `running`，增量读取包含真实输出并最终 `succeeded`；非零退出为 `failed`。写文件只落磁盘，不产生修改记录；分离执行和重定向成功，包含对应输出标记。`maxWaitSeconds` 到点返回时命令仍在运行，对齐 `WB-TERMINAL-001-AC8`。分页字符上限、`hasMoreOutput` / 游标连续读取和 Windows `Set-Location -LiteralPath` 由 `tests/case/unit/ai/terminal-session-manager.test.ts` 补充；生产入口默认主目录不由本隔离 backend 验证。
 
+##### `terminal-stop-and-session-limit`
+
+- 测试类型：`backend`
+- What：单轮并发达到上限时，`terminal_run` 返回可回收的会话清单；`terminal_stop` 能中断并关闭指定会话，随后同轮可继续执行；终端默认非交互环境。
+- Why：卡死的分页器或交互命令不能把 chat 的终端额度永久占满；模型需要可执行的回收入口，且 `git diff` / `git log` 等不应停在分页器等待按键。
+- How：通过 tool harness 限定 `maxConcurrentSessions: 1`、`maxSessionsPerChat: 4`，先启动长命令让其 `running`，再执行第二条命令触发上限，随后调用 `terminal_stop` 关闭长命令并重试；读取 `GIT_PAGER` 与 `CI`，并在临时 git 仓库执行多屏 `git log`。
+- Oracle：上限错误携带运行中会话的 `terminalId`；`terminal_stop` 返回 `stopped` 且后续命令成功；`GIT_PAGER=cat`、`CI=1`；多屏 `git log` 直接结束而不是停在分页器。跨轮不阻塞与 LRU 回收由 `tests/case/unit/ai/terminal-session-manager.test.ts` 补充。
+
 #### web-browsing 类别
 
 ##### `web-search-fetch-page-by-url`

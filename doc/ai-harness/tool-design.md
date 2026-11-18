@@ -106,11 +106,11 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 工具执行 → 结构化 `ToolCallResult` → `modelResult.render*` → `renderedText`；成功结果的**整段文本**按以下规则处理，失败结果经错误渲染后直接投递：
 
-| 条件                                   | 行为                                                                                                                   |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| > 51,200 UTF-8 bytes **或** > 2,000 行 | `ok: false`，提示缩小范围                                                                                              |
+| 条件                                   | 行为                                                                                                              |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| > 51,200 UTF-8 bytes **或** > 2,000 行 | `ok: false`，提示缩小范围                                                                                         |
 | 否则 > 32,000 字符                     | 全文落盘 `userData/partners/{id}/runtime/toolresult/<runId>/` 目录，返回 head/tail 预览 + 路径 + `file_read` 指引 |
-| 否则                                   | 整段直出 ToolMessage                                                                                                   |
+| 否则                                   | 整段直出 ToolMessage                                                                                              |
 
 实现：`buildModelToolResultDelivery`（`shared/modelToolResult.ts`）。
 预览常量：`HEAD=6000` chars，`TAIL=2000` chars。
@@ -125,13 +125,15 @@ boolean 并重新校验。修复成功后按正常工具调用执行，不产生
 
 每个工具保留独立 `renderSuccess`，内部复用 `renderFamilies/` 共享块：
 
-| 族                    | 典型工具                                         | 格式要点                                              |
-| --------------------- | ------------------------------------------------ | ----------------------------------------------------- |
-| **A** 纯 prose        | 各类 edit / mutation                             | 单行确认，如文件已更新                                |
-| **B** XML envelope    | `file_read`、`pdf_read_pages`、`read_image` | `<file path="…">` + 行号或正文                        |
-| **C** 终端流 + marker | `terminal_run`、`terminal_read`                  | 输出正文 + `[status: …]` 等方括号标记                 |
-| **D** 分组纯文本      | search / list / outline；`web_search`（search）  | 标题 + 分组列表；SERP 用 rank / title / url / snippet |
-| **E** Markdown/Web    | `web_search`（fetch）、`browser_use`（extract）  | 不可信内容前缀 + Markdown 正文                        |
+| 族                    | 典型工具                                        | 格式要点                                              |
+| --------------------- | ----------------------------------------------- | ----------------------------------------------------- |
+| **A** 纯 prose        | 各类 edit / mutation；`terminal_stop`           | 单行确认，如文件已更新 / 会话已停止                   |
+| **B** XML envelope    | `file_read`、`pdf_read_pages`、`read_image`     | `<file path="…">` + 行号或正文                        |
+| **C** 终端流 + marker | `terminal_run`、`terminal_read`                 | 输出正文 + `[status: …]` 等方括号标记                 |
+| **D** 分组纯文本      | search / list / outline；`web_search`（search） | 标题 + 分组列表；SERP 用 rank / title / url / snippet |
+| **E** Markdown/Web    | `web_search`（fetch）、`browser_use`（extract） | 不可信内容前缀 + Markdown 正文                        |
+
+`terminal_run` 的失败结果由 `modelResult.renderError` 单独投影：并发上限渲染可回收的会话清单（`terminalId`、命令、运行时长），其余错误回退通用错误渲染。
 
 ### 6.1 控制类工具
 

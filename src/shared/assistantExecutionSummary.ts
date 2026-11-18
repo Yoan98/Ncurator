@@ -87,6 +87,7 @@ const toHeaderShortSegments = (
 const TOOL_UI_KINDS = {
   terminal_run: 'terminal',
   terminal_read: 'terminal',
+  terminal_stop: 'terminal',
   file_read: 'file-read',
   file_search: 'file-read',
   file_edit: 'file-edit',

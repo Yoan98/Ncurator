@@ -187,6 +187,11 @@ const TOOL_ITEM_RENDERERS: Record<RuntimeToolName, ToolItemRenderer> = {
       '读取终端',
       sentence(text('读取终端 '), param(readStringValue(input || {}, 'terminalId') || '运行结果'))
     ),
+  terminal_stop: (input) =>
+    toolCopy(
+      '停止终端',
+      sentence(text('停止终端 '), param(readStringValue(input || {}, 'terminalId') || '会话'))
+    ),
   file_read: (input) =>
     toolCopy('读取文件', sentence(text('读取文件 '), param(readToolFileLabel(input)))),
   file_search: (input) =>

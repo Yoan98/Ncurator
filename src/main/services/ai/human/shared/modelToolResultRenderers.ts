@@ -121,6 +121,38 @@ export const renderTerminalReadModelResult: ModelResultRenderer = ({ data }) => 
   })
 }
 
+export const renderTerminalRunModelError: ModelResultRenderer = ({ toolName, data }) => {
+  const obj = isObject(data) ? data : {}
+  if (readString(obj.error) !== 'terminal_session_limit_reached') {
+    return renderToolError(toolName, data)
+  }
+  const sessions = Array.isArray(obj.sessions) ? obj.sessions.filter(isObject) : []
+  if (sessions.length === 0) {
+    return [
+      'Error: terminal_session_limit_reached',
+      'The current batch is still starting terminal sessions. Wait for it to finish, then retry or call terminal_stop with the returned terminalId.'
+    ].join('\n')
+  }
+  const lines = [
+    'Error: terminal_session_limit_reached',
+    'Terminal sessions for this chat:',
+    ...sessions.map((session) => {
+      const terminalId = readString(session.terminalId) || ''
+      const status = readString(session.status) || 'running'
+      const command = readString(session.command) || '(idle)'
+      const runningSeconds = readNumber(session.runningSeconds) ?? 0
+      return `- terminalId=${terminalId}; status=${status}; command=${command}; running=${String(runningSeconds)}s`
+    }),
+    'Call terminal_stop with one of these terminalId values to free a slot, then retry.'
+  ]
+  return lines.join('\n')
+}
+
+export const renderTerminalStopModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  return `Terminal session ${readString(obj.terminalId) || ''} stopped.`
+}
+
 export const renderTextFileReadModelResult: ModelResultRenderer = ({ args, data }) => {
   const obj = isObject(data) ? data : {}
   const path = readString(args.sourcePath) || ''

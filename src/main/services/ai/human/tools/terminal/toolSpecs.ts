@@ -6,9 +6,11 @@ import type { AiRuntimePlatform } from '../../../types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
 import {
   renderTerminalReadModelResult,
-  renderTerminalRunModelResult
+  renderTerminalRunModelError,
+  renderTerminalRunModelResult,
+  renderTerminalStopModelResult
 } from '../../shared/modelToolResultRenderers'
-import { TERMINAL_READ_SCHEMA, TERMINAL_RUN_SCHEMA } from './toolSchemas'
+import { TERMINAL_READ_SCHEMA, TERMINAL_RUN_SCHEMA, TERMINAL_STOP_SCHEMA } from './toolSchemas'
 
 type TerminalRunToolSpec = HumanToolSpec<
   z.infer<typeof TERMINAL_RUN_SCHEMA>,
@@ -19,6 +21,12 @@ type TerminalRunToolSpec = HumanToolSpec<
 type TerminalReadToolSpec = HumanToolSpec<
   z.infer<typeof TERMINAL_READ_SCHEMA>,
   'terminal_read',
+  'terminal'
+>
+
+type TerminalStopToolSpec = HumanToolSpec<
+  z.infer<typeof TERMINAL_STOP_SCHEMA>,
+  'terminal_stop',
   'terminal'
 >
 
@@ -42,7 +50,10 @@ export const createTerminalRunToolSpec = (
     }
     return { mutability: 'mutating', resourceKey: analysis.resourceKey }
   },
-  modelResult: { renderSuccess: renderTerminalRunModelResult }
+  modelResult: {
+    renderSuccess: renderTerminalRunModelResult,
+    renderError: renderTerminalRunModelError
+  }
 })
 
 export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
@@ -58,5 +69,22 @@ export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
   modelResult: { renderSuccess: renderTerminalReadModelResult }
 }
 
+export const TERMINAL_STOP_TOOL_SPEC: TerminalStopToolSpec = {
+  name: 'terminal_stop',
+  familyId: 'terminal',
+  toolsetIds: ['terminal'],
+  inputSchema: TERMINAL_STOP_SCHEMA,
+  promptSpec: {
+    name: 'terminal_stop',
+    description: '中断并关闭一个终端会话，不新建会话。'
+  },
+  resolveExecutionMeta: () => ({ mutability: 'mutating' }),
+  modelResult: { renderSuccess: renderTerminalStopModelResult }
+}
+
 export const TERMINAL_RUN_TOOL_SPEC = createTerminalRunToolSpec()
-export const TERMINAL_TOOL_SPECS = [TERMINAL_RUN_TOOL_SPEC, TERMINAL_READ_TOOL_SPEC] as const
+export const TERMINAL_TOOL_SPECS = [
+  TERMINAL_RUN_TOOL_SPEC,
+  TERMINAL_READ_TOOL_SPEC,
+  TERMINAL_STOP_TOOL_SPEC
+] as const

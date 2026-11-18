@@ -11,8 +11,12 @@ export const TERMINAL_READ_MAX_CHARS = Math.max(
   Math.floor(TOOL_RESULT_SPILL_MAX_CHARS * TERMINAL_READ_MAX_RATIO)
 )
 
-// 每个 chatSession 最多同时存在的运行中终端数，避免长命令会话无限制堆积。
+// 每个 run 最多同时运行的终端会话数，避免单轮长命令无限制堆积。
 export const TERMINAL_MAX_CONCURRENT_SESSIONS = 5
+
+// 每个 chat 保留的终端会话总数上限。超出时按最久未使用回收旧会话，
+// 避免跨轮遗留的卡死命令永久占满并发额度。
+export const TERMINAL_MAX_SESSIONS_PER_CHAT = 8
 
 // terminal_run 未指定 maxWaitSeconds 时，默认盯命令结束的秒数；到点后让出控制权，命令继续执行。
 export const TERMINAL_DEFAULT_WATCH_SECONDS = 8

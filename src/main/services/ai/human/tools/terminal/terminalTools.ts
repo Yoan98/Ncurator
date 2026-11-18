@@ -12,9 +12,13 @@ import {
   TERMINAL_UNUSABLE_OUTPUT_PLACEHOLDER
 } from './terminalExec'
 import { mapTerminalReadStatus, mapTerminalRunStatus } from './terminalToolStatus'
-import { TERMINAL_MAX_CONCURRENT_SESSIONS } from './terminalConstants'
 import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
-import { createTerminalRunToolSpec, TERMINAL_READ_TOOL_SPEC } from './toolSpecs'
+import type { TerminalSessionEntry, TerminalSessionLimitOutput } from './outputTypes'
+import {
+  createTerminalRunToolSpec,
+  TERMINAL_READ_TOOL_SPEC,
+  TERMINAL_STOP_TOOL_SPEC
+} from './toolSpecs'
 
 type PendingTerminalCommand = {
   terminalId: string
@@ -47,12 +51,46 @@ const buildFailure = (input: { error: string }) => ({ error: input.error })
 
 const SESSION_LIMIT_ERROR = 'terminal_session_limit_reached'
 
-const buildSessionLimitReached = () => ({
+const terminalSessionStatusRank = (status: TerminalSessionEntry['status']): number =>
+  status === 'idle' ? 1 : 0
+
+const listTerminalSessionEntries = (input: {
+  sessionManager: TerminalCapabilityToolsInput['sessionManager']
+  chatSessionId: string
+}): TerminalSessionEntry[] =>
+  input.sessionManager
+    .list({ chatSessionId: input.chatSessionId })
+    .map(
+      (session): TerminalSessionEntry => ({
+        terminalId: session.terminalId,
+        status:
+          session.status === 'running' || session.status === 'stopping' ? session.status : 'idle',
+        command: session.currentCommand || '',
+        runningSeconds: session.startedAt
+          ? Math.max(0, Math.round((Date.now() - session.startedAt) / 1000))
+          : 0
+      })
+    )
+    // 先列正在占额度的会话，模型按顺序回收即可恢复。
+    .sort(
+      (left, right) =>
+        terminalSessionStatusRank(left.status) - terminalSessionStatusRank(right.status)
+    )
+
+const buildSessionLimitReached = (input: {
+  sessions: TerminalSessionEntry[]
+}): TerminalSessionLimitOutput => ({
   error: SESSION_LIMIT_ERROR,
-  hint:
-    `The current chat has reached its limit of ${TERMINAL_MAX_CONCURRENT_SESSIONS} running terminal sessions. ` +
-    'Wait for a command to finish or run kill/pkill/taskkill in a new terminal session to terminate an existing command before retrying. Termination commands are exempt from this limit.'
+  sessions: input.sessions
 })
+
+const findPendingCommand = (input: {
+  partnerId: string
+  terminalId: string
+}): [string, PendingTerminalCommand] | undefined =>
+  Array.from(pendingCommands.entries()).find(
+    ([, value]) => value.partnerId === input.partnerId && value.terminalId === input.terminalId
+  )
 
 const emitTerminalStepStarted = (input: {
   ctx: TerminalToolContext
@@ -256,7 +294,12 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             const message = error instanceof Error ? error.message : String(error)
             const failure =
               message === SESSION_LIMIT_ERROR
-                ? buildSessionLimitReached()
+                ? buildSessionLimitReached({
+                    sessions: listTerminalSessionEntries({
+                      sessionManager: input.sessionManager,
+                      chatSessionId: input.partnerId
+                    })
+                  })
                 : buildFailure({ error: message })
             session.fail(
               failure.error,
@@ -302,8 +345,15 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
                 chatSessionId: input.partnerId,
                 workspaceId: input.workspaceId
               })
-              .then(async (exitCode) => {
-                await finalizeCommand({ commandId: result.commandId, exitCode })
+              .then(async ({ exitCode, returnReason }) => {
+                await finalizeCommand({
+                  commandId: result.commandId,
+                  exitCode,
+                  executionStatus:
+                    returnReason === 'command_stopped' || returnReason === 'terminal_closed'
+                      ? 'cancelled'
+                      : 'completed'
+                })
               })
               .catch((error) => void failCommand(result.commandId, error))
           }
@@ -388,13 +438,11 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               readEndPosition:
                 typeof args.readEndPosition === 'number' ? args.readEndPosition : undefined
             })
-            const pending = Array.from(pendingCommands.entries()).find(
-              ([, value]) =>
-                value.partnerId === input.partnerId &&
-                value.terminalId === result.terminalId &&
-                result.terminalStatus !== 'running'
-            )
-            if (pending && result.exitCode !== null) {
+            const pending = findPendingCommand({
+              partnerId: input.partnerId,
+              terminalId: result.terminalId
+            })
+            if (pending && result.terminalStatus !== 'running' && result.exitCode !== null) {
               await finalizeCommand({ commandId: pending[0], exitCode: result.exitCode })
             }
             const guarded = applyOutputGuards({
@@ -461,5 +509,76 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
     }
   )
 
-  return { tools: [terminalRun, terminalRead], state }
+  const terminalStop = tool(
+    async (args) =>
+      await withToolLifecycle({
+        emitter: toolEvents,
+        toolName: TERMINAL_STOP_TOOL_SPEC.name,
+        args: args as IpcJsonObject,
+        execute: async (session) => {
+          input.ctx.checkCancelled()
+          const terminalId = String(args.terminalId || '').trim()
+          if (!terminalId) {
+            const failure = buildFailure({ error: 'empty terminalId' })
+            session.fail(
+              failure.error,
+              undefined,
+              buildTerminalToolResult({
+                toolName: TERMINAL_STOP_TOOL_SPEC.name,
+                ok: false,
+                data: failure
+              })
+            )
+            return failure
+          }
+          try {
+            const result = await input.sessionManager.stop({
+              terminalId,
+              chatSessionId: input.partnerId,
+              workspaceId: input.workspaceId,
+              closeTerminal: true
+            })
+            const pending = findPendingCommand({ partnerId: input.partnerId, terminalId })
+            const commandId = result.commandId ?? pending?.[0]
+            if (commandId) {
+              await finalizeCommand({
+                commandId,
+                exitCode: result.exitCode ?? 130,
+                executionStatus: 'cancelled'
+              })
+            }
+            const payload = { terminalId, status: 'stopped' as const }
+            session.succeed(
+              undefined,
+              buildTerminalToolResult({
+                toolName: TERMINAL_STOP_TOOL_SPEC.name,
+                ok: true,
+                data: payload
+              })
+            )
+            return payload
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            const failure = buildFailure({ error: message })
+            session.fail(
+              message,
+              undefined,
+              buildTerminalToolResult({
+                toolName: TERMINAL_STOP_TOOL_SPEC.name,
+                ok: false,
+                data: failure
+              })
+            )
+            return failure
+          }
+        }
+      }),
+    {
+      name: TERMINAL_STOP_TOOL_SPEC.name,
+      description: TERMINAL_STOP_TOOL_SPEC.promptSpec.description,
+      schema: TERMINAL_STOP_TOOL_SPEC.inputSchema
+    }
+  )
+
+  return { tools: [terminalRun, terminalRead, terminalStop], state }
 }

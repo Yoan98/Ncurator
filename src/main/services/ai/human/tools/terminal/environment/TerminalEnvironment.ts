@@ -13,11 +13,33 @@ const inheritedEnvironment = (): Record<string, string> =>
     )
   )
 
+// AI 终端必须能自己退出：关闭分页器、编辑器与 Git 凭据提示，避免常见交互把命令挂住。
+// 放在继承环境之后，避免宿主进程里的 PAGER 等反过来影响 AI 终端；显式 manager / session
+// 覆盖仍然优先，保留调试和特殊场景的逃生口。
+const NON_INTERACTIVE_ENVIRONMENT = {
+  PAGER: 'cat',
+  GIT_PAGER: 'cat',
+  GH_PAGER: 'cat',
+  MANPAGER: 'cat',
+  SYSTEMD_PAGER: 'cat',
+  BAT_PAGER: 'cat',
+  LESS: 'FRX',
+  GIT_EDITOR: ':',
+  GIT_SEQUENCE_EDITOR: ':',
+  GIT_MERGE_AUTOEDIT: 'no',
+  GIT_TERMINAL_PROMPT: '0',
+  CI: '1',
+  npm_config_yes: 'true',
+  HOMEBREW_NO_AUTO_UPDATE: '1',
+  PYTHONUNBUFFERED: '1'
+} as const
+
 export const buildTerminalEnvironment = (
   input: TerminalEnvironmentInput
 ): Record<string, string> => {
   const environment = {
     ...inheritedEnvironment(),
+    ...NON_INTERACTIVE_ENVIRONMENT,
     ...input.managerEnvironment,
     ...input.sessionEnvironment,
     TERM: 'xterm-256color'

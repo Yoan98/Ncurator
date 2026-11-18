@@ -30,6 +30,26 @@ describe('terminal platform adapters', () => {
     expect(environment.PYTHONUTF8).toBe('1')
   })
 
+  it('enforces non-interactive defaults unless a session override is explicit', () => {
+    const environment = buildTerminalEnvironment({
+      platform: 'macos',
+      sessionEnvironment: { PAGER: 'less' }
+    })
+
+    expect(environment).toMatchObject({
+      GIT_PAGER: 'cat',
+      GH_PAGER: 'cat',
+      LESS: 'FRX',
+      GIT_EDITOR: ':',
+      GIT_SEQUENCE_EDITOR: ':',
+      GIT_TERMINAL_PROMPT: '0',
+      CI: '1',
+      npm_config_yes: 'true',
+      PYTHONUNBUFFERED: '1',
+      PAGER: 'less'
+    })
+  })
+
   it('keeps protocol literals encoded in shell input and initializes Windows UTF-8', () => {
     const protocol = new TerminalProtocol('sessiontoken')
     const macBootstrap = getTerminalPlatformAdapter('macos').buildBootstrapCommand(protocol)

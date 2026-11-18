@@ -24,7 +24,7 @@ export const RUNTIME_TOOLSET_CATALOG = {
     countsTowardToolBudget: false,
     title: 'terminal',
     description:
-      '在用户工作区执行命令、运行脚本、构建和测试，并可查找文件位置；返回终端状态、增量输出、退出状态和文件产物。'
+      '在用户工作区执行命令、运行脚本、构建和测试，并可查找文件位置、中断终端会话；返回终端状态、增量输出、退出状态和文件产物。'
   },
   'text-file': {
     familyId: 'text-file',
