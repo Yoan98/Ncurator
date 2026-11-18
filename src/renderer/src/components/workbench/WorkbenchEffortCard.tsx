@@ -52,6 +52,7 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
   onPickModel,
   avatar,
   onRefresh,
+  debugMemory,
   refreshStatus = 'idle',
   disabled
 }) => {
@@ -263,6 +264,7 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
   return (
     <div
       data-testid={workbenchSelectors.effortCard}
+      data-debug-memory={debugMemory}
       // 左右内边距比上下小：轨道条两端各内缩 EFFORT_TRACK_RADIUS 才能让形象正对圆头，
       // 内边距再留 18px 的话轨道两侧会显得空一截。14px 让形象右缘距卡片边留 2px 余量。
       className="px-[14px] pb-5 pt-3.5"

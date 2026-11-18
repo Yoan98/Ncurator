@@ -1195,6 +1195,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 
 ## 5. 覆盖边界
 
+- 工作区 `AGENTS.md` 注入由 `tests/case/unit/ai/workspace-instructions.test.ts`、`workspace-instruction-context.test.ts` 和 `context-budget-node.test.ts` 覆盖发现、渲染、截断与消息维护；尚未补 mock-llm 首轮 `request.messages` 快照。
 - 本域 backend 验证工具与 human 执行；Workbench 交互、真实页面和系统应用行为由对应 E2E／人工检查验证。
 - Live 质量依据 raw logs 与实际产物复核，评价写入该次运行结论；测试计划不保存单次评分或通过记录。
 - 跨 run 缓存仍按各 case Oracle 的 85% 门槛验证。`human-partner-resume-with-new-selection-live` 与 `human-skill-eviction-relearn-loop-live` 尚缺满足该门槛的有效通过证据，不能列为已验证通过。

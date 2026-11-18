@@ -1,7 +1,11 @@
-import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages'
+import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createContextBudgetNode } from '../../../../src/main/services/ai/human/node/contextBudgetNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
+import { isWorkspaceInstructionsMessage } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import { resolveEffectiveContextWindowTokens } from '../../../../src/main/services/ai/human/constants'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
@@ -23,7 +27,7 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
     platform: 'macos',
     partnerId: 'partner-1',
     partnerName: '测试伙伴',
-    workspaceRoots: ['/tmp/workspace'],
+    workspaceRoots: [],
     runStartedAt: 0,
     preference: 'default',
     executionPermission: 'review',
@@ -103,6 +107,59 @@ describe('ai unit context budget node', () => {
       kind: 'user',
       context: { contentNodes }
     })
+  })
+
+  it('injects each workspace AGENTS.md after the system prompt once per run', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'ncurator-context-budget-agents-'))
+    try {
+      await writeFile(join(directory, 'AGENTS.md'), '# Workspace rules\n\nRead docs first.')
+      const events: AiRunEvent[] = []
+      const appended: ChatMessageLogEntry[] = []
+      const ctx = {
+        ...createBaseContext(events),
+        workspaceRoots: [directory],
+        appendMessageLog: async (entries: ChatMessageLogEntry[]) => {
+          appended.push(...entries)
+        }
+      }
+      const cache = createHumanRuntimeCache()
+      cache.messages = [
+        new SystemMessage('system'),
+        new HumanMessage({
+          content: 'do work',
+          additional_kwargs: { ncurator_current_user: true }
+        })
+      ]
+      const node = createContextBudgetNode({ ctx, cache })
+      const state = createInitialHumanState({
+        taskId: 'task-workspace-agents',
+        userInput: 'do work'
+      })
+
+      await node(state)
+      expect(cache.messages).toHaveLength(3)
+      expect(cache.messages?.[1] && isWorkspaceInstructionsMessage(cache.messages[1])).toBe(true)
+      expect(String(cache.messages?.[1]?.content)).toContain(join(directory, 'AGENTS.md'))
+      expect(String(cache.messages?.[1]?.content)).toContain('Read docs first.')
+      expect(appended).toHaveLength(1)
+      expect(JSON.stringify(appended)).not.toContain('Read docs first.')
+
+      await node(state)
+      expect(cache.messages).toHaveLength(3)
+
+      cache.messages = [
+        new SystemMessage('system'),
+        new HumanMessage({
+          content: 'after compaction',
+          additional_kwargs: { ncurator_current_user: true }
+        })
+      ]
+      await node(state)
+      expect(cache.messages).toHaveLength(3)
+      expect(cache.messages?.[1] && isWorkspaceInstructionsMessage(cache.messages[1])).toBe(true)
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 
   it('records continue decision with brain context budget snapshot', async () => {

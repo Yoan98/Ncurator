@@ -2607,12 +2607,17 @@ const ChatPage: React.FC = () => {
           freeModels,
           presetProviders: nextPresetProviders
         })
+        /* 目录加载后重建选择时必须带上 effortMemory：
+           否则每次刷新模型列表都会把各模型记住的档位清空。 */
         const nextSelection: WorkbenchModelSelection = {
           mainModel:
             resolveModel(modelSelectionRef.current.mainModel) ||
             (isFreeModelConfigId(modelSelectionRef.current.mainModel?.configId || '')
               ? null
-              : firstModel)
+              : firstModel),
+          ...(modelSelectionRef.current.effortMemory && {
+            effortMemory: modelSelectionRef.current.effortMemory
+          })
         }
         modelSelectionRef.current = nextSelection
         setModelSelection(nextSelection)
@@ -2642,7 +2647,10 @@ const ChatPage: React.FC = () => {
           resolveModel(modelSelectionRef.current.mainModel) ||
           (isFreeModelConfigId(modelSelectionRef.current.mainModel?.configId || '')
             ? null
-            : firstModel)
+            : firstModel),
+        ...(modelSelectionRef.current.effortMemory && {
+          effortMemory: modelSelectionRef.current.effortMemory
+        })
       }
       modelSelectionRef.current = nextSelection
       setModelSelection(nextSelection)
@@ -2694,7 +2702,9 @@ const ChatPage: React.FC = () => {
               modelListsByConfigId,
               freeModels,
               presetProviders
-            }))
+            })),
+      /* 保留各模型的档位记忆，否则启动后第一次校正就把记忆清空。 */
+      ...(modelSelection.effortMemory && { effortMemory: modelSelection.effortMemory })
     }
     if (JSON.stringify(nextSelection) === JSON.stringify(modelSelection)) return
     modelSelectionRef.current = nextSelection
@@ -2744,8 +2754,17 @@ const ChatPage: React.FC = () => {
   const handleModelSelectionChange = useCallback(
     (selection: WorkbenchModelSelection): void => {
       uiStateInteractionVersionRef.current += 1
-      modelSelectionRef.current = selection
-      setModelSelection(selection)
+      /* 档位记忆只增不减：子组件拿到的可能是上一帧的 value，若直接覆盖，
+         刚写入的档位会被旧闭包冲掉，表现为「切回时档位错位」。
+         这里以当前 ref 为基线合并，保证各模型的记忆都能累积下来。 */
+      const previous = modelSelectionRef.current?.effortMemory
+      const merged: WorkbenchModelSelection =
+        previous || selection.effortMemory
+          ? { ...selection, effortMemory: { ...previous, ...selection.effortMemory } }
+          : selection
+      console.log('[effort-debug] merged selection =', JSON.stringify(merged))
+      modelSelectionRef.current = merged
+      setModelSelection(merged)
       const partnerId = currentPartnerIdRef.current
       void persistCurrentUiStateNow({ requireReady: false }).then(() =>
         refreshContextUsage(partnerId)

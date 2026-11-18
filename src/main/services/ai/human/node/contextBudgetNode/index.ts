@@ -1,4 +1,5 @@
 import { refreshUserSkillContext } from '../../userSkillContext'
+import { ensureWorkspaceInstructionsMessage } from '../../workspaceInstructionContext'
 import { randomUUID } from 'node:crypto'
 import type { BrainContextBudgetSnapshot } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
@@ -62,6 +63,7 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
     state = await refreshUserSkillContext({ ...input, state })
+    await ensureWorkspaceInstructionsMessage({ ctx: input.ctx, cache: input.cache })
     input.cache.currentState = state
 
     const contextWindowTokens = resolveEffectiveContextWindowTokens(

@@ -384,32 +384,35 @@ flowchart TD
 
 ### 3.2 Brain messages 标准形态
 
-发给模型的消息由 **System + 若干 User（log `content`）+ 过程（assistant/tool）** 组成。log 里每条 `user.content` 就是当时发给模型的全文。
+发给模型的消息由 **System + 可选 Workspace Instructions + 若干 User（log `content`）+ 过程（assistant/tool）** 组成。log 里每条 `user.content` 就是当时发给模型的全文；Workspace Instructions 是 runtime 合成的 User，不写 log。
 
-**同 run 内（稳态）**——单条 User 紧跟 System，过程在其后：
+**同 run 内（稳态）**——System 后先接可选的 Workspace Instructions，再接单条 User，过程在其后：
 
 ```text
 [System]
-[User]                ← 本 run 的 build 全文；同 run 内不改
-[Assistant / Tool …]  只许末尾 append
+[Workspace Instructions]?  ← 可选；工作区 AGENTS.md 渲染，runtime 合成，不写 log
+[User]                     ← 本 run 的 build 全文；同 run 内不改
+[Assistant / Tool …]       只许末尾 append
 ```
 
 **跨 run resume**——在已有历史末尾再 append 一条新 User；不替换、不改写前面的 User 与过程（第 6 节）。
 
 ```text
 [System]
+[Workspace Instructions]? ← 新 run 重新读取并插回 System 后
 [User]                ← run-1 的 build 全文（log content，保持不变）
 [Assistant / Tool …]  run-1 过程
 [User]                ← run-2 续发，append 在末尾
 ```
 
-| 段                   | 含义                                                                              |
-| -------------------- | --------------------------------------------------------------------------------- |
-| System               | 系统提示                                                                          |
-| User（人说的）       | log `user.content`；当时的 build 全文。图里叫 `[History User]` / `[Current User]` |
-| User（Compact User） | 投影时由 `compaction_checkpoint.summary` 套 `<summary>` 外壳合成；不是 log user   |
-| 过程                 | assistant / tool / 多模态合成 HumanMessage                                        |
-| User（续发）         | 新 run 末尾 append 的 build 全文                                                  |
+| 段                             | 含义                                                                              |
+| ------------------------------ | --------------------------------------------------------------------------------- |
+| System                         | 系统提示                                                                          |
+| User（Workspace Instructions） | 工作区根 `AGENTS.md` 的 runtime 投影；不写 log、不进 UI；压缩后重插               |
+| User（人说的）                 | log `user.content`；当时的 build 全文。图里叫 `[History User]` / `[Current User]` |
+| User（Compact User）           | 投影时由 `compaction_checkpoint.summary` 套 `<summary>` 外壳合成；不是 log user   |
+| 过程                           | assistant / tool / 多模态合成 HumanMessage                                        |
+| User（续发）                   | 新 run 末尾 append 的 build 全文                                                  |
 
 **build user 块**
 
@@ -464,7 +467,8 @@ flowchart TD
 
 **运行态维护**
 
-- 同 run 首次 brain 为 System + User，后续只在末尾追加过程，不改当前 User；currentUserMessageIndex 固定。
+- 同 run 首次 brain 为 System + Workspace Instructions? + User，后续只在末尾追加过程，不改当前 User；currentUserMessageIndex 仅作 runtime 已初始化标记，不参与定位。
+- Workspace Instructions 只进 runtime；compaction 重建消息数组后由 `context_budget` 重插 System 之后，新 run 重新读取。
 - 新 run 在历史末尾追加新 User；历史输入按当时快照保留，新 User 不复制 Compact User。
 - 压缩后整段替换 runtime，恢复标准投影；不能在 System 后直接接 AI／tool。
 - 清空消息后从 System + Current User 开始。
@@ -535,6 +539,26 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 输入数量、源图及编码上限由 read_image 契约维护；本章维护模型消息投影与上下文配额。
 
+### 3.6 工作区指令注入
+
+每个工作地址的根目录可放一份 `AGENTS.md`（文件名大小写不敏感）。`context_budget` 在每次进 brain 前维护一条 runtime 合成的 User 消息，位置固定在 System 之后：
+
+```text
+[System]
+[Workspace Instructions]  ← 可选；runtime 合成，不写 log
+[User]                    ← 本 run 的 build 全文
+[Assistant / Tool …]
+```
+
+- **发现**：只读每个工作地址根目录的 `AGENTS.md`，不向上找 `.git`、不向下递归，不读 `CLAUDE.md` 或 `.local.md`。没有文件的工作区跳过；多个工作区按工作地址顺序各渲染一段，段头写来源绝对路径。
+- **单次加载**：每个 run 第一次 `context_budget` 扫描一次并缓存渲染好的消息对象；后续 `context_budget` 只检查消息数组里是否已有该消息，有就直接返回，不 stat、不比较、不替换。数组因 compaction 重建后，用缓存对象重新插回 System 之后，不再读盘；新 run 使用新 cache 重新扫描。
+- **内容**：`<system-reminder>` 包裹，声明工作区级规则、不得覆盖系统/开发者/用户当前指令；规则要求先读文档时，执行相关修改前必须读取。文件内容里的 `</system-reminder>` 会转义。
+- **预算**：单文件 16 KiB；超过时保留前 10 KiB + 后 6 KiB，中间插入省略标记和完整路径；超过 1 MiB 或非 UTF-8/二进制的源文件跳过。总量不设上限。
+- **边界**：消息只进 runtime cache，不写 `chat_session_message_log`，不投影到 UI；不进 System，避免工作区文件获得系统权限并保护 System 前缀缓存。符号链接 `realpath` 后必须仍在该工作区内。
+- **不更新**：同一 run 内文件变化不刷新，模型本轮修改 `AGENTS.md` 时以自身修改为准；下一 run 重新读取。
+
+实现：`workspaceInstructions.ts`（发现、渲染、截断）与 `workspaceInstructionContext.ts`（缓存与消息插入）。
+
 ---
 
 ## 4. 前缀缓存
@@ -547,10 +571,11 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 一次 brain 请求里，**本轮新内容之前**的全部消息，例如：
 
 ```text
-[System] + [User built₁] + … + tail 已发送段（止于 resume 新增的 User built₂ 之前）
+[System] + [Workspace Instructions]? + [User built₁] + … + tail 已发送段（止于 resume 新增的 User built₂ 之前）
 ```
 
 - System 在本机信息与文件约定 / 工具包目录、当前伙伴 Skill 绑定及已加载文件内容不变时保持稳定；**不含**时区与本地时间。Skill 内容刷新规则见第 7.2 节。
+- Workspace Instructions 在 System 之后；同一 run 内不变，compaction 重建后由 `context_budget` 从缓存重插；文件变化只在新 run 生效。
 - tail 只许 **末尾 append** assistant/tool（过程 `toolCalls.args` 见第 2.2 节）。
 - 同 run 内：**不改** 当前 build user；「当前时间」取本 run `runStartedAt`。
 - resume：**append** 新 User 在整段末尾；历史 User / 过程 **一字不改**（来自 log `content`）。
@@ -569,7 +594,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 Compaction 会重建消息前缀；Skill 首次加载、绑定或正文变化会改写 System；工具包装载或淘汰会改变 bindTools schema。它们都可能使对应变化点之后的缓存无法复用，具体分块和命中取决于供应商。消息形态遵循第 3.3 节。
 
 **resume / update_plan 不改写既有 User 段**：resume 只在末尾追加；计划更新不改写 user。load_toolset 不改写 user，但可能改变工具定义；load_skill 则会更新当前 System 说明区。
-设计约束：除 compaction 外，不得 rewrite 已发送的 User 与过程。
+设计约束：除 compaction 外，不得 rewrite 已发送的 User 与过程。Workspace Instructions 是 runtime 合成消息，不属于已发送历史 User，新 run 可按当前文件重建。
 
 ---
 
@@ -619,7 +644,7 @@ effectiveWindow = min(256_000, floor(modelContext × 0.8))
 2. 压缩模型：system 只锁角色（不要继续对话，只出摘要）。格式指令在 user 侧。切点前的原文进 `<conversation>`。历史压缩只用六栏提示词；半截压缩用三栏提示词。不要 `<previous-summary>`。各栏保持简短，保留精确路径、函数名和报错原文。
 3. **先**算 `throughSeq`（全量 log 里 `< firstKept.seq` 的最大 seq，可以是 annotation；tail 为空时取全量最大 seq）。对不上则 **硬停** `compaction_bookmark_unresolved`：不调压缩模型、不发 started、不写 checkpoint。
 4. 再调压缩模型；只 append **一条** `compaction_checkpoint`（`throughSeq`、`summary` 等）。`summary` 是压缩模型原文，不含英文外壳。`context_compaction_started` / `completed` 带切点：`throughSeq`、`firstKeptSeq`、`historyFloorSeq`、`historyFloorKind`（`compaction` / `none`）、`isSplitTurn`、`foldedCount`、`tailCount`。`targetMessageCount` / `sourceMessageCount` 仍等于 `foldedCount`。
-5. 写完 checkpoint 后整段重投影：`projectBrainMessagesFromLog({ appendCurrentUser: false })`，再 `[System, …projection]`。同 run 压完时本轮 user 已在 log：若它 `seq > throughSeq` 会出现在 tail；若半截把它折进摘要，则不会再投影出来，也不得再 append 一条当前 User。
+5. 写完 checkpoint 后整段重投影：`projectBrainMessagesFromLog({ appendCurrentUser: false })`，再 `[System, …projection]`。同 run 压完时本轮 user 已在 log：若它 `seq > throughSeq` 会出现在 tail；若半截把它折进摘要，则不会再投影出来，也不得再 append 一条当前 User。投影后 `context_budget` 会把本次 run 缓存的 Workspace Instructions 重插到 System 之后。
 6. `stage → context_budget`（与图边 `context_compaction → context_budget` 一致），再由 budget 进 brain。同 run 过程继续 `appendLogEntriesToCache`，不每次全量重投影。
 
 压缩 system：
@@ -755,12 +780,12 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 
 ### 7.1 概念
 
-| 概念              | 含义                                                                                         |
-| ----------------- | -------------------------------------------------------------------------------------------- |
-| **Toolset**       | 能力包；`builtin` 默认可 bind；`external` 需 `load_toolset` 后才进入 bindTools               |
-| **Skill**         | 用户说明文件资产；按伙伴启用并经 `load_skill` 加载，不注册工具                               |
-| **Tool**          | 具体执行入口；归属一个或多个 toolset                                                         |
-| **agent-control** | 内置 toolset，承载 `load_toolset`、`load_skill`、`update_plan`、`read_image` |
+| 概念              | 含义                                                                           |
+| ----------------- | ------------------------------------------------------------------------------ |
+| **Toolset**       | 能力包；`builtin` 默认可 bind；`external` 需 `load_toolset` 后才进入 bindTools |
+| **Skill**         | 用户说明文件资产；按伙伴启用并经 `load_skill` 加载，不注册工具                 |
+| **Tool**          | 具体执行入口；归属一个或多个 toolset                                           |
+| **agent-control** | 内置 toolset，承载 `load_toolset`、`load_skill`、`update_plan`、`read_image`   |
 
 `skill-management` 是按需加载的外部工具包，仅提供主伙伴的 `skill_config` 列表查询及批量启停；工具包加载/淘汰与 Skill 绑定、正文加载状态独立。
 
@@ -876,16 +901,16 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 #### 失败码（互斥）
 
-| `failure_code`        | 短标题（气泡 / toast）                       | `rawMessage`     | 说明                                                  |
-| --------------------- | -------------------------------------------- | ---------------- | ----------------------------------------------------- |
-| `user_cancelled`      | 已取消                                       | 可空             | 用户停止；事件为 `run_cancelled`                      |
-| `process_interrupted` | 任务已中断，可继续对话推进                   | 可空             | 进程/重启打断                                         |
-| `llm_request_failed`  | 模型请求失败（已知 providerCode 时具体化）   | 稳定 code 用统一文案；原始上游详情只进日志 | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案 |
-| `output_truncated`    | 模型输出达到长度限制，可发送「继续」接着完成 | 可选             | `finish_reason=length`                                |
-| `input_too_long`      | 当前输入超过模型上下文限制，请缩短后重试     | 可空             | 当前 user alone 超窗；不调 brain，日志边界见第 6.5 节 |
-| `runtime_limit`       | 已达到运行上限，可继续对话推进               | 可空             | 图递归上限                                            |
-| `internal_error`      | 运行遇到内部错误                             | **必留 detail**  | 主动断言（如 compaction bookmark `undefined`）        |
-| `unexpected_error`    | 运行失败，请重试                             | **必留**异常原文 | 未知兜底                                              |
+| `failure_code`        | 短标题（气泡 / toast）                       | `rawMessage`                               | 说明                                                  |
+| --------------------- | -------------------------------------------- | ------------------------------------------ | ----------------------------------------------------- |
+| `user_cancelled`      | 已取消                                       | 可空                                       | 用户停止；事件为 `run_cancelled`                      |
+| `process_interrupted` | 任务已中断，可继续对话推进                   | 可空                                       | 进程/重启打断                                         |
+| `llm_request_failed`  | 模型请求失败（已知 providerCode 时具体化）   | 稳定 code 用统一文案；原始上游详情只进日志 | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案  |
+| `output_truncated`    | 模型输出达到长度限制，可发送「继续」接着完成 | 可选                                       | `finish_reason=length`                                |
+| `input_too_long`      | 当前输入超过模型上下文限制，请缩短后重试     | 可空                                       | 当前 user alone 超窗；不调 brain，日志边界见第 6.5 节 |
+| `runtime_limit`       | 已达到运行上限，可继续对话推进               | 可空                                       | 图递归上限                                            |
+| `internal_error`      | 运行遇到内部错误                             | **必留 detail**                            | 主动断言（如 compaction bookmark `undefined`）        |
+| `unexpected_error`    | 运行失败，请重试                             | **必留**异常原文                           | 未知兜底                                              |
 
 落库：真正失败时 `ai_run.error` = 短标题，`ai_run.failure_raw_message` = 原文；UI：气泡「失败：{title}」+「查看详情」展开 `rawMessage`（及 HTTP / providerCode）。`user_cancelled` 只保留 `cancelled` 状态和 `failure_code`，不写 `error`、不合成 `final_answer`，UI 不生成失败气泡或「已取消」正文；已有 answer 片段与 `ai_file_change` 保留。
 
@@ -949,17 +974,18 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 ## 附录：关键代码索引
 
-| Concern        | 路径                                                            |
-| -------------- | --------------------------------------------------------------- |
-| Graph          | `src/main/services/ai/human/graph/humanGraph.ts`                |
-| Log 投影       | `src/main/services/ai/human/memory/brainMessageProjection.ts`   |
-| Log → 消息     | `src/main/services/ai/human/memory/conversationLogMessages.ts`  |
-| 过程 tail 投影 | `src/main/services/ai/human/memory/transcript.ts`               |
-| 多模态         | `src/main/services/ai/human/memory/multimodal.ts`               |
-| Build user     | `src/main/services/ai/human/prompts/brain.ts`                   |
-| Compaction     | `src/main/services/ai/human/node/contextCompactionNode/`        |
-| Log 存储       | `src/main/services/storage/domains/ChatMessageLogStore.ts`      |
-| Resume         | `src/main/services/ai/ChatRunService.ts`                        |
-| 交付           | `src/main/services/ai/human/node/brainNode/finalizeDelivery.ts` |
-| UI 过程投影    | `src/renderer/src/components/workbench/messageLogProjection.ts` |
-| 工具 registry  | `src/main/services/ai/human/tools/registry.ts`                  |
+| Concern        | 路径                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| Graph          | `src/main/services/ai/human/graph/humanGraph.ts`                                         |
+| Log 投影       | `src/main/services/ai/human/memory/brainMessageProjection.ts`                            |
+| Log → 消息     | `src/main/services/ai/human/memory/conversationLogMessages.ts`                           |
+| 过程 tail 投影 | `src/main/services/ai/human/memory/transcript.ts`                                        |
+| 多模态         | `src/main/services/ai/human/memory/multimodal.ts`                                        |
+| Build user     | `src/main/services/ai/human/prompts/brain.ts`                                            |
+| 工作区指令     | `src/main/services/ai/human/workspaceInstructions.ts` + `workspaceInstructionContext.ts` |
+| Compaction     | `src/main/services/ai/human/node/contextCompactionNode/`                                 |
+| Log 存储       | `src/main/services/storage/domains/ChatMessageLogStore.ts`                               |
+| Resume         | `src/main/services/ai/ChatRunService.ts`                                                 |
+| 交付           | `src/main/services/ai/human/node/brainNode/finalizeDelivery.ts`                          |
+| UI 过程投影    | `src/renderer/src/components/workbench/messageLogProjection.ts`                          |
+| 工具 registry  | `src/main/services/ai/human/tools/registry.ts`                                           |

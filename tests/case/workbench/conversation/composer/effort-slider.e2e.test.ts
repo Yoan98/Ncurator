@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -19,6 +19,10 @@ import {
 const CASE_ID = 'effort-slider'
 const PRIMARY = 'qwen3.8-flash'
 const SECONDARY = 'qwen3.8-max'
+
+const fail = (message: string): never => {
+  throw new Error(message)
+}
 
 describe('workbench conversation e2e', () => {
   it(
@@ -47,13 +51,19 @@ describe('workbench conversation e2e', () => {
 
           const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
           const effortCard = page.getByTestId(workbenchSelectors.effortCard)
-          const effortValue = page.getByTestId(workbenchSelectors.effortValue)
-          const effortPill = page.getByTestId(workbenchSelectors.effortPill)
           const effortModelName = page.getByTestId(workbenchSelectors.effortModelName)
-          const tierOf = async () => (await effortValue.innerText()).trim()
-
-          /** 从模型面板里选一个预设型号。 */
-          const pickModel = async (modelName: string) => {
+          const tierOf = async (target = page) =>
+            (await target.getByTestId(workbenchSelectors.effortValue).innerText()).trim()
+          const waitTier = async (tier: string, target = page): Promise<void> => {
+            await target.waitForFunction(
+              (input: { testId: string; tier: string }) =>
+                document.querySelector(`[data-testid="${input.testId}"]`)?.textContent?.trim() ===
+                input.tier,
+              { testId: workbenchSelectors.effortValue, tier },
+              { timeout: 30_000 }
+            )
+          }
+          const pickModel = async (modelName: string): Promise<void> => {
             const option = page.getByTestId(
               `${workbenchSelectors.modelSelectPresetOptionPrefix}-${modelName}`
             )
@@ -61,61 +71,64 @@ describe('workbench conversation e2e', () => {
             await option.click()
           }
 
-          // 1) 目录配了强度：胶囊回显档位名。
+          // 1) 目录配了强度：卡片出现，档位名与胶囊一致。
           await effortCard.waitFor({ state: 'visible', timeout: 30_000 })
           const initialTier = await tierOf()
-          expect(initialTier.length).toBeGreaterThan(0)
-          await expect
-            .poll(async () => (await effortPill.innerText()).trim(), { timeout: 15_000 })
-            .toBe(initialTier)
+          if (!initialTier) fail('初始档位名为空')
+          await page.waitForFunction(
+            (input: { testId: string; tier: string }) =>
+              document.querySelector(`[data-testid="${input.testId}"]`)?.textContent?.trim() ===
+              input.tier,
+            { testId: workbenchSelectors.effortPill, tier: initialTier },
+            { timeout: 15_000 }
+          )
 
-          // 2) 点档位小点切到最高档，档位名与胶囊同步。
-          const stops = ['low', 'medium', 'xhigh']
-          for (const stop of stops) {
-            expect(
-              await page.getByTestId(`${workbenchSelectors.effortStopPrefix}-${stop}`).count()
-            ).toBe(1)
+          // 2) 档位集合与目录一致：三档齐全，客户端不补齐。
+          for (const stop of ['low', 'medium', 'xhigh']) {
+            const count = await page
+              .getByTestId(`${workbenchSelectors.effortStopPrefix}-${stop}`)
+              .count()
+            if (count !== 1) fail(`档位 ${stop} 的小点数量为 ${count}`)
           }
-          /* 挑一个与初始档不同的档位来切：初始档可能正好是最高档，
-             直接用最高档断言会因「点了没变化」误判。 */
-          const target = initialTier === 'XHigh' ? 'low' : 'xhigh'
-          await page.getByTestId(`${workbenchSelectors.effortStopPrefix}-${target}`).click()
-          await expect.poll(tierOf).not.toBe(initialTier)
-          const chosenTier = await tierOf()
-          await expect
-            .poll(async () => (await effortPill.innerText()).trim(), { timeout: 10_000 })
-            .toBe(chosenTier)
 
-          // 3) 切到另一个开放强度的模型：档位不能沿用上一模型。
+          // 3) 点档位小点切到与初始档不同的档位。
+          const targetTier = initialTier === 'XHigh' ? 'low' : 'xhigh'
+          await page.getByTestId(`${workbenchSelectors.effortStopPrefix}-${targetTier}`).click()
+          await waitTier(targetTier === 'low' ? 'Low' : 'XHigh')
+          const chosenTier = await tierOf()
+
+          // 4) 切到另一个开放强度的模型：档位不能沿用上一模型。
           await effortModelName.click()
           await pickModel(SECONDARY)
           await effortCard.waitFor({ state: 'visible', timeout: 30_000 })
-          const secondaryInit = await tierOf()
-          expect(secondaryInit.length).toBeGreaterThan(0)
-          expect(secondaryInit).not.toBe(chosenTier)
+          const secondaryTier = await tierOf()
+          if (!secondaryTier) fail('切换到第二模型后档位为空')
+          if (secondaryTier === chosenTier) fail(`切换模型后沿用了上一模型的档位 ${chosenTier}`)
 
-          // 4) 切回原模型：恢复它上次选定的档位（WB-COMPOSER-018-AC3）。
+          // 5) 切回原模型：恢复它上次选定的档位（WB-COMPOSER-018-AC3）。
           await effortModelName.click()
           await pickModel(PRIMARY)
           await effortCard.waitFor({ state: 'visible', timeout: 30_000 })
-          expect(await tierOf()).toBe(chosenTier)
+          await waitTier(chosenTier)
 
-          // 5) 重启后档位随伙伴恢复。
+          // 6) 重启后档位随伙伴恢复（胶囊回显即可，卡片需点开才显示）。
           const restarted = await runtime.restartApp()
           const page2 = restarted.page
           await navigateToWorkbench(page2, { waitForSessionListText: false })
-          const effortCard2 = page2.getByTestId(workbenchSelectors.effortCard)
-          const visible = await effortCard2
-            .waitFor({ state: 'visible', timeout: 30_000 })
-            .then(() => true)
-            .catch(() => false)
-          if (!visible) throw new Error('重启后强度卡片未出现')
-          expect((await page2.getByTestId(workbenchSelectors.effortValue).innerText()).trim()).toBe(
-            chosenTier
+          await page2.waitForFunction(
+            (input: { testId: string; tier: string }) =>
+              document.querySelector(`[data-testid="${input.testId}"]`)?.textContent?.trim() ===
+              input.tier,
+            { testId: workbenchSelectors.effortPill, tier: chosenTier },
+            { timeout: 60_000 }
           )
-          expect((await page2.getByTestId(workbenchSelectors.effortPill).innerText()).trim()).toBe(
-            chosenTier
-          )
+          await getWorkbenchLocator(page2, workbenchSelectors.modelSelect).click()
+          const card2 = page2.getByTestId(workbenchSelectors.effortCard)
+          await card2.waitFor({ state: 'visible', timeout: 30_000 })
+          const restoredTier = await tierOf(page2)
+          if (restoredTier !== chosenTier) {
+            fail(`重启后档位 ${restoredTier} != ${chosenTier}`)
+          }
         }
       })
     },

@@ -5,7 +5,7 @@
 ### 1.1 架构相关
 
 - `doc/architecture.md`：项目整体架构、模块关系、领域能力概要。
-- `doc/ai-harness/human-harness.md`：human graph 消息、投影、范围判定、compaction、resume、brain 上下文。
+- `doc/ai-harness/human-harness.md`：human graph 消息、投影、工作区指令注入、范围判定、compaction、resume、brain 上下文。
 - `doc/ai-harness/tool-design.md`：工具 schema、modelResult、统一投递管道。
 - `doc/storage/design.md`：涉及本地数据库、索引、文件资源、目录布局、持久化关系或存储生命周期时阅读。
 - `doc/storage/tables.md`：涉及当前 SQLite / LanceDB 表名、作用或字段时阅读。

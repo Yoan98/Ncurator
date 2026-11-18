@@ -638,13 +638,13 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
      * 切到别的模型 → 再切回来」档位变回默认，用户以为没保存。
      * 档位是「每个模型各自的偏好」，按模型身份记住即可。
      */
-    const remembered = effortMemory?.[`${configId}\u0000${modelName}`]
+    const remembered = effortMemory?.[`${configId}::${modelName}`]
     const selected: WorkbenchSelectedModel = { configId, modelName }
     if (manual || (isSameSelection(value.mainModel, selected) && value.mainModel?.manual)) {
       selected.manual = true
     }
     if (remembered) selected.effort = remembered
-    onChange({ mainModel: selected })
+    onChange({ mainModel: selected, effortMemory })
     if (keepOpen) return
     // 选完不立刻关面板：若新模型可调强度，应回到强度卡片让用户接着选档；
     // 新模型的能力要等 onChange 生效后才解析出来，所以放到下一帧判断。
@@ -746,6 +746,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const selectedManaged = managedModels?.find(model => managedModelConfigId(model.id) === value.mainModel?.configId)
 
   // 当前选中模型对外开放的强度选项；目录未配置时不显示强度卡片。
+  /* 临时调试：把记忆内容暴露到 DOM，便于 E2E 断言真实值。 */
+  const debugMemory = JSON.stringify({ mem: effortMemory ?? null, keys: Object.keys(value) })
   const selectedEffort = selectedManaged?.effort ?? (selectedPreset ? selectedPreset.effort : undefined)
   const effortValue = selectedEffort
     ? resolveEffort(selectedEffort, value.mainModel?.effort)
@@ -766,8 +768,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!selectedEffort) return
     const next = normalizeSelectionEffort(value.mainModel, selectedEffort)
     if (!next || next === value.mainModel) return
-    onChange({ mainModel: next })
-  }, [onChange, selectedEffort, value.mainModel])
+    /* 带上 effortMemory，否则这次回落写回会把各模型的记忆清空。 */
+    onChange({ mainModel: next, effortMemory: value.effortMemory })
+  }, [onChange, selectedEffort, value.mainModel, value.effortMemory])
 
   const groupedModels = useMemo(() => {
     return configs
@@ -1082,9 +1085,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               if (!model) return
               onChange({
                 mainModel: { ...model, effort: next },
-                effortMemory: { ...value.effortMemory, [`${model.configId}\u0000${model.modelName}`]: next }
+                effortMemory: { ...value.effortMemory, [`${model.configId}::${model.modelName}`]: next }
               })
             }}
+            debugMemory={debugMemory}
             onRefresh={() => void refreshCatalog({ showOutcome: true })}
             refreshStatus={catalogRefreshStatus}
             avatar={partnerAvatar}

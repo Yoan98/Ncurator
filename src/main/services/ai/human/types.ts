@@ -1,5 +1,5 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import type { BaseMessage } from '@langchain/core/messages'
+import type { BaseMessage, HumanMessage } from '@langchain/core/messages'
 import type { ChatMessageImageRef } from '../../../../shared/types'
 import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
@@ -97,6 +97,10 @@ export type HumanRuntimeCache = {
   }
   currentUserMessageIndex?: number
   currentUserLogAppended?: boolean
+  workspaceInstructions?: {
+    checked: true
+    message?: HumanMessage
+  }
   currentState?: HumanState
   lastBrainInputTokens?: number
   lastBrainMessageTokenEstimate?: number

@@ -132,7 +132,8 @@ export const DELEGATE_TO_SUBAGENT_TOOL_SPEC: HumanToolSpec<
   inputSchema: DELEGATE_TO_SUBAGENT_SCHEMA,
   promptSpec: {
     name: 'delegate_to_subagent',
-    description: '创建或继续执行子 agent 任务，返回各任务的状态、结果和产物。'
+    description:
+      '创建或继续执行子 agent 任务，返回各任务的状态、结果和产物。遇到复杂或可拆分的诉求，可拆分给子 agent，并结合其结果继续完成用户诉求。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'mutating',

@@ -3,6 +3,7 @@ import { normalizeThoughtText } from '../../../../../../shared/thoughtText'
 
 const CURRENT_USER_MARKER = 'ncurator_current_user'
 const COMPACTION_USER_MARKER = 'ncurator_compaction_user'
+const WORKSPACE_INSTRUCTIONS_MARKER = 'ncurator_workspace_instructions'
 const COMPACTION_TOOL_RESULT_MAX_CHARS = 2000
 
 export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
@@ -24,6 +25,16 @@ export const isCurrentBrainUserMessage = (message: BaseMessage): boolean =>
 
 export const isCompactedBrainUserMessage = (message: BaseMessage): boolean =>
   message.getType() === 'human' && message.additional_kwargs?.[COMPACTION_USER_MARKER] === true
+
+export const createWorkspaceInstructionsMessage = (content: string): HumanMessage =>
+  new HumanMessage({
+    content,
+    additional_kwargs: { [WORKSPACE_INSTRUCTIONS_MARKER]: true }
+  })
+
+export const isWorkspaceInstructionsMessage = (message: BaseMessage): boolean =>
+  message.getType() === 'human' &&
+  message.additional_kwargs?.[WORKSPACE_INSTRUCTIONS_MARKER] === true
 
 const isImageReferenceHuman = (message: BaseMessage): boolean =>
   message.getType() === 'human' && typeof message.content !== 'string'
@@ -64,7 +75,9 @@ const renderAiMessageLines = (message: AIMessage): string[] => {
   const rawContent =
     typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
   const content =
-    typeof message.content === 'string' ? normalizeThoughtText(rawContent) : normalizeCompactionText(rawContent)
+    typeof message.content === 'string'
+      ? normalizeThoughtText(rawContent)
+      : normalizeCompactionText(rawContent)
   if (content) {
     lines.push(`[ai] ${content}`)
   }
