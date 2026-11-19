@@ -615,6 +615,7 @@ export const en = {
     contentChanged: 'Content changed',
     presentationReviewDataIsMissing: 'Presentation review data is missing',
     taskFailed: 'Task failed: {{value1}}',
+    startupFailed: 'Failed to start: {{value1}}',
     queued: 'Queued',
     completed: 'Completed',
     thinking2: 'Thinking',

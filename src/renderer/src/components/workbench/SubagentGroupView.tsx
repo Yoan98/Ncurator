@@ -20,12 +20,15 @@ const SubagentThought: React.FC<{
 }> = ({ child, open, showDelivery }) => {
   const contentRef = useRef<HTMLDivElement>(null)
   const active = child.status === 'running'
+  const failureText = child.result?.trim() || t(($) => $.common.unknownError)
   const text =
-    child.status === 'failed' || child.status === 'blocked'
-      ? t(($) => $.workbench.taskFailed, {
-          value1: child.result?.trim() || t(($) => $.common.unknownError)
-        })
-      : child.status === 'queued'
+    child.status === 'failed' && child.failurePhase === 'startup'
+      ? t(($) => $.workbench.startupFailed, { value1: failureText })
+      : child.status === 'failed' || child.status === 'blocked'
+        ? t(($) => $.workbench.taskFailed, {
+            value1: failureText
+          })
+        : child.status === 'queued'
         ? t(($) => $.workbench.queued)
         : child.status === 'completed' && !showDelivery
           ? t(($) => $.workbench.completed)

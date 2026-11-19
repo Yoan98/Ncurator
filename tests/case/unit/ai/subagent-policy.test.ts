@@ -48,7 +48,12 @@ describe('subagent policy and file leases', () => {
     ).toBe(true)
     expect(
       DELEGATE_TO_SUBAGENT_SCHEMA.safeParse({
-        agents: [{ name: '123456789', instruction: '任务' }]
+        agents: [{ name: '12345678901234567890', instruction: '任务' }]
+      }).success
+    ).toBe(true)
+    expect(
+      DELEGATE_TO_SUBAGENT_SCHEMA.safeParse({
+        agents: [{ name: '123456789012345678901', instruction: '任务' }]
       }).success
     ).toBe(false)
   })

@@ -159,6 +159,8 @@ export type SubagentTaskView = Omit<
   // Live first-visible-character time; historical projection leaves it unset.
   messageStartedAt?: number
   actions: import('../../../../shared/types').SubagentAction[]
+  /** 派发前校验失败时子会话从未创建；执行失败才带真实 childRunId。 */
+  failurePhase?: 'startup' | 'execution'
 }
 
 export type AssistantProcessGroup = {

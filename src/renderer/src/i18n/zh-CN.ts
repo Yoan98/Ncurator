@@ -585,6 +585,7 @@ export const zh = {
     contentChanged: '内容已修改',
     presentationReviewDataIsMissing: '缺少 PPT 审核内容',
     taskFailed: '我干失败了：{{value1}}',
+    startupFailed: '启动失败：{{value1}}',
     queued: '我在排队',
     completed: '已完成',
     thinking2: '我在思考中',

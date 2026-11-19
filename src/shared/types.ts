@@ -1753,6 +1753,8 @@ export type SubagentUpdate = {
   message?: string
   messageId?: string
   result?: string
+  /** 子会话从本次执行开始到取消终态的实际耗时，供下一轮判断进度与续跑。 */
+  elapsedMs?: number
   artifacts?: AiArtifactRef[]
 }
 

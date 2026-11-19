@@ -4,7 +4,7 @@ import {
   deriveMessageLogMessages,
   repairInterruptedToolCalls
 } from '../../../../src/main/services/ai/human/memory/transcript'
-import type { ChatMessageLogEntry } from '../../../../src/shared/types'
+import type { ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../src/shared/types'
 
 const userEntry = (content: string): ChatMessageLogEntry => ({
   kind: 'user',
@@ -78,6 +78,59 @@ describe('ai unit message transcript repair', () => {
     expect(toolMessages.map((message) => message.tool_call_id)).toEqual(['x', 'y'])
     expect(toolMessages[0].content).toBe('{"ok":true}')
     expect(toolMessages[1].content).toContain('interrupted')
+  })
+
+  it('summarizes a cancelled subagent with elapsed time, last action and resumable agent id', () => {
+    const entries: ChatMessageLogEntry[] = [
+      {
+        kind: 'assistant',
+        content: '派发审核',
+        toolCalls: [
+          {
+            id: 'delegate-1',
+            name: 'delegate_to_subagent',
+            args: { agents: [{ name: 'review', instruction: '审核流程图' }] }
+          }
+        ]
+      },
+      {
+        kind: 'annotation',
+        eventType: 'subagent_updated',
+        payload: {
+          agentId: 'agent-1',
+          toolCallId: 'delegate-1',
+          childRunId: 'child-1',
+          name: 'review',
+          task: '审核流程图',
+          status: 'cancelled',
+          result: '已取消',
+          elapsedMs: 2_543_000,
+          action: {
+            id: 'call-1',
+            toolName: 'terminal_run',
+            text: '取时间与绘制代码指纹',
+            status: 'completed'
+          }
+        }
+      }
+    ]
+    const records: ChatMessageLogRecord[] = entries.map((entry, index) => ({
+      id: `record-${index}`,
+      partnerId: 'partner-1',
+      runId: 'run-1',
+      seq: index,
+      entry,
+      createdAt: index
+    }))
+
+    const repaired = repairInterruptedToolCalls(deriveMessageLogMessages({ entries }), records)
+    const toolMessage = repaired.find((message) => message.getType() === 'tool') as ToolMessage
+
+    expect(toolMessage.content).toContain('"status":"cancelled"')
+    expect(toolMessage.content).toContain('已运行 42 分 23 秒')
+    expect(toolMessage.content).toContain('最后动作：取时间与绘制代码指纹')
+    expect(toolMessage.content).toContain('可用 agentId agent-1 续跑')
+    expect(toolMessage.content).toContain('"interrupted":true')
   })
 
   it('keeps messages unchanged when every tool call already has a result', () => {

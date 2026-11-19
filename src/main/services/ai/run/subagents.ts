@@ -79,6 +79,8 @@ export const createSubagentDispatcher = (
         const actions = new Map<string, { text: string; messageId: string }>()
         let publicToolText = ''
         let finished = false
+        let startedAt: number | undefined
+        let lastAction: SubagentUpdate['action']
         const publish = (update: SubagentUpdate): Promise<void> => {
           const next = updates.then(async () => {
             deps.subagentStore.publish(
@@ -102,6 +104,17 @@ export const createSubagentDispatcher = (
           blocker = message
           throw new SubagentBlockedError(message)
         }
+        const finalSnapshotMeta = (
+          status: SubagentUpdate['status']
+        ): Pick<SubagentUpdate, 'action' | 'elapsedMs'> =>
+          status === 'cancelled'
+            ? {
+                ...(lastAction ? { action: lastAction } : {}),
+                ...(startedAt !== undefined
+                  ? { elapsedMs: Math.max(0, Date.now() - startedAt) }
+                  : {})
+              }
+            : {}
         await publish(base)
         return await schedule(async () => {
           if (deps.abortSignal?.aborted || deps.isCancelled()) {
@@ -109,6 +122,7 @@ export const createSubagentDispatcher = (
             await publish(cancelled)
             return cancelled
           }
+          startedAt = Date.now()
           base = { ...base, status: 'running' }
           const controller = new AbortController()
           const cancel = (): void => {
@@ -224,34 +238,38 @@ export const createSubagentDispatcher = (
                           .join('')
                     const actionMessageId = publicToolText.trim() ? messageId : event.toolCallId
                     actions.set(event.toolCallId, { text, messageId: actionMessageId })
+                    const action: NonNullable<SubagentUpdate['action']> = {
+                      id: event.toolCallId,
+                      toolName: event.toolName,
+                      text,
+                      status: 'running'
+                    }
+                    lastAction = action
                     void publish({
                       ...base,
                       messageId: actionMessageId,
-                      action: {
-                        id: event.toolCallId,
-                        toolName: event.toolName,
-                        text,
-                        status: 'running'
-                      }
+                      action
                     })
                   } else if (event.type === 'tool_call_result') {
+                    const action: NonNullable<SubagentUpdate['action']> = {
+                      id: event.toolCallId,
+                      toolName: event.toolName,
+                      text: actions.get(event.toolCallId)?.text || '',
+                      status: event.error || event.result?.ok === false ? 'failed' : 'completed',
+                      feedback:
+                        event.error ||
+                        (typeof event.result?.data === 'object' &&
+                        event.result.data &&
+                        !Array.isArray(event.result.data) &&
+                        typeof event.result.data.message === 'string'
+                          ? event.result.data.message.slice(0, 2000)
+                          : undefined)
+                    }
+                    lastAction = action
                     void publish({
                       ...base,
                       messageId: actions.get(event.toolCallId)?.messageId,
-                      action: {
-                        id: event.toolCallId,
-                        toolName: event.toolName,
-                        text: actions.get(event.toolCallId)?.text || '',
-                        status: event.error || event.result?.ok === false ? 'failed' : 'completed',
-                        feedback:
-                          event.error ||
-                          (typeof event.result?.data === 'object' &&
-                          event.result.data &&
-                          !Array.isArray(event.result.data) &&
-                          typeof event.result.data.message === 'string'
-                            ? event.result.data.message.slice(0, 2000)
-                            : undefined)
-                      }
+                      action
                     })
                   } else if (event.type === 'browser_panel_opened') {
                     deps.sendEvent({ ...event, runId: payload.runId, background: true })
@@ -271,16 +289,17 @@ export const createSubagentDispatcher = (
               }
             )
             finished = true
+            const status: SubagentUpdate['status'] =
+              blocker || output.needsParent
+                ? 'blocked'
+                : output.status === 'completed'
+                  ? 'completed'
+                  : output.status === 'cancelled'
+                    ? 'cancelled'
+                    : 'failed'
             const update: SubagentUpdate = {
               ...base,
-              status:
-                blocker || output.needsParent
-                  ? 'blocked'
-                  : output.status === 'completed'
-                    ? 'completed'
-                    : output.status === 'cancelled'
-                      ? 'cancelled'
-                      : 'failed',
+              status,
               result: (
                 blocker ||
                 (output.status === 'failed'
@@ -288,16 +307,20 @@ export const createSubagentDispatcher = (
                     '未知错误'
                   : output.finalDeliveryMarkdown || output.error || '未知错误')
               ).slice(0, 12000),
-              artifacts: output.finalArtifacts
+              artifacts: output.finalArtifacts,
+              ...finalSnapshotMeta(status)
             }
             await publish(update)
             return update
           } catch (error) {
             finished = true
+            const status: SubagentUpdate['status'] =
+              controller.signal.aborted || deps.isCancelled() ? 'cancelled' : 'failed'
             const update: SubagentUpdate = {
               ...base,
-              status: controller.signal.aborted || deps.isCancelled() ? 'cancelled' : 'failed',
-              result: error instanceof Error ? error.message : String(error ?? '')
+              status,
+              result: error instanceof Error ? error.message : String(error ?? ''),
+              ...finalSnapshotMeta(status)
             }
             await publish(update)
             return update

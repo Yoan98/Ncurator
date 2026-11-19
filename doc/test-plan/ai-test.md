@@ -664,7 +664,7 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - What：持久子会话投影、compaction、同会话续接与缺失派发结果恢复。
 - Why：共用消息链且重启不复活子实例，保留已完成事实。
 - How：生产运行、公共 compaction 节点与投影入口；只脚本化 LLM 决策，日志与存储真实。
-- Oracle：重新打开 SQLite 后 checkpoint、tail、工具包与计划正确；尚未开始执行的排队会话续接时同时收到原任务和新任务；完成后子会话清理，主结果保留。同会话中断续接由 prefix-stability 验证，结果事务及跨伙伴/重复派发由 SQLite unit 验证。子 compaction 不污染主计划/工具包；已完成子结果进入合成反馈，排队及运行中任务均标记中断；修复不写真实 tool 行、不自动派发。
+- Oracle：重新打开 SQLite 后 checkpoint、tail、工具包与计划正确；尚未开始执行的排队会话续接时同时收到原任务和新任务；完成后子会话清理，主结果保留。同会话中断续接由 prefix-stability 验证，结果事务及跨伙伴/重复派发由 SQLite unit 验证。子 compaction 不污染主计划/工具包；已完成子结果进入合成反馈，排队及运行中任务均标记中断，取消子任务保留最后动作、已运行时长与可续跑 agentId；修复不写真实 tool 行、不自动派发。
 
 ##### `human-subagent-approval`
 

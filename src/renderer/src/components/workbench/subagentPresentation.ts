@@ -64,6 +64,7 @@ export const presentSubagentGroups = (groups: AssistantProcessGroup[]): Assistan
             t(($) => $.workbench.temporaryHelper),
           task: readString(assignment, 'instruction') || '',
           status: 'failed',
+          failurePhase: 'startup',
           result,
           message: result,
           messageId: `failure:${item.id}`,

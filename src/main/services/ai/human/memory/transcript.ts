@@ -3,21 +3,37 @@ import { AIMessage, ToolMessage, type BaseMessage } from '@langchain/core/messag
 import type {
   ChatMessageLogEntry,
   ChatMessageLogPlanItem,
-  ChatMessageLogRecord
+  ChatMessageLogRecord,
+  SubagentUpdate
 } from '../../../../../shared/types'
 import { messagesFromLogEntries } from './conversationLogMessages'
 
 const INTERRUPTED_TOOL_CONTENT =
   'Error: The run was interrupted before this tool call could be executed.'
 
+const formatElapsed = (elapsedMs?: number): string | undefined => {
+  if (elapsedMs === undefined || !Number.isFinite(elapsedMs) || elapsedMs < 0) return undefined
+  const totalSeconds = Math.round(elapsedMs / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return minutes > 0 ? `${minutes} 分 ${seconds} 秒` : `${seconds} 秒`
+}
+
+const describeCancelledChild = (child: SubagentUpdate): string => {
+  const parts = [child.result?.trim() || '已取消']
+  const elapsed = formatElapsed(child.elapsedMs)
+  if (elapsed) parts.push(`已运行 ${elapsed}`)
+  const action = child.action?.text.trim()
+  if (action) parts.push(`最后动作：${action}`)
+  if (child.agentId) parts.push(`可用 agentId ${child.agentId} 续跑`)
+  return parts.join('；')
+}
+
 export const repairInterruptedToolCalls = (
   messages: BaseMessage[],
   records: readonly ChatMessageLogRecord[] = []
 ): BaseMessage[] => {
-  const childResults = new Map<
-    string,
-    Map<string, import('../../../../../shared/types').SubagentUpdate>
-  >()
+  const childResults = new Map<string, Map<string, SubagentUpdate>>()
   for (const record of records) {
     if (record.entry.kind !== 'annotation' || record.entry.eventType !== 'subagent_updated')
       continue
@@ -62,6 +78,8 @@ export const repairInterruptedToolCalls = (
                           )
                           const completed =
                             childIndex >= 0 ? remainingChildren.splice(childIndex, 1)[0] : undefined
+                          if (completed?.status === 'cancelled')
+                            return { ...completed, result: describeCancelledChild(completed) }
                           return completed &&
                             completed.status !== 'running' &&
                             completed.status !== 'queued' &&

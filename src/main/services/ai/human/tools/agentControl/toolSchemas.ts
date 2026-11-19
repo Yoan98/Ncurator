@@ -18,8 +18,8 @@ export const DELEGATE_TO_SUBAGENT_SCHEMA = z.object({
               .string()
               .trim()
               .min(1)
-              .max(8)
-              .describe('创建新子agent的名称，不能同时提供 agentId'),
+              .max(20)
+              .describe('创建新子agent的名称，最多 20 个字符，不能同时提供 agentId'),
             instruction: z.string().trim().min(1).describe('交给子agent执行的完整工作指令')
           })
           .strict(),
