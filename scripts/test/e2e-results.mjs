@@ -11,8 +11,7 @@ export const RELEASE_ACCOUNT_CASES = [
   'account-change-during-runs',
   'account-change-pending-child',
   'managed-model-catalog',
-  'managed-request-admission-and-recovery',
-  'managed-image-conversation'
+  'managed-request-admission-and-recovery'
 ]
 
 export const readTestCaseIds = (filePath, source) => {

@@ -98,7 +98,7 @@ git diff <previous-platform-tag>..<current-platform-tag>
 - 评估结论必须记录版本、影响范围、实际执行和沿用的用例、结果及剩余风险；沿用结果保留原始 commit、安装包 SHA-256 和日志来源。
 - 同一次发布中，已通过且后续修复未波及的用例沿用原结果，包括缓存用例。复测只选择受影响或缺少有效通过证据的用例。禁止老是复测全部，必须评估影响范围！！！
 
-国内候选包必须有同一安装包身份下通过的账号入口、授权结果、独立设备与重启、余额状态、运行中换号、待审批子任务换号、馆长目录、调用准入和恢复、图文会话证据。完整回归自动选择这些用例。分批执行时逐次补齐，其余范围仍按影响评估选择。夹具与真实模型的准备见[账号回归](../test-plan/account-test.md#执行)。
+国内候选包必须有同一安装包身份下通过的账号入口、授权结果、独立设备与重启、余额状态、运行中换号、待审批子任务换号、馆长目录、调用准入和恢复证据。完整回归自动选择这些用例。分批执行时逐次补齐，其余范围仍按影响评估选择。夹具与真实模型的准备见[账号回归](../test-plan/account-test.md#执行)。真实馆长图文用例单独按需联调，不在桌面发版默认回归与必过证据范围内。
 
 正式包 E2E 只消费国内发行包已构建的 `release-bundle-*.json`：执行前复验 Tag、commit、fragment 和哈希，安装 EXE/DMG 后测试安装态程序，不重新构建。未指定过滤参数时，发版命令执行全部发版回归用例；指定 `--domain`、`--suite`、`--group` 或 `--case` 时执行定向范围。过滤参数只允许用于 `--test-only`。
 
@@ -195,12 +195,15 @@ gh release edit <tag> --repo Yoan98/Ncurator --notes-file <release-body.md>
 ```bash
 pnpm release:win --tag windows-vX.Y.Z --prepare-only
 pnpm release:win --tag windows-vX.Y.Z --test-only [回归过滤参数]
+pnpm release:win --tag windows-vX.Y.Z --recheck-only
 pnpm release:win --tag windows-vX.Y.Z --publish-only
 
 pnpm release:mac --tag mac-vX.Y.Z --prepare-only
 pnpm release:mac --tag mac-vX.Y.Z --test-only [回归过滤参数]
 pnpm release:mac --tag mac-vX.Y.Z --publish-only
 ```
+
+Windows 门禁调整后，`--recheck-only` 用当前发布工具复核既有候选的原始正式包结果。标签 commit、平台、安装包 SHA-256 和当前必过项必须匹配；失败记录不会变成通过。此步骤不重跑测试、不改写原结果、不移动标签或上传制品。同一候选的准备、补测、复核和发布必须串行，等上一进程退出后再执行。
 
 独立验证已构建候选包：
 

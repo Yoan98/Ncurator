@@ -32,9 +32,9 @@ pnpm test:e2e:source --domain account \
 
 **免登录真实模型。** 用 `NCURATOR_ACCOUNT_E2E_PROFILE=node-one-free-live` 启动隔离账号服务，再将对应描述文件传给 `NCURATOR_ACCOUNT_E2E_FIXTURE`，执行 `pnpm test:e2e:source --case anonymous-existing-usage`。模型和授权要求见[真实模型与自动化覆盖边界](#4-真实模型与自动化覆盖边界)。
 
-**馆长图文。** 将 `NCURATOR_ACCOUNT_VISION_E2E_FIXTURE` 指向允许调用真实馆长模型的隔离服务描述文件，执行 `pnpm test:e2e:source --case managed-image-conversation`。验证范围见 [Workbench 馆长图文用例](workbench-test.md#managed-image-conversation)。
+**馆长图文（独立联调，不阻断桌面发版）。** 将 `NCURATOR_ACCOUNT_VISION_E2E_FIXTURE` 指向允许调用真实馆长模型的隔离服务描述文件，执行 `pnpm test:e2e:source --case managed-image-conversation`。验证范围见 [Workbench 馆长图文用例](workbench-test.md#managed-image-conversation)。
 
-**国内正式包。** 准备普通和图文两套隔离服务，按[候选包发布流程](../deploy/release.md#22-影响评估)执行。完整发版回归自动选中账号与馆长模型必验用例，按影响评估分批执行时需补齐同一制品的通过证据。
+**国内正式包。** 准备普通账号隔离服务，按[候选包发布流程](../deploy/release.md#22-影响评估)执行。完整发版回归自动选中账号与馆长模型必验用例，按影响评估分批执行时需补齐同一制品的通过证据。
 
 **本地服务联调。** 按[环境变量示例](../../.env-example)将本地客户端配置同步到桌面项目的 `.env`，桌面与网页分别选择 `local` 并重启。执行 `NCURATOR_E2E_LOCAL_BACKEND=1 pnpm test:e2e:source --domain account --case browser-login-outcomes`，核对授权网页和浏览器会话请求均指向选中的本地服务。本分支仅验证真实授权入口和未登录会话请求，不代替完整登录、余额及模型调用验收。隔离源码账号 fixture 将自己的签名 Key 写入私有临时 `.env`，与开发机的 `.env` 隔离；正式包仍使用包内 Key。
 

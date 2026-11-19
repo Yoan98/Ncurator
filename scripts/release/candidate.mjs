@@ -145,8 +145,15 @@ export const recordCandidateE2E = async ({
     throw new Error(`unsupported candidate E2E status: ${status}`)
   }
   const candidate = await readReleaseCandidate({ tag, platform, distribution: 'domestic' })
+  return recordVerifiedCandidateE2E(candidate, { status, resultPath, selection, reason })
+}
+
+const recordVerifiedCandidateE2E = async (
+  candidate,
+  { status, resultPath, selection, reason, recheck = false }
+) => {
   if (candidate.state.status === 'published') {
-    throw new Error(`published candidate ${tag} ${platform} cannot be retested`)
+    throw new Error(`published candidate ${candidate.state.tag} ${candidate.state.platform} cannot be retested`)
   }
   if (status === 'passed') await verifyCandidateRegression(candidate, resultPath)
   const state = {
@@ -160,8 +167,32 @@ export const recordCandidateE2E = async ({
       ...(reason ? { reason: String(reason).trim() } : {})
     }
   }
+  if (recheck) {
+    const current = JSON.parse(await readFile(statePathFor(candidate.directory), 'utf8'))
+    if (JSON.stringify(current) !== JSON.stringify(candidate.state)) {
+      throw new Error('candidate state changed during recheck; stop other release operations first')
+    }
+  }
   await writeState(candidate.directory, state)
   return { ...candidate, state }
+}
+
+// Evaluate the runner's canonical result as-is. No alternate evidence path, test
+// filtering, status rewriting, or package/Tag mutation is supported here.
+export const recheckWindowsCandidateE2E = async ({ tag, commit }) => {
+  const platform = 'windows-x64'
+  const candidate = await readReleaseCandidate({ tag, platform, distribution: 'domestic' })
+  if (candidate.state.commit !== commit) {
+    throw new Error('candidate commit does not match release tag')
+  }
+  const resultPath = path.join(candidate.directory, 'package-e2e-result.json')
+  return recordVerifiedCandidateE2E(candidate, {
+    recheck: true,
+    status: 'passed',
+    resultPath,
+    selection: candidate.state.e2e.selection,
+    reason: 'Canonical package E2E evidence rechecked under the current release policy'
+  })
 }
 
 const verifyCandidateRegression = async (candidate, resultPath = '') => {

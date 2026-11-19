@@ -87,6 +87,16 @@ describe('release regression selection', () => {
     }
   })
 
+  it('keeps managed image conversation opt-in and out of the release gate', async () => {
+    const caseId = 'managed-image-conversation'
+    const file = path.resolve(
+      'tests/case/workbench/conversation/provider-matrix/managed-image-conversation.e2e.test.ts'
+    )
+    expect(RELEASE_ACCOUNT_CASES).not.toContain(caseId)
+    expect(await findTestFiles({ ...defaultScope, target: 'package' })).not.toContain(file)
+    expect(await findTestFiles({ ...defaultScope, caseIds: [caseId] })).toEqual([file])
+  })
+
   it('does not enable the provider matrix through a group filter', async () => {
     expect(
       await findTestFiles({

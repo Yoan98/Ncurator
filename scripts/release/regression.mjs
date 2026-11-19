@@ -20,7 +20,7 @@ const FLAG_OPTIONS = new Set([
   '--fresh-knowledge-cache'
 ])
 
-export const validateReleaseArgs = (args) => {
+export const validateReleaseArgs = (args, { allowRecheck = false } = {}) => {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
     if (VALUE_OPTIONS.has(argument)) {
@@ -31,7 +31,7 @@ export const validateReleaseArgs = (args) => {
       index += 1
       continue
     }
-    if (FLAG_OPTIONS.has(argument)) continue
+    if (FLAG_OPTIONS.has(argument) || (allowRecheck && argument === '--recheck-only')) continue
     throw new Error(`unknown argument: ${argument}`)
   }
 }

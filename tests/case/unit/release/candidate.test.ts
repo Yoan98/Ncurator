@@ -12,6 +12,7 @@ import {
   materializeReleaseCandidate,
   markCandidatePublished,
   readReleaseCandidate,
+  recheckWindowsCandidateE2E,
   recordCandidateE2E,
   resolveCandidateDirectory
 } from '../../../../scripts/release/candidate.mjs'
@@ -137,6 +138,28 @@ const recordPassedCandidate = async (selection?: { mode: string; domain?: string
 }
 
 describe('retained release candidate', () => {
+  it('rechecks canonical evidence for the same tagged Windows installer without rewriting it', async () => {
+    await materializeReleaseCandidate({ bundlePath: await createBundle() })
+    const { result, resultPath } = await writePassedResult()
+    const tag = result.releaseTag
+    await recordCandidateE2E({ tag, platform: 'windows-x64', status: 'failed', resultPath })
+    const failed = JSON.stringify({ ...result, status: 'failed' })
+    await fs.writeFile(resultPath, failed)
+    await expect(recheckWindowsCandidateE2E({ tag, commit: result.releaseCommit })).rejects.toThrow(
+      'actual passed package'
+    )
+    expect(await fs.readFile(resultPath, 'utf8')).toBe(failed)
+    const passed = JSON.stringify(result)
+    await fs.writeFile(resultPath, passed)
+    await expect(recheckWindowsCandidateE2E({ tag, commit: 'other' })).rejects.toThrow(
+      'does not match release tag'
+    )
+    await expect(recheckWindowsCandidateE2E({ tag, commit: result.releaseCommit })).resolves.toMatchObject({
+      state: { status: 'ready' }
+    })
+    expect(await fs.readFile(resultPath, 'utf8')).toBe(passed)
+  })
+
   it('requires a ready state before publishing', async () => {
     const bundlePath = await createBundle()
     await materializeReleaseCandidate({ bundlePath })
@@ -235,7 +258,13 @@ describe('retained release candidate', () => {
     )
     result.tests.push(...required)
     await fs.writeFile(resultPath, JSON.stringify(result))
+    expect(result.tests.flatMap(({ cases }) => cases.map(({ caseId }) => caseId))).not.toContain(
+      'managed-image-conversation'
+    )
     await recordCandidateE2E({ ...request, status: 'passed', resultPath })
+    await expect(assertCandidatePublishable(request)).resolves.toMatchObject({
+      state: { status: 'ready' }
+    })
     result.tests[0].cases[0].app.target = 'source'
     await fs.writeFile(resultPath, JSON.stringify(result))
     await expect(assertCandidatePublishable(request)).rejects.toThrow('actual passed package')
