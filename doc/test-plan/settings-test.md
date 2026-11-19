@@ -278,7 +278,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：界面语言独立持久化，官方服务按发行包固定，旧线路偏好不能覆盖。
 - Why：保留旧切线逻辑会把账号、目录和埋点投向另一系统，也会使国际包误用国内服务。
-- How：在国内包修改语言和通知偏好并重启，核对英文及各页布局。使用带相反线路偏好的历史升级 fixture 分别启动国内、国际配置，核对官网、目录、免费服务及埋点目标，改语言及保存其他偏好后再次检查。发行标识无效及失败不跨系统由配置解析和网关 Unit 补证。
+- How：在国内包通过「应用偏好」分组里的语言卡片（`AUTO` / `中` / `EN`）修改语言和通知偏好并重启，核对英文及各页布局与分组顺序（`视觉风格,应用偏好,数据与诊断`）。使用带相反线路偏好的历史升级 fixture 分别启动国内、国际配置，核对官网、目录、免费服务及埋点目标，改语言及保存其他偏好后再次检查。发行标识无效及失败不跨系统由配置解析和网关 Unit 补证。
 - Oracle：无线路切换控件，合法发行版绑定自身官方入口，旧字段不覆盖，覆盖 `SET-GENERAL-006-AC1/AC2`；非法正式标识阻断官方请求、重试和凭证不跨系统，覆盖 `SET-GENERAL-006-AC3`；语言、自定义地址和固定更新通道独立，覆盖 `SET-GENERAL-006-AC4`。中文和英文布局、统一限宽及窄窗口可操作覆盖 `SET-GENERAL-002-AC3`、`SET-GENERAL-005-AC1/AC2/AC4`，系统通知语言由真机检查补证 `SET-GENERAL-005-AC3`。
 
 #### `partner-cache-cleanup`
@@ -318,8 +318,8 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：通用设置可切换「跟随系统 / 浅色 / 深色」，主题即时生效并通过真实 IPC 持久化。
 - Why：主题同时影响 CSS 变量、antd 算法与原生窗口外壳；只改前端状态不写主进程会导致重启后回退，只改渲染层会留下白底浮层。
-- How：通过 Settings UI 打开通用页，依次选择深色与浅色，逐次读取 `document.documentElement.dataset.theme` 和 `app-settings-get`；切换后回工作台核对外壳、侧栏、输入区与浮层背景色，再切换到「跟随系统」并读取主进程 `nativeTheme.themeSource`。
-- Oracle：三个选项可选且默认「跟随系统」，选择后 `data-theme` 立即变化并与主进程设置一致，对齐 `SET-GENERAL-007-AC1`；「跟随系统」时 `themeSource` 为 `system`，对齐 `SET-GENERAL-007-AC2`；深色下工作台与设置页主要表面均非白色，对齐 `SET-GENERAL-007-AC3`。冷启动首帧（`SET-GENERAL-007-AC4`）与文档版面保持原样（`SET-GENERAL-007-AC5`）由截图与人工检查补证。
+- How：通过 Settings UI 打开通用页，确认「视觉风格」分组置顶且主题以三张缩略图卡片呈现；依次点选深色与浅色卡片，逐次读取 `document.documentElement.dataset.theme`、`app-settings-get` 与该行说明文案；切换后回工作台核对外壳、侧栏、输入区与浮层背景色（按 WCAG 相对亮度判定无白底），再点选「跟随系统」并读取主进程 `nativeTheme.themeSource`。悬浮卡片读取气泡文案，验证其与选项名一致。
+- Oracle：「视觉风格」分组位于通用页最上方且主题为卡片式选择器；三个选项可选且默认「跟随系统」，选择后 `data-theme` 立即变化并与主进程设置一致，对齐 `SET-GENERAL-007-AC1`；「跟随系统」时 `themeSource` 为 `system`，对齐 `SET-GENERAL-007-AC2`；深色下工作台与设置页主要表面均非白色，对齐 `SET-GENERAL-007-AC3`。冷启动首帧（`SET-GENERAL-007-AC4`）与文档版面保持原样（`SET-GENERAL-007-AC5`）由截图与人工检查补证。
 
 ## 4. 发布前真实检查
 

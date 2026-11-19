@@ -104,7 +104,9 @@ export const en = {
     language: 'Interface language',
     languageDescription: 'Applies after restarting the app.',
     theme: 'Appearance',
-    themeDescription: 'Follows the system light or dark appearance when set to System.',
+    themeDescriptionSystem: 'Follows the system light or dark appearance automatically.',
+    themeDescriptionLight: 'Always use the light appearance, regardless of the system.',
+    themeDescriptionDark: 'Always use the dark appearance, regardless of the system.',
     themeLight: 'Light',
     themeDark: 'Dark',
     system: 'System default',
@@ -276,6 +278,7 @@ export const en = {
     serviceConnectionCount_one: '{{count}} configuration',
     serviceConnectionCount_other: '{{count}} configurations',
     applicationPreferences: 'App preferences',
+    visualStyle: 'Visual style',
     dataAndDiagnostics: 'Data and diagnostics',
     partnerCache: 'Partner cache',
     manageCache: 'Manage cache',
@@ -303,9 +306,6 @@ export const en = {
     aiTaskNotifications: 'AI completion notifications',
     sendDesktopNotificationsWhenAiTasksSucceedFailOr:
       'Send system notifications when tasks succeed, fail, or are canceled.',
-    streamingTextAnimation: 'Streaming text animation',
-    streamingTextAnimationDescription:
-      'Reveal streamed answers smoothly; turn off to show text as soon as it arrives.',
     errorLog: 'Error log',
     runtimeAndIndexingErrorsAreLoggedLocallyShareApp:
       'Open the log folder to find app.log for troubleshooting.',

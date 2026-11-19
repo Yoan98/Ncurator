@@ -1771,6 +1771,81 @@ textarea,
   height: 32px;
 }
 
+/* ── 分段卡片选择器（界面主题 / 界面语言） ─────────────────
+ * 卡片本身就是选中结果的预览，所以缩略图色值固定、不跟主题变。
+ * 只把边框、背景、聚焦环这些「外壳」交给 token。
+ */
+.nc-choice-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.nc-choice-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 1px solid var(--notion-line-strong);
+  border-radius: 8px;
+  background: var(--notion-page);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+
+.nc-choice-card:hover:not(:disabled) {
+  border-color: var(--notion-text-faint);
+  background: var(--notion-surface);
+}
+
+.nc-choice-card[data-checked='true'] {
+  border-color: var(--notion-accent-blue);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--notion-accent-blue) 24%, transparent);
+}
+
+.nc-choice-card:focus-visible {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: 2px;
+}
+
+.nc-choice-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.nc-choice-card-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 5px;
+  line-height: 1;
+}
+
+.nc-choice-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  height: 38px;
+  padding: 0 8px;
+  border-radius: 5px;
+  background: var(--notion-surface-sunken);
+  color: var(--notion-text-soft);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.nc-choice-card[data-checked='true'] .nc-choice-glyph {
+  background: color-mix(in srgb, var(--notion-accent-blue) 12%, transparent);
+  color: var(--notion-accent-blue);
+}
+
 .nc-settings-action {
   display: inline-flex;
   align-items: center;
