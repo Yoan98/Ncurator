@@ -3,34 +3,42 @@ import { createSubagentDispatcher } from '../../../../src/main/services/ai/run/s
 import type { AiRunDeps, AiRunStartPayload, AiRunState } from '../../../../src/main/services/ai/types'
 import type { AiRunEvent, SubagentUpdate } from '../../../../src/shared/types'
 
+const createDispatcher = (
+  run: (payload: AiRunStartPayload, deps: AiRunDeps) => Promise<AiRunState>
+): { dispatch: ReturnType<typeof createSubagentDispatcher>; updates: SubagentUpdate[] } => {
+  const updates: SubagentUpdate[] = []
+  const controller = new AbortController()
+  const payload = {
+    runId: 'parent-run',
+    partnerId: 'partner-1',
+    input: '派发审核'
+  } as AiRunStartPayload
+  const deps = {
+    subagentStore: {
+      enqueue: () => [
+        { agentId: 'agent-1', name: 'rv2', task: '审核视频', status: 'queued' as const }
+      ],
+      publish: () => undefined
+    },
+    chatMessageLogStore: {},
+    sendEvent: (event: AiRunEvent) => {
+      if (event.type === 'subagent_updated') updates.push(event.update)
+    },
+    isCancelled: () => false,
+    abortSignal: controller.signal
+  } as unknown as AiRunDeps
+  const dispatch = createSubagentDispatcher(
+    payload,
+    deps,
+    async () => ({}) as never,
+    run
+  )
+  return { dispatch, updates }
+}
+
 describe('ai unit subagent retry display', () => {
   it('publishes retry state while the child model call is retrying and clears it afterwards', async () => {
-    const updates: SubagentUpdate[] = []
-    const controller = new AbortController()
-    const payload = {
-      runId: 'parent-run',
-      partnerId: 'partner-1',
-      input: '派发审核'
-    } as AiRunStartPayload
-    const deps = {
-      subagentStore: {
-        enqueue: () => [
-          { agentId: 'agent-1', name: 'rv2', task: '审核视频', status: 'queued' as const }
-        ],
-        publish: () => undefined
-      },
-      chatMessageLogStore: {},
-      sendEvent: (event: AiRunEvent) => {
-        if (event.type === 'subagent_updated') updates.push(event.update)
-      },
-      isCancelled: () => false,
-      abortSignal: controller.signal
-    } as unknown as AiRunDeps
-
-    const run = async (
-      childPayload: AiRunStartPayload,
-      childDeps: AiRunDeps
-    ): Promise<AiRunState> => {
+    const { dispatch, updates } = createDispatcher(async (childPayload, childDeps) => {
       childDeps.sendEvent({
         type: 'assistant_process_group_started',
         runId: childPayload.runId,
@@ -50,14 +58,8 @@ describe('ai unit subagent retry display', () => {
         finalDeliveryMarkdown: '审核完成',
         finalArtifacts: []
       } as unknown as AiRunState
-    }
+    })
 
-    const dispatch = createSubagentDispatcher(
-      payload,
-      deps,
-      async () => ({}) as never,
-      run
-    )
     const children = await dispatch([{ name: 'rv2', instruction: '审核视频' }], 'delegate-1')
 
     const retryUpdates = updates.filter((update) => update.retry !== undefined)
@@ -69,5 +71,23 @@ describe('ai unit subagent retry display', () => {
     expect(children).toHaveLength(1)
     expect(children[0]?.status).toBe('completed')
     expect(children[0]?.retry).toBeUndefined()
+  })
+
+  it('returns a failed child result after retries are exhausted', async () => {
+    const { dispatch, updates } = createDispatcher(
+      async () =>
+        ({
+          status: 'failed',
+          error: '模型请求失败',
+          failureRawMessage: 'llm_call_timeout'
+        }) as unknown as AiRunState
+    )
+
+    const children = await dispatch([{ name: 'rv2', instruction: '审核视频' }], 'delegate-2')
+
+    expect(updates.at(-1)?.status).toBe('failed')
+    expect(children).toHaveLength(1)
+    expect(children[0]).toMatchObject({ status: 'failed' })
+    expect(children[0]?.result).toBe('模型请求失败：llm_call_timeout')
   })
 })
