@@ -141,7 +141,8 @@ describe('app update publish config', () => {
       macFinalize,
       tagContract,
       storageConfig,
-      uploadFragment
+      uploadFragment,
+      cleanupInventory
     ] = await Promise.all([
       readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
       readFile(path.resolve('scripts/release/macos.mjs'), 'utf8'),
@@ -149,7 +150,8 @@ describe('app update publish config', () => {
       readFile(path.resolve('scripts/release/r2/finalize-macos.mjs'), 'utf8'),
       readFile(path.resolve('scripts/release/tag.mjs'), 'utf8'),
       readFile(path.resolve('scripts/release/storage/config.mjs'), 'utf8'),
-      readFile(path.resolve('scripts/release/r2/upload-fragment.mjs'), 'utf8')
+      readFile(path.resolve('scripts/release/r2/upload-fragment.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/r2/cleanup-inventory.mjs'), 'utf8')
     ])
 
     for (const release of [windowsRelease, macRelease]) {
@@ -178,8 +180,9 @@ describe('app update publish config', () => {
     expect(macFinalize).not.toContain('--keep-old')
     expect(windowsFinalize).toContain('fragmentKey')
     expect(macFinalize).toContain('fragmentKey')
-    expect(windowsFinalize).toContain('legacyStatusPrefix')
-    expect(macFinalize).toContain('legacyStatusPrefix')
+    expect(windowsFinalize).toContain('listSupersededReleaseKeys(fragment, listKeys)')
+    expect(macFinalize).toContain('listSupersededReleaseKeys(arm64, listKeys)')
+    expect(cleanupInventory).toContain('listKeys(legacyStatusPrefix(family))')
     expect(windowsFinalize).not.toContain('release-status/windows/')
     expect(macFinalize).not.toContain('release-status/macos/')
     expect(uploadFragment).toContain('fragmentKey')
