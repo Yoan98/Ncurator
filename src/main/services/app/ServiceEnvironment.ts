@@ -38,13 +38,20 @@ export function readDesktopServiceEnvironment(
   inherited: NodeJS.ProcessEnv = process.env
 ): DesktopServiceEnvironment {
   const settings = readEnvironmentFile(root)
-  const environment = inherited.NCURATOR_SERVICE_ENV ?? settings.NCURATOR_SERVICE_ENV
+  const environment = inherited.NCURATOR_SERVICE_ENV ?? 'production'
   if (environment !== 'local' && environment !== 'production') {
     throw new Error('NCURATOR_SERVICE_ENV must be local or production')
   }
-  const prefix = `NCURATOR_${environment.toUpperCase()}`
+  if (environment === 'production') {
+    return {
+      environment,
+      api: OFFICIAL_API_ORIGINS.domestic,
+      web: OFFICIAL_ORIGINS.domestic,
+      appKey: applicationKey(settings, productionKeyName)
+    }
+  }
   const origin = (suffix: 'API_ORIGIN' | 'WEB_ORIGIN'): string => {
-    const name = `${prefix}_${suffix}`
+    const name = `NCURATOR_LOCAL_${suffix}`
     const value = inherited[name] ?? settings[name]
     if (typeof value !== 'string') throw new Error(`Missing or invalid ${name}`)
     try {
@@ -53,10 +60,9 @@ export function readDesktopServiceEnvironment(
         url.origin !== value ||
         url.username ||
         url.password ||
-        (environment === 'local'
-          ? url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port
-          : value !==
-            (suffix === 'API_ORIGIN' ? OFFICIAL_API_ORIGINS.domestic : OFFICIAL_ORIGINS.domestic))
+        url.protocol !== 'http:' ||
+        url.hostname !== '127.0.0.1' ||
+        !url.port
       )
         throw new Error()
     } catch {
@@ -66,9 +72,6 @@ export function readDesktopServiceEnvironment(
   }
   const api = origin('API_ORIGIN')
   const web = origin('WEB_ORIGIN')
-  const appKey = applicationKey(
-    settings,
-    environment === 'local' ? localKeyName : productionKeyName
-  )
+  const appKey = applicationKey(settings, localKeyName)
   return { environment, api, web, appKey }
 }

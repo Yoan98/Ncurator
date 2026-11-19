@@ -17,7 +17,7 @@ prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` 
 - electron-builder 以 `release-stage/app` 为唯一应用输入，开发工作区不直接进入安装包。
 - Vite 配置统一准备 Vditor 离线资源，开发、源码 E2E 和正式构建使用相同本地资源入口。
 - 安装包包含构建后的应用、生产依赖与运行资源，排除开发和测试资料、`.env`、私钥、Source Map 及其他平台文件。`app.asar` 与 `VITE_*` 可由用户读取，不作为凭证保护手段。
-- 国内源码运行按[环境变量示例](../../.env-example)配置 `.env`，选择整组 API、网页和桌面 Key；缺失配置明确失败。任何安装包都按发行版标记使用生产 API、官网和发行包 App Key，不读取开发选择器或开发凭证，环境变量无法覆盖地址。
+- 国内源码运行按[环境变量示例](../../.env-example)配置 `.env`；`pnpm run dev` 使用固定生产 API、官网和生产桌面 Key，`pnpm run dev:test` 使用本地地址与本地 Key；缺失配置直接报错，不回退。任何安装包都按发行版标记使用生产 API、官网和发行包 App Key，不读取开发选择器或开发凭证，环境变量无法覆盖地址。
 - 生产依赖按追踪结果裁剪，并验证关键读写路径；追踪触达待裁剪目录时构建失败，避免误删运行依赖。
 - 依赖内的运行时代码目录按精确路径保留，包括 ExcelJS 的 `lib/doc` 与 YAML 的 `dist/doc`；staging 校验 YAML 解析及序列化，实际安装包审计检查其关键运行时文件，不能按目录名将其当普通文档删除。
 - Windows x64 在 ONNX Runtime 与 Jieba 原生模块旁各自部署 VC++ 运行库，不要求用户预装系统运行库；安装包审计检查两处实际解包的二进制与 DLL，staging 实际加载 Jieba 默认词典并验证中文分词。

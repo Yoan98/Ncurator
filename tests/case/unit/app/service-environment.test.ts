@@ -83,6 +83,7 @@ describe('domestic service environment selection', () => {
     vi.stubEnv(productionKeyName, 'inherited-wrong-environment-key')
     test.save(' # environment comment')
     writeFileSync(path.join(test.root, '.env.local'), 'NCURATOR_SERVICE_ENV=invalid\n')
+    if (environment === 'local') vi.stubEnv('NCURATOR_SERVICE_ENV', 'local')
     return test
   }
   it.each(['local', 'production'] as const)(
@@ -94,7 +95,7 @@ describe('domestic service environment selection', () => {
       const { loadRootEnvOnce } = await import('../../../../src/main/utils/rootEnv')
       loadRootEnvOnce()
       configureServiceEnvironment()
-      expect(process.env.NCURATOR_SERVICE_ENV).toBe(environment)
+      expect(process.env.NCURATOR_SERVICE_ENV).toBe(environment === 'local' ? 'local' : undefined)
       expect(process.env[productionKeyName]).toBe('inherited-wrong-environment-key')
       expect(process.env[localKeyName]).toBeUndefined()
       expect(getOfficialAppKey()).toBe(environment === 'local' ? localKey : productionKey)
@@ -122,7 +123,12 @@ describe('domestic service environment selection', () => {
       )
       const output = execFileSync(
         process.execPath,
-        ['--import', pathToFileURL(probe).href, path.resolve('scripts/test/workflow.mjs'), '--help'],
+        [
+          '--import',
+          pathToFileURL(probe).href,
+          path.resolve('scripts/test/workflow.mjs'),
+          '--help'
+        ],
         {
           cwd: root,
           env: { ...process.env },
@@ -132,7 +138,7 @@ describe('domestic service environment selection', () => {
       const line = output.split('\n').find((value) => value.startsWith('ENV_PROBE='))
       expect(line).toBeDefined()
       expect(JSON.parse(line!.slice('ENV_PROBE='.length))).toEqual({
-        selector: environment,
+        ...(environment === 'local' && { selector: 'local' }),
         api: environment === 'local' ? 'http://127.0.0.1:6010' : 'https://api.guanzhangai.cn',
         web: environment === 'local' ? 'http://127.0.0.1:5998' : 'https://www.guanzhangai.cn',
         inheritedKeyUnchanged: true,
@@ -167,12 +173,15 @@ describe('domestic service environment selection', () => {
         expect(routeForServiceUrl('https://api.guanzhangai.cn')).toBeNull()
     }
   })
-  it('loads the project selector and allows an explicit selector without inheriting its key', () => {
+  it('ignores the project selector and allows only the launch profile to choose local', () => {
     const test = fixture()
     expect(readDesktopServiceEnvironment(test.root, {}).appKey).toBe(productionKey)
     test.settings.NCURATOR_SERVICE_ENV = 'local'
     test.save()
-    expect(readDesktopServiceEnvironment(test.root, {}).appKey).toBe(localKey)
+    expect(readDesktopServiceEnvironment(test.root, {}).appKey).toBe(productionKey)
+    expect(readDesktopServiceEnvironment(test.root, { NCURATOR_SERVICE_ENV: 'local' }).appKey).toBe(
+      localKey
+    )
     expect(
       readDesktopServiceEnvironment(test.root, { NCURATOR_SERVICE_ENV: 'production' }).appKey
     ).toBe(productionKey)
@@ -186,11 +195,16 @@ describe('domestic service environment selection', () => {
       ).toThrow('NCURATOR_SERVICE_ENV')
     }
   )
-  it('requires a selector even with both complete groups', () => {
+  it('defaults to the fixed production endpoints without selecting local from the file', () => {
     const test = fixture()
     delete test.settings.NCURATOR_SERVICE_ENV
     test.save()
-    expect(() => readDesktopServiceEnvironment(test.root, {})).toThrow('NCURATOR_SERVICE_ENV')
+    expect(readDesktopServiceEnvironment(test.root, {})).toEqual({
+      environment: 'production',
+      api: 'https://api.guanzhangai.cn',
+      web: 'https://www.guanzhangai.cn',
+      appKey: productionKey
+    })
   })
   it.each(['local', 'production'] as const)(
     'never borrows the other environment or inherited key for missing %s credentials',
@@ -224,15 +238,27 @@ describe('domestic service environment selection', () => {
     ['local', 'NCURATOR_LOCAL_WEB_ORIGIN', 'http://localhost:5998'],
     ['local', 'NCURATOR_LOCAL_WEB_ORIGIN', 'http://127.0.0.1:5998/'],
     ['local', 'NCURATOR_LOCAL_API_ORIGIN', 'http://user:password@127.0.0.1:6010'],
-    ['production', 'NCURATOR_PRODUCTION_API_ORIGIN', 'http://api.guanzhangai.cn'],
-    ['production', 'NCURATOR_PRODUCTION_API_ORIGIN', 'https://wrong.invalid'],
-    ['production', 'NCURATOR_PRODUCTION_WEB_ORIGIN', 'https://www.guanzhangai.cn?token=secret'],
     ['local', 'NCURATOR_LOCAL_API_ORIGIN', '']
   ])('rejects invalid %s field %s', (environment, name, value) => {
     const { root } = fixture()
     expect(() =>
       readDesktopServiceEnvironment(root, { NCURATOR_SERVICE_ENV: environment, [name]: value })
     ).toThrow(`Missing or invalid ${name}`)
+  })
+  it('does not use production address overrides from either the file or the parent', () => {
+    const test = fixture()
+    test.settings.NCURATOR_PRODUCTION_API_ORIGIN = 'https://wrong.invalid'
+    test.save()
+    expect(
+      readDesktopServiceEnvironment(test.root, {
+        NCURATOR_PRODUCTION_WEB_ORIGIN: 'https://wrong.invalid'
+      })
+    ).toEqual({
+      environment: 'production',
+      api: 'https://api.guanzhangai.cn',
+      web: 'https://www.guanzhangai.cn',
+      appKey: productionKey
+    })
   })
   it('does not require the inactive group or consume legacy address overrides', () => {
     const test = fixture()

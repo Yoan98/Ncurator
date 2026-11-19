@@ -23,7 +23,11 @@ export const loadRootEnvOnce = (): void => {
 
   // Node 22.12 needs a final line break to recognize a trailing inline comment.
   for (const [key, value] of Object.entries(parseEnv(raw + '\n'))) {
-    if (key === 'NCURATOR_APP_SECRET_DESKTOP' || key === 'NCURATOR_LOCAL_APP_SECRET_DESKTOP')
+    if (
+      key === 'NCURATOR_SERVICE_ENV' ||
+      key === 'NCURATOR_APP_SECRET_DESKTOP' ||
+      key === 'NCURATOR_LOCAL_APP_SECRET_DESKTOP'
+    )
       continue
     if (value === undefined || process.env[key]?.trim()) continue
     process.env[key] = expandEnvironmentReferences(value)
