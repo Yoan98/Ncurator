@@ -1,3 +1,5 @@
+import { constants } from 'node:fs'
+import { createHash } from 'node:crypto'
 import type { Locator } from 'playwright'
 import http from 'node:http'
 import fs from 'node:fs/promises'
@@ -11,6 +13,7 @@ import {
   setupWorkbenchWithTempWorkspace,
   sendWorkbenchMessage,
   collectWorkbenchAiRunEvents,
+  collectWorkbenchLlmIoRecords,
   waitForWorkbenchAiEvent,
   waitForWorkbenchAiRunCompletion,
   createPartnerThroughWorkbenchUi,
@@ -23,6 +26,184 @@ import {
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 import type { AiRunEvent } from '../../../../../src/shared/types'
+
+// Case-local provenance check; intentionally not a shared harness dependency.
+const verifyScreenshotDelivery = (() => {
+  const { lstat, open, realpath } = fs
+
+  const reject = () => {
+    throw new Error('Screenshot delivery provenance is missing or invalid')
+  }
+  const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
+  // Windows Node lstat reports dev=0 while fstat reports the volume serial.
+  // Canonical no-link ancestry plus inode/size/times bind that platform read.
+  const same = (a, b) =>
+    (process.platform === 'win32' || a.dev === b.dev) &&
+    a.ino === b.ino &&
+    a.size === b.size &&
+    a.mtimeNs === b.mtimeNs &&
+    a.ctimeNs === b.ctimeNs
+  const inside = (root, file) => {
+    const r = path.relative(root, file)
+    return r && !r.startsWith('..' + path.sep) && r !== '..' && !path.isAbsolute(r)
+  }
+
+  // Read a regular file only, with no link/junction in any path component.
+  // This guards test inputs, not a hostile process concurrently replacing directories.
+  async function ordinaryBytes(file) {
+    if (!path.isAbsolute(file)) reject()
+    let current = path.parse(file).root
+    for (const part of file.slice(current.length).split(path.sep).filter(Boolean)) {
+      current = path.join(current, part)
+      if ((await lstat(current)).isSymbolicLink()) reject()
+    }
+    const before = await lstat(file, { bigint: true })
+    if (!before.isFile() || before.nlink !== 1n) reject()
+    if (path.relative(await realpath(path.dirname(file)), path.dirname(file))) reject()
+    const fd = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW || 0))
+    try {
+      const opened = await fd.stat({ bigint: true })
+      if (!same(before, opened)) reject()
+      const bytes = await fd.readFile()
+      const after = await lstat(file, { bigint: true })
+      if (
+        after.isSymbolicLink() ||
+        !same(opened, after) ||
+        !same(opened, await fd.stat({ bigint: true }))
+      )
+        reject()
+      return bytes
+    } finally {
+      await fd.close()
+    }
+  }
+
+  function screenshotReceipt({ events, records, started, target }) {
+    if (!Number.isFinite(started)) reject()
+    const runs = events.filter(
+      (e) =>
+        e.type === 'run_started' &&
+        Number.isFinite(e.createdAt) &&
+        e.createdAt >= started &&
+        typeof e.input === 'string' &&
+        e.input.includes('ALPHA_731')
+    )
+    if (runs.length !== 1) reject()
+    const run = runs[0]
+    if (!/^[a-f0-9-]+$/i.test(run.partnerId || '')) reject()
+    const children = new Map()
+    for (const e of events) {
+      if (e.type !== 'subagent_updated' || e.runId !== run.runId) continue
+      const u = e.update
+      if (
+        u?.task?.includes('ALPHA_731') &&
+        !u.task.includes('BETA_892') &&
+        u.task.includes(target)
+      ) {
+        const prior = children.get(u.childRunId)
+        if (prior && (prior.agentId !== u.agentId || prior.toolCallId !== u.toolCallId)) reject()
+        children.set(u.childRunId, u)
+      }
+    }
+    if (children.size !== 1) reject()
+    const child = [...children.values()][0]
+    if (
+      ![child.childRunId, child.agentId, child.toolCallId].every((v) => typeof v === 'string' && v)
+    )
+      reject()
+    const receipts = new Map()
+    for (const row of records) {
+      if (
+        row.ownerRunId !== run.runId ||
+        row.runId !== child.childRunId ||
+        row.taskId !== child.childRunId ||
+        row.agentId !== child.agentId ||
+        row.parentToolCallId !== child.toolCallId ||
+        !Number.isFinite(row.startedAt) ||
+        row.startedAt < run.createdAt
+      )
+        continue
+      const messages = row.requestWire?.messages
+      if (!Array.isArray(messages)) continue
+      for (let i = 0; i < messages.length; i++) {
+        const reply = messages[i]
+        if (reply.role !== 'tool' || typeof reply.content !== 'string') continue
+        const match =
+          /^Browser screenshot completed\.\nTab: ([^\r\n]+)\nPage: [^\r\n]+\nPath: ([^\r\n]+)$/.exec(
+            reply.content
+          )
+        if (!match) continue
+        const calls = messages
+          .slice(0, i)
+          .filter((m) => m.role === 'ai')
+          .flatMap((m) => m.toolCalls || [])
+          .filter((c) => c.id === reply.toolCallId)
+        if (calls.length !== 1 || calls[0].name !== 'browser_use') continue
+        let args
+        try {
+          args = JSON.parse(calls[0].arguments)
+        } catch {
+          continue
+        }
+        if (args.action !== 'screenshot' || args.tabId !== match[1]) continue
+        const receipt = { source: match[2], toolCallId: reply.toolCallId, tabId: match[1] }
+        const old = receipts.get(receipt.toolCallId)
+        if (old && JSON.stringify(old) !== JSON.stringify(receipt)) reject()
+        receipts.set(receipt.toolCallId, receipt)
+      }
+    }
+    if (!receipts.size) reject()
+    return [...receipts.values()].map((receipt) => ({
+      ...receipt,
+      runId: run.runId,
+      partnerId: run.partnerId,
+      childRunId: child.childRunId,
+      agentId: child.agentId
+    }))
+  }
+
+  async function verifyScreenshotDelivery(input) {
+    const receipts = screenshotReceipt(input)
+    const delivered = await ordinaryBytes(input.target)
+    const matching = []
+    for (const receipt of receipts) {
+      const bucket = path.resolve(
+        input.userDataDir,
+        'partners',
+        receipt.partnerId,
+        'runtime',
+        'assets',
+        'browser-screenshots'
+      )
+      const source = path.resolve(receipt.source)
+      if (
+        !path.isAbsolute(receipt.source) ||
+        !inside(bucket, source) ||
+        path.dirname(source) !== bucket ||
+        !/^browser-screenshot-[a-f0-9-]+\.png$/i.test(path.basename(source))
+      )
+        reject()
+      const original = await ordinaryBytes(source)
+      if (
+        original.length < 24 ||
+        !original.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ||
+        original.readUInt32BE(16) === 0 ||
+        original.readUInt32BE(20) === 0
+      )
+        reject()
+      if (original.equals(delivered)) matching.push(receipt)
+    }
+    if (!matching.length) reject()
+    return {
+      ...matching[0],
+      bytes: delivered.length,
+      sha256: hash(delivered),
+      qualifyingScreenshotCalls: receipts.length,
+      matchingScreenshotCalls: matching.length
+    }
+  }
+  return verifyScreenshotDelivery
+})()
 
 const CASE_ID = 'subagent-delegation-browser-sidecar'
 const TASK_SCOPE =
@@ -334,7 +515,7 @@ describe('subagent browser and sidecar real UI', () => {
           const started = Date.now()
           await sendWorkbenchMessage(
             runtime.page,
-            `${TASK_SCOPE}\n请一次派发三位临时帮手分头处理，每位开始操作前先简短告诉我正在做什么，网页帮手在提交表单后、核验资料数字后分别用一句话报告进展，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图保存到 ${screenshot} 并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后用文本编辑工具将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你用文本编辑工具把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
+            `${TASK_SCOPE}\n请一次派发三位临时帮手分头处理，每位开始操作前先简短告诉我正在做什么，网页帮手在提交表单后、核验资料数字后分别用一句话报告进展，并由你最后整合：第一位在内置浏览器打开 ${site.url}，填写 ALPHA_731 并提交，提交后用内置浏览器截图，再用现有 terminal_run 将该次截图工具返回的 PNG 资产复制到 ${screenshot}；这次生成的截图资产允许作为复制源，保留原图，不读取或复制其他文件，并保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=31415 并核对该数字，最后用文本编辑工具将 ${config} 中 timeoutMs 改为 3000，其他字段不动；第二位独立在内置浏览器打开同一个 ${site.url}，填写 BETA_892 并提交，提交后保留表单页面，另外用网页资料抓取读取 ${site.url}/facts?marker=27182 核对该数字；第三位搜索 Python 官方 csv reader 说明返回官方来源链接。网页帮手各自使用自己的标签。你用文本编辑工具把两个提交结果、资料数字和官方来源写到 ${report}，检查后交付。`
           )
           const pendingRow = runtime.page
             .locator('[data-testid="subagent-task"][data-status="running"]')
@@ -595,6 +776,20 @@ describe('subagent browser and sidecar real UI', () => {
           expect(site.receipts).toContain('ALPHA_731')
           expect(site.receipts).toContain('BETA_892')
           expect(site.instances.get('ALPHA_731')).not.toBe(site.instances.get('BETA_892'))
+          const screenshotDelivery = await verifyScreenshotDelivery({
+            events: await collectWorkbenchAiRunEvents(runtime),
+            records: await collectWorkbenchLlmIoRecords(runtime),
+            started,
+            target: screenshot,
+            userDataDir: runtime.userDataDir
+          })
+          runtime.recordEvent({
+            type: 'assertion',
+            name: 'alpha-screenshot-exact-delivery',
+            status: 'ok',
+            message: 'Delivered PNG exactly matches this run and ALPHA child screenshot receipt.',
+            data: screenshotDelivery
+          })
           const image = await fs.readFile(screenshot)
           expect([...image.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
           expect(image.readUInt32BE(16)).toBeGreaterThan(0)
@@ -964,7 +1159,9 @@ describe('subagent browser and sidecar real UI', () => {
             const cloud = runtime.page.locator('[data-testid="subagent-thought"]:visible')
             return (
               (await cloud.count()) === 1 &&
-              (await cloud.innerText()).includes(`我干失败了：${failure.error}`)
+              (await cloud.getAttribute('data-message-id')) === `failure:${failure.itemId}` &&
+              (await cloud.getByTestId('subagent-message').innerText()) ===
+                `启动失败：${failure.error}`
             )
           }, 10_000)
           expect(

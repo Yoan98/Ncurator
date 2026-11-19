@@ -459,6 +459,13 @@ describe('workbench result e2e', () => {
             await workspaceExplorerToggle.getAttribute('aria-pressed')
           const workspaceExplorerToggleClassAfterOpen =
             (await workspaceExplorerToggle.getAttribute('class')) || ''
+          // Verify the selected idle token, not the distinct pointer-hover token.
+          await page.mouse.move(0, 0)
+          await page.waitForFunction(
+            (element) => element !== null && !element.matches(':hover'),
+            await workspaceExplorerToggle.elementHandle(),
+            { timeout: 5000 }
+          )
           const workspaceExplorerToggleBackgroundAfterOpen = await workspaceExplorerToggle.evaluate(
             (element) => {
               const style = getComputedStyle(element)
