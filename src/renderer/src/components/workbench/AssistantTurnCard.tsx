@@ -69,16 +69,16 @@ type AssistantTurnCardProps = {
 }
 
 const getProcessStatusClassName = (status: AssistantProcessGroup['status']): string => {
-  if (status === 'running') return 'text-[#37352F]'
-  if (status === 'failed' || status === 'partial_failed') return 'text-[#B3261E]'
-  return 'text-[#37352F]'
+  if (status === 'running') return 'text-[var(--notion-text)]'
+  if (status === 'failed' || status === 'partial_failed') return 'text-[var(--notion-red)]'
+  return 'text-[var(--notion-text)]'
 }
 
 const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
-  if (iconKind === 'toolset_loading') return 'text-[#2F5F8F]'
-  if (iconKind === 'skill_loading') return 'text-[#8064A2]'
-  if (iconKind === 'default') return 'text-[#9B9A97]'
-  return 'text-[#787774]'
+  if (iconKind === 'toolset_loading') return 'text-[var(--notion-blue)]'
+  if (iconKind === 'skill_loading') return 'text-[var(--notion-purple)]'
+  if (iconKind === 'default') return 'text-[var(--notion-text-faint)]'
+  return 'text-[var(--notion-text-soft)]'
 }
 
 const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: string }> = ({
@@ -189,7 +189,7 @@ const renderSegments = (
 ): React.ReactNode => (
   <span className={options?.shimmer ? 'workbench-thinking-shimmer' : undefined}>
     {segments.map((segment, index) => {
-      const textClassName = segment.emphasis ? 'text-[#37352F]' : ''
+      const textClassName = segment.emphasis ? 'text-[var(--notion-text)]' : ''
       if (!segment.iconKind) {
         return (
           <span
@@ -219,7 +219,7 @@ const AssistantProcessThoughtView: React.FC<{
   onOpenReference?: (reference: OpenableMarkdownReference) => void
 }> = ({ thought, liveTail, onOpenReference }) => (
   <div
-    className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#37352F]"
+    className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[var(--notion-text)]"
     data-testid={workbenchSelectors.assistantThoughts}
   >
     <MarkdownRenderer
@@ -255,18 +255,18 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
             {renderSegments(groupText, { shimmer: isRunning })}
           </span>
           {group.items.length > 0 ? (
-            <HiChevronRight className="h-4 w-4 shrink-0 text-[#9B9A97] transition-transform duration-200 group-open/process:rotate-90" />
+            <HiChevronRight className="h-4 w-4 shrink-0 text-[var(--notion-text-faint)] transition-transform duration-200 group-open/process:rotate-90" />
           ) : null}
         </span>
       </summary>
       {group.items.length > 0 ? (
-        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#37352F]">
+        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[var(--notion-text)]">
           {group.items.map((item) => (
             <div
               key={item.id}
               className={
                 item.status === 'failed' || item.status === 'partial_failed'
-                  ? 'text-[#B3261E]'
+                  ? 'text-[var(--notion-red)]'
                   : undefined
               }
             >
@@ -414,7 +414,7 @@ const AssistantActivityItemView: React.FC<{
         data-process-item-id={item.id}
         data-process-item-status={item.status}
         data-terminal-review-state={item.terminalReviewState}
-        className={`${failed ? 'text-[#B3261E]' : ''} ${item.toolName === 'load_toolset' || item.toolName === 'load_skill' ? 'whitespace-pre-wrap' : ''}`}
+        className={`${failed ? 'text-[var(--notion-red)]' : ''} ${item.toolName === 'load_toolset' || item.toolName === 'load_skill' ? 'whitespace-pre-wrap' : ''}`}
       >
         {renderSegments(toolText)}
         {interaction ? <InteractionResultView interaction={interaction} /> : null}
@@ -430,12 +430,12 @@ const AssistantActivityItemView: React.FC<{
       data-process-item-status={item.status}
       data-terminal-review-state={item.terminalReviewState}
       data-terminal-review-decision={item.terminalReviewDecision}
-      className={failed ? 'text-[#B3261E]' : undefined}
+      className={failed ? 'text-[var(--notion-red)]' : undefined}
     >
       <div className="min-w-0 leading-[22px]">{renderSegments(toolText)}</div>
       <div
         data-testid={workbenchSelectors.assistantReviewResultRail}
-        className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]"
+        className="mt-1 space-y-1 border-l border-[var(--notion-line-strong)] pl-3 text-xs text-[var(--notion-text-soft)]"
       >
         {item.terminalReviewDecision ? (
           <div data-review-actor="ai">
@@ -466,7 +466,7 @@ const AssistantActivityItemView: React.FC<{
 const InteractionResultView: React.FC<{
   interaction: NonNullable<AssistantProcessGroup['items'][number]['interaction']>
 }> = ({ interaction }) => (
-  <div className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]">
+  <div className="mt-1 space-y-1 border-l border-[var(--notion-line-strong)] pl-3 text-xs text-[var(--notion-text-soft)]">
     {interaction.questions.map((question) => {
       const answer = interaction.answers?.find((item) => item.questionId === question.id)
       const labels = (question.options ?? [])
@@ -476,7 +476,7 @@ const InteractionResultView: React.FC<{
       return (
         <div key={question.id}>
           <div>{question.question}</div>
-          <div className="text-[#37352F]">
+          <div className="text-[var(--notion-text)]">
             {labels.join('、') || t(($) => $.workbench.notProvided)}
           </div>
         </div>
@@ -568,7 +568,7 @@ const AssistantActivityGroupView: React.FC<{
       >
         <span
           className={`inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
-            headerShimmer ? 'text-[#37352F]' : 'text-[#9B9A97] group-hover/execution:text-[#37352F]'
+            headerShimmer ? 'text-[var(--notion-text)]' : 'text-[var(--notion-text-faint)] group-hover/execution:text-[var(--notion-text)]'
           }`}
         >
           <LayerIcon iconKind={iconKind} />
@@ -577,14 +577,14 @@ const AssistantActivityGroupView: React.FC<{
           </span>
           {items.length > 0 ? (
             <>
-              <HiChevronRight className="h-4 w-4 shrink-0 text-[#9B9A97] opacity-0 transition-all duration-200 group-hover/execution:opacity-100 group-open/execution:hidden" />
-              <HiChevronDown className="hidden h-4 w-4 shrink-0 text-[#9B9A97] transition-all duration-200 group-open/execution:block" />
+              <HiChevronRight className="h-4 w-4 shrink-0 text-[var(--notion-text-faint)] opacity-0 transition-all duration-200 group-hover/execution:opacity-100 group-open/execution:hidden" />
+              <HiChevronDown className="hidden h-4 w-4 shrink-0 text-[var(--notion-text-faint)] transition-all duration-200 group-open/execution:block" />
             </>
           ) : null}
         </span>
       </summary>
       {items.length > 0 ? (
-        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#787774]">
+        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[var(--notion-text-soft)]">
           {items.map((item) => (
             <AssistantActivityItemView
               key={item.id}
@@ -712,7 +712,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 turn.runFinished ? (
                   <button
                     type="button"
-                    className="mb-2 flex w-full items-center justify-start gap-1.5 border-b border-[#EEEEEC] pb-2 text-left text-[13px] leading-5 text-[#9B9A97]"
+                    className="mb-2 flex w-full items-center justify-start gap-1.5 border-b border-[var(--notion-line)] pb-2 text-left text-[13px] leading-5 text-[var(--notion-text-faint)]"
                     aria-expanded={processExpanded}
                     aria-label={t(($) => $.workbench.activityLog, {
                       value1: processExpanded
@@ -735,7 +735,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     )}
                   </button>
                 ) : (
-                  <div className="mb-2 flex items-center border-b border-[#EEEEEC] pb-2 text-[14px] leading-6 text-[#37352F]">
+                  <div className="mb-2 flex items-center border-b border-[var(--notion-line)] pb-2 text-[14px] leading-6 text-[var(--notion-text)]">
                     <span
                       data-testid={`${workbenchSelectors.assistantRunDurationPrefix}-${messageId}`}
                     >
@@ -789,7 +789,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     return <AssistantProcessGroupView key={entry.id} group={entry.group} />
                   })}
                   {streamingRole === 'thought' && streamingMarkdown.trim() ? (
-                    <div className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#37352F]">
+                    <div className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[var(--notion-text)]">
                       <MarkdownRenderer
                         content={streamingMarkdown}
                         variant="thought"
@@ -815,7 +815,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
 
           {hasFinalAnswer ? (
             <div
-              className="min-w-0 text-[15px] leading-7 text-[#37352F]"
+              className="min-w-0 text-[15px] leading-7 text-[var(--notion-text)]"
               data-testid={`${workbenchSelectors.assistantFinalAnswerPrefix}-${messageId}`}
             >
               <MarkdownRenderer
@@ -831,7 +831,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
 
           {turn.status === 'failed' && turn.error ? (
             <div
-              className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm leading-6 text-[#B3261E]"
+              className="rounded-[8px] border border-[var(--notion-red)] bg-[var(--notion-red-bg)] px-4 py-3 text-sm leading-6 text-[var(--notion-red)]"
               data-testid={`${workbenchSelectors.assistantRunFailurePrefix}-${messageId}`}
             >
               <div>
@@ -841,13 +841,13 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
               {turn.errorDetail ? (
                 <details className="mt-2">
                   <summary
-                    className="cursor-pointer select-none text-xs text-[#8A4F48] underline-offset-2 hover:underline"
+                    className="cursor-pointer select-none text-xs text-[var(--notion-red-text-deep)] underline-offset-2 hover:underline"
                     data-testid={`${workbenchSelectors.assistantRunFailureDetailTogglePrefix}-${messageId}`}
                   >
                     {t(($) => $.workbench.viewDetails)}
                   </summary>
                   <pre
-                    className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[6px] bg-[#F3DDD9] px-3 py-2 text-xs leading-5 text-[#7A3B34]"
+                    className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[6px] bg-[var(--notion-red-bg-hover)] px-3 py-2 text-xs leading-5 text-[var(--notion-red-text-deep)]"
                     data-testid={`${workbenchSelectors.assistantRunFailureDetailPrefix}-${messageId}`}
                   >
                     {turn.errorDetail}
@@ -861,21 +861,21 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             runFinished: turn.runFinished,
             applyTargetCount: turn.applyTargets.length
           }) ? (
-            <div className="overflow-hidden rounded-[8px] border border-[#E5E4E0] bg-white">
-              <div className="flex items-center gap-3 border-b border-[#EEEEEC] px-3.5 py-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
+            <div className="overflow-hidden rounded-[8px] border border-[var(--notion-line-strong)] bg-[var(--notion-page)]">
+              <div className="flex items-center gap-3 border-b border-[var(--notion-line)] px-3.5 py-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[var(--notion-surface)] text-[var(--notion-text-soft)]">
                   <HiOutlineDocumentText className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[14px] font-semibold text-[#37352F]">
+                  <div className="text-[14px] font-semibold text-[var(--notion-text)]">
                     {t(($) => $.workbench.changedFiles)}
                   </div>
-                  <div className="mt-0.5 text-xs text-[#787774]">
+                  <div className="mt-0.5 text-xs text-[var(--notion-text-soft)]">
                     {t(($) => $.workbench.clickAFileToReviewItsChanges)}
                   </div>
                 </div>
                 <div
-                  className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-[#37352F]"
+                  className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-[var(--notion-text)]"
                   data-testid={`${workbenchSelectors.assistantTurnApplyCountPrefix}-${messageId}`}
                 >
                   {turn.applyTargets.length}
@@ -898,7 +898,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                       type="button"
                       onClick={() => onOpenApply(apply.changeId)}
                       data-testid={`${workbenchSelectors.assistantTurnApplyPrefix}-${apply.changeId}`}
-                      className="w-full border-b border-[#F1F0ED] px-3.5 py-2.5 text-left transition-colors duration-200 last:border-b-0 hover:bg-[#F7F7F5]"
+                      className="w-full border-b border-[var(--notion-line)] px-3.5 py-2.5 text-left transition-colors duration-200 last:border-b-0 hover:bg-[var(--notion-surface-sunken)]"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
@@ -906,8 +906,8 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                             filePath={apply.sourcePath || apply.title}
                             workspaces={workspaces}
                             className="text-[13px] font-medium"
-                            fileNameClassName="text-[#37352F]"
-                            prefixClassName="text-[#9B9A97]"
+                            fileNameClassName="text-[var(--notion-text)]"
+                            prefixClassName="text-[var(--notion-text-faint)]"
                             separator="/"
                           />
                         </div>
@@ -917,7 +917,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                             deleteCount={apply.deleteCount}
                           />
                           {statusLabel ? (
-                            <span className="inline-flex h-5 items-center rounded-[4px] bg-[#F4F4F2] px-1.5 text-[11px] font-medium text-[#787774]">
+                            <span className="inline-flex h-5 items-center rounded-[4px] bg-[var(--notion-surface)] px-1.5 text-[11px] font-medium text-[var(--notion-text-soft)]">
                               {statusLabel}
                             </span>
                           ) : null}
@@ -933,7 +933,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   onClick={() => setApplyTargetsExpanded((value) => !value)}
                   aria-expanded={applyTargetsExpanded}
                   data-testid={`${workbenchSelectors.assistantTurnApplyCollapsePrefix}-${messageId}`}
-                  className="flex w-full items-center gap-1.5 border-t border-[#F1F0ED] px-3.5 py-2 text-left text-xs font-medium text-[#787774] transition-colors duration-200 hover:bg-[#F7F7F5] hover:text-[#37352F]"
+                  className="flex w-full items-center gap-1.5 border-t border-[var(--notion-line)] px-3.5 py-2 text-left text-xs font-medium text-[var(--notion-text-soft)] transition-colors duration-200 hover:bg-[var(--notion-surface-sunken)] hover:text-[var(--notion-text)]"
                 >
                   <HiChevronDown
                     className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${

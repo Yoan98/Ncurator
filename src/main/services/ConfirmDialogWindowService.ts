@@ -1,4 +1,7 @@
 import { BrowserWindow } from 'electron'
+import type { AppResolvedTheme } from '../../shared/appPreferences'
+import { getResolvedAppTheme } from './app/AppearanceService'
+import { OVERLAY_PALETTE } from './app/OverlayPalette'
 import type { ConfirmDialogRequest, ConfirmDialogResponse } from '../../shared/types'
 
 const escapeHtml = (value: string): string =>
@@ -13,7 +16,13 @@ const escapeHtml = (value: string): string =>
     return entities[character]
   })
 
-const renderDialog = (request: ConfirmDialogRequest): string => `<!doctype html>
+/**
+ * 弹窗是独立的 data: URL 文档，拿不到渲染进程的 CSS 变量，色板来自 `OverlayPalette`。
+ * 取值必须与 `base.css` 的 `--notion-*` 保持一致，否则弹窗与底层应用会出现色差。
+ */
+const renderDialog = (request: ConfirmDialogRequest, theme: AppResolvedTheme): string => {
+  const c = OVERLAY_PALETTE[theme]
+  return `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -22,36 +31,36 @@ const renderDialog = (request: ConfirmDialogRequest): string => `<!doctype html>
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; width: 100%; height: 100%; }
-    body { color: #37352F; font: 14px/1.5715 "SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-app-region: no-drag; }
+    body { color: ${c.text}; font: 14px/1.5715 "SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-app-region: no-drag; }
     #mask { position: fixed; inset: 0; overflow: auto; background: rgba(0, 0, 0, .45); padding: min(100px, 12vh) 16px 24px; }
-    #dialog { position: relative; width: 520px; max-width: 100%; margin: 0 auto; padding: 20px 24px; border-radius: 8px; background: #fff; box-shadow: 0 16px 40px rgba(15, 15, 15, .12); }
+    #dialog { position: relative; width: 520px; max-width: 100%; margin: 0 auto; padding: 20px 24px; border-radius: 8px; background: ${c.page}; box-shadow: 0 16px 40px ${c.shadow}; }
     h1 { margin: 0 32px 16px 0; font-size: 16px; line-height: 24px; font-weight: 600; }
-    p { margin: 0; color: #787774; white-space: pre-wrap; overflow-wrap: anywhere; }
-    #message { color: #37352F; }
-    #detail { margin-top: 12px; padding: 8px 12px; background: #F7F7F5; border: 1px solid #EEEEEC; border-radius: 6px; font-weight: 500; white-space: pre-wrap; overflow-wrap: anywhere; }
-    #error { margin-top: 12px; color: #B3261E; }
+    p { margin: 0; color: ${c.textSoft}; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #message { color: ${c.text}; }
+    #detail { margin-top: 12px; padding: 8px 12px; background: ${c.sunken}; border: 1px solid ${c.line}; border-radius: 6px; font-weight: 500; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #error { margin-top: 12px; color: ${c.red}; }
     [hidden] { display: none !important; }
     footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-    button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 4px 15px; border: 1px solid #EEEEEC; border-radius: 6px; background: #fff; color: inherit; font: inherit; cursor: pointer; }
-    button:hover { background: #F4F4F2; }
-    button:focus-visible { outline: 2px solid #0B6BCB; outline-offset: 2px; }
+    button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 4px 15px; border: 1px solid ${c.line}; border-radius: 6px; background: ${c.page}; color: inherit; font: inherit; cursor: pointer; }
+    button:hover { background: ${c.surface}; }
+    button:focus-visible { outline: 2px solid ${c.accentBlue}; outline-offset: 2px; }
     button:disabled { cursor: not-allowed; opacity: .65; }
-    #confirm { color: #fff; border-color: #2F3437; background: #2F3437; }
-    #confirm:hover { background: #474C50; }
-    #confirm.danger { background: #ff4d4f; border-color: #ff4d4f; }
+    #confirm { color: ${c.accentText}; border-color: ${c.accent}; background: ${c.accent}; }
+    #confirm:hover { background: ${c.accentHover}; }
+    #confirm.danger { color: #ffffff; background: #ff4d4f; border-color: #ff4d4f; }
     #confirm.danger:hover { background: #ff7875; border-color: #ff7875; }
-    #close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; padding: 0; border: 0; color: #91918E; }
+    #close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: ${c.textFaint}; }
     #close svg { width: 16px; height: 16px; }
-    #checkbox-row { position: relative; display: flex; align-items: center; gap: 8px; margin-top: 16px; color: #787774; line-height: 22px; }
-    #checkbox { width: 16px; height: 16px; margin: 0; accent-color: #2F3437; cursor: pointer; }
-    #checkbox:focus-visible { outline: 2px solid #0B6BCB; outline-offset: 2px; }
+    #checkbox-row { position: relative; display: flex; align-items: center; gap: 8px; margin-top: 16px; color: ${c.textSoft}; line-height: 22px; }
+    #checkbox { width: 16px; height: 16px; margin: 0; accent-color: ${c.accent}; cursor: pointer; }
+    #checkbox:focus-visible { outline: 2px solid ${c.accentBlue}; outline-offset: 2px; }
     #checkbox-content { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; }
     #checkbox-content label { cursor: pointer; }
     #checkbox-space { flex: 1; align-self: stretch; min-width: 12px; }
-    #checkbox-help { flex-shrink: 0; width: 20px; height: 20px; padding: 0; border: 0; background: transparent; color: #91918E; cursor: help; }
-    #checkbox-help:hover { color: #37352F; }
+    #checkbox-help { flex-shrink: 0; width: 20px; height: 20px; padding: 0; border: 0; background: transparent; color: ${c.textFaint}; cursor: help; }
+    #checkbox-help:hover { color: ${c.text}; }
     #checkbox-help svg { width: 16px; height: 16px; }
-    #checkbox-tooltip { position: absolute; z-index: 1; bottom: calc(100% + 8px); left: 24px; max-width: min(300px, calc(100% - 24px)); padding: 8px 10px; border: 1px solid #E0DFDC; border-radius: 6px; background: #fff; color: #37352F; font-size: 12px; line-height: 20px; box-shadow: 0 8px 24px rgba(15, 15, 15, .08); pointer-events: none; }
+    #checkbox-tooltip { position: absolute; z-index: 1; bottom: calc(100% + 8px); left: 24px; max-width: min(300px, calc(100% - 24px)); padding: 8px 10px; border: 1px solid ${c.lineStrong}; border-radius: 6px; background: ${c.page}; color: ${c.text}; font-size: 12px; line-height: 20px; box-shadow: 0 8px 24px ${c.shadowSoft}; pointer-events: none; }
     #checkbox-row:has(#checkbox:disabled) label { cursor: not-allowed; opacity: .65; }
     #spinner { width: 12px; height: 12px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -128,6 +137,7 @@ const renderDialog = (request: ConfirmDialogRequest): string => `<!doctype html>
   </script>
 </body>
 </html>`
+}
 
 type DialogState = {
   window: BrowserWindow
@@ -269,7 +279,9 @@ export class ConfirmDialogWindowService {
         window.focus()
       })
       void window
-        .loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(renderDialog(request))}`)
+        .loadURL(
+          `data:text/html;charset=UTF-8,${encodeURIComponent(renderDialog(request, getResolvedAppTheme()))}`
+        )
         .catch((error: Error) => this.dispose(state, { success: false, error: error.message }))
     })
   }

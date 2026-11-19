@@ -1,3 +1,5 @@
+import { createWindowsLiveProxyPreflight } from '../release/shared/live-proxy-preflight.mjs'
+import { readE2ESeedFixtures } from './e2e-seed-metadata.mjs'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, realpathSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, stat, writeFile, rename } from 'node:fs/promises'
@@ -6,7 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
 import {
-  RELEASE_ACCOUNT_CASES,
+  SERIAL_PACKAGE_ACCOUNT_CASES,
   readTestCaseIds,
   readE2ECaseResults,
   mergeE2ETestResults,
@@ -19,6 +21,11 @@ import {
   readPackagedKnowledgeCacheIdentity
 } from './package-app.mjs'
 import { createKnowledgeCacheIdentity } from '../build/runtime/knowledge-cache-identity.mjs'
+import {
+  resolveKnowledgeSeedRoot,
+  cloneKnowledgeEntries,
+  withSeedLock
+} from './knowledge-seed-store.mjs'
 import {
   captureBackendIdentity,
   importLegacyBackendReport,
@@ -211,28 +218,42 @@ const hashBuildDirectories = async (directories) => {
   return hash.digest('hex')
 }
 
-const readKnowledgeCacheStats = async (cachePath) => {
+const readCaseKnowledgeStats = async (tests) => {
   const totals = { ...EMPTY_KNOWLEDGE_CACHE_STATS }
-  let files = []
-  try {
-    files = await walk(cachePath)
-  } catch {
-    return totals
-  }
-  for (const filePath of files.filter((item) => path.basename(item) === 'stats.json')) {
+  let missingSummaries = 0
+  for (const item of tests.flatMap((test) => test.cases || [])) {
+    if (!item.logDir) continue
     try {
-      const parsed = JSON.parse(await readFile(filePath, 'utf8'))
-      for (const key of Object.keys(totals)) totals[key] += Number(parsed[key] || 0)
+      const summary = JSON.parse(
+        await readFile(
+          path.join(ROOT, item.logDir, 'artifacts', 'knowledge-cache-summary.json'),
+          'utf8'
+        )
+      )
+      for (const key of Object.keys(totals)) totals[key] += Number(summary[key] || 0)
     } catch {
-      // A failed case may leave no usable cache statistics.
+      missingSummaries += 1
     }
   }
-  return totals
+  return { ...totals, missingSummaries, scope: 'case-computations-only' }
 }
 
 const prepareKnowledgeCache = async (input) => {
   const cachePath = path.join(KNOWLEDGE_CACHE_ROOT, 'v3', `${process.platform}-${process.arch}`)
-  if (input.fresh) await rm(cachePath, { recursive: true, force: true })
+  const seedRoot = input.pipeline ? resolveKnowledgeSeedRoot() : ''
+  if (seedRoot) {
+    await withSeedLock(seedRoot, async () => {
+      if (input.fresh) {
+        await rm(path.join(seedRoot, 'entries'), { recursive: true, force: true })
+        await rm(path.join(seedRoot, 'manifests'), { recursive: true, force: true })
+      } else {
+        // Migrate only verified pure results, never runtime databases or locks.
+        const legacy = process.env.NCURATOR_TEST_KNOWLEDGE_LEGACY_CACHE || cachePath
+        await cloneKnowledgeEntries(legacy, path.join(seedRoot, 'entries'))
+      }
+    })
+    process.stdout.write(`[test-workflow] persistent knowledge seed: ${seedRoot}\n`)
+  } else if (input.fresh) await rm(cachePath, { recursive: true, force: true })
   await mkdir(cachePath, { recursive: true })
   return {
     knowledgeCacheEnabled: input.enabled !== false,
@@ -243,7 +264,9 @@ const prepareKnowledgeCache = async (input) => {
       NCURATOR_WORKSPACE_KNOWLEDGE_CACHE: input.enabled === false ? '0' : '1',
       NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH: cachePath,
       NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE: input.namespace,
-      NCURATOR_E2E_BUILD_FINGERPRINT: input.buildFingerprint
+      NCURATOR_E2E_BUILD_FINGERPRINT: input.buildFingerprint,
+      NCURATOR_E2E_KNOWLEDGE_SEED_ROOT: seedRoot,
+      NCURATOR_E2E_KNOWLEDGE_SEED_IDENTITY: input.pipeline ? JSON.stringify(input.pipeline) : ''
     }
   }
 }
@@ -324,21 +347,11 @@ export const findTestFiles = async (input) => {
     return []
   }
 
-  const defaultPackage =
-    input.target === 'package' &&
-    !input.domain &&
-    !input.suite &&
-    !input.groups.length &&
-    !input.caseIds.length &&
-    input.domesticPackage !== false
-  const isReleaseAccountFile = (filePath) =>
-    defaultPackage && RELEASE_ACCOUNT_CASES.includes(toCaseId(filePath))
   const allFiles = await walk(scopeDir)
   const candidates = allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
     .filter((filePath) => {
       if (!filePath.startsWith(path.join(TEST_CASES_ROOT, 'account') + path.sep)) return true
-      if (isReleaseAccountFile(filePath)) return true
       if (toCaseId(filePath) === 'account-change-during-runs') {
         return input.caseIds.includes('account-change-during-runs')
       }
@@ -348,7 +361,6 @@ export const findTestFiles = async (input) => {
     .filter(
       (filePath) =>
         !filePath.startsWith(`${PROVIDER_MATRIX_ROOT}${path.sep}`) ||
-        isReleaseAccountFile(filePath) ||
         input.caseIds.includes(toCaseId(filePath))
     )
     .filter((filePath) => {
@@ -800,7 +812,7 @@ const runE2ETestFilesConcurrently = async (
         .filter(
           ({ testFile }) =>
             target.distribution !== 'international' ||
-            !RELEASE_ACCOUNT_CASES.includes(toCaseId(testFile))
+            !SERIAL_PACKAGE_ACCOUNT_CASES.includes(toCaseId(testFile))
         )
         .map((task) => ({
           ...task,
@@ -813,7 +825,8 @@ const runE2ETestFilesConcurrently = async (
   const gateTasks = runnableTasks.filter((task) => gateCaseIds.includes(toCaseId(task.testFile)))
   const accountTasks = runnableTasks.filter(
     (task) =>
-      task.env.NCURATOR_E2E_EXECUTABLE && RELEASE_ACCOUNT_CASES.includes(toCaseId(task.testFile))
+      task.env.NCURATOR_E2E_EXECUTABLE &&
+      SERIAL_PACKAGE_ACCOUNT_CASES.includes(toCaseId(task.testFile))
   )
   const concurrentTasks = runnableTasks.filter(
     (task) =>
@@ -846,12 +859,8 @@ const runE2ETestFilesConcurrently = async (
     else results.push(taskResult)
   }
 
-  const runTask = async (task) => {
+  const readTaskEvidence = async (task) => {
     const relativeFile = path.relative(ROOT, task.testFile)
-    completed += 1
-    process.stdout.write(
-      `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
-    )
     const pattern = testNamePattern
     const caseIds = readTestCaseIds(task.testFile, await readFile(task.testFile, 'utf8')).filter(
       (id) => !pattern || new RegExp(pattern, 'u').test(id)
@@ -859,18 +868,61 @@ const runE2ETestFilesConcurrently = async (
     const previous = previousResults.find(
       (test) => test.file === relativeFile && test.targetId === task.targetId
     )
-    if (
-      previous &&
-      passedPackageTest(previous, task.env.NCURATOR_E2E_ARTIFACT_SHA256) &&
-      caseIds.length > 0 &&
-      caseIds.every((id) => previous.cases.some((item) => item.caseId === id))
-    ) {
+    return {
+      caseIds,
+      reusable:
+        previous &&
+        passedPackageTest(previous, task.env.NCURATOR_E2E_ARTIFACT_SHA256) &&
+        caseIds.length > 0 &&
+        caseIds.every((id) => previous.cases.some((item) => item.caseId === id))
+          ? previous
+          : undefined
+    }
+  }
+
+  const probeWindowsProxy = createWindowsLiveProxyPreflight()
+  const preflightTasks = async (stageTasks, phase) => {
+    if (process.platform !== 'win32') return true
+    try {
+      const packageTasks = stageTasks.filter((task) => task.env.NCURATOR_E2E_EXECUTABLE)
+      const pendingFiles = (
+        await Promise.all(
+          packageTasks.map(async (task) =>
+            (await readTaskEvidence(task)).reusable ? null : task.testFile
+          )
+        )
+      ).filter(Boolean)
+      await probeWindowsProxy([...new Set(pendingFiles)])
+      return true
+    } catch (error) {
+      process.stderr.write(`[release-preflight:${phase}] ${error.message}\n`)
+      return false
+    }
+  }
+
+  const runTask = async (task) => {
+    const relativeFile = path.relative(ROOT, task.testFile)
+    completed += 1
+    process.stdout.write(
+      `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
+    )
+    const { caseIds, reusable: previous } = await readTaskEvidence(task)
+    if (previous) {
       results.push({ ...previous, index: task.index, reused: true })
       process.stdout.write(`[test-workflow] reuse passed package evidence: ${relativeFile}\n`)
       return { code: 0 }
     }
     const startedAt = Date.now()
     const caseEnv = await buildDirectKnowledgeCacheEnv(task.env, task.testFile)
+    if (
+      caseEnv.NCURATOR_E2E_KNOWLEDGE_SEED_ROOT &&
+      caseEnv.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE === '1'
+    ) {
+      caseEnv.NCURATOR_E2E_SEED_FIXTURES = JSON.stringify(
+        readE2ESeedFixtures(task.testFile, await readFile(task.testFile, 'utf8'), testNamePattern)
+      )
+      caseEnv.NCURATOR_E2E_SEED_PREPARED = '1'
+    }
     let code = await runVitest({
       configPath: task.testFile.startsWith(`${PROVIDER_MATRIX_ROOT}${path.sep}`)
         ? 'vitest.provider-matrix.config.mts'
@@ -915,6 +967,9 @@ const runE2ETestFilesConcurrently = async (
     }
   }
 
+  if (!(await preflightTasks(gateTasks, 'cache-gates'))) {
+    return { exitCode: 1, results }
+  }
   const gateFailure = await runE2EGates(gateTasks, (task) => runTask(task))
   if (gateFailure) {
     process.stderr.write(
@@ -924,6 +979,15 @@ const runE2ETestFilesConcurrently = async (
       exitCode: gateFailure.code,
       results: results.sort((left, right) => left.index - right.index)
     }
+  }
+
+  if (
+    !(await preflightTasks(
+      runnableTasks.filter((task) => !gateTasks.includes(task)),
+      'selected-cases'
+    ))
+  ) {
+    return { exitCode: 1, results }
   }
 
   for (const task of accountTasks) {
@@ -1005,23 +1069,12 @@ const cleanupStaleE2ETempRoot = async (e2eTempRoot) => {
   return removedCount
 }
 
-const runTypeWorkflow = async (input) => {
-  const testFiles = await findTestFiles(input)
-  if (testFiles.length === 0) {
-    if (input.caseIds.length > 0) {
-      throw new Error(
-        `no test files match --case ${input.caseIds.join(', ')} within ${formatScope(input)}`
-      )
-    }
-    process.stdout.write(`[test-workflow] no tests found for ${formatScope(input)}\n`)
-    return { exitCode: 0, e2eResults: [] }
-  }
-
+export const includeReleaseGateSelection = async (input, selectedFiles) => {
   if (input.type === 'e2e' && input.caseIds.length > 0) {
     const declared = new Set(
       (
         await Promise.all(
-          testFiles.map(async (filePath) =>
+          selectedFiles.map(async (filePath) =>
             readTestCaseIds(filePath, await readFile(filePath, 'utf8'))
           )
         )
@@ -1034,6 +1087,47 @@ const runTypeWorkflow = async (input) => {
       )
     }
   }
+
+  if (input.type !== 'e2e' || input.target !== 'package' || !input.gateCaseIds?.length)
+    return { input, testFiles: selectedFiles }
+  const gates = await findTestFiles({
+    ...input,
+    domain: '',
+    suite: '',
+    groups: [],
+    excludeGroups: [],
+    caseIds: input.gateCaseIds
+  })
+  const gateFiles = input.gateCaseIds.map((caseId) => {
+    const file = gates.find((filePath) => toCaseId(filePath) === caseId)
+    if (!file) throw new Error(`Missing required package gate file: ${caseId}`)
+    return file
+  })
+  return {
+    input: input.caseIds.length
+      ? { ...input, caseIds: [...new Set([...input.caseIds, ...input.gateCaseIds])] }
+      : input,
+    testFiles: [...new Set([...gateFiles, ...selectedFiles])]
+  }
+}
+
+const runTypeWorkflow = async (input) => {
+  let testFiles = await findTestFiles(input)
+  if (testFiles.length === 0) {
+    if (input.caseIds.length > 0) {
+      throw new Error(
+        `no test files match --case ${input.caseIds.join(', ')} within ${formatScope(input)}`
+      )
+    }
+    if (input.gateCaseIds?.length && (input.domain || input.suite || input.groups.length))
+      throw new Error(`no release regression tests match explicit scope: ${formatScope(input)}`)
+    process.stdout.write(`[test-workflow] no tests found for ${formatScope(input)}\n`)
+    return { exitCode: 0, e2eResults: [] }
+  }
+
+  const withGates = await includeReleaseGateSelection(input, testFiles)
+  input = withGates.input
+  testFiles = withGates.testFiles
 
   const nativeTarget = input.type === 'e2e' ? 'electron' : 'node'
   const shouldFilterByTestName =
@@ -1107,6 +1201,9 @@ const runTypeWorkflow = async (input) => {
     ])
     const knowledgeCache = await prepareKnowledgeCache({
       namespace: 'source',
+      pipeline: JSON.parse(
+        await readFile(path.join(ROOT, 'out', 'main', 'knowledge-cache-identity.json'), 'utf8')
+      ),
       buildFingerprint,
       fresh: input.freshKnowledgeCache
     })
@@ -1377,6 +1474,7 @@ export const runTestWorkflow = async (argv, options = {}) => {
           namespace: `package/${session.releasePlatform}`,
           buildFingerprint: session.artifactSha256,
           enabled: Boolean(readPackagedKnowledgeCacheIdentity(session.installedAppPath)),
+          pipeline: readPackagedKnowledgeCacheIdentity(session.installedAppPath),
           fresh: args.freshKnowledgeCache
         })
         target.env = { ...session.env, ...knowledgeCache.env }
@@ -1425,7 +1523,8 @@ export const runTestWorkflow = async (argv, options = {}) => {
             knowledgeCachePath: target.knowledgeCache.knowledgeCachePath,
             knowledgeCacheNamespace: target.knowledgeCache.knowledgeCacheNamespace,
             buildFingerprint: target.knowledgeCache.buildFingerprint,
-            ...(await readKnowledgeCacheStats(target.knowledgeCache.knowledgeCachePath))
+            ...(await readCaseKnowledgeStats(targetTests)),
+            seedRoot: target.env.NCURATOR_E2E_KNOWLEDGE_SEED_ROOT || null
           }
         })
       }

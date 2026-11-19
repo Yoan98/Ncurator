@@ -320,13 +320,13 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
         : t(($) => $.settings.updateIndex)
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
-      <div className="mt-1 text-[12px] leading-5 text-[#787774]">
+      <div className="mt-1 text-[12px] leading-5 text-[var(--notion-text-soft)]">
         {t(($) => $.settings.embedding.requirement)}
       </div>
       <Button
         type="link"
         size="small"
-        className="mt-2 !h-auto !p-0 !text-[#2F3437]"
+        className="mt-2 !h-auto !p-0 !text-[var(--notion-text)]"
         onClick={onVectorModelSettingsOpen}
       >
         {t(($) => $.settings.embedding.configure)}
@@ -341,7 +341,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     >
       <div className="nc-settings-workspace-sidebar">
         <section className="nc-settings-side-section">
-          <div className="text-[14px] font-semibold text-[#37352F]">
+          <div className="text-[14px] font-semibold text-[var(--notion-text)]">
             {t(($) => $.settings.webSources)}
           </div>
           <Button
@@ -360,29 +360,29 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
 
         <section className="nc-settings-side-section">
           <div className="flex items-center gap-1.5">
-            <div className="text-[14px] font-semibold text-[#37352F]">
+            <div className="text-[14px] font-semibold text-[var(--notion-text)]">
               {t(($) => $.settings.indexStatus)}
             </div>
             <Tooltip title={t(($) => $.settings.webpageIndexingFetchesTheMainContentAndAddsIt)}>
-              <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#9B9A97] transition-colors hover:text-[#37352F]" />
+              <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[var(--notion-text-faint)] transition-colors hover:text-[var(--notion-text)]" />
             </Tooltip>
           </div>
 
-          <div className="mt-3 text-[12px] text-[#787774]">
-            <div className="border-y border-[#EEEEEC] py-3">
+          <div className="mt-3 text-[12px] text-[var(--notion-text-soft)]">
+            <div className="border-y border-[var(--notion-line)] py-3">
               <div className="inline-flex items-center gap-1.5">
-                <HiArrowPath className="h-4 w-4 text-[#787774]" />
+                <HiArrowPath className="h-4 w-4 text-[var(--notion-text-soft)]" />
                 <span>{t(($) => $.settings.indexable)}</span>
               </div>
               <div
-                className="mt-1 text-[16px] font-semibold text-[#37352F]"
+                className="mt-1 text-[16px] font-semibold text-[var(--notion-text)]"
                 data-testid={importSelectors.webSourceActionableIndexCount}
               >
                 {actionableWebIndexCount}
               </div>
               {webSummary.failed_count > 0 ? (
                 <div
-                  className="mt-1 text-[11px] text-[#B3261E]"
+                  className="mt-1 text-[11px] text-[var(--notion-red)]"
                   data-testid={importSelectors.webSourceActionableFailedHint}
                 >
                   {t(($) => $.settings.includesFailures)}
@@ -397,7 +397,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
           {vectorModelStatus ? (
             <div
               role={hasVectorModel === false ? 'alert' : 'status'}
-              className={`mt-3 break-words text-[12px] ${hasVectorModel === false ? 'text-[#B3261E]' : 'text-[#787774]'}`}
+              className={`mt-3 break-words text-[12px] ${hasVectorModel === false ? 'text-[var(--notion-red)]' : 'text-[var(--notion-text-soft)]'}`}
             >
               {vectorModelStatus}
             </div>
@@ -408,7 +408,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               onClick={() => void handleScanWebSources()}
               loading={webIndexJob?.action === 'scan'}
               disabled={webScanDisabled}
-              className="border-[#EEEEEC] bg-white text-[#37352F]"
+              className="border-[var(--notion-line)] bg-[var(--notion-page)] text-[var(--notion-text)]"
             >
               {t(($) => $.common.checkForUpdates)}
             </Button>
@@ -431,7 +431,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                 >
                   <button
                     type="button"
-                    className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#9B9A97] transition hover:border-[#DAD8D2] hover:text-[#37352F]"
+                    className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] border border-[var(--notion-line)] bg-[var(--notion-page)] text-[var(--notion-text-faint)] transition hover:border-[var(--notion-line-strong)] hover:text-[var(--notion-text)]"
                     aria-label={t(($) => $.settings.whyIndexingIsUnavailable)}
                   >
                     <HiOutlineQuestionMarkCircle className="h-4 w-4" />
@@ -448,7 +448,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       </div>
 
       <section className="nc-settings-panel flex min-h-0 min-w-0 flex-col overflow-hidden">
-        <div className="nc-settings-panel-toolbar shrink-0 text-[14px] font-medium text-[#37352F]">
+        <div className="nc-settings-panel-toolbar shrink-0 text-[14px] font-medium text-[var(--notion-text)]">
           {t(($) => $.settings.webpageList)}
         </div>
         <div
@@ -460,7 +460,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  <span className="text-[#787774]">
+                  <span className="text-[var(--notion-text-soft)]">
                     {webLoading
                       ? t(($) => $.settings.loadingWebpages)
                       : t(($) => $.settings.noWebpagesYet)}
@@ -481,13 +481,13 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                   >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
-                        <div className="truncate text-[14px] font-semibold text-[#37352F]">
+                        <div className="truncate text-[14px] font-semibold text-[var(--notion-text)]">
                           {source.title || source.url}
                         </div>
-                        <div className="mt-1 break-all text-[12px] text-[#787774]">
+                        <div className="mt-1 break-all text-[12px] text-[var(--notion-text-soft)]">
                           {source.url}
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#9B9A97]">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--notion-text-faint)]">
                           <StatusTag
                             label={statusBadge.label}
                             className={statusBadge.className}
@@ -556,7 +556,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       >
         <div className="space-y-4 pt-2">
           <div>
-            <div className="mb-2 text-sm font-medium text-[#37352F]">URL</div>
+            <div className="mb-2 text-sm font-medium text-[var(--notion-text)]">URL</div>
             <Input.TextArea
               value={webUrlsText}
               onChange={(event) => {
@@ -568,7 +568,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               data-testid={importSelectors.webSourceUrlInput}
             />
             {webUrlsError ? (
-              <div className="mt-2 text-[12px] text-[#B3261E]">{webUrlsError}</div>
+              <div className="mt-2 text-[12px] text-[var(--notion-red)]">{webUrlsError}</div>
             ) : null}
           </div>
         </div>
@@ -589,7 +589,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
         cancelButtonProps={{ 'data-testid': importSelectors.webSourceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[8px]"
       >
-        <p className="mb-0 text-[#787774]">
+        <p className="mb-0 text-[var(--notion-text-soft)]">
           {deleteWebSource?.title || deleteWebSource?.url
             ? t(($) => $.settings.deleteTheWebpage, {
                 value1: deleteWebSource?.title || deleteWebSource?.url

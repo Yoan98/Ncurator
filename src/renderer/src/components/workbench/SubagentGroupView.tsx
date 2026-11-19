@@ -216,7 +216,7 @@ const SubagentGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }
               data-agent-id={child.agentId}
               data-status={child.status}
               aria-label={child.name}
-              className={`flex items-center gap-1.5 rounded-lg py-1 pr-1 text-left text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-[#9B9A97] ${child.status === 'queued' ? 'text-[#9B9A97]' : 'text-[#37352F]'}`}
+              className={`flex items-center gap-1.5 rounded-lg py-1 pr-1 text-left text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-[var(--notion-text-faint)] ${child.status === 'queued' ? 'text-[var(--notion-text-faint)]' : 'text-[var(--notion-text)]'}`}
             >
               <span className={child.status === 'queued' ? 'grayscale opacity-40' : undefined}>
                 <PartnerAvatar

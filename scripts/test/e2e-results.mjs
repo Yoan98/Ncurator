@@ -3,7 +3,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 
-export const RELEASE_ACCOUNT_CASES = [
+export const SERIAL_PACKAGE_ACCOUNT_CASES = [
   'account-menu-and-page',
   'browser-login-outcomes',
   'independent-sessions-and-restart',

@@ -37,11 +37,11 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
 
   return (
     <div
-      className="mt-3 rounded-[6px] border border-[#EEEEEC] bg-white px-3 py-2"
+      className="mt-3 rounded-[6px] border border-[var(--notion-line)] bg-[var(--notion-page)] px-3 py-2"
       data-testid={testId}
     >
       <div className="flex items-center text-[12px]">
-        <span className="font-medium text-[#37352F]">{title}</span>
+        <span className="font-medium text-[var(--notion-text)]">{title}</span>
       </div>
       <Progress
         percent={progress.hasDeterminateProgress ? progress.percent : 0}
@@ -53,7 +53,7 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
         className="mt-1.5"
       />
       {shouldHideMessage ? null : (
-        <div className="mt-1 text-[11px] text-[#787774]">
+        <div className="mt-1 text-[11px] text-[var(--notion-text-soft)]">
           <span className="block truncate">{message}</span>
         </div>
       )}

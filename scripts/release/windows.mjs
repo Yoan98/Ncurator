@@ -11,6 +11,7 @@ import {
   markCandidatePublished,
   materializeReleaseCandidate,
   readReleaseCandidate,
+  recheckWindowsCandidateE2E,
   recordCandidateE2E
 } from './candidate.mjs'
 import { inspectLocalWindowsRelease } from './shared/windows.mjs'
@@ -39,11 +40,12 @@ const valueAfter = (name) => {
   return index >= 0 ? args[index + 1] : undefined
 }
 const releaseTag = valueAfter('--tag') || ''
-validateReleaseArgs(args)
+validateReleaseArgs(args, { allowRecheck: true })
 const regression = readRegressionSelection(args)
 const modes = [
   ['prepare', args.includes('--prepare-only')],
   ['test', args.includes('--test-only')],
+  ['recheck', args.includes('--recheck-only')],
   ['publish', args.includes('--publish-only')]
 ].filter(([, enabled]) => enabled)
 
@@ -55,11 +57,15 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId> ...] [--fresh-knowledge-cache]'
+    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--recheck-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId> ...] [--gates-only --impact-reason <reason>] [--fresh-knowledge-cache]'
   )
 }
 const mode = modes[0][0]
-if (mode !== 'test' && hasRegressionSelectionArgs(args)) {
+if (
+  mode !== 'test' &&
+  hasRegressionSelectionArgs(args) &&
+  !(mode === 'recheck' && regression.state.gatesOnly && !regression.state.freshKnowledgeCache)
+) {
   throw new Error('regression selection options are only valid with --test-only')
 }
 
@@ -108,6 +114,18 @@ const { stdout: taggedCommitOutput } = await execFileAsync('git', [
 ])
 const taggedCommit = taggedCommitOutput.trim()
 
+if (mode === 'recheck') {
+  const candidate = await recheckWindowsCandidateE2E({
+    tag: releaseTag,
+    commit: taggedCommit,
+    impactReason: regression.state.impactReason
+  })
+  process.stdout.write(
+    `[release] retained candidate E2E evidence verified: ${candidate.bundlePath}\n`
+  )
+  process.exit(0)
+}
+
 const cleanupLocalCandidates = async () => {
   try {
     const removed = await cleanupSupersededReleaseCandidates({
@@ -150,7 +168,19 @@ const releaseEnvironment = () => {
 }
 
 const testEnvironment = (environment) => {
-  const sanitized = { ...environment }
+  const sanitized = {
+    ...environment,
+    NCURATOR_TEST_KNOWLEDGE_LEGACY_CACHE:
+      process.env.NCURATOR_TEST_KNOWLEDGE_LEGACY_CACHE ||
+      path.join(
+        ROOT,
+        'tests',
+        '.cache',
+        'workspace-knowledge',
+        'v3',
+        `${process.platform}-${process.arch}`
+      )
+  }
   for (const name of [
     'GH_TOKEN',
     'GITHUB_TOKEN',

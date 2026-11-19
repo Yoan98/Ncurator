@@ -8,20 +8,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-import { createWorkspaceWithFiles } from './realWorkspaceHelpers'
-
-const createCancelWorkspaceFiles = (): Array<{ relativePath: string; content: string }> => {
-  const runMarker = Date.now().toString(36)
-  return Array.from({ length: 24 }, (_, fileIndex) => ({
-    relativePath: `notes/index-source-${String(fileIndex + 1).padStart(2, '0')}.md`,
-    content: Array.from(
-      { length: 80 },
-      (_, paragraphIndex) =>
-        `# ${runMarker} file ${fileIndex + 1} paragraph ${paragraphIndex + 1}\n\n` +
-        `Unique indexing content ${runMarker}-${fileIndex + 1}-${paragraphIndex + 1}.`
-    ).join('\n\n')
-  }))
-}
+import { copyScenarioWorkspaceFixture } from './realWorkspaceHelpers'
 
 describe('settings workspace e2e', () => {
   it(
@@ -33,16 +20,13 @@ describe('settings workspace e2e', () => {
         suite: 'workspace',
         groups: ['files'],
         description: '更新索引进行中可取消，停止后按钮恢复且仍有未完成文件。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace-scenarios/workspace-prepare-cancel'],
         knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const workspaceRoot = await createWorkspaceWithFiles(
-            'workspace-prepare-cancel',
-            createCancelWorkspaceFiles()
-          )
+          const workspaceRoot = await copyScenarioWorkspaceFixture('workspace-prepare-cancel')
           const workspace = await createRealWorkspaceWithRoot(page, {
             name: '文件取消索引工作区',
             rootPath: workspaceRoot

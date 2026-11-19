@@ -57,7 +57,7 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId> ...] [--fresh-knowledge-cache]'
+    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId> ...] [--gates-only --impact-reason <reason>] [--fresh-knowledge-cache]'
   )
 }
 const mode = modes[0][0]
@@ -181,7 +181,19 @@ const createCandidate = async (sourceDirectory, platform, commit, distribution) 
 }
 
 const sanitizedTestEnvironment = () => {
-  const environment = { ...process.env }
+  const environment = {
+    ...process.env,
+    NCURATOR_TEST_KNOWLEDGE_LEGACY_CACHE:
+      process.env.NCURATOR_TEST_KNOWLEDGE_LEGACY_CACHE ||
+      path.join(
+        ROOT,
+        'tests',
+        '.cache',
+        'workspace-knowledge',
+        'v3',
+        `${process.platform}-${process.arch}`
+      )
+  }
   for (const name of [
     'GH_TOKEN',
     'GITHUB_TOKEN',

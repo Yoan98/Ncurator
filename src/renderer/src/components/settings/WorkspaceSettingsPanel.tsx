@@ -424,13 +424,13 @@ const WorkspaceSettingsPanel: React.FC = () => {
             <React.Fragment key={entry.id}>
               <button
                 type="button"
-                className="ant-tree-treenode flex min-h-[30px] w-full items-center gap-1.5 rounded-[4px] px-2 text-left text-[13px] text-[#37352F]"
+                className="ant-tree-treenode flex min-h-[30px] w-full items-center gap-1.5 rounded-[4px] px-2 text-left text-[13px] text-[var(--notion-text)]"
                 style={{ paddingLeft: 8 + depth * 18 }}
                 onClick={() =>
                   isDirectory ? toggleWorkspaceDirectory(workspaceId, entry) : undefined
                 }
               >
-                <span className="ant-tree-switcher flex h-4 w-4 shrink-0 items-center justify-center text-[#91918E]">
+                <span className="ant-tree-switcher flex h-4 w-4 shrink-0 items-center justify-center text-[var(--notion-text-faint)]">
                   {isDirectory ? isExpanded ? <HiChevronDown /> : <HiChevronRight /> : null}
                 </span>
                 <FileIcon
@@ -448,7 +448,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                   </span>
                 ) : null}
                 {childLoading ? (
-                  <HiArrowPath className="h-3.5 w-3.5 shrink-0 animate-spin text-[#91918E]" />
+                  <HiArrowPath className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--notion-text-faint)]" />
                 ) : null}
               </button>
               {isDirectory && isExpanded
@@ -458,12 +458,12 @@ const WorkspaceSettingsPanel: React.FC = () => {
           )
         })}
         {loading && entries.length === 0 ? (
-          <div className="px-3 py-2 text-[12px] text-[#91918E]">{t(($) => $.settings.loading)}</div>
+          <div className="px-3 py-2 text-[12px] text-[var(--notion-text-faint)]">{t(($) => $.settings.loading)}</div>
         ) : null}
         {error ? (
           <button
             type="button"
-            className="px-3 py-2 text-[12px] text-[#B3261E]"
+            className="px-3 py-2 text-[12px] text-[var(--notion-red)]"
             onClick={() => void loadWorkspaceDirectory(workspaceId, parentPath)}
           >
             {t(($) => $.settings.couldNotLoadClickToRetry)}
@@ -681,13 +681,13 @@ const WorkspaceSettingsPanel: React.FC = () => {
         : t(($) => $.settings.updateIndex)
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
-      <div className="mt-1 text-[12px] leading-5 text-[#787774]">
+      <div className="mt-1 text-[12px] leading-5 text-[var(--notion-text-soft)]">
         {vectorModelError || t(($) => $.settings.embedding.requirement)}
       </div>
       <Button
         type="link"
         size="small"
-        className="mt-2 !h-auto !p-0 !text-[#2F3437]"
+        className="mt-2 !h-auto !p-0 !text-[var(--notion-text)]"
         onClick={() => navigate('/settings/vector')}
       >
         {t(($) => $.settings.embedding.configure)}
@@ -703,7 +703,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       data-testid={settingsSelectors.workspacePanel}
     >
       <div
-        className="flex h-full min-h-0 flex-col overflow-hidden bg-white"
+        className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--notion-page)]"
         data-testid={importSelectors.page}
       >
         <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
@@ -735,7 +735,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                   <span>
                     {t(($) => $.settings.file2, { value1: summedSummary.file_count })}
                     {embeddingIndex?.staleFileCount ? (
-                      <span className="ml-2 rounded-full bg-[#FBF3DB] px-2 py-0.5 text-[12px] text-[#8B6521]">
+                      <span className="ml-2 rounded-full bg-[var(--notion-yellow-bg)] px-2 py-0.5 text-[12px] text-[var(--notion-yellow)]">
                         {t(($) => $.settings.embedding.stale)}
                       </span>
                     ) : null}
@@ -746,10 +746,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     <div className="nc-settings-workspace-columns">
                       <div className="nc-settings-workspace-sidebar">
                         <section className="nc-settings-side-section">
-                          <div className="text-[14px] font-semibold text-[#37352F]">
+                          <div className="text-[14px] font-semibold text-[var(--notion-text)]">
                             {t(($) => $.settings.fileLocations)}
                           </div>
-                          <div className="mt-2 text-[12px] leading-5 text-[#787774]">
+                          <div className="mt-2 text-[12px] leading-5 text-[var(--notion-text-soft)]">
                             {t(($) => $.settings.addYourUsualWorkingDirectories)}
                           </div>
                           <div className="mt-4">
@@ -767,7 +767,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
                         <section className="nc-settings-side-section">
                           <div className="flex items-center gap-1.5">
-                            <div className="text-[14px] font-semibold text-[#37352F]">
+                            <div className="text-[14px] font-semibold text-[var(--notion-text)]">
                               {t(($) => $.settings.indexStatus)}
                             </div>
                             <Tooltip
@@ -775,24 +775,24 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 ($) => $.settings.indexedFilesImproveSearchSpeedAndCanReduceToken
                               )}
                             >
-                              <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#9B9A97] transition-colors hover:text-[#37352F]" />
+                              <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[var(--notion-text-faint)] transition-colors hover:text-[var(--notion-text)]" />
                             </Tooltip>
                           </div>
-                          <div className="mt-3 text-[12px] text-[#787774]">
-                            <div className="border-y border-[#EEEEEC] py-3">
+                          <div className="mt-3 text-[12px] text-[var(--notion-text-soft)]">
+                            <div className="border-y border-[var(--notion-line)] py-3">
                               <div className="inline-flex items-center gap-1.5">
-                                <HiArrowPath className="h-4 w-4 text-[#787774]" />
+                                <HiArrowPath className="h-4 w-4 text-[var(--notion-text-soft)]" />
                                 <span>{t(($) => $.settings.indexable)}</span>
                               </div>
                               <div
-                                className="mt-1 text-[16px] font-semibold text-[#37352F]"
+                                className="mt-1 text-[16px] font-semibold text-[var(--notion-text)]"
                                 data-testid={importSelectors.workspaceActionableIndexCount}
                               >
                                 {actionableIndexCount}
                               </div>
                               {summedSummary.failed_file_count > 0 ? (
                                 <div
-                                  className="mt-1 text-[11px] text-[#B3261E]"
+                                  className="mt-1 text-[11px] text-[var(--notion-red)]"
                                   data-testid={importSelectors.workspaceActionableFailedHint}
                                 >
                                   {t(($) => $.settings.includesFailures)}
@@ -806,7 +806,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           {vectorModelError || vectorModelStatus ? (
                             <div
                               role={vectorModelError ? 'alert' : 'status'}
-                              className={`mt-3 break-words text-[12px] ${vectorModelError ? 'text-[#B3261E]' : 'text-[#787774]'}`}
+                              className={`mt-3 break-words text-[12px] ${vectorModelError ? 'text-[var(--notion-red)]' : 'text-[var(--notion-text-soft)]'}`}
                             >
                               {vectorModelError || vectorModelStatus}
                             </div>
@@ -842,7 +842,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 >
                                   <button
                                     type="button"
-                                    className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#9B9A97] transition hover:border-[#DAD8D2] hover:text-[#37352F]"
+                                    className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] border border-[var(--notion-line)] bg-[var(--notion-page)] text-[var(--notion-text-faint)] transition hover:border-[var(--notion-line-strong)] hover:text-[var(--notion-text)]"
                                     aria-label={t(($) => $.settings.whyIndexingIsUnavailable)}
                                   >
                                     <HiOutlineQuestionMarkCircle className="h-4 w-4" />
@@ -860,7 +860,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
                       <div className="nc-settings-panel flex min-h-0 min-w-0 flex-col">
                         <div className="nc-settings-panel-toolbar shrink-0">
-                          <div className="text-[14px] font-semibold text-[#37352F]">
+                          <div className="text-[14px] font-semibold text-[var(--notion-text)]">
                             {t(($) => $.settings.directoryTree)}
                           </div>
                           <Tooltip title={t(($) => $.common.refresh)}>
@@ -891,7 +891,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               <Empty
                                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                                 description={
-                                  <span className="text-[#787774]">
+                                  <span className="text-[var(--notion-text-soft)]">
                                     {t(($) => $.settings.noFileLocationsYet)}
                                   </span>
                                 }
@@ -910,7 +910,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                     key={workspace.id}
                                     data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
                                   >
-                                    <div className="group flex min-h-[30px] w-full items-center gap-1.5 rounded-[4px] px-2 text-[13px] text-[#37352F]">
+                                    <div className="group flex min-h-[30px] w-full items-center gap-1.5 rounded-[4px] px-2 text-[13px] text-[var(--notion-text)]">
                                       <button
                                         type="button"
                                         className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
@@ -920,7 +920,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                             : undefined
                                         }
                                       >
-                                        <span className="flex h-4 w-4 shrink-0 items-center justify-center text-[#91918E]">
+                                        <span className="flex h-4 w-4 shrink-0 items-center justify-center text-[var(--notion-text-faint)]">
                                           {isDirectoryRoot ? (
                                             isRootCollapsed ? (
                                               <HiChevronRight />
@@ -938,7 +938,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                           <div className="truncate font-medium">
                                             {getRootDisplayName(workspace)}
                                           </div>
-                                          <div className="truncate text-[11px] text-[#91918E]">
+                                          <div className="truncate text-[11px] text-[var(--notion-text-faint)]">
                                             {workspace.root_path}
                                           </div>
                                         </div>
@@ -978,7 +978,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                   <span>
                     {t(($) => $.settings.webpage, { value1: webCount })}
                     {embeddingIndex?.staleWebCount ? (
-                      <span className="ml-2 rounded-full bg-[#FBF3DB] px-2 py-0.5 text-[12px] text-[#8B6521]">
+                      <span className="ml-2 rounded-full bg-[var(--notion-yellow-bg)] px-2 py-0.5 text-[12px] text-[var(--notion-yellow)]">
                         {t(($) => $.settings.embedding.stale)}
                       </span>
                     ) : null}
@@ -1016,7 +1016,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         cancelButtonProps={{ 'data-testid': importSelectors.workspaceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[8px]"
       >
-        <p className="mb-0 text-[#787774]">
+        <p className="mb-0 text-[var(--notion-text-soft)]">
           {t(($) => $.settings.thisPathWillNoLongerBeASourceRoot)}
         </p>
       </Modal>

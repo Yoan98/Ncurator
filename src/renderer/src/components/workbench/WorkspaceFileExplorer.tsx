@@ -353,7 +353,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
           icon: (
             <FileIcon
               extension={type === 'other' ? '' : type}
-              className="h-4 w-4 shrink-0 text-[#787774]"
+              className="h-4 w-4 shrink-0 text-[var(--notion-text-soft)]"
             />
           )
         }))
@@ -462,7 +462,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                 <button
                   type="button"
                   className={`relative flex h-[30px] w-full items-center gap-1.5 pr-2 text-left text-[13px] transition-colors ${
-                    selected ? 'bg-[#EEEEEB] text-[#37352F]' : 'text-[#57554F]'
+                    selected ? 'bg-[var(--notion-line)] text-[var(--notion-text)]' : 'text-[var(--notion-text-soft)]'
                   } ${visible ? '' : 'hidden'}`}
                   style={{ paddingLeft: 8 + depth * 18 }}
                   title={entry.relative_path}
@@ -486,7 +486,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                     isDirectory ? toggleDirectory(entry) : onOpenFile(entry)
                   }}
                 >
-                  <span className="flex h-5 w-4 shrink-0 items-center justify-center text-[#91918E]">
+                  <span className="flex h-5 w-4 shrink-0 items-center justify-center text-[var(--notion-text-faint)]">
                     {isDirectory ? (
                       isExpanded ? (
                         <HiChevronDown className="h-4 w-4" />
@@ -511,7 +511,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                           mode="compact"
                         />
                       ) : (
-                        <span className="text-[11px] font-medium text-[#787774]">
+                        <span className="text-[11px] font-medium text-[var(--notion-text-soft)]">
                           {t(($) => $.workbench.changed)}
                         </span>
                       )}
@@ -550,23 +550,23 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   return (
     <div
       ref={explorerRef}
-      className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white"
+      className="flex h-full min-h-0 flex-col border-l border-[var(--notion-line)] bg-[var(--notion-page)]"
     >
       <div className="shrink-0 px-2 pt-2">
         <div
-          className="grid h-8 grid-cols-2 rounded-[6px] bg-[#F3F3F1] p-0.5"
+          className="grid h-8 grid-cols-2 rounded-[6px] bg-[var(--notion-surface)] p-0.5"
           data-testid={workbenchSelectors.workspaceExplorerModeSwitch}
         >
           <button
             type="button"
-            className={`rounded-[5px] text-[12px] font-medium ${mode === 'all' ? 'bg-white text-[#37352F] shadow-sm' : 'text-[#787774] hover:text-[#37352F]'}`}
+            className={`rounded-[5px] text-[12px] font-medium ${mode === 'all' ? 'bg-[var(--notion-page)] text-[var(--notion-text)] shadow-sm' : 'text-[var(--notion-text-soft)] hover:text-[var(--notion-text)]'}`}
             onClick={() => onModeChange('all')}
           >
             {t(($) => $.common.all)}
           </button>
           <button
             type="button"
-            className={`rounded-[5px] text-[12px] font-medium ${mode === 'changed' ? 'bg-white text-[#37352F] shadow-sm' : 'text-[#787774] hover:text-[#37352F]'}`}
+            className={`rounded-[5px] text-[12px] font-medium ${mode === 'changed' ? 'bg-[var(--notion-page)] text-[var(--notion-text)] shadow-sm' : 'text-[var(--notion-text-soft)] hover:text-[var(--notion-text)]'}`}
             onClick={() => onModeChange('changed')}
           >
             {t(($) => $.workbench.changesInThisRun)}
@@ -575,13 +575,13 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
         </div>
       </div>
       <div className="shrink-0 p-2">
-        <label className="flex h-8 items-center gap-2 rounded-[6px] border border-[#E0DFDC] px-2.5 text-[#91918E]">
+        <label className="flex h-8 items-center gap-2 rounded-[6px] border border-[var(--notion-line-strong)] px-2.5 text-[var(--notion-text-faint)]">
           <HiOutlineMagnifyingGlass className="h-4 w-4 shrink-0" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t(($) => $.workbench.filterFiles)}
-            className="min-w-0 flex-1 bg-transparent text-[13px] text-[#37352F] outline-none placeholder:text-[#9B9A97]"
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--notion-text)] outline-none placeholder:text-[var(--notion-text-faint)]"
           />
         </label>
       </div>
@@ -623,23 +623,23 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
           {mode === 'all' ? (
             !childrenByPath[''] && !draft ? (
               directoryErrors.has('') && !loading.has('') ? (
-                <div className="px-3 py-2 text-xs text-[#91918E]">
+                <div className="px-3 py-2 text-xs text-[var(--notion-text-faint)]">
                   {t(($) => $.workbench.couldNotReadTheDirectory)}
                   <button
                     type="button"
-                    className="ml-2 text-[#37352F] underline"
+                    className="ml-2 text-[var(--notion-text)] underline"
                     onClick={() => void loadDirectory('')}
                   >
                     {t(($) => $.common.retry)}
                   </button>
                 </div>
               ) : (
-                <div role="status" className="px-3 py-2 text-xs text-[#91918E]">
+                <div role="status" className="px-3 py-2 text-xs text-[var(--notion-text-faint)]">
                   {t(($) => $.workbench.loadingFiles)}
                 </div>
               )
             ) : childrenByPath['']?.length === 0 && !draft ? (
-              <div className="px-3 py-2 text-xs text-[#91918E]">
+              <div className="px-3 py-2 text-xs text-[var(--notion-text-faint)]">
                 {t(($) => $.workbench.thisDirectoryHasNoFiles)}
               </div>
             ) : (
@@ -657,7 +657,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                 <React.Fragment key={latest.id}>
                   <button
                     type="button"
-                    className={`relative flex h-9 w-full items-center gap-2 px-2 text-left text-[13px] transition-colors ${selected ? 'bg-[#EEEEEB] text-[#37352F]' : 'text-[#57554F]'}`}
+                    className={`relative flex h-9 w-full items-center gap-2 px-2 text-left text-[13px] transition-colors ${selected ? 'bg-[var(--notion-line)] text-[var(--notion-text)]' : 'text-[var(--notion-text-soft)]'}`}
                     aria-current={selected ? 'true' : undefined}
                     data-workspace-entry="true"
                     data-testid={`${workbenchSelectors.workspaceFileChangePrefix}-${latest.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
@@ -675,7 +675,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                             ? t(($) => $.workbench.collapseChangeHistory)
                             : t(($) => $.workbench.expandChangeHistory)
                         }
-                        className="flex h-6 w-4 shrink-0 items-center justify-center text-[#91918E]"
+                        className="flex h-6 w-4 shrink-0 items-center justify-center text-[var(--notion-text-faint)]"
                         onClick={(event) => {
                           event.stopPropagation()
                           setExpandedChangeGroups((current) => {
@@ -713,7 +713,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                         mode="compact"
                       />
                     ) : (
-                      <span className="shrink-0 text-[11px] text-[#787774]">
+                      <span className="shrink-0 text-[11px] text-[var(--notion-text-soft)]">
                         {latest.operation === 'deleted'
                           ? t(($) => $.common.deleted)
                           : latest.operation === 'renamed'
@@ -722,20 +722,20 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                       </span>
                     )}
                     {records.length > 1 ? (
-                      <span className="shrink-0 text-[11px] tabular-nums text-[#9B9A97]">
+                      <span className="shrink-0 text-[11px] tabular-nums text-[var(--notion-text-faint)]">
                         {records.length}
                         {t(($) => $.workbench.times)}
                       </span>
                     ) : null}
                   </button>
                   {records.length > 1 && isExpanded ? (
-                    <div className="border-b border-[#EEEEEC] bg-[#FAFAF9] py-1">
+                    <div className="border-b border-[var(--notion-line)] bg-[var(--notion-surface-sunken)] py-1">
                       {records.map((record, index) => (
                         <button
                           data-workspace-entry="true"
                           key={record.id}
                           type="button"
-                          className={`flex h-8 w-full items-center gap-2 pl-9 pr-2 text-left text-[12px] ${selectedKey === `change:${record.id}` ? 'bg-[#EEEEEB] text-[#37352F]' : 'text-[#787774]'}`}
+                          className={`flex h-8 w-full items-center gap-2 pl-9 pr-2 text-left text-[12px] ${selectedKey === `change:${record.id}` ? 'bg-[var(--notion-line)] text-[var(--notion-text)]' : 'text-[var(--notion-text-soft)]'}`}
                           aria-current={selectedKey === `change:${record.id}` ? 'page' : undefined}
                           onClick={() => {
                             setSelectedKey(`change:${record.id}`)
@@ -750,7 +750,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                           <span className="min-w-0 flex-1 truncate">
                             {record.runSummary || t(($) => $.workbench.fileChanges)}
                           </span>
-                          <span className="shrink-0 tabular-nums text-[#9B9A97]">
+                          <span className="shrink-0 tabular-nums text-[var(--notion-text-faint)]">
                             {new Date(record.updatedAt).toLocaleTimeString(
                               getRendererRuntime().locale,
                               {
@@ -767,7 +767,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
               )
             })
           ) : (
-            <div className="px-3 py-8 text-center text-xs text-[#91918E]">
+            <div className="px-3 py-8 text-center text-xs text-[var(--notion-text-faint)]">
               {t(($) => $.workbench.noFileChangesInThisRun)}
             </div>
           )}

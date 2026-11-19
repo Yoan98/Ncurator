@@ -1,4 +1,4 @@
-import type { AppLanguage, AppRuntimeSnapshot, ServiceRoute } from './appPreferences'
+import type { AppLanguage, AppRuntimeSnapshot, AppTheme, ServiceRoute } from './appPreferences'
 
 export type DocumentSourceType = 'file' | 'web'
 export type DocumentImportStatus = 1 | 2 | 3
@@ -1311,6 +1311,7 @@ export type AppSettings = {
   systemNotificationsEnabled: boolean
   knowledgeIndexSpeed: KnowledgeIndexSpeed
   language: AppLanguage
+  theme: AppTheme
   serviceRoute: ServiceRoute
 }
 

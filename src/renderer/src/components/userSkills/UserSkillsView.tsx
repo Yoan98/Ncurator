@@ -192,10 +192,10 @@ export default function UserSkillsView() {
     })
   }
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white" data-testid={selectors.view}>
+    <div className="flex h-full min-h-0 flex-col bg-[var(--notion-page)]" data-testid={selectors.view}>
       <ViewToolbar
         title={t(($) => $.userSkills.title)}
-        icon={<HiOutlineBookOpen className="h-4 w-4 text-[#787774]" />}
+        icon={<HiOutlineBookOpen className="h-4 w-4 text-[var(--notion-text-soft)]" />}
         testId={selectors.topbar}
       >
         <Button
@@ -225,7 +225,7 @@ export default function UserSkillsView() {
             />
           </div>
         ) : (
-          <div className="divide-y divide-[#EEEEEC]">
+          <div className="divide-y divide-[var(--notion-line)]">
             {skills.map((skill) => (
               <div
                 key={skill.name}
@@ -234,13 +234,13 @@ export default function UserSkillsView() {
               >
                 <div className="min-w-0 flex-1">
                   <div
-                    className="line-clamp-2 break-words text-[14px] font-medium text-[#37352F] [overflow-wrap:anywhere]"
+                    className="line-clamp-2 break-words text-[14px] font-medium text-[var(--notion-text)] [overflow-wrap:anywhere]"
                     title={skill.name}
                   >
                     {skill.name}
                   </div>
                   <div
-                    className="mt-1 line-clamp-2 break-words text-[13px] text-[#787774] [overflow-wrap:anywhere]"
+                    className="mt-1 line-clamp-2 break-words text-[13px] text-[var(--notion-text-soft)] [overflow-wrap:anywhere]"
                     title={skill.error ? skillError(skill.error) : skill.description}
                   >
                     {skill.error ? skillError(skill.error) : skill.description}
@@ -296,7 +296,7 @@ export default function UserSkillsView() {
       >
         <div>
           {externalChanged && (
-            <p role="status" className="mb-4 text-xs text-[#787774]">
+            <p role="status" className="mb-4 text-xs text-[var(--notion-text-soft)]">
               {t(($) => $.userSkills.contentChanged)}
             </p>
           )}

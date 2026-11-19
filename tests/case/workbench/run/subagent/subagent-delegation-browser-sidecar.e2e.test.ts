@@ -914,7 +914,7 @@ describe('subagent browser and sidecar real UI', () => {
       suite: 'run',
       groups: ['subagent'],
       description: '派发只显示助手，失败云保留真实错误并支持刷新恢复',
-      fixtures: [],
+      fixtures: ['tests/fixtures/workspace'],
       knowledge: 'cached',
       serviceMode: 'real',
       execution: 'live',

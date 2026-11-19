@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
-import os from 'node:os'
+import { mkdir, realpath } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
@@ -14,6 +13,8 @@ import {
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
 
+import { copyScenarioWorkspaceFixture } from '../files/realWorkspaceHelpers'
+
 const normalizeVisibleText = (value: string): string => value.replace(/\s+/g, '')
 
 describe('settings workspace e2e', () => {
@@ -26,31 +27,21 @@ describe('settings workspace e2e', () => {
         suite: 'workspace',
         groups: ['core'],
         description: '添加目录、子路径拒绝提示、父路径自动替换与扫描后可索引数刷新。',
-        fixtures: [],
-        knowledge: 'cached',
+        fixtures: ['tests/fixtures/workspace-scenarios/workspace-set-root-path'],
+        knowledge: 'none',
         serviceMode: 'real',
         execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const parentRoot = await mkdtemp(path.join(os.tmpdir(), 'settings-workspace-set-root-'))
+          const fixtureRoot = await copyScenarioWorkspaceFixture('workspace-set-root-path')
+          const parentRoot = path.join(fixtureRoot, 'parent')
           const childRoot = path.join(parentRoot, 'docs')
-          const grandParent = await mkdtemp(
-            path.join(os.tmpdir(), 'settings-workspace-set-root-grand-')
-          )
+          const grandParent = path.join(fixtureRoot, 'grand')
           const nestedUnderGrand = path.join(grandParent, 'inner')
-          await mkdir(childRoot, { recursive: true })
+          // An empty directory is part of the initial tree; do not add a scanned placeholder file.
           await mkdir(nestedUnderGrand, { recursive: true })
-          await writeFile(path.join(childRoot, 'brief.txt'), 'hello workspace', 'utf8')
-          runtime.registerResource({
-            name: `settings-workspace:${parentRoot}`,
-            phase: 'after-app-close',
-            dispose: async () => {
-              await rm(parentRoot, { recursive: true, force: true })
-              await rm(grandParent, { recursive: true, force: true })
-            }
-          })
 
           await navigateToSettingsSection(page, 'workspace')
           await getSettingsLocator(page, importSelectors.workspaceEmptyState).waitFor({

@@ -35,9 +35,9 @@ export default function SelectionPopover({
       data-testid={`${testPrefix}-selection-popup`}
       data-placement={floating?.placement}
       className={
-        'fixed z-[1100] border border-[#E0DFDC] bg-white shadow-[0_4px_16px_rgba(15,15,15,0.10)] ' +
+        'fixed z-[1100] border border-[var(--notion-line-strong)] bg-[var(--notion-page)] shadow-[0_4px_16px_rgba(15,15,15,0.10)] ' +
         (popup.mode === 'editor'
-          ? 'flex w-[420px] items-end gap-1 rounded-[19px] p-[4px] focus-within:border-[#B5CCE2]'
+          ? 'flex w-[420px] items-end gap-1 rounded-[19px] p-[4px] focus-within:border-[var(--notion-blue)]'
           : 'rounded-lg p-1')
       }
       style={{
@@ -52,10 +52,10 @@ export default function SelectionPopover({
           type="button"
           data-testid={`${testPrefix}-selection-ai-reference`}
           disabled={locked}
-          className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[#37352F] outline-none hover:bg-[#F4F4F2] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--notion-text)] outline-none hover:bg-[var(--notion-surface)] focus-visible:ring-2 focus-visible:ring-[var(--notion-accent-blue)] disabled:cursor-not-allowed disabled:opacity-40"
           onClick={() => setPopup((previous) => previous && { ...previous, mode: 'editor' })}
         >
-          <HiOutlineSparkles className="h-4 w-4 text-[#80649F]" aria-hidden="true" />
+          <HiOutlineSparkles className="h-4 w-4 text-[var(--notion-purple)]" aria-hidden="true" />
           {t(($) => $.editors.aiReference)}
         </button>
       ) : (
@@ -93,7 +93,7 @@ export default function SelectionPopover({
               aria-label={t(($) => $.editors.removeReference)}
               title={t(($) => $.editors.removeReference)}
               disabled={locked}
-              className="flex h-[28px] w-[28px] shrink-0 cursor-pointer items-center justify-center rounded-full text-[#91918E] outline-none hover:bg-[#F8EBE9] hover:text-[#B3261E] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] disabled:cursor-not-allowed"
+              className="flex h-[28px] w-[28px] shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--notion-text-faint)] outline-none hover:bg-[var(--notion-red-bg)] hover:text-[var(--notion-red)] focus-visible:ring-2 focus-visible:ring-[var(--notion-accent-blue)] disabled:cursor-not-allowed"
               onClick={() => {
                 remove(popup.node.id)
                 setPopup(null)
@@ -116,7 +116,7 @@ export default function SelectionPopover({
                 : t(($) => $.editors.addToInput)
             }
             disabled={locked || !hasUserText(popup.node.children)}
-            className="flex h-[28px] w-[28px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#37352F] text-white outline-none hover:bg-[#25241F] focus-visible:ring-2 focus-visible:ring-[#0B6BCB] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#F4F4F2] disabled:text-[#B8B7B3]"
+            className="flex h-[28px] w-[28px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-[var(--notion-accent)] text-[var(--notion-accent-contrast)] outline-none hover:bg-[var(--notion-accent)] focus-visible:ring-2 focus-visible:ring-[var(--notion-accent-blue)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[var(--notion-surface)] disabled:text-[var(--notion-text-faint)]"
             onClick={save}
           >
             <HiOutlineCheck className="h-3.5 w-3.5" aria-hidden="true" />

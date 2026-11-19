@@ -191,7 +191,7 @@ const ComposerInputEditor: React.FC<Props> = ({
         aria-label={placeholder}
         data-testid={dataTestId}
         data-placeholder={placeholder}
-        className={`block whitespace-pre-wrap break-words text-[#37352F] outline-none empty:before:pointer-events-none empty:before:text-[#9B9A97] empty:before:content-[attr(data-placeholder)] ${variant === 'inline' ? 'min-h-[28px] px-2 py-[4px] text-[13px] leading-[20px]' : 'min-h-[72px] rounded-[6px] border border-[#E5E4E0] px-3 py-2 text-[14px] leading-6'} ${editorClassName || ''}`}
+        className={`block whitespace-pre-wrap break-words text-[var(--notion-text)] outline-none empty:before:pointer-events-none empty:before:text-[var(--notion-text-faint)] empty:before:content-[attr(data-placeholder)] ${variant === 'inline' ? 'min-h-[28px] px-2 py-[4px] text-[13px] leading-[20px]' : 'min-h-[72px] rounded-[6px] border border-[var(--notion-line-strong)] px-3 py-2 text-[14px] leading-6'} ${editorClassName || ''}`}
         onInput={() => {
           if (composingRef.current) return
           editorRef.current

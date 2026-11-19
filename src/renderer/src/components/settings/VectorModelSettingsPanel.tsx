@@ -109,7 +109,7 @@ function ModelFieldLabel({
     <div className="mb-1 flex items-center gap-1.5">
       <label htmlFor={htmlFor} className="text-[13px]">
         {required ? (
-          <span className="mr-1 text-[#ff4d4f]" aria-hidden="true">
+          <span className="mr-1 text-[var(--notion-red)]" aria-hidden="true">
             *
           </span>
         ) : null}
@@ -119,7 +119,7 @@ function ModelFieldLabel({
         <Tooltip title={hint} trigger={['hover', 'focus']} fresh destroyTooltipOnHide>
           <button
             type="button"
-            className="inline-flex items-center text-[#9B9A97] transition-colors hover:text-[#37352F]"
+            className="inline-flex items-center text-[var(--notion-text-faint)] transition-colors hover:text-[var(--notion-text)]"
             aria-label={t(($) => $.settings.embedding.fieldHelp, { field: label })}
             data-testid={helpTestId}
           >
@@ -315,7 +315,7 @@ const VectorModelSettingsPanel: React.FC = () => {
 
   const selectedBadge = (id: string): React.ReactNode =>
     snapshot?.activeModelId === id ? (
-      <Tag className="!m-0 !border-none !bg-[#F4F4F2] !text-[12px] !font-normal !text-[#787774]">
+      <Tag className="!m-0 !border-none !bg-[var(--notion-surface)] !text-[12px] !font-normal !text-[var(--notion-text-soft)]">
         {t(($) => $.settings.embedding.current)}
       </Tag>
     ) : null
@@ -536,7 +536,7 @@ const VectorModelSettingsPanel: React.FC = () => {
         </div>
       ) : null}
       {index?.running ? (
-        <p className="shrink-0 text-[12px] text-[#787774]">
+        <p className="shrink-0 text-[12px] text-[var(--notion-text-soft)]">
           {t(($) => $.settings.embedding.indexingGuard)}
         </p>
       ) : null}
@@ -577,7 +577,7 @@ const VectorModelSettingsPanel: React.FC = () => {
           <List
             loading={loading}
             dataSource={models}
-            className="[&_.ant-list-item]:!border-[#EEEEEC]"
+            className="[&_.ant-list-item]:!border-[var(--notion-line)]"
             data-testid={vectorSelectors.list}
             renderItem={(item) => {
               const id = `local:${item.id}`
@@ -594,22 +594,22 @@ const VectorModelSettingsPanel: React.FC = () => {
                   <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
                     <div className="min-w-0 flex-1 basis-64">
                       <div
-                        className="flex min-h-8 flex-wrap items-center gap-2 text-[14px] font-medium text-[#37352F]"
+                        className="flex min-h-8 flex-wrap items-center gap-2 text-[14px] font-medium text-[var(--notion-text)]"
                         data-testid={isSelected ? vectorSelectors.activeModel : undefined}
                       >
                         <span>{item.name}</span>
                         {selectedBadge(id)}
                       </div>
-                      <p className="mt-1 text-[13px] leading-5 text-[#787774]">
+                      <p className="mt-1 text-[13px] leading-5 text-[var(--notion-text-soft)]">
                         {item.description}
                       </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-[#787774]">
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-[var(--notion-text-soft)]">
                         {item.tags.length ? <span>{item.tags.join(' · ')}</span> : null}
                         {item.isDownloaded ? (
                           <>
                             {item.tags.length ? <span aria-hidden="true">·</span> : null}
                             <span
-                              className="inline-flex items-center gap-1 text-[#2F6F4E]"
+                              className="inline-flex items-center gap-1 text-[var(--notion-green)]"
                               data-testid={`${vectorSelectors.installedBadgePrefix}-${item.id}`}
                             >
                               <HiCheckCircle className="h-3.5 w-3.5" aria-hidden="true" />
@@ -688,7 +688,7 @@ const VectorModelSettingsPanel: React.FC = () => {
                       className="mt-5"
                       data-testid={`${vectorSelectors.progressPrefix}-${item.id}`}
                     >
-                      <div className="flex justify-between gap-3 text-[13px] text-[#37352F]">
+                      <div className="flex justify-between gap-3 text-[13px] text-[var(--notion-text)]">
                         <span>{TEXT.downloadingLabel}</span>
                         <span className="tabular-nums">{downloadProgress}%</span>
                       </div>
@@ -699,7 +699,7 @@ const VectorModelSettingsPanel: React.FC = () => {
                         showInfo={false}
                         className="!my-2"
                       />
-                      <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[12px] text-[#91918E]">
+                      <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[12px] text-[var(--notion-text-faint)]">
                         <span
                           className="min-w-0 flex-1 break-all"
                           data-testid={`${vectorSelectors.currentFilePrefix}-${item.id}`}
@@ -714,7 +714,7 @@ const VectorModelSettingsPanel: React.FC = () => {
                   ) : null}
                   {hasError ? (
                     <div
-                      className="mt-4 flex items-start gap-2 text-[13px] text-[#B3261E]"
+                      className="mt-4 flex items-start gap-2 text-[13px] text-[var(--notion-red)]"
                       data-testid={`${vectorSelectors.errorPrefix}-${item.id}`}
                     >
                       <HiExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -734,7 +734,7 @@ const VectorModelSettingsPanel: React.FC = () => {
         <div className="nc-settings-panel-toolbar">
           <div className="flex flex-wrap items-center gap-3">
             <h2>{t(($) => $.settings.embedding.remoteModels)}</h2>
-            <span className="text-[12px] text-[#787774]">
+            <span className="text-[12px] text-[var(--notion-text-soft)]">
               {t(($) => $.settings.serviceConnectionCount, {
                 count: snapshot?.remoteModels.length ?? 0
               })}
@@ -743,7 +743,7 @@ const VectorModelSettingsPanel: React.FC = () => {
           <Button
             type="primary"
             icon={<HiPlus className="h-4 w-4" aria-hidden="true" />}
-            className="border-none !bg-[#37352F] shadow-none hover:!bg-[#2F3437]"
+            className="border-none !bg-[var(--notion-accent)] shadow-none hover:!bg-[var(--notion-accent)]"
             disabled={!snapshot || Boolean(snapshotError) || Boolean(pending)}
             onClick={() => openEditor()}
             data-testid={vectorSelectors.remoteAddButton}
@@ -769,7 +769,7 @@ const VectorModelSettingsPanel: React.FC = () => {
                     <span>{model.name}</span>
                     {selectedBadge(model.id)}
                   </div>
-                  <div className="mt-1 break-all text-[12px] text-[#787774]">
+                  <div className="mt-1 break-all text-[12px] text-[var(--notion-text-soft)]">
                     {model.modelName} · {model.baseUrl}
                   </div>
                 </div>
@@ -832,7 +832,7 @@ const VectorModelSettingsPanel: React.FC = () => {
               </div>
             ))
           ) : (
-            <p className="px-4 py-4 text-[13px] text-[#787774]">
+            <p className="px-4 py-4 text-[13px] text-[var(--notion-text-soft)]">
               {snapshot
                 ? t(($) => $.settings.embedding.noRemote)
                 : t(($) => $.settings.checkingVectorModelStatus)}
@@ -965,7 +965,7 @@ const VectorModelSettingsPanel: React.FC = () => {
             {draftError || operationError || testResult ? (
               <div
                 role={draftError || operationError ? 'alert' : 'status'}
-                className={`break-words text-[13px] ${draftError || operationError ? 'text-[#B3261E]' : 'text-[#2F6F4E]'}`}
+                className={`break-words text-[13px] ${draftError || operationError ? 'text-[var(--notion-red)]' : 'text-[var(--notion-green)]'}`}
                 data-testid={vectorSelectors.remoteFeedback}
               >
                 {draftError || operationError || testResult}
@@ -1026,7 +1026,7 @@ const VectorModelSettingsPanel: React.FC = () => {
         className="[&_.ant-modal-content]:!rounded-[8px]"
       >
         <div data-testid={vectorSelectors.sourceModal}>
-          <p className="mb-3 text-[#787774]">{TEXT.switchSourceDescription}</p>
+          <p className="mb-3 text-[var(--notion-text-soft)]">{TEXT.switchSourceDescription}</p>
           <Radio.Group
             value={switchSourceValue}
             onChange={(event) => setSwitchSourceValue(event.target.value as ModelSource)}

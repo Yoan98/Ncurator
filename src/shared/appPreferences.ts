@@ -4,11 +4,17 @@ export type AppDistribution = 'domestic' | 'international'
 export type ServiceRoute = AppDistribution
 export type AppLocale = 'zh-CN' | 'en'
 export type AppLanguage = 'system' | AppLocale
+/** Three-state appearance: the OS preference is only honoured by `system`. */
+export type AppTheme = 'system' | 'light' | 'dark'
+/** Appearance actually painted; `system` is resolved before it reaches the UI. */
+export type AppResolvedTheme = 'light' | 'dark'
 
 export interface AppRuntimeSnapshot {
   distribution: AppDistribution
   locale: AppLocale
   serviceRoute: ServiceRoute
+  /** Resolved appearance. Main resolves the OS preference so the first frame is never wrong. */
+  theme: AppResolvedTheme
   accountWebOrigin?: string
 }
 
@@ -16,9 +22,18 @@ export const isServiceRoute = (value: string | undefined | null): value is Servi
   value === 'domestic' || value === 'international'
 export const isAppLanguage = (value: string | undefined | null): value is AppLanguage =>
   value === 'system' || value === 'zh-CN' || value === 'en'
+export const isAppTheme = (value: string | undefined | null): value is AppTheme =>
+  value === 'system' || value === 'light' || value === 'dark'
 export const resolveDistribution = (value?: string | null): AppDistribution => {
   if (!isServiceRoute(value)) throw new Error('Invalid application distribution')
   return value
+}
+
+/** `followsDark` is Main's read of the OS preference (Electron `nativeTheme.shouldUseDarkColors`). */
+export const resolveAppTheme = (preference: AppTheme, followsDark: boolean): AppResolvedTheme => {
+  if (preference === 'dark') return 'dark'
+  if (preference === 'light') return 'light'
+  return followsDark ? 'dark' : 'light'
 }
 
 export const resolveAppLocale = (

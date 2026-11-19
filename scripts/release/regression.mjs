@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { resolveBundleInstaller } from './artifact-bundle.mjs'
-import { passedPackageTest, RELEASE_ACCOUNT_CASES } from '../test/e2e-results.mjs'
+import { passedPackageTest } from '../test/e2e-results.mjs'
 
 const valueAfter = (args, name) => {
   const index = args.indexOf(name)
@@ -12,15 +12,23 @@ const valueAfter = (args, name) => {
   return value
 }
 
-const VALUE_OPTIONS = new Set(['--tag', '--domain', '--suite', '--group', '--case'])
+const VALUE_OPTIONS = new Set([
+  '--tag',
+  '--domain',
+  '--suite',
+  '--group',
+  '--case',
+  '--impact-reason'
+])
 const FLAG_OPTIONS = new Set([
   '--prepare-only',
   '--test-only',
   '--publish-only',
+  '--gates-only',
   '--fresh-knowledge-cache'
 ])
 
-export const validateReleaseArgs = (args) => {
+export const validateReleaseArgs = (args, { allowRecheck = false } = {}) => {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
     if (VALUE_OPTIONS.has(argument)) {
@@ -31,7 +39,7 @@ export const validateReleaseArgs = (args) => {
       index += 1
       continue
     }
-    if (FLAG_OPTIONS.has(argument)) continue
+    if (FLAG_OPTIONS.has(argument) || (allowRecheck && argument === '--recheck-only')) continue
     throw new Error(`unknown argument: ${argument}`)
   }
 }
@@ -61,6 +69,14 @@ export const readRegressionSelection = (args) => {
     throw new Error('不允许选择 showcase；请使用 pnpm test:showcase')
   }
 
+  const gatesOnly = args.includes('--gates-only')
+  const impactReason = valueAfter(args, '--impact-reason').trim()
+  if (gatesOnly && (domain || suite || groups.length || caseIds.length))
+    throw new Error('--gates-only cannot be mixed with other regression selectors')
+  if (gatesOnly && !impactReason) throw new Error('--gates-only requires --impact-reason')
+  if (!gatesOnly && impactReason) throw new Error('--impact-reason requires --gates-only')
+  if (gatesOnly) caseIds.push(...RELEASE_CACHE_CASES)
+
   const workflowArgs = []
   if (domain) workflowArgs.push('--domain', domain)
   if (suite) workflowArgs.push('--suite', suite)
@@ -73,6 +89,7 @@ export const readRegressionSelection = (args) => {
     workflowArgs,
     state: {
       mode: selected ? 'selected' : 'full',
+      ...(gatesOnly ? { gatesOnly, impactReason } : {}),
       ...(domain ? { domain } : {}),
       ...(suite ? { suite } : {}),
       ...(groups.length > 0 ? { groups } : {}),
@@ -84,7 +101,15 @@ export const readRegressionSelection = (args) => {
 
 export const hasRegressionSelectionArgs = (args) =>
   args.some((arg) =>
-    ['--domain', '--suite', '--group', '--case', '--fresh-knowledge-cache'].includes(arg)
+    [
+      '--domain',
+      '--suite',
+      '--group',
+      '--case',
+      '--fresh-knowledge-cache',
+      '--gates-only',
+      '--impact-reason'
+    ].includes(arg)
   )
 export const RELEASE_CACHE_CASES = ['prefix-cache-retain-live', 'subagent-prefix-cache-retain-live']
 
@@ -112,8 +137,9 @@ export const assertPackageRegressionPassed = (result, bundle, installer) => {
   }
   if (bundle.distribution !== 'international') {
     const passed = new Set(result.tests.flatMap((test) => test.cases.map(({ caseId }) => caseId)))
-    const missing = RELEASE_ACCOUNT_CASES.filter((caseId) => !passed.has(caseId))
-    if (missing.length) throw new Error(`missing required package E2E cases: ${missing.join(', ')}`)
+    const missing = RELEASE_CACHE_CASES.filter((caseId) => !passed.has(caseId))
+    if (missing.length)
+      throw new Error(`missing required packaged real cache gates: ${missing.join(', ')}`)
   }
 }
 

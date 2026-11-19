@@ -70,7 +70,7 @@ describe('workbench result e2e', () => {
         suite: 'result',
         groups: ['apply'],
         description: '真实 AI 更新 Excel 后，验证单网格红绿 diff、干净实际文件和回撤。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace'],
         knowledge: 'cached',
         serviceMode: 'real',
         extraEnv: {

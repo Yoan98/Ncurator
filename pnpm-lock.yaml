@@ -290,6 +290,9 @@ importers:
       javascript-obfuscator:
         specifier: 5.5.0
         version: 5.5.0
+      jiti:
+        specifier: 2.7.0
+        version: 2.7.0
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0(bufferutil@4.1.0)(utf-8-validate@6.0.5)

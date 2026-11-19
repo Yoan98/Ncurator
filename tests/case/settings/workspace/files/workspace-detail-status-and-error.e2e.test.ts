@@ -9,7 +9,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-import { createWorkspaceWithFiles, toSupportedFileStatuses } from './realWorkspaceHelpers'
+import { copyScenarioWorkspaceFixture, toSupportedFileStatuses } from './realWorkspaceHelpers'
 
 describe('settings workspace e2e', () => {
   it(
@@ -21,7 +21,7 @@ describe('settings workspace e2e', () => {
         suite: 'workspace',
         groups: ['files'],
         description: '文件 tab 持续展示需索引/失败摘要，并在索引失败后保留文件级错误状态。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace-scenarios/workspace-detail-status-and-error'],
         knowledge: 'cached',
         serviceMode: 'real',
         runMode: 'single',
@@ -29,12 +29,7 @@ describe('settings workspace e2e', () => {
           const { page } = runtime
           let workspaceRoot = ''
 
-          workspaceRoot = await createWorkspaceWithFiles('workspace-detail-status-and-error', [
-            {
-              relativePath: 'docs/broken.docx',
-              content: 'not a valid docx archive'
-            }
-          ])
+          workspaceRoot = await copyScenarioWorkspaceFixture('workspace-detail-status-and-error')
           const workspace = await createRealWorkspaceWithRoot(page, {
             name: '失败工作区',
             rootPath: workspaceRoot

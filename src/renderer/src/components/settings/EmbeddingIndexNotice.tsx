@@ -17,10 +17,10 @@ const EmbeddingIndexNotice: React.FC<{
   return (
     <div
       role="status"
-      className="mt-4 flex shrink-0 gap-2.5 rounded-[8px] bg-[#FBF3DB] p-4 text-[#37352F]"
+      className="mt-4 flex shrink-0 gap-2.5 rounded-[8px] bg-[var(--notion-yellow-bg)] p-4 text-[var(--notion-text)]"
       data-testid={vectorSelectors.staleNotice}
     >
-      <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#8B6521]" />
+      <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--notion-yellow)]" />
       <div className="min-w-0">
         <div className="text-[13px] font-medium">
           {index.running
@@ -29,7 +29,7 @@ const EmbeddingIndexNotice: React.FC<{
               ? t(($) => $.settings.embedding.filesComplete)
               : t(($) => $.settings.embedding.staleTitle)}
         </div>
-        <div className="mt-1 text-[12px] text-[#787774]">
+        <div className="mt-1 text-[12px] text-[var(--notion-text-soft)]">
           {index.running
             ? t(($) => $.settings.embedding.runningDescription)
             : t(($) => $.settings.embedding.staleDescription, index)}
@@ -53,7 +53,7 @@ const EmbeddingIndexNotice: React.FC<{
               <Button
                 size="small"
                 type="link"
-                className="!p-0 !text-[#37352F]"
+                className="!p-0 !text-[var(--notion-text)]"
                 disabled={disabled}
                 onClick={onRestore}
                 data-testid={vectorSelectors.restoreModel}

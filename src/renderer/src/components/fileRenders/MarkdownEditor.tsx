@@ -114,7 +114,7 @@ const MarkdownEditor: React.FC<{ filePath: string; allowSelection?: boolean }> =
 
   if (file.loadError || (!file.loading && file.initialText === null)) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-white">
+      <div className="flex h-full w-full items-center justify-center bg-[var(--notion-page)]">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={file.loadError || t(($) => $.editors.couldNotLoadTheFile)}
@@ -126,7 +126,7 @@ const MarkdownEditor: React.FC<{ filePath: string; allowSelection?: boolean }> =
   // 仅在尚无内容时展示 Spin；已有内容时保持根节点挂载，避免拆掉 Vditor DOM 后无法重建
   if (file.loading && file.initialText === null) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-white">
+      <div className="flex h-full w-full items-center justify-center bg-[var(--notion-page)]">
         <Spin />
       </div>
     )

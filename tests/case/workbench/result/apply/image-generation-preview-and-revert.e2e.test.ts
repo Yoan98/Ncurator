@@ -28,7 +28,7 @@ describe('workbench result e2e', () => {
         suite: 'result',
         groups: ['apply'],
         description: '真实 AI 生成 PNG 后，验证图片预览、工具输入契约和新建文件回退。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace'],
         knowledge: 'cached',
         serviceMode: 'real',
         execution: 'live',

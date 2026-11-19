@@ -25,29 +25,29 @@ export const getTreeEntryStatusMeta = (
   if (entry.index_stale && entry.index_status !== 'indexing' && entry.index_status !== 'failed') {
     return {
       label: t(($) => $.settings.embedding.stale),
-      className: 'border-transparent bg-[#FBF3DB] text-[#8B6521]'
+      className: 'border-transparent bg-[var(--notion-yellow-bg)] text-[var(--notion-yellow)]'
     }
   }
   switch (entry.index_status) {
     case 'indexing':
       return {
         label: t(($) => $.settings.indexing),
-        className: 'border-[#EEEEEC] bg-[#F4F4F2] text-[#2F3437]'
+        className: 'border-[var(--notion-line)] bg-[var(--notion-surface)] text-[var(--notion-text)]'
       }
     case 'indexed':
       return {
         label: t(($) => $.common.indexed),
-        className: 'border-[#E0DFDC] bg-[#F7F7F5] text-[#787774]'
+        className: 'border-[var(--notion-line-strong)] bg-[var(--notion-surface-sunken)] text-[var(--notion-text-soft)]'
       }
     case 'failed':
       return {
         label: t(($) => $.common.failed),
-        className: 'border-[#E7CAC6] bg-[#F8EBE9] text-[#B3261E]'
+        className: 'border-[var(--notion-red)] bg-[var(--notion-red-bg)] text-[var(--notion-red)]'
       }
     default:
       return {
         label: t(($) => $.settings.indexable),
-        className: 'border-[#EEEEEC] bg-[#F7F7F5] text-[#787774]'
+        className: 'border-[var(--notion-line)] bg-[var(--notion-surface-sunken)] text-[var(--notion-text-soft)]'
       }
   }
 }
@@ -59,7 +59,7 @@ export const getWebStatusBadge = (
   if (isRefreshing || source.index_status === 'crawling') {
     return {
       label: t(($) => $.settings.fetching),
-      className: 'border-[#EEEEEC] bg-[#F4F4F2] text-[#2F3437]',
+      className: 'border-[var(--notion-line)] bg-[var(--notion-surface)] text-[var(--notion-text)]',
       tooltip: t(($) => $.settings.fetchingTheWebpageContent),
       icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
     }
@@ -68,7 +68,7 @@ export const getWebStatusBadge = (
   if (source.index_status === 'indexing') {
     return {
       label: t(($) => $.settings.indexing),
-      className: 'border-[#EEEEEC] bg-[#F4F4F2] text-[#2F3437]',
+      className: 'border-[var(--notion-line)] bg-[var(--notion-surface)] text-[var(--notion-text)]',
       tooltip: t(($) => $.settings.buildingTheWebpageIndex),
       icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
     }
@@ -77,7 +77,7 @@ export const getWebStatusBadge = (
   if (source.index_stale && source.index_status === 'indexed') {
     return {
       label: t(($) => $.settings.embedding.stale),
-      className: 'border-transparent bg-[#FBF3DB] text-[#8B6521]',
+      className: 'border-transparent bg-[var(--notion-yellow-bg)] text-[var(--notion-yellow)]',
       tooltip: t(($) => $.settings.embedding.staleTitle),
       icon: <HiOutlineClock className={STATUS_ICON_CLASSNAME} />
     }
@@ -86,7 +86,7 @@ export const getWebStatusBadge = (
   if (source.index_status === 'indexed') {
     return {
       label: t(($) => $.common.indexed),
-      className: 'border-[#E0DFDC] bg-[#F7F7F5] text-[#787774]',
+      className: 'border-[var(--notion-line-strong)] bg-[var(--notion-surface-sunken)] text-[var(--notion-text-soft)]',
       tooltip: t(($) => $.settings.lastIndexed, { value1: formatDateTime(source.last_indexed_at) }),
       icon: <HiCheckCircle className={STATUS_ICON_CLASSNAME} />
     }
@@ -95,7 +95,7 @@ export const getWebStatusBadge = (
   if (source.index_status === 'crawl_failed') {
     return {
       label: t(($) => $.settings.fetchFailed),
-      className: 'border-[#E7CAC6] bg-[#F8EBE9] text-[#B3261E]',
+      className: 'border-[var(--notion-red)] bg-[var(--notion-red-bg)] text-[var(--notion-red)]',
       tooltip: source.last_error || t(($) => $.settings.theMostRecentWebpageFetchFailed),
       icon: <HiOutlineExclamationCircle className={STATUS_ICON_CLASSNAME} />
     }
@@ -104,7 +104,7 @@ export const getWebStatusBadge = (
   if (source.index_status === 'index_failed') {
     return {
       label: t(($) => $.settings.indexingFailed),
-      className: 'border-[#E7CAC6] bg-[#F8EBE9] text-[#B3261E]',
+      className: 'border-[var(--notion-red)] bg-[var(--notion-red-bg)] text-[var(--notion-red)]',
       tooltip: source.last_error || t(($) => $.settings.theMostRecentWebpageIndexingFailed),
       icon: <HiOutlineExclamationCircle className={STATUS_ICON_CLASSNAME} />
     }
@@ -112,7 +112,7 @@ export const getWebStatusBadge = (
 
   return {
     label: t(($) => $.settings.indexable),
-    className: 'border-[#EEEEEC] bg-[#F7F7F5] text-[#787774]',
+    className: 'border-[var(--notion-line)] bg-[var(--notion-surface-sunken)] text-[var(--notion-text-soft)]',
     tooltip: t(($) => $.settings.thisWebpageNeedsToBeIndexedOrUpdated),
     icon: <HiOutlineClock className={STATUS_ICON_CLASSNAME} />
   }

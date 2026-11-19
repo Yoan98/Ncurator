@@ -32,8 +32,9 @@ const readSettingsLayout = async (page: Page) =>
           return rect.left >= row.left && rect.right <= row.right + 1
         }
       ),
-      selectHeights: Array.from(document.querySelectorAll('.nc-settings-preference-select')).map(
-        (select) => select.getBoundingClientRect().height
+      /** 主题/语言卡片的高度：它们取代了旧的下拉框，用来守护控件不会溢出所在行。 */
+      cardHeights: Array.from(document.querySelectorAll('.nc-choice-card')).map(
+        (card) => card.getBoundingClientRect().height
       )
     }
   })
@@ -60,8 +61,7 @@ describe('application language and service region', () => {
             message: '中文通用页分组面板与限宽布局'
           })
           const initial = await runtime.page.evaluate(() => window.api.appSettingsGet())
-          await runtime.page.getByTestId('settings-language').click()
-          await runtime.page.getByTitle('English', { exact: true }).click()
+          await runtime.page.getByTestId('settings-language-en').click()
           await runtime.page.waitForFunction(
             async () => (await window.api.appSettingsGet()).language === 'en'
           )
@@ -116,8 +116,7 @@ describe('application language and service region', () => {
             message: 'English workbench after creating a partner through the UI'
           })
           await navigateToSettingsSection(runtime.page, 'general')
-          await runtime.page.getByTestId('settings-language').click()
-          await runtime.page.getByTitle('简体中文', { exact: true }).click()
+          await runtime.page.getByTestId('settings-language-zh-CN').click()
           return {
             initial,
             saved,
@@ -135,18 +134,16 @@ describe('application language and service region', () => {
           await runtime.assertThat(
             Math.abs(result.chineseLayout.width - 1080) <= CSS_LAYOUT_TOLERANCE_PX &&
               Math.abs(result.englishLayout.width - 1080) <= CSS_LAYOUT_TOLERANCE_PX &&
-              result.chineseLayout.groups.join(',') === '应用偏好,数据与诊断' &&
-              result.englishLayout.groups.join(',') === 'App preferences,Data and diagnostics' &&
+              result.chineseLayout.groups.join(',') === '视觉风格,应用偏好,数据与诊断' &&
+              result.englishLayout.groups.join(',') === 'Visual style,App preferences,Data and diagnostics' &&
               [result.chineseLayout, result.englishLayout, result.narrowLayout].every(
                 (layout) =>
                   layout.width <= 1080 + CSS_LAYOUT_TOLERANCE_PX &&
                   layout.centered &&
                   layout.noHorizontalOverflow &&
                   layout.controlsFit &&
-                  layout.selectHeights.length === 1 &&
-                  layout.selectHeights.every(
-                    (height) => Math.abs(height - 32) <= CSS_LAYOUT_TOLERANCE_PX
-                  )
+                  layout.cardHeights.length === 6 &&
+                  layout.cardHeights.every((height) => height > 0 && height <= 48)
               ) &&
               result.otherLayouts.every(
                 (layout) =>

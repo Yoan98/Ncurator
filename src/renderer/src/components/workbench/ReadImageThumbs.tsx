@@ -52,7 +52,7 @@ const ReadImageThumbs: React.FC<ReadImageThumbsProps> = ({ paths, onPreviewImage
           <button
             key={`${pathValue}-${String(index)}`}
             type="button"
-            className="h-[54px] w-[54px] shrink-0 overflow-hidden rounded-[8px] border border-[#E5E4E0] bg-white p-0 text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3]"
+            className="h-[54px] w-[54px] shrink-0 overflow-hidden rounded-[8px] border border-[var(--notion-line-strong)] bg-[var(--notion-page)] p-0 text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[var(--notion-line-strong)]"
             title={name}
             data-testid={`${workbenchSelectors.readImageThumbPrefix}-${String(index)}`}
             onClick={() => {
@@ -60,7 +60,7 @@ const ReadImageThumbs: React.FC<ReadImageThumbsProps> = ({ paths, onPreviewImage
               onPreviewImage?.({ name, src })
             }}
           >
-            <span className="flex h-full w-full items-center justify-center bg-[#F4F4F2] text-[#787774]">
+            <span className="flex h-full w-full items-center justify-center bg-[var(--notion-surface)] text-[var(--notion-text-soft)]">
               {src ? (
                 <img src={src} alt={name} className="h-full w-full object-cover" />
               ) : (

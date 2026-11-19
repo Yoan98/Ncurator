@@ -444,7 +444,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
             >
               {searchable ? (
                 <div className="workbench-select-search">
-                  <HiMagnifyingGlass className="h-3.5 w-3.5 shrink-0 text-[#91918E]" />
+                  <HiMagnifyingGlass className="h-3.5 w-3.5 shrink-0 text-[var(--notion-text-faint)]" />
                   <input
                     ref={searchInputRef}
                     value={query}
@@ -485,14 +485,14 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                             <>
                               <span className="flex min-w-0 flex-1 items-center gap-2">
                                 {option.icon ? (
-                                  <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
+                                  <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[var(--notion-text-soft)]">
                                     {option.icon}
                                   </span>
                                 ) : null}
                                 <span className="min-w-0 flex-1">
                                   <span
                                     className={joinClassNames(
-                                      'block truncate text-[13px] font-medium text-[#37352F]',
+                                      'block truncate text-[13px] font-medium text-[var(--notion-text)]',
                                       option.labelClassName
                                     )}
                                   >
@@ -501,7 +501,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                                   {showDescriptions && option.description ? (
                                     <span
                                       className={joinClassNames(
-                                        'mt-0.5 block truncate text-[12px] leading-4 text-[#91918E]',
+                                        'mt-0.5 block truncate text-[12px] leading-4 text-[var(--notion-text-faint)]',
                                         option.descriptionClassName
                                       )}
                                     >
@@ -510,16 +510,16 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                                   ) : null}
                                 </span>
                                 {!hasChildren && option.trailing ? (
-                                  <span className="ml-0.5 flex shrink-0 items-center text-[#787774]">
+                                  <span className="ml-0.5 flex shrink-0 items-center text-[var(--notion-text-soft)]">
                                     {option.trailing}
                                   </span>
                                 ) : null}
                               </span>
-                              <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
+                              <span className="flex shrink-0 items-center gap-1.5 text-[var(--notion-text-soft)]">
                                 {hasChildren ? (
-                                  <HiChevronRight className="h-3.5 w-3.5 text-[#9B9A97]" />
+                                  <HiChevronRight className="h-3.5 w-3.5 text-[var(--notion-text-faint)]" />
                                 ) : selected ? (
-                                  <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
+                                  <HiCheck className="h-3.5 w-3.5 text-[var(--notion-text)]" />
                                 ) : null}
                               </span>
                             </>
@@ -541,17 +541,17 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       {emptyAction.icon ? (
-                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
+                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[var(--notion-text-soft)]">
                           {emptyAction.icon}
                         </span>
                       ) : null}
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--notion-text)]">
                         {emptyAction.label}
                       </span>
                     </span>
                   </button>
                 ) : (
-                  <div className="px-4 py-6 text-center text-[12px] text-[#91918E]">
+                  <div className="px-4 py-6 text-center text-[12px] text-[var(--notion-text-faint)]">
                     {t(($) => $.workbench.noResults)}
                   </div>
                 )}
@@ -597,21 +597,21 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                           <>
                             <span className="flex min-w-0 flex-1 items-center gap-2">
                               {option.icon ? (
-                                <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
+                                <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[var(--notion-text-soft)]">
                                   {option.icon}
                                 </span>
                               ) : null}
-                              <span className="min-w-0 truncate text-[13px] font-medium text-[#37352F]">
+                              <span className="min-w-0 truncate text-[13px] font-medium text-[var(--notion-text)]">
                                 {option.label}
                               </span>
                               {option.trailing ? (
-                                <span className="ml-0.5 flex shrink-0 items-center text-[#787774]">
+                                <span className="ml-0.5 flex shrink-0 items-center text-[var(--notion-text-soft)]">
                                   {option.trailing}
                                 </span>
                               ) : null}
                             </span>
-                            <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
-                              {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
+                            <span className="flex shrink-0 items-center gap-1.5 text-[var(--notion-text-soft)]">
+                              {selected ? <HiCheck className="h-3.5 w-3.5 text-[var(--notion-text)]" /> : null}
                             </span>
                           </>
                         )

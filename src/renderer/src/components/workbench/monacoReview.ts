@@ -38,7 +38,10 @@ if (messages && getRendererRuntime().locale === 'zh-CN')
     154: t(($) => $.workbench.revertSelectedChanges),
     155: t(($) => $.workbench.revertThisChange2)
   })
-monaco.editor.defineTheme('curator-review', {
+const REVIEW_THEME_LIGHT = 'curator-review'
+const REVIEW_THEME_DARK = 'curator-review-dark'
+
+monaco.editor.defineTheme(REVIEW_THEME_LIGHT, {
   base: 'vs',
   inherit: true,
   rules: [],
@@ -52,4 +55,43 @@ monaco.editor.defineTheme('curator-review', {
     'editorLineNumber.foreground': '#91918E'
   }
 })
+
+/** 暗色版本与 `--notion-*` 暗色 token 对齐，否则编辑器会成为页面里的一块亮斑。 */
+monaco.editor.defineTheme(REVIEW_THEME_DARK, {
+  base: 'vs-dark',
+  inherit: true,
+  rules: [],
+  colors: {
+    'editor.background': '#191919',
+    'editor.foreground': '#D4D4D4',
+    'editorLineNumber.foreground': '#7A7A76',
+    'editorLineNumber.activeForeground': '#D4D4D4',
+    'editorGutter.background': '#191919',
+    'editor.lineHighlightBackground': '#252525',
+    'editor.selectionBackground': '#2F5F8F66',
+    'editorCursor.foreground': '#5AA9F0',
+    'editorIndentGuide.background1': '#2F2F2F',
+    'editorWidget.background': '#252525',
+    'editorWidget.border': '#2F2F2F',
+    'editorHoverWidget.background': '#252525',
+    'editorHoverWidget.border': '#2F2F2F',
+    'scrollbarSlider.background': '#4A4A4A66',
+    'scrollbarSlider.hoverBackground': '#5F5F5F99',
+    'diffEditor.insertedLineBackground': '#1E2C24',
+    'diffEditor.removedLineBackground': '#3A2422',
+    'diffEditor.insertedTextBackground': '#7CC79B40',
+    'diffEditor.removedTextBackground': '#FF9B9040'
+  }
+})
+
+export type ReviewThemeName = typeof REVIEW_THEME_LIGHT | typeof REVIEW_THEME_DARK
+
+/** Monaco 主题跟随页面 `data-theme`；切换时所有已创建的编辑器同步生效。 */
+export const reviewThemeFor = (resolved: 'light' | 'dark'): ReviewThemeName =>
+  resolved === 'dark' ? REVIEW_THEME_DARK : REVIEW_THEME_LIGHT
+
+export const applyReviewTheme = (resolved: 'light' | 'dark'): void => {
+  monaco.editor.setTheme(reviewThemeFor(resolved))
+}
+
 export { monaco }

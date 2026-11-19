@@ -17,7 +17,7 @@ import process from 'node:process'
 import { verifyReleaseBundle } from './artifact-bundle.mjs'
 import { resolveReleaseAssetPath } from './r2/fragment-contract.mjs'
 import { compareReleaseVersions, parseReleaseTag } from './tag.mjs'
-import { assertPackageRegressionPassed } from './regression.mjs'
+import { assertPackageRegressionPassed, RELEASE_CACHE_CASES } from './regression.mjs'
 
 const CANDIDATE_STATES = new Set(['prepared', 'ready', 'rejected', 'published'])
 const E2E_STATES = new Set(['pending', 'passed', 'failed', 'skipped'])
@@ -145,10 +145,19 @@ export const recordCandidateE2E = async ({
     throw new Error(`unsupported candidate E2E status: ${status}`)
   }
   const candidate = await readReleaseCandidate({ tag, platform, distribution: 'domestic' })
+  return recordVerifiedCandidateE2E(candidate, { status, resultPath, selection, reason })
+}
+
+const recordVerifiedCandidateE2E = async (
+  candidate,
+  { status, resultPath, selection, reason, recheck = false, scopeReview }
+) => {
   if (candidate.state.status === 'published') {
-    throw new Error(`published candidate ${tag} ${platform} cannot be retested`)
+    throw new Error(
+      `published candidate ${candidate.state.tag} ${candidate.state.platform} cannot be retested`
+    )
   }
-  if (status === 'passed') await verifyCandidateRegression(candidate, resultPath)
+  if (status === 'passed') await verifyCandidateRegression(candidate, resultPath, scopeReview)
   const state = {
     ...candidate.state,
     status: status === 'failed' ? 'rejected' : 'ready',
@@ -157,21 +166,100 @@ export const recordCandidateE2E = async ({
       recordedAt: new Date().toISOString(),
       ...(resultPath ? { result: path.relative(candidate.directory, resultPath) } : {}),
       ...(selection ? { selection } : {}),
+      ...(scopeReview ? { scopeReview } : {}),
       ...(reason ? { reason: String(reason).trim() } : {})
+    }
+  }
+  if (recheck) {
+    const current = JSON.parse(await readFile(statePathFor(candidate.directory), 'utf8'))
+    if (JSON.stringify(current) !== JSON.stringify(candidate.state)) {
+      throw new Error('candidate state changed during recheck; stop other release operations first')
     }
   }
   await writeState(candidate.directory, state)
   return { ...candidate, state }
 }
 
-const verifyCandidateRegression = async (candidate, resultPath = '') => {
+const isCacheGateTest = (test) =>
+  RELEASE_CACHE_CASES.some(
+    (id) =>
+      String(test.file || '')
+        .split(/[\\/]/u)
+        .at(-1) ===
+        id + '.e2e.test.ts' || test.cases?.some((item) => item.caseId === id)
+  )
+
+// Canonical runner evidence is read but never modified. Only explicit impact
+// selection with a recorded reason can scope out historical non-gate outcomes.
+export const recheckWindowsCandidateE2E = async ({ tag, commit, impactReason }) => {
+  const platform = 'windows-x64'
+  const candidate = await readReleaseCandidate({ tag, platform, distribution: 'domestic' })
+  if (candidate.state.commit !== commit) {
+    throw new Error('candidate commit does not match release tag')
+  }
+  const resultPath = path.join(candidate.directory, 'package-e2e-result.json')
+  let scopeReview
+  if (impactReason !== undefined) {
+    if (!String(impactReason).trim()) throw new Error('gates-only review requires an impact reason')
+    const bytes = await readFile(resultPath)
+    const original = JSON.parse(bytes)
+    scopeReview = {
+      mode: 'gates-only',
+      impactReason: String(impactReason).trim(),
+      originalResultSha256: sha256Bytes(bytes),
+      excludedFiles: (original.tests || [])
+        .filter((test) => !isCacheGateTest(test))
+        .map(({ file, status }) => ({ file, status }))
+    }
+  }
+  return recordVerifiedCandidateE2E(candidate, {
+    recheck: true,
+    status: 'passed',
+    resultPath,
+    selection: scopeReview
+      ? {
+          mode: 'selected',
+          cases: RELEASE_CACHE_CASES,
+          gatesOnly: true,
+          impactReason: scopeReview.impactReason
+        }
+      : candidate.state.e2e.selection,
+    scopeReview,
+    reason: 'Canonical package E2E evidence rechecked under the current release policy'
+  })
+}
+
+const sha256Bytes = (bytes) => createHash('sha256').update(bytes).digest('hex')
+
+const verifyCandidateRegression = async (candidate, resultPath = '', scopeReview) => {
   const file =
     resultPath ||
     (candidate.state.e2e.result && path.join(candidate.directory, candidate.state.e2e.result))
   if (!file) throw new Error('candidate requires a package E2E result file')
-  const result = JSON.parse(await readFile(file, 'utf8'))
+  const bytes = await readFile(file)
+  const original = JSON.parse(bytes)
   const installer = candidate.verified.bundle.files.find((item) => item.role === 'installer')
-  assertPackageRegressionPassed(result, candidate.verified.bundle, installer)
+  const scope = resultPath ? scopeReview : candidate.state.e2e.scopeReview
+  if (scope) {
+    if (
+      scope.mode !== 'gates-only' ||
+      !scope.impactReason ||
+      scope.originalResultSha256 !== sha256Bytes(bytes)
+    ) {
+      throw new Error('scoped review source evidence changed; repeat impact review')
+    }
+    const tests = (original.tests || []).filter(isCacheGateTest)
+    // The aggregate status reflects all historical tests. Recompute only for
+    // the explicit scope; assertPackageRegressionPassed still validates every
+    // selected entry, required case ID, and candidate identity.
+    assertPackageRegressionPassed(
+      { ...original, tests, status: 'passed' },
+      candidate.verified.bundle,
+      installer
+    )
+  } else {
+    assertPackageRegressionPassed(original, candidate.verified.bundle, installer)
+  }
 }
 
 export const assertCandidatePublishable = async ({

@@ -1,6 +1,6 @@
 {
   "name": "ncurator",
-  "version": "2.0.1",
+  "version": "2.0.0",
   "description": "Local-first AI workspace for documents, research, and task execution",
   "main": "./out/main/index.js",
   "author": "NCurator",
@@ -34,6 +34,7 @@
     "release:start": "node scripts/release/prepare.mjs",
     "release:abort": "node scripts/release/abort.mjs",
     "release:win": "node scripts/release/windows.mjs",
+    "release:inventory": "node scripts/release/prepublish-inventory.mjs",
     "release:doctor": "node scripts/release/doctor.mjs",
     "release:signing:setup": "node scripts/release/setup-macos-signing.mjs",
     "release:mac": "node scripts/release/macos.mjs",
@@ -156,6 +157,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "javascript-obfuscator": "5.5.0",
+    "jiti": "2.7.0",
     "jsdom": "^26.1.0",
     "knip": "^6.33.0",
     "less": "^4.5.1",

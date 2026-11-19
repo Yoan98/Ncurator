@@ -2,7 +2,9 @@ import { AppSettingsError } from '../../../../shared/appErrors'
 import type { AppSettings, KnowledgeIndexSpeed } from '../../../../shared/types'
 import {
   isAppLanguage,
-  type AppDistribution
+  isAppTheme,
+  type AppDistribution,
+  type AppTheme
 } from '../../../../shared/appPreferences'
 import { getAppRuntime } from '../../app/AppRuntime'
 import type { SqliteCore } from '../sqlite/SqliteCore'
@@ -12,6 +14,7 @@ type AppSettingsRow = {
   system_notifications_enabled: number
   knowledge_index_speed: string
   language: string
+  theme: string
 }
 const normalizeIndexSpeed = (value: string | undefined): KnowledgeIndexSpeed =>
   value === 'fast' ? 'fast' : 'slow'
@@ -34,10 +37,17 @@ export class AppSettingsStore {
         .prepare('UPDATE app_settings SET language = ? WHERE id = ?')
         .run(language, SETTINGS_ROW_ID)
     }
+    const theme: AppTheme = isAppTheme(row.theme) ? row.theme : 'system'
+    if (row.theme !== theme) {
+      this.sqlite
+        .prepare('UPDATE app_settings SET theme = ? WHERE id = ?')
+        .run(theme, SETTINGS_ROW_ID)
+    }
     return {
       systemNotificationsEnabled: row.system_notifications_enabled !== 0,
       knowledgeIndexSpeed: normalizeIndexSpeed(row.knowledge_index_speed),
       language,
+      theme,
       serviceRoute
     }
   }
@@ -45,6 +55,8 @@ export class AppSettingsStore {
   public async save(patch: Partial<AppSettings>): Promise<AppSettings> {
     if (patch.language !== undefined && !isAppLanguage(patch.language))
       throw new AppSettingsError('invalid_language')
+    if (patch.theme !== undefined && !isAppTheme(patch.theme))
+      throw new AppSettingsError('invalid_theme')
     if (
       patch.knowledgeIndexSpeed !== undefined &&
       !['slow', 'fast'].includes(patch.knowledgeIndexSpeed)
@@ -64,7 +76,8 @@ export class AppSettingsStore {
       UPDATE app_settings SET
         system_notifications_enabled = COALESCE(@notifications, system_notifications_enabled),
         knowledge_index_speed = COALESCE(@speed, knowledge_index_speed),
-        language = COALESCE(@language, language)
+        language = COALESCE(@language, language),
+        theme = COALESCE(@theme, theme)
       WHERE id = @id
     `
       )
@@ -77,7 +90,8 @@ export class AppSettingsStore {
               ? 1
               : 0,
         speed: patch.knowledgeIndexSpeed ?? null,
-        language: patch.language ?? null
+        language: patch.language ?? null,
+        theme: patch.theme ?? null
       })
     return this.get()
   }

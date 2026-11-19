@@ -83,8 +83,11 @@ export const settingsSelectors = {
   sidebarDragRegion: 'settings-sidebar-drag-region',
   tabSwitch: 'settings-tab-switch',
   generalPanel: 'settings-general-panel',
+  /** 视觉风格分组里的主题卡片；具体卡片为 `settings-theme-<value>`。 */
+  themeChoiceGroup: 'settings-theme-group',
+  /** 应用偏好分组里的语言卡片；具体卡片为 `settings-language-<value>`。 */
+  languageChoiceGroup: 'settings-language-group',
   systemNotificationsSwitch: 'settings-system-notifications-switch',
-  streamingAnimationSwitch: 'settings-streaming-animation-switch',
   errorLogOpenDirectoryButton: 'settings-error-log-open-directory-button',
   cacheCleanupOpen: 'settings-cache-cleanup-open',
   cacheCleanupModal: 'settings-cache-cleanup-modal',

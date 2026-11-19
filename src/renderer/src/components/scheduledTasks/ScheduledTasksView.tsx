@@ -109,9 +109,9 @@ const PartnerOptionList = ({
   onChange: (partnerId: string) => void
   dataTestId: string
 }) => (
-  <div className="max-h-[208px] overflow-y-auto bg-white" data-testid={dataTestId}>
+  <div className="max-h-[208px] overflow-y-auto bg-[var(--notion-page)]" data-testid={dataTestId}>
     {partners.length === 0 ? (
-      <div className="flex h-[72px] items-center justify-center text-[13px] text-[#91918E]">
+      <div className="flex h-[72px] items-center justify-center text-[13px] text-[var(--notion-text-faint)]">
         {t(($) => $.common.noPartnersYet)}
       </div>
     ) : (
@@ -123,7 +123,7 @@ const PartnerOptionList = ({
               key={partner.id}
               type="button"
               className={`flex h-12 w-full items-center gap-2.5 rounded-[6px] px-2.5 text-left transition-colors ${
-                selected ? 'bg-[#EDF3F8] text-[#2F5F8F]' : 'text-[#37352F] hover:bg-[#F4F4F2]'
+                selected ? 'bg-[var(--notion-blue-bg)] text-[var(--notion-blue)]' : 'text-[var(--notion-text)] hover:bg-[var(--notion-surface)]'
               }`}
               aria-pressed={selected}
               data-testid={`${dataTestId}-option-${partner.id}`}
@@ -141,11 +141,11 @@ const PartnerOptionList = ({
               </span>
               <span
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                  selected ? 'border-[#2F5F8F] bg-[#2F5F8F]' : 'border-[#D8D7D3] bg-white'
+                  selected ? 'border-[var(--notion-blue)] bg-[var(--notion-blue)]' : 'border-[var(--notion-line-strong)] bg-[var(--notion-page)]'
                 }`}
                 aria-hidden="true"
               >
-                {selected ? <span className="h-1.5 w-1.5 rounded-full bg-white" /> : null}
+                {selected ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--notion-page)]" /> : null}
               </span>
             </button>
           )
@@ -382,7 +382,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
         title={t(($) => $.common.scheduledTasks)}
         icon={
           <HiOutlineClock
-            className={`h-4 w-4 ${enabledCount > 0 ? 'text-[#2F5F8F]' : 'text-[#787774]'}`}
+            className={`h-4 w-4 ${enabledCount > 0 ? 'text-[var(--notion-blue)]' : 'text-[var(--notion-text-soft)]'}`}
           />
         }
         badge={
@@ -434,14 +434,14 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
               {tasks.map((task) => (
                 <div
                   key={task.id}
-                  className="group flex items-center gap-3 rounded-[8px] border border-[#EEEEEC] bg-white px-4 py-3"
+                  className="group flex items-center gap-3 rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-page)] px-4 py-3"
                   data-testid={`${scheduledTaskSelectors.itemPrefix}-${task.id}`}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-medium text-[#37352F]">
+                    <div className="truncate text-[13px] font-medium text-[var(--notion-text)]">
                       {task.name}
                     </div>
-                    <div className="mt-0.5 truncate text-[12px] text-[#91918E]">
+                    <div className="mt-0.5 truncate text-[12px] text-[var(--notion-text-faint)]">
                       {task.partnerId
                         ? partnerNames.get(task.partnerId) ||
                           t(($) => $.scheduledTasks.partnerDeleted)

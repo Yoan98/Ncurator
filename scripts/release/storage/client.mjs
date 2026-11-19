@@ -28,10 +28,10 @@ export const createAwsCliRuntime = async (config) => {
   }
 }
 
-export const createReleaseStorageClient = async (root = process.cwd()) => {
-  await loadReleaseEnvironment(root)
-  assertLivePublishAllowed()
-  const config = resolveReleaseStorageConfig()
+const openReleaseStorage = async (target) => {
+  const config = resolveReleaseStorageConfig(
+    target ? { ...process.env, RELEASE_STORAGE_TARGET: target } : process.env
+  )
   const runtime = await createAwsCliRuntime(config)
   const localAws = path.join(os.homedir(), '.ncurator', 'release-tools', 'awscli', 'bin', 'aws')
   const windowsAws = process.env.ProgramFiles
@@ -67,6 +67,22 @@ export const createReleaseStorageClient = async (root = process.cwd()) => {
     } while (continuationToken)
     return keys
   }
+
+  return { config, aws, awsExecutable, listKeys }
+}
+
+// Inventory only gets the fixed LIST operation, never generic AWS or deletion.
+// Actual upload and finalize callers still need the production write lock.
+export const createReleaseStorageLister = async (root = process.cwd(), { target } = {}) => {
+  await loadReleaseEnvironment(root)
+  const { listKeys } = await openReleaseStorage(target)
+  return { listKeys }
+}
+
+export const createReleaseStorageClient = async (root = process.cwd(), { target } = {}) => {
+  await loadReleaseEnvironment(root)
+  assertLivePublishAllowed()
+  const { config, aws, awsExecutable, listKeys } = await openReleaseStorage(target)
 
   const deleteKeys = async (keys) => {
     for (const key of [...new Set(keys)]) {

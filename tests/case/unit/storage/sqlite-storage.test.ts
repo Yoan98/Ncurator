@@ -255,7 +255,8 @@ describe('sqlite storage core and stores', () => {
       { version: 19, name: 'user_skills' },
       { version: 20, name: 'skill_name_bindings' },
       { version: 21, name: 'embedding_models' },
-      { version: 22, name: 'llm_manual_models' }
+      { version: 22, name: 'llm_manual_models' },
+      { version: 23, name: 'app_theme' }
     ])
 
     const legacyTables = sqlite
@@ -278,6 +279,7 @@ describe('sqlite storage core and stores', () => {
       systemNotificationsEnabled: false,
       knowledgeIndexSpeed: 'fast',
       language: 'system',
+      theme: 'dark',
       serviceRoute: 'domestic'
     })
 
@@ -286,12 +288,14 @@ describe('sqlite storage core and stores', () => {
       systemNotificationsEnabled: false,
       knowledgeIndexSpeed: 'fast',
       language: 'system',
+      theme: 'dark',
       serviceRoute: 'domestic'
     })
     expect(await settingsStore.get()).toEqual({
       systemNotificationsEnabled: false,
       knowledgeIndexSpeed: 'fast',
       language: 'system',
+      theme: 'dark',
       serviceRoute: 'domestic'
     })
   })

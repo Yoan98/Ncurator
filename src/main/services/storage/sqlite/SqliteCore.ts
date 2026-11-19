@@ -22,6 +22,7 @@ import { subagentSessionsMigration } from './migrations/016_subagent_sessions'
 
 import { openWithPreferencesMigration } from './migrations/017_open_with_preferences'
 import { appLanguageAndServiceRouteMigration } from './migrations/018_app_language_and_service_route'
+import { appThemeMigration } from './migrations/023_app_theme'
 
 import { userSkillsMigration } from './migrations/019_user_skills'
 import { skillNameBindingsMigration } from './migrations/020_skill_name_bindings'
@@ -53,10 +54,11 @@ const MIGRATIONS: readonly Migration[] = [
   userSkillsMigration,
   skillNameBindingsMigration,
   embeddingModelsMigration,
-  llmManualModelsMigration
+  llmManualModelsMigration,
+  appThemeMigration
 ]
 
-export const CURRENT_SCHEMA_VERSION = 22
+export const CURRENT_SCHEMA_VERSION = 23
 
 const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
   [2, new Set(['workspace_change_sets'])]

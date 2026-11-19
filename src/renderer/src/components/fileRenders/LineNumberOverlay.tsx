@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { buildLineNumbers } from './lineNumbers'
 
 const NUMBER_TEXT_CLASS =
-  'whitespace-pre pt-6 pr-1.5 text-right font-mono text-[13px] leading-6 tabular-nums text-[#B7B5AF]'
+  'whitespace-pre pt-6 pr-1.5 text-right font-mono text-[13px] leading-6 tabular-nums text-[var(--notion-text-faint)]'
 
 type LineNumberOverlayProps = {
   lineCount: number

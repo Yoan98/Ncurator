@@ -214,19 +214,19 @@ const ModelSettingsPanel: React.FC = () => {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="truncate font-medium text-[#37352F]">
+                <span className="truncate font-medium text-[var(--notion-text)]">
                   {preset ? providerDisplayName(preset.providerId, record.name) : record.name}
                 </span>
                 {!preset ? (
                   <Tag
-                    className="!m-0 !border-[#EEEEEC] !bg-[#F4F4F2] !text-[11px] !text-[#787774]"
+                    className="!m-0 !border-[var(--notion-line)] !bg-[var(--notion-surface)] !text-[11px] !text-[var(--notion-text-soft)]"
                     data-testid={settingsSelectors.modelCustomTag}
                   >
                     {t(($) => $.settings.custom)}
                   </Tag>
                 ) : null}
               </div>
-              <div className="truncate text-[12px] text-[#9B9A97]">{record.base_url}</div>
+              <div className="truncate text-[12px] text-[var(--notion-text-faint)]">{record.base_url}</div>
             </div>
           </div>
         )
@@ -238,7 +238,7 @@ const ModelSettingsPanel: React.FC = () => {
       key: 'api_key',
       width: 140,
       render: (text: string) => (
-        <span className="rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-2 py-1 text-[12px] text-[#37352F]">
+        <span className="rounded-[6px] border border-[var(--notion-line)] bg-[var(--notion-surface)] px-2 py-1 text-[12px] text-[var(--notion-text)]">
           {maskApiKey(text)}
         </span>
       )
@@ -254,7 +254,7 @@ const ModelSettingsPanel: React.FC = () => {
             size="small"
             icon={<HiPencil />}
             onClick={() => handleEdit(record)}
-            className="text-[#787774] hover:text-[#37352F]"
+            className="text-[var(--notion-text-soft)] hover:text-[var(--notion-text)]"
             data-testid={`${settingsSelectors.modelEditButtonPrefix}-${record.id}`}
           />
           <Popconfirm
@@ -286,7 +286,7 @@ const ModelSettingsPanel: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3">
             <h2>{t(($) => $.settings.configuredServices)}</h2>
             <span
-              className="text-[12px] text-[#787774]"
+              className="text-[12px] text-[var(--notion-text-soft)]"
               data-testid={settingsSelectors.modelConfigCount}
             >
               {t(($) => $.settings.serviceConnectionCount, { count: configs.length })}
@@ -296,7 +296,7 @@ const ModelSettingsPanel: React.FC = () => {
             type="primary"
             icon={<HiPlus className="h-4 w-4" />}
             onClick={handleAdd}
-            className="border-none !bg-[#37352F] shadow-none hover:!bg-[#2F3437]"
+            className="border-none !bg-[var(--notion-accent)] shadow-none hover:!bg-[var(--notion-accent)]"
             data-testid={settingsSelectors.modelAddButton}
           >
             {t(($) => $.settings.addConfiguration)}
@@ -312,7 +312,7 @@ const ModelSettingsPanel: React.FC = () => {
             pagination={false}
             loading={loading}
             size="middle"
-            className="[&_.ant-table-thead_th]:!bg-[#FFFFFF] [&_.ant-table-thead_th]:!py-3 [&_.ant-table-thead_th]:!text-[12px] [&_.ant-table-thead_th]:!text-[#787774] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-3 [&_.ant-table-tbody_td]:!align-middle"
+            className="[&_.ant-table-thead_th]:!bg-[var(--notion-page)] [&_.ant-table-thead_th]:!py-3 [&_.ant-table-thead_th]:!text-[12px] [&_.ant-table-thead_th]:!text-[var(--notion-text-soft)] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-3 [&_.ant-table-tbody_td]:!align-middle"
             data-testid={settingsSelectors.modelTable}
           />
         </div>
@@ -378,7 +378,7 @@ const ModelSettingsPanel: React.FC = () => {
                         </span>
                         <span>{providerDisplayName(provider.providerId, provider.label)}</span>
                         {configured ? (
-                          <span className="text-[11px] text-[#9B9A97]">
+                          <span className="text-[11px] text-[var(--notion-text-faint)]">
                             {t(($) => $.settings.configured)}
                           </span>
                         ) : null}

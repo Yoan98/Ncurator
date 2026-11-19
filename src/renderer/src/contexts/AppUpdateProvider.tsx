@@ -131,7 +131,7 @@ export const AppUpdateProvider: React.FC<React.PropsWithChildren> = ({ children 
         onCancel={() => setRestartPromptOpen(false)}
         data-testid={workbenchSelectors.updateRestartModal}
       >
-        <p className="m-0 text-[13px] leading-6 text-[#5F5E5B]">
+        <p className="m-0 text-[13px] leading-6 text-[var(--notion-text-soft)]">
           {t(($) => $.common.hasBeenDownloadedRestartTheAppToFinishUpdating, {
             value1: getProductName(),
             value2: snapshot?.availableVersion || ''

@@ -6,11 +6,12 @@ import { LuFoldVertical, LuUnfoldVertical } from 'react-icons/lu'
 import type { AiFileChangeRecord } from '../../../../shared/types'
 import { useEditableTextFile } from '../fileRenders/useEditableTextFile'
 import { workbenchSelectors } from '../../testing/selectors'
-import { monaco } from './monacoReview'
+import { applyReviewTheme, monaco, reviewThemeFor } from './monacoReview'
+import { useAppearance } from '../../contexts/AppearanceContext'
 
 type Counts = { insertCount: number; deleteCount: number }
 const reviewActionClass =
-  '!h-7 !w-7 !min-w-7 !rounded-[6px] !p-0 !text-[#91918E] hover:!bg-[#F4F4F2] hover:!text-[#37352F] focus-visible:!outline-2 focus-visible:!outline-[#0B6BCB] focus-visible:!outline-offset-[-2px]'
+  '!h-7 !w-7 !min-w-7 !rounded-[6px] !p-0 !text-[var(--notion-text-faint)] hover:!bg-[var(--notion-surface)] hover:!text-[var(--notion-text)] focus-visible:!outline-2 focus-visible:!outline-[var(--notion-accent-blue)] focus-visible:!outline-offset-[-2px]'
 export function TextFileDiffViewer({
   record,
   onCountsChange
@@ -19,6 +20,13 @@ export function TextFileDiffViewer({
   onCountsChange: (counts: Counts) => void
 }) {
   const file = useEditableTextFile(record.path)
+  const appearance = useAppearance()
+  // 主题只决定编辑器的初始配色；后续切换由 applyReviewTheme 统一处理，
+  // 因此这里用 ref 读取当前值，避免把主题放进建编辑器的依赖里导致重建。
+  const themeRef = useRef(appearance.resolved)
+  useEffect(() => {
+    themeRef.current = appearance.resolved
+  }, [appearance.resolved])
   const [before, setBefore] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
   const [error, setError] = useState('')
@@ -79,7 +87,7 @@ export function TextFileDiffViewer({
       lineHeight: 24,
       wordWrap: 'on',
       scrollBeyondLastLine: false,
-      theme: 'curator-review',
+      theme: reviewThemeFor(themeRef.current),
       readOnly: fileRef.current.readOnly,
       unicodeHighlight: { ambiguousCharacters: false, invisibleCharacters: false }
     }
@@ -156,6 +164,10 @@ export function TextFileDiffViewer({
       host.style.display = ''
     }
   }, [ready, before, paused, record.path])
+  // 主题切换不需要重建编辑器，Monaco 自己会重绘全部已创建实例。
+  useEffect(() => {
+    applyReviewTheme(appearance.resolved)
+  }, [appearance.resolved])
   useEffect(() => {
     const model = modified.current
     if (model && file.initialText !== null && file.initialText !== model.getValue()) {
@@ -170,7 +182,7 @@ export function TextFileDiffViewer({
   }, [file.readOnly])
   if (error || file.loadError)
     return (
-      <div role="alert" className="p-5 text-sm text-[#B3261E]">
+      <div role="alert" className="p-5 text-sm text-[var(--notion-red)]">
         {error || file.loadError}
         <Button
           onClick={() => {
@@ -196,7 +208,7 @@ export function TextFileDiffViewer({
       <div
         role="toolbar"
         aria-label={t(($) => $.workbench.textReview)}
-        className="grid h-9 shrink-0 grid-cols-2 items-center border-b border-[#EEEEEC] text-xs text-[#787774]"
+        className="grid h-9 shrink-0 grid-cols-2 items-center border-b border-[var(--notion-line)] text-xs text-[var(--notion-text-soft)]"
       >
         <span className="px-3" title={t(($) => $.workbench.readOnly)}>
           {t(($) => $.workbench.beforeThisRun)}
@@ -267,7 +279,7 @@ export function TextFileDiffViewer({
         </div>
       </div>
       {file.saveError && (
-        <div role="alert" className="bg-[#F8EBE9] px-3 py-1 text-xs text-[#B3261E]">
+        <div role="alert" className="bg-[var(--notion-red-bg)] px-3 py-1 text-xs text-[var(--notion-red)]">
           {file.saveError}
           <Button
             size="small"
@@ -280,7 +292,7 @@ export function TextFileDiffViewer({
         </div>
       )}
       {paused && (
-        <div role="status" className="bg-[#FBF3DB] px-3 py-1 text-xs">
+        <div role="status" className="bg-[var(--notion-yellow-bg)] px-3 py-1 text-xs">
           {t(($) => $.workbench.diffCalculationTimedOutAndAutomaticComparisonIsPaused)}
           <Button size="small" onClick={() => setPaused(false)}>
             {t(($) => $.workbench.compareAgain)}

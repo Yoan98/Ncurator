@@ -131,8 +131,8 @@ const ApprovalInteractionCard: React.FC<Props> = ({
         />
       }
     >
-      <div className="mx-5 mb-4 rounded-[8px] border border-[#EEEEEC] bg-[#F4F4F2] px-3 py-2.5">
-        <div className="mb-1 flex items-center gap-1.5 text-[11px] text-[#787774]">
+      <div className="mx-5 mb-4 rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-surface)] px-3 py-2.5">
+        <div className="mb-1 flex items-center gap-1.5 text-[11px] text-[var(--notion-text-soft)]">
           <HiCommandLine className="h-[13px] w-[13px]" />
           {t(($) => $.workbench.terminalCommand)}
         </div>

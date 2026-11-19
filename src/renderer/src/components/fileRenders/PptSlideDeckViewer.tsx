@@ -290,7 +290,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
 
   const surface = (url: string | undefined, label?: string, testId?: string) => (
     <div
-      className="relative flex min-h-0 min-w-0 flex-1 select-none items-center justify-center overflow-hidden bg-[#F4F4F2] p-3"
+      className="relative flex min-h-0 min-w-0 flex-1 select-none items-center justify-center overflow-hidden bg-[var(--notion-surface)] p-3"
       style={{
         cursor: dragging ? 'grabbing' : hoveringElement && !spacePressed ? 'pointer' : 'grab'
       }}
@@ -307,7 +307,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
       onDoubleClick={selectionFilePath ? undefined : resetViewport}
     >
       {label ? (
-        <span className="pointer-events-none absolute left-3 top-2 z-10 rounded-[3px] bg-white/90 px-1.5 py-0.5 text-[10px] text-[#787774]">
+        <span className="pointer-events-none absolute left-3 top-2 z-10 rounded-[3px] bg-[var(--notion-page)]/90 px-1.5 py-0.5 text-[10px] text-[var(--notion-text-soft)]">
           {label}
         </span>
       ) : null}
@@ -343,20 +343,20 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
           ) : (
             <img
               src={url}
-              className="block max-h-full max-w-full border border-[#DEDCD8] bg-white object-contain shadow-sm"
+              className="block max-h-full max-w-full border border-[var(--notion-line-strong)] bg-[var(--notion-page)] object-contain shadow-sm"
               draggable={false}
             />
           )}
         </div>
       ) : (
-        <div className="aspect-video w-full max-w-[960px] border border-dashed border-[#D8D6D1] bg-white" />
+        <div className="aspect-video w-full max-w-[960px] border border-dashed border-[var(--notion-line-strong)] bg-[var(--notion-page)]" />
       )}
     </div>
   )
 
   return (
     <div
-      className="flex h-full w-full min-h-0 bg-white"
+      className="flex h-full w-full min-h-0 bg-[var(--notion-page)]"
       data-testid={testId}
       ref={setSelectionContainer}
       tabIndex={0}
@@ -396,13 +396,13 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
         />
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-9 shrink-0 items-center justify-end gap-1 border-b border-[#E7E5E1] bg-white px-2">
+        <div className="flex h-9 shrink-0 items-center justify-end gap-1 border-b border-[var(--notion-line)] bg-[var(--notion-page)] px-2">
           {selectionFilePath && (
             <button
               type="button"
               data-ppt-reference-page
               data-selection-trigger
-              className="mr-auto rounded px-2 py-1 text-xs text-[#80649F] hover:bg-[#F3EDF9]"
+              className="mr-auto rounded px-2 py-1 text-xs text-[var(--notion-purple)] hover:bg-[var(--notion-purple-bg)]"
             >
               {t(($) => $.editors.referenceThisSlide)}
             </button>
@@ -411,7 +411,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
             type="button"
             title={t(($) => $.common.zoomOut)}
             aria-label={t(($) => $.common.zoomOut)}
-            className="rounded p-1 text-[#787774] hover:bg-[#F4F4F2]"
+            className="rounded p-1 text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)]"
             onClick={() => changeZoom(0.8)}
           >
             <HiMinus className="h-4 w-4" />
@@ -420,7 +420,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
             type="button"
             title={t(($) => $.editors.fitToWindow)}
             aria-label={t(($) => $.editors.fitToWindow)}
-            className="min-w-[48px] rounded px-1.5 py-0.5 text-[11px] text-[#787774] hover:bg-[#F4F4F2]"
+            className="min-w-[48px] rounded px-1.5 py-0.5 text-[11px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)]"
             onClick={resetViewport}
           >
             {Math.round(viewport.scale * 100)}%
@@ -429,7 +429,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
             type="button"
             title={t(($) => $.common.zoomIn)}
             aria-label={t(($) => $.common.zoomIn)}
-            className="rounded p-1 text-[#787774] hover:bg-[#F4F4F2]"
+            className="rounded p-1 text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)]"
             onClick={() => changeZoom(1.25)}
           >
             <HiPlus className="h-4 w-4" />
@@ -437,7 +437,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
         </div>
         <div className="relative flex min-h-0 flex-1">
           {diff ? (
-            <div className="flex min-w-0 flex-1 divide-x divide-[#E7E5E1]">
+            <div className="flex min-w-0 flex-1 divide-x divide-[var(--notion-line)]">
               {surface(
                 activeSlide?.primaryUrl,
                 t(($) => $.editors.before),
@@ -453,16 +453,16 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
             surface(activeSlide?.primaryUrl || activeSlide?.secondaryUrl, undefined, afterTestId)
           )}
           <div
-            className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex w-max -translate-x-1/2 whitespace-nowrap items-center gap-3 rounded-full border border-[#E7E5E1] bg-white/90 px-3 py-1.5 text-[11px] text-[#787774] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
+            className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex w-max -translate-x-1/2 whitespace-nowrap items-center gap-3 rounded-full border border-[var(--notion-line)] bg-[var(--notion-page)]/90 px-3 py-1.5 text-[11px] text-[var(--notion-text-soft)] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
             data-testid={hintTestId}
           >
             {selectionFilePath && <span>{t(($) => $.editors.clickAnElementToReferenceIt)}</span>}
-            {selectionFilePath && <span className="h-3 w-px bg-[#E7E5E1]" />}
+            {selectionFilePath && <span className="h-3 w-px bg-[var(--notion-line-strong)]" />}
             <span className="flex items-center gap-1.5">
               <MouseScrollIcon />
               <span>{t(($) => $.editors.scrollToZoom)}</span>
             </span>
-            <span className="h-3 w-px bg-[#E7E5E1]" />
+            <span className="h-3 w-px bg-[var(--notion-line-strong)]" />
             <span className="flex items-center gap-1.5">
               <HiHandRaised className="h-4 w-4" />
               <span>{t(($) => $.editors.dragToPan)}</span>
@@ -470,13 +470,13 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
           </div>
         </div>
       </div>
-      <div className="flex w-[136px] shrink-0 flex-col border-l border-[#E7E5E1] bg-[#FAFAF9]">
+      <div className="flex w-[136px] shrink-0 flex-col border-l border-[var(--notion-line)] bg-[var(--notion-surface-sunken)]">
         {filter ? (
-          <div className="flex h-9 shrink-0 items-center justify-center gap-0.5 border-b border-[#E7E5E1] p-1">
+          <div className="flex h-9 shrink-0 items-center justify-center gap-0.5 border-b border-[var(--notion-line)] p-1">
             <button
               type="button"
               aria-label={t(($) => $.editors.showChangedSlidesOnly)}
-              className={`rounded px-2 py-1 text-[11px] ${filter.changedOnly ? 'bg-[#E9E7E3] font-medium text-[#37352F]' : 'text-[#9B9A97]'}`}
+              className={`rounded px-2 py-1 text-[11px] ${filter.changedOnly ? 'bg-[var(--notion-surface-hover)] font-medium text-[var(--notion-text)]' : 'text-[var(--notion-text-faint)]'}`}
               onClick={() => filter.onChange(true)}
             >
               {t(($) => $.editors.changes)}
@@ -484,7 +484,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
             <button
               type="button"
               aria-label={t(($) => $.editors.showAllSlides)}
-              className={`rounded px-2 py-1 text-[11px] ${!filter.changedOnly ? 'bg-[#E9E7E3] font-medium text-[#37352F]' : 'text-[#9B9A97]'}`}
+              className={`rounded px-2 py-1 text-[11px] ${!filter.changedOnly ? 'bg-[var(--notion-surface-hover)] font-medium text-[var(--notion-text)]' : 'text-[var(--notion-text-faint)]'}`}
               onClick={() => filter.onChange(false)}
             >
               {t(($) => $.common.all)}
@@ -501,7 +501,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
                   value1: slide.index,
                   value2: slide.label ? `：${slide.label}` : ''
                 })}
-                className={`relative block box-border w-full overflow-hidden rounded border-2 bg-white ${slide.id === activeSlide?.id ? 'border-[#37352F]' : 'border-transparent'}`}
+                className={`relative block box-border w-full overflow-hidden rounded border-2 bg-[var(--notion-page)] ${slide.id === activeSlide?.id ? 'border-[var(--notion-accent)]' : 'border-transparent'}`}
                 onClick={() => selectSlide(slide.id)}
               >
                 {slide.primaryUrl || slide.secondaryUrl ? (
@@ -511,9 +511,9 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
                     draggable={false}
                   />
                 ) : (
-                  <span className="block aspect-video w-full bg-white" />
+                  <span className="block aspect-video w-full bg-[var(--notion-page)]" />
                 )}
-                <span className="absolute bottom-0.5 left-1 rounded bg-black/60 px-1 text-[9px] text-white">
+                <span className="absolute bottom-0.5 left-1 rounded bg-black/60 px-1 text-[9px] text-[var(--notion-accent-contrast)]">
                   {slide.index}
                 </span>
                 {slide.marker ? (

@@ -117,6 +117,10 @@ export const createGitHubReleasePublisher = ({
   }
 
   return {
+    async verifyCandidateSource(bundle) {
+      return verifySource(bundle)
+    },
+
     async prepare(candidate) {
       assertLivePublishAllowed()
       if (!['ready', 'published'].includes(candidate.state.status)) {

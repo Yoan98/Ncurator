@@ -2,8 +2,9 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { listSupersededReleaseKeys } from './cleanup-inventory.mjs'
 import { assertReleaseFragment } from './fragment-contract.mjs'
-import { artifactKey, artifactPrefix, fragmentKey, legacyStatusPrefix } from './storage-layout.mjs'
+import { artifactKey, fragmentKey } from './storage-layout.mjs'
 import { createReleaseStorageClient } from '../storage/client.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { parseReleaseTag } from '../tag.mjs'
@@ -149,10 +150,7 @@ try {
     throw new Error('public Windows release manifest verification failed')
   }
 
-  const removable = (await listKeys(artifactPrefix('windows'))).filter(
-    (key) => !key.startsWith(artifactPrefix('windows', releaseTag))
-  )
-  removable.push(...(await listKeys(legacyStatusPrefix('windows'))))
+  const removable = await listSupersededReleaseKeys(fragment, listKeys)
   await deleteKeys(removable)
   process.stdout.write(`[release] Windows ${releaseTag} is live at ${installerUrl}\n`)
 } finally {

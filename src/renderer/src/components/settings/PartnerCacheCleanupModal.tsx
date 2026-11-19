@@ -205,7 +205,7 @@ export default function PartnerCacheCleanupModal({
             title={partner.name}
           />
         ) : (
-          <HiOutlineUserGroup className="h-6 w-6 shrink-0 text-[#787774]" />
+          <HiOutlineUserGroup className="h-6 w-6 shrink-0 text-[var(--notion-text-soft)]" />
         )}
         <span className="min-w-0 flex-1 truncate">
           {partner?.name || t(($) => $.settings.allPartners)}
@@ -300,7 +300,7 @@ export default function PartnerCacheCleanupModal({
         closable={!cleaning}
         keyboard={!cleaning}
         footer={
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#EEEEEC] pt-3 text-left text-[13px] text-[#37352F]">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--notion-line)] pt-3 text-left text-[13px] text-[var(--notion-text)]">
             <div className="min-w-0" data-testid={settingsSelectors.cacheCleanupSummary}>
               <div className="flex flex-wrap items-baseline gap-x-2">
                 <span>{t(($) => $.settings.estimatedSpaceToFree)}</span>
@@ -312,7 +312,7 @@ export default function PartnerCacheCleanupModal({
                       : sizeText(totalBytes)}
                 </span>
               </div>
-              <div className="mt-0.5 text-[12px] text-[#787774]">
+              <div className="mt-0.5 text-[12px] text-[var(--notion-text-soft)]">
                 {isLoading || errorText
                   ? t(($) => $.settings.cacheCutoffBefore, { value1: date.format('YYYY-MM-DD') })
                   : t(($) => $.settings.cacheCutoffSummary, {
@@ -326,7 +326,7 @@ export default function PartnerCacheCleanupModal({
               disabled={!canClean}
               onClick={confirmCleanup}
               data-testid={settingsSelectors.cacheCleanupConfirm}
-              className="shrink-0 rounded bg-[#F8EBE9] px-4 py-2 text-[13px] text-[#B3261E] hover:bg-[#F3DDD9] disabled:cursor-not-allowed disabled:opacity-40"
+              className="shrink-0 rounded bg-[var(--notion-red-bg)] px-4 py-2 text-[13px] text-[var(--notion-red)] hover:bg-[var(--notion-red-bg-hover)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {cleaning
                 ? t(($) => $.settings.cleaningUp)
@@ -336,7 +336,7 @@ export default function PartnerCacheCleanupModal({
         }
         destroyOnClose
       >
-        <div className="nc-cache-cleanup-content text-[13px] text-[#37352F]">
+        <div className="nc-cache-cleanup-content text-[13px] text-[var(--notion-text)]">
           <div className="shrink-0">
             <label className="mb-1.5 block font-medium">{t(($) => $.common.partner)}</label>
             <Select
@@ -361,7 +361,7 @@ export default function PartnerCacheCleanupModal({
             />
             <div className="mb-0.5 mt-3 flex items-center justify-between gap-3">
               <span className="font-medium">{t(($) => $.settings.contentToCleanUp)}</span>
-              <span className="pr-10 text-[12px] text-[#787774]">
+              <span className="pr-10 text-[12px] text-[var(--notion-text-soft)]">
                 {t(($) => $.settings.cacheTotalUsage)}
               </span>
             </div>
@@ -371,7 +371,7 @@ export default function PartnerCacheCleanupModal({
               return (
                 <div
                   key={category}
-                  className="flex items-center gap-2 border-b border-[#EEEEEC] py-2"
+                  className="flex items-center gap-2 border-b border-[var(--notion-line)] py-2"
                 >
                   <Checkbox
                     className="min-w-0 flex-1"
@@ -388,16 +388,16 @@ export default function PartnerCacheCleanupModal({
                   >
                     <div className="font-medium leading-5">
                       {info.title}
-                      <span className="ml-2 font-mono text-[11px] font-normal text-[#787774]">
+                      <span className="ml-2 font-mono text-[11px] font-normal text-[var(--notion-text-soft)]">
                         {category}
                       </span>
                     </div>
-                    <div className="text-[12px] font-normal leading-[18px] text-[#787774]">
+                    <div className="text-[12px] font-normal leading-[18px] text-[var(--notion-text-soft)]">
                       {info.description}
                     </div>
                   </Checkbox>
                   <span
-                    className="shrink-0 text-[12px] tabular-nums text-[#787774]"
+                    className="shrink-0 text-[12px] tabular-nums text-[var(--notion-text-soft)]"
                     data-testid={`${settingsSelectors.cacheCategorySizePrefix}-${category}`}
                   >
                     {isLoading
@@ -419,7 +419,7 @@ export default function PartnerCacheCleanupModal({
                       disabled={!selectedPartner || selectedPartner === 'all' || cleaning}
                       data-testid={`${settingsSelectors.cacheOpenPrefix}-${category}`}
                       onClick={() => void openDirectory(category)}
-                      className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded text-[#787774] hover:bg-[#F4F4F2] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <FileIcon kind="directory" expanded className="h-4 w-4" />
                     </button>
@@ -453,7 +453,7 @@ export default function PartnerCacheCleanupModal({
                   disabled={cleaning}
                   data-testid={`${settingsSelectors.cacheQuickDatePrefix}-${days}`}
                   onClick={() => selectDate(dayjs().subtract(days, 'day'))}
-                  className="h-[34px] rounded border border-[#E6E6E3] px-3 text-[12px] hover:bg-[#F4F4F2] disabled:opacity-40"
+                  className="h-[34px] rounded border border-[var(--notion-line)] px-3 text-[12px] hover:bg-[var(--notion-surface)] disabled:opacity-40"
                 >
                   {t(($) => $.settings.cacheDaysAgo, { count: days })}
                 </button>
@@ -461,7 +461,7 @@ export default function PartnerCacheCleanupModal({
             </div>
             <div className="mb-2 mt-4 flex justify-between gap-3">
               <span className="font-medium">{t(($) => $.settings.dataToCleanUp)}</span>
-              <span className="text-[12px] text-[#787774]">
+              <span className="text-[12px] text-[var(--notion-text-soft)]">
                 {t(($) => $.settings.byDateOldestFirst)}
               </span>
             </div>
@@ -476,7 +476,7 @@ export default function PartnerCacheCleanupModal({
                 className="w-full text-[12px]"
                 data-testid={settingsSelectors.cachePreviewTable}
               >
-                <thead className="text-[#787774]">
+                <thead className="text-[var(--notion-text-soft)]">
                   <tr>
                     {[
                       t(($) => $.settings.date),
@@ -486,7 +486,7 @@ export default function PartnerCacheCleanupModal({
                     ].map((label, index) => (
                       <th
                         key={label}
-                        className={`sticky top-0 z-10 bg-[#F4F4F2] px-2 py-2 font-normal ${index < 2 ? 'text-left' : 'text-right'}`}
+                        className={`sticky top-0 z-10 bg-[var(--notion-surface)] px-2 py-2 font-normal ${index < 2 ? 'text-left' : 'text-right'}`}
                       >
                         {label}
                       </th>
@@ -495,7 +495,7 @@ export default function PartnerCacheCleanupModal({
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <tr key={`${row.day}-${row.category}`} className="border-b border-[#EEEEEC]">
+                    <tr key={`${row.day}-${row.category}`} className="border-b border-[var(--notion-line)]">
                       <td className="whitespace-nowrap px-2 py-2">
                         {dayjs(row.day).format('YYYY-MM-DD')}
                       </td>
@@ -512,7 +512,7 @@ export default function PartnerCacheCleanupModal({
                     <tr>
                       <td
                         colSpan={4}
-                        className={`px-3 py-5 text-center ${errorText ? 'text-[#B3261E]' : 'text-[#787774]'}`}
+                        className={`px-3 py-5 text-center ${errorText ? 'text-[var(--notion-red)]' : 'text-[var(--notion-text-soft)]'}`}
                         role={errorText ? 'alert' : undefined}
                       >
                         {emptyText}
@@ -524,16 +524,16 @@ export default function PartnerCacheCleanupModal({
             </Spin>
           </div>
           <div className="shrink-0">
-            <p className="mb-0 mt-2 text-[12px] leading-[18px] text-[#787774]">
+            <p className="mb-0 mt-2 text-[12px] leading-[18px] text-[var(--notion-text-soft)]">
               {t(($) => $.settings.cleanUpSelectedDirectoriesBeforeTheCutoffDatePartners)}
             </p>
             {busy && (
-              <p className="mb-0 mt-1 text-[12px] text-[#B3261E]">
+              <p className="mb-0 mt-1 text-[12px] text-[var(--notion-red)]">
                 {t(($) => $.settings.theSelectedPartnerIsRunningWaitForItTo)}
               </p>
             )}
             {!!skippedCount && (
-              <p className="mb-0 mt-1 text-[12px] text-[#787774]">
+              <p className="mb-0 mt-1 text-[12px] text-[var(--notion-text-soft)]">
                 {t(($) => $.settings.cacheSkippedItems, { count: skippedCount })}
               </p>
             )}

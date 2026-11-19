@@ -1,5 +1,15 @@
 import { initializeAppMenu } from './services/app/AppMenu'
 import { configureServiceEnvironment, getAppRuntime, initializeAppRuntime, usesLocalService } from './services/app/AppRuntime'
+import {
+  applyAppearance,
+  applyWindowChrome,
+  getResolvedAppTheme,
+  seedAppThemePreference,
+  subscribeAppearance,
+  watchSystemAppearance,
+  windowChrome
+} from './services/app/AppearanceService'
+import { readStoredAppTheme } from './services/app/AppearancePreference'
 import { downloadPageUrl } from '../shared/appPreferences'
 import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
@@ -52,6 +62,8 @@ if (e2eUserDataPath) {
   )
 }
 syncUserDataPathFromElectron()
+// Window and splash are created before SQLite opens, so the appearance preference is restored here.
+seedAppThemePreference(readStoredAppTheme())
 
 const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
@@ -218,6 +230,7 @@ function resyncPointerTracking(
 
 function createWindow(): BrowserWindow {
   const initialWindowBounds = getInitialWindowBounds()
+  const chrome = windowChrome(getResolvedAppTheme())
 
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -226,10 +239,9 @@ function createWindow(): BrowserWindow {
     minHeight: MIN_WINDOW_HEIGHT,
     show: false,
     autoHideMenuBar: true,
-    // 主内容区（右侧/底部边缘）为白色；窗口底色对齐为白，
-    // 使 macOS live-resize 时 OS 先填充的一帧与内容同色，消除拖动露白（对齐主流应用做法）。
-    // 米白与启动画面底色一致，冷启动首帧不会先闪一块纯白。
-    backgroundColor: '#fbfbfa',
+    // 窗口底色与内容同色：macOS live-resize 时 OS 先填充的一帧不会露出对比色；
+    // 同时与启动画面底色一致，冷启动首帧不会先闪一层别的颜色。
+    backgroundColor: chrome.background,
     ...(process.platform === 'darwin'
       ? {
           titleBarStyle: 'hiddenInset',
@@ -243,8 +255,8 @@ function createWindow(): BrowserWindow {
       ? {
           titleBarStyle: 'hidden',
           titleBarOverlay: {
-            color: '#FBFBFA',
-            symbolColor: '#37352F',
+            color: chrome.background,
+            symbolColor: chrome.symbol,
             height: 36
           }
         }
@@ -394,6 +406,13 @@ if (!singleInstanceLock) {
     })
 
     initializeAppRuntime(app.getPreferredSystemLanguages())
+    // The preference was seeded from disk before this point; resolve it once the OS is readable.
+    applyAppearance()
+    watchSystemAppearance()
+    // Only the main window owns themed native chrome; auxiliary windows stay transparent.
+    subscribeAppearance(() => {
+      if (mainAppWindow) applyWindowChrome(mainAppWindow)
+    })
     if (getAppRuntime().distribution === 'domestic') {
       if (app.isPackaged && process.platform === 'win32') app.setAsDefaultProtocolClient('ncurator')
       if (process.platform !== 'darwin') openDesktopLink(process.argv.slice(1))
@@ -517,6 +536,9 @@ if (!singleInstanceLock) {
     markStartup('storage initialized')
     const appSettings = await storageService.appSettings.get()
     initializeAppRuntime(app.getPreferredSystemLanguages(), appSettings)
+    // SQLite is authoritative: carry the saved preference over the first-frame copy.
+    seedAppThemePreference(appSettings.theme)
+    applyAppearance()
     appStartupStatus = { mode: 'normal', ...getAppRuntime() }
     initializeAppMenu()
     embeddingRuntimeClient.setThreadBudget(resolveOrtThreadBudget(appSettings.knowledgeIndexSpeed))

@@ -46,7 +46,7 @@ const AttachmentFileIcon: React.FC<AttachmentFileIconProps> = ({
 
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-[8px] bg-[#F4F4F2] ${sizeClassName} ${visualSpec.iconClassName} ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-[8px] bg-[var(--notion-surface)] ${sizeClassName} ${visualSpec.iconClassName} ${className}`}
     >
       <ReferenceIcon reference={reference} size="md" />
     </span>

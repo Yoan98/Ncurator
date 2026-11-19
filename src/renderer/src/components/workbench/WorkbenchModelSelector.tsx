@@ -200,7 +200,7 @@ const PriceTierCoins: React.FC<{ tier: LlmPriceTier }> = ({ tier }) => {
         <PiCoinBold
           key={index}
           aria-hidden="true"
-          className="pointer-events-none absolute left-0 block text-[#9B9A97]"
+          className="pointer-events-none absolute left-0 block text-[var(--notion-text-faint)]"
           style={{
             width: PRICE_TIER_COIN_SIZE,
             height: PRICE_TIER_COIN_SIZE,
@@ -841,7 +841,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           <CatalogModelIcon src={model.iconUrl} alt={model.label} />
           <span className="inline-flex items-end" style={{ gap: PRICE_TIER_COIN_GAP_PX }}>
             <span
-              className="whitespace-nowrap text-[13px] font-medium text-[#37352F]"
+              className="whitespace-nowrap text-[13px] font-medium text-[var(--notion-text)]"
               style={{ lineHeight: `${PRICE_TIER_TEXT_LINE_PX}px` }}
             >
               {model.label}
@@ -849,7 +849,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             <PriceTierCoins tier={model.priceTier} />
           </span>
         </span>
-        {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
+        {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[var(--notion-text)]" /> : null}
       </button>
     )
   }
@@ -892,15 +892,15 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             className="inline-flex items-end gap-1.5"
             style={{ lineHeight: `${PRICE_TIER_TEXT_LINE_PX}px` }}
           >
-            <span className="whitespace-nowrap text-[13px] font-medium text-[#37352F]">
+            <span className="whitespace-nowrap text-[13px] font-medium text-[var(--notion-text)]">
               {model.label}
             </span>
-            <span className="relative top-[1px] text-[11px] font-medium leading-none text-[#9B9A97]">
+            <span className="relative top-[1px] text-[11px] font-medium leading-none text-[var(--notion-text-faint)]">
               {t(($) => $.preferences.free)}
             </span>
           </span>
         </span>
-        {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
+        {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[var(--notion-text)]" /> : null}
       </button>
     )
   }
@@ -934,7 +934,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           </span>
         </span>
         {discount && <ModelDiscountTag>{discount}</ModelDiscountTag>}
-        {selected && <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" />}
+        {selected && <HiCheck className="h-3.5 w-3.5 shrink-0 text-[var(--notion-text)]" />}
       </button>
     )
   }
@@ -945,7 +945,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       <button
         type="button"
         disabled={manualSaving}
-        className="text-[12px] text-[#0B6BCB] hover:underline"
+        className="text-[12px] text-[var(--notion-accent-blue)] hover:underline"
         data-testid={workbenchSelectors.modelListErrorOpen}
         aria-expanded={expanded}
         onClick={() => setInlinePanel(expanded ? null : { kind: 'error', key })}
@@ -959,15 +959,15 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
   const renderErrorDetails = (error: string): React.ReactNode => (
     <div
-      className="mt-2 border-t border-[#EEEEEC] pt-2 text-left"
+      className="mt-2 border-t border-[var(--notion-line)] pt-2 text-left"
       data-testid={workbenchSelectors.modelListErrorPanel}
     >
-      <div className="flex items-center justify-between gap-2 text-[12px] text-[#37352F]">
+      <div className="flex items-center justify-between gap-2 text-[12px] text-[var(--notion-text)]">
         <span>{t(($) => $.common.errorInformation)}</span>
         <button
           type="button"
           data-testid={workbenchSelectors.modelListErrorCopy}
-          className="text-[#787774] hover:text-[#37352F]"
+          className="text-[var(--notion-text-soft)] hover:text-[var(--notion-text)]"
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(error)
@@ -981,7 +981,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         </button>
       </div>
       <pre
-        className="mt-2 max-h-40 select-text overflow-auto whitespace-pre-wrap rounded-[6px] bg-[#F4F4F2] p-2 text-[11px] leading-[18px] text-[#37352F] [overflow-wrap:anywhere]"
+        className="mt-2 max-h-40 select-text overflow-auto whitespace-pre-wrap rounded-[6px] bg-[var(--notion-surface)] p-2 text-[11px] leading-[18px] text-[var(--notion-text)] [overflow-wrap:anywhere]"
         data-testid={workbenchSelectors.modelListErrorText}
       >
         {error}
@@ -993,10 +993,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (inlinePanel?.kind !== 'manual' || inlinePanel.configId !== configId) return null
     return (
       <div
-        className="nc-document-form mt-2 border-t border-[#EEEEEC] pt-2"
+        className="nc-document-form mt-2 border-t border-[var(--notion-line)] pt-2"
         data-testid={workbenchSelectors.modelManualForm}
       >
-        <label htmlFor={manualModelNameId} className="mb-1 block text-[12px] text-[#37352F]">
+        <label htmlFor={manualModelNameId} className="mb-1 block text-[12px] text-[var(--notion-text)]">
           {t(($) => $.workbench.manualModelName)}
         </label>
         <Input
@@ -1017,7 +1017,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           }}
         />
         {manualSaveError ? (
-          <div role="alert" className="mt-2 text-[12px] text-[#C45D57]">
+          <div role="alert" className="mt-2 text-[12px] text-[var(--notion-red)]">
             {manualSaveError}
           </div>
         ) : null}
@@ -1026,7 +1026,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             type="button"
             disabled={manualSaving}
             data-testid={workbenchSelectors.modelManualCancel}
-            className="rounded-[6px] border border-[#E5E4E0] px-3 py-1 text-[12px] text-[#37352F] hover:bg-[#F4F4F2] disabled:opacity-40"
+            className="rounded-[6px] border border-[var(--notion-line-strong)] px-3 py-1 text-[12px] text-[var(--notion-text)] hover:bg-[var(--notion-surface)] disabled:opacity-40"
             onClick={() => setInlinePanel(null)}
           >
             {t(($) => $.common.cancel)}
@@ -1036,7 +1036,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             disabled={!canUseManualModel}
             aria-busy={manualSaving}
             data-testid={workbenchSelectors.modelManualUse}
-            className="rounded-[6px] bg-[#37352F] px-3 py-1 text-[12px] text-white disabled:opacity-40"
+            className="rounded-[6px] bg-[var(--notion-accent)] px-3 py-1 text-[12px] text-[var(--notion-accent-contrast)] disabled:opacity-40"
             onClick={() => void applyManualModel()}
           >
             {t(($) => $.common.use)}
@@ -1110,24 +1110,24 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           >
             {managedModels?.map(renderManagedModelOption)}
             {managedCatalog?.status === 'loading' && !managedModels && (
-              <div role="status" className="px-3 py-2 text-[12px] text-[#787774]">
+              <div role="status" className="px-3 py-2 text-[12px] text-[var(--notion-text-soft)]">
                 {t(($) => $.workbench.loadingManagedModels)}
               </div>
             )}
             {managedCatalog?.status === 'unavailable' && (
-              <div role="status" className="px-3 py-2 text-[12px] text-[#787774]">
+              <div role="status" className="px-3 py-2 text-[12px] text-[var(--notion-text-soft)]">
                 {t(($) => $.workbench.managedModelsUnavailable)}
               </div>
             )}
             {managedCatalog?.status === 'ready' && !managedModels?.length && !showEmpty && (
-              <div className="px-3 py-2 text-[12px] text-[#787774]">{t(($) => $.workbench.noManagedModels)}</div>
+              <div className="px-3 py-2 text-[12px] text-[var(--notion-text-soft)]">{t(($) => $.workbench.noManagedModels)}</div>
             )}
             {showLoading && !managedModels?.length ? (
-              <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
+              <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[var(--notion-text-faint)]">
                 {t(($) => $.workbench.loadingModelCatalogs)}
               </div>
             ) : showEmpty && (!showManaged || managedCatalog?.status === 'ready') ? (
-              <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
+              <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[var(--notion-text-faint)]">
                 {t(($) => $.workbench.noConfiguredPresetModels)}
               </div>
             ) : (
@@ -1146,7 +1146,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                   type="button"
                   className={
                     showLoginOffer
-                      ? 'flex min-h-9 w-full items-center gap-2 rounded-[7px] border border-[#F1DFB5] bg-[#FFFAF0] px-2 py-1 text-left text-[13px] font-medium text-[var(--notion-text)] hover:bg-[var(--notion-yellow-bg)]'
+                      ? 'flex min-h-9 w-full items-center gap-2 rounded-[7px] border border-[var(--notion-yellow-bg)] bg-[var(--notion-warning-bg-soft)] px-2 py-1 text-left text-[13px] font-medium text-[var(--notion-text)] hover:bg-[var(--notion-yellow-bg)]'
                       : 'workbench-select-option text-[13px]'
                   }
                   onMouseEnter={() => setInspectedModel(null)}
@@ -1182,12 +1182,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               </div>
             )}
             {catalogError && !showLoading ? (
-              <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
+              <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[var(--notion-text-faint)]">
                 {renderLoadFailure(catalogError)}
                 <button
                   type="button"
                   disabled={catalogRefreshStatus === 'loading'}
-                  className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[var(--notion-line-strong)] px-3 text-[12px] font-medium text-[var(--notion-text)] hover:bg-[var(--notion-surface)] disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => void refreshCatalog({ showOutcome: true })}
                 >
                   <HiArrowPath
@@ -1202,7 +1202,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             ) : null}
           </div>
         </div>
-        <div className="border-t border-[#EEEEEC] py-1.5">
+        <div className="border-t border-[var(--notion-line)] py-1.5">
           <button
             type="button"
             className="workbench-select-option min-h-[44px]"
@@ -1214,13 +1214,13 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             onMouseEnter={() => setInspectedModel(null)}
           >
             <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-              <HiAdjustmentsHorizontal className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
-              <span className="text-[13px] font-semibold text-[#37352F]">
+              <HiAdjustmentsHorizontal className="h-3.5 w-3.5 shrink-0 text-[var(--notion-text-soft)]" />
+              <span className="text-[13px] font-semibold text-[var(--notion-text)]">
                 {t(($) => $.workbench.customModel)}
               </span>
             </span>
             <span className="min-w-0 flex-1" />
-            <HiChevronRight className="h-3.5 w-3.5 shrink-0 text-[#9B9A97]" />
+            <HiChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--notion-text-faint)]" />
           </button>
         </div>
       </>
@@ -1229,10 +1229,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
   const renderCustomView = (): React.ReactNode => (
     <>
-      <div className="flex items-center gap-2 border-b border-[#EEEEEC] px-2.5 py-2">
+      <div className="flex items-center gap-2 border-b border-[var(--notion-line)] px-2.5 py-2">
         <button
           type="button"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)]"
           onClick={() => {
             setView('preset')
             setQuery('')
@@ -1240,7 +1240,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         >
           <HiChevronLeft className="h-4 w-4" />
         </button>
-        <div className="min-w-0 flex-1 text-[13px] font-semibold text-[#37352F]">
+        <div className="min-w-0 flex-1 text-[13px] font-semibold text-[var(--notion-text)]">
           {t(($) => $.workbench.chooseModel)}
         </div>
         {onRefreshModelLists ? (
@@ -1251,7 +1251,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               aria-busy={modelListsLoading}
               data-testid={workbenchSelectors.modelListRefreshIcon}
               disabled={modelListsLoading}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-[#9B9A97] hover:bg-[#F4F4F2] hover:text-[#37352F] disabled:pointer-events-none"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-[var(--notion-text-faint)] hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)] disabled:pointer-events-none"
               onClick={() => void onRefreshModelLists()}
             >
               <HiArrowPath
@@ -1262,7 +1262,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         ) : null}
       </div>
       <div className="workbench-select-search">
-        <HiMagnifyingGlass className="h-3.5 w-3.5 shrink-0 text-[#91918E]" />
+        <HiMagnifyingGlass className="h-3.5 w-3.5 shrink-0 text-[var(--notion-text-faint)]" />
         <input
           ref={searchInputRef}
           value={query}
@@ -1295,7 +1295,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               <button
                 type="button"
                 aria-expanded={!collapsed}
-                className="flex w-full items-center justify-between gap-2 px-3 py-1 text-left text-[11px] font-medium text-[#9B9A97] hover:text-[#37352F]"
+                className="flex w-full items-center justify-between gap-2 px-3 py-1 text-left text-[11px] font-medium text-[var(--notion-text-faint)] hover:text-[var(--notion-text)]"
                 onClick={toggleCollapsed}
               >
                 <span className="inline-flex items-center gap-1">
@@ -1311,7 +1311,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                 ) : error ? (
                   <span
                     role="status"
-                    className="text-[#C45D57]"
+                    className="text-[var(--notion-red)]"
                     data-testid={workbenchSelectors.modelListLoadFailure}
                   >
                     {t(($) => $.common.loadFailed)}
@@ -1344,11 +1344,11 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           {getProviderLogo(resolveLlmProvider(group.config.base_url).providerId)}
-                          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--notion-text)]">
                             {model.label || model.id}
                           </span>
                         </span>
-                        {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
+                        {selected ? <HiCheck className="h-3.5 w-3.5 text-[var(--notion-text)]" /> : null}
                       </button>
                     )
                   })
@@ -1356,7 +1356,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               {!collapsed ? (
                 <div className="px-3 pb-1 pl-6">
                   {!error && !modelListsLoading && group.models.length === 0 ? (
-                    <div role="status" className="py-2 text-[12px] text-[#91918E]">
+                    <div role="status" className="py-2 text-[12px] text-[var(--notion-text-faint)]">
                       {t(($) => $.workbench.noMatchingModels)}
                     </div>
                   ) : null}
@@ -1367,7 +1367,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                         <button
                           type="button"
                           disabled={manualSaving}
-                          className="text-[12px] text-[#0B6BCB] hover:underline"
+                          className="text-[12px] text-[var(--notion-accent-blue)] hover:underline"
                           data-testid={workbenchSelectors.modelManualOpen}
                           aria-expanded={
                             inlinePanel?.kind === 'manual' &&
@@ -1390,7 +1390,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           )
         })}
         {groupedModels.length === 0 ? (
-          <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
+          <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[var(--notion-text-faint)]">
             <div role="status">
               {modelListsLoading
                 ? t(($) => $.common.loading)
@@ -1425,7 +1425,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       <div
         ref={inspectorRef}
         data-testid={workbenchSelectors.inspector}
-        className="max-h-[calc(100vh-24px)] overflow-y-auto rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3 text-[12px]"
+        className="max-h-[calc(100vh-24px)] overflow-y-auto rounded-[12px] border border-[var(--notion-line-strong)] bg-[var(--notion-page)] px-3 py-3 text-[12px]"
         style={{
           position: 'fixed',
           top: inspectorTop,
@@ -1436,14 +1436,14 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       >
         <div
           data-testid={workbenchSelectors.inspectorTitle}
-          className="text-[14px] font-semibold text-[#252521]"
+          className="text-[14px] font-semibold text-[var(--notion-text)]"
         >
           {model.label}
         </div>
         {unavailable ? (
-          <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 leading-[18px] text-[#5F5E5A]">
+          <div className="mt-2.5 border-t border-[var(--notion-line)] pt-2.5 leading-[18px] text-[var(--notion-text-soft)]">
             <div>{t(($) => $.workbench.thisModelDoesNotExist)}</div>
-            <div className="mt-1.5 break-all text-[#9B9A97]">
+            <div className="mt-1.5 break-all text-[var(--notion-text-faint)]">
               {t(($) => $.workbench.modelName)}
               {unavailable.id}
             </div>
@@ -1451,14 +1451,14 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         ) : (
           <>
             {model.description && (
-              <p className="mt-1.5 leading-[18px] text-[#5F5E5A]">{model.description}</p>
+              <p className="mt-1.5 leading-[18px] text-[var(--notion-text-soft)]">{model.description}</p>
             )}
             {free && (
-              <p className="mt-1.5 leading-[18px] text-[#9B9A97]">
+              <p className="mt-1.5 leading-[18px] text-[var(--notion-text-faint)]">
                 {t(($) => $.preferences.freeNotice)}
               </p>
             )}
-            <dl className="mt-2.5 border-t border-[#EEEEEC] pt-2.5">
+            <dl className="mt-2.5 border-t border-[var(--notion-line)] pt-2.5">
               {(priceTier || free) && (
                 <ModelInspectorDetail label={t(($) => $.workbench.priceTier2)}>
                   {priceTier ? (
@@ -1537,7 +1537,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               {effortPillLabel && (
                 <span
                   data-testid={workbenchSelectors.effortPill}
-                  className="shrink-0 text-[13px] text-[#B9B8B4]"
+                  className="shrink-0 text-[13px] text-[var(--notion-text-faint)]"
                 >
                   {effortPillLabel}
                 </span>
@@ -1550,7 +1550,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               {effortPillLabel && (
                 <span
                   data-testid={workbenchSelectors.effortPill}
-                  className="shrink-0 text-[13px] text-[#B9B8B4]"
+                  className="shrink-0 text-[13px] text-[var(--notion-text-faint)]"
                 >
                   {effortPillLabel}
                 </span>
@@ -1560,7 +1560,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             <>
               <CatalogModelIcon src={selectedFree.iconUrl} alt={selectedFree.label} />
               <span className="truncate">{selectedFree.label}</span>
-              <span className="shrink-0 text-[11px] font-medium text-[#9B9A97]">
+              <span className="shrink-0 text-[11px] font-medium text-[var(--notion-text-faint)]">
                 {t(($) => $.preferences.free)}
               </span>
             </>
@@ -1569,7 +1569,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               {!hideTriggerIcon ? <HiCpuChip className="h-3.5 w-3.5 shrink-0" /> : null}
               <span className="truncate">{mainLabel}</span>
               {isManagedModelConfigId(value.mainModel?.configId || '') && (
-                <span className="shrink-0 text-[11px] text-[#787774]">
+                <span className="shrink-0 text-[11px] text-[var(--notion-text-soft)]">
                   {!signedIn ? t(($) => $.workbench.managedModelLoginRequired)
                     : managedCatalog?.status === 'ready' ? t(($) => $.workbench.managedModelRemoved) : null}
                 </span>

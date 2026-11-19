@@ -1,6 +1,6 @@
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import React, { useEffect, useState } from 'react'
-import { Select, Switch, message } from 'antd'
+import { Switch, message } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { updateRendererRoute, appSettingsErrorText } from '../../i18n'
 import FileIcon from '../FileIcon'
@@ -8,10 +8,16 @@ import type { AppSettings } from '../../../../shared/types'
 import { settingsSelectors } from '../../testing/selectors'
 import PartnerCacheCleanupModal from './PartnerCacheCleanupModal'
 import SettingsGroup, { SettingsRow } from './SettingsGroup'
+import SettingsChoiceCards, { type SettingsChoiceOption } from './SettingsChoiceCards'
 import {
-  isStreamingMarkdownAnimationEnabled,
-  setStreamingMarkdownAnimationEnabled
-} from '../../utils/renderPreferences'
+  LanguagePreviewChinese,
+  LanguagePreviewEnglish,
+  LanguagePreviewSystem,
+  ThemePreviewDark,
+  ThemePreviewLight,
+  ThemePreviewSystem
+} from './SettingsChoicePreviews'
+import { useAppearance } from '../../contexts/AppearanceContext'
 
 const GeneralSettingsPanel: React.FC = () => {
   const { t } = useTranslation()
@@ -19,9 +25,7 @@ const GeneralSettingsPanel: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [openingLogDirectory, setOpeningLogDirectory] = useState(false)
   const [cacheCleanupOpen, setCacheCleanupOpen] = useState(false)
-  const [streamingAnimation, setStreamingAnimation] = useState<boolean>(() =>
-    isStreamingMarkdownAnimationEnabled()
-  )
+  const appearance = useAppearance()
 
   useEffect(() => {
     void window.api
@@ -101,43 +105,86 @@ const GeneralSettingsPanel: React.FC = () => {
     }
   }
 
+  const themeOptions: SettingsChoiceOption<AppSettings['theme']>[] = [
+    {
+      value: 'system',
+      label: t(($) => $.preferences.system),
+      preview: <ThemePreviewSystem />
+    },
+    {
+      value: 'light',
+      label: t(($) => $.preferences.themeLight),
+      preview: <ThemePreviewLight />
+    },
+    {
+      value: 'dark',
+      label: t(($) => $.preferences.themeDark),
+      preview: <ThemePreviewDark />
+    }
+  ]
+
+  // 说明文案跟着选中项走：用户不必再从三句里猜「现在这句是在说哪个选项」。
+  const themeDescription =
+    (settings?.theme ?? 'system') === 'light'
+      ? t(($) => $.preferences.themeDescriptionLight)
+      : (settings?.theme ?? 'system') === 'dark'
+        ? t(($) => $.preferences.themeDescriptionDark)
+        : t(($) => $.preferences.themeDescriptionSystem)
+
+  const languageOptions: SettingsChoiceOption<AppSettings['language']>[] = [
+    {
+      value: 'system',
+      label: t(($) => $.preferences.system),
+      preview: <LanguagePreviewSystem />
+    },
+    {
+      value: 'zh-CN',
+      label: t(($) => $.preferences.simplifiedChinese),
+      preview: <LanguagePreviewChinese />
+    },
+    {
+      value: 'en',
+      label: t(($) => $.preferences.english),
+      preview: <LanguagePreviewEnglish />
+    }
+  ]
+
   return (
     <section
       className="nc-settings-general h-full overflow-y-auto"
       data-testid={settingsSelectors.generalPanel}
       aria-label={t(($) => $.settings.generalSettings)}
     >
+      <SettingsGroup title={t(($) => $.settings.visualStyle)}>
+        <SettingsRow
+          title={t(($) => $.preferences.theme)}
+          description={themeDescription}
+        >
+          <SettingsChoiceCards
+            label={t(($) => $.preferences.theme)}
+            value={settings?.theme ?? 'system'}
+            disabled={!settings || saving}
+            testIdPrefix="settings-theme"
+            options={themeOptions}
+            onChange={(theme) => {
+              appearance.setPreference(theme)
+              void updatePreference({ theme })
+            }}
+          />
+        </SettingsRow>
+      </SettingsGroup>
       <SettingsGroup title={t(($) => $.settings.applicationPreferences)}>
         <SettingsRow
           title={t(($) => $.preferences.language)}
           description={t(($) => $.preferences.languageDescription)}
         >
-          <Select
-            data-testid="settings-language"
-            aria-label={t(($) => $.preferences.language)}
-            className="nc-settings-preference-select"
+          <SettingsChoiceCards
+            label={t(($) => $.preferences.language)}
             value={settings?.language ?? 'system'}
             disabled={!settings || saving}
-            options={[
-              { value: 'system', label: t(($) => $.preferences.system) },
-              { value: 'zh-CN', label: t(($) => $.preferences.simplifiedChinese) },
-              { value: 'en', label: t(($) => $.preferences.english) }
-            ]}
-            onChange={(language: AppSettings['language']) => void updatePreference({ language })}
-          />
-        </SettingsRow>
-        <SettingsRow
-          title={t(($) => $.settings.streamingTextAnimation)}
-          description={t(($) => $.settings.streamingTextAnimationDescription)}
-        >
-          <Switch
-            checked={streamingAnimation}
-            onChange={(enabled) => {
-              setStreamingAnimation(enabled)
-              setStreamingMarkdownAnimationEnabled(enabled)
-            }}
-            data-testid={settingsSelectors.streamingAnimationSwitch}
-            aria-label={t(($) => $.settings.streamingTextAnimation)}
+            testIdPrefix="settings-language"
+            options={languageOptions}
+            onChange={(language) => void updatePreference({ language })}
           />
         </SettingsRow>
         <SettingsRow

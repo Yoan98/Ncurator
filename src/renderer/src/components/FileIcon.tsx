@@ -28,7 +28,7 @@ const FileIcon: FC<FileIconProps> = ({ name = '', extension, kind, expanded, cla
     'data-file-icon': iconKind,
     className:
       className ||
-      `${iconKind === 'directory' ? DIRECTORY_ICON_SIZE_CLASSES.sm : FILE_ICON_SIZE_CLASSES.sm} shrink-0 text-[#787774]`
+      `${iconKind === 'directory' ? DIRECTORY_ICON_SIZE_CLASSES.sm : FILE_ICON_SIZE_CLASSES.sm} shrink-0 text-[var(--notion-text-soft)]`
   }
   if (['docx', 'xlsx', 'ppt', 'pdf'].includes(iconKind)) {
     return (

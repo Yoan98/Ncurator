@@ -1,5 +1,3 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
@@ -12,6 +10,8 @@ import {
   selectWorkspaceIndexSpeedThroughSettingsUi,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
+
+import { copyScenarioWorkspaceFixture } from './realWorkspaceHelpers'
 
 type SequentialPrepareEvent = {
   workspaceId: string
@@ -30,7 +30,7 @@ describe('settings workspace e2e', () => {
         suite: 'workspace',
         groups: ['files'],
         description: '多个文件地址更新索引时，前一个地址终态后再启动下一个。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace-scenarios/workspace-prepare-sequential-addresses'],
         knowledge: 'cached',
         serviceMode: 'real',
         execution: 'exclusive',
@@ -38,18 +38,9 @@ describe('settings workspace e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const firstRoot = await mkdtemp(path.join(os.tmpdir(), 'settings-prepare-seq-a-'))
-          const secondRoot = await mkdtemp(path.join(os.tmpdir(), 'settings-prepare-seq-b-'))
-          await writeFile(path.join(firstRoot, 'alpha.txt'), 'first address index\n')
-          await writeFile(path.join(secondRoot, 'beta.txt'), 'second address index\n')
-          runtime.registerResource({
-            name: `settings-prepare-seq:${firstRoot}`,
-            phase: 'after-app-close',
-            dispose: async () => {
-              await rm(firstRoot, { recursive: true, force: true })
-              await rm(secondRoot, { recursive: true, force: true })
-            }
-          })
+          const root = await copyScenarioWorkspaceFixture('workspace-prepare-sequential-addresses')
+          const firstRoot = path.join(root, 'first')
+          const secondRoot = path.join(root, 'second')
 
           const firstWorkspaceId = await addWorkspaceDirectoryThroughNativeDialog(page, firstRoot)
           await waitForFileIndexJobIdle(page, firstWorkspaceId)

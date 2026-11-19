@@ -873,12 +873,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     : t(($) => $.workbench.contextUsageUnavailable)
   const contextUsageTooltip = contextUsage ? (
     <div className="space-y-1 text-xs leading-5">
-      <div className="font-medium text-[#37352F]">{t(($) => $.workbench.contextUsage)}</div>
+      <div className="font-medium text-[var(--notion-text)]">{t(($) => $.workbench.contextUsage)}</div>
       <div>
         {t(($) => $.workbench.used2)}
         {contextUsagePercent}%
       </div>
-      <div className="text-[#787774]">
+      <div className="text-[var(--notion-text-soft)]">
         {contextUsage.usedContextTokens.toLocaleString(getRendererRuntime().locale)} /{' '}
         {contextUsage.contextWindowTokens.toLocaleString(getRendererRuntime().locale)} tokens
       </div>
@@ -983,7 +983,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               <button
                 key={attachment.id}
                 type="button"
-                className={`group relative h-[44px] shrink-0 rounded-[8px] border border-[#E5E4E0] bg-white text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3] ${
+                className={`group relative h-[44px] shrink-0 rounded-[8px] border border-[var(--notion-line-strong)] bg-[var(--notion-page)] text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[var(--notion-line-strong)] ${
                   attachment.kind === 'image'
                     ? 'w-[44px] overflow-hidden p-0'
                     : 'flex w-[200px] items-center gap-1.5 px-1.5 py-1 pr-6'
@@ -1016,7 +1016,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 title={attachment.name}
               >
                 {attachment.kind === 'image' ? (
-                  <span className="flex h-full w-full items-center justify-center bg-[#F4F4F2] text-[#787774]">
+                  <span className="flex h-full w-full items-center justify-center bg-[var(--notion-surface)] text-[var(--notion-text-soft)]">
                     {attachmentPreviewUrls[attachment.id] ? (
                       <img
                         src={attachmentPreviewUrls[attachment.id]}
@@ -1028,15 +1028,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     )}
                   </span>
                 ) : attachment.kind === 'directory' ? (
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
-                    <FileIcon kind="directory" className="h-[21px] w-[21px] text-[#787774]" />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[var(--notion-surface)] text-[var(--notion-text-soft)]">
+                    <FileIcon kind="directory" className="h-[21px] w-[21px] text-[var(--notion-text-soft)]" />
                   </span>
                 ) : (
                   <AttachmentFileIcon fileName={attachment.name} />
                 )}
                 {attachment.kind !== 'image' ? (
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
+                    <span className="block truncate text-[13px] font-medium leading-5 text-[var(--notion-text)]">
                       {attachment.name}
                     </span>
                   </span>
@@ -1045,7 +1045,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   role="button"
                   tabIndex={0}
                   aria-label={t(($) => $.workbench.removeAttachment)}
-                  className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-[#37352F] text-white shadow group-hover:flex"
+                  className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-[var(--notion-accent)] text-[var(--notion-accent-contrast)] shadow group-hover:flex"
                   data-testid={`${workbenchSelectors.attachmentRemoveButtonPrefix}-${attachment.id}`}
                   onClick={(event) => {
                     event.preventDefault()
@@ -1075,7 +1075,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             aria-multiline="true"
             tabIndex={0}
             spellCheck={false}
-            className="block max-h-[min(240px,30dvh)] min-h-[32px] w-full overflow-x-hidden overflow-y-auto overscroll-y-contain whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#37352F] outline-none [&_[data-role='scope-token']]:align-baseline"
+            className="block max-h-[min(240px,30dvh)] min-h-[32px] w-full overflow-x-hidden overflow-y-auto overscroll-y-contain whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[var(--notion-text)] outline-none [&_[data-role='scope-token']]:align-baseline"
             data-testid={workbenchSelectors.input}
             onClick={(event) => {
               const token =
@@ -1132,7 +1132,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           ></span>
 
           <div
-            className={`pointer-events-none absolute inset-x-0 top-0 text-[15px] leading-6 text-[#91918E] ${
+            className={`pointer-events-none absolute inset-x-0 top-0 text-[15px] leading-6 text-[var(--notion-text-faint)] ${
               hasContent ? 'hidden' : ''
             }`}
           >
@@ -1141,10 +1141,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         </div>
 
         <div className="mx-[-4px] mt-1.5 flex items-center justify-between gap-2 px-1">
-          <div className="flex shrink-0 items-center gap-1.5 text-[#91918E]">
+          <div className="flex shrink-0 items-center gap-1.5 text-[var(--notion-text-faint)]">
             <button
               type="button"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#787774] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--notion-text-soft)] transition hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)]"
               aria-label={t(($) => $.workbench.addAttachment)}
               data-testid={workbenchSelectors.attachmentAddButton}
               onClick={() => void handlePickAttachments()}
@@ -1222,13 +1222,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
                     showCancel
                       ? cancelling
-                        ? 'border-[#E5E4E0] bg-[#F4F4F2] text-[#B5B3AD]'
+                        ? 'border-[var(--notion-line-strong)] bg-[var(--notion-surface)] text-[var(--notion-text-faint)]'
                         : stoppingRun
-                          ? 'border-[#B3261E] bg-[#B3261E] text-white hover:bg-[#8F3028]'
-                          : 'border-[#37352F] bg-[#37352F] text-white hover:bg-[#2F3437]'
+                          ? 'border-[var(--notion-red)] bg-[var(--notion-red)] text-[var(--notion-accent-contrast)] hover:bg-[var(--notion-red)]'
+                          : 'border-[var(--notion-accent)] bg-[var(--notion-accent)] text-[var(--notion-accent-contrast)] hover:bg-[var(--notion-accent)]'
                       : sendButtonDisabled
-                        ? 'border-[#E5E4E0] bg-[#F4F4F2] text-[#B5B3AD]'
-                        : 'border-[#37352F] bg-[#37352F] text-white hover:bg-[#2F3437]'
+                        ? 'border-[var(--notion-line-strong)] bg-[var(--notion-surface)] text-[var(--notion-text-faint)]'
+                        : 'border-[var(--notion-accent)] bg-[var(--notion-accent)] text-[var(--notion-accent-contrast)] hover:bg-[var(--notion-accent)]'
                   }`}
                   data-testid={workbenchSelectors.sendButton}
                   aria-label={
@@ -1257,7 +1257,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
       {composerHint ? (
         <div
-          className="mt-1 px-1 text-[12px] leading-5 text-[#9B6A1A]"
+          className="mt-1 px-1 text-[12px] leading-5 text-[var(--notion-yellow)]"
           data-testid={workbenchSelectors.composerHint}
         >
           {composerHint}
