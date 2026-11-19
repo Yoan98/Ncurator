@@ -161,6 +161,56 @@ export async function captureBackendIdentity({ root, ref, runtime = {} }) {
   return { commit, files, runtime }
 }
 
+// Preserve historical raw-byte identities. Only Git's built-in Windows checkout
+// conversion may explain a blob/worktree mismatch; never normalize fixture bytes.
+export async function verifyBackendSourceSnapshot({ root, identity }) {
+  const historical = await captureBackendIdentity({ root, ref: identity.commit })
+  const names = Object.keys(historical.files).sort()
+  if (stable(names) !== stable(Object.keys(identity.files).sort()))
+    fail('source snapshot file set does not match its original commit')
+  const mismatches = names.filter((file) => historical.files[file] !== identity.files[file])
+  if (!mismatches.length) return
+  if (
+    identity.runtime?.platform !== 'win32' ||
+    git(root, ['config', '--get', 'core.autocrlf']).toString().trim() !== 'true'
+  )
+    fail('source snapshot does not match its original commit')
+  const changedAttributes = git(root, ['diff', '--name-only', '-z', identity.commit, 'HEAD'])
+    .toString()
+    .split('\0')
+    .filter((file) => path.posix.basename(file) === '.gitattributes')
+  if (changedAttributes.length) fail('checkout attributes changed since the original commit')
+  const attributes = execFileSync(
+    'git',
+    ['check-attr', '-z', '--stdin', 'filter', 'ident', 'working-tree-encoding'],
+    {
+      cwd: root,
+      input: mismatches.join('\0') + '\0',
+      maxBuffer: 64 * 1024 * 1024
+    }
+  )
+    .toString()
+    .split('\0')
+    .filter(Boolean)
+  if (attributes.length !== mismatches.length * 9) fail('incomplete checkout attributes')
+  for (let index = 0; index < attributes.length; index += 3) {
+    if (!['unspecified', 'unset'].includes(attributes[index + 2]))
+      fail('custom checkout conversion is not accepted for historical evidence')
+  }
+  for (const file of mismatches) {
+    // Per-path output has no misleading pre-conversion batch byte count.
+    const bytes = git(root, [
+      '-c',
+      'core.autocrlf=true',
+      'cat-file',
+      '--filters',
+      identity.commit + ':' + file
+    ])
+    if (backendEvidenceHash(bytes) !== identity.files[file])
+      fail('source snapshot does not match its original commit')
+  }
+}
+
 const validateInput = ({ text, expectedSha256, identity, expectedFiles }) => {
   if (!/^[a-f0-9]{64}$/.test(expectedSha256 || '') || backendEvidenceHash(text) !== expectedSha256)
     fail('report hash mismatch')

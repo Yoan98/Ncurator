@@ -8,6 +8,7 @@ import {
   backendEnvironmentHash,
   backendRuntimeHash,
   captureBackendIdentity,
+  verifyBackendSourceSnapshot,
   importLegacyBackendReport,
   importVitestBackendReport,
   planBackendResume
@@ -389,5 +390,86 @@ describe('backend evidence', () => {
         processExitCode: 0
       })
     ).toThrow('summary')
+  })
+})
+
+describe('historical Windows checkout evidence', () => {
+  const fixture = async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'evidence-checkout-'))
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' })
+    git('init')
+    git('config', 'user.email', 'fixture@example.test')
+    git('config', 'user.name', 'Fixture')
+    git('config', 'core.autocrlf', 'true')
+    await mkdir(path.join(root, 'src'))
+    await writeFile(path.join(root, 'src/with space.ts'), 'one\ntwo\n')
+    await writeFile(path.join(root, 'fixture.bin'), Buffer.from([0, 10, 255, 13, 10]))
+    git('add', '.')
+    git('commit', '-m', 'original')
+    await writeFile(path.join(root, 'src/with space.ts'), 'one\r\ntwo\r\n')
+    const identity = await captureBackendIdentity({
+      root,
+      runtime: { platform: 'win32', environmentSha256: 'unchanged' }
+    })
+    return { root, git, identity }
+  }
+
+  it('reconstructs exact built-in checkout bytes without changing evidence or runtime', async () => {
+    const { root, identity } = await fixture()
+    try {
+      const before = JSON.stringify(identity)
+      await verifyBackendSourceSnapshot({ root, identity })
+      expect(JSON.stringify(identity)).toBe(before)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    'text',
+    'binary',
+    'renamed',
+    'platform',
+    'filter',
+    'ident',
+    'encoding',
+    'attributes',
+    'nested-attributes'
+  ])('rejects non-equivalent or untrusted checkout: %s', async (kind) => {
+    const { root, git, identity } = await fixture()
+    try {
+      if (kind === 'text')
+        identity.files['src/with space.ts'] = backendEvidenceHash('different\r\n')
+      if (kind === 'binary')
+        identity.files['fixture.bin'] = backendEvidenceHash(Buffer.from([0, 10]))
+      if (kind === 'renamed') {
+        identity.files['src/renamed.ts'] = identity.files['src/with space.ts']
+        delete identity.files['src/with space.ts']
+      }
+      if (kind === 'platform') identity.runtime.platform = 'darwin'
+      if (['filter', 'ident', 'encoding'].includes(kind)) {
+        const attr =
+          kind === 'encoding'
+            ? 'working-tree-encoding=UTF-8'
+            : kind === 'filter'
+              ? 'filter=custom'
+              : 'ident'
+        await writeFile(path.join(root, '.git/info/attributes'), `*.ts ${attr}\n`)
+      }
+      if (kind === 'nested-attributes') {
+        await mkdir(path.join(root, '中文'))
+        await writeFile(path.join(root, '中文/.gitattributes'), '*.ts text eol=lf\n')
+        git('add', '.')
+        git('commit', '-m', 'changed nested attributes')
+      }
+      if (kind === 'attributes') {
+        await writeFile(path.join(root, '.gitattributes'), '*.ts text eol=lf\n')
+        git('add', '.gitattributes')
+        git('commit', '-m', 'changed attributes')
+      }
+      await expect(verifyBackendSourceSnapshot({ root, identity })).rejects.toThrow()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 })

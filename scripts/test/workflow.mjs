@@ -28,6 +28,7 @@ import {
 } from './knowledge-seed-store.mjs'
 import {
   captureBackendIdentity,
+  verifyBackendSourceSnapshot,
   importLegacyBackendReport,
   importVitestBackendReport,
   planBackendResume,
@@ -92,7 +93,11 @@ const loadRootEnv = () => {
     return
   }
   for (const [key, value] of Object.entries(parseEnv(raw + '\n'))) {
-    if (key === 'NCURATOR_SERVICE_ENV' || key === 'NCURATOR_APP_SECRET_DESKTOP' || key === 'NCURATOR_LOCAL_APP_SECRET_DESKTOP')
+    if (
+      key === 'NCURATOR_SERVICE_ENV' ||
+      key === 'NCURATOR_APP_SECRET_DESKTOP' ||
+      key === 'NCURATOR_LOCAL_APP_SECRET_DESKTOP'
+    )
       continue
     if (process.env[key]?.trim()) continue
     process.env[key] = expandEnvironmentReferences(value)
@@ -660,16 +665,7 @@ const openBackendEvidence = async (manifestPath, files) => {
   })
   const attempts = []
   for (const record of manifest.attempts) {
-    const historical = await captureBackendIdentity({
-      root: ROOT,
-      ref: record.identity.commit,
-      runtime: record.identity.runtime
-    })
-    const ordered = (values) =>
-      JSON.stringify(Object.entries(values).sort(([a], [b]) => a.localeCompare(b)))
-    if (ordered(historical.files) !== ordered(record.identity.files)) {
-      throw new Error('backend evidence source snapshot does not match its original commit')
-    }
+    await verifyBackendSourceSnapshot({ root: ROOT, identity: record.identity })
     const text = await readFile(path.resolve(path.dirname(absolutePath), record.reportPath), 'utf8')
     const input = {
       text,
