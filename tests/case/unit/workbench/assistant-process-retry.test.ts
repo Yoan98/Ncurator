@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { presentRunFailureText } from '../../../../src/renderer/src/components/workbench/runFailureText'
+import { presentRunFailureText } from '../../../../src/shared/llmFailureText'
 import type { AiRunEvent } from '../../../../src/shared/types'
 import { reduceAssistantProcessGroups } from '../../../harness/core/assistantProcessGroups'
 

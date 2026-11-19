@@ -1,3 +1,4 @@
+import { presentRunFailureText } from '../../../shared/llmFailureText'
 import { LlmProviderError, type LlmBillingStatus, type LlmProviderDiagnostics } from './errors'
 
 export type ProviderFailureCode =
@@ -212,7 +213,7 @@ export const providerFailure = (code: ProviderFailureCode,
   } = {}): LlmProviderError =>
   new LlmProviderError({
     providerCode: code,
-    message: providerFailureMessage(code) + (options.messageSuffix ?? ''),
+    message: presentRunFailureText(providerFailureMessage(code) + (options.messageSuffix ?? '')),
     retryable: options.retryable ?? FAILURES[code].retryable,
     billing: options.billing,
     httpStatus: options.status,

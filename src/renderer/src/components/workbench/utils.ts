@@ -1,4 +1,4 @@
-import { presentRunFailureText } from './runFailureText'
+import { presentRunFailureText } from '../../../../shared/llmFailureText'
 import { localizeSystemText } from '../../i18n/systemText'
 import { t } from '../../i18n'
 import { PARTNER_AVATAR_SHAPES, PARTNER_AVATAR_COLORS } from '../../../../shared/types'

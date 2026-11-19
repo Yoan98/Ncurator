@@ -1,4 +1,4 @@
-import { presentRunFailureText } from '../components/workbench/runFailureText'
+import { presentRunFailureText } from '../../../shared/llmFailureText'
 import { messageTimeLabel } from '../i18n/systemText'
 import { t, getProductName, getContactUrl, getRendererRuntime } from '../i18n'
 import { useDesktopAccount } from '../contexts/DesktopAccountProvider'

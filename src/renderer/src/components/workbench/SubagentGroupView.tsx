@@ -12,7 +12,7 @@ import { Tooltip } from 'antd'
 import PartnerAvatar from './PartnerAvatar'
 import type { AssistantProcessGroup, SubagentTaskView } from './types'
 import { getSubagentAvatar } from './utils'
-import { presentRunFailureText } from './runFailureText'
+import { presentRunFailureText } from '../../../../shared/llmFailureText'
 
 const SubagentThought: React.FC<{
   child: SubagentTaskView
