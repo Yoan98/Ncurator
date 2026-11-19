@@ -53,6 +53,7 @@ describe('release preflight', () => {
     'prefix-cache-retain-live',
     'subagent-prefix-cache-retain-live',
     'queue-message-during-run',
+    'partner-cache-cleanup',
     'scheduled-task-trigger-and-session-refresh'
   ])('checks the configured local provider for %s', async (caseId) => {
     const fetchNow = vi

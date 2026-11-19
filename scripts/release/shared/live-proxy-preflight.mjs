@@ -30,6 +30,7 @@ const LOCAL_PROXY_CASE_FILES = new Set([
   'model-selector-and-provider-error.e2e.test.ts',
   'multi-file-apply-tabs.e2e.test.ts',
   'multi-format-selection-reference.e2e.test.ts',
+  'partner-cache-cleanup.e2e.test.ts',
   'partner-create-and-name.e2e.test.ts',
   'ppt-create-diff-and-revert.e2e.test.ts',
   'ppt-update-diff-interactions.e2e.test.ts',
