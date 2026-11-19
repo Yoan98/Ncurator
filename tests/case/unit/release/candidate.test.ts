@@ -4,7 +4,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { RELEASE_CACHE_CASES } from '../../../../scripts/release/regression.mjs'
-import { RELEASE_ACCOUNT_CASES } from '../../../../scripts/test/e2e-results.mjs'
 import { createReleaseBundle } from '../../../../scripts/release/artifact-bundle.mjs'
 import {
   assertCandidatePublishable,
@@ -108,7 +107,7 @@ const writePassedResult = async (tag = 'windows-v0.1.21') => {
     releaseCommit: candidate.state.commit,
     releasePlatform: candidate.state.platform,
     artifactSha256: installer.sha256,
-    tests: [...RELEASE_CACHE_CASES, ...RELEASE_ACCOUNT_CASES].map((caseId) => ({
+    tests: RELEASE_CACHE_CASES.map((caseId) => ({
       file: `tests/case/workbench/${caseId}.e2e.test.ts`,
       targetId: 'windows-x64',
       status: 'passed',
@@ -154,10 +153,45 @@ describe('retained release candidate', () => {
     await expect(recheckWindowsCandidateE2E({ tag, commit: 'other' })).rejects.toThrow(
       'does not match release tag'
     )
-    await expect(recheckWindowsCandidateE2E({ tag, commit: result.releaseCommit })).resolves.toMatchObject({
+    await expect(
+      recheckWindowsCandidateE2E({ tag, commit: result.releaseCommit })
+    ).resolves.toMatchObject({
       state: { status: 'ready' }
     })
     expect(await fs.readFile(resultPath, 'utf8')).toBe(passed)
+  })
+
+  it('explicitly scopes historical failures and locks the original evidence hash', async () => {
+    await materializeReleaseCandidate({ bundlePath: await createBundle() })
+    const { result, resultPath } = await writePassedResult()
+    const args = { tag: result.releaseTag, commit: result.releaseCommit }
+    const other = { ...result.tests[0], file: 'other.e2e.test.ts', status: 'failed', cases: [] }
+    const original = { ...result, status: 'failed', tests: [...result.tests, other] }
+    const bytes = JSON.stringify(original)
+    await fs.writeFile(resultPath, bytes)
+    await expect(recheckWindowsCandidateE2E(args)).rejects.toThrow('actual passed package')
+    const scoped = { ...args, impactReason: 'Reviewed delta excludes the prior failed case' }
+    await expect(recheckWindowsCandidateE2E(scoped)).resolves.toMatchObject({
+      state: {
+        status: 'ready',
+        e2e: {
+          scopeReview: {
+            mode: 'gates-only',
+            excludedFiles: [{ file: other.file, status: 'failed' }]
+          }
+        }
+      }
+    })
+    expect(await fs.readFile(resultPath, 'utf8')).toBe(bytes)
+    const publishArgs = { ...args, platform: 'windows-x64' }
+    await expect(assertCandidatePublishable(publishArgs)).resolves.toMatchObject({
+      state: { status: 'ready' }
+    })
+    await fs.writeFile(resultPath, bytes + '\n')
+    await expect(assertCandidatePublishable(publishArgs)).rejects.toThrow('source evidence changed')
+    original.tests[0] = { ...original.tests[0], status: 'failed' }
+    await fs.writeFile(resultPath, JSON.stringify(original))
+    await expect(recheckWindowsCandidateE2E(scoped)).rejects.toThrow('actual passed package')
   })
 
   it('requires a ready state before publishing', async () => {
@@ -233,7 +267,7 @@ describe('retained release candidate', () => {
     ).rejects.toThrow('unsupported candidate E2E status')
   })
 
-  it('accepts selected package cases without unrelated cache cases and rechecks evidence before publication', async () => {
+  it('requires two cache gates beside selected package cases and rechecks evidence before publication', async () => {
     await materializeReleaseCandidate({ bundlePath: await createBundle() })
     const request = {
       tag: 'windows-v0.1.21',
@@ -248,13 +282,13 @@ describe('retained release candidate', () => {
     await expect(recordCandidateE2E({ ...request, status: 'passed', resultPath })).rejects.toThrow(
       'actual passed package'
     )
-    const required = result.tests.slice(RELEASE_CACHE_CASES.length)
-    result.tests = [result.tests[0]]
+    const required = [...result.tests]
+    result.tests = [structuredClone(result.tests[0])]
     result.tests[0].file = 'tests/case/settings/general/language-and-service-route.e2e.test.ts'
     result.tests[0].cases[0].caseId = 'language-and-service-route'
     await fs.writeFile(resultPath, JSON.stringify(result))
     await expect(recordCandidateE2E({ ...request, status: 'passed', resultPath })).rejects.toThrow(
-      'missing required package E2E cases'
+      'missing required packaged real cache gates'
     )
     result.tests.push(...required)
     await fs.writeFile(resultPath, JSON.stringify(result))

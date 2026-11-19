@@ -57,7 +57,7 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId> ...] [--fresh-knowledge-cache]'
+    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId> ...] [--gates-only --impact-reason <reason>] [--fresh-knowledge-cache]'
   )
 }
 const mode = modes[0][0]

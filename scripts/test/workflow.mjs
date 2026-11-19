@@ -7,7 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
 import {
-  RELEASE_ACCOUNT_CASES,
+  SERIAL_PACKAGE_ACCOUNT_CASES,
   readTestCaseIds,
   readE2ECaseResults,
   mergeE2ETestResults,
@@ -346,21 +346,11 @@ export const findTestFiles = async (input) => {
     return []
   }
 
-  const defaultPackage =
-    input.target === 'package' &&
-    !input.domain &&
-    !input.suite &&
-    !input.groups.length &&
-    !input.caseIds.length &&
-    input.domesticPackage !== false
-  const isReleaseAccountFile = (filePath) =>
-    defaultPackage && RELEASE_ACCOUNT_CASES.includes(toCaseId(filePath))
   const allFiles = await walk(scopeDir)
   const candidates = allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
     .filter((filePath) => {
       if (!filePath.startsWith(path.join(TEST_CASES_ROOT, 'account') + path.sep)) return true
-      if (isReleaseAccountFile(filePath)) return true
       if (toCaseId(filePath) === 'account-change-during-runs') {
         return input.caseIds.includes('account-change-during-runs')
       }
@@ -370,7 +360,6 @@ export const findTestFiles = async (input) => {
     .filter(
       (filePath) =>
         !filePath.startsWith(`${PROVIDER_MATRIX_ROOT}${path.sep}`) ||
-        isReleaseAccountFile(filePath) ||
         input.caseIds.includes(toCaseId(filePath))
     )
     .filter((filePath) => {
@@ -822,7 +811,7 @@ const runE2ETestFilesConcurrently = async (
         .filter(
           ({ testFile }) =>
             target.distribution !== 'international' ||
-            !RELEASE_ACCOUNT_CASES.includes(toCaseId(testFile))
+            !SERIAL_PACKAGE_ACCOUNT_CASES.includes(toCaseId(testFile))
         )
         .map((task) => ({
           ...task,
@@ -835,7 +824,8 @@ const runE2ETestFilesConcurrently = async (
   const gateTasks = runnableTasks.filter((task) => gateCaseIds.includes(toCaseId(task.testFile)))
   const accountTasks = runnableTasks.filter(
     (task) =>
-      task.env.NCURATOR_E2E_EXECUTABLE && RELEASE_ACCOUNT_CASES.includes(toCaseId(task.testFile))
+      task.env.NCURATOR_E2E_EXECUTABLE &&
+      SERIAL_PACKAGE_ACCOUNT_CASES.includes(toCaseId(task.testFile))
   )
   const concurrentTasks = runnableTasks.filter(
     (task) =>
@@ -1036,23 +1026,12 @@ const cleanupStaleE2ETempRoot = async (e2eTempRoot) => {
   return removedCount
 }
 
-const runTypeWorkflow = async (input) => {
-  const testFiles = await findTestFiles(input)
-  if (testFiles.length === 0) {
-    if (input.caseIds.length > 0) {
-      throw new Error(
-        `no test files match --case ${input.caseIds.join(', ')} within ${formatScope(input)}`
-      )
-    }
-    process.stdout.write(`[test-workflow] no tests found for ${formatScope(input)}\n`)
-    return { exitCode: 0, e2eResults: [] }
-  }
-
+export const includeReleaseGateSelection = async (input, selectedFiles) => {
   if (input.type === 'e2e' && input.caseIds.length > 0) {
     const declared = new Set(
       (
         await Promise.all(
-          testFiles.map(async (filePath) =>
+          selectedFiles.map(async (filePath) =>
             readTestCaseIds(filePath, await readFile(filePath, 'utf8'))
           )
         )
@@ -1065,6 +1044,47 @@ const runTypeWorkflow = async (input) => {
       )
     }
   }
+
+  if (input.type !== 'e2e' || input.target !== 'package' || !input.gateCaseIds?.length)
+    return { input, testFiles: selectedFiles }
+  const gates = await findTestFiles({
+    ...input,
+    domain: '',
+    suite: '',
+    groups: [],
+    excludeGroups: [],
+    caseIds: input.gateCaseIds
+  })
+  const gateFiles = input.gateCaseIds.map((caseId) => {
+    const file = gates.find((filePath) => toCaseId(filePath) === caseId)
+    if (!file) throw new Error(`Missing required package gate file: ${caseId}`)
+    return file
+  })
+  return {
+    input: input.caseIds.length
+      ? { ...input, caseIds: [...new Set([...input.caseIds, ...input.gateCaseIds])] }
+      : input,
+    testFiles: [...new Set([...gateFiles, ...selectedFiles])]
+  }
+}
+
+const runTypeWorkflow = async (input) => {
+  let testFiles = await findTestFiles(input)
+  if (testFiles.length === 0) {
+    if (input.caseIds.length > 0) {
+      throw new Error(
+        `no test files match --case ${input.caseIds.join(', ')} within ${formatScope(input)}`
+      )
+    }
+    if (input.gateCaseIds?.length && (input.domain || input.suite || input.groups.length))
+      throw new Error(`no release regression tests match explicit scope: ${formatScope(input)}`)
+    process.stdout.write(`[test-workflow] no tests found for ${formatScope(input)}\n`)
+    return { exitCode: 0, e2eResults: [] }
+  }
+
+  const withGates = await includeReleaseGateSelection(input, testFiles)
+  input = withGates.input
+  testFiles = withGates.testFiles
 
   const nativeTarget = input.type === 'e2e' ? 'electron' : 'node'
   const shouldFilterByTestName =

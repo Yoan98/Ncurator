@@ -6,16 +6,21 @@ import path from 'node:path'
 import {
   hasRegressionSelectionArgs,
   readRegressionSelection,
+  RELEASE_CACHE_CASES,
   validateReleaseArgs
 } from '../../../../scripts/release/regression.mjs'
 import {
-  RELEASE_ACCOUNT_CASES,
+  SERIAL_PACKAGE_ACCOUNT_CASES,
   mergeE2ETestResults,
   passedPackageTest,
   readTestCaseIds,
   runE2EGates
 } from '../../../../scripts/test/e2e-results.mjs'
-import { findTestFiles, partitionBackendTestFiles } from '../../../../scripts/test/workflow.mjs'
+import {
+  findTestFiles,
+  includeReleaseGateSelection,
+  partitionBackendTestFiles
+} from '../../../../scripts/test/workflow.mjs'
 
 const providerMatrixFile = path.resolve(
   'tests/case/workbench/conversation/provider-matrix/live-preset-provider-smoke.e2e.test.ts'
@@ -72,29 +77,59 @@ describe('release regression selection', () => {
     expect(files).not.toContain(providerMatrixFile)
   })
 
-  it('discovers every mandatory account case for a domestic package', async () => {
+  it('requires explicit rationale for gates-only', () => {
+    expect(() => readRegressionSelection(['--gates-only'])).toThrow('requires --impact-reason')
+    expect(() =>
+      readRegressionSelection(['--gates-only', '--impact-reason', 'review', '--case', 'x'])
+    ).toThrow('cannot be mixed')
+    expect(
+      readRegressionSelection(['--gates-only', '--impact-reason', 'review']).workflowArgs
+    ).toEqual(RELEASE_CACHE_CASES.flatMap((caseId) => ['--case', caseId]))
+  })
+
+  it('keeps all nine account/model cases out of default package selection and individually runnable', async () => {
     const domestic = await findTestFiles({ ...defaultScope, target: 'package' })
-    const international = await findTestFiles({
-      ...defaultScope,
-      target: 'package',
-      domesticPackage: false
-    })
-    for (const caseId of RELEASE_ACCOUNT_CASES) {
-      expect(domestic.some((file) => path.basename(file) === caseId + '.e2e.test.ts')).toBe(true)
-      expect(international.some((file) => path.basename(file) === caseId + '.e2e.test.ts')).toBe(
-        false
-      )
+    for (const caseId of SERIAL_PACKAGE_ACCOUNT_CASES) {
+      expect(domestic.some((file) => path.basename(file) === caseId + '.e2e.test.ts')).toBe(false)
+      const explicit = await findTestFiles({
+        ...defaultScope,
+        target: 'package',
+        caseIds: [caseId]
+      })
+      expect(explicit.some((file) => path.basename(file) === caseId + '.e2e.test.ts')).toBe(true)
     }
   })
 
-  it('keeps managed image conversation opt-in and out of the release gate', async () => {
-    const caseId = 'managed-image-conversation'
-    const file = path.resolve(
-      'tests/case/workbench/conversation/provider-matrix/managed-image-conversation.e2e.test.ts'
+  it('rejects a typo mixed with a valid case before adding fixed gates', async () => {
+    const selected = {
+      ...defaultScope,
+      target: 'package',
+      caseIds: ['wps-sync-dispatch-on-write-and-revert', 'prefix-cache-retain-liev'],
+      gateCaseIds: RELEASE_CACHE_CASES
+    }
+    const files = await findTestFiles(selected)
+    expect(files).toHaveLength(1)
+    await expect(includeReleaseGateSelection(selected, files)).rejects.toThrow(
+      'no E2E cases match --case prefix-cache-retain-liev'
     )
-    expect(RELEASE_ACCOUNT_CASES).not.toContain(caseId)
-    expect(await findTestFiles({ ...defaultScope, target: 'package' })).not.toContain(file)
-    expect(await findTestFiles({ ...defaultScope, caseIds: [caseId] })).toEqual([file])
+  })
+
+  it('adds the exact fixed gates even to narrowed package test selections', async () => {
+    const selected = {
+      ...defaultScope,
+      target: 'package',
+      domain: 'workbench',
+      suite: 'result',
+      groups: ['apply'],
+      excludeGroups: ['prefix-cache', 'subagent'],
+      caseIds: ['wps-sync-dispatch-on-write-and-revert'],
+      gateCaseIds: RELEASE_CACHE_CASES
+    }
+    const result = await includeReleaseGateSelection(selected, await findTestFiles(selected))
+    expect(result.input.caseIds).toEqual([...selected.caseIds, ...RELEASE_CACHE_CASES])
+    expect(result.testFiles.map((file) => path.basename(file))).toEqual(
+      [...RELEASE_CACHE_CASES, ...selected.caseIds].map((id) => id + '.e2e.test.ts')
+    )
   })
 
   it('does not enable the provider matrix through a group filter', async () => {
