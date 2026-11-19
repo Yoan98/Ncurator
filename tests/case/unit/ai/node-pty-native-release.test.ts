@@ -44,3 +44,36 @@ describe.skipIf(process.platform === 'win32')('node-pty native release preparati
     )
   })
 })
+
+describe.skipIf(process.platform !== 'win32')('node-pty native Windows release preparation', () => {
+  it.each(['conpty.node', 'pty.node'])(
+    'accepts %s without a Unix spawn-helper',
+    async (binding) => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-node-pty-win-'))
+      tempRoots.push(root)
+      await fs.writeFile(path.join(root, binding), 'test binding')
+      expect(isNodePtyNativeReleaseReady(root)).toBe(true)
+      expect(prepareNodePtyNativeRelease(root)).toBe(true)
+      expect(() => assertNodePtyNativeReleaseReady(root, 'Windows test release')).not.toThrow()
+      await expect(fs.stat(path.join(root, 'spawn-helper'))).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
+    }
+  )
+
+  it('rejects an empty release and directories posing as native bindings', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-node-pty-win-'))
+    tempRoots.push(root)
+    for (const directoryEntries of [false, true]) {
+      if (directoryEntries) {
+        await fs.mkdir(path.join(root, 'conpty.node'))
+        await fs.mkdir(path.join(root, 'pty.node'))
+      }
+      expect(isNodePtyNativeReleaseReady(root)).toBe(false)
+      expect(prepareNodePtyNativeRelease(root)).toBe(false)
+      expect(() => assertNodePtyNativeReleaseReady(root, 'Windows test release')).toThrow(
+        'Windows test release is incomplete'
+      )
+    }
+  })
+})
