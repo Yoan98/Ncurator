@@ -218,14 +218,16 @@ it('signs the canonical v2 body and renews only the API-origin ticket', async ()
   const { seedFreeModelToken } =
     await import('../../../../src/main/services/officialApi/freeModelToken')
   seedFreeModelToken(jwt('legacy-seed'), 'https://www.guanzhangai.cn')
-  seedFreeModelToken(jwt('v2-seed'))
+  const seedToken = jwt('v2-seed')
+  const refreshToken = jwt('v2-refresh')
+  seedFreeModelToken(seedToken)
   const route = '/api/v2/free/chat/completions'
   const url = 'https://api.guanzhangai.cn' + route
   const calls: RequestInit[] = []
   const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (target, init) => {
     if (String(target).endsWith('/free/token')) {
       expect(target).toBe('https://api.guanzhangai.cn/api/v1/free/token')
-      return Response.json({ token: jwt('v2-refresh') })
+      return Response.json({ token: refreshToken })
     }
     calls.push({ ...init, headers: new Headers(init?.headers) })
     return new Response('', { status: calls.length === 1 ? 401 : 200 })
@@ -252,8 +254,8 @@ it('signs the canonical v2 body and renews only the API-origin ticket', async ()
   expect(new Headers(calls[0].headers).get(APP_NONCE_HEADER)).not.toBe(
     new Headers(calls[1].headers).get(APP_NONCE_HEADER)
   )
-  expect(new Headers(calls[0].headers).get('authorization')).toBe(`Bearer ${jwt('v2-seed')}`)
-  expect(new Headers(calls[1].headers).get('authorization')).toBe(`Bearer ${jwt('v2-refresh')}`)
+  expect(new Headers(calls[0].headers).get('authorization')).toBe(`Bearer ${seedToken}`)
+  expect(new Headers(calls[1].headers).get('authorization')).toBe(`Bearer ${refreshToken}`)
   await expect(send(url, { method: 'POST', body: '{"model":"old-model"}' })).rejects.toThrow(
     '免费模型编号无效'
   )
