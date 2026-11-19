@@ -297,25 +297,31 @@ export const snapshotModelAssets = async (root, memoRoot) => {
       signature: entry.signature
     })
     const file = memoRoot ? path.join(memoRoot, 'model-digests', `${identity}.json`) : null
-    const previous = file
-      ? await readFile(file, 'utf8')
-          .then(JSON.parse)
-          .catch(() => null)
-      : null
-    let sha256 =
-      previous?.identity === identity && HEX.test(previous.digest) ? previous.digest : null
-    if (!sha256) {
+    const readOrHash = async () => {
+      const before = await lstat(entry.source, { bigint: true })
+      if (
+        before.isSymbolicLink() || !before.isFile() ||
+        `${before.dev}:${before.ino}:${before.size}:${before.mtimeNs}:${before.ctimeNs}` !== entry.signature
+      ) throw new Error(`Model asset changed during hashing: ${entry.source}`)
+      // Re-read under the keyed lock: another caller may have published while we waited.
+      const previous = file
+        ? await readFile(file, 'utf8').then(JSON.parse).catch(() => null)
+        : null
+      if (previous?.identity === identity && HEX.test(previous.digest)) return previous.digest
       const hash = createHash('sha256')
       for await (const chunk of createReadStream(entry.source)) hash.update(chunk)
-      sha256 = hash.digest('hex')
+      const sha256 = hash.digest('hex')
       const after = await lstat(entry.source, { bigint: true })
       if (
-        `${after.dev}:${after.ino}:${after.size}:${after.mtimeNs}:${after.ctimeNs}` !==
-        entry.signature
-      )
-        throw new Error(`Model asset changed during hashing: ${entry.source}`)
+        after.isSymbolicLink() || !after.isFile() ||
+        `${after.dev}:${after.ino}:${after.size}:${after.mtimeNs}:${after.ctimeNs}` !== entry.signature
+      ) throw new Error(`Model asset changed during hashing: ${entry.source}`)
       if (file) await writeSeedJsonAtomically(file, { identity, digest: sha256 })
+      return sha256
     }
+    const sha256 = file
+      ? await withSeedLock(path.join(memoRoot, 'model-digest-locks', identity), readOrHash)
+      : await readOrHash()
     values.push({ name: entry.name, sha256 })
   }
   return { files: values, fingerprint: digestObject(values) }

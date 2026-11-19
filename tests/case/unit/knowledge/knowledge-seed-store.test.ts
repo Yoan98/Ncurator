@@ -1,5 +1,17 @@
+import { spawn } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
 import { createHash } from 'node:crypto'
-import { readFile, cp, mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import {
+  readFile,
+  readdir,
+  cp,
+  mkdir,
+  mkdtemp,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -64,17 +76,41 @@ describe('isolated fixture knowledge seeds', () => {
     )
   })
 
-  it('rejects traversal and fixture symlinks, including directory symlinks', async () => {
+  it('rejects fixture traversal', async () => {
     const checkout = path.join(root, 'repo')
-    const directory = await fixture(checkout)
+    await fixture(checkout)
     await expect(snapshotFixtureInputs(['../../outside'], checkout)).rejects.toThrow(
       'tests/fixtures'
     )
-    await symlink(path.join(directory, 'note.txt'), path.join(directory, 'alias.txt'))
+  })
+
+  it('rejects real fixture file symlinks', async (context) => {
+    const checkout = path.join(root, 'repo')
+    const directory = await fixture(checkout)
+    try {
+      await symlink(path.join(directory, 'note.txt'), path.join(directory, 'alias.txt'), 'file')
+    } catch (error) {
+      if (process.platform !== 'win32' || (error as NodeJS.ErrnoException).code !== 'EPERM')
+        throw error
+      context.skip('Windows denied file symlink creation; file symlink safety is unverified')
+      return
+    }
     await expect(snapshotFixtureInputs(['tests/fixtures/workspace'], checkout)).rejects.toThrow(
       'symlinks'
     )
-    await symlink(directory, path.join(checkout, 'tests/fixtures/alias'))
+  })
+
+  it('rejects real directory links directly and through descendants', async () => {
+    const checkout = path.join(root, 'repo')
+    const directory = await fixture(checkout)
+    await symlink(
+      directory,
+      path.join(checkout, 'tests/fixtures/alias'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
+    await expect(snapshotFixtureInputs(['tests/fixtures/alias'], checkout)).rejects.toThrow(
+      'symlinks'
+    )
     await expect(
       snapshotFixtureInputs(['tests/fixtures/alias/note.txt'], checkout)
     ).rejects.toThrow('symlinks')
@@ -145,6 +181,102 @@ describe('isolated fixture knowledge seeds', () => {
     await writeFile(path.join(b, 'onnx/model.onnx'), 'different model bytes')
     expect((await snapshotModelAssets(b, memo)).fingerprint).not.toBe(first.fingerprint)
   })
+
+  const coldModel = async () => {
+    const model = path.join(root, 'concurrent-model')
+    const memo = path.join(root, 'concurrent-memo')
+    await mkdir(model)
+    await writeFile(path.join(model, 'weights.bin'), Buffer.alloc(2 * 1024 * 1024, 37))
+    await writeFile(path.join(model, 'config.json'), '{}')
+    return { model, memo, expected: await snapshotModelAssets(model) }
+  }
+
+  const assertPublishedMemo = async (memo: string) => {
+    const names = (await readdir(path.join(memo, 'model-digests'))).filter((name) =>
+      name.endsWith('.json')
+    )
+    expect(names).toHaveLength(2)
+    for (const name of names) {
+      const entry = JSON.parse(await readFile(path.join(memo, 'model-digests', name), 'utf8'))
+      expect(name).toBe(`${entry.identity}.json`)
+      expect(entry.digest).toMatch(/^[a-f0-9]{64}$/u)
+    }
+  }
+
+  it('publishes a shared cold model memo under simultaneous same-process requests', async () => {
+    const { model, memo, expected } = await coldModel()
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () => snapshotModelAssets(model, memo))
+    )
+    for (const result of results) expect(result).toEqual(expected)
+    await assertPublishedMemo(memo)
+    expect(await snapshotModelAssets(model, memo)).toEqual(expected)
+  })
+
+  it('publishes a shared cold model memo from simultaneous real child processes', async () => {
+    const { model, memo, expected } = await coldModel()
+    const moduleUrl = pathToFileURL(path.resolve('scripts/test/knowledge-seed-store.mjs')).href
+    const source = `
+      import { snapshotModelAssets } from ${JSON.stringify(moduleUrl)};
+      process.once('message', async () => {
+        try {
+          const result = await snapshotModelAssets(${JSON.stringify(model)}, ${JSON.stringify(memo)});
+          process.stdout.write(JSON.stringify(result));
+          process.disconnect();
+        } catch (error) { console.error(error); process.exit(1); }
+      });
+      process.send('ready');
+    `
+    const workers = Array.from({ length: 3 }, () => {
+      const child = spawn(process.execPath, ['--input-type=module', '-e', source], {
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc']
+      })
+      let output = '',
+        errors = ''
+      child.stdout!.on('data', (chunk) => {
+        output += chunk
+      })
+      child.stderr!.on('data', (chunk) => {
+        errors += chunk
+      })
+      const ready = new Promise<void>((resolve, reject) => {
+        child.once('message', () => resolve())
+        child.once('error', reject)
+        child.once('exit', () => reject(new Error('model memo child exited before readiness')))
+      })
+      const result = new Promise<unknown>((resolve, reject) => {
+        child.once('error', reject)
+        child.once('close', (code) => {
+          if (code !== 0) return reject(new Error(`model memo child failed (${code}): ${errors}`))
+          try {
+            resolve(JSON.parse(output))
+          } catch (error) {
+            reject(error)
+          }
+        })
+      })
+      // Attach rejection handlers before awaiting the readiness barrier.
+      void ready.catch(() => {})
+      void result.catch(() => {})
+      return { child, ready, result }
+    })
+    const timer = setTimeout(() => {
+      for (const { child } of workers) child.kill()
+    }, 15_000)
+    try {
+      await Promise.all(workers.map(({ ready }) => ready))
+      for (const { child } of workers) child.send('start')
+      for (const result of await Promise.all(workers.map(({ result }) => result)))
+        expect(result).toEqual(expected)
+      await assertPublishedMemo(memo)
+      expect(await snapshotModelAssets(model, memo)).toEqual(expected)
+    } finally {
+      clearTimeout(timer)
+      for (const { child } of workers) if (child.exitCode === null) child.kill()
+      await Promise.allSettled(workers.map(({ result }) => result))
+    }
+  }, 20_000)
 
   const coverageSetup = async () => {
     const checkout = path.join(root, 'checkout')
