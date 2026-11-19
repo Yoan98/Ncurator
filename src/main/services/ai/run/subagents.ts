@@ -155,7 +155,7 @@ export const createSubagentDispatcher = (
             void next.catch(() => {})
           }
           try {
-            await publish(base)
+            await publish({ ...base, retry: null })
             // A task cancelled while queued has no graph messages yet; preserve its original input on first execution.
             const input =
               assignment.agentId &&
@@ -227,6 +227,24 @@ export const createSubagentDispatcher = (
                     event.display.kind === 'thinking'
                   ) {
                     publicToolText = ''
+                  } else if (
+                    event.type === 'assistant_process_group_started' &&
+                    event.display.kind === 'retry'
+                  ) {
+                    void publish({
+                      ...base,
+                      messageId: `${childRunId}:retry`,
+                      retry: {
+                        attempt: event.display.attempt,
+                        maxAttempts: event.display.maxAttempts
+                      }
+                    })
+                  } else if (
+                    (event.type === 'assistant_process_group_completed' ||
+                      event.type === 'assistant_process_group_failed') &&
+                    event.groupId.endsWith(':llm-retry')
+                  ) {
+                    void publish({ ...base, messageId: `${childRunId}:retry`, retry: null })
                   } else if (event.type === 'assistant_process_thought') {
                     publicToolText = event.text
                   } else if (event.type === 'tool_call_started') {

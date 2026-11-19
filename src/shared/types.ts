@@ -1742,6 +1742,11 @@ export type SubagentAction = {
   feedback?: string
 }
 
+export type SubagentRetryState = {
+  attempt: number
+  maxAttempts: number
+}
+
 export type SubagentUpdate = {
   agentId: string
   toolCallId: string
@@ -1755,6 +1760,8 @@ export type SubagentUpdate = {
   result?: string
   /** 子会话从本次执行开始到取消终态的实际耗时，供下一轮判断进度与续跑。 */
   elapsedMs?: number
+  /** 模型请求重试状态；只用于 UI 展示，不进入父模型上下文。 */
+  retry?: SubagentRetryState | null
   artifacts?: AiArtifactRef[]
 }
 

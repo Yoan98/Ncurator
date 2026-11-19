@@ -20,34 +20,40 @@ const SubagentThought: React.FC<{
 }> = ({ child, open, showDelivery }) => {
   const contentRef = useRef<HTMLDivElement>(null)
   const active = child.status === 'running'
+  const retry = active ? child.retry : undefined
   const failureText = child.result?.trim() || t(($) => $.common.unknownError)
   const text =
-    child.status === 'failed' && child.failurePhase === 'startup'
-      ? t(($) => $.workbench.startupFailed, { value1: failureText })
-      : child.status === 'failed' || child.status === 'blocked'
-        ? t(($) => $.workbench.taskFailed, {
-            value1: failureText
-          })
-        : child.status === 'queued'
-        ? t(($) => $.workbench.queued)
-        : child.status === 'completed' && !showDelivery
-          ? t(($) => $.workbench.completed)
-          : active
-            ? child.message?.trim()
-              ? child.message
-              : t(($) => $.workbench.thinking2)
-            : child.result ||
-              {
-                waiting_approval: t(($) => $.workbench.waitingForOperationApproval),
-                completed: t(($) => $.workbench.taskCompleted),
-                failed: t(($) => $.workbench.executionFailed),
-                cancelled: t(($) => $.workbench.stopped),
-                blocked: t(($) => $.workbench.theMainPartnerNeedsToContinue),
-                interrupted: t(
-                  ($) => $.workbench.executionWasInterruptedBeforeACompleteResultWasReceived
-                )
-              }[child.status]
-  const streaming = active && child.streaming && Boolean(child.message?.trim())
+    retry
+      ? t(($) => $.workbench.subagentRetrying, {
+          attempt: retry.attempt,
+          maxAttempts: retry.maxAttempts
+        })
+      : child.status === 'failed' && child.failurePhase === 'startup'
+        ? t(($) => $.workbench.startupFailed, { value1: failureText })
+        : child.status === 'failed' || child.status === 'blocked'
+          ? t(($) => $.workbench.taskFailed, {
+              value1: failureText
+            })
+          : child.status === 'queued'
+            ? t(($) => $.workbench.queued)
+            : child.status === 'completed' && !showDelivery
+              ? t(($) => $.workbench.completed)
+              : active
+                ? child.message?.trim()
+                  ? child.message
+                  : t(($) => $.workbench.thinking2)
+                : child.result ||
+                  {
+                    waiting_approval: t(($) => $.workbench.waitingForOperationApproval),
+                    completed: t(($) => $.workbench.taskCompleted),
+                    failed: t(($) => $.workbench.executionFailed),
+                    cancelled: t(($) => $.workbench.stopped),
+                    blocked: t(($) => $.workbench.theMainPartnerNeedsToContinue),
+                    interrupted: t(
+                      ($) => $.workbench.executionWasInterruptedBeforeACompleteResultWasReceived
+                    )
+                  }[child.status]
+  const streaming = active && !retry && child.streaming && Boolean(child.message?.trim())
   useLayoutEffect(() => {
     if (!open || !contentRef.current) return
     const content = contentRef.current

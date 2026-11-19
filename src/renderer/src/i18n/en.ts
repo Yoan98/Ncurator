@@ -619,6 +619,7 @@ export const en = {
     queued: 'Queued',
     completed: 'Completed',
     thinking2: 'Thinking',
+    subagentRetrying: 'Network hiccup — retrying ({{attempt}}/{{maxAttempts}})',
     waitingForOperationApproval: 'Waiting for operation approval',
     taskCompleted: 'Task completed',
     executionFailed: 'Execution failed',

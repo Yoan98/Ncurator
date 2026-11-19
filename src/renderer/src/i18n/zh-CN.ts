@@ -589,6 +589,7 @@ export const zh = {
     queued: '我在排队',
     completed: '已完成',
     thinking2: '我在思考中',
+    subagentRetrying: '网络不太好，我正在重试（{{attempt}}/{{maxAttempts}}）',
     waitingForOperationApproval: '等待你审核操作',
     taskCompleted: '任务已完成',
     executionFailed: '执行失败',
