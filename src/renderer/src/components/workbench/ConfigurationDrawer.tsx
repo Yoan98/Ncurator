@@ -75,7 +75,7 @@ export default function ConfigurationDrawer({
         </div>
         <div
           data-testid={footerTestId}
-          className="nc-config-footer flex shrink-0 justify-end gap-2 border-t border-[#EEEEEC] bg-white px-6 py-3"
+          className="nc-config-footer flex shrink-0 justify-end gap-2 border-t border-[var(--notion-line)] bg-[var(--notion-page)] px-6 py-3"
         >
           <Button onClick={close} disabled={busy} data-testid={cancelTestId}>
             {t(($) => $.common.cancel)}

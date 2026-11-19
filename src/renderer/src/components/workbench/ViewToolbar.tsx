@@ -15,11 +15,11 @@ export default function ViewToolbar({
 }) {
   return (
     <div
-      className="nc-view-toolbar flex h-[44px] shrink-0 items-center justify-between gap-3 border-b border-[#EEEEEC] bg-white px-4"
+      className="nc-view-toolbar flex h-[44px] shrink-0 items-center justify-between gap-3 border-b border-[var(--notion-line)] bg-[var(--notion-page)] px-4"
       style={{ WebkitAppRegion: 'drag' } as CSSProperties}
       data-testid={testId}
     >
-      <div className="flex min-w-0 items-center gap-2 text-[13px] font-medium text-[#37352F]">
+      <div className="flex min-w-0 items-center gap-2 text-[13px] font-medium text-[var(--notion-text)]">
         {icon}
         <span className="truncate">{title}</span>
         {badge}

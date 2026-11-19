@@ -8,13 +8,13 @@ import type { AppSettings, KnowledgeIndexSpeed } from '../../../../shared/types'
 import { importSelectors } from '../../testing/selectors'
 
 const SPEED_HELP = (
-  <div className="w-[260px] text-[12px] leading-5 text-[#5F5F5B]">
+  <div className="w-[260px] text-[12px] leading-5 text-[var(--notion-text-soft)]">
     <div>
-      <span className="font-medium text-[#37352F]">{t(($) => $.settings.slow)}</span>
+      <span className="font-medium text-[var(--notion-text)]">{t(($) => $.settings.slow)}</span>
       {t(($) => $.settings.usesFewerComputerResourcesToIndexFilesTakingMore)}
     </div>
     <div className="mt-2">
-      <span className="font-medium text-[#37352F]">{t(($) => $.settings.fast)}</span>
+      <span className="font-medium text-[var(--notion-text)]">{t(($) => $.settings.fast)}</span>
       {t(($) => $.settings.usesMoreComputerResourcesToFinishIndexingFaster)}
     </div>
   </div>
@@ -65,13 +65,13 @@ export const KnowledgeIndexSpeedControl: React.FC<{ prepareRunning: boolean }> =
   return (
     <div className="mt-3">
       <div className="flex items-center gap-1.5">
-        <div className="text-[14px] font-semibold text-[#37352F]">
+        <div className="text-[14px] font-semibold text-[var(--notion-text)]">
           {t(($) => $.settings.indexingSpeed)}
         </div>
         <Tooltip title={SPEED_HELP}>
           <button
             type="button"
-            className="inline-flex items-center text-[#9B9A97] transition-colors hover:text-[#37352F]"
+            className="inline-flex items-center text-[var(--notion-text-faint)] transition-colors hover:text-[var(--notion-text)]"
             aria-label={t(($) => $.settings.aboutIndexingSpeed)}
             data-testid={importSelectors.workspaceIndexSpeedHelp}
           >
@@ -79,7 +79,7 @@ export const KnowledgeIndexSpeedControl: React.FC<{ prepareRunning: boolean }> =
           </button>
         </Tooltip>
       </div>
-      <div className="mt-3 flex overflow-hidden rounded-[6px] border border-[#EEEEEC]">
+      <div className="mt-3 flex overflow-hidden rounded-[6px] border border-[var(--notion-line)]">
         <Button
           size="small"
           type={current === 'slow' ? 'primary' : 'text'}

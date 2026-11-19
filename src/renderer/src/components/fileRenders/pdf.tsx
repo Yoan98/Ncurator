@@ -87,14 +87,14 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
     <div
       id="my-pdf-renderer"
       ref={setSelectionContainer}
-      className="relative h-full w-full overflow-auto bg-[#F4F4F2] p-4"
+      className="relative h-full w-full overflow-auto bg-[var(--notion-surface)] p-4"
     >
       <Document
         file={file}
         onLoadSuccess={onDocumentLoadSuccess}
         onLoadError={onDocumentLoadError}
         loading={
-          <div className="flex h-full items-center justify-center text-[#9B9A97]">
+          <div className="flex h-full items-center justify-center text-[var(--notion-text-faint)]">
             Loading PDF...
           </div>
         }
@@ -120,7 +120,7 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
         {numPages > 1 && (
           <div
             data-selection-ignore
-            className="sticky bottom-4 left-1/2 z-10 w-fit min-w-[200px] -translate-x-1/2 rounded-full bg-white/80 p-2 opacity-20 shadow-none backdrop-blur-sm transition-opacity duration-300 hover:opacity-100"
+            className="sticky bottom-4 left-1/2 z-10 w-fit min-w-[200px] -translate-x-1/2 rounded-full bg-[var(--notion-page)]/80 p-2 opacity-20 shadow-none backdrop-blur-sm transition-opacity duration-300 hover:opacity-100"
           >
             <Pagination
               current={pageNumber}

@@ -1,27 +1,28 @@
+/* Vditor 主题：全部走应用 token，避免自带白色背景盖住 `vditor--dark`。 */
 .vditor {
-  --border-color: #eeeeec;
-  --panel-background-color: #ffffff;
-  --toolbar-background-color: #ffffff;
-  --textarea-background-color: #ffffff;
-  --textarea-text-color: #37352f;
-  --blockquote-color: #787774;
-  --heading-border-color: #eeeeec;
-  --ir-heading-color: #37352f;
-  --ir-title-color: #91918e;
-  --ir-bi-color: #0b6bcb;
-  --ir-link-color: #0b6bcb;
-  --ir-bracket-color: #91918e;
-  --ir-paren-color: #787774;
+  --border-color: var(--notion-line);
+  --panel-background-color: var(--notion-page);
+  --toolbar-background-color: var(--notion-page);
+  --textarea-background-color: var(--notion-page);
+  --textarea-text-color: var(--notion-text);
+  --blockquote-color: var(--notion-text-soft);
+  --heading-border-color: var(--notion-line);
+  --ir-heading-color: var(--notion-text);
+  --ir-title-color: var(--notion-text-faint);
+  --ir-bi-color: var(--notion-accent-blue);
+  --ir-link-color: var(--notion-accent-blue);
+  --ir-bracket-color: var(--notion-text-faint);
+  --ir-paren-color: var(--notion-text-soft);
   border: none;
   width: 100% !important;
   height: 100% !important;
   box-sizing: border-box;
-  background: #ffffff;
+  background: var(--notion-page);
 }
 
 .vditor .vditor-reset {
-  background: #ffffff;
-  color: #37352f;
+  background: var(--notion-page);
+  color: var(--notion-text);
   font-family:
     'SF Pro Text',
     'PingFang SC',
@@ -55,36 +56,39 @@
 }
 
 .vditor .vditor-reset a {
-  color: #0b6bcb;
+  color: var(--notion-accent-blue);
 }
 
 .vditor .vditor-reset blockquote {
-  color: #787774;
-  border-left: 3px solid #e0dfdc;
+  color: var(--notion-text-soft);
+  border-left: 3px solid var(--notion-line-strong);
 }
 
 .vditor .vditor-reset code {
-  background: #f4f4f2;
+  background: var(--notion-surface);
   border-radius: 4px;
 }
 
-.vditor .vditor-reset pre code {
-  background: #fbfbfa;
-  border: 1px solid #eeeeec;
+/* Vditor 通过内联样式给代码块写了半透明底（a11y-light 一套），普通类选择器盖不住，
+   需 !important 覆盖为跟随主题的实色底，文字配色由 highlight.js 主题接管。 */
+.vditor .vditor-reset pre code,
+.vditor .vditor-reset pre code.hljs {
+  background: var(--notion-surface-sunken) !important;
+  border: 1px solid var(--notion-line);
   border-radius: 6px;
 }
 
 .vditor .vditor-reset table {
-  border-color: #e0dfdc;
+  border-color: var(--notion-line-strong);
 }
 
 .vditor .vditor-reset th,
 .vditor .vditor-reset td {
-  border-color: #e0dfdc;
+  border-color: var(--notion-line-strong);
 }
 
 .vditor .vditor-reset thead {
-  background: #f7f7f5;
+  background: var(--notion-surface-sunken);
 }
 
 .nc-markdown-reader .vditor-toolbar,
@@ -103,7 +107,7 @@
   display: flex;
   flex-wrap: wrap;
   padding: 4px 0 7px;
-  border-bottom: 1px solid #eeeeec;
+  border-bottom: 1px solid var(--notion-line);
   box-shadow: none;
 }
 
@@ -113,7 +117,7 @@
 .nc-markdown-author .vditor-toolbar__item button {
   height: 28px;
   width: 28px;
-  color: #787774;
+  color: var(--notion-text-soft);
 }
 .nc-markdown-author .vditor-toolbar__item svg {
   height: 15px;
@@ -129,5 +133,5 @@
 .nc-markdown-author .vditor-ir h5::before,
 .nc-markdown-author .vditor-ir h6::before {
   font-size: 11px;
-  color: #91918e;
+  color: var(--notion-text-faint);
 }

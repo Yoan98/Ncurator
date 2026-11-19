@@ -20,12 +20,12 @@ const ChangeCountBadges: React.FC<ChangeCountBadgesProps> = ({
   return (
     <span className={`inline-flex shrink-0 items-center gap-1.5 ${className || ''}`}>
       {showInsertCount ? (
-        <span className="inline-flex items-center text-[11px] font-semibold leading-none tabular-nums text-[#147A3D]">
+        <span className="inline-flex items-center text-[11px] font-semibold leading-none tabular-nums text-[var(--notion-green)]">
           +{insertCount}
         </span>
       ) : null}
       {showDeleteCount ? (
-        <span className="inline-flex items-center text-[11px] font-semibold leading-none tabular-nums text-[#B42318]">
+        <span className="inline-flex items-center text-[11px] font-semibold leading-none tabular-nums text-[var(--notion-red)]">
           -{deleteCount}
         </span>
       ) : null}

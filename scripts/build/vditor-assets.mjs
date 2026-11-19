@@ -52,6 +52,11 @@ copyFile(
   path.join(V, 'dist', 'js', 'highlight.js', 'styles', 'a11y-light.min.css'),
   path.join(DST, 'js', 'highlight.js', 'styles', 'a11y-light.min.css')
 )
+// 暗色主题下代码块需要对应的高亮样式，否则深色界面里会出现亮底代码块。
+copyFile(
+  path.join(V, 'dist', 'js', 'highlight.js', 'styles', 'a11y-dark.min.css'),
+  path.join(DST, 'js', 'highlight.js', 'styles', 'a11y-dark.min.css')
+)
 copyDir(path.join(V, 'dist', 'css', 'content-theme'), path.join(DST, 'css', 'content-theme'))
 
 for (const filePath of fs.readdirSync(path.join(DST, 'js', 'katex', 'fonts'))) {

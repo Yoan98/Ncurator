@@ -8,9 +8,9 @@ export default function ConfigurationFieldLabel({
   required?: boolean
 }) {
   return (
-    <span className="nc-configuration-field-label block text-[13px] leading-5 text-[#37352F]">
+    <span className="nc-configuration-field-label block text-[13px] leading-5 text-[var(--notion-text)]">
       {required && (
-        <span className="mr-1 text-[#ff4d4f]" aria-hidden="true">
+        <span className="mr-1 text-[var(--notion-red)]" aria-hidden="true">
           *
         </span>
       )}

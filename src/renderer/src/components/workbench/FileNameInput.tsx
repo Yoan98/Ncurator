@@ -44,7 +44,7 @@ const FileNameInput: FC<FileNameInputProps> = ({
 
   return (
     <>
-      <div className="flex h-[30px] items-center gap-1.5 rounded-[6px] border border-[#0B6BCB] bg-white px-1.5 text-[13px] shadow-[0_0_0_2px_rgba(11,107,203,0.08)]">
+      <div className="flex h-[30px] items-center gap-1.5 rounded-[6px] border border-[var(--notion-accent-blue)] bg-[var(--notion-page)] px-1.5 text-[13px] shadow-[0_0_0_2px_rgba(11,107,203,0.08)]">
         <FileIcon name={value} />
         <input
           ref={inputRef}
@@ -55,7 +55,7 @@ const FileNameInput: FC<FileNameInputProps> = ({
           value={value}
           disabled={busy}
           placeholder={t(($) => $.workbench.filenameExtension)}
-          className="min-w-0 flex-1 bg-transparent text-[#37352F] outline-none"
+          className="min-w-0 flex-1 bg-transparent text-[var(--notion-text)] outline-none"
           onSelect={(event) => clampSelection(event.currentTarget)}
           onChange={(event) => {
             const name = event.target.value
@@ -84,7 +84,7 @@ const FileNameInput: FC<FileNameInputProps> = ({
         />
       </div>
       {error ? (
-        <div role="alert" className="mt-1 text-xs text-[#B3261E]">
+        <div role="alert" className="mt-1 text-xs text-[var(--notion-red)]">
           {error}
         </div>
       ) : null}

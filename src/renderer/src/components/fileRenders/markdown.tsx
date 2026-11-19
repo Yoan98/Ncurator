@@ -116,7 +116,7 @@ const TextPreviewScaffold = ({
 
   if (state.loading) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-white">
+      <div className="flex h-full w-full items-center justify-center bg-[var(--notion-page)]">
         <Spin />
       </div>
     )
@@ -124,7 +124,7 @@ const TextPreviewScaffold = ({
 
   if (state.error) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-white">
+      <div className="flex h-full w-full items-center justify-center bg-[var(--notion-page)]">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={t(($) => $.editors.filePreviewUnavailable2)}
@@ -135,16 +135,16 @@ const TextPreviewScaffold = ({
 
   if (state.text.length === 0) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-white">
+      <div className="flex h-full w-full items-center justify-center bg-[var(--notion-page)]">
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(($) => $.editors.emptyFile)} />
       </div>
     )
   }
 
   return (
-    <div className="h-full w-full overflow-auto bg-white">
+    <div className="h-full w-full overflow-auto bg-[var(--notion-page)]">
       {truncated ? (
-        <div className="sticky top-0 z-10 border-b border-[#EEEEEC] bg-[#FFF8E5] px-6 py-2 text-xs text-[#7A4D00]">
+        <div className="sticky top-0 z-10 border-b border-[var(--notion-line)] bg-[var(--notion-warning-bg)] px-6 py-2 text-xs text-[var(--notion-warning-text)]">
           {t(($) => $.editors.thisFileIsLargeShowingOnlyTheFirst)}
           {TEXT_PREVIEW_MAX_CHARS.toLocaleString(getRendererRuntime().locale)}
           {t(($) => $.editors.characters)}
@@ -163,7 +163,7 @@ const PlainTextBody = ({ text }: { text: string }) => (
       testId={workbenchSelectors.lineNumberOverlay}
     />
     <pre
-      className="m-0 min-h-full whitespace-pre-wrap break-words px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F]"
+      className="m-0 min-h-full whitespace-pre-wrap break-words px-8 py-6 font-mono text-[13px] leading-6 text-[var(--notion-text)]"
       data-testid={workbenchSelectors.plainTextViewer}
     >
       {text}

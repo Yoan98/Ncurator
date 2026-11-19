@@ -95,7 +95,7 @@ export function DesktopAccountMenu() {
               <div className="flex min-w-0 items-center gap-2 px-1 py-1">
                 {avatar}
                 <div className="min-w-0">
-                  <div className="break-all text-[#37352F]">{identity}</div>
+                  <div className="break-all text-[var(--notion-text)]">{identity}</div>
                   <div className="text-xs">{t(($) => $.account.signedIn)}</div>
                 </div>
               </div>
@@ -115,7 +115,7 @@ export function DesktopAccountMenu() {
                   >
                     {wallet ? walletAmount(wallet.available) : '—'}
                   </span>
-                  <HiOutlineArrowUpRight aria-hidden="true" className="text-[#91918E]" />
+                  <HiOutlineArrowUpRight aria-hidden="true" className="text-[var(--notion-text-faint)]" />
                 </span>
               </span>
             ),
@@ -275,7 +275,7 @@ export function DesktopAccountMenu() {
       >
         {avatar}
         <span className="min-w-0 flex-1 truncate text-left">{identity}</span>
-        <HiOutlineChevronUp className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
+        <HiOutlineChevronUp className="h-3.5 w-3.5 shrink-0 text-[var(--notion-text-soft)]" />
       </button>
     </Dropdown>
   )

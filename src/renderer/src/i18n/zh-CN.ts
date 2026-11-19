@@ -95,6 +95,10 @@ export const zh = {
     freeNotice: '不保证稳定和隐私性',
     language: '界面语言',
     languageDescription: '重启应用后生效。',
+    theme: '界面主题',
+    themeDescription: '跟随系统时随电脑的浅色 / 深色自动切换。',
+    themeLight: '浅色',
+    themeDark: '深色',
     system: '跟随系统',
     simplifiedChinese: '简体中文',
     english: 'English',
@@ -104,7 +108,8 @@ export const zh = {
     domestic: '中国大陆',
     international: '国际',
     saveFailed: '保存设置失败',
-    loadFailed: '读取设置失败'
+    loadFailed: '读取设置失败',
+    invalidTheme: '界面主题选项无效'
   },
   common: {
     discardTitle: '放弃未保存的修改？',

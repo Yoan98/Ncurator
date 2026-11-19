@@ -142,7 +142,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
   return (
     <div
       ref={panelRef}
-      className={`absolute inset-x-0 z-50 overflow-hidden rounded-[14px] border border-[#E5E4E0] bg-white px-2 py-2 shadow-[0_16px_36px_rgba(15,15,15,0.1)] ${
+      className={`absolute inset-x-0 z-50 overflow-hidden rounded-[14px] border border-[var(--notion-line-strong)] bg-[var(--notion-page)] px-2 py-2 shadow-[0_16px_36px_rgba(15,15,15,0.1)] ${
         layout.placement === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'
       }`}
       style={{ maxHeight: `${layout.maxHeight}px` }}
@@ -158,7 +158,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
         onScroll={handleScroll}
       >
         {loading ? (
-          <div className="flex items-center justify-center py-8 text-[#9B9A97]">
+          <div className="flex items-center justify-center py-8 text-[var(--notion-text-faint)]">
             <Spin size="small" />
           </div>
         ) : options.length === 0 ? (
@@ -170,7 +170,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
           <div className="space-y-2">
             {visibleGroups.map((group) => (
               <div key={group.title}>
-                <div className="px-2.5 pb-0.5 text-[11px] font-medium leading-5 text-[#9B9A97]">
+                <div className="px-2.5 pb-0.5 text-[11px] font-medium leading-5 text-[var(--notion-text-faint)]">
                   {group.title}
                 </div>
                 <div className="space-y-0.5">
@@ -186,7 +186,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                         type="button"
                         tabIndex={-1}
                         className={`flex h-8 w-full items-center gap-[2px] rounded-[8px] px-2.5 text-left transition-colors ${
-                          active ? 'bg-[#F1F1F0]' : 'hover:bg-[#F7F7F5]'
+                          active ? 'bg-[var(--notion-surface)]' : 'hover:bg-[var(--notion-surface-sunken)]'
                         }`}
                         data-reference-kind={reference.kind}
                         data-mention-active={active ? 'true' : undefined}
@@ -203,12 +203,12 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                             {reference.name}
                           </span>
                           {parentPath ? (
-                            <span className="truncate text-[11px] font-normal leading-4 text-[#B1B0AD]">
+                            <span className="truncate text-[11px] font-normal leading-4 text-[var(--notion-text-faint)]">
                               {parentPath}
                             </span>
                           ) : null}
                         </span>
-                        <span className="shrink-0 text-[10px] text-[#B1B0AD]">
+                        <span className="shrink-0 text-[10px] text-[var(--notion-text-faint)]">
                           {getKbAvailabilityLabel(reference.kbAvailability)}
                         </span>
                       </button>
@@ -218,7 +218,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
               </div>
             ))}
             {loadingMore ? (
-              <div className="flex justify-center py-2 text-[#9B9A97]">
+              <div className="flex justify-center py-2 text-[var(--notion-text-faint)]">
                 <Spin size="small" />
               </div>
             ) : null}

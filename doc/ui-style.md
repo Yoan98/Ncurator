@@ -53,6 +53,8 @@
 
 下列为概念 token，对应实现中的 `--notion-*` CSS 变量（如 `page` → `--notion-page`）；阴影对应 `--shadow-md`（soft）/ `--shadow-lg`（float）。
 
+浅色值为默认值（`:root`），深色值定义在 `[data-theme='dark']`，变量名不变，因此组件只引用 token、不分支主题。
+
 - `page`：`#FFFFFF`
 - `canvas`：`#FFFFFF`
 - `sidebar`：`#FBFBFA`
@@ -75,6 +77,28 @@
 - `yellow-bg`：`#FBF3DB`
 - `shadow-float`：`0 16px 40px rgba(15, 15, 15, 0.12)`
 - `shadow-soft`：`0 8px 24px rgba(15, 15, 15, 0.08)`
+- `warning`：`#E85D04` (高风险动作图标，如完全放行)
+
+#### 深色
+
+- `page` / `canvas`：`#191919`
+- `sidebar`：`#202020`
+- `surface`：`#252525`
+- `surface-hover`：`#2C2C2C`
+- `line`：`#2F2F2F`
+- `line-strong`：`#3D3D3D`
+- `text`：`#D4D4D4`（在 `page` 上 11.86）
+- `text-soft`：`#9A9A97`（在 `page` 上 6.23）
+- `text-faint`：`#7A7A76`（在 `page` 上 4.08）
+- `accent`：`#E6E6E6`，其上文字为 `#1A1A1A`（主按钮为浅底深字）
+- `accent-blue`：`#5AA9F0`，hover `#7CB8F7`（在 `page` 上 7.01）
+- `red` / `red-bg`：`#FF9B90` / `#3A2422`
+- `green` / `green-bg`：`#7CC79B` / `#1E2C24`
+- `blue` / `blue-bg`：`#8FB6DC` / `#1F2A33`
+- `yellow` / `yellow-bg`：`#D9B267` / `#332B1C`
+- `warning`：`#F08C3A`
+
+深色下正文、次要文字与弱文字在页底上的对比度分别不低于 11.8 / 6.2 / 4.0；不得直接复镜像亮色那样的弱文字明度。
 
 ### 使用规则
 
@@ -84,6 +108,9 @@
 - 危险、拒绝、错误才使用 `red/red-bg`。
 - `accent-blue` 用于输入框 focus、链接和操作按钮悬浮态。
 - 状态色使用低饱和表达，彩色元素控制在局部强调范围内。
+- 深浅主题只通过 `data-theme` 在 `html` 上切换，组件不读取主题值；仅在确实无法用变量表达时才使用 `dark:` 变体或两套具体色值。
+- 透明叠加色使用 `color-mix(in oklab, var(--notion-…) n%, transparent)`，不得写死浅色 rgba。
+- 文档真实版面（DOCX、PDF、PPT、Excel、图片）保持原样，主题只改变其外围工作区；不得对内容反色或整体反相。
 
 ## 4. 尺度系统
 

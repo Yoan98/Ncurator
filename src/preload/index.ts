@@ -17,8 +17,10 @@ import {
   APP_UPDATE_DOWNLOAD_CHANNEL,
   APP_UPDATE_GET_SNAPSHOT_CHANNEL,
   APP_UPDATE_INSTALL_CHANNEL,
-  APP_UPDATE_STATUS_CHANNEL
+  APP_UPDATE_STATUS_CHANNEL,
+  APP_THEME_CHANGED_CHANNEL
 } from '../shared/constants'
+import type { AppResolvedTheme } from '../shared/appPreferences'
 import type { DesktopApi, DownloadProgress } from './api'
 import { DESKTOP_ACCOUNT_CHANGED, DESKTOP_ACCOUNT_COMMAND, type DesktopAccountSnapshot } from '../shared/desktopAccount'
 import { MANAGED_MODELS_GET } from '../shared/managedModels'
@@ -587,6 +589,15 @@ const api: DesktopApi = {
     ipcRenderer.on(APP_UPDATE_STATUS_CHANNEL, listener)
     return () => {
       ipcRenderer.removeListener(APP_UPDATE_STATUS_CHANNEL, listener)
+    }
+  },
+  onAppThemeChanged: (cb: (theme: AppResolvedTheme) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, theme: AppResolvedTheme): void => {
+      cb(theme)
+    }
+    ipcRenderer.on(APP_THEME_CHANGED_CHANNEL, listener)
+    return () => {
+      ipcRenderer.removeListener(APP_THEME_CHANGED_CHANNEL, listener)
     }
   },
   onAiRunEvent: (cb: (event: AiRunEvent) => void) => {

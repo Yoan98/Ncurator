@@ -64,4 +64,4 @@ const PROVIDER_LOGO_MAP: Partial<Record<LlmProviderId, ReactNode>> = {
 }
 
 export const getProviderLogo = (providerId: LlmProviderId): ReactNode =>
-  PROVIDER_LOGO_MAP[providerId] ?? <HiSparkles className="w-4 h-4 text-[#9B9A97]" />
+  PROVIDER_LOGO_MAP[providerId] ?? <HiSparkles className="w-4 h-4 text-[var(--notion-text-faint)]" />

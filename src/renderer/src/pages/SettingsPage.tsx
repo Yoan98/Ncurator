@@ -126,12 +126,12 @@ const SettingsPage: React.FC = () => {
               className="nc-settings-back-row workbench-no-drag mb-2 flex min-w-0 items-center gap-2"
               data-testid={settingsSelectors.backRow}
             >
-              <HiArrowLeft className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
-              <span className="truncate text-[13px] font-medium text-[#37352F]">
+              <HiArrowLeft className="h-[18px] w-[18px] shrink-0 text-[var(--notion-text-soft)]" />
+              <span className="truncate text-[13px] font-medium text-[var(--notion-text)]">
                 {t(($) => $.settings.backToWorkbench)}
               </span>
             </NavLink>
-            <div className="px-2 pb-2 text-[12px] font-medium text-[#9B9A97]">
+            <div className="px-2 pb-2 text-[12px] font-medium text-[var(--notion-text-faint)]">
               {t(($) => $.common.settings)}
             </div>
             <div className="space-y-1">
@@ -147,7 +147,7 @@ const SettingsPage: React.FC = () => {
                       }`
                     }
                   >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#787774]">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--notion-text-soft)]">
                       {item.icon}
                     </span>
                     <span className="truncate text-[13px] font-medium">{item.label}</span>

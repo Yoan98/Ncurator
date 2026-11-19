@@ -401,7 +401,7 @@ export default function DocumentSelectionLayer({
             type="button"
             aria-label={t(($) => $.preferences.selectionEdit) + node.selectedText}
             disabled={state.locked}
-            className="sr-only focus:not-sr-only focus:absolute focus:bottom-3 focus:left-3 focus:z-10 focus:bg-white"
+            className="sr-only focus:not-sr-only focus:absolute focus:bottom-3 focus:left-3 focus:z-10 focus:bg-[var(--notion-page)]"
             onFocus={() => targets.current.find((t) => t.node.id === node.id)?.geometry.reveal()}
             onClick={() => {
               const t = targets.current.find((t) => t.node.id === node.id)
@@ -417,8 +417,8 @@ export default function DocumentSelectionLayer({
             key={index}
             data-testid="document-selection-highlight"
             className={
-              'pointer-events-none fixed z-[40] bg-[#E9DDFB]/30' +
-              (box.outline ? ' border border-[#B990DF]' : '')
+              'pointer-events-none fixed z-[40] bg-[var(--notion-purple-hover)]/30' +
+              (box.outline ? ' border border-[var(--notion-purple-line)]' : '')
             }
             style={{ left: box.left, top: box.top, width: box.width, height: box.height }}
           />

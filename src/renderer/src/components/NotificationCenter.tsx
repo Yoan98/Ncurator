@@ -54,7 +54,7 @@ const NotificationCenter = () => {
     <div className="fixed bottom-6 right-6 z-50 pointer-events-none">
       <Card
         data-testid={workbenchSelectors.llmConfigMissingNotification}
-        className="w-80 shadow-none border-[#37352F]/20 !bg-white/95 backdrop-blur-md pointer-events-auto animate-slide-in-right"
+        className="w-80 shadow-none border-[var(--notion-accent)]/20 !bg-[var(--notion-page)]/95 backdrop-blur-md pointer-events-auto animate-slide-in-right"
         size="small"
         actions={[
           <Button
@@ -62,7 +62,7 @@ const NotificationCenter = () => {
             type="text"
             size="small"
             onClick={() => setOpen(false)}
-            className="text-[#9B9A97]"
+            className="text-[var(--notion-text-faint)]"
           >
             {t(($) => $.common.later)}
           </Button>,
@@ -75,7 +75,7 @@ const NotificationCenter = () => {
               setOpen(false)
               navigate('/settings/model')
             }}
-            className="!bg-[#37352F] hover:!bg-[#2F3437]"
+            className="!bg-[var(--notion-accent)] hover:!bg-[var(--notion-accent)]"
           >
             {t(($) => $.common.configure)}
           </Button>
@@ -83,17 +83,17 @@ const NotificationCenter = () => {
       >
         <Card.Meta
           avatar={
-            <div className="w-10 h-10 rounded-[8px] bg-[#F4F4F2] flex items-center justify-center text-[#37352F]">
+            <div className="w-10 h-10 rounded-[8px] bg-[var(--notion-surface)] flex items-center justify-center text-[var(--notion-text)]">
               <HiOutlineCog6Tooth className="text-xl" />
             </div>
           }
           title={
-            <span className="block whitespace-normal break-words text-[#37352F]">
+            <span className="block whitespace-normal break-words text-[var(--notion-text)]">
               {t(($) => $.common.noCustomModelConfigured)}
             </span>
           }
           description={
-            <Typography.Text className="text-[#787774] text-xs">
+            <Typography.Text className="text-[var(--notion-text-soft)] text-xs">
               {t(($) => $.common.customModelConfigOptional)}
             </Typography.Text>
           }

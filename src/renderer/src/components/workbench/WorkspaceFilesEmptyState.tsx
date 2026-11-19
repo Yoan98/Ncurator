@@ -21,19 +21,19 @@ const WorkspaceFilesEmptyState = ({
     data-testid={workbenchSelectors.workspaceFilesEmptyState}
   >
     {loadState === 'loading' ? (
-      <div role="status" className="flex items-center gap-2 text-[13px] text-[#91918E]">
+      <div role="status" className="flex items-center gap-2 text-[13px] text-[var(--notion-text-faint)]">
         <Spin size="small" />
         {t(($) => $.workbench.loadingDirectories)}
       </div>
     ) : (
       <div className="w-full max-w-[320px]">
-        <FileIcon kind="directory" className="mx-auto h-8 w-8 text-[#91918E]" />
-        <div className="mt-4 text-[16px] font-semibold text-[#37352F]">
+        <FileIcon kind="directory" className="mx-auto h-8 w-8 text-[var(--notion-text-faint)]" />
+        <div className="mt-4 text-[16px] font-semibold text-[var(--notion-text)]">
           {loadState === 'error'
             ? t(($) => $.workbench.couldNotLoadDirectories)
             : t(($) => $.workbench.noDirectoriesAddedYet)}
         </div>
-        <div className="mt-2 text-[13px] leading-5 text-[#91918E]">
+        <div className="mt-2 text-[13px] leading-5 text-[var(--notion-text-faint)]">
           {loadState === 'error'
             ? t(($) => $.workbench.reloadTheDirectoriesToTryAgain)
             : t(($) => $.workbench.addADirectoryInWorkspaceSettingsToBrowseAnd)}

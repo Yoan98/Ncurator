@@ -8,7 +8,8 @@ const i18n = createInstance()
 let runtime: AppRuntimeSnapshot = {
   locale: 'zh-CN',
   distribution: 'domestic',
-  serviceRoute: 'domestic'
+  serviceRoute: 'domestic',
+  theme: 'light'
 }
 export const getRendererRuntime = (): Readonly<AppRuntimeSnapshot> => runtime
 export const getProductName = (): string => productName(runtime.locale)
@@ -58,6 +59,8 @@ export const appSettingsErrorText = (code: AppSettingsErrorCode): string => {
       return t(($) => $.preferences.invalidServiceRoute)
     case 'invalid_index_speed':
       return t(($) => $.preferences.invalidIndexSpeed)
+    case 'invalid_theme':
+      return t(($) => $.preferences.invalidTheme)
     case 'invalid_notification_setting':
       return t(($) => $.preferences.invalidNotifications)
   }

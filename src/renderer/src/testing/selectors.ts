@@ -83,6 +83,7 @@ export const settingsSelectors = {
   sidebarDragRegion: 'settings-sidebar-drag-region',
   tabSwitch: 'settings-tab-switch',
   generalPanel: 'settings-general-panel',
+  themeSelect: 'settings-theme-select',
   systemNotificationsSwitch: 'settings-system-notifications-switch',
   streamingAnimationSwitch: 'settings-streaming-animation-switch',
   errorLogOpenDirectoryButton: 'settings-error-log-open-directory-button',

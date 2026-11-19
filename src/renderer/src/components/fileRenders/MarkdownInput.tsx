@@ -4,6 +4,7 @@ import 'vditor/dist/index.css'
 import './markdownEditor.css'
 import { getRendererRuntime, t } from '../../i18n'
 import { vditorI18n } from './vditorI18n'
+import { useAppearance } from '../../contexts/AppearanceContext'
 
 /** Markdown editing only. The owner controls whether and when content is saved. */
 export default function MarkdownInput(props: {
@@ -23,6 +24,11 @@ export default function MarkdownInput(props: {
   const ready = useRef(false)
   const baseline = useRef('')
   const current = useRef(props)
+  const appearance = useAppearance()
+  const themeRef = useRef(appearance.resolved)
+  useLayoutEffect(() => {
+    themeRef.current = appearance.resolved
+  }, [appearance.resolved])
   useLayoutEffect(() => {
     current.current = props
   })
@@ -38,6 +44,8 @@ export default function MarkdownInput(props: {
     current.current.onRoot?.(root.current)
     const instance = new Vditor(host, {
       mode: 'ir',
+      // 初始化时直接给对主题，避免先画一帧白底再切到暗色。
+      theme: themeRef.current === 'dark' ? 'dark' : 'classic',
       lang: getRendererRuntime().locale === 'zh-CN' ? 'zh_CN' : 'en_US',
       i18n: vditorI18n,
       toolbar: props.authoring
@@ -95,7 +103,11 @@ export default function MarkdownInput(props: {
       image: { preview: (element) => current.current.onImage?.(element as HTMLImageElement) },
       preview: {
         delay: 80,
-        hljs: { enable: true, lineNumber: false, style: 'a11y-light' },
+        hljs: {
+          enable: true,
+          lineNumber: false,
+          style: themeRef.current === 'dark' ? 'a11y-dark' : 'a11y-light'
+        },
         math: { engine: 'KaTeX' },
         markdown: { gfmAutoLink: true, footnotes: true }
       },
@@ -145,6 +157,15 @@ export default function MarkdownInput(props: {
     if (props.readOnly) editor.current.disabled()
     else editor.current.enable()
   }, [props.readOnly])
+  // Vditor 自己切内部样式表与代码高亮，不需要重建实例（重建会丢光标与撤销栈）。
+  useEffect(() => {
+    if (!ready.current || !editor.current) return
+    editor.current.setTheme(
+      appearance.resolved === 'dark' ? 'dark' : 'classic',
+      undefined,
+      appearance.resolved === 'dark' ? 'a11y-dark' : 'a11y-light'
+    )
+  }, [appearance.resolved])
   const emitCurrent = (): void => {
     if (!ready.current || !editor.current || current.current.readOnly) return
     // Deleting a whole code block can leave Vditor's hidden closing marker behind.
@@ -171,7 +192,7 @@ export default function MarkdownInput(props: {
     <div
       ref={root}
       data-testid={props.testId}
-      className="h-full w-full overflow-hidden bg-white"
+      className="h-full w-full overflow-hidden bg-[var(--notion-page)]"
       onInputCapture={(event) => {
         if ((event.nativeEvent as InputEvent).isComposing) return
         // Read after Vditor normalizes the DOM, without waiting for its undo debounce.

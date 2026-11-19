@@ -30,7 +30,7 @@ const IndexPrepareCancelModal: React.FC<IndexPrepareCancelModalProps> = ({
       cancelButtonProps={{ 'data-testid': continueTestId }}
       className="[&_.ant-modal-content]:!rounded-[8px]"
     >
-      <p className="mb-0 text-[#787774]">
+      <p className="mb-0 text-[var(--notion-text-soft)]">
         {t(($) => $.settings.unfinishedItemsWillStopIndexingCompletedIndexesWillBe)}
       </p>
     </Modal>

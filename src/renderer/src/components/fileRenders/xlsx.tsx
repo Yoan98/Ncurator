@@ -17,6 +17,7 @@ import {
 } from '../../../../shared/excelWorkbook'
 import '@univerjs/preset-sheets-core/lib/index.css'
 import { workbenchSelectors } from '../../testing/selectors'
+import { useAppearance } from '../../contexts/AppearanceContext'
 
 type XlsxDocument = Omit<LoadedFileRenderDocument, 'fileData'> & {
   file?: File | Blob
@@ -134,6 +135,19 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const [ready, setReady] = useState(false)
   const [changedSheetIds, setChangedSheetIds] = useState<string[]>([])
   const [changedSheetNames, setChangedSheetNames] = useState<string[]>([])
+  const appearance = useAppearance()
+  const themeRef = useRef(appearance.resolved)
+  themeRef.current = appearance.resolved
+  /** 表格实例创建后保留 API，供主题切换时同步，不必重建工作簿。 */
+  const univerApiRef = useRef<{ toggleDarkMode: (isDark: boolean) => void } | null>(null)
+
+  /**
+   * 主题切换：Univer 自己维护 canvas 配色，CSS 变量管不到它，必须显式调用。
+   * 重建工作簿会丢失滚动与选中状态，所以只用官方 API 切换。
+   */
+  useEffect(() => {
+    univerApiRef.current?.toggleDarkMode(appearance.resolved === 'dark')
+  }, [appearance.resolved, ready])
 
   useEffect(() => {
     if (!document || !containerRef.current || !selectionContainerRef.current) return
@@ -166,13 +180,14 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
           if (cancelled) return
           const univer = new Univer({
             logLevel: LogLevel.WARN,
+            // 初始化即给对主题，避免表格先白后黑地闪一下。
+            darkMode: themeRef.current === 'dark',
             locale: getRendererRuntime().locale === 'zh-CN' ? LocaleType.ZH_CN : LocaleType.EN_US,
             locales: {
               [getRendererRuntime().locale === 'zh-CN' ? LocaleType.ZH_CN : LocaleType.EN_US]:
                 localeModule.default
             }
           })
-          dispose = () => univer.dispose()
           const sheetPreviewOptions: Record<string, unknown> = {
             protectedRangeShadow: 'none',
             disableForceStringAlert: true
@@ -201,6 +216,13 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             univer.registerPlugin(plugin, options)
           }
           const univerAPI = FUniver.newAPI(univer)
+          univerApiRef.current = univerAPI as unknown as {
+            toggleDarkMode: (isDark: boolean) => void
+          }
+          dispose = () => {
+            univerApiRef.current = null
+            univer.dispose()
+          }
           // Keep Univer's navigation and copy behavior while blocking workbook edits.
           const workbook = univerAPI.createWorkbook(preview.data)
           let down: { x: number; y: number } | null = null
@@ -309,7 +331,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const sheetDotCss = changedSheetDotStyle(changedSheetIds)
   return (
     <div
-      className="relative h-full w-full bg-white"
+      className="relative h-full w-full bg-[var(--notion-page)]"
       data-testid={workbenchSelectors.excelViewer}
       data-excel-ready={ready ? 'true' : 'false'}
       data-excel-file-name={document.fileName || ''}
@@ -318,7 +340,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
     >
       {sheetDotCss ? <style>{sheetDotCss}</style> : null}
       {error ? (
-        <div className="flex h-full items-center justify-center text-sm text-[#787774]">
+        <div className="flex h-full items-center justify-center text-sm text-[var(--notion-text-soft)]">
           {t(($) => $.editors.excelPreviewFailed2)}
           {error}
         </div>

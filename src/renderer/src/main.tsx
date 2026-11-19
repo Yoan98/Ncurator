@@ -85,6 +85,8 @@ const installPointerResyncHandler = (): void => {
 const start = async (): Promise<void> => {
   installPointerResyncHandler()
   const startup = await window.api.appStartupGetStatus()
+  // Paint the resolved appearance before the first React frame so the splash never flips colour.
+  document.documentElement.dataset.theme = startup.theme
   await initializeI18n(startup)
   if (startup.locale === 'zh-CN') await import('monaco-editor/nls/lang/zh-cn.js')
   const { default: App } = await import('./App')

@@ -20,8 +20,8 @@ export const FullAccessConfirmModal: React.FC<FullAccessConfirmModalProps> = ({
     <Modal
       open={open}
       title={
-        <div className="flex items-center gap-2 text-[15px] font-semibold text-[#37352F]">
-          <HiExclamationTriangle className="h-5 w-5 shrink-0 text-[#E85D04]" />
+        <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--notion-text)]">
+          <HiExclamationTriangle className="h-5 w-5 shrink-0 text-[var(--notion-warning)]" />
           <span>{t(($) => $.workbench.enableFullAccess)}</span>
         </div>
       }
@@ -32,7 +32,7 @@ export const FullAccessConfirmModal: React.FC<FullAccessConfirmModalProps> = ({
             type="button"
             onClick={onCancel}
             data-testid={workbenchSelectors.fullAccessConfirmCancelButton}
-            className="rounded-[6px] border border-[#EEEEEC] bg-white px-3.5 py-1.5 text-[13px] font-normal text-[#37352F] transition-colors hover:bg-[#F4F4F2]"
+            className="rounded-[6px] border border-[var(--notion-line)] bg-[var(--notion-page)] px-3.5 py-1.5 text-[13px] font-normal text-[var(--notion-text)] transition-colors hover:bg-[var(--notion-surface)]"
           >
             {t(($) => $.common.cancel)}
           </button>
@@ -40,9 +40,9 @@ export const FullAccessConfirmModal: React.FC<FullAccessConfirmModalProps> = ({
             type="button"
             onClick={onConfirm}
             data-testid={workbenchSelectors.fullAccessConfirmOkButton}
-            className="flex items-center gap-1.5 rounded-[6px] border border-[#F8D7DA] bg-[#F8EBE9] px-3.5 py-1.5 text-[13px] font-medium text-[#B3261E] transition-colors hover:bg-[#F4DCDA]"
+            className="flex items-center gap-1.5 rounded-[6px] border border-[var(--notion-red-line)] bg-[var(--notion-red-bg)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--notion-red)] transition-colors hover:bg-[var(--notion-red-bg-hover)]"
           >
-            <HiExclamationTriangle className="h-3.5 w-3.5 shrink-0 text-[#B3261E]" />
+            <HiExclamationTriangle className="h-3.5 w-3.5 shrink-0 text-[var(--notion-red)]" />
             <span>{t(($) => $.workbench.enable)}</span>
           </button>
         </div>
@@ -52,54 +52,54 @@ export const FullAccessConfirmModal: React.FC<FullAccessConfirmModalProps> = ({
       className="[&_.ant-modal-content]:!rounded-[8px]"
       data-testid={workbenchSelectors.fullAccessConfirmModal}
     >
-      <div className="flex flex-col gap-3.5 pt-1 text-[13px] leading-relaxed text-[#787774]">
-        <p className="mb-0 text-[#37352F]">
+      <div className="flex flex-col gap-3.5 pt-1 text-[13px] leading-relaxed text-[var(--notion-text-soft)]">
+        <p className="mb-0 text-[var(--notion-text)]">
           {t(($) => $.workbench.aiWillBeAbleToRunCommandsUseThe)}
         </p>
 
-        <div className="flex flex-col overflow-hidden rounded-[8px] border border-[#EEEEEC] bg-[#FBFBFA]">
+        <div className="flex flex-col overflow-hidden rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-sidebar)]">
           <div className="flex items-start gap-3 p-3">
-            <FileIcon kind="directory" className="h-5 w-5 shrink-0 mt-0.5 text-[#2563EB]" />
+            <FileIcon kind="directory" className="h-5 w-5 shrink-0 mt-0.5 text-[var(--file-icon-doc)]" />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="font-medium text-[#37352F]">
+              <span className="font-medium text-[var(--notion-text)]">
                 {t(($) => $.workbench.filesAndFolders)}
               </span>
-              <span className="text-xs leading-5 text-[#787774]">
+              <span className="text-xs leading-5 text-[var(--notion-text-soft)]">
                 {t(($) => $.workbench.readCreateModifyUploadOrDeleteFilesAnywhereOn)}
               </span>
             </div>
           </div>
 
-          <div className="h-px bg-[#EEEEEC]" />
+          <div className="h-px bg-[var(--notion-line)]" />
 
           <div className="flex items-start gap-3 p-3">
-            <HiCommandLine className="h-5 w-5 shrink-0 mt-0.5 text-[#37352F]" />
+            <HiCommandLine className="h-5 w-5 shrink-0 mt-0.5 text-[var(--notion-text)]" />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="font-medium text-[#37352F]">
+              <span className="font-medium text-[var(--notion-text)]">
                 {t(($) => $.workbench.terminalCommand)}
               </span>
-              <span className="text-xs leading-5 text-[#787774]">
+              <span className="text-xs leading-5 text-[var(--notion-text-soft)]">
                 {t(($) => $.workbench.runCommandsInstallSoftwareAndChangeSystemSettings)}
               </span>
             </div>
           </div>
 
-          <div className="h-px bg-[#EEEEEC]" />
+          <div className="h-px bg-[var(--notion-line)]" />
 
           <div className="flex items-start gap-3 p-3">
-            <HiOutlineGlobeAlt className="h-5 w-5 shrink-0 mt-0.5 text-[#0284C7]" />
+            <HiOutlineGlobeAlt className="h-5 w-5 shrink-0 mt-0.5 text-[var(--notion-blue)]" />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="font-medium text-[#37352F]">
+              <span className="font-medium text-[var(--notion-text)]">
                 {t(($) => $.workbench.internetAndConnectedApps)}
               </span>
-              <span className="text-xs leading-5 text-[#787774]">
+              <span className="text-xs leading-5 text-[var(--notion-text-soft)]">
                 {t(($) => $.workbench.visitWebsitesSendDataAndUseEnabledPlugins)}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-[6px] border border-[#FBE3D5] bg-[#FBF3DB] p-2.5 text-xs leading-relaxed text-[#B45309]">
+        <div className="rounded-[6px] border border-[var(--notion-warning-bg)] bg-[var(--notion-yellow-bg)] p-2.5 text-xs leading-relaxed text-[var(--notion-warning-text)]">
           {t(($) => $.workbench.thisCanLeadToDataLossDisclosureOrPrompt)}
         </div>
       </div>

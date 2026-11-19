@@ -5,7 +5,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import type { MarkdownLinkAccessEntry } from '../../../shared/types'
 import { splitStableMarkdown } from '../../../shared/streamingMarkdown'
 import {
@@ -21,6 +21,7 @@ import {
 import MarkdownImage, { type MarkdownPreviewImage } from './markdownImage'
 import remarkGfmNoAutolink from './remarkGfmNoAutolink'
 import { useStreamingMarkdownAnimation } from '../utils/renderPreferences'
+import { useAppearance } from '../contexts/AppearanceContext'
 import { useTypewriterText } from '../utils/streamingTypewriter'
 
 interface MarkdownRendererProps {
@@ -47,6 +48,8 @@ type ComponentOptions = {
   onOpenImage?: (image: MarkdownPreviewImage) => void
   /** Streaming tail: skip syntax highlighting and image loading until closed. */
   deferHeavy?: boolean
+  /** 代码块高亮主题需跟页面明暗同步，否则暗色下会出现亮底代码块。 */
+  codeTheme?: 'light' | 'dark'
 }
 
 const createMarkdownComponents = (options: ComponentOptions): Components => ({
@@ -60,7 +63,7 @@ const createMarkdownComponents = (options: ComponentOptions): Components => ({
     }
     return (
       <SyntaxHighlighter
-        style={oneLight}
+        style={options.codeTheme === 'dark' ? oneDark : oneLight}
         language={language}
         PreTag="div"
         className="markdown-code-block !my-0"
@@ -193,6 +196,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   )
 
   const animateStream = useStreamingMarkdownAnimation()
+  const codeTheme = useAppearance().resolved
   const split = useMemo(
     () =>
       streaming ? splitStableMarkdown(normalizedContent) : { stable: normalizedContent, tail: '' },
@@ -205,16 +209,23 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   // images) on every streamed token.
   const { full, light } = useMemo(
     () => ({
-      full: createMarkdownComponents({ linkAccess, sourceFilePath, onOpenReference, onOpenImage }),
+      full: createMarkdownComponents({
+        linkAccess,
+        sourceFilePath,
+        onOpenReference,
+        onOpenImage,
+        codeTheme
+      }),
       light: createMarkdownComponents({
         linkAccess: undefined,
         sourceFilePath,
         onOpenReference,
         onOpenImage,
-        deferHeavy: true
+        deferHeavy: true,
+        codeTheme
       })
     }),
-    [linkAccess, sourceFilePath, onOpenReference, onOpenImage]
+    [linkAccess, sourceFilePath, onOpenReference, onOpenImage, codeTheme]
   )
 
   return (

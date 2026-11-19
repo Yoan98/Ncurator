@@ -30,15 +30,15 @@ const WorkspacePathLabel: React.FC<WorkspacePathLabelProps> = ({
   if (!display.prefix) {
     return (
       <span title={display.label} className={`block min-w-0 truncate ${className || ''}`}>
-        <span className={fileNameClassName || 'text-[#37352F]'}>{display.fileName}</span>
+        <span className={fileNameClassName || 'text-[var(--notion-text)]'}>{display.fileName}</span>
       </span>
     )
   }
 
   return (
     <span title={display.label} className={`block min-w-0 truncate ${className || ''}`}>
-      <span className={prefixClassName || 'text-[#9B9A97]'}>{display.prefix}</span>
-      <span className={fileNameClassName || 'text-[#37352F]'}>{display.fileName}</span>
+      <span className={prefixClassName || 'text-[var(--notion-text-faint)]'}>{display.prefix}</span>
+      <span className={fileNameClassName || 'text-[var(--notion-text)]'}>{display.fileName}</span>
     </span>
   )
 }

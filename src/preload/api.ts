@@ -17,6 +17,7 @@ import type {
   UserSkillResourcePreview
 } from '../shared/userSkills'
 import type { AppSettingsErrorCode } from '../shared/appErrors'
+import type { AppResolvedTheme } from '../shared/appPreferences'
 import type {
   GetFileReviewResponse,
   OpenFileReviewLocationRequest,
@@ -396,6 +397,7 @@ export type DesktopApi = {
   appUpdateDownload: () => Promise<AppUpdateActionResponse>
   appUpdateInstall: () => Promise<AppUpdateActionResponse>
   onAppUpdateStatus: (cb: (snapshot: AppUpdateSnapshot) => void) => () => void
+  onAppThemeChanged: (cb: (theme: AppResolvedTheme) => void) => () => void
   appStartupGetStatus: () => Promise<AppStartupStatus>
   appQuit: () => Promise<void>
   getFileReview: (request: { changeRecordId: string }) => Promise<GetFileReviewResponse>

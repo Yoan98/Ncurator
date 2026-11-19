@@ -53,7 +53,7 @@ const UserMessageBody: React.FC<UserMessageBodyProps> = ({
 
   return (
     <div className="flex w-full min-w-0 flex-col items-end">
-      <div className="relative box-border w-fit max-w-[66%] min-w-0 rounded-[22px] bg-[#F4F4F2] px-4 py-[10px] text-[14px] leading-6 text-[#37352F] [overflow-wrap:anywhere]">
+      <div className="relative box-border w-fit max-w-[66%] min-w-0 rounded-[22px] bg-[var(--notion-surface)] px-4 py-[10px] text-[14px] leading-6 text-[var(--notion-text)] [overflow-wrap:anywhere]">
         <div
           ref={contentRef}
           id={textId}
@@ -68,7 +68,7 @@ const UserMessageBody: React.FC<UserMessageBodyProps> = ({
           <div className="nc-user-message-fade" aria-hidden="true" />
         ) : null}
       </div>
-      <div className="mt-1 flex h-6 items-center justify-end gap-1.5 text-[12px] leading-none text-[#9B9A97]">
+      <div className="mt-1 flex h-6 items-center justify-end gap-1.5 text-[12px] leading-none text-[var(--notion-text-faint)]">
         {actions ? (
           <span
             className="flex items-center gap-1.5 opacity-0 transition-opacity duration-150 group-hover/user-message:opacity-100"
@@ -80,7 +80,7 @@ const UserMessageBody: React.FC<UserMessageBodyProps> = ({
         {overflowing ? (
           <button
             type="button"
-            className="inline-flex h-6 items-center gap-0.5 rounded-[6px] px-1 text-[#787774] outline-none transition-colors hover:bg-[#F4F4F2] hover:text-[#37352F] focus-visible:ring-2 focus-visible:ring-[#0B6BCB]"
+            className="inline-flex h-6 items-center gap-0.5 rounded-[6px] px-1 text-[var(--notion-text-soft)] outline-none transition-colors hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)] focus-visible:ring-2 focus-visible:ring-[var(--notion-accent-blue)]"
             aria-expanded={expanded}
             aria-controls={textId}
             data-testid={`${workbenchSelectors.userMessageFoldTogglePrefix}-${messageId}`}

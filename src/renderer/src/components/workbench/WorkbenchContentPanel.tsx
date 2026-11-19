@@ -133,30 +133,30 @@ export const FileChangeNotice: React.FC<{ record: AiFileChangeRecord }> = ({ rec
       data-testid={workbenchSelectors.applyChangeNotice}
     >
       <div className="max-w-[460px]">
-        <HiDocumentText className="mx-auto h-10 w-10 text-[#B7B5AF]" />
-        <div className="mt-4 text-[15px] font-semibold text-[#37352F]">{title}</div>
+        <HiDocumentText className="mx-auto h-10 w-10 text-[var(--notion-text-faint)]" />
+        <div className="mt-4 text-[15px] font-semibold text-[var(--notion-text)]">{title}</div>
         {record.operation === 'renamed' && record.status !== 'reverted' ? (
           <div className="mt-4 grid grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)] items-center gap-2 text-left text-[13px]">
-            <div className="min-w-0 rounded-[6px] bg-[#F4F4F2] px-3 py-2">
-              <div className="text-[11px] text-[#91918E]">
+            <div className="min-w-0 rounded-[6px] bg-[var(--notion-surface)] px-3 py-2">
+              <div className="text-[11px] text-[var(--notion-text-faint)]">
                 {t(($) => $.workbench.originalFileName)}
               </div>
-              <div className="mt-0.5 truncate text-[#57554F]" title={record.beforePath}>
+              <div className="mt-0.5 truncate text-[var(--notion-text-soft)]" title={record.beforePath}>
                 {getPathFileName(record.beforePath)}
               </div>
             </div>
-            <HiArrowsRightLeft className="h-4 w-4 text-[#B7B5AF]" />
-            <div className="min-w-0 rounded-[6px] bg-[#F4F4F2] px-3 py-2">
-              <div className="text-[11px] text-[#91918E]">
+            <HiArrowsRightLeft className="h-4 w-4 text-[var(--notion-text-faint)]" />
+            <div className="min-w-0 rounded-[6px] bg-[var(--notion-surface)] px-3 py-2">
+              <div className="text-[11px] text-[var(--notion-text-faint)]">
                 {t(($) => $.workbench.currentFileName)}
               </div>
-              <div className="mt-0.5 truncate text-[#37352F]" title={record.afterPath}>
+              <div className="mt-0.5 truncate text-[var(--notion-text)]" title={record.afterPath}>
                 {getPathFileName(record.afterPath || record.path)}
               </div>
             </div>
           </div>
         ) : null}
-        <div className="mt-2 text-[13px] leading-6 text-[#787774]">{description}</div>
+        <div className="mt-2 text-[13px] leading-6 text-[var(--notion-text-soft)]">{description}</div>
       </div>
     </div>
   )
@@ -164,12 +164,12 @@ export const FileChangeNotice: React.FC<{ record: AiFileChangeRecord }> = ({ rec
 
 const WorkbenchEmptyPanel: React.FC = () => (
   <div className="flex h-full items-center justify-center px-5 py-4">
-    <div className="flex h-full w-full items-center justify-center rounded-[8px] border border-dashed border-[#EEEEEC] bg-white">
+    <div className="flex h-full w-full items-center justify-center rounded-[8px] border border-dashed border-[var(--notion-line)] bg-[var(--notion-page)]">
       <div className="text-center">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={
-            <span className="text-[12px] text-[#9B9A97]">
+            <span className="text-[12px] text-[var(--notion-text-faint)]">
               {t(($) => $.workbench.nothingOpenYet)}
             </span>
           }
@@ -379,7 +379,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
       data-file-change-status={mode === 'edit' ? status : undefined}
     >
       <div
-        className="flex h-11 shrink-0 items-center gap-2 border-b border-[#EEEEEC] bg-white px-3"
+        className="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--notion-line)] bg-[var(--notion-page)] px-3"
         data-testid={workbenchSelectors.documentToolbar}
       >
         {backTarget ? (
@@ -389,7 +389,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
               size="small"
               aria-label={t(($) => $.workbench.back2)}
               icon={<HiArrowLeft className="h-4 w-4" />}
-              className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
+              className="!text-[var(--notion-text-soft)] hover:!bg-[var(--notion-surface)] hover:!text-[var(--notion-text)]"
               onClick={() => onBackToPanelState(backTarget)}
             />
           </Tooltip>
@@ -400,15 +400,15 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
               filePath={filePath}
               workspaces={workspaces}
               className="min-w-0 text-[13px] font-semibold"
-              prefixClassName="text-[#787774]"
-              fileNameClassName="text-[#37352F]"
+              prefixClassName="text-[var(--notion-text-soft)]"
+              fileNameClassName="text-[var(--notion-text)]"
             />
             {mode === 'edit' ? (
               <>
                 {onSwitchDisplayMode ? (
                   <span className="inline-flex shrink-0 items-center gap-0.5">
                     <span
-                      className="inline-flex h-5 items-center rounded-[4px] bg-[#F1F1EF] px-1.5 text-[11px] font-medium text-[#57554F]"
+                      className="inline-flex h-5 items-center rounded-[4px] bg-[var(--notion-surface)] px-1.5 text-[11px] font-medium text-[var(--notion-text-soft)]"
                       data-testid={workbenchSelectors.documentModeTag}
                     >
                       {displayMode === 'review'
@@ -431,7 +431,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                             : t(($) => $.workbench.switchToReview)
                         }
                         icon={<HiArrowsRightLeft className="h-3.5 w-3.5" />}
-                        className="!h-6 !w-6 !min-w-6 !rounded-[4px] !p-0 !text-[#91918E] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
+                        className="!h-6 !w-6 !min-w-6 !rounded-[4px] !p-0 !text-[var(--notion-text-faint)] hover:!bg-[var(--notion-surface)] hover:!text-[var(--notion-text)]"
                         data-testid={workbenchSelectors.documentModeToggle}
                         onClick={onSwitchDisplayMode}
                       />
@@ -442,7 +442,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                   <>
                     <ChangeCountBadges insertCount={insertCount} deleteCount={deleteCount} />
                     {statusBadgeLabel ? (
-                      <span className="inline-flex h-5 shrink-0 items-center rounded-[4px] bg-[#F4F4F2] px-1.5 text-[11px] font-medium text-[#787774]">
+                      <span className="inline-flex h-5 shrink-0 items-center rounded-[4px] bg-[var(--notion-surface)] px-1.5 text-[11px] font-medium text-[var(--notion-text-soft)]">
                         {statusBadgeLabel}
                       </span>
                     ) : null}
@@ -457,7 +457,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
             <Tooltip title={WPS_OPEN_WITH_HINT} placement="bottom">
               <button
                 type="button"
-                className="flex h-8 w-7 shrink-0 cursor-pointer items-center justify-center text-[#91918E] transition-colors hover:text-[#37352F]"
+                className="flex h-8 w-7 shrink-0 cursor-pointer items-center justify-center text-[var(--notion-text-faint)] transition-colors hover:text-[var(--notion-text)]"
                 onClick={() => {
                   void window.api.openExternal(getManualUrl('#wps-integration'))
                 }}
@@ -486,7 +486,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
             }}
           >
             <div
-              className="flex h-8 shrink-0 items-stretch overflow-hidden rounded-[6px] border border-[#E7E5E0] bg-[#FBFBFA] shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+              className="flex h-8 shrink-0 items-stretch overflow-hidden rounded-[6px] border border-[var(--notion-line)] bg-[var(--notion-sidebar)] shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
               data-testid={workbenchSelectors.openWithMenu}
             >
               <Button
@@ -504,7 +504,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                     <HiArrowTopRightOnSquare className="h-4 w-4" />
                   )
                 }
-                className="!h-full !rounded-none !px-2.5 !text-[#37352F] hover:!bg-[#F1F1EF] disabled:!text-[#C9C7C2]"
+                className="!h-full !rounded-none !px-2.5 !text-[var(--notion-text)] hover:!bg-[var(--notion-surface-hover)] disabled:!text-[var(--notion-text-faint)]"
                 data-testid={workbenchSelectors.openWithButton}
                 disabled={!canOpen || isDeletedCreatedFile}
                 onClick={(event) => {
@@ -520,7 +520,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 size="small"
                 aria-label={t(($) => $.workbench.chooseAnApplication)}
                 icon={<HiChevronDown className="h-3.5 w-3.5" />}
-                className="!h-full !rounded-none !border-l !border-l-[#E7E5E0] !px-1.5 !text-[#787774] hover:!bg-[#F1F1EF] disabled:!text-[#C9C7C2]"
+                className="!h-full !rounded-none !border-l !border-l-[var(--notion-line)] !px-1.5 !text-[var(--notion-text-soft)] hover:!bg-[var(--notion-surface-hover)] disabled:!text-[var(--notion-text-faint)]"
                 data-testid={workbenchSelectors.applyOpenSystemButton}
               />
             </div>
@@ -532,7 +532,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 size="small"
                 aria-label={t(($) => $.workbench.revertThisChange)}
                 icon={<HiArrowUturnLeft className="h-4 w-4" />}
-                className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] disabled:!text-[#C9C7C2]"
+                className="!text-[var(--notion-text-soft)] hover:!bg-[var(--notion-surface)] hover:!text-[var(--notion-text)] disabled:!text-[var(--notion-text-faint)]"
                 loading={reverting}
                 disabled={!canRevert}
                 data-testid={workbenchSelectors.applyRevertButton}
@@ -558,9 +558,9 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 }
                 aria-pressed={explorerOpen}
                 icon={<FileIcon kind="directory" expanded={explorerOpen} className="h-4 w-4" />}
-                className={`!h-8 !w-8 !rounded-[6px] !border !p-0 !text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] ${
+                className={`!h-8 !w-8 !rounded-[6px] !border !p-0 !text-[var(--notion-text-soft)] hover:!bg-[var(--notion-surface)] hover:!text-[var(--notion-text)] ${
                   explorerOpen
-                    ? '!border-[#D9D8D4] !bg-[#F1F1EF] !text-[#37352F]'
+                    ? '!border-[var(--notion-line-strong)] !bg-[var(--notion-surface-hover)] !text-[var(--notion-text)]'
                     : '!border-transparent !bg-transparent'
                 }`}
                 data-testid={workbenchSelectors.workspaceExplorerToggle}
@@ -572,17 +572,17 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
         </div>
       </div>
       {errorMessage ? (
-        <div className="shrink-0 border-b border-[#E7CAC6] bg-white px-4 py-2.5 text-xs text-[#B3261E]">
+        <div className="shrink-0 border-b border-[var(--notion-red)] bg-[var(--notion-page)] px-4 py-2.5 text-xs text-[var(--notion-red)]">
           {errorMessage}
         </div>
       ) : null}
-      <div className="min-h-0 flex-1 bg-white" data-testid={workbenchSelectors.documentView}>
+      <div className="min-h-0 flex-1 bg-[var(--notion-page)]" data-testid={workbenchSelectors.documentView}>
         {isDeletedCreatedFile && !content ? (
           <div className="flex h-full items-center justify-center">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
-                <span className="text-[#787774]">
+                <span className="text-[var(--notion-text-soft)]">
                   {t(($) => $.workbench.thisFileWasDeletedWhenTheChangeWasReverted)}
                 </span>
               }
@@ -949,7 +949,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       documentDisplayMode === 'review' &&
       activeApplyRecord.capability !== 'image' &&
       !activeApplyRecord.previewPath ? (
-        <div className="flex h-full items-center justify-center text-sm text-[#B3261E]">
+        <div className="flex h-full items-center justify-center text-sm text-[var(--notion-red)]">
           {t(($) => $.workbench.reviewDataIsMissingOrUsesAnUnsupportedFormat)}
         </div>
       ) : activeApplyRecord &&
@@ -1001,7 +1001,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   }
   return (
     <aside
-      className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white"
+      className="flex h-full min-h-0 flex-col border-l border-[var(--notion-line)] bg-[var(--notion-page)]"
       data-testid={workbenchSelectors.contentPanel}
     >
       <WorkbenchTabBar
@@ -1024,12 +1024,12 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                     <FileIcon
                       kind="directory"
                       expanded
-                      className="mx-auto h-10 w-10 text-[#91918E]"
+                      className="mx-auto h-10 w-10 text-[var(--notion-text-faint)]"
                     />
-                    <div className="mt-4 text-[18px] font-semibold text-[#37352F]">
+                    <div className="mt-4 text-[18px] font-semibold text-[var(--notion-text)]">
                       {t(($) => $.workbench.openFile)}
                     </div>
-                    <div className="mt-2 text-sm text-[#91918E]">
+                    <div className="mt-2 text-sm text-[var(--notion-text-faint)]">
                       {t(($) => $.workbench.chooseFromTheWorkspaceFileListOnTheRight)}
                     </div>
                   </div>
@@ -1115,7 +1115,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                 />
               ) : (
                 <div
-                  className="flex h-full items-center justify-center text-sm text-[#9B9A97]"
+                  className="flex h-full items-center justify-center text-sm text-[var(--notion-text-faint)]"
                   data-testid={workbenchSelectors.applyPanel}
                 >
                   {applyLoading ? <Spin /> : t(($) => $.workbench.noAiFileChangesYet)}
@@ -1150,7 +1150,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               key="workspace-file-explorer"
               className={
                 floatingExplorer
-                  ? 'absolute bottom-0 right-0 top-11 z-20 w-[300px] max-w-[85%] overflow-hidden bg-white shadow-[-8px_8px_24px_rgba(0,0,0,0.12)]'
+                  ? 'absolute bottom-0 right-0 top-11 z-20 w-[300px] max-w-[85%] overflow-hidden bg-[var(--notion-page)] shadow-[-8px_8px_24px_rgba(0,0,0,0.12)]'
                   : 'w-[min(38%,300px)] min-w-[240px] shrink-0'
               }
               data-testid={

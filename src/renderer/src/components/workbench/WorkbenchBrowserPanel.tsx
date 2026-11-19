@@ -210,14 +210,14 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col bg-white"
+      className="flex h-full min-h-0 flex-col bg-[var(--notion-page)]"
       data-testid={workbenchSelectors.browserPanel}
     >
-      <div className="relative flex h-11 shrink-0 items-center gap-1 border-b border-[#EEEEEC] px-2">
+      <div className="relative flex h-11 shrink-0 items-center gap-1 border-b border-[var(--notion-line)] px-2">
         <Tooltip title={t(($) => $.workbench.back)}>
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2] disabled:text-[#C9C7C2]"
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)] disabled:text-[var(--notion-text-faint)]"
             disabled={!state.canGoBack}
             aria-label={t(($) => $.workbench.back)}
             onClick={() => void runStateAction(() => window.api.browserTabBack({ tabId }))}
@@ -228,7 +228,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         <Tooltip title={t(($) => $.workbench.forward)}>
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2] disabled:text-[#C9C7C2]"
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)] disabled:text-[var(--notion-text-faint)]"
             disabled={!state.canGoForward}
             aria-label={t(($) => $.workbench.forward)}
             onClick={() => void runStateAction(() => window.api.browserTabForward({ tabId }))}
@@ -239,7 +239,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         <Tooltip title={state.isLoading ? t(($) => $.common.stop) : t(($) => $.common.refresh)}>
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2] disabled:text-[#C9C7C2]"
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)] disabled:text-[var(--notion-text-faint)]"
             disabled={!state.url}
             aria-label={
               state.isLoading ? t(($) => $.workbench.stopLoading) : t(($) => $.common.refresh)
@@ -270,12 +270,12 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
             onFocus={(event) => event.currentTarget.select()}
             placeholder={t(($) => $.workbench.enterAUrl)}
             aria-label={t(($) => $.workbench.browserAddress)}
-            className="h-7 w-full rounded-[7px] border border-transparent bg-[#F7F7F5] pr-8 pl-3 text-left text-[13px] text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#E0DFDC] focus:bg-white"
+            className="h-7 w-full rounded-[7px] border border-transparent bg-[var(--notion-surface-sunken)] pr-8 pl-3 text-left text-[13px] text-[var(--notion-text)] outline-none placeholder:text-[var(--notion-text-faint)] focus:border-[var(--notion-line-strong)] focus:bg-[var(--notion-page)]"
           />
           <Tooltip title={t(($) => $.workbench.go)}>
             <button
               type="submit"
-              className="absolute top-0 right-0 flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#ECECE9] hover:text-[#37352F] disabled:text-[#C9C7C2]"
+              className="absolute top-0 right-0 flex h-7 w-7 items-center justify-center rounded-[6px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface-hover)] hover:text-[var(--notion-text)] disabled:text-[var(--notion-text-faint)]"
               aria-label={t(($) => $.workbench.go)}
               disabled={!address.trim()}
             >
@@ -286,7 +286,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         <Tooltip title={t(($) => $.workbench.opensInAnExternalBrowser)}>
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2] disabled:text-[#C9C7C2]"
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)] disabled:text-[var(--notion-text-faint)]"
             aria-label={t(($) => $.workbench.opensInAnExternalBrowser)}
             data-testid={workbenchSelectors.browserOpenExternal}
             disabled={!state.url && !address.trim()}
@@ -314,7 +314,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         </Tooltip>
         <button
           type="button"
-          className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2]"
+          className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)]"
           aria-label={t(($) => $.workbench.moreBrowserActions)}
           aria-expanded={menuOpen}
           data-testid={workbenchSelectors.browserMenu}
@@ -337,13 +337,13 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         </div>
       </div>
       {error ? (
-        <div className="shrink-0 border-b border-[#E7CAC6] px-3 py-1.5 text-xs text-[#B3261E]">
+        <div className="shrink-0 border-b border-[var(--notion-red)] px-3 py-1.5 text-xs text-[var(--notion-red)]">
           {error}
         </div>
       ) : null}
       <div
         ref={viewportRef}
-        className="relative min-h-0 flex-1 bg-white"
+        className="relative min-h-0 flex-1 bg-[var(--notion-page)]"
         data-testid={workbenchSelectors.browserViewport}
       >
         {transitionImage ? (
@@ -356,11 +356,11 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         ) : !state.url ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
-              <HiGlobeAlt className="mx-auto h-10 w-10 text-[#91918E]" />
-              <div className="mt-4 text-[18px] font-semibold text-[#37352F]">
+              <HiGlobeAlt className="mx-auto h-10 w-10 text-[var(--notion-text-faint)]" />
+              <div className="mt-4 text-[18px] font-semibold text-[var(--notion-text)]">
                 {t(($) => $.workbench.startBrowsing)}
               </div>
-              <div className="mt-2 text-sm text-[#91918E]">
+              <div className="mt-2 text-sm text-[var(--notion-text-faint)]">
                 {t(($) => $.workbench.enterAUrlAboveToOpenAPage)}
               </div>
             </div>

@@ -13,10 +13,18 @@ type ImageLightboxProps = {
   onClose: () => void
 }
 
+/** 遮罩固定深色：图片预览是「暗底浮层」，不随明暗主题变浅。 */
+const LIGHTBOX_SCRIM = 'fixed inset-0 z-[9999] overflow-hidden bg-[#111111]/95'
+
 const clampScale = (value: number): number => Math.max(0.25, Math.min(4, value))
 
+/**
+ * 图片预览是「暗底浮层」，它自己的控件不能用会随主题反战的 `--notion-page`：
+ * 深色主题下该变量是 #191919，与 #111111 遮罩的对比只有 1.07，按钮会融进背景。
+ * 因此这里固定用浅色控件（底 #FFFFFF / 字 #2F3437），与遮罩对比 18.88，两主题一致。
+ */
 const toolbarButtonClassName =
-  'inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#2F3437] shadow-[0_8px_24px_rgba(0,0,0,0.28)] transition hover:bg-[#F4F4F2]'
+  'inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--notion-page)] text-[var(--notion-text)] shadow-[0_8px_24px_rgba(0,0,0,0.28)] transition hover:bg-[var(--notion-surface-hover)]'
 
 const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
   const [scale, setScale] = useState(1)
@@ -55,7 +63,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] overflow-hidden bg-[#111111]/95"
+      className={LIGHTBOX_SCRIM}
       data-testid={workbenchSelectors.attachmentPreviewModal}
       onWheel={(event) => {
         event.preventDefault()
@@ -69,7 +77,12 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
         onClick={onClose}
       />
 
-      <div className="absolute right-5 top-5 z-[2] flex items-center gap-3">
+      {/*
+        工具栏避开原生标题栏：Windows 的窗口按钮由系统画在右上角并被覆盖在页面之上，
+        顶到 top-5 会被它们盖住，导致看不清也点不到；`--window-titlebar-safe-top` 在
+        Windows 上等于标题栏高度，其他平台为 0，因此这里不需要平台分支。
+      */}
+      <div className="absolute right-5 top-[calc(var(--window-titlebar-safe-top)+1.25rem)] z-[2] flex items-center gap-3">
         <button
           type="button"
           className={toolbarButtonClassName}
@@ -98,7 +111,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
         </button>
       </div>
 
-      <div className="relative z-[1] flex h-full w-full items-center justify-center px-6 pb-24 pt-20">
+      <div className="relative z-[1] flex h-full w-full items-center justify-center px-6 pb-24 pt-[calc(var(--window-titlebar-safe-top)+5rem)]">
         <div className="flex h-full w-full items-center justify-center overflow-hidden">
           <img
             src={image.src}
@@ -146,10 +159,10 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
         </div>
       </div>
 
-      <div className="absolute bottom-6 left-1/2 z-[2] flex -translate-x-1/2 items-center gap-3 rounded-full bg-white px-2 py-1.5 text-[#2F3437] shadow-[0_10px_28px_rgba(0,0,0,0.32)]">
+      <div className="absolute bottom-6 left-1/2 z-[2] flex -translate-x-1/2 items-center gap-3 rounded-full bg-[var(--notion-page)] px-2 py-1.5 text-[var(--notion-text)] shadow-[0_10px_28px_rgba(0,0,0,0.32)]">
         <button
           type="button"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[#F4F4F2]"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[var(--notion-surface-hover)]"
           aria-label={t(($) => $.common.zoomOut)}
           onClick={() => updateScale(scale - 0.1)}
         >
@@ -167,7 +180,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
         </button>
         <button
           type="button"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[#F4F4F2]"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[var(--notion-surface-hover)]"
           aria-label={t(($) => $.common.zoomIn)}
           onClick={() => updateScale(scale + 0.1)}
         >

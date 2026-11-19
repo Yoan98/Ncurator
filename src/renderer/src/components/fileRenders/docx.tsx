@@ -248,7 +248,7 @@ export const DocxPreview = ({
 
   return (
     <div
-      className="relative flex h-full w-full min-w-0 bg-[#F7F7F5]"
+      className="relative flex h-full w-full min-w-0 bg-[var(--notion-surface-sunken)]"
       data-testid={workbenchSelectors.docxViewer}
     >
       <div
@@ -273,7 +273,7 @@ export const DocxPreview = ({
         />
       ) : null}
       {renderError ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#F7F7F5] px-6 text-center text-sm text-[#787774]">
+        <div className="absolute inset-0 flex items-center justify-center bg-[var(--notion-surface-sunken)] px-6 text-center text-sm text-[var(--notion-text-soft)]">
           <span className="max-w-[460px] whitespace-pre-wrap break-words">
             {t(($) => $.editors.wordPreviewFailed, { value1: renderError })}
           </span>

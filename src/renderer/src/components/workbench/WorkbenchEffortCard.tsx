@@ -280,13 +280,13 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
           disabled={disabled}
           data-testid={workbenchSelectors.effortModelName}
           onClick={onPickModel}
-          className="group mx-auto mt-0.5 flex max-w-full items-center justify-center gap-[3px] px-1 py-px text-[13px] text-[#787774] transition-colors hover:text-[#37352F] disabled:hover:text-[#787774]"
+          className="group mx-auto mt-0.5 flex max-w-full items-center justify-center gap-[3px] px-1 py-px text-[13px] text-[var(--notion-text-soft)] transition-colors hover:text-[var(--notion-text)] disabled:hover:text-[var(--notion-text-soft)]"
         >
           <span className="min-w-0 truncate">{modelLabel}</span>
           <span
             aria-hidden="true"
             // 原 10px 太小，视觉上几乎看不见；14px 与模型名基线更协调。
-            className="shrink-0 text-[14px] leading-none text-[#A8A7A3] transition-transform group-hover:translate-x-0.5"
+            className="shrink-0 text-[14px] leading-none text-[var(--notion-text-faint)] transition-transform group-hover:translate-x-0.5"
           >
             ›
           </span>
@@ -296,13 +296,13 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
           aria-label={t(($) => $.workbench.refreshModelCatalogs)}
           data-testid={workbenchSelectors.modelSelectCatalogRefresh}
           disabled={disabled || refreshStatus === 'loading'}
-          className="absolute -top-0.5 right-[-6px] inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[#B9B8B4] transition hover:bg-[#EFEFEE] hover:text-[#787774] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-[#B9B8B4]"
+          className="absolute -top-0.5 right-[-6px] inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[var(--notion-text-faint)] transition hover:bg-[var(--notion-surface-hover)] hover:text-[var(--notion-text-soft)] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-[var(--notion-text-faint)]"
           onClick={onRefresh}
         >
           {refreshStatus === 'success' ? (
-            <HiCheck className="h-3.5 w-3.5 text-[#356B5A]" />
+            <HiCheck className="h-3.5 w-3.5 text-[var(--notion-green)]" />
           ) : refreshStatus === 'error' ? (
-            <HiXMark className="h-3.5 w-3.5 text-[#B3261E]" />
+            <HiXMark className="h-3.5 w-3.5 text-[var(--notion-red)]" />
           ) : (
             <HiArrowPath
               className={`h-3.5 w-3.5${refreshStatus === 'loading' ? ' animate-spin' : ''}`}
@@ -417,7 +417,7 @@ export const WorkbenchEffortCard: React.FC<WorkbenchEffortCardProps> = ({
           ) : (
             // 没有伙伴形象时退回一个中性圆点，避免滑块位置空着。
             <span
-              className="block rounded-full bg-white"
+              className="block rounded-full bg-[var(--notion-page)]"
               style={{
                 width: THUMB_SIZE,
                 height: THUMB_SIZE,

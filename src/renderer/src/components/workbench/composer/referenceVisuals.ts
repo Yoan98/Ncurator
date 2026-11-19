@@ -3,14 +3,14 @@ import type { DocumentSelectionNode, SelectedReference } from '../../../../../sh
 
 export const INLINE_TOKEN_CLASS_NAME =
   'mr-1.5 inline-flex max-w-full items-baseline gap-1 rounded-md px-1.5 py-0.5 align-baseline text-[0.9em] font-medium leading-[1.4]'
-export const REFERENCE_LABEL_CLASS_NAME = 'text-[#37352F]'
+export const REFERENCE_LABEL_CLASS_NAME = 'text-[var(--notion-text)]'
 export const REFERENCE_TOKEN_CLASS_NAME = INLINE_TOKEN_CLASS_NAME + ' ' + REFERENCE_LABEL_CLASS_NAME
 export const INLINE_TOKEN_LABEL_CLASS_NAME = 'min-w-0 max-w-[180px] truncate'
 export const SELECTION_TOKEN_CLASS_NAME =
   INLINE_TOKEN_CLASS_NAME +
-  ' cursor-pointer bg-[#F3EDF9] text-[#6F4F91] outline-none transition-colors hover:bg-[#E9DDFB] focus-visible:ring-2 focus-visible:ring-[#0B6BCB]'
+  ' cursor-pointer bg-[var(--notion-purple-bg)] text-[var(--notion-purple-deep)] outline-none transition-colors hover:bg-[var(--notion-purple-hover)] focus-visible:ring-2 focus-visible:ring-[var(--notion-accent-blue)]'
 export const SELECTION_NUMBER_CLASS_NAME =
-  'inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-[5px] bg-[#E3D5F2] px-[3px] text-[10px] font-semibold leading-none text-[#6F4F91]'
+  'inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-[5px] bg-[var(--notion-purple-bg)] px-[3px] text-[10px] font-semibold leading-none text-[var(--notion-purple-deep)]'
 export const SELECTION_DOCUMENT_ICON_PATH =
   'M10.5 2.5H5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 5 15.5h8a1.5 1.5 0 0 0 1.5-1.5V6.5m-4-4 4 4h-4v-4ZM6.5 9h5m-5 3h5'
 export const selectionFileName = (node: DocumentSelectionNode): string =>

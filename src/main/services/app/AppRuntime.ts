@@ -8,12 +8,15 @@ import {
 import {
   officialApiUrl,
   officialUrl,
-  routeForOfficialUrl,
   resolveAppLocale,
+  resolveAppTheme,
   resolveDistribution,
+  routeForOfficialUrl,
   type AppDistribution,
   type AppLanguage,
+  type AppResolvedTheme,
   type AppRuntimeSnapshot,
+  type AppTheme,
   type ServiceRoute
 } from '../../../shared/appPreferences'
 
@@ -51,7 +54,7 @@ export function configureServiceEnvironment(
   if (packaged) return
   sourceService = undefined
   distribution = resolveDistribution(inherited.NCURATOR_DISTRIBUTION || 'domestic')
-  runtime = { distribution, locale: runtime.locale, serviceRoute: distribution }
+  runtime = { distribution, locale: runtime.locale, serviceRoute: distribution, theme: runtime.theme }
   if (distribution === 'domestic') sourceService = readDesktopServiceEnvironment(root, inherited)
 }
 
@@ -77,16 +80,33 @@ export function routeForServiceUrl(value: string): ServiceRoute | null {
   return route === 'domestic' ? null : route
 }
 
-let runtime: AppRuntimeSnapshot = { distribution, locale: 'zh-CN', serviceRoute: distribution }
+let runtime: AppRuntimeSnapshot = {
+  distribution,
+  locale: 'zh-CN',
+  serviceRoute: distribution,
+  theme: 'light'
+}
+/** Preference restored from disk before SQLite opens, so the first frame already knows it. */
+let initialTheme: AppTheme = 'system'
 export const getAppRuntime = (): Readonly<AppRuntimeSnapshot> => runtime
+export const setInitialAppTheme = (theme: AppTheme): void => {
+  initialTheme = theme
+}
+/** `followsDark` is Main's read of the OS preference; callers pass it so `system` resolves here. */
 export const initializeAppRuntime = (
   systemLanguages: readonly string[],
-  settings?: { language: AppLanguage; serviceRoute: ServiceRoute }
+  settings?: { language: AppLanguage; serviceRoute: ServiceRoute; theme?: AppTheme },
+  followsDark = false
 ): void => {
   runtime = {
     distribution,
     locale: resolveAppLocale(settings?.language || 'system', systemLanguages),
     serviceRoute: distribution,
+    theme: resolveAppTheme(settings?.theme ?? initialTheme, followsDark),
     ...(sourceService && { accountWebOrigin: sourceService.web })
   }
+}
+
+export const setAppRuntimeTheme = (theme: AppResolvedTheme): void => {
+  runtime = { ...runtime, theme }
 }

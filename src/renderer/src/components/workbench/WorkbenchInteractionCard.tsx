@@ -14,7 +14,7 @@ import {
 } from 'react-icons/hi2'
 
 const iconButtonClass =
-  'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[#787774] transition-colors hover:bg-[#F4F4F2] focus-visible:outline-2 focus-visible:outline-[#0B6BCB] disabled:cursor-not-allowed disabled:opacity-35'
+  'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[var(--notion-text-soft)] transition-colors hover:bg-[var(--notion-surface)] focus-visible:outline-2 focus-visible:outline-[var(--notion-accent-blue)] disabled:cursor-not-allowed disabled:opacity-35'
 
 type CardProps = {
   source?: React.ReactNode
@@ -38,7 +38,7 @@ type CardProps = {
 
 export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
   <section
-    className="nc-timeline-layout-anchor flex max-h-[calc(100vh-120px)] min-w-0 flex-col overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-white text-[#37352F] shadow-[0_8px_24px_rgba(15,15,15,0.065)]"
+    className="nc-timeline-layout-anchor flex max-h-[calc(100vh-120px)] min-w-0 flex-col overflow-hidden rounded-[12px] border border-[var(--notion-line-strong)] bg-[var(--notion-page)] text-[var(--notion-text)] shadow-[0_8px_24px_rgba(15,15,15,0.065)]"
     data-testid={props.cardTestId}
     onKeyDownCapture={(event) => {
       if (
@@ -57,7 +57,7 @@ export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
     }}
   >
     <header className="flex shrink-0 items-center justify-between gap-2 px-[18px] pt-3">
-      <div className="flex min-w-0 items-center gap-[7px] text-xs text-[#787774]">
+      <div className="flex min-w-0 items-center gap-[7px] text-xs text-[var(--notion-text-soft)]">
         {props.itemLabel === t(($) => $.workbench.question) ? (
           <HiOutlineQuestionMarkCircle className="h-[15px] w-[15px] shrink-0" />
         ) : (
@@ -69,7 +69,7 @@ export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
         {props.total > 1 && (
           <>
             <span
-              className="mr-[7px] whitespace-nowrap text-xs text-[#91918E] tabular-nums"
+              className="mr-[7px] whitespace-nowrap text-xs text-[var(--notion-text-faint)] tabular-nums"
               data-testid={`${props.cardTestId}-position`}
             >
               {props.currentIndex + 1} / {props.total}
@@ -115,7 +115,7 @@ export const WorkbenchInteractionCard: React.FC<CardProps> = (props) => (
     </header>
     <div className="min-h-0 overflow-y-auto">
       {props.source && (
-        <div className="mx-5 mt-2 flex min-w-0 items-center gap-2 break-words text-xs text-[#787774]">
+        <div className="mx-5 mt-2 flex min-w-0 items-center gap-2 break-words text-xs text-[var(--notion-text-soft)]">
           {props.source}
         </div>
       )}
@@ -150,23 +150,23 @@ export const WorkbenchInteractionChoice: React.FC<ChoiceProps> = (props) => (
     disabled={props.disabled}
     onClick={props.onClick}
     data-testid={props.testId}
-    className={`flex min-h-[46px] w-full items-center gap-3 rounded-[8px] p-2.5 text-left text-sm transition-colors outline-none focus-visible:bg-[#EFEFEE] disabled:cursor-not-allowed disabled:opacity-45 ${props.selected ? 'bg-[#F4F4F2]' : 'hover:bg-[#F8F8F7]'}`}
+    className={`flex min-h-[46px] w-full items-center gap-3 rounded-[8px] p-2.5 text-left text-sm transition-colors outline-none focus-visible:bg-[var(--notion-surface-hover)] disabled:cursor-not-allowed disabled:opacity-45 ${props.selected ? 'bg-[var(--notion-surface)]' : 'hover:bg-[var(--notion-surface-sunken)]'}`}
   >
     <span
       aria-hidden="true"
-      className={`inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[5px] border text-xs ${props.selected ? 'border-[#37352F] bg-[#37352F] text-white' : 'border-[#E0DFDC] bg-white text-[#787774]'}`}
+      className={`inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[5px] border text-xs ${props.selected ? 'border-[var(--notion-accent)] bg-[var(--notion-accent)] text-[var(--notion-accent-contrast)]' : 'border-[var(--notion-line-strong)] bg-[var(--notion-page)] text-[var(--notion-text-soft)]'}`}
     >
       {props.multiple ? props.selected && <HiCheck className="h-3.5 w-3.5" /> : props.index + 1}
     </span>
     <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
       {props.label}
       {props.recommended && (
-        <span className="ml-2 inline-flex h-5 items-center rounded-[5px] bg-[#EDF3F8] px-1.5 align-middle text-xs leading-none font-medium whitespace-nowrap text-[#2F5F8F]">
+        <span className="ml-2 inline-flex h-5 items-center rounded-[5px] bg-[var(--notion-blue-bg)] px-1.5 align-middle text-xs leading-none font-medium whitespace-nowrap text-[var(--notion-blue)]">
           {t(($) => $.common.recommended)}
         </span>
       )}
       {props.description && (
-        <span className="block text-xs text-[#787774]">{props.description}</span>
+        <span className="block text-xs text-[var(--notion-text-soft)]">{props.description}</span>
       )}
     </span>
   </button>
@@ -191,13 +191,13 @@ type FooterProps = {
 
 export const WorkbenchInteractionFooter: React.FC<FooterProps> = (props) => (
   <div
-    className={`shrink-0 px-[18px] pb-4 ${props.expanded ? '' : 'mt-[15px] border-t border-[#EEEEEC] pt-[14px]'}`}
+    className={`shrink-0 px-[18px] pb-4 ${props.expanded ? '' : 'mt-[15px] border-t border-[var(--notion-line)] pt-[14px]'}`}
   >
     <div className={`flex items-start gap-2 ${props.expanded ? '' : 'px-[11px]'}`}>
       {!props.expanded && (
         <HiOutlinePencil
           aria-hidden="true"
-          className="mt-[10px] h-[15px] w-[15px] shrink-0 text-[#91918E]"
+          className="mt-[10px] h-[15px] w-[15px] shrink-0 text-[var(--notion-text-faint)]"
         />
       )}
       <Input.TextArea
@@ -212,12 +212,12 @@ export const WorkbenchInteractionFooter: React.FC<FooterProps> = (props) => (
       />
     </div>
     {props.error && (
-      <div role="alert" className="mt-2 break-words text-xs text-[#B3261E]">
+      <div role="alert" className="mt-2 break-words text-xs text-[var(--notion-red)]">
         {props.error}
       </div>
     )}
     <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5">
-      <span aria-live="polite" className="min-w-0 break-words text-xs text-[#91918E]">
+      <span aria-live="polite" className="min-w-0 break-words text-xs text-[var(--notion-text-faint)]">
         {props.hint}
       </span>
       <button
@@ -225,7 +225,7 @@ export const WorkbenchInteractionFooter: React.FC<FooterProps> = (props) => (
         onClick={props.onSubmit}
         disabled={props.disabled || props.submitting || props.inputDisabled}
         data-testid={props.submitTestId}
-        className="ml-auto inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-[6px] bg-[#37352F] px-3 py-[5px] text-[13px] leading-[22px] font-medium text-white focus-visible:outline-2 focus-visible:outline-[#0B6BCB] disabled:cursor-not-allowed disabled:bg-[#F4F4F2] disabled:text-[#91918E]"
+        className="ml-auto inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-[6px] bg-[var(--notion-accent)] px-3 py-[5px] text-[13px] leading-[22px] font-medium text-[var(--notion-accent-contrast)] focus-visible:outline-2 focus-visible:outline-[var(--notion-accent-blue)] disabled:cursor-not-allowed disabled:bg-[var(--notion-surface)] disabled:text-[var(--notion-text-faint)]"
       >
         {props.label}
         {props.submitting ? (

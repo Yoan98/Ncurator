@@ -59,11 +59,11 @@ export default function FileOpenWithMenu({
           ? preferredApplicationId === application.id && (
               <HiCheck
                 aria-label={t(($) => $.workbench.selected)}
-                className="h-4 w-4 shrink-0 text-[#787774]"
+                className="h-4 w-4 shrink-0 text-[var(--notion-text-soft)]"
               />
             )
           : application.isDefault && (
-              <span className="shrink-0 text-[11px] text-[#91918E]">
+              <span className="shrink-0 text-[11px] text-[var(--notion-text-faint)]">
                 {t(($) => $.workbench.default)}
               </span>
             )}
@@ -99,7 +99,7 @@ export default function FileOpenWithMenu({
               {!preferredApplicationId && (
                 <HiCheck
                   aria-label={t(($) => $.workbench.selected)}
-                  className="h-4 w-4 text-[#787774]"
+                  className="h-4 w-4 text-[var(--notion-text-soft)]"
                 />
               )}
             </span>
@@ -117,7 +117,7 @@ export default function FileOpenWithMenu({
           label: (
             <span className="flex items-center justify-between gap-3">
               {t(($) => $.workbench.defaultApp)}
-              <HiChevronRight className="h-3.5 w-3.5 text-[#91918E]" />
+              <HiChevronRight className="h-3.5 w-3.5 text-[var(--notion-text-faint)]" />
             </span>
           )
         },

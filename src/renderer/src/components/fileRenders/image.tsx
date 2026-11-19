@@ -8,7 +8,7 @@ const CustomImageRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
   if (!document?.uri) return null
 
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-auto bg-[#F4F4F2] p-6">
+    <div className="flex h-full w-full items-center justify-center overflow-auto bg-[var(--notion-surface)] p-6">
       <img
         src={document.uri}
         alt={document.fileName || t(($) => $.editors.imagePreview)}

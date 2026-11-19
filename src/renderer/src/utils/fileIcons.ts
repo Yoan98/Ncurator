@@ -30,73 +30,73 @@ export type FileVisualSpec = {
 const FILE_VISUAL_SPECS: Record<FileIconKind, FileVisualSpec> = {
   directory: {
     kind: 'directory',
-    iconClassName: 'text-[#787774]',
+    iconClassName: 'text-[var(--notion-text-soft)]',
     documentFillClassName: 'fill-none',
-    documentAccentClassName: 'fill-[#787774]'
+    documentAccentClassName: 'fill-[var(--file-icon-neutral)]'
   },
   web: {
     kind: 'web',
-    iconClassName: 'text-[#2F6F4E]',
+    iconClassName: 'text-[var(--notion-green)]',
     documentFillClassName: 'fill-none',
-    documentAccentClassName: 'fill-[#2F6F4E]'
+    documentAccentClassName: 'fill-[var(--file-icon-web)]'
   },
   pdf: {
     kind: 'pdf',
-    iconClassName: 'text-[#C92A2A]',
-    documentFillClassName: 'fill-[#E5484D]',
-    documentAccentClassName: 'fill-[#F9B4B4]',
+    iconClassName: 'text-[var(--file-icon-pdf)]',
+    documentFillClassName: 'fill-[var(--file-icon-pdf)]',
+    documentAccentClassName: 'fill-[var(--file-icon-pdf-accent)]',
     documentLabel: 'PDF'
   },
   docx: {
     kind: 'docx',
-    iconClassName: 'text-[#2563EB]',
-    documentFillClassName: 'fill-[#3B82F6]',
-    documentAccentClassName: 'fill-[#BFDBFE]',
+    iconClassName: 'text-[var(--file-icon-doc)]',
+    documentFillClassName: 'fill-[var(--file-icon-doc)]',
+    documentAccentClassName: 'fill-[var(--file-icon-doc-accent)]',
     documentLabel: 'DOC'
   },
   xlsx: {
     kind: 'xlsx',
-    iconClassName: 'text-[#16803C]',
-    documentFillClassName: 'fill-[#22A06B]',
-    documentAccentClassName: 'fill-[#BBF7D0]',
+    iconClassName: 'text-[var(--file-icon-xls)]',
+    documentFillClassName: 'fill-[var(--file-icon-xls)]',
+    documentAccentClassName: 'fill-[var(--file-icon-xls-accent)]',
     documentLabel: 'XLS'
   },
   ppt: {
     kind: 'ppt',
-    iconClassName: 'text-[#D97706]',
-    documentFillClassName: 'fill-[#F59E0B]',
-    documentAccentClassName: 'fill-[#FDE68A]',
+    iconClassName: 'text-[var(--file-icon-ppt)]',
+    documentFillClassName: 'fill-[var(--file-icon-ppt)]',
+    documentAccentClassName: 'fill-[var(--file-icon-ppt-accent)]',
     documentLabel: 'PPT'
   },
   audio: {
     kind: 'audio',
-    iconClassName: 'text-[#8B5CF6]',
+    iconClassName: 'text-[var(--file-icon-media)]',
     documentFillClassName: 'fill-none',
     documentAccentClassName: 'fill-none'
   },
   video: {
     kind: 'video',
-    iconClassName: 'text-[#0F766E]',
+    iconClassName: 'text-[var(--file-icon-media)]',
     documentFillClassName: 'fill-none',
     documentAccentClassName: 'fill-none'
   },
   image: {
     kind: 'image',
-    iconClassName: 'text-[#0F766E]',
+    iconClassName: 'text-[var(--file-icon-media)]',
     documentFillClassName: 'fill-none',
     documentAccentClassName: 'fill-none'
   },
   markdown: {
     kind: 'markdown',
-    iconClassName: 'text-[#787774]',
-    documentFillClassName: 'fill-[#787774]',
-    documentAccentClassName: 'fill-[#787774]'
+    iconClassName: 'text-[var(--notion-text-soft)]',
+    documentFillClassName: 'fill-[var(--file-icon-neutral)]',
+    documentAccentClassName: 'fill-[var(--file-icon-neutral)]'
   },
   file: {
     kind: 'file',
-    iconClassName: 'text-[#787774]',
-    documentFillClassName: 'fill-[#787774]',
-    documentAccentClassName: 'fill-[#787774]'
+    iconClassName: 'text-[var(--notion-text-soft)]',
+    documentFillClassName: 'fill-[var(--file-icon-neutral)]',
+    documentAccentClassName: 'fill-[var(--file-icon-neutral)]'
   }
 }
 

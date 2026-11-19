@@ -45,8 +45,8 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan, run
           value1: done,
           value2: visiblePlan.length
         })}
-        className={`flex h-7 w-7 items-center justify-center rounded-full border border-[#E5E4E0] bg-white shadow-[0_2px_8px_rgba(15,15,15,0.08)] transition duration-200 group-hover/plan:border-[#D8D7D3] ${
-          finishing ? 'scale-105 border-[#D8D7D3]' : ''
+        className={`flex h-7 w-7 items-center justify-center rounded-full border border-[var(--notion-line-strong)] bg-[var(--notion-page)] shadow-[0_2px_8px_rgba(15,15,15,0.08)] transition duration-200 group-hover/plan:border-[var(--notion-line-strong)] ${
+          finishing ? 'scale-105 border-[var(--notion-line-strong)]' : ''
         }`}
       >
         <svg viewBox="0 0 20 20" className="h-5 w-5 -rotate-90" aria-hidden="true">
@@ -66,7 +66,7 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan, run
         </svg>
       </div>
 
-      <div className="invisible absolute bottom-[36px] left-1/2 w-[300px] -translate-x-1/2 translate-y-1 rounded-[10px] border border-[#E5E4E0] bg-white p-2.5 opacity-0 shadow-[0_12px_32px_rgba(15,15,15,0.12)] transition duration-150 group-hover/plan:visible group-hover/plan:translate-y-0 group-hover/plan:opacity-100">
+      <div className="invisible absolute bottom-[36px] left-1/2 w-[300px] -translate-x-1/2 translate-y-1 rounded-[10px] border border-[var(--notion-line-strong)] bg-[var(--notion-page)] p-2.5 opacity-0 shadow-[0_12px_32px_rgba(15,15,15,0.12)] transition duration-150 group-hover/plan:visible group-hover/plan:translate-y-0 group-hover/plan:opacity-100">
         <div className="space-y-1">
           {visiblePlan.map((item, index) => {
             const completed = item.status === 'done'
@@ -74,15 +74,15 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan, run
             return (
               <div
                 key={`${item.title}-${index}`}
-                className="flex min-w-0 items-start gap-2 rounded-[6px] px-1.5 py-1.5 text-[13px] leading-5 text-[#37352F]"
+                className="flex min-w-0 items-start gap-2 rounded-[6px] px-1.5 py-1.5 text-[13px] leading-5 text-[var(--notion-text)]"
               >
                 <span
                   className={`mt-0.5 flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-full ${
                     completed
-                      ? 'border border-[#37352F] bg-[#37352F] text-white'
+                      ? 'border border-[var(--notion-accent)] bg-[var(--notion-accent)] text-[var(--notion-accent-contrast)]'
                       : doing
-                        ? 'text-[#37352F]'
-                        : 'border border-[#C9C8C3] bg-white'
+                        ? 'text-[var(--notion-text)]'
+                        : 'border border-[var(--notion-line-strong)] bg-[var(--notion-page)]'
                   }`}
                   aria-hidden="true"
                 >
@@ -95,7 +95,7 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan, run
                     />
                   ) : null}
                 </span>
-                <span className={completed ? 'text-[#787774]' : undefined}>{item.title}</span>
+                <span className={completed ? 'text-[var(--notion-text-soft)]' : undefined}>{item.title}</span>
               </div>
             )
           })}

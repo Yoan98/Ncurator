@@ -3,6 +3,9 @@ import { getAppRuntime } from '../app/AppRuntime'
 import { BrowserWindow, screen } from 'electron'
 import type { BrowserTabState } from '../../../shared/types'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
+import { getResolvedAppTheme } from '../app/AppearanceService'
+import { OVERLAY_PALETTE } from '../app/OverlayPalette'
+import type { AppResolvedTheme } from '../../../shared/appPreferences'
 
 type BrowserMenuActions = {
   zoomIn: () => BrowserTabState
@@ -36,7 +39,9 @@ type MenuWindowOptions = {
   hasShadow?: boolean
 }
 
-const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
+const renderMenuHtml = (state: BrowserTabState, theme: AppResolvedTheme): string => {
+  const c = OVERLAY_PALETTE[theme]
+  return `<!doctype html>
 <html lang="${getAppRuntime().locale}">
   <head>
     <meta charset="UTF-8" />
@@ -49,20 +54,20 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
       html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
       body {
         padding: 8px;
-        color: #37352f;
+        color: ${c.text};
         font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       .menu {
         width: 100%;
         height: 100%;
         overflow: hidden;
-        border: 1px solid #e1e0dc;
+        border: 1px solid ${c.line};
         border-radius: 8px;
-        background: #fff;
+        background: ${c.page};
       }
       .zoom-row { height: 51px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
-      .label { color: #57554f; }
-      .controls { height: 30px; display: flex; overflow: hidden; border: 1px solid #deddd9; border-radius: 7px; background: #fbfbfa; }
+      .label { color: ${c.textSoft}; }
+      .controls { height: 30px; display: flex; overflow: hidden; border: 1px solid ${c.lineStrong}; border-radius: 7px; background: ${c.surface}; }
       .control {
         display: flex;
         height: 100%;
@@ -70,13 +75,13 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
         align-items: center;
         justify-content: center;
         border: 0;
-        color: #57554f;
+        color: ${c.textSoft};
         text-decoration: none;
         user-select: none;
       }
-      .control:hover { background: #f1f1ef; color: #24231f; }
-      .control[data-disabled="true"] { color: #c9c7c2; pointer-events: none; }
-      .percent { min-width: 58px; border-right: 1px solid #deddd9; border-left: 1px solid #deddd9; font-variant-numeric: tabular-nums; }
+      .control:hover { background: ${c.surfaceHover}; color: ${c.text}; }
+      .control[data-disabled="true"] { color: ${c.textFaint}; pointer-events: none; }
+      .percent { min-width: 58px; border-right: 1px solid ${c.lineStrong}; border-left: 1px solid ${c.lineStrong}; font-variant-numeric: tabular-nums; }
     </style>
   </head>
   <body>
@@ -112,8 +117,11 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
     </div>
   </body>
 </html>`
+}
 
-const renderResourceMenuHtml = (): string => `<!doctype html>
+const renderResourceMenuHtml = (theme: AppResolvedTheme): string => {
+  const c = OVERLAY_PALETTE[theme]
+  return `<!doctype html>
 <html lang="${getAppRuntime().locale}">
   <head>
     <meta charset="UTF-8" />
@@ -124,11 +132,11 @@ const renderResourceMenuHtml = (): string => `<!doctype html>
     <style>
       * { box-sizing: border-box; }
       html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
-      body { padding: 8px; color: #37352f; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .menu { width: 100%; height: 100%; padding: 5px; border: 1px solid #e1e0dc; border-radius: 8px; background: #fff; }
-      a { display: flex; height: 37px; align-items: center; gap: 10px; padding: 0 10px; border-radius: 6px; color: #37352f; text-decoration: none; user-select: none; }
-      a:hover { background: #f4f4f2; }
-      svg { width: 17px; height: 17px; flex: 0 0 auto; color: #787774; }
+      body { padding: 8px; color: ${c.text}; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .menu { width: 100%; height: 100%; padding: 5px; border: 1px solid ${c.line}; border-radius: 8px; background: ${c.page}; }
+      a { display: flex; height: 37px; align-items: center; gap: 10px; padding: 0 10px; border-radius: 6px; color: ${c.text}; text-decoration: none; user-select: none; }
+      a:hover { background: ${c.surface}; }
+      svg { width: 17px; height: 17px; flex: 0 0 auto; color: ${c.textSoft}; }
     </style>
   </head>
   <body>
@@ -150,6 +158,7 @@ const renderResourceMenuHtml = (): string => `<!doctype html>
     </div>
   </body>
 </html>`
+}
 
 export class BrowserMenuWindowService {
   private menuWindow: BrowserWindow | null = null
@@ -189,7 +198,7 @@ export class BrowserMenuWindowService {
       if (action === 'zoom-in') updateZoom(options.actions.zoomIn())
       return { action: 'deny' }
     })
-    await this.present(menuWindow, renderMenuHtml(options.state))
+    await this.present(menuWindow, renderMenuHtml(options.state, getResolvedAppTheme()))
   }
 
   public async openResourceMenu(options: ResourceMenuOpenOptions): Promise<void> {
@@ -205,7 +214,7 @@ export class BrowserMenuWindowService {
       this.close()
       return { action: 'deny' }
     })
-    await this.present(menuWindow, renderResourceMenuHtml())
+    await this.present(menuWindow, renderResourceMenuHtml(getResolvedAppTheme()))
   }
 
   private createWindow(

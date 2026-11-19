@@ -103,7 +103,7 @@ const WorkbenchTabBar = ({
 
   return (
     <div
-      className="nc-resource-tabbar workbench-no-drag flex h-11 shrink-0 items-center bg-white px-2"
+      className="nc-resource-tabbar workbench-no-drag flex h-11 shrink-0 items-center bg-[var(--notion-page)] px-2"
       data-testid={workbenchSelectors.resourceTabBar}
     >
       <div className="relative min-w-0 flex-1 self-stretch">
@@ -125,8 +125,8 @@ const WorkbenchTabBar = ({
                   }}
                   className={`group flex h-8 min-w-[60px] max-w-[200px] flex-1 basis-0 items-center gap-1.5 overflow-hidden rounded-[8px] px-2 text-left text-[13px] transition-colors ${
                     active
-                      ? 'bg-[#F2F2F0] font-medium text-[#37352F]'
-                      : 'text-[#787774] hover:bg-[#F7F7F5] hover:text-[#37352F]'
+                      ? 'bg-[var(--notion-surface)] font-medium text-[var(--notion-text)]'
+                      : 'text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface-sunken)] hover:text-[var(--notion-text)]'
                   }`}
                   data-testid={`${workbenchSelectors.resourceTabPrefix}-${tab.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
                   onClick={() => onActivateTab(tab.id)}
@@ -142,7 +142,7 @@ const WorkbenchTabBar = ({
                   <button
                     type="button"
                     aria-label={t(($) => $.workbench.close2, { value1: tab.title })}
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] hover:bg-[#E6E6E3] ${
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] hover:bg-[var(--notion-line)] ${
                       active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                     }`}
                     onClick={(event) => {
@@ -184,7 +184,7 @@ const WorkbenchTabBar = ({
       </div>
       <button
         type="button"
-        className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
+        className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)]"
         aria-label={t(($) => $.workbench.newTab)}
         aria-expanded={addMenuOpen}
         data-testid={workbenchSelectors.resourceTabAddButton}
@@ -194,7 +194,7 @@ const WorkbenchTabBar = ({
       </button>
       <button
         type="button"
-        className="ml-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
+        className="ml-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)]"
         aria-label={t(($) => $.workbench.collapseRightSidebar)}
         title={t(($) => $.workbench.collapseRightSidebar)}
         data-testid={workbenchSelectors.contentPanelToggle}

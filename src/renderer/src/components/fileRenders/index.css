@@ -2,11 +2,11 @@
   overflow-y: unset !important;
 }
 
-/* react-doc-viewer 容器默认 #eee 灰底，在编辑器未完全撑满时会在右侧露出灰色区域，
-   统一改为白色，避免与业务背景冲突。 */
+/* react-doc-viewer 容器默认 #eee 灰底，在编辑器未完全撑满时会在右侧露出灰色区域。
+   DOCX 真实版面保持白纸（由文档自身渲染），这里只跟随主题的外围画布。 */
 #react-doc-viewer,
 #proxy-renderer {
-  background: #ffffff !important;
+  background: var(--notion-page) !important;
 }
 
 .docx-content {
@@ -22,15 +22,15 @@
 }
 
 .docx-overview-thumb {
-  background: rgba(95, 93, 87, 0.26);
+  background: color-mix(in srgb, var(--notion-text-soft) 26%, transparent);
 }
 
 .docx-overview:hover .docx-overview-thumb {
-  background: rgba(95, 93, 87, 0.38);
+  background: color-mix(in srgb, var(--notion-text-soft) 38%, transparent);
 }
 
 .docx-overview[data-dragging='true'] .docx-overview-thumb {
-  background: rgba(95, 93, 87, 0.48);
+  background: color-mix(in srgb, var(--notion-text-soft) 48%, transparent);
 }
 
 .docx-overview[data-dragging='true'] {
@@ -38,7 +38,7 @@
 }
 
 .docx-content ::selection {
-  background: #dbc5f6;
+  background: var(--notion-purple-hover);
   color: inherit;
 }
 
@@ -47,7 +47,7 @@
   width: 100% !important;
   min-width: 0 !important;
   overflow-x: hidden !important;
-  background: #f7f7f5 !important;
+  background: var(--notion-surface-sunken) !important;
   padding: 16px !important;
   padding-bottom: 0 !important;
 }
@@ -61,14 +61,14 @@
 }
 
 .docx-content ins {
-  background: #e9f7ef !important;
-  color: #166534 !important;
+  background: var(--notion-green-bg) !important;
+  color: var(--notion-green) !important;
   text-decoration: none !important;
 }
 
 .docx-content del {
-  background: #f8ebe9 !important;
-  color: #b3261e !important;
+  background: var(--notion-red-bg) !important;
+  color: var(--notion-red) !important;
   text-decoration: line-through !important;
 }
 
@@ -76,7 +76,7 @@
   cursor: pointer;
 }
 .office-review-navigable [data-review-region]:hover {
-  outline: 1px solid #91b6d6;
+  outline: 1px solid var(--notion-blue);
   outline-offset: 2px;
 }
 
@@ -84,17 +84,17 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: #787774;
+  color: var(--notion-text-soft);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 
 .text-file-review .monaco-editor .diff-hidden-lines .unchanged-lines-label:hover {
-  color: #37352f;
+  color: var(--notion-text);
 }
 
 .text-file-review .monaco-editor .diff-hidden-lines .unchanged-lines-label:focus-visible {
-  outline: 2px solid #0b6bcb;
+  outline: 2px solid var(--notion-accent-blue);
   outline-offset: 2px;
 }

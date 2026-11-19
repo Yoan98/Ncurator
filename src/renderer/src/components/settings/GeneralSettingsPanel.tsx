@@ -12,6 +12,7 @@ import {
   isStreamingMarkdownAnimationEnabled,
   setStreamingMarkdownAnimationEnabled
 } from '../../utils/renderPreferences'
+import { useAppearance } from '../../contexts/AppearanceContext'
 
 const GeneralSettingsPanel: React.FC = () => {
   const { t } = useTranslation()
@@ -22,6 +23,7 @@ const GeneralSettingsPanel: React.FC = () => {
   const [streamingAnimation, setStreamingAnimation] = useState<boolean>(() =>
     isStreamingMarkdownAnimationEnabled()
   )
+  const appearance = useAppearance()
 
   useEffect(() => {
     void window.api
@@ -124,6 +126,27 @@ const GeneralSettingsPanel: React.FC = () => {
               { value: 'en', label: t(($) => $.preferences.english) }
             ]}
             onChange={(language: AppSettings['language']) => void updatePreference({ language })}
+          />
+        </SettingsRow>
+        <SettingsRow
+          title={t(($) => $.preferences.theme)}
+          description={t(($) => $.preferences.themeDescription)}
+        >
+          <Select
+            data-testid={settingsSelectors.themeSelect}
+            aria-label={t(($) => $.preferences.theme)}
+            className="nc-settings-preference-select"
+            value={settings?.theme ?? 'system'}
+            disabled={!settings || saving}
+            options={[
+              { value: 'system', label: t(($) => $.preferences.system) },
+              { value: 'light', label: t(($) => $.preferences.themeLight) },
+              { value: 'dark', label: t(($) => $.preferences.themeDark) }
+            ]}
+            onChange={(theme: AppSettings['theme']) => {
+              appearance.setPreference(theme)
+              void updatePreference({ theme })
+            }}
           />
         </SettingsRow>
         <SettingsRow

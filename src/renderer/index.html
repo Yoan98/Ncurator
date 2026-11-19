@@ -18,10 +18,25 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        /* 跟随主进程写入的 data-theme；未写入时回落到系统偏好，避免冷启动闪白。 */
         background: #fbfbfa;
         pointer-events: none;
         opacity: 1;
         transition: opacity 220ms ease;
+      }
+      @media (prefers-color-scheme: dark) {
+        #nc-boot-splash {
+          background: #202020;
+        }
+      }
+      html[data-theme='dark'] #nc-boot-splash {
+        background: #202020;
+      }
+      html[data-theme='light'] #nc-boot-splash {
+        background: #fbfbfa;
+      }
+      :root {
+        color-scheme: light dark;
       }
       #nc-boot-splash.nc-boot-leaving {
         opacity: 0;

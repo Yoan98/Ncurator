@@ -351,7 +351,7 @@ export default function DocxOverviewRuler({
   return (
     <div
       ref={rail}
-      className="docx-overview relative h-full w-[16px] shrink-0 touch-none select-none bg-[#F7F7F5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0B6BCB]"
+      className="docx-overview relative h-full w-[16px] shrink-0 touch-none select-none bg-[var(--notion-surface-sunken)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--notion-accent-blue)]"
       data-testid={workbenchSelectors.docxOverview}
       data-mode={mode}
       data-dragging={dragging}
@@ -396,7 +396,7 @@ export default function DocxOverviewRuler({
             data-testid={workbenchSelectors.docxOverviewMarker}
             data-marker-index={index}
             data-kinds={[...new Set(marker.targets.map((t) => t.kind))].join(' ')}
-            className="absolute cursor-pointer rounded-[1px] border-0 p-0 hover:brightness-90 focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0B6BCB]"
+            className="absolute cursor-pointer rounded-[1px] border-0 p-0 hover:brightness-90 focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--notion-accent-blue)]"
             style={{
               top: marker.top,
               height: marker.bottom - marker.top,

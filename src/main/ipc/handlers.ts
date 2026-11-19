@@ -7,8 +7,10 @@ import type {
   UserSkillSource
 } from '../../shared/userSkills'
 import { AppSettingsError } from '../../shared/appErrors'
+import { APP_THEME_CHANGED_CHANNEL } from '../../shared/constants'
 import { mainText } from '../services/app/i18n'
 import { getAppRuntime } from '../services/app/AppRuntime'
+import { setAppThemePreference, subscribeAppearance } from '../services/app/AppearanceService'
 import { FileReviewService } from '../services/ai/fileChanges/FileReviewService'
 import { isWpsApplication, type OpenFileReviewLocationRequest } from '../../shared/fileReview'
 import { notifyWpsFileOpened } from '../services/wps/officeFileWriteNotify'
@@ -290,6 +292,12 @@ export function registerHandlers(services: {
   })
   const fileWatchService = new FileWatchService()
   const confirmDialogService = new ConfirmDialogWindowService()
+  // Main owns the resolved appearance (including OS switches while following the system).
+  subscribeAppearance((theme) => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (!window.isDestroyed()) window.webContents.send(APP_THEME_CHANGED_CHANNEL, theme)
+    })
+  })
   ipcMain.handle(
     'confirm-dialog-show',
     async (event, request: ConfirmDialogRequest): Promise<ConfirmDialogResponse> => {
@@ -3645,6 +3653,7 @@ export function registerHandlers(services: {
         systemNotificationsEnabled: true,
         knowledgeIndexSpeed: 'slow',
         language: 'system',
+        theme: getAppRuntime().theme,
         serviceRoute: getAppRuntime().serviceRoute
       }
     }
@@ -3661,6 +3670,7 @@ export function registerHandlers(services: {
         return { success: false, error: '正在更新索引，请完成后再切换速度' }
       }
       const saved = await appSettingsStore.save(settings)
+      if (previous.theme !== saved.theme) setAppThemePreference(saved.theme)
       if (previous.knowledgeIndexSpeed !== saved.knowledgeIndexSpeed) {
         if (services.embeddingModelService) {
           await services.embeddingModelService.applyIndexSpeed(saved.knowledgeIndexSpeed)

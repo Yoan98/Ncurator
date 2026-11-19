@@ -90,7 +90,7 @@ const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> 
 
   if (file.loading) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-white">
+      <div className="flex h-full w-full items-center justify-center bg-[var(--notion-page)]">
         <Spin />
       </div>
     )
@@ -98,7 +98,7 @@ const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> 
 
   if (file.loadError || file.initialText === null) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-white">
+      <div className="flex h-full w-full items-center justify-center bg-[var(--notion-page)]">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={file.loadError || t(($) => $.editors.couldNotLoadTheFile)}
@@ -112,9 +112,9 @@ const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> 
   const lineCount = countLines(displayValue)
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-white">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--notion-page)]">
       {truncated ? (
-        <div className="shrink-0 border-b border-[#EEEEEC] bg-[#FFF8E5] px-6 py-2 text-xs text-[#7A4D00]">
+        <div className="shrink-0 border-b border-[var(--notion-line)] bg-[var(--notion-warning-bg)] px-6 py-2 text-xs text-[var(--notion-warning-text)]">
           {t(($) => $.editors.thisFileIsLargeEditingIsLimitedToThe)}
           {TEXT_EDIT_MAX_CHARS.toLocaleString(getRendererRuntime().locale)}
           {t(($) => $.editors.characters)}
@@ -138,7 +138,7 @@ const PlainTextEditor: React.FC<{ filePath: string; allowSelection?: boolean }> 
         <textarea
           ref={bindTextarea}
           readOnly={file.readOnly || Boolean(selectionState?.locked)}
-          className="relative z-[1] m-0 h-full w-full resize-none whitespace-pre-wrap break-words border-0 bg-transparent px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F] outline-none"
+          className="relative z-[1] m-0 h-full w-full resize-none whitespace-pre-wrap break-words border-0 bg-transparent px-8 py-6 font-mono text-[13px] leading-6 text-[var(--notion-text)] outline-none"
           data-testid={workbenchSelectors.plainTextEditor}
           value={displayValue}
           onChange={handleChange}

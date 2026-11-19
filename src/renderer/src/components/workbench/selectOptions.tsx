@@ -12,7 +12,7 @@ import { FaCircle } from 'react-icons/fa'
 import type { WorkbenchSelectOption } from './types'
 
 const preferenceDots = (count: 1 | 2): React.ReactNode => (
-  <span className="inline-flex items-center gap-0.5 text-[#787774]">
+  <span className="inline-flex items-center gap-0.5 text-[var(--notion-text-soft)]">
     {Array.from({ length: count }).map((_, index) => (
       <FaCircle key={index} className="h-1.5 w-1.5" />
     ))}
@@ -28,7 +28,7 @@ export const AI_PREFERENCE_OPTIONS: WorkbenchSelectOption[] = [
     trailing: (
       <Tooltip title={t(($) => $.workbench.aiDecidesHowToProceed)}>
         <span
-          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#9B9A97] transition hover:bg-[#EFEFED] hover:text-[#37352F]"
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[var(--notion-text-faint)] transition hover:bg-[var(--notion-surface-hover)] hover:text-[var(--notion-text)]"
           aria-label={t(($) => $.workbench.aboutDefaultPreferences)}
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
@@ -55,7 +55,7 @@ export const AI_PREFERENCE_OPTIONS: WorkbenchSelectOption[] = [
         trailing: (
           <Tooltip title={t(($) => $.workbench.prioritizeContentFromLocalSources)}>
             <span
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#9B9A97] transition hover:bg-[#EFEFED] hover:text-[#37352F]"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[var(--notion-text-faint)] transition hover:bg-[var(--notion-surface-hover)] hover:text-[var(--notion-text)]"
               aria-label={t(($) => $.workbench.aboutFlexibleLocalSourceMode)}
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
@@ -76,7 +76,7 @@ export const AI_PREFERENCE_OPTIONS: WorkbenchSelectOption[] = [
         trailing: (
           <Tooltip title={t(($) => $.workbench.useOnlyTheContentOfLocalSourcesToPerform)}>
             <span
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#9B9A97] transition hover:bg-[#EFEFED] hover:text-[#37352F]"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[var(--notion-text-faint)] transition hover:bg-[var(--notion-surface-hover)] hover:text-[var(--notion-text)]"
               aria-label={t(($) => $.workbench.aboutStrictLocalSourceMode)}
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
@@ -94,17 +94,17 @@ export const EXECUTION_PERMISSION_OPTIONS: WorkbenchSelectOption[] = [
   {
     value: 'review',
     label: t(($) => $.workbench.review),
-    icon: <HiShieldCheck className="h-4 w-4 text-[#787774]" />,
+    icon: <HiShieldCheck className="h-4 w-4 text-[var(--notion-text-soft)]" />,
     triggerIcon: <HiShieldCheck className="h-3.5 w-3.5" />,
     description: t(($) => $.workbench.potentiallyRiskyOperationsRequireYourApproval)
   },
   {
     value: 'full_access',
     label: t(($) => $.workbench.fullAccess),
-    icon: <HiExclamationTriangle className="h-4 w-4 text-[#E85D04]" />,
-    triggerIcon: <HiExclamationTriangle className="h-3.5 w-3.5 text-[#E85D04]" />,
+    icon: <HiExclamationTriangle className="h-4 w-4 text-[var(--notion-warning)]" />,
+    triggerIcon: <HiExclamationTriangle className="h-3.5 w-3.5 text-[var(--notion-warning)]" />,
     description: t(($) => $.workbench.operateYourComputerWithoutRestrictions),
-    labelClassName: '!text-[#E85D04]',
-    descriptionClassName: '!text-[#E85D04]'
+    labelClassName: '!text-[var(--notion-warning)]',
+    descriptionClassName: '!text-[var(--notion-warning)]'
   }
 ]

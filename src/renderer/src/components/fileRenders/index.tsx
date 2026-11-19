@@ -172,19 +172,19 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
     unsupportedDocument
   } = usePreparedDocuments(documents)
   const surfaceClassName = framed
-    ? `rounded-[8px] border border-[#EEEEEC] bg-white ${className || ''}`
-    : `bg-white ${className || ''}`
+    ? `rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-page)] ${className || ''}`
+    : `bg-[var(--notion-page)] ${className || ''}`
 
   if (documents.length === 0) {
     return (
       <div
         className={`flex h-full items-center justify-center ${
-          framed ? 'rounded-[8px] border border-dashed border-[#EEEEEC] bg-[#F4F4F2]' : 'bg-white'
+          framed ? 'rounded-[8px] border border-dashed border-[var(--notion-line)] bg-[var(--notion-surface)]' : 'bg-[var(--notion-page)]'
         } ${className || ''}`}
       >
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={<span className="text-[#787774]">{emptyText}</span>}
+          description={<span className="text-[var(--notion-text-soft)]">{emptyText}</span>}
         />
       </div>
     )
@@ -194,7 +194,7 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
     return (
       <div
         className={`flex h-full items-center justify-center ${
-          framed ? 'rounded-[8px] border border-[#EEEEEC] bg-white' : 'bg-white'
+          framed ? 'rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-page)]' : 'bg-[var(--notion-page)]'
         } ${className || ''}`}
       >
         <Spin size="large" />
@@ -209,13 +209,13 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
     return (
       <div
         className={`flex h-full items-center justify-center ${
-          framed ? 'rounded-[8px] border border-[#EEEEEC] bg-white' : 'bg-white'
+          framed ? 'rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-page)]' : 'bg-[var(--notion-page)]'
         } ${className || ''}`}
       >
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={
-            <span className="max-w-[420px] whitespace-pre-wrap break-words text-[#787774]">
+            <span className="max-w-[420px] whitespace-pre-wrap break-words text-[var(--notion-text-soft)]">
               {errorMessage
                 ? errorMessage === t(($) => $.editors.fileDeleted)
                   ? errorMessage

@@ -103,6 +103,10 @@ export const en = {
     freeNotice: 'Stability and privacy are not guaranteed',
     language: 'Interface language',
     languageDescription: 'Applies after restarting the app.',
+    theme: 'Appearance',
+    themeDescription: 'Follows the system light or dark appearance when set to System.',
+    themeLight: 'Light',
+    themeDark: 'Dark',
     system: 'System default',
     simplifiedChinese: '简体中文',
     english: 'English',
@@ -113,7 +117,8 @@ export const en = {
     domestic: 'Mainland China',
     international: 'International',
     saveFailed: 'Could not save settings',
-    loadFailed: 'Could not load settings'
+    loadFailed: 'Could not load settings',
+    invalidTheme: 'Invalid appearance option'
   },
   common: {
     discardTitle: 'Discard your changes?',

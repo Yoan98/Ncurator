@@ -273,7 +273,7 @@ const detectRendererPlatform = (): string =>
   navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin'
 
 const PARTNER_ROW_ACTION_CLASS =
-  'flex h-6 w-6 items-center justify-center rounded-[6px] text-[#91918E] transition hover:bg-white hover:text-[#37352F]'
+  'flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--notion-text-faint)] transition hover:bg-[var(--notion-page)] hover:text-[var(--notion-text)]'
 
 const clampWorkbenchSidebarWidth = (width: number): number =>
   Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, width))
@@ -4950,7 +4950,7 @@ const ChatPage: React.FC = () => {
                       <button
                         key={attachment.id}
                         type="button"
-                        className={`h-[44px] shrink-0 rounded-[8px] border border-[#E5E4E0] bg-white text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3] ${
+                        className={`h-[44px] shrink-0 rounded-[8px] border border-[var(--notion-line-strong)] bg-[var(--notion-page)] text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[var(--notion-line-strong)] ${
                           attachment.kind === 'image'
                             ? 'w-[44px] overflow-hidden p-0'
                             : 'flex w-[200px] items-center gap-1.5 px-1.5 py-1'
@@ -4986,20 +4986,20 @@ const ChatPage: React.FC = () => {
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <span className="flex h-full w-full items-center justify-center bg-[#F4F4F2] text-[#787774]">
+                            <span className="flex h-full w-full items-center justify-center bg-[var(--notion-surface)] text-[var(--notion-text-soft)]">
                               <HiPhoto className="h-5 w-5" />
                             </span>
                           )
                         ) : attachment.kind === 'directory' ? (
                           <>
-                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[var(--notion-surface)] text-[var(--notion-text-soft)]">
                               <FileIcon
                                 kind="directory"
-                                className="h-[21px] w-[21px] text-[#787774]"
+                                className="h-[21px] w-[21px] text-[var(--notion-text-soft)]"
                               />
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
+                              <span className="block truncate text-[13px] font-medium leading-5 text-[var(--notion-text)]">
                                 {attachment.name}
                               </span>
                             </span>
@@ -5008,7 +5008,7 @@ const ChatPage: React.FC = () => {
                           <>
                             <AttachmentFileIcon fileName={attachment.name} />
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
+                              <span className="block truncate text-[13px] font-medium leading-5 text-[var(--notion-text)]">
                                 {attachment.name}
                               </span>
                             </span>
@@ -5031,7 +5031,7 @@ const ChatPage: React.FC = () => {
                   <Tooltip title={t(($) => $.common.copy)}>
                     <button
                       type="button"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--notion-text-faint)] transition hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)]"
                       aria-label={t(($) => $.workbench.copyMessage)}
                       data-testid={`${workbenchSelectors.userMessageCopyButtonPrefix}-${messageItem.id}`}
                       onClick={() => void handleCopyUserMessage(messageItem)}
@@ -5043,7 +5043,7 @@ const ChatPage: React.FC = () => {
                     <Tooltip title={t(($) => $.common.edit)}>
                       <button
                         type="button"
-                        className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--notion-text-faint)] transition hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)]"
                         aria-label={t(($) => $.workbench.editMessage)}
                         data-testid={`${workbenchSelectors.userMessageEditButtonPrefix}-${messageItem.id}`}
                         onClick={() => handleEditUserMessage(messageItem)}
@@ -5070,7 +5070,7 @@ const ChatPage: React.FC = () => {
     if (!turn) {
       return (
         <div key={messageItem.id} {...hoverProps}>
-          <div className="min-w-0 text-[15px] leading-7 text-[#37352F]">
+          <div className="min-w-0 text-[15px] leading-7 text-[var(--notion-text)]">
             <MarkdownRenderer
               content={messageItem.content}
               linkAccess={messageItem.linkAccess}
@@ -5214,7 +5214,7 @@ const ChatPage: React.FC = () => {
           />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1">
-              <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+              <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--notion-text)]">
                 {partner.name}
               </div>
               <Tooltip
@@ -5261,7 +5261,7 @@ const ChatPage: React.FC = () => {
                   <HiTrash className="h-3.5 w-3.5" />
                 </button>
               </Tooltip>
-              <div className="flex h-6 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
+              <div className="flex h-6 shrink-0 items-center gap-1 text-[11px] text-[var(--notion-text-faint)] group-hover:hidden">
                 {partner.isRunning ? (
                   <span
                     className="nc-session-running-spinner"
@@ -5277,12 +5277,12 @@ const ChatPage: React.FC = () => {
               </div>
             </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] leading-4">
-              <span className="min-w-0 flex-1 truncate text-[#8A8781]">
+              <span className="min-w-0 flex-1 truncate text-[var(--notion-text-soft)]">
                 {partner.lastUserMessagePreview || t(($) => $.preferences.partnerEmptyPreview)}
               </span>
               {partner.needsAssistance ? (
                 <span
-                  className="shrink-0 rounded-full bg-[#E8F1FF] px-2 py-0.5 text-[11px] leading-4 text-[#3478F6]"
+                  className="shrink-0 rounded-full bg-[var(--notion-blue-bg)] px-2 py-0.5 text-[11px] leading-4 text-[var(--notion-blue)]"
                   data-testid={`${workbenchSelectors.partnerNeedsAssistancePrefix}-${partner.id}`}
                   role="status"
                 >
@@ -5431,7 +5431,7 @@ const ChatPage: React.FC = () => {
                 className="h-[22px] w-[22px] shrink-0"
                 aria-hidden="true"
               />
-              <span className="truncate text-[14px] font-semibold text-[#37352F]">
+              <span className="truncate text-[14px] font-semibold text-[var(--notion-text)]">
                 {getProductName()}
               </span>
             </div>
@@ -5448,7 +5448,7 @@ const ChatPage: React.FC = () => {
             data-testid={workbenchSelectors.newPartnerButton}
             aria-label={t(($) => $.workbench.createPartner)}
           >
-            <HiPlus className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
+            <HiPlus className="h-[18px] w-[18px] shrink-0 text-[var(--notion-text-soft)]" />
             <span>{t(($) => $.workbench.createPartner)}</span>
           </button>
           <button
@@ -5464,7 +5464,7 @@ const ChatPage: React.FC = () => {
           >
             <HiOutlineClock
               className={`h-[18px] w-[18px] shrink-0 ${
-                scheduledTaskEnabledCount > 0 ? 'text-[#2F5F8F]' : 'text-[#787774]'
+                scheduledTaskEnabledCount > 0 ? 'text-[var(--notion-blue)]' : 'text-[var(--notion-text-soft)]'
               }`}
             />
             <span className="min-w-0 flex-1 truncate text-left">
@@ -5481,7 +5481,7 @@ const ChatPage: React.FC = () => {
             onClick={() => setWorkbenchView('skills')}
             data-testid={userSkillsSelectors.button}
           >
-            <HiOutlineBookOpen className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
+            <HiOutlineBookOpen className="h-[18px] w-[18px] shrink-0 text-[var(--notion-text-soft)]" />
             <span>{t(($) => $.userSkills.title)}</span>
           </button>
         </div>
@@ -5512,7 +5512,7 @@ const ChatPage: React.FC = () => {
                 className="nc-sidebar-nav-row flex-1"
                 aria-label={t(($) => $.common.settings)}
               >
-                <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
+                <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[var(--notion-text-soft)]" />
                 <span>{t(($) => $.common.settings)}</span>
               </button>
               <SidebarUpdateControl />
@@ -5618,10 +5618,10 @@ const ChatPage: React.FC = () => {
                       }}
                       aria-hidden="true"
                     />
-                    <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
+                    <div className="nc-topbar-title-region min-w-0 flex-1 bg-[var(--notion-page)]">
                       {currentPartner ? (
                         <div className="flex min-w-0 items-center gap-2 leading-none">
-                          <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
+                          <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[var(--notion-text)]">
                             {currentPartner.name}
                           </div>
                         </div>
@@ -5722,7 +5722,7 @@ const ChatPage: React.FC = () => {
                             ref={messageListRef}
                           >
                             {loadingOlderMessages ? (
-                              <div className="py-3 text-center text-xs text-[#8A8781]">
+                              <div className="py-3 text-center text-xs text-[var(--notion-text-soft)]">
                                 {t(($) => $.workbench.loadingEarlierMessages)}
                               </div>
                             ) : null}
@@ -5759,12 +5759,13 @@ const ChatPage: React.FC = () => {
                             <HiOutlineArrowDown className="h-4 w-4" />
                           </button>
                         ) : null}
+
                         {!currentPartnerId ? (
                           <div
                             className="nc-empty-state"
                             data-testid={workbenchSelectors.emptyState}
                           >
-                            <p className="max-w-[760px] px-6 text-center text-[14px] leading-7 text-[#8A8781]">
+                            <p className="max-w-[760px] px-6 text-center text-[14px] leading-7 text-[var(--notion-text-soft)]">
                               {partners.length === 0
                                 ? t(($) => $.workbench.noPartnersYetCreateOneFromTheSidebarTo)
                                 : t(($) => $.workbench.selectAPartnerToStartAConversation)}
@@ -5780,9 +5781,9 @@ const ChatPage: React.FC = () => {
                         data-empty={isNewSession ? 'true' : undefined}
                         data-testid={workbenchSelectors.composerShell}
                       >
-                        <div className="mx-auto w-full max-w-[800px]">
+                        <div className="relative mx-auto w-full max-w-[800px]">
                           {isNewSession && currentPartnerId ? (
-                            <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
+                            <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[var(--notion-text)]">
                               <span>{t(($) => $.workbench.whatWouldYouLikeToDo)}</span>
                             </div>
                           ) : null}
@@ -5881,10 +5882,10 @@ const ChatPage: React.FC = () => {
                   </div>
                   {isAttachmentDropActive ? (
                     <div
-                      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/55 backdrop-blur-[1px]"
+                      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-[var(--notion-page)]/55 backdrop-blur-[1px]"
                       data-testid={workbenchSelectors.attachmentDropOverlay}
                     >
-                      <div className="border border-dashed border-[#7B96A8] bg-white/85 px-5 py-3 text-sm font-medium text-[#37586E] shadow-sm">
+                      <div className="border border-dashed border-[var(--notion-blue)] bg-[var(--notion-page)]/85 px-5 py-3 text-sm font-medium text-[var(--notion-blue)] shadow-sm">
                         {t(($) => $.workbench.dropToAddFilesOrFolders)}
                       </div>
                     </div>
@@ -6128,7 +6129,7 @@ const ChatPage: React.FC = () => {
                 animationSeed={`preview-${createPartnerShape}-${createPartnerColor}`}
                 animated
               />
-              <div className="text-[13px] text-[#787774]">
+              <div className="text-[13px] text-[var(--notion-text-soft)]">
                 {t(($) => $.workbench.avatarPreview)}
               </div>
             </div>
@@ -6142,7 +6143,7 @@ const ChatPage: React.FC = () => {
                     key={shape}
                     type="button"
                     className={`overflow-visible rounded-full p-0.5 ${
-                      createPartnerShape === shape ? 'ring-2 ring-[#37352F]' : ''
+                      createPartnerShape === shape ? 'ring-2 ring-[var(--notion-accent)]' : ''
                     }`}
                     onClick={() => setCreatePartnerShape(shape)}
                     aria-label={shape}
@@ -6168,7 +6169,7 @@ const ChatPage: React.FC = () => {
                     key={color}
                     type="button"
                     className={`h-6 w-6 rounded-full ${
-                      createPartnerColor === color ? 'ring-2 ring-[#37352F] ring-offset-2' : ''
+                      createPartnerColor === color ? 'ring-2 ring-[var(--notion-accent)] ring-offset-2' : ''
                     }`}
                     style={{ backgroundColor: PARTNER_AVATAR_COLOR_HEX[color] }}
                     onClick={() => setCreatePartnerColor(color)}

@@ -110,7 +110,7 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
     },
     [enabled, record.id, record.capability, showIntegrationIssue]
   )
-  if (error) return <div className="p-6 text-sm text-[#B3261E]">{error}</div>
+  if (error) return <div className="p-6 text-sm text-[var(--notion-red)]">{error}</div>
   if (!content)
     return (
       <div className="flex h-full items-center justify-center">
@@ -123,7 +123,7 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
         {navigationError && (
           <div
             role="status"
-            className="absolute left-3 top-2 z-20 max-w-[90%] rounded bg-white/95 px-3 py-1 text-xs text-[#787774] shadow"
+            className="absolute left-3 top-2 z-20 max-w-[90%] rounded bg-[var(--notion-page)]/95 px-3 py-1 text-xs text-[var(--notion-text-soft)] shadow"
           >
             {navigationError}
           </div>
@@ -131,7 +131,7 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
         {navigating && (
           <div
             role="status"
-            className="pointer-events-none absolute right-4 top-2 z-20 rounded bg-white/95 px-3 py-1 text-xs text-[#787774] shadow"
+            className="pointer-events-none absolute right-4 top-2 z-20 rounded bg-[var(--notion-page)]/95 px-3 py-1 text-xs text-[var(--notion-text-soft)] shadow"
           >
             {t(($) => $.workbench.openingWpsAndLocatingContent)}
           </div>
