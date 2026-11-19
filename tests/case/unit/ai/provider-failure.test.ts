@@ -8,20 +8,27 @@ import {
 } from '../../../../src/main/services/ai/providerFailure'
 
 describe('ai unit provider failure copy', () => {
-  it('builds the managed upstream failure copy with billing state', () => {
-    expect(providerFailureMessage('upstream_timeout', 'waived'))
-      .toBe('上游模型超时未返回。本次未计费。')
-    expect(providerFailureMessage('upstream_interrupted', 'waived'))
-      .toBe('上游连接中断，回答未完整接收。本次未计费。')
-    expect(providerFailureMessage('incomplete', 'unknown'))
-      .toBe('与馆长服务的连接意外中断，回答未完整接收。计费状态待确认。')
-    expect(providerFailureMessage('timeout', 'unknown'))
-      .toBe('等待模型响应超过 5 分钟，已中断。计费状态待确认。')
+  it('keeps billing state in provider metadata without including it in failure copy', () => {
+    for (const billing of ['waived', 'charged', 'unknown'] as const) {
+      expect(providerFailure('upstream_timeout', { billing })).toMatchObject({
+        billing, providerCode: 'upstream_timeout', message: '上游模型超时未返回。'
+      })
+    }
+    expect(providerFailureMessage('upstream_interrupted'))
+      .toBe('上游连接中断，回答未完整接收。')
+    expect(providerFailureMessage('incomplete'))
+      .toBe('与馆长服务的连接意外中断，回答未完整接收。')
+    expect(providerFailureMessage('timeout'))
+      .toBe('等待模型响应超过 5 分钟，已中断。')
+    expect(providerFailureMessage('settlement_pending')).toBe('这次请求仍在处理，请稍后再试。')
+    expect(providerFailureMessage('settlement_in_progress')).toBe('上一条请求仍在处理，请稍后再试。')
+    expect(providerFailureMessage('payment_required')).toContain('请充值')
+    expect(providerFailureMessage('balance_insufficient')).toContain('余额不足')
   })
 
   it('maps stable provider codes to titles and retryability', () => {
     expect(providerFailureTitle('upstream_timeout')).toBe('上游模型超时')
-    expect(providerFailureTitle('upstream_interrupted')).toBe('上游连接中断')
+    expect(providerFailureTitle('upstream_interrupted')).toBe('这次没完成，请重试')
     expect(providerFailureTitle('ModelNotOpen')).toBeUndefined()
 
     expect(providerFailure('model_concurrency_limited')).toMatchObject({

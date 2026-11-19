@@ -83,6 +83,11 @@ const sleep = async (ms: number, signal?: AbortSignal): Promise<void> => {
   })
 }
 
+const isConnectionFailure = (error: unknown): boolean => {
+  const code = findLlmProviderError(error)?.providerCode
+  return code === 'upstream_interrupted' || code === 'incomplete' || isLlmTransportError(error)
+}
+
 const reasonFromError = (error: unknown): string =>
   error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')
 
@@ -294,7 +299,8 @@ export const runLlmCallWithActivity = async <T>(input: {
                 callId,
                 attempt: retryCount,
                 maxAttempts: maxRetries,
-                message: retry.message
+                message: retry.message,
+                connection: isConnectionFailure(error)
               })
             }
             retryRowVisible = false
@@ -319,7 +325,8 @@ export const runLlmCallWithActivity = async <T>(input: {
           callId,
           attempt: retryCount,
           maxAttempts: maxRetries,
-          message: retry.message
+          message: retry.message,
+          connection: isConnectionFailure(error)
         })
         const delayMs = retry.delayMs ?? Math.min(1_500, 250 * retryCount)
         await sleep(Math.max(0, delayMs), input.ctx.abortSignal)

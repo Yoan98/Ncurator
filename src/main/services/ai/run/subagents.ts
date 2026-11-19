@@ -236,7 +236,8 @@ export const createSubagentDispatcher = (
                       messageId: `${childRunId}:retry`,
                       retry: {
                         attempt: event.display.attempt,
-                        maxAttempts: event.display.maxAttempts
+                        maxAttempts: event.display.maxAttempts,
+                        ...(event.display.connection ? { connection: true } : {})
                       }
                     })
                   } else if (

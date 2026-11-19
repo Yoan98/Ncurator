@@ -1375,7 +1375,7 @@ export class ChatRunService {
         context: { source: 'unexpected' }
       })
       const failure = classifyThrownErrorToAiRunFailure(error)
-      const presentation = resolveAiRunFailurePresentation(failure.failureCode, failure.rawMessage)
+      const presentation = resolveAiRunFailurePresentation(failure.failureCode, failure.rawMessage, failure.providerCode)
       const failureSource = presentation.source === 'user' ? 'internal' : presentation.source
       await this.queueRunEvent(runId, {
         type: 'run_failed',

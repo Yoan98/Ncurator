@@ -1,3 +1,4 @@
+import { presentRunFailureText } from '../components/workbench/runFailureText'
 import { messageTimeLabel } from '../i18n/systemText'
 import { t, getProductName, getContactUrl, getRendererRuntime } from '../i18n'
 import { useDesktopAccount } from '../contexts/DesktopAccountProvider'
@@ -370,7 +371,9 @@ const buildSearchTurnFromProjectedMessage = (message: ChatMessage): AssistantTur
 })
 
 const formatRunFailureTitle = (event: Extract<AiRunEvent, { type: 'run_failed' }>): string =>
-  event.message?.trim() || t(($) => $.workbench.theTaskFailedPleaseTryAgain)
+  event.providerCode === 'upstream_interrupted' || event.providerCode === 'incomplete'
+    ? t(($) => $.workbench.connectionFailed)
+    : presentRunFailureText(event.message) || t(($) => $.workbench.theTaskFailedPleaseTryAgain)
 
 const formatRunFailureDetail = (
   event: Extract<AiRunEvent, { type: 'run_failed' }>
@@ -379,7 +382,7 @@ const formatRunFailureDetail = (
     event.httpStatus ? `HTTP ${event.httpStatus}` : '',
     event.providerCode || ''
   ].filter(Boolean)
-  const raw = event.rawMessage?.trim() || ''
+  const raw = presentRunFailureText(event.rawMessage)
   if (metadata.length === 0 && !raw) return undefined
   if (metadata.length === 0) return raw
   if (!raw) return metadata.join(' · ')

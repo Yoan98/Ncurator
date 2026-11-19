@@ -102,7 +102,7 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 - 主子共用 `AiRunService.run`、human graph、审批、工具、预算、消息投影与 compaction。子工具禁止查询/派发子 agent、主动提问、定时任务管理及 skill 管理；并发常量默认 2，其余 FIFO。
 - `ai_subagent` 只存身份、原任务和生命周期；完整 user/assistant/tool、计划、技能及压缩 checkpoint 使用同一 `chat_session_message_log`。SQLite transcript 在入口绑定 `{partnerId, subagentId?}`，graph 不区分读写实现。每个会话独立 seq，续接跨执行读取历史，复用 checkpoint 与原文 tail 后追加新 user。
 - agentId 为稳定会话 ID，childRunId 为本次执行 ID，ownerRunId 为本次父任务文件归属。派发支持创建与续接；续接校验伙伴归属并原子占用会话，活跃会话不能重复执行。具体参数由工具 schema 维护。
-- 子过程、结果及审批 annotation 保存到主日志用于 UI，执行前失败保留原始错误与输入。模型请求重试期间把 `attempt/maxAttempts` 作为子会话临时状态写入 annotation，重试结束即清空；该状态只用于 UI，不进入主上下文。子完整日志不进入主上下文。派发工具汇集交付结果；公开流与完成快照共用消息标识，每轮及重试替换使用独立标识，保留开始、替换与结束；工具动作沿用附带公开消息标识，单纯状态更新不产生新消息。不转发内部推理；诊断关联 agentId 与父子执行。
+- 子过程、结果及审批 annotation 保存到主日志用于 UI，执行前失败保留原始错误与输入。模型请求重试期间把 `attempt/maxAttempts` 与可选的连接问题标识作为子会话临时状态写入 annotation，重试结束即清空；该状态只用于 UI，不进入主上下文。子完整日志不进入主上下文。派发工具汇集交付结果；公开流与完成快照共用消息标识，每轮及重试替换使用独立标识，保留开始、替换与结束；工具动作沿用附带公开消息标识，单纯状态更新不产生新消息。不转发内部推理；诊断关联 agentId 与父子执行。
 - 审批共用父任务 FIFO 队列及生产提交入口；等待保留实例并占名额。决定落盘后恢复原 hand，拒绝/指导跳过原操作。旧审批不跨执行复用。
 - 创建和续接继承当前父配置。文件修改从产生时归本次 ownerRunId；历史修改不搬运，终端/浏览器控制及文档工作态不恢复。缺失工具结果由公共投影修复，不重放操作、不伪造真实结果。
 - 完成时同事务保存父结果 annotation 并删除子身份及完整日志；失败、取消、交回父任务保留会话，释放运行资源。取消终态保留最后动作与已运行时长，供下一轮投影说明进度；启动将排队、运行及等待审批会话标记中断，不自动调用模型。清空消息/删除伙伴清理子会话，保留文件按既有规则处理。
@@ -929,6 +929,8 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 - 纯文本请求出现 tool call 属于协议违规，不重试；`content_filter` 在 tool-enabled 请求中交给 brain 生成内容安全兜底，在纯文本请求中以 `content_filter` 终止且不重试；
 - `finish_reason` 缺失按 `upstream_interrupted` 处理，不当作正常完成；
 - 5 次耗尽后按 `llm_request_failed` 落失败气泡，显示统一短标题和计费状态，由用户重新发送或 resume。
+
+模型失败和重试界面不展示单次调用是否计费或是否待确认；结算状态仍在内部结果与恢复逻辑中保留。重试界面只对连接故障使用连接不稳定文案，仍展示重试次数；余额或账户门禁保留真实原因和充值指引。
 
 #### LLM 调用层重试
 

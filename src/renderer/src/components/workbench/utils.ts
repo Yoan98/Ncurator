@@ -1,3 +1,4 @@
+import { presentRunFailureText } from './runFailureText'
 import { localizeSystemText } from '../../i18n/systemText'
 import { t } from '../../i18n'
 import { PARTNER_AVATAR_SHAPES, PARTNER_AVATAR_COLORS } from '../../../../shared/types'
@@ -116,10 +117,14 @@ const getDisplayGroupText = (
   if (display.kind === 'retry') {
     const progress = `${display.attempt}/${display.maxAttempts}`
     if (status === 'running')
-      return sentence(text(t(($) => $.workbench.retrying, { value1: progress })))
+      return sentence(text(display.connection
+        ? t(($) => $.workbench.connectionRetrying, { value1: progress })
+        : t(($) => $.workbench.retrying, { value1: progress })))
     if (status === 'partial_failed')
       return sentence(text(t(($) => $.workbench.someRetriesFailed, { value1: progress })))
-    return sentence(text(t(($) => $.workbench.retryFailed, { value1: progress })))
+    return sentence(text(display.connection
+      ? t(($) => $.workbench.connectionRetryFailed, { value1: progress })
+      : t(($) => $.workbench.retryFailed, { value1: progress })))
   }
   if (display.kind === 'compaction') {
     if (status === 'running')
@@ -148,7 +153,7 @@ const getDisplayItemText = (
     return getToolItemText(normalizeToolName(display.toolName), status, display.input)
   }
   if (display.kind === 'retry') {
-    return sentence(text(display.message || ''))
+    return sentence(text(presentRunFailureText(display.message)))
   }
   return getDisplayGroupText(display, status)
 }
@@ -872,7 +877,7 @@ export const reduceAssistantProcessGroups = (
       groupId: event.groupId,
       itemId: event.itemId,
       status: 'failed',
-      error: event.error,
+      error: isRetryProcessEvent(event) ? presentRunFailureText(event.error) : event.error,
       failureStartedAt: event.failedAt,
       display: event.display,
       sourceEventType: event.type

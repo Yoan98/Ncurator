@@ -12,6 +12,7 @@ import { Tooltip } from 'antd'
 import PartnerAvatar from './PartnerAvatar'
 import type { AssistantProcessGroup, SubagentTaskView } from './types'
 import { getSubagentAvatar } from './utils'
+import { presentRunFailureText } from './runFailureText'
 
 const SubagentThought: React.FC<{
   child: SubagentTaskView
@@ -21,10 +22,12 @@ const SubagentThought: React.FC<{
   const contentRef = useRef<HTMLDivElement>(null)
   const active = child.status === 'running'
   const retry = active ? child.retry : undefined
-  const failureText = child.result?.trim() || t(($) => $.common.unknownError)
+  const failureText = presentRunFailureText(child.result) || t(($) => $.common.unknownError)
   const text =
     retry
-      ? t(($) => $.workbench.subagentRetrying, {
+      ? retry.connection
+        ? t(($) => $.workbench.connectionRetrying, { value1: `${retry.attempt}/${retry.maxAttempts}` })
+        : t(($) => $.workbench.subagentRetrying, {
           attempt: retry.attempt,
           maxAttempts: retry.maxAttempts
         })

@@ -169,6 +169,7 @@ export const emitLlmRetryProcessStarted = (input: {
   attempt: number
   maxAttempts: number
   message: string
+  connection?: boolean
   createdAt?: number
 }): void => {
   const createdAt = input.createdAt || Date.now()
@@ -177,7 +178,8 @@ export const emitLlmRetryProcessStarted = (input: {
     kind: 'retry',
     attempt: input.attempt,
     maxAttempts: input.maxAttempts,
-    message: input.message
+    message: input.message,
+    ...(input.connection ? { connection: true } : {})
   }
   input.sendEvent({
     type: 'assistant_process_group_started',

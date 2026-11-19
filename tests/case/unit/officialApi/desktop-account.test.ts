@@ -353,7 +353,7 @@ it('reports an exhausted empty completion as invalid_output with mechanism facts
       retryable: true
     })
     expect(error.message).toContain('模型本次没有返回可用内容')
-    expect(error.message).toContain('本次已计费')
+    expect(error.message).not.toMatch(/计费|费用/)
     expect(error.message).toContain('正文：无')
     expect(fixture.submitted).toHaveLength(6)
   } finally { fixture.cleanup() }
@@ -373,7 +373,7 @@ it('rejects tool calls from a text-only request without retrying', async () => {
       billing: 'charged',
       retryable: false
     })
-    expect(error.message).toContain('本次已计费')
+    expect(error.message).not.toMatch(/计费|费用/)
     expect(fixture.submitted).toHaveLength(1)
   } finally { fixture.cleanup() }
 })
@@ -391,7 +391,7 @@ it.each([['timeout', 'upstream_timeout'], ['interrupted', 'upstream_interrupted'
         streamingMode: 'force_stream' }).then(() => undefined, value => value)
       const provider = findLlmProviderError(error)
       expect(provider).toMatchObject({ providerCode: code, billing: 'waived' })
-      expect(provider?.message).toContain('本次未计费')
+      expect(provider?.message).not.toMatch(/计费|费用/)
       expect(fixture.submitted).toHaveLength(6)
       expect(fixture.lookedUp).toEqual([])
     } finally { fixture.cleanup() }

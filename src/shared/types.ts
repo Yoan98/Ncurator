@@ -1184,7 +1184,7 @@ export type AssistantProcessDisplay =
   | { kind: 'thinking' }
   | { kind: 'toolset_loading'; toolsetId: RuntimeToolsetId }
   | { kind: 'tool'; toolName: string; input: IpcJsonObject }
-  | { kind: 'retry'; attempt: number; maxAttempts: number; message: string }
+  | { kind: 'retry'; attempt: number; maxAttempts: number; message: string; connection?: boolean }
   | { kind: 'compaction' }
   | { kind: 'finalizing' }
 export type AssistantProcessKind =
@@ -1745,6 +1745,7 @@ export type SubagentAction = {
 export type SubagentRetryState = {
   attempt: number
   maxAttempts: number
+  connection?: boolean
 }
 
 export type SubagentUpdate = {

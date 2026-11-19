@@ -43,7 +43,7 @@ const FAILURES: Record<ProviderFailureCode, FailureCopy> = {
     retryable: true
   },
   upstream_interrupted: {
-    title: '上游连接中断',
+    title: '这次没完成，请重试',
     detail: '上游连接中断，回答未完整接收。',
     retryable: true
   },
@@ -68,7 +68,7 @@ const FAILURES: Record<ProviderFailureCode, FailureCopy> = {
     retryable: true
   },
   incomplete: {
-    title: '回答未完整接收',
+    title: '这次没完成，请重试',
     detail: '与馆长服务的连接意外中断，回答未完整接收。',
     retryable: true
   },
@@ -98,18 +98,18 @@ const FAILURES: Record<ProviderFailureCode, FailureCopy> = {
     retryable: false
   },
   payment_required: {
-    title: '账户有待付费用',
-    detail: '馆长账户有未付费用，请充值后再试。',
+    title: '需要充值',
+    detail: '请充值后再试。',
     retryable: false
   },
   settlement_in_progress: {
-    title: '费用处理中',
-    detail: '上一笔费用仍在处理，请稍后再试。',
+    title: '请求处理中',
+    detail: '上一条请求仍在处理，请稍后再试。',
     retryable: true
   },
   settlement_pending: {
-    title: '费用处理中',
-    detail: '本次费用仍在处理。',
+    title: '请求处理中',
+    detail: '这次请求仍在处理，请稍后再试。',
     retryable: true
   },
   unauthorized: {
@@ -179,13 +179,6 @@ const FAILURES: Record<ProviderFailureCode, FailureCopy> = {
   }
 }
 
-const billingText = (billing?: LlmBillingStatus): string => {
-  if (billing === 'waived') return '本次未计费。'
-  if (billing === 'charged') return '本次已计费。'
-  if (billing === 'unknown') return '计费状态待确认。'
-  return ''
-}
-
 export const isProviderFailureCode = (value: unknown): value is ProviderFailureCode =>
   typeof value === 'string' && Object.hasOwn(FAILURES, value)
 
@@ -205,8 +198,7 @@ export const providerFailureCodeForHttp = (status?: number, message?: string): P
   return undefined
 }
 
-export const providerFailureMessage = (code: ProviderFailureCode,
-  billing?: LlmBillingStatus): string => FAILURES[code].detail + billingText(billing)
+export const providerFailureMessage = (code: ProviderFailureCode): string => FAILURES[code].detail
 
 export const providerFailure = (code: ProviderFailureCode,
   options: {
@@ -220,7 +212,7 @@ export const providerFailure = (code: ProviderFailureCode,
   } = {}): LlmProviderError =>
   new LlmProviderError({
     providerCode: code,
-    message: providerFailureMessage(code, options.billing) + (options.messageSuffix ?? ''),
+    message: providerFailureMessage(code) + (options.messageSuffix ?? ''),
     retryable: options.retryable ?? FAILURES[code].retryable,
     billing: options.billing,
     httpStatus: options.status,

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { presentRunFailureText } from '../../../../src/renderer/src/components/workbench/runFailureText'
 import type { AiRunEvent } from '../../../../src/shared/types'
 import { reduceAssistantProcessGroups } from '../../../harness/core/assistantProcessGroups'
 
 const retryStarted = (
   groupId: string,
   attempt: number,
-  createdAt: number
+  createdAt: number,
+  connection = false
 ): AiRunEvent => ({
   type: 'assistant_process_group_started',
   runId: 'run-1',
@@ -15,7 +17,8 @@ const retryStarted = (
     kind: 'retry',
     attempt,
     maxAttempts: 5,
-    message: '429'
+    message: connection ? '回答未完整接收。本次未计费。' : '429',
+    connection
   },
   createdAt
 })
@@ -36,6 +39,24 @@ describe('assistant process retry groups', () => {
     expect(
       second.filter((group) => group.kind === 'retry')[0]?.runningText.map((segment) => segment.text).join('')
     ).toContain('2/5')
+  })
+
+  it('shows connection-specific copy and attempt count only for a connection issue', () => {
+    const id = 'run-1:llm-retry'
+    const connection = reduceAssistantProcessGroups([], retryStarted(id, 2, 10, true))
+    expect(connection[0].runningText.map(item => item.text).join('')).toContain('连接不稳定，正在重试（2/5）')
+    expect(connection[0].failedText.map(item => item.text).join('')).toContain('这次没完成，请重试（2/5）')
+    const nonConnection = reduceAssistantProcessGroups(connection, retryStarted(id, 3, 20))
+    expect(nonConnection[0].runningText.map(item => item.text).join('')).not.toContain('连接不稳定')
+  })
+
+  it('hides legacy billing copy without obscuring actual failure details', () => {
+    expect(presentRunFailureText('上游连接中断，回答未完整接收。本次未计费。')).toBe('上游连接中断，回答未完整接收。')
+    expect(presentRunFailureText('模型本次没有返回可用内容。本次已计费。')).toBe('模型本次没有返回可用内容。')
+    expect(presentRunFailureText('计费状态待确认。')).toBe('')
+    expect(presentRunFailureText('费用处理中')).toBe('请求处理中')
+    expect(presentRunFailureText('馆长账户有未付费用，请充值后再试。')).toBe('请充值后再试。')
+    expect(presentRunFailureText('余额不足，请充值或缩短本次上下文。')).toBe('余额不足，请充值或缩短本次上下文。')
   })
 
   it('dismisses the retry row after the call succeeds', () => {
