@@ -459,6 +459,18 @@ describe('workbench result e2e', () => {
             await workspaceExplorerToggle.getAttribute('aria-pressed')
           const workspaceExplorerToggleClassAfterOpen =
             (await workspaceExplorerToggle.getAttribute('class')) || ''
+          const workspaceExplorerToggleBackgroundAfterOpen = await workspaceExplorerToggle.evaluate(
+            (element) => {
+              const style = getComputedStyle(element)
+              const token = style.getPropertyValue('--notion-surface-hover').trim()
+              const probe = document.createElement('span')
+              probe.style.backgroundColor = token
+              element.appendChild(probe)
+              const expected = getComputedStyle(probe).backgroundColor
+              probe.remove()
+              return { actual: style.backgroundColor, expected, token }
+            }
+          )
           const workspaceExplorerModeTextAfterOpen =
             (await workspaceExplorerModeSwitch.textContent()) || ''
           const currentSessionChanges = getWorkbenchPrefixLocator(
@@ -543,6 +555,7 @@ describe('workbench result e2e', () => {
             workspaceExplorerToggleLabelAfterOpen,
             workspaceExplorerTogglePressedAfterOpen,
             workspaceExplorerToggleClassAfterOpen,
+            workspaceExplorerToggleBackgroundAfterOpen,
             explorerFloatsBelowToolbar,
             explorerDoesNotResizePreview,
             explorerBackdropVisible,
@@ -613,7 +626,10 @@ describe('workbench result e2e', () => {
               result.workspaceExplorerToggleIcon === 'folder' &&
               result.workspaceExplorerToggleLabelAfterOpen === '收起文件列表' &&
               result.workspaceExplorerTogglePressedAfterOpen === 'true' &&
-              result.workspaceExplorerToggleClassAfterOpen.includes('!bg-[#F1F1EF]') &&
+              result.workspaceExplorerToggleBackgroundAfterOpen.token.length > 0 &&
+              result.workspaceExplorerToggleBackgroundAfterOpen.expected !== 'rgba(0, 0, 0, 0)' &&
+              result.workspaceExplorerToggleBackgroundAfterOpen.actual ===
+                result.workspaceExplorerToggleBackgroundAfterOpen.expected &&
               result.explorerFloatsBelowToolbar &&
               result.explorerDoesNotResizePreview &&
               result.explorerBackdropVisible &&
