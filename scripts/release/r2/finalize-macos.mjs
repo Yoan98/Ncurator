@@ -4,10 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import { listSupersededReleaseKeys } from './cleanup-inventory.mjs'
 import { assertReleaseFragment } from './fragment-contract.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { createReleaseStorageClient } from '../storage/client.mjs'
-import { artifactKey, artifactPrefix, fragmentKey, legacyStatusPrefix } from './storage-layout.mjs'
+import { artifactKey, fragmentKey } from './storage-layout.mjs'
 import { parseReleaseTag } from '../tag.mjs'
 import { isReleaseChannelCurrent } from '../shared/live-tag.mjs'
 
@@ -168,20 +169,7 @@ try {
     throw new Error('public macOS release manifest verification failed')
   }
 
-  const uploadedFragmentKey = fragmentKey(releaseTag, arm64.platform)
-  const removable = (await listKeys(artifactPrefix('macos'))).filter(
-    (key) => !key.startsWith(artifactPrefix('macos', releaseTag))
-  )
-  const activeArtifactKeys = new Set([
-    uploadedFragmentKey,
-    ...arm64.files.map((file) => artifactKey(arm64, file.name))
-  ])
-  removable.push(
-    ...(await listKeys(artifactPrefix('macos', releaseTag))).filter(
-      (key) => !activeArtifactKeys.has(key)
-    )
-  )
-  removable.push(...(await listKeys(legacyStatusPrefix('macos'))))
+  const removable = await listSupersededReleaseKeys(arm64, listKeys)
   await deleteKeys(removable)
   process.stdout.write(`[release] macOS arm64 ${releaseTag} is live at ${installerUrl}\n`)
 } finally {

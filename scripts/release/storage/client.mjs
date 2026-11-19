@@ -28,10 +28,12 @@ export const createAwsCliRuntime = async (config) => {
   }
 }
 
-export const createReleaseStorageClient = async (root = process.cwd()) => {
+export const createReleaseStorageClient = async (root = process.cwd(), { target } = {}) => {
   await loadReleaseEnvironment(root)
   assertLivePublishAllowed()
-  const config = resolveReleaseStorageConfig()
+  const config = resolveReleaseStorageConfig(
+    target ? { ...process.env, RELEASE_STORAGE_TARGET: target } : process.env
+  )
   const runtime = await createAwsCliRuntime(config)
   const localAws = path.join(os.homedir(), '.ncurator', 'release-tools', 'awscli', 'bin', 'aws')
   const windowsAws = process.env.ProgramFiles

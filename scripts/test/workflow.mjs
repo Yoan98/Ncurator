@@ -1,3 +1,4 @@
+import { createWindowsLiveProxyPreflight } from '../release/shared/live-proxy-preflight.mjs'
 import { readE2ESeedFixtures } from './e2e-seed-metadata.mjs'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, realpathSync } from 'node:fs'
@@ -858,12 +859,8 @@ const runE2ETestFilesConcurrently = async (
     else results.push(taskResult)
   }
 
-  const runTask = async (task) => {
+  const readTaskEvidence = async (task) => {
     const relativeFile = path.relative(ROOT, task.testFile)
-    completed += 1
-    process.stdout.write(
-      `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
-    )
     const pattern = testNamePattern
     const caseIds = readTestCaseIds(task.testFile, await readFile(task.testFile, 'utf8')).filter(
       (id) => !pattern || new RegExp(pattern, 'u').test(id)
@@ -871,12 +868,46 @@ const runE2ETestFilesConcurrently = async (
     const previous = previousResults.find(
       (test) => test.file === relativeFile && test.targetId === task.targetId
     )
-    if (
-      previous &&
-      passedPackageTest(previous, task.env.NCURATOR_E2E_ARTIFACT_SHA256) &&
-      caseIds.length > 0 &&
-      caseIds.every((id) => previous.cases.some((item) => item.caseId === id))
-    ) {
+    return {
+      caseIds,
+      reusable:
+        previous &&
+        passedPackageTest(previous, task.env.NCURATOR_E2E_ARTIFACT_SHA256) &&
+        caseIds.length > 0 &&
+        caseIds.every((id) => previous.cases.some((item) => item.caseId === id))
+          ? previous
+          : undefined
+    }
+  }
+
+  const probeWindowsProxy = createWindowsLiveProxyPreflight()
+  const preflightTasks = async (stageTasks, phase) => {
+    if (process.platform !== 'win32') return true
+    try {
+      const packageTasks = stageTasks.filter((task) => task.env.NCURATOR_E2E_EXECUTABLE)
+      const pendingFiles = (
+        await Promise.all(
+          packageTasks.map(async (task) =>
+            (await readTaskEvidence(task)).reusable ? null : task.testFile
+          )
+        )
+      ).filter(Boolean)
+      await probeWindowsProxy([...new Set(pendingFiles)])
+      return true
+    } catch (error) {
+      process.stderr.write(`[release-preflight:${phase}] ${error.message}\n`)
+      return false
+    }
+  }
+
+  const runTask = async (task) => {
+    const relativeFile = path.relative(ROOT, task.testFile)
+    completed += 1
+    process.stdout.write(
+      `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
+    )
+    const { caseIds, reusable: previous } = await readTaskEvidence(task)
+    if (previous) {
       results.push({ ...previous, index: task.index, reused: true })
       process.stdout.write(`[test-workflow] reuse passed package evidence: ${relativeFile}\n`)
       return { code: 0 }
@@ -936,6 +967,9 @@ const runE2ETestFilesConcurrently = async (
     }
   }
 
+  if (!(await preflightTasks(gateTasks, 'cache-gates'))) {
+    return { exitCode: 1, results }
+  }
   const gateFailure = await runE2EGates(gateTasks, (task) => runTask(task))
   if (gateFailure) {
     process.stderr.write(
@@ -945,6 +979,15 @@ const runE2ETestFilesConcurrently = async (
       exitCode: gateFailure.code,
       results: results.sort((left, right) => left.index - right.index)
     }
+  }
+
+  if (
+    !(await preflightTasks(
+      runnableTasks.filter((task) => !gateTasks.includes(task)),
+      'selected-cases'
+    ))
+  ) {
+    return { exitCode: 1, results }
   }
 
   for (const task of accountTasks) {

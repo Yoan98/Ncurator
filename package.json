@@ -34,6 +34,7 @@
     "release:start": "node scripts/release/prepare.mjs",
     "release:abort": "node scripts/release/abort.mjs",
     "release:win": "node scripts/release/windows.mjs",
+    "release:inventory": "node scripts/release/prepublish-inventory.mjs",
     "release:doctor": "node scripts/release/doctor.mjs",
     "release:signing:setup": "node scripts/release/setup-macos-signing.mjs",
     "release:mac": "node scripts/release/macos.mjs",
