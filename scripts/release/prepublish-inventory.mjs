@@ -3,7 +3,7 @@ import { createGitHubReleasePublisher } from './github.mjs'
 import { readReleaseCandidate } from './candidate.mjs'
 import { listSupersededReleaseKeys } from './r2/cleanup-inventory.mjs'
 import { DISTRIBUTIONS, distributionStorage } from './shared/distribution.mjs'
-import { createReleaseStorageClient } from './storage/client.mjs'
+import { createReleaseStorageLister } from './storage/client.mjs'
 import { prepareReleaseStoragePublication } from './storage/publish.mjs'
 import { parseReleaseTag } from './tag.mjs'
 
@@ -28,7 +28,7 @@ for (const distribution of DISTRIBUTIONS) {
     )
   }
   const target = distributionStorage(distribution)
-  const storage = await createReleaseStorageClient(process.cwd(), { target })
+  const storage = await createReleaseStorageLister(process.cwd(), { target })
   const channels = await prepareReleaseStoragePublication(verified.fragment)
   const channel = channels.find(({ config }) => config.target === target)
   if (!channel) throw new Error('release channel does not match candidate distribution')
