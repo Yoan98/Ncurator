@@ -24,8 +24,9 @@ import type {
 } from '../../../shared/types'
 import type { AiEventDispatchContext } from './types'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS, AI_LLM_CALL_TIMEOUT_MS } from './constants'
-import { LlmProviderError, toLlmOutputError } from './errors'
+import { LlmProviderError, SystemSuspendInterruption, toLlmOutputError } from './errors'
 import { classifyLlmRetry, classifyManagedLlmRetry } from './llmRetry'
+import { SYSTEM_SUSPEND_INTERRUPT_THRESHOLD_MS, systemSuspendMonitor } from '../app/systemSuspend'
 import { forManagedInvocation, isManagedModelConfigId } from '../officialApi/managedModel'
 import {
   extractTextContent,
@@ -244,38 +245,88 @@ const withAbortTimeout = async <T>(input: {
   const controller = new AbortController()
   const timeoutMs = Math.max(1, Number(input.timeoutMs || AI_LLM_CALL_TIMEOUT_MS))
   let timeoutId: ReturnType<typeof setTimeout> | undefined
-  let cleanupAbortListener: (() => void) | undefined
+  let settled = false
+  let remainingMs = timeoutMs
+  let activeStartedAt = Date.now()
+  let timerExpectedAt = 0
+  let failReason: Error | undefined
+  let rejectTimeout: ((error: unknown) => void) | undefined
 
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
-    timeoutId = setTimeout(() => {
-      const timeoutError = new Error('llm_call_timeout') as Error & { code?: string }
-      timeoutError.code = 'TIMEOUT'
-      controller.abort(timeoutError)
-      reject(timeoutError)
-    }, timeoutMs)
+    rejectTimeout = reject
   })
 
-  const externalAbortPromise = new Promise<never>((_resolve, reject) => {
-    if (!input.externalSignal) return
-    const onAbort = () => {
-      const cancelledError = createCancelledError()
-      controller.abort(cancelledError)
-      reject(cancelledError)
+  const clearTimer = (): void => {
+    if (!timeoutId) return
+    clearTimeout(timeoutId)
+    timeoutId = undefined
+  }
+
+  const fail = (error: Error): void => {
+    if (settled) return
+    settled = true
+    failReason = error
+    clearTimer()
+    controller.abort(error)
+    rejectTimeout?.(error)
+  }
+
+  const scheduleTimer = (ms: number): void => {
+    clearTimer()
+    timerExpectedAt = Date.now() + ms
+    timeoutId = setTimeout(() => {
+      // A late timer means the main process did not run for that interval
+      // (system sleep / App Nap), not that the model ignored the request.
+      const overshootMs = Date.now() - timerExpectedAt
+      fail(overshootMs >= SYSTEM_SUSPEND_INTERRUPT_THRESHOLD_MS
+        ? new SystemSuspendInterruption(overshootMs, 'timer')
+        : Object.assign(new Error('llm_call_timeout'), { code: 'TIMEOUT' }))
+    }, Math.max(1, ms))
+  }
+
+  const onSuspend = (): void => {
+    if (settled) return
+    // Freeze the active model-wait budget while the system is suspended.
+    remainingMs = Math.max(0, remainingMs - (Date.now() - activeStartedAt))
+    clearTimer()
+  }
+
+  const onResume = (gapMs: number): void => {
+    if (settled) return
+    if (gapMs >= SYSTEM_SUSPEND_INTERRUPT_THRESHOLD_MS) {
+      fail(new SystemSuspendInterruption(gapMs))
+      return
     }
-    cleanupAbortListener = listenForAbort(input.externalSignal, onAbort)
-  })
+    // A very short nap may leave the connection alive; continue with the
+    // active-time budget that was left when the system suspended.
+    activeStartedAt = Date.now()
+    scheduleTimer(remainingMs)
+  }
+
+  const unsubscribeSuspend = systemSuspendMonitor.onSuspend(onSuspend)
+  const unsubscribeResume = systemSuspendMonitor.onResume(onResume)
+  const cleanupAbortListener = input.externalSignal
+    ? listenForAbort(input.externalSignal, () => fail(createCancelledError()))
+    : undefined
 
   try {
-    const result = await Promise.race([
-      input.execute(controller.signal),
-      timeoutPromise,
-      externalAbortPromise
-    ])
-    if (input.externalSignal?.aborted) throw createCancelledError()
-    return result
+    if (settled) return await timeoutPromise
+    scheduleTimer(timeoutMs)
+    try {
+      const result = await Promise.race([input.execute(controller.signal), timeoutPromise])
+      if (input.externalSignal?.aborted) throw createCancelledError()
+      return result
+    } catch (error) {
+      // The raced execute rejects with the abort reason as well; keep the
+      // classified interruption/timeout/cancel error instead of a raw AbortError.
+      throw failReason ?? error
+    }
   } finally {
-    if (timeoutId) clearTimeout(timeoutId)
+    settled = true
+    clearTimer()
     cleanupAbortListener?.()
+    unsubscribeSuspend()
+    unsubscribeResume()
   }
 }
 

@@ -69,7 +69,7 @@
 
 结构化输出回归验证纯文本请求、代码块解析、JSON 修复和 Schema 校验的单一路径；相关证据在 `tests/case/unit/ai/structured-output-single-path.test.ts`。
 
-LLM 错误分类与退避按 [Human Harness](../ai-harness/human-harness.md#84-失败告警与重试) 验证结构化信号、不可重试边界及重试事件，Unit 证据分别由 `llm-error-classification.test.ts` 与 `structured-chat-activity.test.ts` 提供。馆长流式完成语义（有正文/tool-call 放行、空完成 `invalid_output`、已计费统一重试、`settlement_*` 不重放、纯文本请求出现 tool call 不重试）由 `desktop-account.test.ts` 的 managed 用例补证。
+LLM 错误分类与退避按 [Human Harness](../ai-harness/human-harness.md#84-失败告警与重试) 验证结构化信号、不可重试边界及重试事件，Unit 证据分别由 `llm-error-classification.test.ts` 与 `structured-chat-activity.test.ts` 提供。馆长流式完成语义（有正文/tool-call 放行、空完成 `invalid_output`、已计费统一重试、`settlement_*` 不重放、纯文本请求出现 tool call 不重试）由 `desktop-account.test.ts` 的 managed 用例补证。系统休眠/唤醒对活跃模型调用的中断、计时器晚到判定与 `process_interrupted` 文案由 `system-suspend-interruption.test.ts` 覆盖。
 
 ## 4. 回归测试清单
 

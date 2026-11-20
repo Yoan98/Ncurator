@@ -3,7 +3,8 @@ import type { HumanState } from '../human/types'
 import {
   findLlmProviderError,
   isLlmInputTooLongError,
-  isLlmOutputTruncatedError
+  isLlmOutputTruncatedError,
+  isSystemSuspendInterruption
 } from '../errors'
 import { normalizeStructuredOutputError } from '../structuredOutput'
 import { isProviderFailureCode, providerFailureCodeForHttp, providerFailureMessage } from '../providerFailure'
@@ -11,6 +12,13 @@ import { resolveAiRunFailurePresentation } from '../runFailureCatalog'
 
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error || 'unknown')
+
+const formatSuspendGap = (gapMs: number): string => {
+  const totalSeconds = Math.max(1, Math.round(gapMs / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return minutes > 0 ? `${minutes} 分 ${String(seconds).padStart(2, '0')} 秒` : `${seconds} 秒`
+}
 
 export const isContentSafetyError = (error: unknown): boolean => {
   const message = getErrorMessage(error).toLowerCase()
@@ -123,6 +131,15 @@ export const classifyThrownErrorToAiRunFailure = (
       error.lastHumanState = lastHumanState
     }
     return error
+  }
+
+  if (isSystemSuspendInterruption(error)) {
+    return createAiRunFailure({
+      failureCode: 'process_interrupted',
+      cause: error,
+      rawMessage: `${error.source === 'timer' ? '系统暂停' : '电脑休眠'} ${formatSuspendGap(error.gapMs)}，模型连接中断。本次回答未完成，可继续对话推进。`,
+      lastHumanState
+    })
   }
 
   if (isCancelledError(error)) {

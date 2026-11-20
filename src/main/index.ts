@@ -1,4 +1,5 @@
 import { initializeAppMenu } from './services/app/AppMenu'
+import { startSystemSuspendMonitor } from './services/app/systemSuspend'
 import { configureServiceEnvironment, getAppRuntime, initializeAppRuntime, usesLocalService } from './services/app/AppRuntime'
 import {
   applyAppearance,
@@ -11,7 +12,7 @@ import {
 } from './services/app/AppearanceService'
 import { readStoredAppTheme } from './services/app/AppearancePreference'
 import { downloadPageUrl } from '../shared/appPreferences'
-import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, screen, powerMonitor } from 'electron'
 import { join } from 'path'
 import { fileURLToPath } from 'node:url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -394,6 +395,14 @@ if (!singleInstanceLock) {
   // initialization and is ready to create browser windows.
   // Some APIs can only be used after this event occurs.
   app.whenReady().then(async () => {
+    startSystemSuspendMonitor({
+      onSuspend: (listener) => {
+        powerMonitor.on('suspend', listener)
+      },
+      onResume: (listener) => {
+        powerMonitor.on('resume', listener)
+      }
+    })
     const startupStartedAt = Date.now()
     /** 启动耗时打点：`[STARTUP] <ms> <label>` 打在终端里，用来定位冷启动慢在哪一段。 */
     const markStartup = (label: string): void => {

@@ -736,8 +736,8 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 
 ### 6.1 触发
 
-用户停止、网络错误、超时、`process_interrupted`（重启）、`output_truncated`、`runtime_limit`、其他失败。
-重启：`failInterruptedRuns` 标记活动 run，不自动调模型。
+用户停止、网络错误、超时、`process_interrupted`（重启/系统休眠）、`output_truncated`、`runtime_limit`、其他失败。
+重启：`failInterruptedRuns` 标记活动 run，不自动调模型。系统休眠/唤醒同样只中断当前调用，不自动重试或继续。
 
 ### 6.2 核心规则
 
@@ -904,13 +904,15 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | `failure_code`        | 短标题（气泡 / toast）                       | `rawMessage`                               | 说明                                                  |
 | --------------------- | -------------------------------------------- | ------------------------------------------ | ----------------------------------------------------- |
 | `user_cancelled`      | 已取消                                       | 可空                                       | 用户停止；事件为 `run_cancelled`                      |
-| `process_interrupted` | 任务已中断，可继续对话推进                   | 可空                                       | 进程/重启打断                                         |
+| `process_interrupted` | 任务已中断，可继续对话推进                   | 可空；系统休眠时带休眠时长                 | 进程/重启/系统休眠打断                                |
 | `llm_request_failed`  | 模型请求失败（已知 providerCode 时具体化）   | 稳定 code 用统一文案；原始上游详情只进日志 | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案  |
 | `output_truncated`    | 模型输出达到长度限制，可发送「继续」接着完成 | 可选                                       | `finish_reason=length`                                |
 | `input_too_long`      | 当前输入超过模型上下文限制，请缩短后重试     | 可空                                       | 当前 user alone 超窗；不调 brain，日志边界见第 6.5 节 |
 | `runtime_limit`       | 已达到运行上限，可继续对话推进               | 可空                                       | 图递归上限                                            |
 | `internal_error`      | 运行遇到内部错误                             | **必留 detail**                            | 主动断言（如 compaction bookmark `undefined`）        |
 | `unexpected_error`    | 运行失败，请重试                             | **必留**异常原文                           | 未知兜底                                              |
+
+系统休眠/唤醒会暂停主进程，不能按模型超时处理：`powerMonitor` 记录 suspend/resume 间隔，活跃 LLM 调用跨越休眠时中断为 `SystemSuspendInterruption`，按 `process_interrupted` 落失败，`rawMessage` 写明休眠时长，不重试、不进入重试行、不自动调模型。休眠时间不计入模型调用的 5 分钟等待；只有应用持续运行时模型 5 分钟无响应，才使用 `llm_request_failed` 的 `timeout` 文案。计时器按活跃时间预算，并保留“定时器晚到”后备判断。
 
 落库：真正失败时 `ai_run.error` = 短标题，`ai_run.failure_raw_message` = 原文；UI：气泡「失败：{title}」+「查看详情」展开 `rawMessage`（及 HTTP / providerCode）。`user_cancelled` 只保留 `cancelled` 状态和 `failure_code`，不写 `error`、不合成 `final_answer`，UI 不生成失败气泡或「已取消」正文；已有 answer 片段与 `ai_file_change` 保留。
 
@@ -956,6 +958,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | ------------------------ | ------------------------------ | ------------------------------------ |
 | 用户停止                 | `user_cancelled` / `cancelled` | 已写段保留；repair 悬空 tool_calls   |
 | 应用重启                 | `process_interrupted`          | 活动 run 标记 failed；不自动调模型   |
+| 系统休眠/唤醒            | `process_interrupted`          | 中断活跃调用；不重试；文案带休眠时长 |
 | 输出截断                 | `output_truncated`             | 写半截 `assistant` 后失败；可 resume |
 | 图递归上限               | `runtime_limit`                | 可 resume                            |
 | 当前 user 超窗           | `input_too_long`               | 不调 brain；日志边界见第 6.5 节      |

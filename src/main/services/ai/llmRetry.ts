@@ -1,4 +1,4 @@
-import { isLlmOutputError, LlmProviderError } from './errors'
+import { isLlmOutputError, isSystemSuspendInterruption, LlmProviderError } from './errors'
 import { normalizeStructuredOutputError } from './structuredOutput'
 import { isCancelledError } from './utils/runFailure'
 
@@ -94,6 +94,11 @@ export const classifyLlmRetry = (error: unknown, attempt = 1): LlmRetryDecision 
   const info = normalizeStructuredOutputError(error)
   const message = info.message || 'unknown'
 
+  // A system suspend is an external interruption, not a model failure.
+  if (isSystemSuspendInterruption(error)) {
+    return { retryable: false, message }
+  }
+
   // Do not trust LlmProviderError.retryable; always reclassify from signals.
   if (isCancelledError(error)) {
     return { retryable: false, message }
@@ -133,6 +138,9 @@ export const NON_REPLAYABLE_MANAGED_CODES = new Set([
 ])
 
 export const classifyManagedLlmRetry = (error: unknown, attempt = 1): LlmRetryDecision => {
+  if (isSystemSuspendInterruption(error)) {
+    return { retryable: false, message: error.message }
+  }
   let cause = error
   for (let depth = 0; cause && depth < 5; depth++, cause = readCause(cause)) {
     if (cause instanceof ManagedModelConcurrencyRejection) {

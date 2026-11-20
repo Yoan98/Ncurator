@@ -5,6 +5,24 @@ export type LlmBillingStatus = 'waived' | 'charged' | 'unknown'
 /** Stable, non-secret facts kept with a provider failure for local diagnosis. */
 export type LlmProviderDiagnostics = Record<string, string | number | boolean>
 
+/** The main process was suspended (system sleep) while a model call was active. */
+export class SystemSuspendInterruption extends Error {
+  public readonly code = 'SYSTEM_SUSPENDED'
+  public readonly gapMs: number
+  public readonly source: 'system' | 'timer'
+
+  public constructor(gapMs: number, source: 'system' | 'timer' = 'system') {
+    super('system_suspended')
+    this.name = 'SystemSuspendInterruption'
+    this.gapMs = Math.max(0, gapMs)
+    this.source = source
+  }
+}
+
+export const isSystemSuspendInterruption = (
+  error: unknown
+): error is SystemSuspendInterruption => error instanceof SystemSuspendInterruption
+
 export type LlmProviderErrorInput = {
   message: string
   httpStatus?: number
