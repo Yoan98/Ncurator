@@ -100,17 +100,35 @@ it('account-menu-and-page', async () => {
         await service.authorize(runtime, web, email)
         const avatar = trigger.getByTestId('desktop-account-avatar')
         await expect.poll(() => avatar.innerText()).toBe(email[0].toUpperCase())
-        const readAvatarColors = (element: HTMLElement | SVGElement) => {
-          const { backgroundColor, borderTopColor, color } = getComputedStyle(element)
-          return [backgroundColor, borderTopColor, color]
+        const readAvatarPalette = (element: HTMLElement | SVGElement) => {
+          const channels = ['backgroundColor', 'borderTopColor', 'color'] as const
+          const tokens = ['--notion-green-bg', '--notion-green-line', '--notion-green'] as const
+          const style = getComputedStyle(element)
+          const tokenValues = tokens.map((token) => style.getPropertyValue(token).trim())
+          if (tokenValues.some((value) => !value))
+            throw new Error('Missing account avatar theme token')
+          const actual = channels.map((channel) => style[channel])
+          const reference = document.createElement('span')
+          reference.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none'
+          channels.forEach((channel, index) => {
+            reference.style[channel] = tokenValues[index]
+          })
+          element.parentElement!.append(reference)
+          try {
+            const expectedStyle = getComputedStyle(reference)
+            return { actual, expected: channels.map((channel) => expectedStyle[channel]) }
+          } finally {
+            reference.remove()
+          }
         }
-        const avatarColors = ['rgb(221, 244, 231)', 'rgb(200, 231, 215)', 'rgb(36, 87, 65)']
-        expect(await avatar.evaluate(readAvatarColors)).toEqual(avatarColors)
+        const avatarPalette = await avatar.evaluate(readAvatarPalette)
+        expect(avatarPalette.actual).toEqual(avatarPalette.expected)
         await openAccountMenu(page)
         expect(await menu.getByText(offerText, { exact: true }).count()).toBe(0)
         const menuAvatar = menu.getByTestId('desktop-account-avatar')
         expect(await menuAvatar.innerText()).toBe(email[0].toUpperCase())
-        expect(await menuAvatar.evaluate(readAvatarColors)).toEqual(avatarColors)
+        const menuAvatarPalette = await menuAvatar.evaluate(readAvatarPalette)
+        expect(menuAvatarPalette.actual).toEqual(menuAvatarPalette.expected)
         expect(await menu.getByText(email, { exact: true }).count()).toBe(0)
         web = await service.continueInBrowser(web)
         const websiteNumber = await service.userNumber(web)
