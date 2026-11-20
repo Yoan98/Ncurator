@@ -8,7 +8,6 @@ import {
   prepareReleaseStoragePublication,
   publishReleaseStorage
 } from '../../../../scripts/release/storage/publish.mjs'
-import { RELEASE_PUBLIC_BASE_URLS } from '../../../../scripts/release/shared/live-tag.mjs'
 import * as liveTag from '../../../../scripts/release/shared/live-tag.mjs'
 
 const environment = {
@@ -83,20 +82,19 @@ describe('release storage config', () => {
     expect(config.addressingStyle).toBe('path')
   })
 
-  it('requires both stores for platform releases regardless of the recovery selector', () => {
+  it('requires only COS for platform releases regardless of the recovery selector', () => {
     for (const selector of ['cos', 'r2']) {
       const configs = resolveReleaseStorageConfigs({
         ...environment,
         RELEASE_STORAGE_TARGET: selector
       })
-      expect(configs.map((config) => config.target)).toEqual(['cos', 'r2'])
-      expect(configs.map((config) => config.publicBaseUrl)).toEqual(RELEASE_PUBLIC_BASE_URLS)
+      expect(configs.map((config) => config.target)).toEqual(['cos'])
+      expect(configs.map((config) => config.publicBaseUrl)).toEqual([
+        'https://download.guanzhangai.cn'
+      ])
       expect(configs[0].credentials.AWS_ACCESS_KEY_ID).toBe('cos-id')
-      expect(configs[1].credentials.AWS_ACCESS_KEY_ID).toBe('r2-id')
     }
-    expect(() => resolveReleaseStorageConfigs({ SecretId: 'id', SecretKey: 'key' })).toThrow(
-      'R2_PUBLIC_BASE_URL'
-    )
+    expect(resolveReleaseStorageConfigs({ SecretId: 'id', SecretKey: 'key' })).toHaveLength(1)
   })
 
   it('prepares exactly the storage belonging to each distribution', async () => {

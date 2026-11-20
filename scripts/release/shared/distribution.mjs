@@ -3,6 +3,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 
 export const DISTRIBUTIONS = ['domestic', 'international']
+// Normal releases pause international packaging/publication; keep its support intact.
+export const ACTIVE_RELEASE_DISTRIBUTIONS = Object.freeze(['domestic'])
 export const distributionName = (distribution) =>
   distribution === 'international' ? 'NCurator' : '馆长'
 export const distributionStorage = (distribution) =>

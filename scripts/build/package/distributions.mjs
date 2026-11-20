@@ -5,7 +5,7 @@ import { loadEnv } from 'vite'
 import { spawnSync } from 'node:child_process'
 import { parse } from 'yaml'
 import {
-  DISTRIBUTIONS,
+  ACTIVE_RELEASE_DISTRIBUTIONS,
   distributionName,
   hashSharedApp
 } from '../../release/shared/distribution.mjs'
@@ -28,14 +28,20 @@ const run = (command, args) => {
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`${command} failed (${result.status})`)
 }
-const distributionKeys = Object.fromEntries(DISTRIBUTIONS.map(distribution => {
-  const name = distribution === 'domestic' ? 'NCURATOR_APP_SECRET_DOMESTIC' : 'NCURATOR_APP_SECRET_INTERNATIONAL'
-  const key = distributionEnvironment[name]
-  if (!key || key.length < 16 || /\s/.test(key)) throw new Error(`Missing ${name}`)
-  return [distribution, key]
-}))
-if (distributionKeys.domestic === distributionKeys.international) throw new Error('Distribution application keys must differ')
-for (const distribution of DISTRIBUTIONS) {
+const distributionKeys = Object.fromEntries(
+  ACTIVE_RELEASE_DISTRIBUTIONS.map((distribution) => {
+    const name =
+      distribution === 'domestic'
+        ? 'NCURATOR_APP_SECRET_DOMESTIC'
+        : 'NCURATOR_APP_SECRET_INTERNATIONAL'
+    const key = distributionEnvironment[name]
+    if (!key || key.length < 16 || /\s/.test(key)) throw new Error(`Missing ${name}`)
+    return [distribution, key]
+  })
+)
+if (distributionKeys.international && distributionKeys.domestic === distributionKeys.international)
+  throw new Error('Distribution application keys must differ')
+for (const distribution of ACTIVE_RELEASE_DISTRIBUTIONS) {
   const marker = { distribution, appKey: distributionKeys[distribution] }
   const origin =
     distribution === 'international'

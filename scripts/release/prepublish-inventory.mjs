@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { createGitHubReleasePublisher } from './github.mjs'
 import { readReleaseCandidate } from './candidate.mjs'
 import { listSupersededReleaseKeys } from './r2/cleanup-inventory.mjs'
-import { DISTRIBUTIONS, distributionStorage } from './shared/distribution.mjs'
+import { ACTIVE_RELEASE_DISTRIBUTIONS, distributionStorage } from './shared/distribution.mjs'
 import { createReleaseStorageLister } from './storage/client.mjs'
 import { prepareReleaseStoragePublication } from './storage/publish.mjs'
 import { parseReleaseTag } from './tag.mjs'
@@ -19,10 +19,10 @@ const git = (...args) => execFileSync('git', args, { encoding: 'utf8', timeout: 
 if (git('cat-file', '-t', 'refs/tags/' + tag) !== 'tag')
   throw new Error('expected annotated release tag')
 const commit = git('rev-parse', 'refs/tags/' + tag + '^{commit}')
-for (const distribution of DISTRIBUTIONS) {
+for (const distribution of ACTIVE_RELEASE_DISTRIBUTIONS) {
   const { state, verified } = await readReleaseCandidate({ tag, platform, distribution })
   if (state.commit !== commit) throw new Error('candidate commit does not match release tag')
-  if (distribution === 'international') {
+  if (distribution === 'domestic') {
     await createGitHubReleasePublisher({ root: process.cwd() }).verifyCandidateSource(
       verified.bundle
     )

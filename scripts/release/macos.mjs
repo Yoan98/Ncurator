@@ -1,4 +1,4 @@
-import { DISTRIBUTIONS } from './shared/distribution.mjs'
+import { ACTIVE_RELEASE_DISTRIBUTIONS } from './shared/distribution.mjs'
 import { execFile, spawn } from 'node:child_process'
 import { access, cp, mkdir, readdir } from 'node:fs/promises'
 import path from 'node:path'
@@ -262,6 +262,17 @@ const taggedCommit = await validateTag()
 const tools = await validateEnvironment()
 
 if (mode === 'prepare') {
+  // Do not let an older tagged packager silently produce an international build.
+  const { stdout: taggedPackager } = await execFileAsync(
+    'git',
+    ['show', `${releaseTag}:scripts/build/package/distributions.mjs`],
+    { cwd: ROOT }
+  )
+  if (!taggedPackager.includes('ACTIVE_RELEASE_DISTRIBUTIONS')) {
+    throw new Error(
+      'This tag predates domestic-only packaging; reuse its tested domestic candidate'
+    )
+  }
   const workspace = await prepareReleaseWorkspace({
     releaseTag,
     defaultRootName: 'ncurator-macos-prepare',
@@ -286,7 +297,7 @@ if (mode === 'prepare') {
       cwd: sourceDirectory,
       env: buildEnvironment
     })
-    for (const distribution of DISTRIBUTIONS) {
+    for (const distribution of ACTIVE_RELEASE_DISTRIBUTIONS) {
       const candidate = await createCandidate(
         sourceDirectory,
         MACOS_PLATFORM,
@@ -330,7 +341,7 @@ if (mode === 'test') {
 }
 
 const candidates = []
-for (const distribution of DISTRIBUTIONS) {
+for (const distribution of ACTIVE_RELEASE_DISTRIBUTIONS) {
   candidates.push(
     await assertCandidatePublishable({
       tag: releaseTag,
@@ -349,7 +360,7 @@ const publications = await Promise.all(
 )
 const github = createGitHubReleasePublisher({ root: ROOT })
 const githubRelease = await github.prepare(
-  candidates.find((candidate) => candidate.state.distribution === 'international')
+  candidates.find((candidate) => candidate.state.distribution === 'domestic')
 )
 for (const { candidate, channels } of publications) {
   await publishReleaseStorage(candidate.verified, channels, {
@@ -359,7 +370,7 @@ for (const { candidate, channels } of publications) {
   })
 }
 await github.publish(githubRelease)
-for (const distribution of DISTRIBUTIONS)
+for (const distribution of ACTIVE_RELEASE_DISTRIBUTIONS)
   await markCandidatePublished({ tag: releaseTag, platform: MACOS_PLATFORM, distribution })
 try {
   await cleanupLocalTestLogs(ROOT, { tag: releaseTag })
@@ -380,5 +391,5 @@ try {
   process.stderr.write(`[release] local candidate cleanup warning: ${message}\n`)
 }
 process.stdout.write(
-  `[release] macOS ${releaseTag} published to Tencent COS, Cloudflare R2 and GitHub\n`
+  `[release] macOS ${releaseTag} published to Tencent COS and GitHub (domestic installer only)\n`
 )

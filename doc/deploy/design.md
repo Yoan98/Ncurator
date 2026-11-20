@@ -4,11 +4,11 @@
 
 ### Windows
 
-本地 Windows x64：Node.js 22 x64、项目指定 pnpm、Python 3.12 x64、Git、tar；发布时还需 AWS CLI、COS 和 R2 存储配置，以及已配置认证且具备公开仓库写权限的 GitHub CLI。`pnpm release:doctor` 检查本机条件。prepare / test / publish 只消费本机候选包。
+本地 Windows x64：Node.js 22 x64、项目指定 pnpm、Python 3.12 x64、Git、tar；发布时还需 AWS CLI、COS 存储配置，以及已配置认证且具备公开仓库写权限的 GitHub CLI。`pnpm release:doctor` 检查本机条件。prepare / test / publish 只消费本机候选包。
 
 ### macOS
 
-prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` P12（自建更新签名，`timestamp: none`、`notarize: false`，非 Apple Developer ID 公证）。候选包须完成正式包 E2E；发布时需 AWS CLI、COS 和 R2 存储配置及已配置认证的 GitHub CLI。不构建、测试或发布 Intel Mac。
+prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` P12（自建更新签名，`timestamp: none`、`notarize: false`，非 Apple Developer ID 公证）。候选包须完成正式包 E2E；发布时需 AWS CLI、COS 存储配置及已配置认证的 GitHub CLI。不构建、测试或发布 Intel Mac。
 
 ### 构建与产物边界
 
@@ -47,7 +47,7 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 公开对象键使用用户可见文件名（如 `馆长-X.Y.Z-macos-arm64.dmg` / `馆长-X.Y.Z-Windows-x64.exe`），官网 `/api/download/*` 仍 307 到该直链；浏览器保存名取自 URL 末段。本地构建产物与 fragment 的 `storageName` 可仍为 ASCII（如 `Ncurator-mac-arm64.dmg`），仅用于解析磁盘文件。
 
-每次正式发布产出国内、国际两个发行包：国内包只写 COS，国际包只写 R2。二者共用同一构建的应用资源，记录相同的共用资源 SHA-256；安装包、签名与文件哈希分别登记。存储对象布局与缓存策略一致，公开 manifest 使用各自域名。COS 配置：环境变量 `SecretId` / `SecretKey`（或 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`）。桶与区域默认使用 `ncurator-1324873382` / `ap-guangzhou`，可通过 `COS_BUCKET` / `COS_REGION` 覆盖；公开地址必须为 `https://download.guanzhangai.cn`。使用默认配置时无需将这些值写入 `.env`。CDN、DNS、资费与采购见 [`tencent-cdn-billing.md`](./tencent-cdn-billing.md)。发布子用户权限模板：[`scripts/release/cos/cam-policy.json`](../../scripts/release/cos/cam-policy.json)。
+常规正式发布只构建国内包并写 COS；该安装包同时提供 GitHub 手动下载。国际包的构建、维护和发布暂停，旧 R2 产物和更新指针保留。两套发行能力及对象布局保留，仍各自使用对应域名和产物校验。COS 配置：环境变量 `SecretId` / `SecretKey`（或 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`）。桶与区域默认使用 `ncurator-1324873382` / `ap-guangzhou`，可通过 `COS_BUCKET` / `COS_REGION` 覆盖；公开地址必须为 `https://download.guanzhangai.cn`。使用默认配置时无需将这些值写入 `.env`。CDN、DNS、资费与采购见 [`tencent-cdn-billing.md`](./tencent-cdn-billing.md)。发布子用户权限模板：[`scripts/release/cos/cam-policy.json`](../../scripts/release/cos/cam-policy.json)。
 
 国内官网／下载为 `https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`，国际官网／下载为 `https://www.ncurator.com`、`https://download.ncurator.com`。国内发行包固定从 COS 自动更新，国际包固定从 R2 更新；官方业务入口按发行包固定，见[整体架构](../architecture.md)。两端分别更新对应发行包、metadata 与 manifest，不跨站镜像。
 
@@ -55,17 +55,17 @@ CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=315
 
 ### GitHub Releases 手动下载
 
-GitHub Releases 镜像与 R2 上线的国际安装包字节一致，附件使用[英文品牌文件名](../brand.md#下载与缓存命名)。公开 annotated Tag 指向候选包的完整构建提交，源码须满足公开仓库边界。Windows 和 macOS 各有独立 Tag，README 引用 Releases 列表。认证、附件、公布和恢复见[发布流程](./release.md#31-github-releases-镜像)。
+GitHub Releases 只提供国内安装包，与 COS 上线包字节一致。标题和双语说明均注明国内包，附件使用带 `-CN` 的 [ASCII 文件名](../brand.md#下载与缓存命名)。正常流程暂停国际包，保留 R2 上已有安装包和更新元数据。公开 annotated Tag 指向候选包的完整构建提交，源码须满足公开仓库边界。Windows 和 macOS 各有独立 Tag，README 引用 Releases 列表。认证、附件、公布和恢复见[发布流程](./release.md#31-github-releases-镜像)。
 
-R2 发布配置为每次正式发布必需：设置 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_ACCOUNT_ID`、`R2_BUCKET_NAME`、`R2_PUBLIC_BASE_URL=https://download.ncurator.com`。平台发布入口固定处理两个存储；`RELEASE_STORAGE_TARGET=cos|r2` 仅选择底层上传 / finalize 恢复目标，默认 COS。
+常规发布不使用 R2。为保留既有渠道的底层恢复能力，R2 配置为 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_ACCOUNT_ID`、`R2_BUCKET_NAME`、`R2_PUBLIC_BASE_URL=https://download.ncurator.com`。平台发布入口固定使用 COS；`RELEASE_STORAGE_TARGET=cos|r2` 仅选择底层上传 / finalize 恢复目标，默认 COS。
 
-三个公开渠道独立生效，候选包在三方验证通过后标记 `published`。中断时复用同一组候选，保留已验证的文件和版本指针。各渠道的发布顺序与中断恢复见[发布手册](release.md#4-中断与恢复)。
+COS 与 GitHub 独立生效，国内候选包在两方验证通过后标记 `published`。中断时复用同一组候选，保留已验证的文件和版本指针。各渠道的发布顺序与中断恢复见[发布手册](release.md#4-中断与恢复)。
 
 ### 本地保留与清理
 
 `~/.ncurator/release-work`（Windows）或系统临时目录（非 Windows）：prepare/test 临时目录，阶段结束删除。`~/.ncurator/release-candidates`：发布并公开验证后只保留本平台最新候选及其 E2E 结果。`~/.ncurator/release-tools`：可复用构建缓存，不随发布删除。
 
-三个渠道全部发布验证成功后，同时清理仓库 `tests/logs/` 和 `.codex-tmp/release-{tag}/` 中本次及更早同平台版本的临时复测目录，包括复制的日志和回放包。较新版本、其他平台及普通 `.codex-tmp/` 目录保留；失败、prepare-only、test-only 不触发这项清理。清理拒绝通过符号链接进入仓库外目录。
+两个渠道全部发布验证成功后，同时清理仓库 `tests/logs/` 和 `.codex-tmp/release-{tag}/` 中本次及更早同平台版本的临时复测目录，包括复制的日志和回放包。较新版本、其他平台及普通 `.codex-tmp/` 目录保留；失败、prepare-only、test-only 不触发这项清理。清理拒绝通过符号链接进入仓库外目录。
 
 ## 3. 自动更新通道
 

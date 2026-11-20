@@ -21,9 +21,11 @@
 | Windows 下载 | 馆长-{version}-Windows-x64.exe | NCurator-{version}-Windows-x64.exe |
 | macOS 下载   | 馆长-{version}-macos-arm64.dmg | NCurator-{version}-macos-arm64.dmg |
 | 安装后       | 馆长.exe / 馆长.app            | NCurator.exe / NCurator.app        |
-| 发布位置     | COS 国内下载站                 | R2 国际下载站、GitHub Releases     |
+| 发布位置     | COS 国内下载站、GitHub Releases | R2 国际下载站（暂停新发布）     |
 
 公开 URL 末段使用对应用户可见下载名；浏览器保存名与之相同。本地构建和 fragment 的 `storageName` 保持 ASCII，例如 `Ncurator-mac-arm64.dmg`；每个发行包通过独立产物目录隔离，不为展示名改动更新 zip、blockmap 的内部命名。
+
+GitHub Releases 仅提供国内包，附件名为 `NCurator-<版本>-Windows-x64-CN.exe` 或 `NCurator-<版本>-macOS-arm64-CN.dmg`，仅改变附件名称，字节与 COS 安装包一致。
 
 ## 技术标识约束
 

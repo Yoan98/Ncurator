@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { ACTIVE_RELEASE_DISTRIBUTIONS, distributionStorage } from '../shared/distribution.mjs'
 
 export const DOMESTIC_DOWNLOAD_BASE_URL = 'https://download.guanzhangai.cn'
 export const GLOBAL_DOWNLOAD_BASE_URL = 'https://download.ncurator.com'
@@ -71,11 +72,14 @@ export const resolveReleaseStorageConfig = (environment = process.env) => {
   throw new Error('RELEASE_STORAGE_TARGET must be cos or r2')
 }
 
-// Platform releases always publish to both channels. The single-target selector
-// is reserved for the upload/finalize recovery commands.
+// Normal platform publication and preflights use the active distribution policy.
+// The low-level upload/finalize commands retain independent channel selection.
 export const resolveReleaseStorageConfigs = (environment = process.env) =>
-  ['cos', 'r2'].map((target) =>
-    resolveReleaseStorageConfig({ ...environment, RELEASE_STORAGE_TARGET: target })
+  ACTIVE_RELEASE_DISTRIBUTIONS.map((distribution) =>
+    resolveReleaseStorageConfig({
+      ...environment,
+      RELEASE_STORAGE_TARGET: distributionStorage(distribution)
+    })
   )
 
 export const assertLivePublishAllowed = (environment = process.env) => {

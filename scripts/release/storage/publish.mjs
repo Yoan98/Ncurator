@@ -1,7 +1,7 @@
 import { distributionStorage } from '../shared/distribution.mjs'
 import path from 'node:path'
 import process from 'node:process'
-import { resolveReleaseStorageConfigs } from './config.mjs'
+import { resolveReleaseStorageConfig } from './config.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import {
   isReleaseChannelCurrent,
@@ -14,17 +14,13 @@ export const prepareReleaseStoragePublication = async (
   environment = process.env,
   fetchImpl = fetchWithRetry
 ) => {
-  // Resolve both sets of credentials and reject newer public versions before
-  // GitHub or either storage channel receives any writes.
-  const configs = resolveReleaseStorageConfigs(environment).filter(
-    (config) => config.target === distributionStorage(fragment.distribution)
-  )
-  return Promise.all(
-    configs.map(async (config) => ({
-      config,
-      current: await isReleaseChannelCurrent(fragment, config.publicBaseUrl, fetchImpl)
-    }))
-  )
+  const config = resolveReleaseStorageConfig({
+    ...environment,
+    RELEASE_STORAGE_TARGET: distributionStorage(fragment.distribution)
+  })
+  return [
+    { config, current: await isReleaseChannelCurrent(fragment, config.publicBaseUrl, fetchImpl) }
+  ]
 }
 
 export const publishReleaseStorage = async (

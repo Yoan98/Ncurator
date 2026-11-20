@@ -43,6 +43,9 @@ export const readReleaseNotes = async ({ notes, notesFile, root = process.cwd() 
   )
 }
 
+export const DOMESTIC_GITHUB_NOTICE_ZH = '此 Release 仅提供国内包。'
+export const DOMESTIC_GITHUB_NOTICE_EN = 'This release contains only the Mainland China installer.'
+
 export const renderGitHubReleaseNotes = ({ tag, notes, repositoryUrl }) => {
   const { chinese, english } = parseNotes(notes)
   const { family } = parseReleaseTag(tag)
@@ -57,6 +60,7 @@ export const renderGitHubReleaseNotes = ({ tag, notes, repositoryUrl }) => {
     '### 下载',
     '',
     `平台：${platform}。请下载下方的 ${extension} 安装包。`,
+    DOMESTIC_GITHUB_NOTICE_ZH,
     'SHA256SUMS 提供安装包的 SHA-256 校验值。',
     '',
     `[对应源码](${sourceUrl}) · [官网更新日志](https://www.guanzhangai.cn/zh/changelog)`,
@@ -68,6 +72,7 @@ export const renderGitHubReleaseNotes = ({ tag, notes, repositoryUrl }) => {
     '### Download',
     '',
     `Platform: ${platform}. Download the ${extension} installer below.`,
+    DOMESTIC_GITHUB_NOTICE_EN,
     'SHA256SUMS contains the SHA-256 checksum of the installer.',
     '',
     `[Source code](${sourceUrl}) · [Website changelog](https://www.ncurator.com/en/changelog)`,
