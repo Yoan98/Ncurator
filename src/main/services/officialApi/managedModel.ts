@@ -315,13 +315,16 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
       let response: Response
       try { response = await deps.fetch(url, { method: 'POST', body, headers, signal: request.signal, redirect: 'error', cache: 'no-store' }) }
       catch {
-        // A transport failure may happen after admission. Recover first: a settled
-        // execution is finished and safe to retry as a new call; an accepted or
-        // in-flight execution must be recovered instead of replayed.
-        const status = await recover().catch(() => undefined)
+        // A transport failure is safe to retry with the same requestId: the
+        // gateway deduplicates by requestId, so an already-admitted execution
+        // is looked up instead of being executed twice. Do not gate this on a
+        // successful recovery: during a brief backend rollout that query is
+        // unavailable too, and the client still needs the retry.
         request.signal.throwIfAborted()
         throw failure('incomplete', {
-          retryable: status?.status === 'not_found' || status?.status === 'settled'
+          retryable: true,
+          diagnostics: { transport: true, requestId },
+          suffix: ''
         })
       }
       try { scope.assertCurrent() } catch (error) {
@@ -330,10 +333,25 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
       }
       if (response.status === 202) {
         await response.body?.cancel()
-        await recover().catch(() => undefined)
-        // The execution is already admitted but its outcome is unknown; replaying
-        // it would create a second admitted call. Recover instead of retrying.
-        throw failure('incomplete', { retryable: false })
+        const status = await recover().catch(() => undefined)
+        if (status?.status === 'settled') {
+          // The previous execution is finished. A fresh request cannot duplicate
+          // an in-flight call, so it is safe to retry as a new call.
+          if (invocation) invocation.retryRequestId = randomUUID()
+          const billing = billingFrom(status)
+          throw failure('incomplete', {
+            retryable: true,
+            diagnostics: { transport: true, admitted: true, requestId, billing },
+            suffix: ''
+          })
+        }
+        // Admitted/in-flight or recovery unavailable: retry the same requestId.
+        // The gateway treats a duplicate requestId as a lookup, not a new call.
+        throw failure('incomplete', {
+          retryable: true,
+          diagnostics: { transport: true, admitted: true, requestId },
+          suffix: ''
+        })
       }
       if (!response.ok) {
         const result: unknown = await response.json().catch(() => undefined)
@@ -355,10 +373,15 @@ export function createManagedModelFetch(config: LlmRuntimeConfig, deps: Dependen
         }
         if (response.status >= 500) void recover().catch(() => undefined)
         // An unknown 429 is not the admission-safe concurrency rejection; do not
-        // replay a call whose admission/outcome may already exist.
+        // replay a call whose admission/outcome may already exist. A 5xx during a
+        // short backend rollout is transient and retries with the same requestId.
         throw failure(code, {
           status: response.status,
-          retryable: response.status === 429 ? false : undefined
+          retryable: response.status === 429 ? false : undefined,
+          ...(response.status >= 500 && {
+            diagnostics: { transport: true, requestId },
+            suffix: ''
+          })
         })
       }
       if (parsed.stream === true && response.body && response.headers.get('content-type')?.startsWith('text/event-stream')) {

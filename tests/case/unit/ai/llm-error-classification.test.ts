@@ -48,6 +48,18 @@ describe('ai unit llm error classification', () => {
     }))).toMatchObject({ retryable: false })
   })
 
+  it('uses a slower backoff for transient managed transport failures', () => {
+    const transport = new LlmProviderError({
+      message: '与馆长服务的连接意外中断，回答未完整接收。',
+      providerCode: 'incomplete',
+      retryable: true,
+      diagnostics: { transport: true }
+    })
+    expect(classifyManagedLlmRetry(transport, 1)).toMatchObject({ retryable: true, delayMs: 5_000 })
+    expect(classifyManagedLlmRetry(transport, 2)).toMatchObject({ retryable: true, delayMs: 5_000 })
+    expect(classifyManagedLlmRetry(transport, 5)).toMatchObject({ retryable: true, delayMs: 5_000 })
+  })
+
   it('classifies insufficient balance errors as fatal', () => {
     expect(
       classifyLlmErrorKind({

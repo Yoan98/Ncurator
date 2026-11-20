@@ -925,8 +925,8 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 `classifyManagedLlmRetry` 驱动馆长模型的自动重试，沿用 `AI_LLM_CALL_MAX_RETRY_ATTEMPTS=5`：
 
 - 与自定义 API 共用客户端的同一套重试决策、上限、退避和重试行 UI；分类信号按服务商事实输入，计费不参与判定；
-- 只对 `upstream_timeout`、`upstream_interrupted`、`upstream_error`、`upstream_rate_limited`、`incomplete`、`invalid_output`、`failed`、`unavailable` 且 `retryable=true` 的失败重试；已计费同样可重试，重试是新的模型调用、新的 requestId，可能再次计费；
-- `settlement_pending`、`settlement_in_progress`、`client_disconnected` 不重放；202/结果不明时只按原 requestId 查回，不重新生成；429 并发准入拒绝保留原 requestId；
+- 只对 `upstream_timeout`、`upstream_interrupted`、`upstream_error`、`upstream_rate_limited`、`incomplete`、`invalid_output`、`failed`、`unavailable` 且 `retryable=true` 的失败重试；瞬时传输失败（连接中断、后端短时不可用、恢复查询不可用）用**同一 requestId** 重试并采用固定 5 秒连接退避，仍为 5 次（约 25 秒），服务端按 requestId 去重，不会重复执行；已 settled 的失败才用新 requestId 作为新调用重试；已计费同样可重试，可能再次计费；
+- `settlement_pending`、`settlement_in_progress`、`client_disconnected` 不重放；202/已受理且未结束时按原 requestId 查回或重试，不重新生成；已 settled 才用新 requestId；429 并发准入拒绝保留原 requestId；
 - 流正常结束且存在正文或 tool-call 分片时，客户端不判失败：tool call 交给 brain 的既有修复/回错逻辑；只有「没有任何可用内容」「传输在完成前中断」才进入统一重试；
 - 纯文本请求出现 tool call 属于协议违规，不重试；`content_filter` 在 tool-enabled 请求中交给 brain 生成内容安全兜底，在纯文本请求中以 `content_filter` 终止且不重试；
 - `finish_reason` 缺失按 `upstream_interrupted` 处理，不当作正常完成；
@@ -942,7 +942,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1      | HTTP status         | 401/402/403 → 不重试；408/429/500/502/503/504 → 可重试（有上限）；**429 使用指数退避**（2s 起、上限 15s）                                                                                                                                                                                |
 | 2      | providerCode / type | `insufficient_balance`、`quota_exceeded`、`invalid_api_key`、`authentication_error`… → 不重试；`rate_limit_exceeded`、`timeout`、`request_timeout`、`server_error`、`service_unavailable`、`resource_exhausted`… → 可重试；`rate_limit_exceeded` / `resource_exhausted` 使用同上指数退避 |
-| 3      | 类型信号            | `constructor.name` 为 `APIConnectionError` / `APIConnectionTimeoutError`，或 `error.name === 'TimeoutError'`（含一层 `cause`）→ 可重试、短退避                                                                                                                                           |
+| 3      | 类型信号            | `constructor.name` 为 `APIConnectionError` / `APIConnectionTimeoutError`，或 `error.name === 'TimeoutError'`（含一层 `cause`）→ 可重试、短退避；馆长瞬时传输失败使用固定 5 秒的连接退避，并用同一 requestId 去重                                                                                                    |
 | 4      | unknown             | **不重试**；不匹配文案                                                                                                                                                                                                                                                                   |
 
 #### 告警（不停跑）

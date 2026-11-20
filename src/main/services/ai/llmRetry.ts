@@ -66,6 +66,11 @@ const isRateLimitOrCapacityError = (info: { status?: number; code?: string }): b
 const resolveCapacityBackoffDelay = (attempt: number): number =>
   Math.min(15_000, 2_000 * 2 ** Math.max(0, attempt - 1))
 
+// A short backend rollout can take tens of seconds; a fixed delay keeps the
+// retry policy simple. The same requestId is idempotent, so waiting longer
+// between attempts is safe and does not create extra model calls.
+const TRANSPORT_RETRY_DELAY_MS = 5_000
+
 export const classifyLlmErrorKind = (error: unknown): LlmErrorClassification => {
   const info = normalizeStructuredOutputError(error)
   const normalizedCode = normalizeSignal(info.code)
@@ -151,10 +156,15 @@ export const classifyManagedLlmRetry = (error: unknown, attempt = 1): LlmRetryDe
         return { retryable: false, message: cause.message }
       }
       if (cause.retryable) {
+        const transport = cause.diagnostics?.transport === true
         return {
           retryable: true,
           message: cause.message,
-          ...(cause.providerCode === 'upstream_rate_limited' && { delayMs: resolveCapacityBackoffDelay(attempt) })
+          ...(cause.providerCode === 'upstream_rate_limited'
+            ? { delayMs: resolveCapacityBackoffDelay(attempt) }
+            : transport
+              ? { delayMs: TRANSPORT_RETRY_DELAY_MS }
+              : {})
         }
       }
       return { retryable: false, message: cause.message }

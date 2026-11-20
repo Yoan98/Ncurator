@@ -481,10 +481,10 @@ it.runIf(Boolean(process.env.NCURATOR_TEST_MANAGED_DIRECT))('uses the real API f
   } finally { fixture.cleanup() }
 }, 25_000)
 
-it.each(['expired', 'lookup', 'unknown-429', 'stream-recovered'] as const)('handles %s through the managed invocation without replaying an admitted call', async scenario => {
+it.each(['expired', 'lookup', 'unknown-429', 'stream-recovered'] as const)('handles %s through an idempotent lookup or a fresh call after settlement', async scenario => {
   const fixture = managedDesktopFixture((requestId, attempt) => {
     if (scenario === 'expired' && attempt === 1) return Response.json({ error: 'access_token_expired' }, { status: 401 })
-    if (scenario === 'lookup') return Response.json({ status: 'lookup', requestId }, { status: 202 })
+    if (scenario === 'lookup' && attempt === 1) return Response.json({ status: 'lookup', requestId }, { status: 202 })
     if (scenario === 'unknown-429') return Response.json({ error: 'rate_limit_exceeded' }, { status: 429 })
     return managedSse(requestId, scenario === 'stream-recovered' ? 'disconnected' : 'text')
   }, { status: 'settled', executionStatus: 'completed', wallet: sampleWallet })
@@ -493,13 +493,79 @@ it.each(['expired', 'lookup', 'unknown-429', 'stream-recovered'] as const)('hand
     const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
       getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {}, checkCancelled: () => {} })
     const pending = executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入', streamingMode: 'force_stream' })
-    if (scenario === 'expired' || scenario === 'stream-recovered') await expect(pending).resolves.toBe('测试内容')
-    else await expect(pending).rejects.toThrow()
-    expect(fixture.submitted).toHaveLength(scenario === 'expired' ? 2 : 1)
-    if (scenario === 'expired') expect(fixture.submitted[1]).toEqual({ requestId: fixture.submitted[0].requestId, access: 'Bearer access.part.2' })
-    expect(fixture.lookedUp).toEqual(scenario === 'lookup' || scenario === 'stream-recovered' ? [fixture.submitted[0].requestId] : [])
+    if (scenario === 'expired' || scenario === 'lookup' || scenario === 'stream-recovered') {
+      await expect(pending).resolves.toBe('测试内容')
+    } else {
+      await expect(pending).rejects.toThrow()
+    }
+    expect(fixture.submitted).toHaveLength(scenario === 'expired' || scenario === 'lookup' ? 2 : 1)
+    if (scenario === 'expired') {
+      expect(fixture.submitted[1]).toEqual({
+        requestId: fixture.submitted[0].requestId,
+        access: 'Bearer access.part.2'
+      })
+    }
+    if (scenario === 'lookup') {
+      // The first execution settled while the client looked it up; retrying as a
+      // new call is safe because the previous request is already finished.
+      expect(fixture.submitted[1].requestId).not.toBe(fixture.submitted[0].requestId)
+    }
+    expect(fixture.lookedUp).toEqual(
+      scenario === 'lookup' || scenario === 'stream-recovered' ? [fixture.submitted[0].requestId] : []
+    )
   } finally { fixture.cleanup() }
-})
+}, 20_000)
+
+it('retries an in-flight 202 lookup with the same request id', async () => {
+  const fixture = managedDesktopFixture((requestId, attempt) => attempt === 1
+    ? Response.json({ status: 'lookup', requestId }, { status: 202 })
+    : managedSse(requestId, 'text'))
+  try {
+    await fixture.login()
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
+      checkCancelled: () => {} })
+    await expect(executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
+      streamingMode: 'force_stream' })).resolves.toBe('测试内容')
+    expect(fixture.submitted).toHaveLength(2)
+    expect(fixture.submitted[1].requestId).toBe(fixture.submitted[0].requestId)
+    expect(fixture.lookedUp).toEqual([fixture.submitted[0].requestId])
+  } finally { fixture.cleanup() }
+}, 20_000)
+
+it('retries a transient 503 with the same request id', async () => {
+  const fixture = managedDesktopFixture((requestId, attempt) => attempt === 1
+    ? Response.json({ error: 'unavailable' }, { status: 503 })
+    : managedSse(requestId, 'text'))
+  try {
+    await fixture.login()
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
+      checkCancelled: () => {} })
+    await expect(executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
+      streamingMode: 'force_stream' })).resolves.toBe('测试内容')
+    expect(fixture.submitted).toHaveLength(2)
+    expect(fixture.submitted[1].requestId).toBe(fixture.submitted[0].requestId)
+  } finally { fixture.cleanup() }
+}, 20_000)
+
+it('retries a transient managed transport failure with the same request id', async () => {
+  const fixture = managedDesktopFixture((requestId, attempt) => {
+    if (attempt <= 2) throw new Error('backend unavailable')
+    return managedSse(requestId, 'text')
+  })
+  try {
+    await fixture.login()
+    const executor = createAiLlmExecutor({ eventCtx: { runId: randomUUID(), sendEvent: () => {} },
+      getConfig: async () => resolveManagedRuntimeConfig('managed:9', '测试模型'), saveConfig: async () => {},
+      checkCancelled: () => {} })
+    await expect(executor.chatText({ caller: 'test', schemaName: 'managed', system: '系统', user: '输入',
+      streamingMode: 'force_stream' })).resolves.toBe('测试内容')
+    expect(fixture.submitted).toHaveLength(3)
+    expect(new Set(fixture.submitted.map(entry => entry.requestId)).size).toBe(1)
+    expect(fixture.lookedUp).toEqual([])
+  } finally { fixture.cleanup() }
+}, 30_000)
 
 it('uses a distinct request ID for consecutive calls and the follow-up after a tool result', async () => {
   const fixture = managedDesktopFixture((requestId, attempt) => managedSse(requestId, attempt === 3 ? 'tools' : 'text'))

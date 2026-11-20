@@ -84,8 +84,10 @@ const sleep = async (ms: number, signal?: AbortSignal): Promise<void> => {
 }
 
 const isConnectionFailure = (error: unknown): boolean => {
-  const code = findLlmProviderError(error)?.providerCode
-  return code === 'upstream_interrupted' || code === 'incomplete' || isLlmTransportError(error)
+  const providerError = findLlmProviderError(error)
+  const code = providerError?.providerCode
+  return code === 'upstream_interrupted' || code === 'incomplete' ||
+    providerError?.diagnostics?.transport === true || isLlmTransportError(error)
 }
 
 const reasonFromError = (error: unknown): string =>

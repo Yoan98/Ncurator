@@ -445,7 +445,7 @@ pnpm test:update:e2e
 - What：受控 429 后过程区出现自动重试行：第一次为 `正在重试 1/5`，随后在同一行更新次数；运行中不得与尾部黑球同时出现，也不得叠多行。
 - Why：免费/共享额度模型会稳定打出 429；重试行叠层或与思考等待并存是用户可直接看见的过程层 bug，过程流主 case 不保证本轮出现重试。
 - How：经 Settings 添加自定义模型，指向本地 OpenAI 兼容代理；代理对前两次 `chat/completions` 返回真实 HTTP 429，其后转发 live 上游。Workbench 选中该自定义模型并发送短请求；运行中持续采集过程区重试行数、次数文案与尾部黑球（`data-live-tail`）是否共存，直至 run 完成。
-- Oracle：必须见到 `正在重试 1/5` 且随后在同一行见到 `2/5`，对齐 `WB-COMPOSER-015-AC1`；任一时刻过程区最多一行“正在重试 / 重试失败”，对齐 `WB-COMPOSER-015-AC2`；重试行 running 时不得同时出现尾部黑球，对齐 `WB-COMPOSER-015-AC3`、`WB-COMPOSER-003-AC3`；重试成功后正文一开始流式输出，重试行就必须消失，不得出现「正文在流、顶部仍挂着正在重试」，对齐 `WB-COMPOSER-015-AC1`。前两次 chat 为 429、第三次起转发上游；429 退避毫秒以及断网/`TimeoutError`/调用层 `TIMEOUT` 分类由 unit `llm-error-classification` 覆盖。run 完成后过程区不得再留“已重试 / 正在重试”，对齐 `WB-COMPOSER-015-AC4`。
+- Oracle：必须见到 `正在重试 1/5` 且随后在同一行见到 `2/5`，对齐 `WB-COMPOSER-015-AC1`；任一时刻过程区最多一行“正在重试 / 重试失败”，对齐 `WB-COMPOSER-015-AC2`；重试行 running 时不得同时出现尾部黑球，对齐 `WB-COMPOSER-015-AC3`、`WB-COMPOSER-003-AC3`；重试成功后正文一开始流式输出，重试行就必须消失，不得出现「正文在流、顶部仍挂着正在重试」，对齐 `WB-COMPOSER-015-AC1`。前两次 chat 为 429、第三次起转发上游；429 退避毫秒以及断网/`TimeoutError`/调用层 `TIMEOUT` 分类由 unit `llm-error-classification` 覆盖；瞬时连接失败的固定 5 秒连接退避与同一 requestId 去重由 unit `desktop-account` 覆盖。run 完成后过程区不得再留“已重试 / 正在重试”，对齐 `WB-COMPOSER-015-AC4`。
 
 #### `managed-request-admission-and-recovery`
 
@@ -454,7 +454,7 @@ pnpm test:update:e2e
 - What：馆长请求零余额拒绝、用户停止及完成确认丢失后的原请求恢复。
 - Why：直接套用通用 429、断流及超时重试可能重复执行、重复收费，或把用户身份和资金门禁误当作临时并发问题。
 - How：使用实际桌面和隔离计费 API，通过受控流精确停在已受理、未完成的状态。桌面提交零余额请求，经测试渠道充值后发送并停止调用，再发送一轮，由网络边界丢弃已结算的完成确认。主进程按原请求查回，核对 UI、请求编号和钱包。并发配额由接口回归覆盖，重试交互见 `llm-retry-process-row`。
-- Oracle：零余额拒绝不执行模型或产生费用。停止后桌面结束运行，服务端未取得可信终态时免收。完成确认丢失后正文和运行仍可正常结案，桌面只对该请求查回，不重发、换号或重复收费，补证 `WB-COMPOSER-015-AC5`。已计费不阻断客户端自动重试、只有空响应/无可用内容才重试、完整或不完整 tool call 不整次重试，由 unit `desktop-account.test.ts` 与 `llm-error-classification.test.ts` 覆盖，补证 `WB-COMPOSER-015-AC6`。
+- Oracle：零余额拒绝不执行模型或产生费用。停止后桌面结束运行，服务端未取得可信终态时免收。完成确认丢失后正文和运行仍可正常结案，桌面只对该请求查回，不重发、换号或重复收费，补证 `WB-COMPOSER-015-AC5`。瞬时后端不可用/连接中断用同一 requestId 和连接退避重试；202 已受理且未结束时同 ID 查回，不重复执行；已 settled 后才用新 requestId 新调用。已计费不阻断客户端自动重试、只有空响应/无可用内容才重试、完整或不完整 tool call 不整次重试，由 unit `desktop-account.test.ts` 与 `llm-error-classification.test.ts` 覆盖，补证 `WB-COMPOSER-015-AC6`。
 
 #### `terminal-background-service-flow`
 
