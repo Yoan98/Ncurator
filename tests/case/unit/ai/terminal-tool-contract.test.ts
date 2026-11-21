@@ -12,6 +12,7 @@ import {
   TERMINAL_RUN_SCHEMA,
   TERMINAL_STOP_SCHEMA
 } from '../../../../src/main/services/ai/human/tools/terminal/toolSchemas'
+import { TERMINAL_MAX_WATCH_SECONDS } from '../../../../src/main/services/ai/human/tools/terminal/terminalConstants'
 import { TERMINAL_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
 import {
   mapTerminalReadStatus,
@@ -71,6 +72,30 @@ describe('ai unit terminal tool contract', () => {
         maxWaitSeconds: 1.5
       }).success
     ).toBe(false)
+  })
+
+  it('caps maxWaitSeconds at the watch limit and rejects anything longer', () => {
+    const call = (maxWaitSeconds: number) => TERMINAL_RUN_SCHEMA.safeParse({
+      command: 'npm run build', commandExplanation: '构建项目', maxWaitSeconds
+    })
+    // 上限本身就是合法值，超出一秒即拒绝，由模型改在范围内重试。
+    expect(TERMINAL_MAX_WATCH_SECONDS).toBe(120)
+    expect(call(TERMINAL_MAX_WATCH_SECONDS).success).toBe(true)
+    expect(call(TERMINAL_MAX_WATCH_SECONDS + 1).success).toBe(false)
+    expect(call(600).success).toBe(false)
+    // 省略时仍可用，交给默认盯守时长。
+    expect(TERMINAL_RUN_SCHEMA.safeParse({ command: 'pwd', commandExplanation: '查看目录' }).success).toBe(true)
+  })
+
+  it('tells the model the upper bound and that the command keeps running', () => {
+    const schema = toJSONSchema(TERMINAL_RUN_SCHEMA) as {
+      properties: { maxWaitSeconds: { description?: string; maximum?: number } }
+    }
+    const { description, maximum } = schema.properties.maxWaitSeconds
+    // JSON Schema 里也要带上限，模型才能提前知道边界。
+    expect(maximum).toBe(TERMINAL_MAX_WATCH_SECONDS)
+    expect(description).toContain(String(TERMINAL_MAX_WATCH_SECONDS))
+    expect(description).toContain('命令继续执行')
   })
 
   it('documents the watch window and the continuation path on maxWaitSeconds', () => {

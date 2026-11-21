@@ -1,4 +1,5 @@
 import { z } from 'zod/v4'
+import { TERMINAL_MAX_WATCH_SECONDS } from './terminalConstants'
 
 export const TERMINAL_RUN_SCHEMA = z.object({
   command: z.string().min(1).describe('要在终端执行的命令'),
@@ -6,8 +7,11 @@ export const TERMINAL_RUN_SCHEMA = z.object({
   maxWaitSeconds: z
     .number()
     .int()
+    .max(TERMINAL_MAX_WATCH_SECONDS)
     .optional()
-    .describe('本次调用最长盯着命令结束的秒数；到点后命令继续执行')
+    .describe(
+      `本次调用最长盯着命令结束的秒数，最多 ${TERMINAL_MAX_WATCH_SECONDS}；它只是盯着看的时间，到点后命令继续执行`
+    )
 })
 
 export const TERMINAL_READ_SCHEMA = z.object({

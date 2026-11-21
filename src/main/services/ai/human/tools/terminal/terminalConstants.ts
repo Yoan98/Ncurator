@@ -20,3 +20,8 @@ export const TERMINAL_MAX_SESSIONS_PER_CHAT = 8
 
 // terminal_run 未指定 maxWaitSeconds 时，默认盯命令结束的秒数；到点后让出控制权，命令继续执行。
 export const TERMINAL_DEFAULT_WATCH_SECONDS = 8
+
+// 单次调用盯命令结束的上限秒数。它是「最多等多久」而不是「必须等这么久」：
+// 命令提前结束就提前返回，到这里只是让出控制权的天花板。
+// 超过上限由 schema 直接拒绝，让模型改在范围内重试；长任务靠多次 terminal_read 接力。
+export const TERMINAL_MAX_WATCH_SECONDS = 120
