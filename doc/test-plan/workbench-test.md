@@ -178,7 +178,7 @@ pnpm test:update:e2e
 - What：智能模式上下文用量在 run 后按真实模型用量刷新，并可查看已用比例与 tokens，不额外展示口径行。
 - Why：用量提示错误会误导用户对后续可用上下文的判断；显示与压缩各算一套时会给出错误的“还很空”信号。
 - How：创建含固定标记文本的工作地址，不准备知识库索引；记录运行前圆环用量，通过真实工具读取该文件，使同一 run 的下一次模型调用使用真实 usage 加工具输出增量的预算，并核对最终回复包含文件标记。通过只读 aiContextUsageGet 获取生产摘要，核对圆环及 hover 的已用 / 阈值 tokens、百分比与摘要一致，并确认已用 tokens 更新、摘要 `basis` 为 `usage_plus_delta`，hover 不展示「真实用量／估算」口径行。
-- Oracle：圆圈与 hover 展示的已用百分比及已用 / 阈值 token 须与生产摘要一致，不展示剩余，对齐 `WB-COMPOSER-008-AC1`；百分比与中文标签之间空白不影响判定。run 后显示值随生产上下文摘要更新、大于运行前值，不展示额外口径行，对齐 `WB-COMPOSER-008-AC2` 与 `WB-COMPOSER-008-AC5`。仅存在“已用”文案不足以判定通过。压缩后回落与越过阈值时的百分比不封顶由 `context-budget-node` 单测和 `context-usage-snapshot` 单测覆盖 `WB-COMPOSER-008-AC4`。
+- Oracle：圆圈与 hover 展示的已用百分比及已用 / 阈值 token 须与生产摘要一致，不展示剩余，对齐 `WB-COMPOSER-008-AC1`；百分比与中文标签之间空白不影响判定。run 后显示值随生产上下文摘要更新、大于运行前值，不展示额外口径行，对齐 `WB-COMPOSER-008-AC2` 与 `WB-COMPOSER-008-AC5`。仅存在“已用”文案不足以判定通过。压缩后回落与越过阈值时的百分比不封顶由 `context-budget-node`、`context-compaction-node` 和 `context-usage-snapshot` 覆盖 `WB-COMPOSER-008-AC4`。离线 `chat-run-service-contract` 使用真实提交／查询链路和确定性模型驱动，覆盖两次独立发送之间不回落、一次直接回答后用量刷新、无 usage 或取消时保留有效用量、撤回历史时作废原值。
 
 #### `chat-without-knowledge-model`
 

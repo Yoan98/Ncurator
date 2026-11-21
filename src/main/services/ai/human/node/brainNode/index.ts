@@ -1,6 +1,6 @@
 import { refreshUserSkillContext } from '../../userSkillContext'
 import { randomUUID } from 'node:crypto'
-import { SystemMessage } from '@langchain/core/messages'
+import { AIMessage, SystemMessage } from '@langchain/core/messages'
 import { getToolCalls } from '../../../../../utils/aiCapabilityUtils'
 import { extractTextContent, tryRepairJsonObject } from '../../../structuredOutput'
 import type { ChatMessageLogToolCall, JsonObject } from '../../../../../../shared/types'
@@ -448,13 +448,34 @@ export const createBrainNode = (input: {
         await input.ctx.appendMessageLog([
           { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
         ])
-        return await finalizeDelivery({
+        const completed = await finalizeDelivery({
           ctx: input.ctx,
           cache: input.cache,
           state,
           deliveryMarkdown,
           emitAnswerEvents: input.emitAnswerEvents
         })
+        const budget = state.execution.contextBudget
+        if (
+          input.ctx.recordContextBudget && budget && inputTokens !== undefined &&
+          Number.isFinite(inputTokens) && inputTokens >= 0 && result.usage?.source !== 'unavailable'
+        ) {
+          // A final answer is written to the transcript but never returns to the budget node.
+          // Record it for display only: it was not part of the provider's measured input.
+          const deltaTokenEstimate = Math.max(
+            0,
+            estimateMessagesForContext([...messages, new AIMessage(deliveryMarkdown)]) -
+              requestMessageTokenEstimate
+          )
+          input.ctx.recordContextBudget({
+            ...budget,
+            basis: 'usage_plus_delta',
+            budgetTokens: inputTokens + deltaTokenEstimate,
+            lastBrainInputTokens: inputTokens,
+            deltaTokenEstimate
+          })
+        }
+        return completed
       }
 
       const dispatchQueue = buildDispatchQueue(executableCalls)

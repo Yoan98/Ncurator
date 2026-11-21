@@ -2805,7 +2805,7 @@ export function registerHandlers(services: {
         partnerId,
         chatMessageLogStore,
         workbenchUiStore,
-        contextBudget: chatRunService.getLastContextBudget(partnerId)
+        sample: chatRunService.getContextUsageSample(partnerId)
       })
       return { success: true, ...usage }
     } catch (e) {

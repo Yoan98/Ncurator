@@ -1,4 +1,8 @@
-import type { AiContextUsageBasis, BrainContextBudgetSnapshot } from '../../../shared/types'
+import type {
+  AiContextUsageBasis,
+  BrainContextBudgetSnapshot,
+  WorkbenchSelectedModel
+} from '../../../shared/types'
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type { WorkbenchUiStore } from '../storage/domains/WorkbenchUiStore'
 import { resolveEffectiveContextWindowTokens } from './human/constants'
@@ -16,26 +20,55 @@ export type AiContextUsage = {
   hasEffectiveImageContext: boolean
 }
 
-/**
- * 上下文用量展示。
- *
- * - 有主会话预算快照时，已用量直接用当轮判定过的 `budgetTokens`（真实 brain usage + 增量），
- *   和 compaction 触发是同一个数；分母仍由同一个公式现算，保证与判定同口径。
- * - 没有快照（新会话 / 应用刚启动还没跑过）时退回消息估算，并把 `basis` 标成 `estimate`。
- */
+type ContextUsageModel = Pick<WorkbenchSelectedModel, 'configId' | 'modelName'> | null
+
+export type ContextUsageSample = {
+  model: ContextUsageModel
+  snapshot: BrainContextBudgetSnapshot
+}
+
+const sameModel = (left: ContextUsageModel, right: ContextUsageModel): boolean =>
+  left?.configId === right?.configId && left?.modelName === right?.modelName
+
+/** Keep the most informative same-scope sample, without affecting graph budget decisions. */
+export const selectContextUsageSample = (
+  previous: ContextUsageSample | undefined,
+  next: ContextUsageSample
+): ContextUsageSample => {
+  if (
+    previous &&
+    sameModel(previous.model, next.model) &&
+    previous.snapshot.contextWindowTokens === next.snapshot.contextWindowTokens &&
+    (previous.snapshot.basis === 'usage_plus_delta' ||
+      previous.snapshot.basis === 'post_compaction') &&
+    (next.snapshot.basis === 'initial' || next.snapshot.basis === 'usage_unavailable')
+  ) {
+    return previous
+  }
+  return next
+}
+
 export const getAiContextUsage = async (input: {
   partnerId: string
   chatMessageLogStore: ChatMessageLogStore
   workbenchUiStore: WorkbenchUiStore
-  contextBudget?: BrainContextBudgetSnapshot
+  sample?: ContextUsageSample
 }): Promise<AiContextUsage> => {
   const records = await input.chatMessageLogStore.listForModel(input.partnerId)
   const partnerState = await input.workbenchUiStore.getPartnerState(input.partnerId)
+  const model = partnerState?.composer.modelSelection.mainModel ?? null
   const contextWindowTokens = resolveEffectiveContextWindowTokens(
-    await lookupCatalogModelContextTokens(partnerState?.composer.modelSelection.mainModel)
+    await lookupCatalogModelContextTokens(model)
   )
+  const sample = input.sample
+  const snapshot =
+    sample &&
+    sameModel(sample.model, model) &&
+    sample.snapshot.contextWindowTokens === contextWindowTokens
+      ? sample.snapshot
+      : undefined
   const usedContextTokens =
-    input.contextBudget?.budgetTokens ??
+    snapshot?.budgetTokens ??
     estimateMessagesForContext(
       projectMessageLogRecords(records, { includeUserEntries: true }).messages
     )
@@ -43,7 +76,7 @@ export const getAiContextUsage = async (input: {
     contextWindowTokens,
     usedContextTokens,
     ratio: usedContextTokens / contextWindowTokens,
-    basis: input.contextBudget?.basis ?? 'estimate',
+    basis: snapshot?.basis ?? 'estimate',
     updatedAt: Date.now(),
     hasEffectiveImageContext: hasEffectiveImageContextInMessageLog(records)
   }

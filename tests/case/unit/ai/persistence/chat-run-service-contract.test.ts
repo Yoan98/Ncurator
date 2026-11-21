@@ -2,6 +2,8 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AIMessage } from '@langchain/core/messages'
+import { getAiContextUsage } from '../../../../../src/main/services/ai/contextUsage'
 import type {
   AiApprovalBatchRequest,
   AiApprovalBatchResult
@@ -93,6 +95,7 @@ const createTestService = async (options?: {
   autoStartRuns?: boolean
   onRunTerminal?: (run: AiRunRecord, status: 'completed' | 'failed' | 'cancelled') => void
   observeEvent?: (event: AiRunEvent) => void
+  llmDriver?: ConstructorParameters<typeof ChatRunService>[0]['llmDriver']
   bindManagedModel?: ConstructorParameters<typeof ChatRunService>[0]['bindManagedModel']
 }): Promise<TestService> => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'ncurator-chat-run-'))
@@ -143,6 +146,7 @@ const createTestService = async (options?: {
       options?.observeEvent?.(event)
     },
     autoStartRuns: options?.autoStartRuns ?? false,
+    llmDriver: options?.llmDriver,
     bindManagedModel: options?.bindManagedModel,
     onRunTerminal: options?.onRunTerminal
   })
@@ -272,6 +276,105 @@ describe('unit ai persistence backend', () => {
     expect(await storage.aiRun.getRun('owner-stream')).toEqual(before)
     expect(await storage.chatMessageLog.list('partner-1')).toHaveLength(0)
     expect(events.map((event) => event.type)).toEqual(['subagent_stream', 'llm_request_state'])
+  })
+
+  it('keeps the real ring value during a second send and refreshes after one direct answer', async () => {
+    const secondRequest = Promise.withResolvers<void>()
+    const cancelledRequest = Promise.withResolvers<void>()
+    let calls = 0
+    const setup = await createTestService({
+      autoStartRuns: true,
+      llmDriver: {
+        chatTools: async () => {
+          calls += 1
+          const call = calls
+          if (call === 2) await secondRequest.promise
+          if (call === 4) await cancelledRequest.promise
+          return {
+            message: new AIMessage('A direct answer with a known nonzero token estimate.'),
+            finishReason: 'stop',
+            ...(call <= 2 && { usage: { inputTokens: call === 1 ? 24_000 : 25_000, source: 'usage_metadata' } })
+          }
+        }
+      }
+    })
+    const { service, storage, events } = setup
+    const partnerId = 'partner-1'
+    const model = { configId: 'mock-config', modelName: 'mock-model' }
+    await storage.llm.save({
+      id: model.configId, name: model.modelName, providerKind: 'openai-compatible',
+      base_url: 'https://example.invalid', api_key: 'synthetic'
+    })
+    await seedPartner(storage)
+    await storage.workbenchUi.savePartnerState(partnerId, {
+      version: 1,
+      composer: {
+        aiPreference: 'local_sources_strict', executionPermission: 'review',
+        modelSelection: { mainModel: model },
+        draft: { input: '', contentNodes: [], selectedReferences: [], attachments: [], assetBucketId: null }
+      },
+      panel: { tabs: [], activeTabId: null, collapsed: true, fallbackState: { kind: 'empty', title: '', description: '' } }
+    })
+    const readRing = () => getAiContextUsage({
+      partnerId, chatMessageLogStore: storage.chatMessageLog, workbenchUiStore: storage.workbenchUi,
+      sample: service.getContextUsageSample(partnerId)
+    })
+    const waitForCompletion = async (runId: string) => {
+      await waitForCondition(() => events.some(event => event.type === 'run_completed' && event.runId === runId))
+    }
+    const submit = (text: string) => service.submit({
+      partnerId, preference: 'local_sources_strict', executionPermission: 'review',
+      contentNodes: [{ kind: 'text', text }], mainModel: model
+    })
+    const first = await submit('第一条')
+    expect(first.success).toBe(true)
+    await waitForCompletion(first.run!.id)
+    const before = await readRing()
+    expect(before.usedContextTokens).toBeGreaterThan(24_000)
+    expect(before.basis).toBe('usage_plus_delta')
+
+    const second = await submit('第二条')
+    expect(second.success).toBe(true)
+    try {
+      await waitForCondition(() => calls === 2)
+      const earlier = events.find(event => event.type === 'context_budget_evaluated' && event.runId === second.run?.id)
+      expect(earlier?.type === 'context_budget_evaluated' && earlier.snapshot.basis).toBe('initial')
+      if (earlier?.type === 'context_budget_evaluated') {
+        expect(earlier.snapshot.budgetTokens).toBeLessThan(before.usedContextTokens)
+      }
+      expect((await readRing()).usedContextTokens).toBe(before.usedContextTokens)
+    } finally {
+      secondRequest.resolve()
+    }
+    await waitForCompletion(second.run!.id)
+    const after = await readRing()
+    expect(after.usedContextTokens).toBeGreaterThan(25_000)
+    expect(after.basis).toBe('usage_plus_delta')
+    expect(calls).toBe(2)
+
+    const noUsage = await submit('第三条不返回 usage')
+    expect(noUsage.success).toBe(true)
+    await waitForCompletion(noUsage.run!.id)
+    expect((await readRing()).usedContextTokens).toBe(after.usedContextTokens)
+
+    const cancelled = await submit('第四条取消')
+    expect(cancelled.success).toBe(true)
+    try {
+      await waitForCondition(() => calls === 4)
+      expect((await service.cancelRun(cancelled.run!.id)).success).toBe(true)
+    } finally {
+      cancelledRequest.resolve()
+    }
+    await waitForCondition(() => events.some(event =>
+      event.type === 'run_cancelled' && event.runId === cancelled.run!.id
+    ))
+    expect((await readRing()).usedContextTokens).toBe(after.usedContextTokens)
+
+    const retracted = await service.retractLatestTurn({
+      partnerId, userMessageId: cancelled.run!.userMessageId!
+    })
+    expect(retracted.success).toBe(true)
+    expect((await readRing()).basis).toBe('estimate')
   })
 
   it('chat-submit-ai-creates-placeholder-and-run', async () => {

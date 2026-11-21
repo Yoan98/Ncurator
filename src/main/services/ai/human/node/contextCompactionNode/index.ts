@@ -24,6 +24,7 @@ import {
   type CompactionLogSplit
 } from '../../memory/compactionSplit'
 import { messagesFromLogEntries } from '../../memory/conversationLogMessages'
+import { estimateMessagesForContext } from '../../memory/multimodal'
 import {
   resolveHistoryFloor,
   resolveMaxMessageLogSeq,
@@ -206,24 +207,6 @@ export const createContextCompactionNode = (input: {
     }
     await input.ctx.appendMessageLog([checkpointEntry])
 
-    emitCompactionCompleted({
-      sendEvent: input.ctx.sendEvent,
-      runId: input.ctx.runId
-    })
-    input.ctx.sendEvent({
-      type: 'context_compaction_completed',
-      runId: input.ctx.runId,
-      taskId: state.task.taskId,
-      compactBlockId,
-      sourceMessageCount: folded.length,
-      tokenEstimateBefore: budgetTokensBefore,
-      sourceHistoryTokenEstimate,
-      tokenEstimateAfter,
-      summaryPreview: compactBlock.summary,
-      completedAt: Date.now(),
-      stage: 'human_brain',
-      ...cut
-    })
     input.cache.lastBrainInputTokens = undefined
     input.cache.lastBrainMessageTokenEstimate = undefined
     input.cache.postCompactionNeedsFreshBrainUsage = true
@@ -253,6 +236,39 @@ export const createContextCompactionNode = (input: {
     input.cache.conversationProjection = undefined
     input.cache.currentUserMessageIndex = projection.currentUserMessageIndex + 1
     input.cache.currentUserLogAppended = true
+
+    // The checkpoint is already persisted. Make its new budget visible before the
+    // completion event, even when the next budget evaluation is interrupted.
+    const previousBudget = state.execution.contextBudget
+    if (input.ctx.recordContextBudget && previousBudget) {
+      input.ctx.recordContextBudget({
+        evaluationId: compactBlockId,
+        basis: 'post_compaction',
+        budgetTokens: estimateMessagesForContext(input.cache.messages),
+        contextWindowTokens: previousBudget.contextWindowTokens,
+        hasCompressibleHistory: hasCompressibleCompactionHistory(projectedRecords, retainTokens),
+        usageAvailable: true
+      })
+    }
+
+    emitCompactionCompleted({
+      sendEvent: input.ctx.sendEvent,
+      runId: input.ctx.runId
+    })
+    input.ctx.sendEvent({
+      type: 'context_compaction_completed',
+      runId: input.ctx.runId,
+      taskId: state.task.taskId,
+      compactBlockId,
+      sourceMessageCount: folded.length,
+      tokenEstimateBefore: budgetTokensBefore,
+      sourceHistoryTokenEstimate,
+      tokenEstimateAfter,
+      summaryPreview: compactBlock.summary,
+      completedAt: Date.now(),
+      stage: 'human_brain',
+      ...cut
+    })
 
     return {
       ...returnToContextBudget(state),

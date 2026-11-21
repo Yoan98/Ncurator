@@ -6,7 +6,10 @@ import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteC
 import { PartnerStore } from '../../../../src/main/services/storage/domains/PartnerStore'
 import { ChatMessageLogStore } from '../../../../src/main/services/storage/domains/ChatMessageLogStore'
 import { WorkbenchUiStore } from '../../../../src/main/services/storage/domains/WorkbenchUiStore'
-import { getAiContextUsage } from '../../../../src/main/services/ai/contextUsage'
+import {
+  getAiContextUsage,
+  selectContextUsageSample
+} from '../../../../src/main/services/ai/contextUsage'
 import { projectMessageLogRecords } from '../../../../src/main/services/ai/human/memory/transcript'
 import { estimateMessagesForContext } from '../../../../src/main/services/ai/human/memory/multimodal'
 import { resolveEffectiveContextWindowTokens } from '../../../../src/main/services/ai/human/constants'
@@ -85,12 +88,12 @@ describe('ai unit context usage basis', () => {
     expect(usage.ratio).toBeCloseTo(usage.usedContextTokens / usage.contextWindowTokens, 10)
   })
 
-  it('reports the budget snapshot the compaction decision used', async () => {
+  it('reports a measured sample for the same model and context window', async () => {
     const snapshot: BrainContextBudgetSnapshot = {
       evaluationId: 'eval',
       basis: 'usage_plus_delta',
       budgetTokens: 251_000,
-      contextWindowTokens: 256_000,
+      contextWindowTokens: resolveEffectiveContextWindowTokens(),
       hasCompressibleHistory: true,
       usageAvailable: true,
       lastBrainInputTokens: 240_000,
@@ -100,7 +103,7 @@ describe('ai unit context usage basis', () => {
       partnerId: PARTNER_ID,
       chatMessageLogStore: logs,
       workbenchUiStore: ui,
-      contextBudget: snapshot
+      sample: { model: null, snapshot }
     })
     expect(usage.basis).toBe('usage_plus_delta')
     expect(usage.usedContextTokens).toBe(snapshot.budgetTokens)
@@ -116,16 +119,78 @@ describe('ai unit context usage basis', () => {
       partnerId: PARTNER_ID,
       chatMessageLogStore: logs,
       workbenchUiStore: ui,
-      contextBudget: {
-        evaluationId: 'eval-after',
-        basis: 'post_compaction',
-        budgetTokens: 21_000,
-        contextWindowTokens: 256_000,
-        hasCompressibleHistory: false,
-        usageAvailable: true
+      sample: {
+        model: null,
+        snapshot: {
+          evaluationId: 'eval-after',
+          basis: 'post_compaction',
+          budgetTokens: 21_000,
+          contextWindowTokens: resolveEffectiveContextWindowTokens(),
+          hasCompressibleHistory: false,
+          usageAvailable: true
+        }
       }
     })
     expect(usage.basis).toBe('post_compaction')
     expect(usage.usedContextTokens).toBe(21_000)
+  })
+
+  it('holds a reliable same-scope sample over estimates, but accepts real decreases', () => {
+    const model = { configId: 'provider-a', modelName: 'model-a' }
+    const makeSample = (
+      basis: BrainContextBudgetSnapshot['basis'],
+      budgetTokens: number,
+      contextWindowTokens = 100_000
+    ) => ({
+      model,
+      snapshot: {
+        evaluationId: basis,
+        basis,
+        budgetTokens,
+        contextWindowTokens,
+        hasCompressibleHistory: true,
+        usageAvailable: true
+      }
+    })
+    const measured = makeSample('usage_plus_delta', 24_000)
+    const initial = makeSample('initial', 17_000)
+    const unavailable = makeSample('usage_unavailable', 18_000)
+    expect(selectContextUsageSample(measured, initial)).toBe(measured)
+    expect(selectContextUsageSample(measured, unavailable)).toBe(measured)
+
+    const compacted = makeSample('post_compaction', 6_000)
+    expect(selectContextUsageSample(measured, compacted)).toBe(compacted)
+    expect(selectContextUsageSample(compacted, unavailable)).toBe(compacted)
+    const nextMeasured = makeSample('usage_plus_delta', 22_000)
+    expect(selectContextUsageSample(measured, nextMeasured)).toBe(nextMeasured)
+
+    const differentProvider = { ...initial, model: { ...model, configId: 'provider-b' } }
+    expect(selectContextUsageSample(measured, differentProvider)).toBe(differentProvider)
+    const changedWindow = makeSample('initial', 17_000, 120_000)
+    expect(selectContextUsageSample(measured, changedWindow)).toBe(changedWindow)
+  })
+
+  it('does not expose a stale sample for a different selected model or window', async () => {
+    const base = {
+      evaluationId: 'old',
+      basis: 'usage_plus_delta' as const,
+      budgetTokens: 24_000,
+      contextWindowTokens: resolveEffectiveContextWindowTokens(),
+      hasCompressibleHistory: true,
+      usageAvailable: true
+    }
+    const read = (sample: Parameters<typeof getAiContextUsage>[0]['sample']) =>
+      getAiContextUsage({
+        partnerId: PARTNER_ID,
+        chatMessageLogStore: logs,
+        workbenchUiStore: ui,
+        sample
+      })
+    expect(
+      (await read({ model: { configId: 'old', modelName: 'old' }, snapshot: base })).basis
+    ).toBe('estimate')
+    expect(
+      (await read({ model: null, snapshot: { ...base, contextWindowTokens: 100_000 } })).basis
+    ).toBe('estimate')
   })
 })

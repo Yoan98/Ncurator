@@ -5869,7 +5869,7 @@ const ChatPage: React.FC = () => {
                                 showCancel={Boolean(aiRunId)}
                                 draftValue={composerDraftValue}
                                 draftKey={composerDraftKey}
-                                contextUsage={contextUsage}
+                                contextUsage={contextUsage?.partnerId === currentPartnerId ? contextUsage : null}
                                 plan={composerPlan}
                                 requestAttachmentTarget={ensureAttachmentTarget}
                                 onPreviewFile={(file) => void openFile(file)}

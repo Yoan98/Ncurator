@@ -5,6 +5,7 @@ import { appendFileChangeArtifactsAndEmitEvents } from './utils/artifacts'
 import { BrowserWindow } from 'electron'
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid'
 import { AiRunService } from './AiRunService'
+import { selectContextUsageSample, type ContextUsageSample } from './contextUsage'
 import { classifyThrownErrorToAiRunFailure } from './utils/runFailure'
 import { resolveAiRunFailurePresentation } from './runFailureCatalog'
 import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
@@ -40,7 +41,6 @@ import type {
   AiRunCancelResponse,
   AiRunEvent,
   AiRunRecord,
-  BrainContextBudgetSnapshot,
   ChatMessage,
   ChatMessageContentNode,
   PartnerClearContextResponse,
@@ -184,14 +184,13 @@ export class ChatRunService {
   private readonly activeQuestions = new Map<string, ActiveQuestion>()
   private readonly pendingPartnerSubmissions = new Set<string>()
   private readonly pendingManagedSubmissions = new Set<ManagedRunBinding>()
-  /** 最近一次主会话上下文预算快照；上下文用量展示的唯一真实来源。 */
-  private readonly lastContextBudgets = new Map<string, BrainContextBudgetSnapshot>()
+  private readonly contextUsageSamples = new Map<string, ContextUsageSample>()
 
   public constructor(private readonly deps: ChatRunServiceDeps) {}
 
-  public getLastContextBudget(partnerId: string): BrainContextBudgetSnapshot | undefined {
+  public getContextUsageSample(partnerId: string): ContextUsageSample | undefined {
     const normalizedPartnerId = String(partnerId || '').trim()
-    return normalizedPartnerId ? this.lastContextBudgets.get(normalizedPartnerId) : undefined
+    return normalizedPartnerId ? this.contextUsageSamples.get(normalizedPartnerId) : undefined
   }
 
   private async loadProjectedPartnerMessages(partnerId: string): Promise<ChatMessage[]> {
@@ -410,6 +409,7 @@ export class ChatRunService {
     const assistantMessage = messages.find((message) => message.id === run.assistantMessageId)
 
     await this.deps.aiRunStore.deleteRunsByIds([run.id])
+    this.contextUsageSamples.delete(partnerId)
     const nextMessages = await this.loadProjectedPartnerMessages(partnerId)
 
     return {
@@ -446,6 +446,7 @@ export class ChatRunService {
     await Promise.all(affectedRuns.map(([, entry]) => entry.eventQueue.catch(() => {})))
     await terminalSessionManager.closeByChatSession(normalizedPartnerId)
     await this.deps.partnerStore.deletePartner(normalizedPartnerId)
+    this.contextUsageSamples.delete(normalizedPartnerId)
     await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
     await deletePartnerRootDir(normalizedPartnerId)
   }
@@ -468,7 +469,7 @@ export class ChatRunService {
     }
     const clear = async (): Promise<PartnerClearContextResponse> => {
       await this.deps.partnerCacheService?.clearPartnerFiles(normalizedPartnerId, deleteFileChanges)
-      this.lastContextBudgets.delete(normalizedPartnerId)
+      this.contextUsageSamples.delete(normalizedPartnerId)
       this.deps.subagentStore.deleteByPartner(normalizedPartnerId)
       await this.deps.chatMessageLogStore.deleteByPartner(normalizedPartnerId)
       await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
@@ -1294,7 +1295,18 @@ export class ChatRunService {
           sendEvent,
           recordLlmIo: this.deps.recordLlmIo,
           recordContextBudget: (snapshot) => {
-            this.lastContextBudgets.set(run.partnerId, snapshot)
+            if (
+              entry.deleted ||
+              this.activeRuns.get(runId) !== entry ||
+              (entry.cancelled && snapshot.basis !== 'post_compaction')
+            ) return
+            this.contextUsageSamples.set(
+              run.partnerId,
+              selectContextUsageSample(this.contextUsageSamples.get(run.partnerId), {
+                model: run.mainModel ?? null,
+                snapshot
+              })
+            )
           },
           llmDriver: this.deps.llmDriver,
           requestApprovalBatch: async (request) => await this.requestApprovalBatch(runId, request),

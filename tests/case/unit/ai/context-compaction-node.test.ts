@@ -9,6 +9,7 @@ import {
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import type {
   AiRunEvent,
+  BrainContextBudgetSnapshot,
   ChatMessageLogEntry,
   ChatMessageLogRecord
 } from '../../../../src/shared/types'
@@ -159,6 +160,7 @@ describe('ai human context compaction node', () => {
     const appended: ChatMessageLogEntry[] = []
     const prompts: Array<{ system: string; user: string }> = []
     const events: AiRunEvent[] = []
+    let displaySample: BrainContextBudgetSnapshot | undefined
     const ctx = {
       ...createContext(),
       humanRuntimeOverrides: {
@@ -173,19 +175,34 @@ describe('ai human context compaction node', () => {
         return '## 目标\n继续交付'
       },
       checkCancelled: () => undefined,
+      recordContextBudget: (sample) => {
+        expect(appended).toHaveLength(1)
+        displaySample = sample
+      },
       sendEvent: (event: AiRunEvent) => {
+        if (event.type === 'context_compaction_completed') {
+          expect(displaySample?.basis).toBe('post_compaction')
+          expect(displaySample?.budgetTokens).toBeLessThan(24_000)
+        }
         events.push(event)
       }
     } as AiRunContext
     const cache = createHumanRuntimeCache()
     cache.currentUserLogAppended = true
     const node = createContextCompactionNode({ ctx, cache })
-    const next = await node(
-      createInitialHumanState({
-        taskId: 'task-compact',
-        userInput: 'continue the task'
-      })
-    )
+    const initial = createInitialHumanState({
+      taskId: 'task-compact',
+      userInput: 'continue the task'
+    })
+    initial.execution.contextBudget = {
+      evaluationId: 'before',
+      basis: 'usage_plus_delta',
+      budgetTokens: 24_000,
+      contextWindowTokens: resolveEffectiveContextWindowTokens(ctx.humanRuntimeOverrides?.modelContextWindowTokens),
+      hasCompressibleHistory: true,
+      usageAvailable: true
+    }
+    const next = await node(initial)
 
     expect(prompts).toHaveLength(1)
     expect(prompts[0]?.user).toContain('<conversation>')
@@ -212,6 +229,8 @@ describe('ai human context compaction node', () => {
     expect(isCurrentBrainUserMessage(cache.messages![2]!)).toBe(false)
     expect(cache.messages?.filter(isCurrentBrainUserMessage)).toHaveLength(0)
     expect(next.execution.stage).toBe('context_budget')
+    expect(next.execution.contextBudget).toEqual(initial.execution.contextBudget)
+    expect(displaySample?.budgetTokens).toBe(estimateMessagesForContext(cache.messages!))
     const { started, completed } = compactionEvents(events)
     expect(started).toHaveLength(1)
     expect(completed).toHaveLength(1)
