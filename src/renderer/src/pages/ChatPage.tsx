@@ -162,6 +162,7 @@ import {
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
   formatRelativeTime,
+  getAssistantAnswerMarkdown,
   applyQuestionInteractionResult,
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts
@@ -5106,6 +5107,7 @@ const ChatPage: React.FC = () => {
           messageId={messageItem.id}
           turn={turn}
           isStreaming={loading && Boolean(turn.runId && turn.runId === aiRunId)}
+          isLatestMessage={currentMessages.at(-1)?.id === messageItem.id}
           onOpenApply={openFileChange}
           workspaces={workspaces}
           onOpenReference={handleOpenMarkdownReference}
@@ -5160,9 +5162,24 @@ const ChatPage: React.FC = () => {
     () =>
       buildConversationOutline({
         messages: currentMessages,
-        dayStart: activeTimelineDayStart
+        dayStart: activeTimelineDayStart,
+        resolveReply: (message) => {
+          const turn = assistantTurns[message.id]
+          if (!turn) return undefined
+          const answer = getAssistantAnswerMarkdown(turn)
+          if (answer.trim() && (!message.error || turn.error)) {
+            return {
+              text: answer,
+              final: turn.linkAccess !== undefined || turn.status === 'completed'
+            }
+          }
+          const streamingProgress =
+            turn.streamingRole === 'thought' ? turn.streamingMarkdown.trim() : ''
+          const progress = streamingProgress || turn.processThoughts.at(-1)?.text
+          return progress ? { text: progress, final: false } : undefined
+        }
       }),
-    [activeTimelineDayStart, currentMessages]
+    [activeTimelineDayStart, assistantTurns, currentMessages]
   )
 
   const outlineActiveId = useMemo(
@@ -5760,6 +5777,7 @@ const ChatPage: React.FC = () => {
 
                         {outlineVisible && !isNewSession && outlineItems.length > 0 ? (
                           <ConversationOutline
+                            key={`${currentPartnerId}:${activeTimelineDayStart}`}
                             items={outlineItems}
                             activeId={outlineActiveId}
                             onSelect={handleOutlineSelect}

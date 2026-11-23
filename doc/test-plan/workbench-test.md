@@ -789,7 +789,7 @@ pnpm test:update:e2e
 - How：真实模型通过一次提问询问仅一个候选项的单选、2 至 4 项多选和无选项纯输入三题，真实 UI 点选、取消、填写、翻页与提交；选项行获得焦点后 Enter 下一步，回复框 Enter 下一步和最终发送，空回答 Enter 不前进，Shift+Enter 换行；检查输入采用 Ant Design 默认间距与标准单行高度、无尾部勾叉与选项键盘焦点无整行蓝色外描边；切伙伴和刷新后恢复待处理卡并清空草稿，后续交互继续回答。通过日志检查提交前后运行和工具状态，不注入 UI / IPC 状态。
 - Oracle：对应 `WB-BLOCKER-001-AC9`、`WB-BLOCKER-001-AC11`、`WB-BLOCKER-001-AC12`、`WB-SESSION-014-AC2`；无普通 Composer，单项无分页、多项显示数量与箭头；多选有轻提示；输入为 Ant Design TextArea，默认间距紧凑、单行不额外撑高，多行按内容增长；有选项时输入默认和悬停无边框及阴影，点击聚焦后显示，失焦后隐藏，纯输入题保留完整细描边；选择行无尾部勾叉和蓝色焦点外描边；每题选项不超过 4 项，单个候选项可选择并提交；纯输入无需选项，空白不能发送；选择后仍停留当前题，翻页保留草稿，最后统一提交，选项焦点与回复框 Enter 执行对应主动作，Shift+Enter 换行，空回答按 Enter 不前进，问答在 Activity 回显。协助标签正确出现和清除，新交互不继承草稿。
 - 人工验收（`WB-BLOCKER-001-AC11`）：推荐标签紧贴标题，以浅蓝底深蓝字显示；未选、选中和改选其他项时持续可见；深灰编号只表达已选；长标题及窄窗口下不溢出。
-- Oracle：任务完成后点击复制，使用系统剪贴板与持久化的完整回复比对；刷新页面核对完成时间不变，对齐 `WB-SESSION-017-AC1/AC2/AC3`。同一问答只有一条导航，悬停仍显示预览，对齐 `WB-SESSION-016-AC1/AC3`。
+- Oracle：任务完成后点击复制，使用系统剪贴板与持久化的完整回复比对。发送下一轮后，前一轮页脚保留高度，悬浮时显示；最新回复页脚常驻，时间仅显示时分且无提示。刷新后核对原完成时间，对齐 `WB-SESSION-017-AC1/AC2/AC3`。等待回答时悬浮导航项，核对卡片使用实际显示在过程区的最后一段 AI 文字；任务完成后核对它改用交付正文，对齐 `WB-SESSION-016-AC1/AC3`。
 - Oracle：准备真实 MP4，要求模型在最终回复中给出 Markdown 视频嵌入，通过会话内播放器实际起播并暂停，对齐 `WB-PANEL-006-AC2`；截图保留视频与回复页脚。
 
 ### 5.4 `scheduled-task`
@@ -922,7 +922,7 @@ pnpm test:update:e2e
 | `WB-COMPOSER-015-AC6`                      | 已覆盖：`desktop-account.test.ts` 验证已计费超时/空完成走统一 5 次重试、纯文本请求出现 tool call 不重试、`stop` + 完整 tool call 交给上层、未完成 tool call 交给 brain；`llm-error-classification.test.ts` 验证 `billing` 不参与重试判定，`settlement_pending` / `settlement_in_progress` / `client_disconnected` 不可重放。 |
 | `WB-CORE-008-AC5`                          | 部分覆盖：跨屏后的指针跟踪恢复依赖主进程可信鼠标事件与渲染层光标翻转，无法单测；双屏拖拽、拖回主屏、启动恢复到副屏三种路径需真实 macOS 人工验收。
 | `WB-CORE-009-AC1/AC2/AC3`                  | 待补：启动加载画面（首帧米白底 + 居中 logo、会话加载后淡出、最迟 8s 移除、不拦截点击与滚动）依赖真实冷启动时序与窗口首帧，现有 E2E 都在应用启动完成后接管页面，无法断言首帧内容；需要窗口级截图取证，列入人工验收。                                                                                                                                            |
-| `WB-SESSION-016-AC1/AC2/AC3/AC4`           | 部分覆盖：`conversation-outline` unit 覆盖按问句归组、跨午夜与追加消息归属、当天过滤、标题/摘要清洗、整轮长度分档（对应 AC2 刻度三档）、40 条抽样保留首尾，以及组件的活跃态、hover 预览延迟与点击回调（对应 AC3 预览卡）；导轨几何位置、跨天整组替换、窄窗口隐藏（AC4）与真实滚动高亮仍需真实窗口人工验收。                                                                                                    |
+| `WB-SESSION-016-AC1/AC2/AC3/AC4`           | 部分覆盖：`conversation-outline` unit 覆盖按问句归组、跨午夜与追加消息归属、当天过滤、最终回答优先及普通回复回退、整轮长度分档、40 条抽样保留首尾。`conversation-projection` unit 覆盖历史消息在无最终回答时从日志取最后一段可见进展。`human-interaction-question-card` 验证真实窗口中的问句、过程文字与交付正文预览。导轨几何位置、跨天整组替换、窄窗口隐藏与滚动高亮保留人工验收。 |
 | `WB-COMPOSER-003-AC11`                     | 部分覆盖：单元测试未覆盖 DOM 滚动视口，按钮显示阈值、迟滞隐藏、点击缓动与中断、reduced-motion/e2e 瞬移需真实窗口人工验收；按钮文案与 selector 已固定，可直接补 UI 断言。                                                                                                                                                  |
 | `WB-COMPOSER-003-AC10`                     | 部分覆盖：`streaming-markdown` 与 `streaming-typewriter` unit 覆盖块切分、闭合块/末块划分、打字机速度与追赶；按帧合并渲染只做了单测级验证，真实长回答的掉帧率、滚动跟随手感、动效开关与 reduced-motion 分支需人工验收。                                                                                                   |
 | `WB-COMPOSER-003-AC8`（图片部分）          | 部分覆盖：`markdown-link-render` unit 覆盖含空格路径自动补齐、图片扩展名/类型图标与代码块不被改写；正文图片直显、加载失败降级为引用文字、点击放大与按类型图标的真实窗口断言待补（需要真实模型输出图片链接）。                                                                                                             |
@@ -984,5 +984,5 @@ pnpm test:update:e2e
 
 - `WB-PANEL-005-AC3` 的 HTML 文件外部编辑刷新和关闭后的资源释放保留真实窗口人工验收。
 - `WB-PANEL-006-AC5/AC6/AC7` 保留声音/倍速/全屏、失败重试、伙伴切换与退出中断的真实窗口检查；会话内嵌起播由 `human-interaction-question-card` 覆盖，Windows x64 和 macOS arm64 正式包分别登记。
-- `WB-SESSION-017-AC2/AC3` 的时间悬浮完整日期与伙伴重开保留人工验收；复制和刷新持久化由 `human-interaction-question-card` 覆盖。
+- `WB-SESSION-017-AC2/AC3` 的跨天日期格式和伙伴重开保留人工验收；复制、页脚显隐和刷新持久化由 `human-interaction-question-card` 覆盖。
 - `SET-GENERAL-001-AC7/AC8` 的系统通知展示与点击定位见 Settings 测试计划，底层去重由通知服务 Unit 补证。

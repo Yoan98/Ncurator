@@ -1,5 +1,5 @@
-import { localizeSystemText } from '../../i18n/systemText'
-import { t, getRendererRuntime } from '../../i18n'
+import { answerCompletionTimeLabel, localizeSystemText } from '../../i18n/systemText'
+import { t } from '../../i18n'
 import { App, Tooltip } from 'antd'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SubagentGroupView, { SubagentCloudProvider } from './SubagentGroupView'
@@ -25,7 +25,7 @@ import {
   HiOutlineMagnifyingGlass,
   HiOutlinePhoto,
   HiOutlinePencilSquare,
-  HiOutlineClipboardDocument
+  HiOutlineSquare2Stack
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import type {
@@ -44,6 +44,7 @@ import {
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
+  getAssistantAnswerMarkdown,
   resolveAssistantExecutionIcon,
   resolveQuestionInteraction,
   shouldShowAssistantApplyTargets,
@@ -64,6 +65,7 @@ type AssistantTurnCardProps = {
   messageId: string
   turn?: AssistantTurnViewModel
   isStreaming?: boolean
+  isLatestMessage: boolean
   onOpenApply: (changeId: string) => void
   workspaces: WorkspaceSource[]
   onOpenReference: (reference: OpenableMarkdownReference) => void
@@ -616,6 +618,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   onOpenApply,
   workspaces,
   isStreaming,
+  isLatestMessage,
   onOpenReference,
   onPreviewImage
 }) => {
@@ -628,17 +631,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const streamingMarkdown = turn?.streamingMarkdown || ''
   const streamingRole = turn?.streamingRole || 'answer'
-  let visibleAnswerMarkdown =
-    finalAnswerMarkdown || (streamingRole === 'answer' ? streamingMarkdown : '')
-  if (turn?.status === 'failed' && turn.error) {
-    // Failed run snapshots may include the same title shown by the failure card.
-    const failureLine = `失败：${turn.error}`
-    const suffix = `\n\n${failureLine}`
-    if (visibleAnswerMarkdown === failureLine) visibleAnswerMarkdown = ''
-    else if (visibleAnswerMarkdown.endsWith(suffix)) {
-      visibleAnswerMarkdown = visibleAnswerMarkdown.slice(0, -suffix.length)
-    }
-  }
+  const visibleAnswerMarkdown = getAssistantAnswerMarkdown(turn)
   const hasFinalAnswer = visibleAnswerMarkdown.trim().length > 0
   const hasStreamingThought = streamingRole === 'thought' && streamingMarkdown.trim().length > 0
   const hasNextAiContentForActivity =
@@ -709,7 +702,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
 
   return (
     <SubagentCloudProvider groups={processGroups}>
-      <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
+      <div className="group/assistant-turn w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
         <div className="space-y-4">
           {timeline.length > 0 || hasStreamingThought || runAlive || turn.startedAt ? (
             <div data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}>
@@ -955,7 +948,13 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             </div>
           ) : null}
           {turn.runFinished && hasFinalAnswer ? (
-            <div className="mt-2 flex items-center gap-2 text-xs text-[var(--notion-text-faint)]">
+            <div
+              className={`flex h-6 items-center gap-1 text-xs text-[var(--notion-text-faint)] ${
+                isLatestMessage
+                  ? ''
+                  : 'opacity-0 group-hover/assistant-turn:opacity-100 group-has-[:focus-visible]/assistant-turn:opacity-100'
+              }`}
+            >
               <Tooltip title={t(($) => $.common.copy)}>
                 <button
                   type="button"
@@ -973,25 +972,17 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     )
                   }}
                 >
-                  <HiOutlineClipboardDocument className="h-4 w-4" />
+                  <HiOutlineSquare2Stack className="h-5 w-5 -scale-x-100" />
                 </button>
               </Tooltip>
               {turn.status === 'completed' && turn.finishedAt ? (
-                <Tooltip
-                  title={new Date(turn.finishedAt).toLocaleString(getRendererRuntime().locale)}
+                <time
+                  className="tabular-nums"
+                  dateTime={new Date(turn.finishedAt).toISOString()}
+                  data-testid={`workbench-assistant-finished-at-${messageId}`}
                 >
-                  <time
-                    dateTime={new Date(turn.finishedAt).toISOString()}
-                    data-testid={`workbench-assistant-finished-at-${messageId}`}
-                  >
-                    {t(($) => $.workbench.completedAt, {
-                      time: new Date(turn.finishedAt).toLocaleTimeString(
-                        getRendererRuntime().locale,
-                        { hour: '2-digit', minute: '2-digit' }
-                      )
-                    })}
-                  </time>
-                </Tooltip>
+                  {answerCompletionTimeLabel(turn.finishedAt)}
+                </time>
               ) : null}
             </div>
           ) : null}

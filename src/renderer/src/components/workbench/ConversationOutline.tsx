@@ -61,11 +61,6 @@ const ConversationOutlineView: React.FC<ConversationOutlineProps> = ({
     setPreview(null)
   }, [clearHoverTimer])
 
-  // A re-scoped day replaces the items; never leave a stale preview behind.
-  useEffect(() => {
-    setPreview(null)
-  }, [items])
-
   const previewItem = preview ? items.find((item) => item.id === preview.id) : undefined
 
   return (
@@ -86,7 +81,7 @@ const ConversationOutlineView: React.FC<ConversationOutlineProps> = ({
               className={`nc-conversation-outline-item${isActive ? ' is-active' : ''}`}
               data-kind={item.kind}
               data-length={item.lengthLevel}
-              aria-label={item.title}
+              aria-label={item.title || item.snippet}
               aria-current={isActive ? 'true' : undefined}
               data-testid={`${workbenchSelectors.conversationOutlineItemPrefix}-${item.id}`}
               onMouseEnter={(event) => schedulePreview(item.id, event.currentTarget)}
@@ -113,7 +108,9 @@ const ConversationOutlineView: React.FC<ConversationOutlineProps> = ({
           data-testid={workbenchSelectors.conversationOutlinePreview}
           role="presentation"
         >
-          <div className="nc-conversation-outline-preview-title">{previewItem.title}</div>
+          {previewItem.title ? (
+            <div className="nc-conversation-outline-preview-title">{previewItem.title}</div>
+          ) : null}
           {previewItem.snippet ? (
             <div className="nc-conversation-outline-preview-snippet">{previewItem.snippet}</div>
           ) : null}

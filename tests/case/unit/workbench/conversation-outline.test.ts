@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildConversationOutline,
-  buildOutlinePreview,
   MAX_OUTLINE_ITEMS,
+  outlinePreviewText,
   resolveConversationQuestion
 } from '../../../../src/shared/workbench/conversationOutline'
 import { startOfLocalDay } from '../../../../src/shared/workbench/messageTimeline'
@@ -24,27 +24,32 @@ const message = (
   timestamp
 })
 
-describe('buildOutlinePreview', () => {
-  it('takes the first line as title and the rest as snippet', () => {
-    const preview = buildOutlinePreview('## 结论\n\n第一段内容\n第二段内容')
-    expect(preview.title).toBe('结论')
-    expect(preview.snippet).toBe('第一段内容 第二段内容')
+describe('outlinePreviewText', () => {
+  it('collapses multiple lines into a preview', () => {
+    expect(outlinePreviewText('## 结论\n\n第一段内容\n第二段内容')).toBe(
+      '结论 第一段内容 第二段内容'
+    )
   })
 
   it('strips list markers but keeps inline markdown', () => {
-    const preview = buildOutlinePreview('- **加粗** 与 `code`\n- 第二条')
-    expect(preview.title).toBe('**加粗** 与 `code`')
-    expect(preview.snippet).toBe('第二条')
+    expect(outlinePreviewText('- **加粗** 与 `code`\n- 第二条')).toBe('**加粗** 与 `code` 第二条')
   })
 
-  it('drops fenced code blocks', () => {
-    const preview = buildOutlinePreview('说明\n```ts\nconst a = 1\n```\n尾部')
-    expect(preview.title).toBe('说明')
-    expect(preview.snippet).toBe('尾部')
+  it('keeps link labels and media descriptions without their paths', () => {
+    expect(
+      outlinePreviewText(
+        '已完成 [brief.md](</Users/me/My Docs/brief.md>)，见 ![演示视频](/tmp/demo(1).mp4)。'
+      )
+    ).toBe('已完成 brief.md，见 演示视频。')
   })
 
-  it('returns an empty pair for whitespace-only input', () => {
-    expect(buildOutlinePreview('   \n\n')).toEqual({ title: '', snippet: '' })
+  it('uses surrounding prose or the code itself for code-only replies', () => {
+    expect(outlinePreviewText('说明\n```ts\nconst a = 1\n```\n尾部')).toBe('说明 尾部')
+    expect(outlinePreviewText('```ts\nconst a = 1\n```')).toBe('const a = 1')
+  })
+
+  it('returns empty text for whitespace-only input', () => {
+    expect(outlinePreviewText('   \n\n')).toBe('')
   })
 })
 
@@ -59,7 +64,7 @@ describe('buildConversationOutline', () => {
       ]
     })
     expect(items.map((item) => item.id)).toEqual(['a'])
-    expect(items[0]).toMatchObject({ kind: 'user', title: '今天的问题' })
+    expect(items[0]).toMatchObject({ kind: 'user', title: '今天的问题', snippet: '今天的回答' })
   })
 
   it('falls back to the latest day when no day is selected', () => {
@@ -76,10 +81,38 @@ describe('buildConversationOutline', () => {
       messages: [
         message('a', 'assistant', '   ', DAY),
         message('b', 'system', '系统提示', DAY),
-        message('c', 'user', '真实消息', DAY)
+        message('c', 'user', '真实消息', DAY),
+        message('d', 'assistant', '   ', DAY + 1),
+        { ...message('e', 'assistant', '失败：连接错误', DAY + 2), error: true },
+        message('f', 'user', ' ', DAY + 3)
       ]
     })
     expect(items.map((item) => item.id)).toEqual(['c'])
+    expect(items[0]).toMatchObject({ title: '真实消息', snippet: '' })
+  })
+
+  it('prefers the latest final answer, then the latest non-empty reply from that question', () => {
+    const messages = [
+      message('q1', 'user', '第一问\n补充', DAY),
+      message('final-1', 'assistant', '旧的最终回答', DAY + 1),
+      message('q2', 'user', '第二问', DAY + 2),
+      { ...message('final-2', 'assistant', '最新的最终回答', DAY + 3), userMessageId: 'q1' },
+      { ...message('partial-1', 'assistant', '第一问的后续回复', DAY + 4), userMessageId: 'q1' },
+      message('partial-2', 'assistant', '第二问的旧回复', DAY + 5),
+      message('partial-3', 'assistant', '第二问的最新回复', DAY + 6),
+      message('empty', 'assistant', '\n ', DAY + 7)
+    ]
+
+    const items = buildConversationOutline({
+      dayStart: startOfLocalDay(DAY),
+      messages,
+      resolveReply: (item) => ({ text: item.content, final: item.id.startsWith('final-') })
+    })
+
+    expect(items.map(({ id, title, snippet }) => ({ id, title, snippet }))).toEqual([
+      { id: 'q1', title: '第一问 补充', snippet: '最新的最终回答' },
+      { id: 'q2', title: '第二问', snippet: '第二问的最新回复' }
+    ])
   })
 
   it('buckets tick length by content size', () => {
@@ -106,6 +139,9 @@ describe('buildConversationOutline', () => {
       expect.objectContaining({ id: question.id, kind: 'user', lengthLevel: 3 })
     ])
     expect(resolveConversationQuestion(messages, answer.id)?.id).toBe(question.id)
+    expect(buildConversationOutline({ messages, dayStart: null }).map((item) => item.id)).toEqual([
+      question.id
+    ])
     expect(
       buildConversationOutline({ messages, dayStart: startOfLocalDay(NEXT_DAY) }).map(
         (item) => item.id

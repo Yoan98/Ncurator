@@ -13,9 +13,9 @@ export type ConversationOutlineItemKind = 'user' | 'assistant'
 export type ConversationOutlineItem = {
   id: string
   kind: ConversationOutlineItemKind
-  /** First non-empty line, markdown markers stripped and truncated. */
+  /** User message preview. */
   title: string
-  /** Remaining lines collapsed into one preview paragraph; may be empty. */
+  /** Latest final answer, or the latest available reply. */
   snippet: string
   /** Tick width bucket: short / medium / long content. */
   lengthLevel: 1 | 2 | 3
@@ -41,22 +41,26 @@ const truncate = (value: string, maxChars: number): string =>
   value.length > maxChars ? `${value.slice(0, maxChars).trimEnd()}…` : value
 
 const stripFencedCode = (value: string): string => value.replace(/```[\s\S]*?```/gu, ' ')
+const INLINE_LINK = /!?\[([^\]\n[]*)\]\((?:<[^>\n]*>|(?:\\[^\n]|[^()\n\\]|\([^()\n]*\))*)\)/gu
 
-/** Plain-text preview pair: first line as title, the rest as snippet. */
-export const buildOutlinePreview = (raw: string): { title: string; snippet: string } => {
-  const lines = stripFencedCode(raw)
-    .split('\n')
-    .map((line) => stripLineMarkers(line.trim()))
-    .filter((line) => line.length > 0)
-  if (lines.length === 0) return { title: '', snippet: '' }
-  return {
-    title: truncate(collapseWhitespace(lines[0]), TITLE_MAX_CHARS),
-    snippet: truncate(collapseWhitespace(lines.slice(1).join(' ')), SNIPPET_MAX_CHARS)
-  }
+export const outlinePreviewText = (raw: string): string => {
+  const prose = stripFencedCode(raw).trim()
+  return collapseWhitespace(
+    (prose ? prose.replace(INLINE_LINK, '$1') : raw.replace(/^[\t ]*```[^\n]*$/gmu, ''))
+      .split('\n')
+      .map((line) => stripLineMarkers(line.trim()))
+      .join(' ')
+  )
 }
 
-const lengthLevelOf = (content: string): 1 | 2 | 3 => {
-  const size = collapseWhitespace(content).length
+type OutlineReply = { text: string; final: boolean }
+
+const defaultReply = (message: ChatMessage): OutlineReply =>
+  !message.error && message.content.trim()
+    ? { text: message.content, final: true }
+    : { text: message.assistantProgressText || '', final: false }
+
+const lengthLevelOf = (size: number): 1 | 2 | 3 => {
   if (size < LEVEL_2_CHARS) return 1
   if (size < LEVEL_3_CHARS) return 2
   return 3
@@ -73,36 +77,53 @@ const sampleItems = (items: readonly ConversationOutlineItem[]): ConversationOut
 export const buildConversationOutline = (input: {
   messages: readonly ChatMessage[]
   dayStart: number | null
+  resolveReply?: (message: ChatMessage) => OutlineReply | undefined
 }): ConversationOutlineItem[] => {
-  const { messages } = input
+  const { messages, resolveReply } = input
   if (messages.length === 0) return []
-  const scopeDay = input.dayStart ?? startOfLocalDay(messages[messages.length - 1].timestamp)
+  const latest = messages[messages.length - 1]
+  const scopeDay =
+    input.dayStart ??
+    startOfLocalDay(resolveConversationQuestion(messages, latest.id)?.timestamp ?? latest.timestamp)
 
-  const groups = new Map<string, { message: ChatMessage; content: string }>()
+  const groups = new Map<
+    string,
+    { message: ChatMessage; title: string; length: number; reply?: OutlineReply }
+  >()
   for (const message of messages) {
-    if (message.role !== 'user') continue
-    const content = message.content || message.attachments?.map((item) => item.name).join(' ') || ''
-    groups.set(message.id, { message, content })
+    if (message.role !== 'user' || startOfLocalDay(message.timestamp) !== scopeDay) continue
+    const content =
+      message.content.trim() ||
+      message.attachments?.map((item) => item.name).join(' ') ||
+      message.selectedReferences?.map((item) => item.name).join(' ') ||
+      ''
+    groups.set(message.id, {
+      message,
+      title: truncate(outlinePreviewText(content), TITLE_MAX_CHARS),
+      length: collapseWhitespace(content).length
+    })
   }
   let previousUserId: string | undefined
   for (const message of messages) {
     if (message.role === 'user') previousUserId = message.id
     if (message.role !== 'assistant') continue
     const group = groups.get(message.userMessageId || previousUserId || '')
-    if (group) group.content += `\n${message.content || ''}`
+    if (!group) continue
+    const { text, final } = resolveReply?.(message) ?? defaultReply(message)
+    if (text.trim()) group.length += collapseWhitespace(text).length + Number(group.length > 0)
+    if (group.reply?.final && !final) continue
+    const preview = outlinePreviewText(text)
+    if (preview) group.reply = { text: truncate(preview, SNIPPET_MAX_CHARS), final }
   }
   const items: ConversationOutlineItem[] = []
-  for (const { message, content } of groups.values()) {
-    if (startOfLocalDay(message.timestamp) !== scopeDay) continue
-    const raw = message.content || message.attachments?.map((item) => item.name).join(' ') || ''
-    const preview = buildOutlinePreview(raw)
-    if (!preview.title) continue
+  for (const { message, title, length, reply } of groups.values()) {
+    if (!title && !reply) continue
     items.push({
       id: message.id,
       kind: 'user',
-      title: preview.title,
-      snippet: preview.snippet,
-      lengthLevel: lengthLevelOf(content),
+      title,
+      snippet: reply?.text || '',
+      lengthLevel: lengthLevelOf(length),
       timestamp: message.timestamp
     })
   }

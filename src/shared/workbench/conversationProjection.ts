@@ -6,6 +6,7 @@ import type {
   ChatMessageLogRecord,
   SelectedReference
 } from '../types'
+import { assistantProcessTextInLog, normalizeThoughtText } from '../thoughtText'
 
 const ACTIVE_RUN_STATUSES = new Set<AiRunRecord['status']>([
   'running',
@@ -77,19 +78,36 @@ export const projectAiConversationMessages = (input: {
     const deliveryRecord = [...runRecords].reverse().find(isDeliveryAssistant)
     const deliveryEntry =
       deliveryRecord?.entry.kind === 'assistant' ? deliveryRecord.entry : undefined
-    const deliveryContent = deliveryEntry?.content ?? (run.finalAnswer || run.partialAnswer || '')
+    const partialAnswer = run.partialAnswerRole !== 'thought' ? run.partialAnswer : undefined
+    const deliveryContent = deliveryEntry?.content ?? (run.finalAnswer || partialAnswer || '')
+    let assistantProgressText: string | undefined
+    if (!deliveryContent.trim() || run.status === 'failed') {
+      for (const { text } of assistantProcessTextInLog(runRecords)) assistantProgressText = text
+      if (run.partialAnswerRole === 'thought' && run.status !== 'failed') {
+        assistantProgressText =
+          normalizeThoughtText(run.partialAnswer || '') || assistantProgressText
+      }
+    }
 
     const isActive = ACTIVE_RUN_STATUSES.has(run.status)
     const hasProcessLog = runRecords.some(
       (record) => record.entry.kind === 'assistant' && record.entry.toolCalls.length > 0
     )
-    if (deliveryContent || isActive || run.error || hasProcessLog || run.status === 'continued') {
+    if (
+      deliveryContent ||
+      assistantProgressText ||
+      isActive ||
+      run.error ||
+      hasProcessLog ||
+      run.status === 'continued'
+    ) {
       messages.push({
         id: run.assistantMessageId,
         partner_id: input.partnerId,
         role: 'assistant',
         userMessageId: run.userMessageId,
         content: deliveryContent,
+        ...(assistantProgressText ? { assistantProgressText } : {}),
         timestamp:
           run.status === 'continued'
             ? (runUserMessage?.timestamp ?? run.createdAt) + 1

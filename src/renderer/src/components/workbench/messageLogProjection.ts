@@ -6,7 +6,7 @@ import type {
   ChatMessageLogRecord,
   IpcJsonObject
 } from '../../../../shared/types'
-import { normalizeThoughtText } from '../../../../shared/thoughtText'
+import { assistantProcessTextInLog } from '../../../../shared/thoughtText'
 import { isBrainThinkingOpenInLog } from '../../../../shared/assistantProcessLiveness'
 import {
   reduceAssistantProcessGroups,
@@ -35,10 +35,8 @@ export const projectProcessGroups = (input: {
 } => {
   const groupById = new Map<string, AssistantProcessGroup>()
   const orderedGroupIds: string[] = []
-  const thoughts: AssistantProcessThought[] = []
   const toolArgsById = new Map<string, IpcJsonObject>()
   const pendingQuestionToolCallIds: string[] = []
-  let thinkingOpen = false
   let fallbackOrder = 0
 
   const resolveCreatedAt = (record: Pick<ChatMessageLogRecord, 'seq' | 'createdAt'>): number => {
@@ -78,10 +76,6 @@ export const projectProcessGroups = (input: {
           createdAt: resolveCreatedAt(record)
         })
         groups.forEach(upsertGroup)
-      } else if (entry.eventType === 'thinking_started') {
-        thinkingOpen = true
-      } else if (entry.eventType === 'thinking_completed') {
-        thinkingOpen = false
       } else if (entry.eventType === 'compaction_checkpoint') {
         const createdAt = resolveCreatedAt(record)
         upsertGroup(
@@ -192,18 +186,6 @@ export const projectProcessGroups = (input: {
     }
 
     if (entry.kind === 'assistant') {
-      if (thinkingOpen) {
-        const text = normalizeThoughtText(entry.content)
-        if (text) {
-          const thoughtCreatedAt = resolveCreatedAt(record)
-          thoughts.push({
-            id: `${input.runId}:thought:seq:${record.seq}`,
-            text,
-            createdAt: thoughtCreatedAt,
-            sourceEventType: 'assistant_process_thought'
-          })
-        }
-      }
       for (const call of entry.toolCalls) {
         toolArgsById.set(call.id, call.args)
       }
@@ -270,7 +252,15 @@ export const projectProcessGroups = (input: {
     }
   }
 
-  const processThoughts = thoughts.sort((left, right) => left.createdAt - right.createdAt)
+  const processThoughts = Array.from(
+    assistantProcessTextInLog(input.records),
+    ({ record, text }): AssistantProcessThought => ({
+      id: `${input.runId}:thought:seq:${record.seq}`,
+      text,
+      createdAt: resolveCreatedAt(record),
+      sourceEventType: 'assistant_process_thought'
+    })
+  ).sort((left, right) => left.createdAt - right.createdAt)
   const projectedGroups = orderedGroupIds
     .map((id) => groupById.get(id))
     .filter((group): group is AssistantProcessGroup => Boolean(group))

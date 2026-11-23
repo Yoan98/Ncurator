@@ -519,7 +519,6 @@ export const en = {
     backToWorkbench: 'Back to workbench'
   },
   workbench: {
-    completedAt: 'Completed at {{time}}',
     loadingPartiallyFailed: 'Partially failed',
     noEffectiveFileChange: 'No file content changes were detected.',
     next: 'Next',

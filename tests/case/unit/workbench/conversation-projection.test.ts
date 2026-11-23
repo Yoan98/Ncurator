@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { projectAiConversationMessages } from '../../../../src/shared/workbench/conversationProjection'
+import { buildConversationOutline } from '../../../../src/shared/workbench/conversationOutline'
 import type {
   AiRunRecord,
   ChatMessageContentNode,
@@ -37,6 +38,61 @@ const buildLogRecord = (input: {
 })
 
 describe('conversationProjection', () => {
+  it('previews the last visible progress in a historical turn with no final answer', () => {
+    const run = buildRun({
+      id: 'continued',
+      status: 'continued',
+      finalAnswer: undefined,
+      partialAnswer: ''
+    })
+    const entries: ChatMessageLogRecord['entry'][] = [
+      { kind: 'annotation', eventType: 'thinking_started', payload: {} },
+      {
+        kind: 'assistant',
+        content: '我先确认代码。',
+        toolCalls: [{ id: 'check', name: 'terminal_run', args: {} }]
+      },
+      { kind: 'annotation', eventType: 'thinking_completed', payload: {} },
+      { kind: 'annotation', eventType: 'thinking_started', payload: {} },
+      {
+        kind: 'assistant',
+        content: '我用浏览器测量松手时的帧序列。',
+        toolCalls: [{ id: 'measure', name: 'terminal_run', args: {} }]
+      },
+      { kind: 'annotation', eventType: 'thinking_completed', payload: {} },
+      { kind: 'annotation', eventType: 'thinking_started', payload: {} },
+      {
+        kind: 'assistant',
+        content: ' ',
+        toolCalls: [{ id: 'reading', name: 'terminal_run', args: {} }]
+      },
+      { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
+    ]
+    const records = entries.map((entry, index) =>
+      buildLogRecord({ runId: run.id, seq: index + 1, entry })
+    )
+    const projectOutline = () =>
+      buildConversationOutline({
+        dayStart: null,
+        messages: projectAiConversationMessages({ partnerId: run.partnerId, runs: [run], records })
+      })
+
+    expect(projectOutline()).toEqual([
+      expect.objectContaining({ id: run.userMessageId, snippet: '我用浏览器测量松手时的帧序列。' })
+    ])
+
+    records.push(
+      buildLogRecord({
+        runId: run.id,
+        seq: records.length + 1,
+        entry: { kind: 'assistant', content: '已修复松手时的卡顿。', toolCalls: [] }
+      })
+    )
+    expect(projectOutline()).toEqual([
+      expect.objectContaining({ id: run.userMessageId, snippet: '已修复松手时的卡顿。' })
+    ])
+  })
+
   it('projects user and delivery assistant per run from log and run metadata', () => {
     const runs = [
       buildRun({

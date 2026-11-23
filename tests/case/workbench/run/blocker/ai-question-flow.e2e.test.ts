@@ -87,7 +87,7 @@ describe('workbench AI question e2e', () => {
           await selectWorkbenchExecutionPermission(page, '完全访问')
           await sendWorkbenchMessage(
             page,
-            `请帮我完善当前工作区里的 brief。请先用一次 ask_user_question 提出三题：单选主色（只提供蓝色一个选项）、多选视觉风格（2至4项）、纯文字询问需要写入的主题（不提供选项）。等我回答完三题后再继续修改。完成后在最终回复末尾原样写入视频嵌入：![演示视频](<${videoPath}>)。`
+            `请帮我完善当前工作区里的 brief。第一次调用工具前，请先输出一句进展说明「我会先确认简报的三个要点」，并在同一条消息用一次 ask_user_question 提出三题：单选主色（只提供蓝色一个选项）、多选视觉风格（2至4项）、纯文字询问需要写入的主题（不提供选项）。等我回答完三题后再继续修改。完成后在最终回复末尾原样写入视频嵌入：![演示视频](<${videoPath}>)。`
           )
 
           const required = await waitForWorkbenchAiEvent(runtime, {
@@ -99,6 +99,26 @@ describe('workbench AI question e2e', () => {
 
           const card = page.getByTestId(workbenchSelectors.humanQuestionCard)
           await card.waitFor({ state: 'visible', timeout: 30_000 })
+          const outlineItems = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.conversationOutlineItemPrefix
+          )
+          const outlinePreview = getWorkbenchLocator(
+            page,
+            workbenchSelectors.conversationOutlinePreview
+          )
+          const outlineSnippet = outlinePreview.locator('.nc-conversation-outline-preview-snippet')
+          const visibleProgress = page.getByTestId(workbenchSelectors.assistantThoughts).last()
+          await visibleProgress.waitFor({ state: 'visible', timeout: 5000 })
+          const progressText = (await visibleProgress.innerText()).trim()
+          await outlineItems.first().hover()
+          await expect
+            .poll(() => outlineSnippet.textContent({ timeout: 1000 }).catch(() => ''))
+            .toContain(progressText.slice(0, 14))
+          await runtime.captureScreenshot({
+            name: 'conversation-outline-progress',
+            message: '尚无最终回复时，导航显示最近一段进展文字'
+          })
           const inputCountDuringQuestion = await getWorkbenchLocator(
             page,
             workbenchSelectors.input
@@ -420,19 +440,64 @@ describe('workbench AI question e2e', () => {
             name: 'assistant-full-copy-and-completion-time',
             message: '复制按钮写入完整真实回复，并显示有效完成时间。'
           })
-          await runtime.captureScreenshot({
-            name: 'assistant-inline-video-footer',
-            message: '会话内视频、复制按钮与持久化完成时间'
-          })
-          const outlineItems = getWorkbenchPrefixLocator(
-            page,
-            workbenchSelectors.conversationOutlineItemPrefix
-          )
           await expect.poll(() => outlineItems.count()).toBe(1)
           await outlineItems.first().hover()
-          await getWorkbenchLocator(page, workbenchSelectors.conversationOutlinePreview).waitFor({
-            state: 'visible'
+          await outlinePreview.waitFor({ state: 'visible' })
+          const question = messages.find((item) => item.id === answer.userMessageId)
+          if (!question) throw new Error('reply has no owning question')
+          expect(
+            await outlinePreview.locator('.nc-conversation-outline-preview-title').innerText()
+          ).toContain(question.content.slice(0, 16))
+          expect(
+            await outlinePreview.locator('.nc-conversation-outline-preview-snippet').innerText()
+          ).not.toBe('')
+          await runtime.captureScreenshot({
+            name: 'assistant-inline-video-footer',
+            message: '会话内视频、回复页脚和导航问答预览'
           })
+
+          await sendWorkbenchMessage(page, '请只回复一句「收到」，不需要执行其他操作。')
+          const secondCompletion = await waitForWorkbenchAiEvent(runtime, {
+            name: 'second_answer_completed',
+            matches: (event) => event.type === 'run_completed' && event.runId !== required.runId
+          })
+          const updatedMessages = await page.evaluate(
+            (partnerId) => window.api.partnerMessageList(partnerId),
+            assistancePartnerId
+          )
+          const latest = updatedMessages.findLast((item) => item.role === 'assistant')
+          if (!latest || latest.id === answer.id)
+            throw new Error(`Missing second reply for ${secondCompletion.runId}`)
+          await page
+            .getByTestId(
+              `${workbenchSelectors.conversationOutlineItemPrefix}-${latest.userMessageId}`
+            )
+            .hover()
+          expect(
+            await outlinePreview.locator('.nc-conversation-outline-preview-snippet').innerText()
+          ).toBe(latest.content.trim())
+          const latestTime = page.getByTestId(`workbench-assistant-finished-at-${latest.id}`)
+          await latestTime.waitFor({ state: 'visible' })
+          const readFooter = (time: typeof completedAt) =>
+            time.evaluate((element) => {
+              const footer = element.parentElement!
+              return { opacity: getComputedStyle(footer).opacity, height: footer.offsetHeight }
+            })
+          await page.mouse.move(0, 0)
+          const historicalFooter = await readFooter(completedAt)
+          expect(historicalFooter.opacity).toBe('0')
+          expect(historicalFooter.height).toBeGreaterThan(0)
+          expect((await readFooter(latestTime)).opacity).toBe('1')
+          const latestLabel = await latestTime.innerText()
+          expect(latestLabel).toMatch(/^\d{2}:\d{2}$/u)
+          await latestTime.hover()
+          expect(await latestTime.getAttribute('title')).toBeNull()
+          expect(await latestTime.getAttribute('aria-describedby')).toBeNull()
+          await completedAt.hover()
+          expect(await readFooter(completedAt)).toEqual({ ...historicalFooter, opacity: '1' })
+          await page.mouse.move(0, 0)
+          expect(await readFooter(completedAt)).toEqual(historicalFooter)
+
           await page.reload()
           await completedAt.waitFor({ state: 'visible' })
           await runtime.assertThat((await completedAt.getAttribute('datetime')) === timestamp, {

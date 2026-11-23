@@ -32,6 +32,7 @@ import type {
   AssistantProcessStatus,
   AssistantRichTextSegment,
   AssistantToolName,
+  AssistantTurnViewModel,
   WorkbenchFileRef
 } from './types'
 
@@ -950,6 +951,19 @@ export const applyQuestionInteractionResult = (
     })
     .reverse()
   return targetFound ? next : current
+}
+
+export const getAssistantAnswerMarkdown = (turn?: AssistantTurnViewModel): string => {
+  if (!turn) return ''
+  const answer =
+    turn.finalAnswerMarkdown || (turn.streamingRole === 'answer' ? turn.streamingMarkdown : '')
+  if (turn.status !== 'failed' || !turn.error) return answer
+
+  // The failure card shows this title separately from the answer.
+  const failureLine = `失败：${turn.error}`
+  const suffix = `\n\n${failureLine}`
+  if (answer === failureLine) return ''
+  return answer.endsWith(suffix) ? answer.slice(0, -suffix.length) : answer
 }
 
 export const shouldShowAssistantApplyTargets = (input: {

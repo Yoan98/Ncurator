@@ -731,6 +731,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   /** User question that owns this assistant message, independent of display order. */
   userMessageId?: string
+  /** Last user-visible progress message when the run has no delivery text. */
+  assistantProgressText?: string
   content: string
   timestamp: number
   contentNodes?: ChatMessageContentNode[]

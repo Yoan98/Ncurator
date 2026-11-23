@@ -95,3 +95,22 @@ export const messageTimeLabel = (timestamp: number): string => {
     return `${new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(timestamp)} ${time}`
   return `${new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'numeric', day: 'numeric' }).format(timestamp)} ${time}`
 }
+
+export const answerCompletionTimeLabel = (timestamp: number): string => {
+  const locale = getRendererRuntime().locale
+  const date = new Date(timestamp)
+  const now = new Date()
+  const time = new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date)
+  if (startOfLocalDay(timestamp) === startOfLocalDay(now.valueOf())) return time
+
+  const day = new Intl.DateTimeFormat(locale, {
+    month: 'long',
+    day: 'numeric',
+    ...(date.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {})
+  }).format(date)
+  return `${day} ${time}`
+}

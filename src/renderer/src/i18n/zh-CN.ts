@@ -494,7 +494,6 @@ export const zh = {
     backToWorkbench: '返回工作台'
   },
   workbench: {
-    completedAt: '完成于 {{time}}',
     loadingPartiallyFailed: '部分失败',
     noEffectiveFileChange: '本次未检测到文件内容变化',
     next: '下一步',
