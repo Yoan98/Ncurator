@@ -52,7 +52,8 @@ const UNUSED_DISTRIBUTIONS = [
       'lib/es/locale'
     ]
   })),
-  { packageName: 'js-tiktoken', paths: ['dist/index.js', 'dist/index.cjs', 'dist/ranks'] }
+  { packageName: 'js-tiktoken', paths: ['dist/index.js', 'dist/index.cjs', 'dist/ranks'] },
+  { packageName: 'ffmpeg-static', paths: ['install.js'] }
 ]
 
 const unusedDistributionTargets = (runtimeTrace) => {

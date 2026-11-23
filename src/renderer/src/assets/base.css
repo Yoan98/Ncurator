@@ -20,6 +20,8 @@
   --notion-accent-contrast: #ffffff;
   --notion-accent-blue: #0b6bcb;
   --notion-accent-blue-hover: #0958a5;
+  --notion-accent-selection: color-mix(in srgb, var(--notion-accent-blue) 9%, var(--notion-page));
+  --notion-accent-match: color-mix(in srgb, var(--notion-accent-blue) 16%, var(--notion-page));
   --notion-red: #b3261e;
   --notion-red-bg: #f8ebe9;
   --notion-green: #2f6f4e;
@@ -144,6 +146,8 @@
   --notion-accent-contrast: #1a1a1a;
   --notion-accent-blue: #5aa9f0;
   --notion-accent-blue-hover: #7cb8f7;
+  --notion-accent-selection: color-mix(in srgb, var(--notion-accent-blue) 19%, var(--notion-page));
+  --notion-accent-match: color-mix(in srgb, var(--notion-accent-blue) 30%, var(--notion-page));
   --notion-red: #ff9b90;
   --notion-red-bg: #3a2422;
   --notion-green: #7cc79b;
@@ -2576,6 +2580,10 @@ textarea,
 /* 覆盖 Mark 样式 */
 mark {
   @apply bg-[var(--notion-surface)] text-[var(--notion-text)] rounded-sm px-0.5 font-medium;
+}
+
+mark.reference-mention-match {
+  background-color: var(--notion-accent-match);
 }
 
 .markdown-body {

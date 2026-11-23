@@ -3,6 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { parse, stringify } from 'yaml'
 import { collectRuntimePackageNames } from '../runtime/bundle-graph.mjs'
 import { traceRuntimeDependencies, writeRuntimeTraceReport } from '../runtime/trace.mjs'
@@ -21,6 +22,7 @@ const STAGE_DIR = path.join(ROOT, 'release-stage', 'app')
 const OUT_DIR = path.join(ROOT, 'out')
 const DIST_DIR = path.join(ROOT, 'dist')
 const ROOT_PACKAGE_PATH = path.join(ROOT, 'package.json')
+const rootRequire = createRequire(ROOT_PACKAGE_PATH)
 const ROOT_LOCKFILE_PATH = path.join(ROOT, 'pnpm-lock.yaml')
 const SIDECAR_BIN_DIR = path.join(ROOT, 'resources', 'web_crawler_sidecar', 'bin')
 const NATIVE_RESOURCE_DIR = path.join(ROOT, 'resources', 'native')
@@ -537,6 +539,33 @@ const main = async () => {
   }
   delete stagePackage.pnpm
   if (runtimePackageNames.includes('node-pty')) installPreparedNodePtyNative()
+  const binarySuffix = process.platform === 'win32' ? '.exe' : ''
+  const videoBinaries = [
+    [
+      rootRequire('ffmpeg-static'),
+      path.join(STAGE_DIR, 'node_modules', 'ffmpeg-static', `ffmpeg${binarySuffix}`)
+    ],
+    [
+      rootRequire('@ffprobe-installer/ffprobe').path,
+      path.join(
+        STAGE_DIR,
+        'node_modules',
+        '@ffprobe-installer',
+        `${process.platform}-${process.arch}`,
+        `ffprobe${binarySuffix}`
+      )
+    ]
+  ]
+  for (const [source, target] of videoBinaries) {
+    if (!source || !fs.existsSync(source))
+      throw new Error('Prepared video preview binary is missing')
+    if (!fs.existsSync(path.dirname(target)))
+      throw new Error(`Video preview runtime package is missing: ${target}`)
+    fs.copyFileSync(source, target)
+    fs.chmodSync(target, 0o755)
+    const license = path.join(path.dirname(source), `${path.basename(source)}.LICENSE`)
+    if (fs.existsSync(license)) fs.copyFileSync(license, `${target}.LICENSE`)
+  }
   fs.rmSync(path.join(STAGE_DIR, 'pnpm-lock.yaml'), { force: true })
   pruneCompiledOutput()
   const runtimePruning = pruneNodeModules(runtimeTrace)

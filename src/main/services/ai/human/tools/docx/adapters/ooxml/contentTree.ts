@@ -224,7 +224,7 @@ const readTableStyle = (table: Element): DocxTableStyle | undefined => {
   if (!tblPr) return undefined
   const alignment = firstChildElement(tblPr, 'jc')
   const width = firstChildElement(tblPr, 'tblW')
-  const layout = firstChildElement(tblPr, 'tblLayout')
+  const layout = firstChildElement(tblPr, 'tblLayout')?.getAttributeNS(tblPr.namespaceURI, 'type')
   const widthType = width ? getAttr(width, 'type') : ''
   const widthValue = width ? numberAttr(width, 'w') : undefined
   return compact({
@@ -237,7 +237,7 @@ const readTableStyle = (table: Element): DocxTableStyle | undefined => {
         : widthType === 'pct'
           ? { value: widthValue / 50, unit: 'percent' as const }
           : { value: widthValue / 20, unit: 'pt' as const },
-    layout: layout ? (getAttr(layout, 'type') === 'autofit' ? 'autofit' : 'fixed') : undefined,
+    layout: layout === 'autofit' || layout === 'fixed' ? layout : undefined,
     borders: readBorders(tblPr, 'tblBorders')
   })
 }

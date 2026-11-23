@@ -20,15 +20,40 @@ type SystemNotificationServiceDeps = {
 }
 
 const STATUS_KEYS = {
+  waiting_human: ['runNeedsAnswer', 'runNeedsAnswerBody'],
   completed: ['runCompleted', 'runCompletedBody'],
   failed: ['runFailed', 'runFailedBody'],
   cancelled: ['runCancelled', 'runCancelledBody']
 } as const
 
 export class SystemNotificationService {
+  private readonly notifiedQuestions = new Set<string>()
   public constructor(private readonly deps: SystemNotificationServiceDeps) {}
 
   public async notifyRunTerminal(run: AiRunRecord, status: RunTerminalStatus): Promise<void> {
+    await this.notify(run, status)
+    for (const key of this.notifiedQuestions) {
+      if (key.startsWith(`${run.id}:`)) this.notifiedQuestions.delete(key)
+    }
+  }
+
+  public async notifyRunQuestion(run: AiRunRecord, interactionId: string): Promise<void> {
+    const key = `${run.id}:${interactionId}`
+    if (this.notifiedQuestions.has(key)) return
+    this.notifiedQuestions.add(key)
+    try {
+      await this.notify(run, 'waiting_human', interactionId)
+    } catch (error) {
+      this.notifiedQuestions.delete(key)
+      throw error
+    }
+  }
+
+  private async notify(
+    run: AiRunRecord,
+    status: RunTerminalStatus | 'waiting_human',
+    interactionId?: string
+  ): Promise<void> {
     const settings = await this.deps.settingsStore.get()
     if (!settings.systemNotificationsEnabled) return
     if (!(this.deps.isSupported || Notification.isSupported)()) return
@@ -45,7 +70,7 @@ export class SystemNotificationService {
     )
 
     notification.on('click', () => {
-      void this.openPartner(run.partnerId)
+      void this.openPartner(run.partnerId, interactionId)
     })
     notification.show()
 
@@ -54,7 +79,7 @@ export class SystemNotificationService {
         __NCURATOR_E2E_RECORD_SYSTEM_NOTIFICATION__?: (payload: {
           runId: string
           partnerId: string
-          status: RunTerminalStatus
+          status: RunTerminalStatus | 'waiting_human'
           title: string
           body: string
         }) => void
@@ -63,7 +88,7 @@ export class SystemNotificationService {
     observer?.({ runId: run.id, partnerId: run.partnerId, status, ...copy })
   }
 
-  private async openPartner(partnerId: string): Promise<void> {
+  private async openPartner(partnerId: string, interactionId?: string): Promise<void> {
     const window = this.deps.getMainWindow() || this.deps.createMainWindow?.()
     if (!window || window.isDestroyed()) return
     if (window.webContents.isLoading()) {
@@ -83,7 +108,9 @@ export class SystemNotificationService {
     window.show()
     window.focus()
     if (!window.webContents.isDestroyed()) {
-      window.webContents.send('system-notification-open-session', partnerId)
+      if (interactionId)
+        window.webContents.send('system-notification-open-session', partnerId, interactionId)
+      else window.webContents.send('system-notification-open-session', partnerId)
     }
   }
 }

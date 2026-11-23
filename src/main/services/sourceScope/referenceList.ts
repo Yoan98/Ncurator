@@ -12,6 +12,7 @@ import type {
 } from '../../../shared/types'
 import { REFERENCE_ITEM_PAGE_SIZE as DEFAULT_PAGE_SIZE } from '../../../shared/types'
 import { buildWebReferenceItem } from './selection'
+import { WorkspaceEntryFilter } from '../workspace/workspaceEntryBlacklist'
 
 /** 相对工作地址根的最大路径深度（根为 0，根下第一层为 1，再下一层为 2） */
 const MAX_REFERENCE_PATH_DEPTH = 2
@@ -36,18 +37,28 @@ const normalizeRelativePath = (value: string): string =>
 const pathDepth = (relativePath: string): number =>
   normalizeRelativePath(relativePath).split('/').filter(Boolean).length
 
-const matchesQuery = (reference: SelectedReference, query: string): boolean => {
-  const normalized = query.trim().toLowerCase()
-  if (!normalized) return true
-  const values =
-    reference.kind === 'web'
-      ? [reference.name, reference.url]
-      : [reference.name, reference.relativePath, reference.absolutePath]
-  return values.some((value) =>
-    String(value || '')
-      .toLowerCase()
-      .includes(normalized)
-  )
+type ReferenceRoot = ReferenceItemListResponse['workspaceRoots'][string]
+
+const normalizeQuery = (value: string): string => value.trim().toLowerCase().replaceAll('\\', '/')
+
+const matchRank = (reference: SelectedReference, query: string, root?: ReferenceRoot): number => {
+  const name = normalizeQuery(reference.name)
+  if (!query || name === query) return 0
+  if (reference.kind === 'file' && path.basename(name, path.extname(name)) === query) return 1
+  if (name.startsWith(query)) return 2
+  if (name.includes(query)) return 3
+  if (reference.kind === 'web') return normalizeQuery(reference.url).includes(query) ? 4 : Infinity
+  if (normalizeQuery(reference.relativePath).includes(query)) return 4
+  if (query.includes('/')) {
+    const displayPath = [root?.name, reference.relativePath].filter(Boolean).join('/')
+    if (
+      [displayPath, reference.absolutePath].some((candidate) =>
+        normalizeQuery(candidate).includes(query)
+      )
+    )
+      return 4
+  }
+  return Infinity
 }
 
 export const buildDirectoryReferenceFromRecords = (input: {
@@ -120,6 +131,7 @@ const entryToReference = (input: {
 
 const paginate = (
   items: SelectedReference[],
+  roots: ReferenceItemListResponse['workspaceRoots'],
   offset: number,
   limit: number
 ): ReferenceItemListResponse => {
@@ -128,6 +140,11 @@ const paginate = (
   const slice = items.slice(safeOffset, safeOffset + safeLimit)
   return {
     items: slice,
+    workspaceRoots: Object.fromEntries(
+      slice.flatMap((item) =>
+        item.kind === 'web' ? [] : [[item.workspaceId, roots[item.workspaceId]]]
+      )
+    ),
     total: items.length,
     hasMore: safeOffset + slice.length < items.length,
     offset: safeOffset,
@@ -160,10 +177,14 @@ const allowKind = (
 const collectWorkspaceShallowReferences = async (
   deps: ReferenceListDeps,
   workspace: WorkspaceSource,
-  kindFilters: Set<SelectedReference['kind']> | null
+  kindFilters: Set<SelectedReference['kind']> | null,
+  roots: ReferenceItemListResponse['workspaceRoots']
 ): Promise<SelectedReference[]> => {
   if (!workspace.root_path) return []
   const normalized = await deps.normalizeWorkspaceRoot(workspace.root_path)
+  const filter = new WorkspaceEntryFilter(normalized.normalizedRootPath)
+  if (await filter.isIgnored('', normalized.kind)) return []
+  roots[workspace.id] = { name: normalized.displayName, path: normalized.normalizedRootPath }
   const records = await deps.listWorkspaceFileIndexRecords(workspace.id)
 
   if (normalized.kind === 'file') {
@@ -206,9 +227,9 @@ const collectWorkspaceShallowReferences = async (
   const depth1Dirs: WorkspaceTreeEntry[] = []
   for (const entry of depth1) {
     if (pathDepth(entry.relative_path) > MAX_REFERENCE_PATH_DEPTH) continue
+    if (entry.kind === 'directory') depth1Dirs.push(entry)
     if (!allowKind(entry.kind, kindFilters)) continue
     items.push(entryToReference({ workspace, entry, records }))
-    if (entry.kind === 'directory') depth1Dirs.push(entry)
   }
 
   for (const dir of depth1Dirs) {
@@ -232,18 +253,30 @@ export const listReferenceItemsPage = async (
   request: ListReferenceItemsRequest,
   kindFilters: Set<SelectedReference['kind']> | null
 ): Promise<ReferenceItemListResponse> => {
-  const query = String(request.query || '').trim()
+  const query = normalizeQuery(request.query ?? '')
   const offset = Number(request.offset) || 0
   const limit = Number(request.limit) || DEFAULT_PAGE_SIZE
 
   const workspaces = await deps.listWorkspaces()
-  const local: SelectedReference[] = []
+  const roots: ReferenceItemListResponse['workspaceRoots'] = {}
+  const groups: SelectedReference[][] = []
   for (const workspace of workspaces) {
-    local.push(...(await collectWorkspaceShallowReferences(deps, workspace, kindFilters)))
+    groups.push(await collectWorkspaceShallowReferences(deps, workspace, kindFilters, roots))
   }
-  const web = allowKind('web', kindFilters)
-    ? (await deps.listWebSources()).map(buildWebReferenceItem)
-    : []
-  const all = [...local, ...web].filter((item) => matchesQuery(item, query))
-  return paginate(all, offset, limit)
+  if (allowKind('web', kindFilters))
+    groups.push((await deps.listWebSources()).map(buildWebReferenceItem))
+  const rankedGroups = groups
+    .map((group) =>
+      group
+        .map((item) => ({
+          item,
+          rank: matchRank(item, query, item.kind === 'web' ? undefined : roots[item.workspaceId])
+        }))
+        .filter(({ rank }) => Number.isFinite(rank))
+        .sort((left, right) => left.rank - right.rank)
+    )
+    .filter((group) => group.length > 0)
+  rankedGroups.sort((left, right) => left[0].rank - right[0].rank)
+  const items = rankedGroups.flatMap((group) => group.map(({ item }) => item))
+  return paginate(items, roots, offset, limit)
 }

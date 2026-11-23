@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { execFileSync } from 'node:child_process'
 
 const assertInside = (parent, child, label) => {
   const relative = path.relative(parent, child)
@@ -68,6 +69,13 @@ export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDire
     if (!fs.existsSync(requiredPath) || !fs.statSync(requiredPath).isFile()) {
       throw new Error(`required staged runtime file is missing (${required.id}): ${requiredPath}`)
     }
+  }
+
+  const ffmpeg = loadStageModule(stageRequire, stageNodeModules, 'ffmpeg-static')
+  const ffprobe = loadStageModule(stageRequire, stageNodeModules, '@ffprobe-installer/ffprobe').path
+  for (const binary of [ffmpeg, ffprobe]) {
+    assertInside(stageNodeModules, fs.realpathSync(binary), 'video preview binary')
+    execFileSync(binary, ['-version'], { timeout: 10000, stdio: 'pipe', windowsHide: true })
   }
 
   const yaml = loadStageModule(stageRequire, stageNodeModules, 'yaml')

@@ -1,3 +1,6 @@
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import ffmpeg from 'ffmpeg-static'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
@@ -43,6 +46,16 @@ const setupPreviewWorkspace = async (
   workbookBytes: Buffer
 }> => {
   const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
+  const required = new Set(['学习笔记', 'workbench-preview.md', 'human-input.txt'])
+  for (const entry of await fs.readdir(workspace.rootPath)) {
+    if (!required.has(entry))
+      await fs.rm(path.join(workspace.rootPath, entry), { recursive: true, force: true })
+  }
+  const notesPath = path.join(workspace.rootPath, '学习笔记')
+  for (const entry of await fs.readdir(notesPath)) {
+    if (!['深度学习.pdf', '深度学习.docx'].includes(entry))
+      await fs.rm(path.join(notesPath, entry), { recursive: true, force: true })
+  }
   const workbook = new ExcelJS.Workbook()
   const data = workbook.addWorksheet('Data')
   data.getCell('A1').value = 'excel normal preview fixture'
@@ -309,6 +322,138 @@ const readOpenWithHasWps = async (page: Page): Promise<boolean> => {
   return labels.some((label) => isWpsOpenWithApplication({ name: label }))
 }
 
+const verifyInteractivePreviews = async (
+  runtime: E2ETestRuntime,
+  rootPath: string
+): Promise<void> => {
+  const { page } = runtime
+  await fs.writeFile(
+    path.join(rootPath, 'interactive-report.html'),
+    '<!doctype html><html><head><link rel="stylesheet" href="report.css"></head><body><button id="load">读取报表数据</button><p id="result">等待操作</p><script src="report.js"></script></body></html>'
+  )
+  await fs.writeFile(path.join(rootPath, 'report.css'), '#result { color: rgb(11, 107, 203); }')
+  await fs.writeFile(path.join(rootPath, 'report.json'), JSON.stringify({ value: 42 }))
+  await fs.writeFile(
+    path.join(rootPath, 'report.js'),
+    'document.querySelector("#load").addEventListener("click", async () => { const result = await (await fetch("report.json")).json(); document.querySelector("#result").textContent = "报表值 " + result.value; });'
+  )
+  if (!ffmpeg) throw new Error('FFmpeg is unavailable')
+  const execute = promisify(execFile)
+  for (const [name, codec, container] of [
+    ['native-video.mp4', 'libx264', 'mp4'],
+    ['hevc-video.mkv', 'libx265', 'matroska']
+  ]) {
+    await execute(ffmpeg, [
+      '-nostdin',
+      '-y',
+      '-v',
+      'error',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc2=size=320x180:rate=12:duration=2',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:duration=2',
+      '-c:v',
+      codec,
+      ...(codec === 'libx265' ? ['-x265-params', 'pools=1:frame-threads=1'] : []),
+      '-preset',
+      'ultrafast',
+      '-threads',
+      '1',
+      '-c:a',
+      'aac',
+      '-f',
+      container,
+      path.join(rootPath, name)
+    ])
+  }
+  const open = async (name: string): Promise<void> => {
+    await openWorkbenchWorkspaceFile(runtime, name)
+    if (await page.getByPlaceholder('筛选文件…').isVisible())
+      await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+  }
+  await open('interactive-report.html')
+  const report = page.frameLocator('[data-testid="workbench-html-preview"]')
+  await report.getByRole('button', { name: '读取报表数据' }).click()
+  await report.getByText('报表值 42', { exact: true }).waitFor()
+  const isolation = await report.locator('body').evaluate(() => {
+    let parentAccessible = false
+    try {
+      parentAccessible = Boolean(window.parent.document.body)
+    } catch {
+      /* expected sandbox boundary */
+    }
+    return {
+      apiAvailable: 'api' in window,
+      parentAccessible,
+      color: getComputedStyle(document.querySelector('#result')!).color
+    }
+  })
+  await runtime.assertThat(
+    !isolation.apiAvailable &&
+      !isolation.parentAccessible &&
+      isolation.color === 'rgb(11, 107, 203)',
+    {
+      name: 'interactive-html-preview',
+      message: '真实 HTML 的相对脚本、样式和 JSON 可运行，桌面与父页面保持隔离。',
+      data: isolation
+    }
+  )
+  for (const name of ['native-video.mp4', 'hevc-video.mkv']) {
+    await open(name)
+    const preview = page.getByTestId('workbench-video-preview')
+    await preview.locator('[data-video-state="ready"]').waitFor({ timeout: 90000 })
+    await preview.getByRole('button', { name: '播放', exact: true }).last().click()
+    await page.waitForFunction(() => {
+      const video = document.querySelector<HTMLVideoElement>(
+        '[data-testid="workbench-video-preview"] video'
+      )
+      return Boolean(video && video.currentTime > 0.2 && !video.paused)
+    })
+    await preview.locator('video').hover()
+    await preview.getByRole('button', { name: '暂停', exact: true }).last().click()
+    const playable = await preview.locator('video').evaluate((element: HTMLVideoElement) => ({
+      duration: element.duration,
+      width: element.videoWidth,
+      paused: element.paused
+    }))
+    await runtime.assertThat(playable.duration > 1 && playable.width === 320 && playable.paused, {
+      name: name.startsWith('hevc') ? 'converted-video-playback' : 'native-video-playback',
+      message: '真实视频可起播、推进时间并暂停。',
+      data: playable
+    })
+    await runtime.captureScreenshot({
+      name: name.startsWith('hevc') ? 'converted-video-player' : 'native-video-player',
+      message: '现成视频播放器与文件 Tab 类型图标'
+    })
+  }
+  await open('native-video.mp4')
+  await open('hevc-video.mkv')
+  await page
+    .getByTestId('workbench-video-preview')
+    .locator('[data-video-state="ready"]')
+    .waitFor({ timeout: 15000 })
+  const tabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
+  while (await tabs.count())
+    await tabs
+      .last()
+      .getByRole('button', { name: /^关闭 / })
+      .click()
+  await getWorkbenchLocator(page, workbenchSelectors.contentPanelShell).waitFor({
+    state: 'detached'
+  })
+  await runtime.assertThat(
+    (await getWorkbenchLocator(page, workbenchSelectors.contentPanelShell).count()) === 0,
+    {
+      name: 'last-file-tab-collapses-panel',
+      message: '关闭最后一个文件标签后右侧自动折叠并释放布局宽度。'
+    }
+  )
+}
+
 describe('workbench result e2e', () => {
   it(
     CASE_ID,
@@ -500,6 +645,7 @@ describe('workbench result e2e', () => {
           ).equals(workspace.workbookBytes)
 
           return {
+            rootPath: workspace.rootPath,
             pdfPageVisible,
             pdfWpsHintVisible,
             docxOpenWithHasWps,
@@ -604,6 +750,7 @@ describe('workbench result e2e', () => {
               }
             }
           )
+          await verifyInteractivePreviews(runtime, result.rootPath)
           await assertNoWorkbenchFakeSignals(runtime)
         }
       })

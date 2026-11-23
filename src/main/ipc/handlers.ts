@@ -467,6 +467,9 @@ export function registerHandlers(services: {
     },
     onRunTerminal: async (run, status) => {
       await services.systemNotificationService?.notifyRunTerminal(run, status)
+    },
+    onQuestionRequired: async (run, interactionId) => {
+      await services.systemNotificationService?.notifyRunQuestion(run, interactionId)
     }
   })
   void chatRunService.failInterruptedRuns().catch((error) => {
@@ -728,10 +731,11 @@ export function registerHandlers(services: {
         )
       }
 
-      await workspaceStore.replaceWorkspaceFileIndexRecords(workspaceId, nextRecords)
       if (removedDocumentIds.length > 0) {
-        await documentsStore.deleteDocumentsByIds(removedDocumentIds)
+        const result = await documentsStore.deleteDocumentsByIds(removedDocumentIds)
+        if (!result.success) throw new Error(result.error || result.msg || '清理工作空间索引失败')
       }
+      await workspaceStore.replaceWorkspaceFileIndexRecords(workspaceId, nextRecords)
       job = await updateAndEmitWorkspaceIndexJob(job, {
         status: 'succeeded',
         phase: 'complete',
@@ -812,8 +816,12 @@ export function registerHandlers(services: {
       .map((record) => record.document_id)
       .filter((documentId): documentId is string => Boolean(documentId))
     if (removedDocumentIds.length > 0) {
-      await documentsStore.deleteDocumentsByIds(removedDocumentIds)
+      const result = await documentsStore.deleteDocumentsByIds(removedDocumentIds)
+      if (!result.success) throw new Error(result.error || result.msg || '清理工作空间索引失败')
     }
+    await workspaceStore.deleteWorkspaceFileIndexRecordsByIds(
+      diff.removed.map((record) => record.id)
+    )
     for (const record of diff.removed) {
       recordMap.delete(record.relative_path)
     }
@@ -2305,8 +2313,10 @@ export function registerHandlers(services: {
         const items = await workspaceService.listDirectory({
           workspaceId,
           rootPath: workspace.root_path,
-          relativePath: payload?.relativePath
+          relativePath: payload?.relativePath,
+          purpose: payload?.purpose
         })
+        if (payload?.purpose === 'browse') return { items, total: items.length }
         const records = await workspaceStore.listWorkspaceFileIndexRecordsByPaths(
           workspaceId,
           items.filter((item) => item.kind === 'file').map((item) => item.relative_path)
@@ -2671,7 +2681,7 @@ export function registerHandlers(services: {
         )
       } catch (error) {
         console.error('? [REFERENCE-ITEM-LIST] ERROR:', error)
-        return { items: [], total: 0, hasMore: false, offset: 0, limit: 50 }
+        return { items: [], workspaceRoots: {}, total: 0, hasMore: false, offset: 0, limit: 50 }
       }
     }
   )

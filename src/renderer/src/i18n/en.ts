@@ -303,9 +303,9 @@ export const en = {
     couldNotSaveNotificationSettings: 'Could not save notification settings',
     couldNotOpenTheLogDirectory: 'Could not open the log directory',
     generalSettings: 'General settings',
-    aiTaskNotifications: 'AI completion notifications',
+    aiTaskNotifications: 'AI task notifications',
     sendDesktopNotificationsWhenAiTasksSucceedFailOr:
-      'Send system notifications when tasks succeed, fail, or are canceled.',
+      'Send system notifications when tasks succeed, fail, are canceled, or need your answer.',
     errorLog: 'Error log',
     runtimeAndIndexingErrorsAreLoggedLocallyShareApp:
       'Open the log folder to find app.log for troubleshooting.',
@@ -519,6 +519,7 @@ export const en = {
     backToWorkbench: 'Back to workbench'
   },
   workbench: {
+    completedAt: 'Completed at {{time}}',
     loadingPartiallyFailed: 'Partially failed',
     noEffectiveFileChange: 'No file content changes were detected.',
     next: 'Next',
@@ -1025,6 +1026,15 @@ export const en = {
     startCreatingWithAi: 'Start creating with AI'
   },
   editors: {
+    videoPreview: 'Video preview',
+    htmlPreview: 'HTML preview',
+    videoUnavailable: 'Video file unavailable',
+    videoCannotPlay: 'This video cannot be played',
+    videoMayHaveMoved: 'The file may have been moved or deleted.',
+    videoRetryOrOpen: 'Retry or open it with your system player.',
+    openVideoWithSystem: 'Open with system player',
+    preparingVideo: 'Preparing video…',
+    loadingVideo: 'Loading video',
     add: 'Add',
     formattingChanges: 'Formatting changes',
     reference: 'Reference #{{value1}}',
@@ -1050,8 +1060,6 @@ export const en = {
     changes: 'Changes',
     showAllSlides: 'Show all slides',
     slide: 'Slide {{value1}}{{value2}}',
-    supportedFormatsPdfDocxPptxExcelMarkdownUtf8:
-      'Supported formats: PDF, DOCX, PPTX, Excel, Markdown, UTF-8 text, and PNG, JPG, GIF, WebP, BMP, SVG images.',
     unknownFormat: 'Unknown format',
     couldNotReadWordPreviewData: 'Could not read Word preview data',
     wordPreviewDataIsMissing: 'Word preview data is missing',
@@ -1061,7 +1069,7 @@ export const en = {
     selectAFileToViewItsContentsHere: 'Select a file to view its contents here.',
     fileDeleted: 'File deleted',
     filePreviewUnavailable: 'File preview unavailable: {{value1}}',
-    previewIsNotSupportedForFiles: 'Preview is not supported for {{value1}} files.\n{{value2}}',
+    previewIsNotSupportedForFiles: 'Preview is not supported for {{value1}} files.',
     filePreviewUnavailable2: 'File preview unavailable',
     filePreview: 'File preview',
     couldNotLoadTheTextPreview: 'Could not load the text preview',

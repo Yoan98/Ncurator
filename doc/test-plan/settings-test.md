@@ -73,9 +73,9 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 - 测试类型：`e2e`
 - What：目录树只读取各地址或被展开目录的直属子项，并以加载反馈承载读取过程。
-- Why：文件地址可能包含 `node_modules` 等超大目录；进入设置页不能递归枚举整个森林。
-- How：添加包含根目录文件、普通子目录、`node_modules` 和点开头文件/目录的真实临时目录；进入文件 tab 后验证顶层首层，展开普通子目录后验证其直属文件，再确认点开头项始终不可见。检查目录开/关的 `react-icons` 图形、Office 原有彩色专属图标、MD/普通文件的 Phosphor Light 细线图标及目录的 Bootstrap `BsFolder / BsFolder2Open` 图标、与 `@` 候选一致的目录 16px / 文件 18px 尺寸（非整数 DPI 的 CSS 布局量化误差最多 0.05px）、行高及 hover 背景，再展开后点击目录树右上刷新，确认已展开节点仍展开、未展开目录不会被全部展开。
-- Oracle：`node_modules` 在顶层可见但其内容不会在首次加载时出现；子目录展开前不读取其子项，展开时显示局部 loading；点开头文件或目录在任意层级均不显示；页面没有全部展开/折叠入口，顶层地址行可单独折叠，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。目录树右上刷新只更新已展示节点状态、不重置展开折叠，对齐 `SET-WORKSPACE-008-AC6`。Office 原有彩色图标、MD/普通文件/目录库图标、目录 16px / 文件 18px 尺寸与开/关形状、行对齐和未选中行无 hover 底色对齐 `SET-WORKSPACE-008-AC7`。新添加后只展开该地址、其余折叠由产品交互覆盖，本 case 不强制断言。
+- Why：工作空间按统一黑名单跳过依赖和缓存目录；普通目录继续按需读取直属子项。
+- How：添加包含根目录文件、普通子目录、`node_modules` 和点开头文件/目录的真实临时目录。进入文件 tab 后验证顶层首层，展开普通子目录后验证其直属文件，再确认点开头项始终不可见。检查目录开/关的 `react-icons` 图形、Office 专属图标及当前主题对应的文件类型配色、MD/普通文件的 Phosphor Light 细线图标及目录的 Bootstrap `BsFolder / BsFolder2Open` 图标、与 `@` 候选一致的目录 16px / 文件 18px 尺寸（非整数 DPI 的 CSS 布局量化误差最多 0.05px）、行高及 hover 背景。展开后点击目录树右上刷新，确认已展开节点仍展开、未展开目录不会被全部展开。
+- Oracle：`node_modules` 及其内容在初次加载和刷新后均隐藏，对齐 `SET-WORKSPACE-008-AC8`。子目录展开前不读取其子项，展开时显示局部 loading。点开头文件或目录在任意层级均不显示。页面没有全部展开/折叠入口，顶层地址行可单独折叠，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。目录树右上刷新只更新已展示节点状态、不重置展开折叠，对齐 `SET-WORKSPACE-008-AC6`。Office 原有彩色图标、MD/普通文件/目录库图标、目录 16px / 文件 18px 尺寸与开/关形状、行对齐和未选中行无 hover 底色对齐 `SET-WORKSPACE-008-AC7`。黑名单嵌套、特征目录与旧索引清理由 [Knowledge 扫描契约](knowledge-test.md#workspace-scan-contract) 提供 backend 证据，对齐 `SET-WORKSPACE-008-AC9`。新添加后只展开该地址、其余折叠由产品交互覆盖，本 case 不强制断言。
 
 #### `workspace-remove-from-list`
 
@@ -102,8 +102,8 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：点击“检查更新”后，页面会刷新文件树和需索引摘要。
 - Why：这是用户识别待更新文件的第一步。
-- How：通过原生目录选择绑定空隔离目录，再将 `workspace-scenarios/workspace-scan-progress-refresh` 中 600 个固定文件复制进去，制造被测的外部新增；通过 Settings UI 触发检查更新并读取刷新后的文件树。
-- Oracle：检查成功后页面可索引/摘要反映真实发现结果（如可索引数与树内容），对齐 `SET-WORKSPACE-003-AC2`；过程进度通过 job 事件或进度块可见，扫描很快完成时允许采不到中间 UI，但若采到事件则应包含目录扫描与索引比对两阶段结构，对齐 `SET-WORKSPACE-003-AC1`、`SET-WORKSPACE-003-AC5`；运行期间目录读取次数为 0；离开再返回时恢复当前进度和按钮状态，对齐 `SET-WORKSPACE-003-AC3`。
+- How：通过原生目录选择绑定空隔离目录，等待初次扫描结束。原样复制共享样本的 Markdown、TXT 与 TS 各一份，在 Settings UI 点击「检查更新」，记录新任务事件与终态目录树。用例使用 `knowledge: none`。
+- Oracle：同一任务报告目录扫描、索引比对和成功终态，对齐 `SET-WORKSPACE-003-AC1`、`SET-WORKSPACE-003-AC5`。完成后树中显示 3 个文件，待索引汇总为 2，对齐 `SET-WORKSPACE-003-AC2`。采到运行事件时目录读取次数保持不变。小目录的任务可能在切回页面前结束，运行中切回并恢复进度的专项覆盖仍按 `SET-WORKSPACE-003-AC3` 人工验收。
 
 #### `workspace-prepare-refresh`
 
@@ -325,7 +325,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 - 向量模型补充真实检查：生产远程服务完成手动文件和网页重建，覆盖 `SET-VECTOR-006-AC2/AC3/AC4/AC5` 与 `SET-VECTOR-007-AC2/AC3/AC5/AC6`；分别验证鉴权／长度错误、运行中配置拒绝、内容未变重建、取消与关闭重启、部分重建没有误导切回入口，以及全部分类完成前 KB 始终报错。Unit/模拟 HTTP 不能计作真实 UI 或 live 通过。
 
-- `SET-GENERAL-001`：通知开关由 Settings E2E 验证，通知服务行为由 Unit 验证。候选包上尽可能补充检查四类真实终态通知、馆长 logo、点击返回对应伙伴及系统通知不可用时的稳定性；受系统权限或工具能力限制的部分如实记录为未验证，不阻塞发布，也不要求用户介入。不伪造通知对象或点击事件，不将 Unit 结果记为真实 OS 检查通过。
+- `SET-GENERAL-001`：通知开关由 Settings E2E 验证，通知服务行为由 Unit 验证。候选包上尽可能补充检查四类真实终态及每批待回答问题通知、馆长 logo、点击返回对应伙伴或定位问题卡片（`SET-GENERAL-001-AC7/AC8`）及系统通知不可用时的稳定性；受系统权限或工具能力限制的部分如实记录为未验证，不阻塞发布，也不要求用户介入。不伪造通知对象或点击事件，不将 Unit 结果记为真实 OS 检查通过。
 
 ## 5. 自动化覆盖边界
 

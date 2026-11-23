@@ -1,4 +1,4 @@
-import { isImageFileExtension } from './imageFiles'
+import { fileExtensionOf, isImageFileExtension } from './imageFiles'
 
 /**
  * 文件类型分类：只决定用哪种图标，不含任何样式。
@@ -15,6 +15,7 @@ export type FileIconKind =
   | 'video'
   | 'image'
   | 'markdown'
+  | 'html'
   | 'file'
 
 const normalizeFileExtension = (value: string | undefined): string => {
@@ -26,15 +27,12 @@ const normalizeFileExtension = (value: string | undefined): string => {
 }
 
 export const getFileIconKind = (name: string, extension?: string): FileIconKind => {
-  const filename = name.split(/[\\/]/u).pop() || name
-  const dotIndex = filename.lastIndexOf('.')
-  const fileExt =
-    normalizeFileExtension(extension) ||
-    (dotIndex > -1 ? normalizeFileExtension(filename.slice(dotIndex + 1)) : '')
+  const fileExt = normalizeFileExtension(extension) || fileExtensionOf(name)
   if (fileExt === 'md' || fileExt === 'markdown') return 'markdown'
+  if (fileExt === 'html' || fileExt === 'htm') return 'html'
   if (isImageFileExtension(fileExt)) return 'image'
   if (fileExt === 'pdf') return 'pdf'
-  if (fileExt === 'docx') return 'docx'
+  if (fileExt === 'doc' || fileExt === 'docx') return 'docx'
   if (['xls', 'xlsx', 'xlsm', 'xltx', 'xltm', 'csv'].includes(fileExt)) return 'xlsx'
   if (fileExt === 'ppt' || fileExt === 'pptx') return 'ppt'
   if (['aac', 'flac', 'm4a', 'mp3', 'oga', 'ogg', 'opus', 'wav', 'weba'].includes(fileExt)) {

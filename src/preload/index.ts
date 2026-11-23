@@ -90,10 +90,16 @@ const emitDownloadProgress = (payload: DownloadProgress): void => {
   }
 }
 
-ipcRenderer.on('system-notification-open-session', (_event, partnerId: string) => {
-  pendingSystemNotificationPartnerId = partnerId
-  for (const listener of systemNotificationPartnerListeners) listener(partnerId)
-})
+ipcRenderer.on(
+  'system-notification-open-session',
+  (_event, partnerId: string, interactionId?: string) => {
+    if (interactionId)
+      window.sessionStorage.setItem('ncurator.pending-notification-interaction', interactionId)
+    else window.sessionStorage.removeItem('ncurator.pending-notification-interaction')
+    pendingSystemNotificationPartnerId = partnerId
+    for (const listener of systemNotificationPartnerListeners) listener(partnerId)
+  }
+)
 
 if (isE2EObserverEnabled) {
   ipcRenderer.on('ai-run-event', (_event: Electron.IpcRendererEvent, data: AiRunEvent) => {
@@ -312,6 +318,11 @@ const api: DesktopApi = {
   embeddingModelSelect: (id) => ipcRenderer.invoke('embedding-model-select', id),
   embeddingModelTest: (input) => ipcRenderer.invoke('embedding-model-test', input),
   readFile: (filePath: string): Promise<Uint8Array> => ipcRenderer.invoke('read-file', filePath),
+  previewHtmlOpen: (source) => ipcRenderer.invoke('preview-html-open', source),
+  previewResourceRelease: (id) => ipcRenderer.invoke('preview-resource-release', id),
+  previewVideoOpen: (request) => ipcRenderer.invoke('preview-video-open', request),
+  previewVideoGet: (id) => ipcRenderer.invoke('preview-video-get', id),
+  previewVideoConvert: (request) => ipcRenderer.invoke('preview-video-convert', request),
   fileExists: (filePath: string): Promise<boolean> => ipcRenderer.invoke('file-exists', filePath),
   writeTextFile: (payload) => {
     emitE2EIpcCall('writeTextFile', {

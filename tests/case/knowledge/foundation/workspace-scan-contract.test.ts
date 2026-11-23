@@ -1,6 +1,11 @@
 import { describe, it } from 'vitest'
 import path from 'node:path'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import {
+  listReferenceItemsPage,
+  type ReferenceListDeps
+} from '../../../../src/main/services/sourceScope/referenceList'
+import { pruneBlacklistedWorkspaceFiles } from '../../../../src/main/services/workspace/workspaceEntryBlacklist'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 describe('unit workspace backend', () => {
@@ -29,10 +34,46 @@ describe('unit workspace backend', () => {
           path.join(runtime.workspaceRoot, '工作', '.drafts', 'hidden.md'),
           'hidden\n'
         )
+        const ignoredFilePaths = [
+          '.private/notes.md',
+          'node_modules/guide.md',
+          'bower_components/guide.md',
+          '__pycache__/guide.md',
+          '__pypackages__/guide.md',
+          'venv/guide.md',
+          'coverage/guide.md',
+          'htmlcov/guide.md',
+          'playwright-report/guide.md',
+          '__MACOSX/guide.md',
+          'visible/deep/node_modules/guide.md',
+          'python-env/deep/guide.md'
+        ]
+        const keptFilePaths = [
+          'node_modules_backup/guide.md',
+          'build/report.txt',
+          'dist/report.txt',
+          'out/report.txt',
+          'target/report.txt',
+          'vendor/guide.md',
+          'bin/guide.md',
+          'obj/guide.md',
+          'coverage.txt',
+          '~$notes.txt',
+          'ordinary-env/guide.md'
+        ]
+        for (const relativePath of [...ignoredFilePaths, ...keptFilePaths]) {
+          const absolutePath = path.join(runtime.workspaceRoot, relativePath)
+          await mkdir(path.dirname(absolutePath), { recursive: true })
+          await writeFile(absolutePath, 'workspace blacklist contract\n')
+        }
+        await writeFile(
+          path.join(runtime.workspaceRoot, 'python-env', 'pyvenv.cfg'),
+          'home = python\n'
+        )
+        await mkdir(path.join(runtime.workspaceRoot, 'ordinary-env', 'pyvenv.cfg'))
         const scanResult = await runtime.workspaceSourceService.scanWorkspaceTree({
           workspaceId: 'workspace-scan-contract',
           rootPath: runtime.workspaceRoot,
-          workspaceName: '扫描契约工作区',
           now,
           onProgress: (progress) => {
             scanProgress.push({ ...progress })
@@ -47,9 +88,22 @@ describe('unit workspace backend', () => {
               now
             })
           )
+        const ignoredRecords = ignoredFilePaths.map((relativePath, index) => ({
+          id: `ignored-record-${index}`,
+          workspace_id: scanResult.workspace.id,
+          relative_path: relativePath,
+          absolute_path: path.join(runtime.workspaceRoot, relativePath),
+          name: path.basename(relativePath),
+          file_ext: 'md',
+          index_status: 'indexed' as const,
+          document_id: `ignored-document-${index}`,
+          created_at: now,
+          updated_at: now
+        }))
         const hiddenDiff = await runtime.workspaceSourceService.diffWorkspaceTreeAgainstIndex({
           entries: scanResult.entries,
           records: [
+            ...ignoredRecords,
             {
               id: 'hidden-env-record',
               workspace_id: scanResult.workspace.id,
@@ -75,8 +129,53 @@ describe('unit workspace backend', () => {
         await runtime.storageService.workspace.saveWorkspace(scanResult.workspace)
         await runtime.storageService.workspace.replaceWorkspaceFileIndexRecords(
           scanResult.workspace.id,
-          records
+          [...records, ...ignoredRecords]
         )
+        const documents = runtime.storageService.documents
+        const legacyDocuments = ignoredRecords.map((record) => ({
+          id: record.document_id,
+          name: record.name,
+          source_type: 'file' as const,
+          workspace_id: scanResult.workspace.id,
+          file_path: record.absolute_path,
+          import_status: 2,
+          active_generation_id: 'blacklist-old-generation',
+          created_at: now
+        }))
+        legacyDocuments.push({
+          ...legacyDocuments[0],
+          id: 'ignored-orphan-document',
+          file_path: path.join(runtime.workspaceRoot, 'node_modules', 'orphan.md')
+        })
+        for (const document of legacyDocuments) await documents.addDocument(document)
+        await documents.addChunks({
+          chunks: legacyDocuments.map((document) => ({
+            id: `${document.id}-chunk`,
+            document_id: document.id,
+            document_name: document.name,
+            workspace_id: scanResult.workspace.id,
+            source_type: 'file' as const,
+            text: 'blacklistlegacycontent',
+            metadata: { page: 1 }
+          })),
+          vectors: legacyDocuments.map(() => new Float32Array(768).fill(1)),
+          generationId: 'blacklist-old-generation'
+        })
+        const ignoredDocumentIds = legacyDocuments.map((document) => document.id)
+        const oldChunkCount = await documents.countChunksByDocumentIds(ignoredDocumentIds)
+        await runtime.storageService.close()
+        await runtime.storageService.initialize()
+        await pruneBlacklistedWorkspaceFiles({
+          workspaceStore: runtime.storageService.workspace,
+          documentsStore: documents
+        })
+        const oldDocumentsAfterCleanup = await documents.listDocumentsBySourceType(
+          'file',
+          scanResult.workspace.id
+        )
+        const oldChunkCountAfterCleanup =
+          await documents.countChunksByDocumentIds(ignoredDocumentIds)
+        const oldSearchResults = await documents.ftsSearch('blacklistlegacycontent')
 
         const savedWorkspace = await runtime.storageService.workspace.getWorkspaceById(
           scanResult.workspace.id
@@ -119,8 +218,76 @@ describe('unit workspace backend', () => {
           rootPath: runtime.workspaceRoot,
           relativePath: '工作'
         })
+        for (const name of ['node_modules', 'python-env', '.private']) {
+          await runtime.storageService.workspace.saveWorkspace({
+            id: `ignored-root-${name}`,
+            root_path: path.join(runtime.workspaceRoot, name),
+            created_at: now,
+            updated_at: now
+          })
+        }
+        const referenceDeps: ReferenceListDeps = {
+          listWorkspaces: () => runtime.storageService.workspace.listWorkspaces(),
+          listWorkspaceFileIndexRecords: (workspaceId) =>
+            runtime.storageService.workspace.listWorkspaceFileIndexRecords(workspaceId),
+          listDirectory: (input) => runtime.workspaceSourceService.listDirectory(input),
+          listWebSources: async () => [],
+          normalizeWorkspaceRoot: (rootPath) =>
+            runtime.workspaceSourceService.normalizeWorkspaceRoot(rootPath)
+        }
+        const referencePaths: string[] = []
+        let referenceOffset = 0
+        for (;;) {
+          const references = await listReferenceItemsPage(
+            referenceDeps,
+            { offset: referenceOffset },
+            null
+          )
+          referencePaths.push(
+            ...references.items
+              .filter((item) => item.kind !== 'web')
+              .map((item) => item.relativePath)
+          )
+          if (!references.hasMore) break
+          referenceOffset += references.items.length
+        }
+        const nameSearch = await listReferenceItemsPage(
+          referenceDeps,
+          { query: 'node_modules' },
+          null
+        )
+        const markerSearch = await listReferenceItemsPage(
+          referenceDeps,
+          { query: 'python-env' },
+          null
+        )
+        await rm(path.join(runtime.workspaceRoot, 'python-env', 'pyvenv.cfg'))
+        const afterMarkerRemoval = await runtime.workspaceSourceService.listDirectory({
+          workspaceId: scanResult.workspace.id,
+          rootPath: runtime.workspaceRoot
+        })
+        await writeFile(
+          path.join(runtime.workspaceRoot, 'python-env', 'pyvenv.cfg'),
+          'home = python\n'
+        )
 
         return {
+          ignoredFilePaths,
+          keptFilePaths,
+          oldChunkCount,
+          oldDocumentsAfterCleanup,
+          oldChunkCountAfterCleanup,
+          oldSearchResults,
+          sourceAfterCleanup: await readFile(
+            path.join(runtime.workspaceRoot, 'node_modules', 'guide.md'),
+            'utf8'
+          ),
+          referencePaths,
+          nameSearchPaths: nameSearch.items
+            .filter((item) => item.kind !== 'web')
+            .map((item) => item.relativePath),
+          markerSearchCount: markerSearch.total,
+          afterMarkerRemovalPaths: afterMarkerRemoval.map((entry) => entry.relative_path),
           activeJob,
           scanProgress,
           diffProgress,
@@ -194,17 +361,17 @@ describe('unit workspace backend', () => {
 
         runtime.assertThat(
           !result.rootDirectoryPaths.some((item) => item.startsWith('.')) &&
-            result.rootDirectoryPaths.includes('node_modules') &&
+            !result.rootDirectoryPaths.includes('node_modules') &&
             result.rootDirectoryPaths.includes('工作') &&
             !result.nestedDirectoryPaths.some((item) => item.includes('.drafts')) &&
             !result.rootDirectoryPaths.includes('visible/deep') &&
             result.visibleDirectoryPaths.includes('visible/deep') &&
             !result.visibleDirectoryPaths.includes('visible/deep/leaf.txt') &&
             result.deepDirectoryPaths.includes('visible/deep/leaf.txt') &&
-            result.modulesDirectoryPaths.includes('node_modules/noise.js'),
+            result.modulesDirectoryPaths.length === 0,
           {
             name: 'workspace-directory-list-is-lazy-and-filters-noise',
-            message: '目录读取应只返回直属子项，隐藏点开头项，并保留非隐藏目录的可见性。',
+            message: '目录读取应只返回直属子项，并按工作空间黑名单隐藏目录及其全部内容。',
             data: result
           }
         )
@@ -251,6 +418,61 @@ describe('unit workspace backend', () => {
             '如果旧索引里已经有隐藏文件，下次扫描 diff 应把它当作已移除，便于清理旧知识库记录。',
           data: result.removedHiddenPaths
         })
+        runtime.assertThat(
+          result.ignoredFilePaths.every(
+            (item) =>
+              !result.scannedPaths.includes(item) &&
+              !result.indexedPaths.includes(item) &&
+              result.removedHiddenPaths.includes(item)
+          ) &&
+            !result.rootDirectoryPaths.includes('python-env') &&
+            result.keptFilePaths.every((item) => result.indexedPaths.includes(item)) &&
+            result.afterMarkerRemovalPaths.includes('python-env'),
+          {
+            name: 'workspace-blacklist-filters-subtrees-and-rechecks-markers',
+            message:
+              '黑名单在任意层级生效，保留普通构建目录与相似名称，特征文件移除后下次读取生效，对齐 SET-WORKSPACE-008-AC8。',
+            data: result
+          }
+        )
+        runtime.assertThat(
+          result.oldChunkCount === result.ignoredFilePaths.length + 1 &&
+            result.oldDocumentsAfterCleanup.length === 0 &&
+            result.oldChunkCountAfterCleanup === 0 &&
+            result.oldSearchResults.length === 0 &&
+            result.sourceAfterCleanup === 'workspace blacklist contract\n',
+          {
+            name: 'workspace-blacklist-cleans-persisted-indexes-on-startup',
+            message:
+              '启动清理移除旧文件索引、文档及向量块，重复清理保持一致，对齐 SET-WORKSPACE-008-AC9。',
+            data: result
+          }
+        )
+        runtime.assertThat(
+          !result.referencePaths.includes('node_modules') &&
+            !result.referencePaths.includes('python-env') &&
+            result.referencePaths.filter((item) => item === '').length === 1 &&
+            result.ignoredFilePaths.every((item) => !result.referencePaths.includes(item)) &&
+            result.keptFilePaths.every((item) => result.referencePaths.includes(item)) &&
+            result.nameSearchPaths.includes('node_modules_backup/guide.md') &&
+            result.nameSearchPaths.every((item) =>
+              ['node_modules_backup', 'node_modules_backup/guide.md'].includes(item)
+            ) &&
+            result.markerSearchCount === 0 &&
+            !result.referencePaths.some((item) =>
+              item.split('/').some((name) => name.startsWith('.'))
+            ),
+          {
+            name: 'workspace-blacklist-filters-reference-discovery-and-search',
+            message:
+              '@ 候选和关键词搜索统一排除黑名单目录、虚拟环境及其内容，命中的工作地址根也被排除。',
+            data: {
+              referencePaths: result.referencePaths,
+              nameSearchPaths: result.nameSearchPaths,
+              markerSearchCount: result.markerSearchCount
+            }
+          }
+        )
       }
     })
   })

@@ -1,5 +1,6 @@
 import { localizeSystemText } from '../../i18n/systemText'
-import { t } from '../../i18n'
+import { t, getRendererRuntime } from '../../i18n'
+import { App, Tooltip } from 'antd'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SubagentGroupView, { SubagentCloudProvider } from './SubagentGroupView'
 import { presentSubagentGroups } from './subagentPresentation'
@@ -23,7 +24,8 @@ import {
   HiOutlineGlobeAlt,
   HiOutlineMagnifyingGlass,
   HiOutlinePhoto,
-  HiOutlinePencilSquare
+  HiOutlinePencilSquare,
+  HiOutlineClipboardDocument
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import type {
@@ -568,7 +570,9 @@ const AssistantActivityGroupView: React.FC<{
       >
         <span
           className={`inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
-            headerShimmer ? 'text-[var(--notion-text)]' : 'text-[var(--notion-text-faint)] group-hover/execution:text-[var(--notion-text)]'
+            headerShimmer
+              ? 'text-[var(--notion-text)]'
+              : 'text-[var(--notion-text-faint)] group-hover/execution:text-[var(--notion-text)]'
           }`}
         >
           <LayerIcon iconKind={iconKind} />
@@ -615,6 +619,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   onOpenReference,
   onPreviewImage
 }) => {
+  const { message } = App.useApp()
   const [applyTargetsExpanded, setApplyTargetsExpanded] = useState(false)
   const [processExpanded, setProcessExpanded] = useState(() => !turn?.runFinished)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
@@ -946,6 +951,47 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                         count: turn.applyTargets.length - MAX_VISIBLE_APPLY_TARGETS
                       })}
                 </button>
+              ) : null}
+            </div>
+          ) : null}
+          {turn.runFinished && hasFinalAnswer ? (
+            <div className="mt-2 flex items-center gap-2 text-xs text-[var(--notion-text-faint)]">
+              <Tooltip title={t(($) => $.common.copy)}>
+                <button
+                  type="button"
+                  aria-label={t(($) => $.workbench.copyMessage)}
+                  data-testid={`workbench-assistant-copy-${messageId}`}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] transition hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)]"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(visibleAnswerMarkdown).then(
+                      () => {
+                        void message.success(t(($) => $.common.copied))
+                      },
+                      () => {
+                        void message.error(t(($) => $.workbench.couldNotCopy))
+                      }
+                    )
+                  }}
+                >
+                  <HiOutlineClipboardDocument className="h-4 w-4" />
+                </button>
+              </Tooltip>
+              {turn.status === 'completed' && turn.finishedAt ? (
+                <Tooltip
+                  title={new Date(turn.finishedAt).toLocaleString(getRendererRuntime().locale)}
+                >
+                  <time
+                    dateTime={new Date(turn.finishedAt).toISOString()}
+                    data-testid={`workbench-assistant-finished-at-${messageId}`}
+                  >
+                    {t(($) => $.workbench.completedAt, {
+                      time: new Date(turn.finishedAt).toLocaleTimeString(
+                        getRendererRuntime().locale,
+                        { hour: '2-digit', minute: '2-digit' }
+                      )
+                    })}
+                  </time>
+                </Tooltip>
               ) : null}
             </div>
           ) : null}

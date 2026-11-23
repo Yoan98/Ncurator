@@ -1,5 +1,10 @@
 import type { FC } from 'react'
-import { HiOutlineMusicalNote, HiOutlinePhoto, HiOutlineVideoCamera } from 'react-icons/hi2'
+import {
+  HiOutlineCodeBracketSquare,
+  HiOutlineMusicalNote,
+  HiOutlinePhoto,
+  HiOutlineVideoCamera
+} from 'react-icons/hi2'
 import { PiFileMdLight, PiFileTextLight } from 'react-icons/pi'
 import { BsFolder, BsFolder2Open } from 'react-icons/bs'
 import { LuGlobe } from 'react-icons/lu'
@@ -28,7 +33,7 @@ const FileIcon: FC<FileIconProps> = ({ name = '', extension, kind, expanded, cla
     'data-file-icon': iconKind,
     className:
       className ||
-      `${iconKind === 'directory' ? DIRECTORY_ICON_SIZE_CLASSES.sm : FILE_ICON_SIZE_CLASSES.sm} shrink-0 text-[var(--notion-text-soft)]`
+      `${iconKind === 'directory' ? DIRECTORY_ICON_SIZE_CLASSES.sm : FILE_ICON_SIZE_CLASSES.sm} shrink-0 ${visualSpec.iconClassName}`
   }
   if (['docx', 'xlsx', 'ppt', 'pdf'].includes(iconKind)) {
     return (
@@ -45,17 +50,19 @@ const FileIcon: FC<FileIconProps> = ({ name = '', extension, kind, expanded, cla
       ? expanded
         ? BsFolder2Open
         : BsFolder
-      : iconKind === 'audio'
-        ? HiOutlineMusicalNote
-        : iconKind === 'video'
-          ? HiOutlineVideoCamera
-          : iconKind === 'image'
-            ? HiOutlinePhoto
-            : iconKind === 'web'
-              ? LuGlobe
-              : iconKind === 'markdown'
-                ? PiFileMdLight
-                : PiFileTextLight
+      : iconKind === 'html'
+        ? HiOutlineCodeBracketSquare
+        : iconKind === 'audio'
+          ? HiOutlineMusicalNote
+          : iconKind === 'video'
+            ? HiOutlineVideoCamera
+            : iconKind === 'image'
+              ? HiOutlinePhoto
+              : iconKind === 'web'
+                ? LuGlobe
+                : iconKind === 'markdown'
+                  ? PiFileMdLight
+                  : PiFileTextLight
   return <Icon {...iconProps} />
 }
 

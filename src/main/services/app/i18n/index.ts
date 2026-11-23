@@ -41,7 +41,9 @@ const zh = {
   runFailed: 'AI 运行失败',
   runFailedBody: '点击查看失败详情',
   runCancelled: 'AI 运行已取消',
-  runCancelledBody: '点击返回对话'
+  runCancelledBody: '点击返回对话',
+  runNeedsAnswer: 'AI 需要你的回答',
+  runNeedsAnswerBody: '点击查看待回答的问题'
 } as const
 const en: Record<keyof typeof zh, string> = {
   appAbout: 'About',
@@ -84,7 +86,9 @@ const en: Record<keyof typeof zh, string> = {
   runFailed: 'AI task failed',
   runFailedBody: 'Click to view details',
   runCancelled: 'AI task cancelled',
-  runCancelledBody: 'Click to return to the conversation'
+  runCancelledBody: 'Click to return to the conversation',
+  runNeedsAnswer: 'AI needs your answer',
+  runNeedsAnswerBody: 'Click to view the pending question'
 }
 const i18n = createInstance()
 void i18n.init({

@@ -65,5 +65,8 @@ describe('reference icon kind', () => {
     expect(getFileIconKind('/tmp/notes.md')).toBe('markdown')
     expect(getFileIconKind('/tmp/report.pdf')).toBe('pdf')
     expect(getFileIconKind('/tmp/archive.bin')).toBe('file')
+    expect(getFileIconKind('/tmp/report.html')).toBe('html')
+    expect(getFileIconKind('https://example.com/clip.MOV?download=1')).toBe('video')
+    expect(getFileIconKind('/tmp/legacy.doc')).toBe('docx')
   })
 })

@@ -153,3 +153,5 @@ SQLite 管理文档来源及有效状态，LanceDB 管理可重建 chunk。检�
 浏览器网页运行态由 Main 管理，Renderer 负责面板呈现。网页运行与面板显隐分开，用户及 AI 操作同一应用内标签；工具资源范围由 Tool Runtime 控制。
 
 定时任务保存配置并绑定伙伴，到点向该伙伴提交任务描述，执行读取伙伴当前 Composer 配置。任务记录的持久化由 Storage 负责，运行仍进入同一 AI 主链路。
+
+HTML 与视频预览通过 Main 的可撤销资源授权提供按需读取。HTML 在隔离 iframe 中运行脚本，目录边界由 Main 校验。视频由 Video.js 展示，无法直接播放时由 Main 调用随包 FFmpeg/FFprobe 生成原子发布的预览缓存，Renderer 读取转换状态；关闭与退出释放授权及子进程。

@@ -1,7 +1,9 @@
 import { t } from '../../i18n'
 import { useCallback, useEffect, useRef, useState, type WheelEvent } from 'react'
 import { Tooltip, message } from 'antd'
-import { HiOutlineDocument, HiOutlineGlobeAlt, HiPlus, HiXMark } from 'react-icons/hi2'
+import { HiPlus, HiXMark } from 'react-icons/hi2'
+import FileIcon from '../FileIcon'
+import { getFileIconKind, getFileVisualSpec } from '../../utils/fileIcons'
 import type { WorkbenchResourceTab } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import SidebarPanelIcon from '../SidebarPanelIcon'
@@ -16,12 +18,13 @@ type WorkbenchTabBarProps = {
   onCollapse: () => void
 }
 
-const getTabIcon = (tab: WorkbenchResourceTab) =>
-  tab.kind === 'browser' ? (
-    <HiOutlineGlobeAlt className="h-4 w-4 shrink-0" />
-  ) : (
-    <HiOutlineDocument className="h-4 w-4 shrink-0" />
+const getTabIcon = (tab: WorkbenchResourceTab) => {
+  const kind =
+    tab.kind === 'browser' ? 'web' : tab.filePath ? getFileIconKind(tab.filePath) : 'directory'
+  return (
+    <FileIcon kind={kind} className={`h-4 w-4 shrink-0 ${getFileVisualSpec(kind).iconClassName}`} />
   )
+}
 
 const WorkbenchTabBar = ({
   tabs,

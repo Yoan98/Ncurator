@@ -11,10 +11,11 @@ DocxCreateRunNode,
 DocxCreateTableCellNode,
 DocxCreateTableNode,
 DocxCreateTableRowNode,
-DocxLength
+DocxLength,
+DocxTableStyle
 } from '../../types'
 import { normalizeDocxHexColor } from '../../utils/color'
-import { childElements } from './dom'
+import { childElements, firstChildElement } from './dom'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
@@ -57,6 +58,30 @@ const widthAttrs = (node: Element, width: DocxLength): void => {
     String(Math.round(width.unit === 'percent' ? width.value * 50 : width.value * 20))
   )
   setWordAttr(node, 'type', width.unit === 'percent' ? 'pct' : 'dxa')
+}
+
+export const setTableLayout = (
+  properties: Element,
+  layout: DocxTableStyle['layout'] | null
+): void => {
+  if (layout === undefined) return
+  const existing = firstChildElement(properties, 'tblLayout')
+  if (layout === null) {
+    if (existing) properties.removeChild(existing)
+    return
+  }
+  const node = wordElement(properties.ownerDocument, 'tblLayout')
+  setWordAttr(node, 'type', layout)
+  if (existing) {
+    properties.replaceChild(node, existing)
+  } else {
+    const next = childElements(properties).find((element) =>
+      ['tblCellMar', 'tblLook', 'tblCaption', 'tblDescription', 'tblPrChange'].includes(
+        element.localName
+      )
+    )
+    properties.insertBefore(node, next || null)
+  }
 }
 
 const borderName = (side: keyof DocxBorders): string => {
@@ -317,8 +342,8 @@ const createTable = (
     widthAttrs(width, node.style.width)
     tblPr.appendChild(width)
   }
-  if (node.style?.layout) appendVal(tblPr, 'tblLayout', node.style.layout)
   if (node.style?.borders) appendBorders(tblPr, 'tblBorders', node.style.borders)
+  setTableLayout(tblPr, node.style?.layout)
   if (tblPr.childNodes.length > 0) table.appendChild(tblPr)
   node.children.forEach((row) => table.appendChild(createRow(doc, row, relationships)))
   return table

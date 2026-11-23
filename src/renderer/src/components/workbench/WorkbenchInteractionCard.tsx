@@ -161,7 +161,7 @@ export const WorkbenchInteractionChoice: React.FC<ChoiceProps> = (props) => (
     <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
       {props.label}
       {props.recommended && (
-        <span className="ml-2 inline-flex h-5 items-center rounded-[5px] bg-[var(--notion-blue-bg)] px-1.5 align-middle text-xs leading-none font-medium whitespace-nowrap text-[var(--notion-blue)]">
+        <span className="ml-2 inline-flex h-5 items-center rounded-full bg-[var(--notion-blue-bg)] px-2 align-middle text-xs leading-none font-medium whitespace-nowrap text-[var(--notion-blue)]">
           {t(($) => $.common.recommended)}
         </span>
       )}

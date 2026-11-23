@@ -9,7 +9,9 @@ import CustomPptxRenderer from './pptx'
 import CustomImageRenderer from './image'
 import CustomXlsxRenderer from './xlsx'
 import { prepareFileRenderDocument } from './utils'
-import { FILE_PREVIEW_SUPPORT_SUMMARY, getPreviewTypeLabel } from './capabilities'
+import { getPreviewTypeLabel, resolveRegisteredPreviewType } from './capabilities'
+import VideoPreview from '../media/VideoPreview'
+import HtmlPreview from '../media/HtmlPreview'
 import type {
   FileRenderDocument,
   LoadedFileRenderDocument,
@@ -165,21 +167,50 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
   className,
   framed = true
 }) => {
+  const singleDocument = documents.length === 1 ? documents[0] : undefined
+  const specialType = singleDocument
+    ? resolveRegisteredPreviewType(
+        singleDocument.fileName || '',
+        singleDocument.fileType,
+        undefined,
+        singleDocument.filePath || singleDocument.uri
+      )
+    : null
+  const special = singleDocument && (specialType === 'html' || specialType === 'video')
   const {
     documents: loadedDocuments,
     loading,
     errorMessage,
     unsupportedDocument
-  } = usePreparedDocuments(documents)
+  } = usePreparedDocuments(special ? [] : documents)
   const surfaceClassName = framed
     ? `rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-page)] ${className || ''}`
     : `bg-[var(--notion-page)] ${className || ''}`
+
+  if (special) {
+    const source = singleDocument.filePath || singleDocument.uri || ''
+    return (
+      <div className={`h-full overflow-hidden ${surfaceClassName}`}>
+        {specialType === 'html' ? (
+          <HtmlPreview filePath={source} revision={singleDocument.contentRevision} />
+        ) : (
+          <VideoPreview
+            key={`${source}:${singleDocument.contentRevision || 0}`}
+            source={source}
+            name={singleDocument.fileName}
+          />
+        )}
+      </div>
+    )
+  }
 
   if (documents.length === 0) {
     return (
       <div
         className={`flex h-full items-center justify-center ${
-          framed ? 'rounded-[8px] border border-dashed border-[var(--notion-line)] bg-[var(--notion-surface)]' : 'bg-[var(--notion-page)]'
+          framed
+            ? 'rounded-[8px] border border-dashed border-[var(--notion-line)] bg-[var(--notion-surface)]'
+            : 'bg-[var(--notion-page)]'
         } ${className || ''}`}
       >
         <Empty
@@ -194,7 +225,9 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
     return (
       <div
         className={`flex h-full items-center justify-center ${
-          framed ? 'rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-page)]' : 'bg-[var(--notion-page)]'
+          framed
+            ? 'rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-page)]'
+            : 'bg-[var(--notion-page)]'
         } ${className || ''}`}
       >
         <Spin size="large" />
@@ -209,7 +242,9 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
     return (
       <div
         className={`flex h-full items-center justify-center ${
-          framed ? 'rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-page)]' : 'bg-[var(--notion-page)]'
+          framed
+            ? 'rounded-[8px] border border-[var(--notion-line)] bg-[var(--notion-page)]'
+            : 'bg-[var(--notion-page)]'
         } ${className || ''}`}
       >
         <Empty
@@ -222,8 +257,7 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
                   : t(($) => $.editors.filePreviewUnavailable, { value1: errorMessage })
                 : unsupportedType
                   ? t(($) => $.editors.previewIsNotSupportedForFiles, {
-                      value1: unsupportedType,
-                      value2: FILE_PREVIEW_SUPPORT_SUMMARY
+                      value1: unsupportedType
                     })
                   : t(($) => $.editors.filePreviewUnavailable2)}
             </span>

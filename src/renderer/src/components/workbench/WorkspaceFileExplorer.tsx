@@ -4,6 +4,7 @@ import { App, Dropdown, Modal, type MenuProps } from 'antd'
 import { HiChevronDown, HiChevronRight, HiOutlineMagnifyingGlass } from 'react-icons/hi2'
 import type {
   AiFileChangeRecord,
+  WorkspaceListItem,
   WorkspaceSource,
   WorkspaceTreeEntry
 } from '../../../../shared/types'
@@ -24,7 +25,7 @@ import {
 export type WorkspaceFileExplorerMode = 'all' | 'changed'
 
 type WorkspaceFileExplorerProps = {
-  workspace: WorkspaceSource | null
+  workspaces: WorkspaceListItem[]
   workspaceLoadState: WorkspaceLoadState
   onOpenWorkspaceSettings: () => void
   onReloadWorkspaces: () => void
@@ -43,11 +44,15 @@ type WorkspaceFileExplorerProps = {
 
 type NewFileType = 'docx' | 'xlsx' | 'pptx' | 'other'
 type FileNameDraft = {
+  workspaceId: string
   parentPath: string
   name: string
   suffix: string
   error: string | null
 } & ({ kind: 'create' } | { kind: 'rename'; entry: WorkspaceTreeEntry })
+
+const getDirectoryKey = (workspaceId: string, relativePath: string): string =>
+  `${workspaceId}:${relativePath}`
 
 const getParentPath = (relativePath: string): string =>
   relativePath.split('/').slice(0, -1).join('/')
@@ -59,7 +64,10 @@ const newFileTypes: { type: NewFileType; label: string; name: string }[] = [
   { type: 'other', label: t(($) => $.workbench.otherFiles), name: t(($) => $.workbench.newFile) }
 ]
 
-const getRelativePath = (workspace: WorkspaceSource | null, filePath: string): string => {
+const getRelativePath = (workspaces: WorkspaceSource[], filePath: string): string => {
+  const workspace = workspaces.find((item) =>
+    normalizePath(filePath).startsWith(`${normalizePath(item.root_path)}/`)
+  )
   const root = normalizePath(workspace?.root_path || '')
   const normalized = filePath.replace(/\\/g, '/')
   return root && normalizePath(normalized).startsWith(`${root}/`)
@@ -70,7 +78,7 @@ const getRelativePath = (workspace: WorkspaceSource | null, filePath: string): s
 }
 
 const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
-  workspace,
+  workspaces,
   workspaceLoadState,
   onOpenWorkspaceSettings,
   onReloadWorkspaces,
@@ -86,7 +94,10 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
 }) => {
   const { message } = App.useApp()
   const [childrenByPath, setChildrenByPath] = useState<Record<string, WorkspaceTreeEntry[]>>({})
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const [expanded, setExpanded] = useState<
+    Map<string, { workspaceId: string; relativePath: string }>
+  >(() => new Map())
+  const [collapsedRoots, setCollapsedRoots] = useState<Set<string>>(() => new Set())
   const [expandedChangeGroups, setExpandedChangeGroups] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState<Set<string>>(() => new Set())
   const [directoryErrors, setDirectoryErrors] = useState<Set<string>>(() => new Set())
@@ -102,14 +113,16 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   const explorerRef = useRef<HTMLDivElement | null>(null)
   const selectedFileRef = useRef<HTMLButtonElement | null>(null)
   const mutationInFlightRef = useRef(false)
-  const workspaceIdRef = useRef(workspace?.id)
+  const workspacesRef = useRef(workspaces)
   const directoryRequestIds = useRef<Record<string, number>>({})
   const expandedRef = useRef(expanded)
+  const collapsedRootsRef = useRef(collapsedRoots)
   const appliedReloadTokenRef = useRef(reloadToken)
   useLayoutEffect(() => {
-    workspaceIdRef.current = workspace?.id
+    workspacesRef.current = workspaces
     expandedRef.current = expanded
-  }, [workspace?.id, expanded])
+    collapsedRootsRef.current = collapsedRoots
+  }, [workspaces, expanded, collapsedRoots])
 
   const activeChanges = useMemo(
     () => groupSessionFileChanges(filterVisibleFileChangeRecords(changeRecords)),
@@ -125,67 +138,59 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   }, [activeChanges])
 
   const loadDirectory = useCallback(
-    async (relativePath: string): Promise<void> => {
-      if (!workspace) return
-      const requestId = (directoryRequestIds.current[relativePath] || 0) + 1
-      directoryRequestIds.current[relativePath] = requestId
+    async (workspaceId: string, relativePath: string): Promise<void> => {
+      const workspace = workspacesRef.current.find((item) => item.id === workspaceId)
+      if (!workspace || workspace.root_kind === 'file') return
+      const key = getDirectoryKey(workspaceId, relativePath)
+      const requestId = (directoryRequestIds.current[key] || 0) + 1
+      directoryRequestIds.current[key] = requestId
       const isLatestRequest = (): boolean =>
-        workspaceIdRef.current === workspace.id &&
-        directoryRequestIds.current[relativePath] === requestId
-      setLoading((current) => new Set(current).add(relativePath))
+        directoryRequestIds.current[key] === requestId &&
+        workspacesRef.current.some(
+          (item) => item.id === workspaceId && item.root_path === workspace.root_path
+        )
+      setLoading((current) => new Set(current).add(key))
       try {
         const response = await window.api.workspaceDirectoryList({
-          workspaceId: workspace.id,
-          relativePath
+          workspaceId,
+          relativePath,
+          purpose: 'browse'
         })
         if (!isLatestRequest()) return
         if (response.error) throw new Error(response.error)
-        setChildrenByPath((current) => ({ ...current, [relativePath]: response.items }))
+        setChildrenByPath((current) => ({ ...current, [key]: response.items }))
         setDirectoryErrors((current) => {
           const next = new Set(current)
-          next.delete(relativePath)
+          next.delete(key)
           return next
         })
       } catch {
-        if (isLatestRequest()) {
-          setDirectoryErrors((current) => new Set(current).add(relativePath))
-        }
+        if (isLatestRequest()) setDirectoryErrors((current) => new Set(current).add(key))
       } finally {
         if (isLatestRequest()) {
           setLoading((current) => {
             const next = new Set(current)
-            next.delete(relativePath)
+            next.delete(key)
             return next
           })
         }
       }
     },
-    [workspace]
+    []
   )
 
   const refreshVisibleDirectories = useCallback((): void => {
-    if (!workspace) return
-    void loadDirectory('')
-    for (const relativePath of expandedRef.current) {
-      void loadDirectory(relativePath)
+    for (const workspace of workspacesRef.current) {
+      if (!collapsedRootsRef.current.has(workspace.id)) void loadDirectory(workspace.id, '')
     }
-  }, [loadDirectory, workspace])
+    for (const { workspaceId, relativePath } of expandedRef.current.values()) {
+      if (!collapsedRootsRef.current.has(workspaceId)) void loadDirectory(workspaceId, relativePath)
+    }
+  }, [loadDirectory])
 
   useEffect(() => {
-    directoryRequestIds.current = {}
-    appliedReloadTokenRef.current = reloadToken
-    setChildrenByPath({})
-    setExpanded(new Set())
-    setExpandedChangeGroups(new Set())
-    setDirectoryErrors(new Set())
-    setDraft(null)
-    setContextMenuOpen(false)
-    setDeleteTarget(null)
-    setSelectedKey(null)
-    if (workspace) void loadDirectory('')
-    // reloadToken 只在工作区切换时同步，避免每次刷新都清空展开态
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when workspace/loader changes
-  }, [loadDirectory, workspace])
+    refreshVisibleDirectories()
+  }, [refreshVisibleDirectories])
 
   useEffect(() => {
     setDraft(null)
@@ -214,17 +219,37 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     if (selectedKey) selectedFileRef.current?.scrollIntoView({ block: 'nearest' })
   }, [selectedKey])
 
+  const createWorkspaceId =
+    contextTarget?.workspace_id ||
+    (workspaces.length === 1 && workspaces[0].root_kind !== 'file' ? workspaces[0].id : undefined)
+
   const beginCreate = (type: NewFileType): void => {
+    if (!createWorkspaceId) return
+    const workspaceId = createWorkspaceId
     const parentPath =
       contextTarget?.kind === 'directory'
         ? contextTarget.relative_path
         : getParentPath(contextTarget?.relative_path || '')
     const suffix = type === 'other' ? '' : `.${type}`
     setQuery('')
-    if (parentPath) setExpanded((current) => new Set(current).add(parentPath))
-    void loadDirectory(parentPath)
+    setCollapsedRoots((current) => {
+      if (!current.has(workspaceId)) return current
+      const next = new Set(current)
+      next.delete(workspaceId)
+      return next
+    })
+    if (parentPath) {
+      setExpanded((current) =>
+        new Map(current).set(getDirectoryKey(workspaceId, parentPath), {
+          workspaceId,
+          relativePath: parentPath
+        })
+      )
+    }
+    void loadDirectory(workspaceId, parentPath)
     setDraft({
       kind: 'create',
+      workspaceId,
       parentPath,
       suffix,
       name: `${newFileTypes.find((item) => item.type === type)?.name || t(($) => $.workbench.newFile)}${suffix}`,
@@ -236,6 +261,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     const dot = entry.name.lastIndexOf('.')
     setDraft({
       kind: 'rename',
+      workspaceId: entry.workspace_id,
       entry,
       parentPath: getParentPath(entry.relative_path),
       name: entry.name,
@@ -245,7 +271,8 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   }
 
   const submitFileName = async (): Promise<void> => {
-    if (!workspace || !draft || mutationInFlightRef.current) return
+    if (!draft || mutationInFlightRef.current) return
+    const workspaceId = draft.workspaceId
     const fileName = draft.name.trim()
     const baseName = draft.suffix ? fileName.slice(0, -draft.suffix.length) : fileName
     const dot = fileName.lastIndexOf('.')
@@ -272,7 +299,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       if (draft.kind === 'rename') {
         entry = await withTextFileMutation(draft.entry.absolute_path, 'renamed', async () => {
           const response = await window.api.workspaceFileRename({
-            workspaceId: workspace.id,
+            workspaceId,
             relativePath: draft.entry.relative_path,
             fileName
           })
@@ -283,7 +310,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
         onFileRenamed(draft.entry.absolute_path, entry)
       } else {
         const response = await window.api.workspaceFileCreate({
-          workspaceId: workspace.id,
+          workspaceId,
           parentRelativePath: draft.parentPath,
           fileName
         })
@@ -292,14 +319,14 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
         entry = response.entry
         onFileChanged(entry.absolute_path)
       }
-      if (workspaceIdRef.current !== workspace.id) return
+      if (!workspacesRef.current.some((item) => item.id === workspaceId)) return
       setDraft(null)
       setQuery('')
-      await loadDirectory(draft.parentPath)
-      if (workspaceIdRef.current !== workspace.id) return
+      await loadDirectory(workspaceId, draft.parentPath)
+      if (!workspacesRef.current.some((item) => item.id === workspaceId)) return
       setSelectedKey(`file:${normalizePath(entry.absolute_path)}`)
     } catch (error) {
-      if (workspaceIdRef.current === workspace.id)
+      if (workspacesRef.current.some((item) => item.id === workspaceId))
         setDraft({
           ...draft,
           error: error instanceof Error ? error.message : t(($) => $.workbench.fileOperationFailed)
@@ -311,23 +338,24 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   }
 
   const trashFile = async (): Promise<void> => {
-    if (!workspace || !deleteTarget || mutationInFlightRef.current) return
+    if (!deleteTarget || mutationInFlightRef.current) return
+    const workspaceId = deleteTarget.workspace_id
     mutationInFlightRef.current = true
     setDeleting(true)
     try {
       await withTextFileMutation(deleteTarget.absolute_path, 'deleted', async () => {
         const response = await window.api.workspaceFileTrash({
-          workspaceId: workspace.id,
+          workspaceId,
           relativePath: deleteTarget.relative_path
         })
         if (!response.success)
           throw new Error(response.error || t(($) => $.workbench.couldNotMoveToTrash))
       })
       onFileChanged(deleteTarget.absolute_path)
-      if (workspaceIdRef.current !== workspace.id) return
+      if (!workspacesRef.current.some((item) => item.id === workspaceId)) return
       setDeleteTarget(null)
       setSelectedKey(null)
-      await loadDirectory(getParentPath(deleteTarget.relative_path))
+      await loadDirectory(workspaceId, getParentPath(deleteTarget.relative_path))
       void message.success(t(($) => $.workbench.fileMovedToTrash))
     } catch (error) {
       void message.error(
@@ -344,6 +372,9 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     items: [
       {
         key: 'create',
+        disabled:
+          !createWorkspaceId ||
+          Boolean(contextTarget?.kind === 'file' && !contextTarget.relative_path),
         label: t(($) => $.workbench.newFile),
         icon: <LuFilePlus2 aria-hidden className="h-4 w-4" />,
         popupClassName: 'workspace-file-menu',
@@ -358,7 +389,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
           )
         }))
       },
-      ...(contextTarget?.kind === 'file'
+      ...(contextTarget?.kind === 'file' && contextTarget.relative_path
         ? [
             { type: 'divider' as const },
             {
@@ -383,8 +414,8 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     }
   }
 
-  const renderDraft = (parentPath: string, depth: number): React.ReactNode =>
-    draft?.parentPath === parentPath ? (
+  const renderDraft = (workspaceId: string, parentPath: string, depth: number): React.ReactNode =>
+    draft?.workspaceId === workspaceId && draft.parentPath === parentPath ? (
       <div ref={inputRowRef} className="py-1 pr-2" style={{ paddingLeft: 25 + depth * 18 }}>
         <FileNameInput
           key={draft.kind === 'rename' ? draft.entry.id : `create:${parentPath}:${draft.suffix}`}
@@ -401,13 +432,13 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     ) : null
 
   useEffect(() => {
-    if (!workspace || reloadToken === appliedReloadTokenRef.current) return
+    if (reloadToken === appliedReloadTokenRef.current) return
     appliedReloadTokenRef.current = reloadToken
     refreshVisibleDirectories()
-  }, [reloadToken, refreshVisibleDirectories, workspace])
+  }, [reloadToken, refreshVisibleDirectories])
 
   useEffect(() => {
-    if (!workspace || !liveRefreshEnabled) return
+    if (!liveRefreshEnabled) return
     const refreshOnFocus = (): void => {
       refreshVisibleDirectories()
     }
@@ -420,32 +451,36 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       window.removeEventListener('focus', refreshOnFocus)
       document.removeEventListener('visibilitychange', refreshOnVisibility)
     }
-  }, [liveRefreshEnabled, refreshVisibleDirectories, workspace])
+  }, [liveRefreshEnabled, refreshVisibleDirectories])
 
   const toggleDirectory = (entry: WorkspaceTreeEntry): void => {
-    const entryPath = entry.relative_path
+    const { workspace_id: workspaceId, relative_path: relativePath } = entry
+    const key = getDirectoryKey(workspaceId, relativePath)
+    if (!expanded.has(key)) void loadDirectory(workspaceId, relativePath)
     setExpanded((current) => {
-      const next = new Set(current)
-      next.has(entryPath) ? next.delete(entryPath) : next.add(entryPath)
+      const next = new Map(current)
+      if (next.has(key)) next.delete(key)
+      else next.set(key, { workspaceId, relativePath })
       return next
     })
-    void loadDirectory(entryPath)
   }
 
-  const renderEntries = (parentPath: string, depth: number): React.ReactNode => {
-    const entries = [...(childrenByPath[parentPath] || [])].sort((a, b) =>
-      a.kind === b.kind ? 0 : a.kind === 'directory' ? -1 : 1
-    )
+  const renderEntries = (
+    workspaceId: string,
+    parentPath: string,
+    depth: number
+  ): React.ReactNode => {
+    const entries = childrenByPath[getDirectoryKey(workspaceId, parentPath)] || []
     const firstFileIndex = entries.findIndex((entry) => entry.kind === 'file')
     const normalizedQuery = query.trim().toLowerCase()
     return (
       <>
         {draft?.kind === 'create' && firstFileIndex === -1 && entries.length === 0
-          ? renderDraft(parentPath, depth)
+          ? renderDraft(workspaceId, parentPath, depth)
           : null}
         {entries.map((entry, index) => {
           const isDirectory = entry.kind === 'directory'
-          const isExpanded = expanded.has(entry.relative_path)
+          const isExpanded = expanded.has(getDirectoryKey(workspaceId, entry.relative_path))
           const change = changesByPath.get(normalizePath(entry.absolute_path))
           const visible =
             !normalizedQuery || entry.relative_path.toLowerCase().includes(normalizedQuery)
@@ -454,15 +489,17 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
           return (
             <React.Fragment key={entry.id}>
               {draft?.kind === 'create' && index === firstFileIndex
-                ? renderDraft(parentPath, depth)
+                ? renderDraft(workspaceId, parentPath, depth)
                 : null}
               {draft?.kind === 'rename' && draft.entry.id === entry.id ? (
-                renderDraft(parentPath, depth)
+                renderDraft(workspaceId, parentPath, depth)
               ) : (
                 <button
                   type="button"
                   className={`relative flex h-[30px] w-full items-center gap-1.5 pr-2 text-left text-[13px] transition-colors ${
-                    selected ? 'bg-[var(--notion-line)] text-[var(--notion-text)]' : 'text-[var(--notion-text-soft)]'
+                    selected
+                      ? 'bg-[var(--notion-line)] text-[var(--notion-text)]'
+                      : 'text-[var(--notion-text-soft)]'
                   } ${visible ? '' : 'hidden'}`}
                   style={{ paddingLeft: 8 + depth * 18 }}
                   title={entry.relative_path}
@@ -519,18 +556,59 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                   ) : null}
                 </button>
               )}
-              {isDirectory && isExpanded ? renderEntries(entry.relative_path, depth + 1) : null}
+              {isDirectory && isExpanded
+                ? renderDirectory(workspaceId, entry.relative_path, depth + 1)
+                : null}
             </React.Fragment>
           )
         })}
         {draft?.kind === 'create' && firstFileIndex === -1 && entries.length > 0
-          ? renderDraft(parentPath, depth)
+          ? renderDraft(workspaceId, parentPath, depth)
           : null}
       </>
     )
   }
 
-  if (!workspace?.root_path) {
+  const renderDirectory = (
+    workspaceId: string,
+    relativePath: string,
+    depth: number
+  ): React.ReactNode => {
+    const key = getDirectoryKey(workspaceId, relativePath)
+    const entries = childrenByPath[key]
+    const hasDraft = draft?.workspaceId === workspaceId && draft.parentPath === relativePath
+    if (hasDraft || entries?.length) return renderEntries(workspaceId, relativePath, depth)
+    if (directoryErrors.has(key) && !loading.has(key)) {
+      return (
+        <div
+          className="px-3 py-2 text-xs text-[var(--notion-text-faint)]"
+          style={{ paddingLeft: 12 + depth * 18 }}
+        >
+          {t(($) => $.workbench.couldNotReadTheDirectory)}
+          <button
+            type="button"
+            className="ml-2 text-[var(--notion-text)] underline"
+            onClick={() => void loadDirectory(workspaceId, relativePath)}
+          >
+            {t(($) => $.common.retry)}
+          </button>
+        </div>
+      )
+    }
+    return (
+      <div
+        role={entries ? undefined : 'status'}
+        className="px-3 py-2 text-xs text-[var(--notion-text-faint)]"
+        style={{ paddingLeft: 12 + depth * 18 }}
+      >
+        {entries
+          ? t(($) => $.workbench.thisDirectoryHasNoFiles)
+          : t(($) => $.workbench.loadingFiles)}
+      </div>
+    )
+  }
+
+  if (workspaces.length === 0) {
     return (
       <WorkspaceFilesEmptyState
         loadState={workspaceLoadState}
@@ -542,7 +620,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
 
   const normalizedQuery = query.trim().toLowerCase()
   const filteredChanges = activeChanges.filter(({ latest }) =>
-    getRelativePath(workspace, latest.afterPath || latest.beforePath || latest.path)
+    getRelativePath(workspaces, latest.afterPath || latest.beforePath || latest.path)
       .toLowerCase()
       .includes(normalizedQuery)
   )
@@ -621,36 +699,89 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
           }}
         >
           {mode === 'all' ? (
-            !childrenByPath[''] && !draft ? (
-              directoryErrors.has('') && !loading.has('') ? (
-                <div className="px-3 py-2 text-xs text-[var(--notion-text-faint)]">
-                  {t(($) => $.workbench.couldNotReadTheDirectory)}
+            workspaces.map((workspace) => {
+              const name =
+                workspace.root_path.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) ||
+                workspace.root_path
+              const isDirectory = workspace.root_kind !== 'file'
+              const isExpanded = isDirectory && !collapsedRoots.has(workspace.id)
+              const root: WorkspaceTreeEntry = {
+                id: workspace.id,
+                workspace_id: workspace.id,
+                kind: isDirectory ? 'directory' : 'file',
+                name,
+                relative_path: '',
+                absolute_path: workspace.root_path,
+                supported_for_index: false
+              }
+              const rootKey = `file:${normalizePath(root.absolute_path)}`
+              const selected = selectedKey === rootKey
+              const selectRoot = (): void => {
+                setContextTarget(root)
+                setSelectedKey(rootKey)
+              }
+              return (
+                <div key={workspace.id} data-workspace-root={workspace.id}>
                   <button
                     type="button"
-                    className="ml-2 text-[var(--notion-text)] underline"
-                    onClick={() => void loadDirectory('')}
+                    className={`flex h-[30px] w-full items-center gap-1.5 px-2 text-left text-[13px] font-medium ${selected ? 'bg-[var(--notion-line)] text-[var(--notion-text)]' : 'text-[var(--notion-text)]'}`}
+                    title={root.absolute_path}
+                    aria-expanded={isDirectory ? isExpanded : undefined}
+                    aria-current={selected || undefined}
+                    data-workspace-entry="true"
+                    onContextMenu={selectRoot}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+                        event.preventDefault()
+                        selectRoot()
+                        setContextMenuOpen(true)
+                      }
+                    }}
+                    onClick={() => {
+                      setSelectedKey(rootKey)
+                      if (!isDirectory) {
+                        onOpenFile(root)
+                        return
+                      }
+                      const next = new Set(collapsedRoots)
+                      if (isExpanded) next.add(workspace.id)
+                      else {
+                        next.delete(workspace.id)
+                        void loadDirectory(workspace.id, '')
+                        for (const { workspaceId, relativePath } of expanded.values()) {
+                          if (workspaceId === workspace.id)
+                            void loadDirectory(workspaceId, relativePath)
+                        }
+                      }
+                      setCollapsedRoots(next)
+                    }}
                   >
-                    {t(($) => $.common.retry)}
+                    <span className="flex h-5 w-4 shrink-0 items-center justify-center text-[var(--notion-text-faint)]">
+                      {isDirectory ? (
+                        isExpanded ? (
+                          <HiChevronDown className="h-4 w-4" />
+                        ) : (
+                          <HiChevronRight className="h-4 w-4" />
+                        )
+                      ) : null}
+                    </span>
+                    <FileIcon
+                      name={name}
+                      kind={isDirectory ? 'directory' : undefined}
+                      expanded={isExpanded}
+                    />
+                    <span className="min-w-0 truncate">{name}</span>
                   </button>
-                </div>
-              ) : (
-                <div role="status" className="px-3 py-2 text-xs text-[var(--notion-text-faint)]">
-                  {t(($) => $.workbench.loadingFiles)}
+                  {isExpanded ? renderDirectory(workspace.id, '', 1) : null}
                 </div>
               )
-            ) : childrenByPath['']?.length === 0 && !draft ? (
-              <div className="px-3 py-2 text-xs text-[var(--notion-text-faint)]">
-                {t(($) => $.workbench.thisDirectoryHasNoFiles)}
-              </div>
-            ) : (
-              renderEntries('', 0)
-            )
+            })
           ) : filteredChanges.length > 0 ? (
             filteredChanges.map(({ latest, records }) => {
               const selected = selectedKey === `change:${latest.id}`
               const isExpanded = expandedChangeGroups.has(latest.id)
               const displayPath = getRelativePath(
-                workspace,
+                workspaces,
                 latest.afterPath || latest.beforePath || latest.path
               )
               return (

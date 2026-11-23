@@ -17,11 +17,9 @@ import type {
   ChatAttachment,
   LLMConfig,
   LlmRemoteModel,
-  ReferenceKind,
   SelectedReference,
   WorkbenchModelSelection
 } from '../../../../shared/types'
-import { REFERENCE_ITEM_PAGE_SIZE } from '../../../../shared/types'
 import type { ChatMessageLogPlanItem } from '../../../../shared/types'
 import type { FreeModelPublicEntry } from '../../../../shared/freeModels'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -32,10 +30,11 @@ import type {
   WorkbenchExecutionPermission,
   WorkbenchFileRef
 } from './types'
-import { buildComposerPlaceholder, COMPOSER_REFERENCE_KINDS } from './composer/constants'
+import { buildComposerPlaceholder } from './composer/constants'
 import AttachmentFileIcon from './composer/AttachmentFileIcon'
 import { isAttachmentDocumentPreviewable } from './composer/attachmentPresentation'
 import ReferenceMentionPanel from './composer/ReferenceMentionPanel'
+import { useReferenceMention } from './composer/useReferenceMention'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
 import {
   anchorCaretInTextNode,
@@ -165,31 +164,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const draftValueRef = useRef<ComposerDraftValue>(draftValue)
   const knownScopesRef = useRef(new Map<string, SelectedReference>())
   const mentionRefreshFrameRef = useRef<number | null>(null)
-  const mentionQueryRef = useRef<string | null>(null)
-  const mentionSessionSequenceRef = useRef(0)
-  const mentionRequestSeqRef = useRef(0)
-  const mentionHasMoreRef = useRef(false)
-  const mentionLoadingMoreRef = useRef(false)
-  const mentionNextOffsetRef = useRef(0)
-  const mentionOptionsRef = useRef<SelectedReference[]>([])
-  const mentionActiveIndexRef = useRef(0)
   const controlFocusTimeoutRef = useRef<number | null>(null)
   const compositionGuardTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
   const compositionJustEndedRef = useRef(false)
   const attachmentPreviewUrlsRef = useRef<Record<string, string>>({})
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
-  const [mentionSessionId, setMentionSessionId] = useState<number | null>(null)
-  const [mentionOptions, setMentionOptions] = useState<SelectedReference[]>([])
-  const [mentionLoading, setMentionLoading] = useState(false)
-  const [mentionLoadingMore, setMentionLoadingMore] = useState(false)
-  const [mentionHasMore, setMentionHasMore] = useState(false)
-  const [mentionActiveIndex, setMentionActiveIndex] = useState(0)
   const [hasContent, setHasContent] = useState(false)
   const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({})
-
-  mentionOptionsRef.current = mentionOptions
-  mentionActiveIndexRef.current = mentionActiveIndex
 
   useEffect(() => {
     draftValueRef.current = draftValue
@@ -199,21 +180,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   useLayoutEffect(() => {
     if (editorRef.current) syncComposerTokens(editorRef.current, draftValue.contentNodes)
   })
-
-  const closeMention = useCallback(() => {
-    mentionQueryRef.current = null
-    setMentionQuery(null)
-    setMentionSessionId(null)
-    setMentionOptions([])
-    mentionOptionsRef.current = []
-    setMentionHasMore(false)
-    mentionHasMoreRef.current = false
-    mentionNextOffsetRef.current = 0
-    setMentionLoadingMore(false)
-    mentionLoadingMoreRef.current = false
-    mentionActiveIndexRef.current = 0
-    setMentionActiveIndex(0)
-  }, [])
 
   const getInsertedScopeKeys = useCallback((): Set<string> => {
     const editor = editorRef.current
@@ -226,56 +192,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     return currentKeys
   }, [])
 
-  const fetchMentionPage = useCallback(
-    async (input: { query: string; offset: number; append: boolean }): Promise<void> => {
-      const requestSeq = ++mentionRequestSeqRef.current
-      if (input.append) {
-        setMentionLoadingMore(true)
-        mentionLoadingMoreRef.current = true
-      } else {
-        setMentionLoading(true)
-      }
-      try {
-        const referenceKinds: ReferenceKind[] = COMPOSER_REFERENCE_KINDS
-        const response = await window.api.referenceItemList({
-          referenceKinds,
-          query: input.query || undefined,
-          offset: input.offset,
-          limit: REFERENCE_ITEM_PAGE_SIZE
-        })
-        if (requestSeq !== mentionRequestSeqRef.current) return
-        const inserted = getInsertedScopeKeys()
-        const pageItems = response.items.filter((scope) => !inserted.has(getScopeKey(scope)))
-        pageItems.forEach((scope) => {
-          knownScopesRef.current.set(getScopeKey(scope), scope)
-        })
-        setMentionOptions((current) => {
-          const next = input.append ? [...current, ...pageItems] : pageItems
-          mentionOptionsRef.current = next
-          return next
-        })
-        setMentionHasMore(Boolean(response.hasMore))
-        mentionHasMoreRef.current = Boolean(response.hasMore)
-        mentionNextOffsetRef.current = response.offset + response.items.length
-        // Keep the user's keyboard selection across late/same-query refetches.
-        // Only clamp so a shorter result list cannot leave activeIndex out of range.
-        if (!input.append) {
-          setMentionActiveIndex((current) => {
-            const next = pageItems.length === 0 ? 0 : Math.min(current, pageItems.length - 1)
-            mentionActiveIndexRef.current = next
-            return next
-          })
-        }
-      } finally {
-        if (requestSeq === mentionRequestSeqRef.current) {
-          setMentionLoading(false)
-          setMentionLoadingMore(false)
-          mentionLoadingMoreRef.current = false
-        }
-      }
-    },
-    [getInsertedScopeKeys]
-  )
+  const {
+    state: mention,
+    getCurrent: getCurrentMention,
+    search: searchMention,
+    close: closeMention,
+    loadMore: loadMoreMentionOptions,
+    move: moveMention,
+    canSelect: canSelectMention
+  } = useReferenceMention(getInsertedScopeKeys)
 
   const rememberScopes = useCallback((nodes: ComposerNode[]): void => {
     nodes.forEach((node) => {
@@ -442,19 +367,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       closeMention()
       return
     }
-    if (mentionQueryRef.current === context.query) return
-    const isNewMentionSession = mentionQueryRef.current === null
-    mentionQueryRef.current = context.query
-    setMentionQuery(context.query)
-    if (isNewMentionSession) {
-      mentionSessionSequenceRef.current += 1
-      setMentionOptions([])
-      mentionOptionsRef.current = []
-      setMentionSessionId(mentionSessionSequenceRef.current)
-    }
-    mentionActiveIndexRef.current = 0
-    setMentionActiveIndex(0)
-  }, [closeMention, getMentionContext])
+    searchMention(context.query)
+  }, [closeMention, getMentionContext, searchMention])
 
   const scheduleMentionRefresh = useCallback(() => {
     if (mentionRefreshFrameRef.current !== null) {
@@ -519,7 +433,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     (scope: SelectedReference) => {
       const editor = editorRef.current
       const context = getMentionContext()
-      if (!editor || !context) return
+      if (!editor || !context || !canSelectMention(context.query)) return
 
       knownScopesRef.current.set(getScopeKey(scope), scope)
 
@@ -546,7 +460,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       closeMention()
       syncDraftFromEditor()
     },
-    [closeMention, getMentionContext, syncDraftFromEditor]
+    [canSelectMention, closeMention, getMentionContext, syncDraftFromEditor]
   )
 
   useEffect(() => {
@@ -554,25 +468,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     renderDraftNodes(nextNodes)
     closeMention()
   }, [closeMention, draftKey, renderDraftNodes])
-
-  useEffect(() => {
-    if (mentionSessionId === null || mentionQuery === null) return
-    void fetchMentionPage({
-      query: mentionQuery,
-      offset: 0,
-      append: false
-    })
-  }, [fetchMentionPage, mentionQuery, mentionSessionId])
-
-  const loadMoreMentionOptions = useCallback(() => {
-    if (mentionQuery === null) return
-    if (!mentionHasMoreRef.current || mentionLoadingMoreRef.current || mentionLoading) return
-    void fetchMentionPage({
-      query: mentionQuery,
-      offset: mentionNextOffsetRef.current,
-      append: true
-    })
-  }, [fetchMentionPage, mentionLoading, mentionQuery])
 
   useEffect(() => {
     const handleSelectionChange = (): void => {
@@ -775,35 +670,21 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   const handleMentionKeyDown = useCallback(
     (event: KeyboardEvent): boolean => {
-      if (mentionQueryRef.current === null) return false
+      if (getCurrentMention().query === null) return false
       if (event.isComposing || isComposingRef.current) return false
       // Same native event can reach both the window capture listener and the editor handler.
       if (event.defaultPrevented) return true
-      const options = mentionOptionsRef.current
-      if (event.key === 'ArrowDown' && options.length > 0) {
+      const { options, activeIndex } = getCurrentMention()
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && options.length > 0) {
         event.preventDefault()
         event.stopPropagation()
-        setMentionActiveIndex((current) => {
-          const next = (current + 1) % options.length
-          mentionActiveIndexRef.current = next
-          return next
-        })
-        return true
-      }
-      if (event.key === 'ArrowUp' && options.length > 0) {
-        event.preventDefault()
-        event.stopPropagation()
-        setMentionActiveIndex((current) => {
-          const next = current === 0 ? options.length - 1 : current - 1
-          mentionActiveIndexRef.current = next
-          return next
-        })
+        moveMention(event.key === 'ArrowDown' ? 1 : -1)
         return true
       }
       if (event.key === 'Enter') {
         event.preventDefault()
         event.stopPropagation()
-        const nextOption = options[mentionActiveIndexRef.current]
+        const nextOption = options[activeIndex]
         if (nextOption) insertMentionScope(nextOption)
         return true
       }
@@ -815,11 +696,11 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       }
       return false
     },
-    [closeMention, insertMentionScope]
+    [closeMention, getCurrentMention, insertMentionScope, moveMention]
   )
 
   useEffect(() => {
-    if (mentionQuery === null) return
+    if (mention.query === null) return
     const onKeyDown = (event: KeyboardEvent): void => {
       handleMentionKeyDown(event)
     }
@@ -829,7 +710,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     return () => {
       window.removeEventListener('keydown', onKeyDown, true)
     }
-  }, [handleMentionKeyDown, mentionQuery])
+  }, [handleMentionKeyDown, mention.query])
 
   const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>): void => {
     if (event.nativeEvent.isComposing || isComposingRef.current) return
@@ -873,7 +754,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     : t(($) => $.workbench.contextUsageUnavailable)
   const contextUsageTooltip = contextUsage ? (
     <div className="space-y-1 text-xs leading-5">
-      <div className="font-medium text-[var(--notion-text)]">{t(($) => $.workbench.contextUsage)}</div>
+      <div className="font-medium text-[var(--notion-text)]">
+        {t(($) => $.workbench.contextUsage)}
+      </div>
       <div>
         {t(($) => $.workbench.used2)}
         {contextUsagePercent}%
@@ -951,13 +834,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   return (
     <div className="relative" inert={locked || undefined}>
       <WorkbenchPlanProgress plan={plan} running={loading && showCancel && !cancelling} />
-      {mentionQuery !== null ? (
+      {mention.query !== null ? (
         <ReferenceMentionPanel
-          loading={mentionLoading}
-          loadingMore={mentionLoadingMore}
-          options={mentionOptions}
-          activeIndex={mentionActiveIndex}
-          hasMore={mentionHasMore}
+          {...mention}
           onSelect={insertMentionScope}
           onLoadMore={loadMoreMentionOptions}
         />
@@ -1029,7 +908,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   </span>
                 ) : attachment.kind === 'directory' ? (
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[var(--notion-surface)] text-[var(--notion-text-soft)]">
-                    <FileIcon kind="directory" className="h-[21px] w-[21px] text-[var(--notion-text-soft)]" />
+                    <FileIcon
+                      kind="directory"
+                      className="h-[21px] w-[21px] text-[var(--notion-text-soft)]"
+                    />
                   </span>
                 ) : (
                   <AttachmentFileIcon fileName={attachment.name} />
@@ -1094,7 +976,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             onKeyUp={(event) => {
               if (isComposingRef.current) return
               if (
-                mentionQueryRef.current !== null &&
+                getCurrentMention().query !== null &&
                 (event.key === 'ArrowDown' ||
                   event.key === 'ArrowUp' ||
                   event.key === 'Enter' ||

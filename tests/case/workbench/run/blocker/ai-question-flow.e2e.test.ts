@@ -1,5 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import ffmpeg from 'ffmpeg-static'
 import { describe, expect, it } from 'vitest'
 import type { AiRunEvent, PendingHumanInteraction } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -60,12 +63,31 @@ describe('workbench AI question e2e', () => {
               force: true
             })
           }
+          if (!ffmpeg) throw new Error('FFmpeg is unavailable')
+          const videoPath = path.join(setup.workspace.rootPath, 'preview.mp4')
+          await promisify(execFile)(ffmpeg, [
+            '-nostdin',
+            '-y',
+            '-v',
+            'error',
+            '-f',
+            'lavfi',
+            '-i',
+            'testsrc2=size=320x180:rate=12:duration=3',
+            '-c:v',
+            'libx264',
+            '-preset',
+            'ultrafast',
+            '-threads',
+            '1',
+            videoPath
+          ])
           // This case isolates AI clarification. Full access auto-approves
           // ordinary tools, while ask_user_question still waits for the user.
           await selectWorkbenchExecutionPermission(page, '完全访问')
           await sendWorkbenchMessage(
             page,
-            '请帮我完善当前工作区里的 brief。请先用一次 ask_user_question 提出三题：单选主色（只提供蓝色一个选项）、多选视觉风格（2至4项）、纯文字询问需要写入的主题（不提供选项）。等我回答完三题后再继续修改。'
+            `请帮我完善当前工作区里的 brief。请先用一次 ask_user_question 提出三题：单选主色（只提供蓝色一个选项）、多选视觉风格（2至4项）、纯文字询问需要写入的主题（不提供选项）。等我回答完三题后再继续修改。完成后在最终回复末尾原样写入视频嵌入：![演示视频](<${videoPath}>)。`
           )
 
           const required = await waitForWorkbenchAiEvent(runtime, {
@@ -367,6 +389,56 @@ describe('workbench AI question e2e', () => {
               event.interactionId === required.interactionId
           )
           if (!resolved) throw new Error('question resolved event was not recorded')
+          const videoPreview = page.getByTestId('workbench-video-preview')
+          await videoPreview.locator('[data-video-state="ready"]').waitFor({ timeout: 30000 })
+          await videoPreview.getByRole('button', { name: '播放', exact: true }).last().click()
+          await expect
+            .poll(() =>
+              videoPreview.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime)
+            )
+            .toBeGreaterThan(0.2)
+          await videoPreview.locator('video').hover()
+          await videoPreview.getByRole('button', { name: '暂停', exact: true }).last().click()
+          await runtime.assertThat(
+            await videoPreview.locator('video').evaluate((video: HTMLVideoElement) => video.paused),
+            { name: 'conversation-inline-video', message: '真实 AI 回复中的视频可直接起播并暂停。' }
+          )
+          const messages = await page.evaluate(
+            (partnerId) => window.api.partnerMessageList(partnerId),
+            assistancePartnerId
+          )
+          const answer = messages.findLast((message) => message.role === 'assistant')
+          if (!answer?.content) throw new Error('completed answer is missing')
+          const copy = page.getByTestId(`workbench-assistant-copy-${answer.id}`)
+          await copy.click()
+          await expect
+            .poll(() => runtime.electronApp.evaluate(({ clipboard }) => clipboard.readText()))
+            .toBe(answer.content)
+          const completedAt = page.getByTestId(`workbench-assistant-finished-at-${answer.id}`)
+          const timestamp = await completedAt.getAttribute('datetime')
+          await runtime.assertThat(Boolean(timestamp && Number.isFinite(Date.parse(timestamp))), {
+            name: 'assistant-full-copy-and-completion-time',
+            message: '复制按钮写入完整真实回复，并显示有效完成时间。'
+          })
+          await runtime.captureScreenshot({
+            name: 'assistant-inline-video-footer',
+            message: '会话内视频、复制按钮与持久化完成时间'
+          })
+          const outlineItems = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.conversationOutlineItemPrefix
+          )
+          await expect.poll(() => outlineItems.count()).toBe(1)
+          await outlineItems.first().hover()
+          await getWorkbenchLocator(page, workbenchSelectors.conversationOutlinePreview).waitFor({
+            state: 'visible'
+          })
+          await page.reload()
+          await completedAt.waitFor({ state: 'visible' })
+          await runtime.assertThat((await completedAt.getAttribute('datetime')) === timestamp, {
+            name: 'assistant-completion-time-persists',
+            message: '刷新后完成时间保持原值，同一问答只生成一条导航且保留悬浮预览。'
+          })
           return {
             resolved,
             questionCount: questions.length,

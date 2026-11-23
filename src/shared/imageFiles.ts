@@ -34,9 +34,15 @@ const IMAGE_MIME_BY_EXTENSION: Record<ImageFileExtension, string> = {
 
 /** Lowercase extension without the dot; empty for dotfiles and extensionless names. */
 export const fileExtensionOf = (pathOrName: string): string => {
-  const base = String(pathOrName || '')
-    .split(/[\\/]/u)
-    .pop()
+  let pathname = String(pathOrName || '')
+  if (/^https?:\/\//iu.test(pathname)) {
+    try {
+      pathname = new URL(pathname).pathname
+    } catch {
+      return ''
+    }
+  }
+  const base = pathname.split(/[\\/]/u).pop()
   if (!base) return ''
   const dotIndex = base.lastIndexOf('.')
   return dotIndex > 0 ? base.slice(dotIndex + 1).toLowerCase() : ''

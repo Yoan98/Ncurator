@@ -19,6 +19,9 @@ import {
   type OpenableMarkdownReference
 } from './markdownReference'
 import MarkdownImage, { type MarkdownPreviewImage } from './markdownImage'
+import VideoPreview from './media/VideoPreview'
+import { isVideoPreviewSource } from '../../../shared/preview'
+import { resolveMarkdownImageLocalPath } from '../../../shared/markdownImagePath'
 import remarkGfmNoAutolink from './remarkGfmNoAutolink'
 import { useStreamingMarkdownAnimation } from '../utils/renderPreferences'
 import { useAppearance } from '../contexts/AppearanceContext'
@@ -53,6 +56,16 @@ type ComponentOptions = {
 }
 
 const createMarkdownComponents = (options: ComponentOptions): Components => ({
+  p({ children, node }) {
+    const hasVideo = node?.children.some(
+      (child) =>
+        child.type === 'element' &&
+        child.tagName === 'img' &&
+        typeof child.properties.src === 'string' &&
+        isVideoPreviewSource(child.properties.src)
+    )
+    return hasVideo ? <div>{children}</div> : <p>{children}</p>
+  },
   code(props) {
     const language = LANGUAGE_CLASS_RE.exec(props.className || '')?.[1]
     const text = String(props.children).replace(/\n$/, '')
@@ -139,6 +152,20 @@ const createMarkdownComponents = (options: ComponentOptions): Components => ({
       )
     }
     const access = findMarkdownLinkAccess(options.linkAccess, src || '')
+    if (src && isVideoPreviewSource(src)) {
+      const source = /^https:\/\//iu.test(src)
+        ? src
+        : resolveMarkdownImageLocalPath(options.sourceFilePath || '', src)
+      if (source)
+        return (
+          <VideoPreview
+            source={source}
+            name={alt}
+            inline
+            unavailable={access?.accessStatus === 'unavailable'}
+          />
+        )
+    }
     return (
       <MarkdownImage
         src={src}

@@ -3,16 +3,14 @@ import { App, Button, Modal } from 'antd'
 import {
   HiOutlineChevronDown,
   HiOutlineChevronRight,
-  HiOutlineCodeBracket,
-  HiOutlineDocumentText,
   HiOutlineFolderOpen,
-  HiOutlinePaperClip,
-  HiOutlinePhoto
+  HiOutlinePaperClip
 } from 'react-icons/hi2'
 import type { UserSkillSource, UserSkillResourcePreview } from '../../../../shared/userSkills'
 import { t } from '../../i18n'
 import { userSkillsSelectors as selectors } from '../../testing/selectors'
 import { skillError } from './skillErrors'
+import FileIcon from '../FileIcon'
 
 export default function SkillResources({
   resources,
@@ -82,11 +80,6 @@ export default function SkillResources({
           {resources.map((path) => {
             const parts = path.split('/')
             const name = parts.pop()!
-            const Icon = /\.(png|jpe?g|gif|webp)$/i.test(name)
-              ? HiOutlinePhoto
-              : /\.(py|sh|js|ts|bat|ps1)$/i.test(name)
-                ? HiOutlineCodeBracket
-                : HiOutlineDocumentText
             return (
               <button
                 key={path}
@@ -95,7 +88,7 @@ export default function SkillResources({
                 onClick={() => void inspect(path)}
                 className="flex w-full items-center gap-2.5 rounded-[6px] px-1.5 py-2 text-left hover:bg-[var(--notion-surface)]"
               >
-                <Icon className="h-4 w-4 shrink-0 text-[var(--notion-text-soft)]" />
+                <FileIcon name={name} className="h-4 w-4 shrink-0" />
                 <span className="min-w-0 flex-1 break-words text-[13px] text-[var(--notion-text)]">
                   <span className="line-clamp-2 [overflow-wrap:anywhere]" title={name}>
                     {name}

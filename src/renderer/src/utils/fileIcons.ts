@@ -28,6 +28,12 @@ export type FileVisualSpec = {
 }
 
 const FILE_VISUAL_SPECS: Record<FileIconKind, FileVisualSpec> = {
+  html: {
+    kind: 'html',
+    iconClassName: 'text-[var(--notion-text-soft)]',
+    documentFillClassName: 'fill-none',
+    documentAccentClassName: 'fill-none'
+  },
   directory: {
     kind: 'directory',
     iconClassName: 'text-[var(--notion-text-soft)]',

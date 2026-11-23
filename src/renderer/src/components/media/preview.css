@@ -1,0 +1,94 @@
+.nc-video-canvas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  padding: 20px;
+  overflow: hidden;
+  background: var(--notion-surface);
+}
+.nc-video-inline {
+  width: 100%;
+  max-width: 560px;
+  margin: 10px 0;
+}
+.nc-video-frame {
+  position: relative;
+  width: 100%;
+  max-height: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #151515;
+  color: #f2f2f2;
+}
+.nc-video-skin {
+  width: 100%;
+  height: 100%;
+  --media-accent-color: #f2f2f0;
+  --media-accent-text-color: #202020;
+  --media-border-radius: 8px;
+  --media-border-color: transparent;
+  --media-controls-before-start: visible;
+  --media-font-family: inherit;
+  --media-object-fit: contain;
+  --media-scale-unit: 15px;
+}
+.nc-video-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: #181818;
+  color: #f2f2f2;
+  font-size: 13px;
+  text-align: center;
+}
+.nc-video-overlay strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.nc-video-overlay > span {
+  color: #bdbdbb;
+  font-size: 12px;
+}
+.nc-video-overlay progress {
+  width: min(200px, 75%);
+  height: 4px;
+  accent-color: #ededeb;
+}
+.nc-video-error-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.nc-video-error-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid #ffffff40;
+  border-radius: 5px;
+  background: #ffffff0a;
+  color: #ededeb;
+  font-size: 12px;
+}
+.nc-video-error-actions button:first-child {
+  background: #f0f0ee;
+  color: #202020;
+  border-color: #f0f0ee;
+}
+.nc-video-error-actions button:focus-visible {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: 2px;
+}

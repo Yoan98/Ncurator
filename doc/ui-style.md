@@ -212,6 +212,7 @@
 - 默认过渡时长 `160-180ms`。
 - hover 使用浅灰底、边框变色或轻微透明度变化；选择、悬停和焦点必须可区分。需要持续选择的列表由明确选择驱动 active 态，不能用临时 hover 代替。
 - 同类元素必须共享同一套 hover / active / focus 反馈。
+- 需要明确强调键盘当前项的候选列表可以使用蓝色选中态。底色统一使用 `--notion-accent-selection`，从当前主题的 `--notion-accent-blue` 与页面底色混合。选中边缘与焦点沿用 `--notion-accent-blue`，候选名称的命中片段底色使用 `--notion-accent-match`。普通悬停沿用中性底色。
 
 ## 9. Cursor 规则
 

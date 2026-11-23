@@ -15,6 +15,7 @@ import type {
   AiFileChangeRecord,
   BrowserTabState,
   OpenWithApplication,
+  WorkspaceListItem,
   WorkspaceSource,
   WorkspaceTreeEntry
 } from '../../../../shared/types'
@@ -53,8 +54,7 @@ type WorkbenchContentPanelProps = {
   reviewOpenRequest: WorkbenchReviewOpenRequest | null
   applyLoading: boolean
   applyReverting: boolean
-  workspaces: WorkspaceSource[]
-  selectedWorkspace: WorkspaceSource | null
+  workspaces: WorkspaceListItem[]
   workspaceLoadState: WorkspaceLoadState
   onOpenWorkspaceSettings: () => void
   onReloadWorkspaces: () => void
@@ -247,6 +247,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   const [openWithLoading, setOpenWithLoading] = useState(false)
   const [openWithError, setOpenWithError] = useState<string | null>(null)
   const isDeletedCreatedFile = mode === 'edit' && status === 'reverted' && operation === 'created'
+  const isRemoteVideo = /^https:\/\//iu.test(filePath)
   const revealPath = isDeletedCreatedFile ? getParentPath(filePath) : filePath
   const openTitle = isDeletedCreatedFile
     ? t(($) => $.workbench.theFileWasDeletedAndCannotBeOpened)
@@ -277,6 +278,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
     if (
       !canOpen ||
       isDeletedCreatedFile ||
+      isRemoteVideo ||
       typeof window.api.listOpenWithApplications !== 'function'
     ) {
       return
@@ -353,6 +355,12 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
 
   const openWithApplication = async (application?: OpenWithApplication): Promise<void> => {
     try {
+      if (isRemoteVideo) {
+        const response = await window.api.openExternal(filePath)
+        if (!response.success)
+          void message.error(response.error || t(($) => $.workbench.couldNotOpenTheApplication))
+        return
+      }
       await flushReferencedTextFiles([filePath])
       const response = await window.api.openFileWithApplication({
         filePath,
@@ -522,6 +530,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 icon={<HiChevronDown className="h-3.5 w-3.5" />}
                 className="!h-full !rounded-none !border-l !border-l-[var(--notion-line)] !px-1.5 !text-[var(--notion-text-soft)] hover:!bg-[var(--notion-surface-hover)] disabled:!text-[var(--notion-text-faint)]"
                 data-testid={workbenchSelectors.applyOpenSystemButton}
+                disabled={isRemoteVideo}
               />
             </div>
           </FileOpenWithMenu>
@@ -641,7 +650,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   applyLoading,
   applyReverting,
   workspaces,
-  selectedWorkspace,
   workspaceLoadState,
   onOpenWorkspaceSettings,
   onReloadWorkspaces,
@@ -714,7 +722,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   const previousExplorerOpenRef = React.useRef(explorerOpen)
   const suppressExternalNoticeUntilRef = React.useRef(isAiRunActive ? Number.POSITIVE_INFINITY : 0)
   const floatingExplorer = state.kind === 'file_preview' || state.kind === 'apply_workspace'
-  const hasWorkspace = Boolean(selectedWorkspace?.root_path)
+  const hasWorkspace = workspaces.length > 0
   const bumpExplorerReload = React.useCallback((): void => {
     setExplorerReloadToken((current) => current + 1)
   }, [])
@@ -744,6 +752,10 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       setEditableKind('plain-text')
       return
     }
+    if (registered || /^https:\/\//iu.test(path)) {
+      setEditableKind(null)
+      return
+    }
     let cancelled = false
     void classifyEditableTextKind(path, fileName)
       .then((kind) => {
@@ -758,7 +770,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   }, [activeEditableFile?.path, activeEditableFile?.fileName])
   // 可编辑文本由编辑器自行处理外部变更；面板级 watch 仅覆盖不可编辑预览（docx/ppt/excel 等）
   const previewWatchPath =
-    activeEditableFile && editableKind === null ? activeEditableFile.path : null
+    activeEditableFile &&
+    editableKind === null &&
+    !/^https:\/\//iu.test(activeEditableFile.path)
+      ? activeEditableFile.path
+      : null
   useEffect(() => {
     if (state.kind === 'file_launcher') {
       setExplorerOpen(true)
@@ -1158,7 +1174,8 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               }
             >
               <WorkspaceFileExplorer
-                workspace={selectedWorkspace}
+                key={JSON.stringify(workspaces.map(({ id, root_path }) => [id, root_path]))}
+                workspaces={workspaces}
                 workspaceLoadState={workspaceLoadState}
                 onOpenWorkspaceSettings={onOpenWorkspaceSettings}
                 onReloadWorkspaces={onReloadWorkspaces}
@@ -1192,7 +1209,6 @@ const areContentPanelPropsEqual = (
   previous.applyLoading === next.applyLoading &&
   previous.applyReverting === next.applyReverting &&
   previous.workspaces === next.workspaces &&
-  previous.selectedWorkspace === next.selectedWorkspace &&
   previous.workspaceLoadState === next.workspaceLoadState &&
   previous.onOpenWorkspaceSettings === next.onOpenWorkspaceSettings &&
   previous.onReloadWorkspaces === next.onReloadWorkspaces &&

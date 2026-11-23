@@ -1,4 +1,5 @@
 import { parse as parseYaml } from 'yaml'
+import { execFileSync } from 'node:child_process'
 import { hashSharedEntries, distributionName } from '../../release/shared/distribution.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -174,6 +175,21 @@ for (const archivePath of archives) {
       throw new Error('Packaged application name is incorrect')
     if (process.platform === 'win32' && !fs.existsSync(path.join(appRoot, `${name}.exe`)))
       throw new Error('Packaged executable name is incorrect')
+  }
+  const unpackedModules = path.join(path.dirname(archivePath), 'app.asar.unpacked', 'node_modules')
+  const binarySuffix = process.platform === 'win32' ? '.exe' : ''
+  for (const binary of [
+    path.join(unpackedModules, 'ffmpeg-static', `ffmpeg${binarySuffix}`),
+    path.join(
+      unpackedModules,
+      '@ffprobe-installer',
+      `${process.platform}-${process.arch}`,
+      `ffprobe${binarySuffix}`
+    )
+  ]) {
+    if (!fs.existsSync(binary))
+      throw new Error(`Packaged video preview binary is missing: ${binary}`)
+    execFileSync(binary, ['-version'], { timeout: 10000, windowsHide: true, stdio: 'pipe' })
   }
   assertPackagedNodePtyHelpersExecutable(appRoot)
   assertVcRuntimeDllsPackaged(appRoot)

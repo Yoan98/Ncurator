@@ -1,11 +1,19 @@
-import { describe, it } from 'vitest'
+import { copyFile, mkdir } from 'node:fs/promises'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { addWorkspaceDirectoryThroughNativeDialog } from '../../../../harness/e2e/settings'
+import {
+  createEmptyE2EWorkspace,
+  E2E_WORKSPACE_FIXTURE_ROOT
+} from '../../../../harness/e2e/workspaceFixture'
 import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
   createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
+  navigateToWorkbench,
   pasteWorkbenchText,
   setupWorkbenchWorkspaceOnly,
   waitForWorkbenchMentionPanelText,
@@ -52,13 +60,13 @@ describe('workbench conversation e2e', () => {
             return (
               word?.querySelector('text')?.textContent === 'DOC' &&
               !!shape &&
-              getComputedStyle(shape).fill === 'rgb(59, 130, 246)' &&
+              getComputedStyle(shape).fill === getComputedStyle(word).color &&
               Math.abs(word.getBoundingClientRect().width - 18) <= 0.05
             )
           })
           const neutralMentionLabels = await mentionPanel.evaluate((node) => {
             const labels = Array.from(node.querySelectorAll('button[data-reference-kind]')).map(
-              (button) => button.children[1]?.firstElementChild
+              (button) => button.children[1]
             )
             return (
               labels.length > 1 &&
@@ -262,6 +270,71 @@ describe('workbench conversation e2e', () => {
           const restoredHeight = await input.evaluate(
             (element) => element.getBoundingClientRect().height
           )
+
+          const { rootPath: rankingRoot } = await createEmptyE2EWorkspace(CASE_ID, 'workbench')
+          const sameName = 'workbench-preview.md'
+          for (const name of ['Reference-Match-Official', 'Reference-Match']) {
+            const root = path.join(rankingRoot, name)
+            await mkdir(root)
+            await copyFile(
+              path.join(E2E_WORKSPACE_FIXTURE_ROOT, sameName),
+              path.join(root, sameName)
+            )
+            await addWorkspaceDirectoryThroughNativeDialog(page, root)
+          }
+          await navigateToWorkbench(page)
+          await appendWorkbenchInputText(page, '@Reference')
+          const selected = mentionPanel.locator('[data-mention-active="true"]')
+          await selected.locator('mark').first().waitFor()
+          const beforeQueryBounds = await mentionPanel.boundingBox()
+          await input.pressSequentially('-Match')
+          await selected
+            .locator('[data-reference-path]')
+            .filter({ hasText: /^Reference-Match\/$/u })
+            .waitFor()
+          const exactRootFirst = await selected.locator('[data-reference-path]').textContent()
+          const updatedQueryBounds = await mentionPanel.boundingBox()
+          expect(updatedQueryBounds?.y).toBeCloseTo(beforeQueryBounds!.y)
+          expect(updatedQueryBounds?.height).toBeCloseTo(beforeQueryBounds!.height)
+          const { accentBg, matchBg } = await selected.evaluate((row) => {
+            const mark = row.querySelector('mark')
+            const probe = document.createElement('span')
+            row.append(probe)
+            try {
+              probe.style.backgroundColor = 'var(--notion-accent-selection)'
+              const accentBg =
+                getComputedStyle(probe).backgroundColor === getComputedStyle(row).backgroundColor
+              probe.style.backgroundColor = 'var(--notion-accent-match)'
+              return {
+                accentBg,
+                matchBg:
+                  !!mark &&
+                  getComputedStyle(probe).backgroundColor === getComputedStyle(mark).backgroundColor
+              }
+            } finally {
+              probe.remove()
+            }
+          })
+          expect(await selected.locator('mark').allTextContents()).toEqual(['Reference-Match'])
+          expect(await selected.locator('[data-reference-path] mark').count()).toBe(0)
+          await input.press('ArrowDown')
+          expect(await selected.locator('[data-reference-path]').textContent()).toBe(
+            'Reference-Match-Official/'
+          )
+          await input.press('ControlOrMeta+a')
+          await input.press('Backspace')
+          await appendWorkbenchInputText(page, `@${sameName}`)
+          const exactGroup = mentionPanel.getByRole('group', {
+            name: 'Reference-Match',
+            exact: true
+          })
+          const sameFile = exactGroup.getByRole('button', { name: /workbench-preview\.md/u })
+          const indexStatus = sameFile.locator('[data-reference-index-status]')
+          await indexStatus.hover()
+          await page.getByRole('tooltip').filter({ hasText: '未索引' }).waitFor()
+          const sameFileDisplayPath = await sameFile.locator('[data-reference-path]').textContent()
+          await sameFile.click()
+          await mentionPanel.waitFor({ state: 'detached' })
           return {
             originalMentionIcons,
             originalTokenIcon,
@@ -282,10 +355,26 @@ describe('workbench conversation e2e', () => {
             restoredHeight,
             activeBeforeArrowDown,
             activeAfterArrowDown,
-            activeAfterSettled
+            activeAfterSettled,
+            exactRootFirst,
+            accentBg,
+            matchBg,
+            sameFileDisplayPath
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.exactRootFirst === 'Reference-Match/' &&
+              result.accentBg &&
+              result.matchBg &&
+              result.sameFileDisplayPath === 'Reference-Match/workbench-preview.md',
+            {
+              name: 'workbench-reference-ranks-workspace-groups',
+              message:
+                '完全匹配的根地址优先，命中名称使用蓝色底，右侧路径以普通文本显示，跨组键盘选择和索引图标提示正确。',
+              data: result
+            }
+          )
           await runtime.assertThat(
             result.originalMentionIcons &&
               result.originalTokenIcon &&

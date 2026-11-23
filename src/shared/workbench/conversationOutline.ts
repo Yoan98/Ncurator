@@ -1,7 +1,7 @@
 /**
  * Coarse outline of one local day's conversation, used by the right-side rail.
  *
- * Items follow the day selected on the left timeline, one item per message, so
+ * Items follow the question's local day, one item per user question, so
  * the rail stays cheap: pure string work, no DOM, no markdown parsing.
  */
 
@@ -78,22 +78,48 @@ export const buildConversationOutline = (input: {
   if (messages.length === 0) return []
   const scopeDay = input.dayStart ?? startOfLocalDay(messages[messages.length - 1].timestamp)
 
-  const items: ConversationOutlineItem[] = []
+  const groups = new Map<string, { message: ChatMessage; content: string }>()
   for (const message of messages) {
-    if (message.role !== 'user' && message.role !== 'assistant') continue
+    if (message.role !== 'user') continue
+    const content = message.content || message.attachments?.map((item) => item.name).join(' ') || ''
+    groups.set(message.id, { message, content })
+  }
+  let previousUserId: string | undefined
+  for (const message of messages) {
+    if (message.role === 'user') previousUserId = message.id
+    if (message.role !== 'assistant') continue
+    const group = groups.get(message.userMessageId || previousUserId || '')
+    if (group) group.content += `\n${message.content || ''}`
+  }
+  const items: ConversationOutlineItem[] = []
+  for (const { message, content } of groups.values()) {
     if (startOfLocalDay(message.timestamp) !== scopeDay) continue
-    const raw = message.content || ''
-    if (!raw.trim()) continue
+    const raw = message.content || message.attachments?.map((item) => item.name).join(' ') || ''
     const preview = buildOutlinePreview(raw)
     if (!preview.title) continue
     items.push({
       id: message.id,
-      kind: message.role,
+      kind: 'user',
       title: preview.title,
       snippet: preview.snippet,
-      lengthLevel: lengthLevelOf(raw),
+      lengthLevel: lengthLevelOf(content),
       timestamp: message.timestamp
     })
   }
   return sampleItems(items)
+}
+
+/** Older messages without ownership metadata follow their preceding user question. */
+export const resolveConversationQuestion = (
+  messages: readonly ChatMessage[],
+  messageId: string
+): ChatMessage | undefined => {
+  const index = messages.findIndex((message) => message.id === messageId)
+  const message = messages[index]
+  if (!message || message.role === 'user') return message
+  if (message.userMessageId) return messages.find((item) => item.id === message.userMessageId)
+  return messages
+    .slice(0, index)
+    .reverse()
+    .find((item) => item.role === 'user')
 }

@@ -6,6 +6,7 @@ import type { Page } from 'playwright'
 import JSZip from 'jszip'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { createEmptyE2EWorkspace } from '../../../../harness/e2e/workspaceFixture'
 import { accountButton, labels, menuItem, openAccountMenu } from '../../../../harness/e2e/account'
 import {
   addWorkspaceDirectoryThroughNativeDialog,
@@ -288,9 +289,11 @@ describe('workbench result e2e', () => {
           await page
             .getByRole('menuitem', { name: '重命名', exact: true })
             .waitFor({ state: 'visible' })
-          const fileMenuCorrect =
-            (await page.getByRole('menuitem', { name: /^新建文件/u }).count()) === 1 &&
-            (await page.getByRole('menuitem', { name: '重命名', exact: true }).isVisible())
+          const fileContextMenu = page.getByRole('menu').filter({
+            has: page.getByRole('menuitem', { name: '重命名', exact: true })
+          })
+          await fileContextMenu.getByRole('menuitem', { name: /^新建文件/u }).waitFor()
+          await fileContextMenu.getByRole('menuitem', { name: '删除', exact: true }).waitFor()
           await page.waitForTimeout(250)
           await runtime.captureScreenshot({
             name: 'workspace-file-context-menu',
@@ -556,6 +559,43 @@ describe('workbench result e2e', () => {
               () => false
             ))
 
+          const second = await createEmptyE2EWorkspace(CASE_ID, 'workbench')
+          await fs.mkdir(path.join(second.rootPath, 'node_modules'))
+          await fs.copyFile(
+            path.join(workspace.rootPath, SEED_FILE),
+            path.join(second.rootPath, '.hidden.txt')
+          )
+          await fs.copyFile(
+            path.join(workspace.rootPath, SEED_FILE),
+            path.join(second.rootPath, 'node_modules', 'module-notes.txt')
+          )
+          await addWorkspaceDirectoryThroughNativeDialog(page, second.rootPath)
+          await getSettingsLocator(page, settingsSelectors.backRow).click()
+          await openAllModeExplorer(page)
+          const allRoots = list.locator('[data-workspace-root]')
+          const primaryRoot = allRoots.filter({
+            has: page.getByTitle(workspace.rootPath, { exact: true })
+          })
+          const secondRoot = allRoots.filter({
+            has: page.getByTitle(second.rootPath, { exact: true })
+          })
+          await secondRoot.getByTitle('.hidden.txt', { exact: true }).waitFor()
+          await secondRoot.getByTitle('node_modules', { exact: true }).click()
+          await secondRoot.getByTitle('node_modules/module-notes.txt', { exact: true }).click()
+          await getWorkbenchLocator(page, workbenchSelectors.plainTextEditor).waitFor()
+          await startFileCreation(page, '其他文件', second.rootPath)
+          await newNameInput.fill('second-root.md')
+          await newNameInput.press('Enter')
+          await secondRoot.getByTitle('second-root.md', { exact: true }).waitFor()
+          const allRootsBrowsable =
+            (await allRoots.count()) === 2 &&
+            (await primaryRoot.getByTitle(SEED_FILE, { exact: true }).isVisible()) &&
+            (await secondRoot
+              .getByTitle('node_modules/module-notes.txt', { exact: true })
+              .isVisible()) &&
+            (await fs.stat(path.join(second.rootPath, 'second-root.md'))).isFile() &&
+            (await primaryRoot.getByTitle('second-root.md', { exact: true }).count()) === 0
+
           await closeExplorerIfOpen(page)
           const previewTabId = await tabs.first().getAttribute('data-testid')
           if (await accountButton(page).isVisible()) {
@@ -565,6 +605,7 @@ describe('workbench result e2e', () => {
             await page.getByRole('button', { name: '设置', exact: true }).click()
           }
           await page.getByRole('link', { name: '工作空间', exact: true }).click()
+          await removeWorkspaceDirectoryThroughSettingsUi(page, second.rootPath)
           await removeWorkspaceDirectoryThroughSettingsUi(page, workspace.rootPath)
           await getSettingsLocator(page, settingsSelectors.backRow).click()
           await getWorkbenchLocator(page, workbenchSelectors.plainTextEditor).waitFor({
@@ -612,7 +653,6 @@ describe('workbench result e2e', () => {
             duplicatePreserved,
             invalidCancelled,
             nestedCreationCorrect,
-            fileMenuCorrect,
             fileCreationUsesParent,
             explorerStayedOpen,
             expandedDirectoryPreserved,
@@ -630,6 +670,7 @@ describe('workbench result e2e', () => {
             floatingCreatePreservedPreview,
             deleteCancelled,
             deletedFileNotRecreated,
+            allRootsBrowsable,
             workspaceRoot: workspace.rootPath
           }
         },
@@ -640,7 +681,6 @@ describe('workbench result e2e', () => {
               result.duplicatePreserved &&
               result.invalidCancelled &&
               result.nestedCreationCorrect &&
-              result.fileMenuCorrect &&
               result.fileCreationUsesParent &&
               result.explorerStayedOpen &&
               result.expandedDirectoryPreserved &&
@@ -681,6 +721,7 @@ describe('workbench result e2e', () => {
           )
           await runtime.assertThat(
             result.seedVisibleOnLauncher &&
+              result.allRootsBrowsable &&
               result.lateAVisibleAfterOpen &&
               result.lateBVisibleAfterReopen &&
               result.focusWhileClosedDidNotRefresh &&

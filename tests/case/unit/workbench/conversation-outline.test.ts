@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildConversationOutline,
   buildOutlinePreview,
-  MAX_OUTLINE_ITEMS
+  MAX_OUTLINE_ITEMS,
+  resolveConversationQuestion
 } from '../../../../src/shared/workbench/conversationOutline'
 import { startOfLocalDay } from '../../../../src/shared/workbench/messageTimeline'
 import type { ChatMessage } from '../../../../src/shared/types'
@@ -57,7 +58,7 @@ describe('buildConversationOutline', () => {
         message('c', 'user', '昨天的问题', DAY - 24 * 60 * 60 * 1000)
       ]
     })
-    expect(items.map((item) => item.id)).toEqual(['a', 'b'])
+    expect(items.map((item) => item.id)).toEqual(['a'])
     expect(items[0]).toMatchObject({ kind: 'user', title: '今天的问题' })
   })
 
@@ -86,11 +87,30 @@ describe('buildConversationOutline', () => {
       dayStart: startOfLocalDay(DAY),
       messages: [
         message('short', 'user', '短', DAY),
-        message('medium', 'assistant', 'x'.repeat(400), DAY + 1),
-        message('long', 'assistant', 'x'.repeat(1200), DAY + 2)
+        message('medium', 'user', 'x'.repeat(400), DAY + 1),
+        message('long', 'user', 'x'.repeat(1200), DAY + 2)
       ]
     })
     expect(items.map((item) => item.lengthLevel)).toEqual([1, 2, 3])
+  })
+
+  it('keeps an answer with its question across midnight and queued user messages', () => {
+    const question = message('question', 'user', '跨天问题', DAY)
+    const queued = message('queued', 'user', '追加问题', NEXT_DAY)
+    const answer = {
+      ...message('answer', 'assistant', 'x'.repeat(900), NEXT_DAY + 1),
+      userMessageId: question.id
+    }
+    const messages = [question, queued, answer]
+    expect(buildConversationOutline({ messages, dayStart: startOfLocalDay(DAY) })).toEqual([
+      expect.objectContaining({ id: question.id, kind: 'user', lengthLevel: 3 })
+    ])
+    expect(resolveConversationQuestion(messages, answer.id)?.id).toBe(question.id)
+    expect(
+      buildConversationOutline({ messages, dayStart: startOfLocalDay(NEXT_DAY) }).map(
+        (item) => item.id
+      )
+    ).toEqual([queued.id])
   })
 
   it('samples long days while keeping the first and last item', () => {

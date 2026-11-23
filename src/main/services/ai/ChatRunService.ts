@@ -138,6 +138,7 @@ type ChatRunServiceDeps = {
     run: AiRunRecord,
     status: Extract<AiRunRecord['status'], 'completed' | 'failed' | 'cancelled'>
   ) => void | Promise<void>
+  onQuestionRequired?: (run: AiRunRecord, interactionId: string) => void | Promise<void>
 }
 
 const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = [
@@ -1130,6 +1131,7 @@ export class ChatRunService {
       id: uuidv4(),
       partner_id: payload.partnerId,
       role: 'assistant',
+      userMessageId: userMessage.id,
       content: '',
       timestamp: createdAt + 1
     }
@@ -1756,6 +1758,16 @@ export class ChatRunService {
       return
     }
     if (
+      projectedEvent.type === 'human_interaction_required' &&
+      projectedEvent.interaction.kind === 'question'
+    ) {
+      try {
+        await this.deps.onQuestionRequired?.(run, projectedEvent.interactionId)
+      } catch (error) {
+        console.error('[CHAT-RUN] question notification failed:', error)
+      }
+    }
+    if (
       (projectedEvent.type === 'run_completed' ||
         projectedEvent.type === 'run_failed' ||
         projectedEvent.type === 'run_cancelled') &&
@@ -1771,6 +1783,13 @@ export class ChatRunService {
     if (entry?.deleted) {
       discardUnstartedContinuation()
       return
+    }
+    if (
+      projectedEvent.type === 'run_completed' ||
+      projectedEvent.type === 'run_failed' ||
+      projectedEvent.type === 'run_cancelled'
+    ) {
+      projectedEvent.finishedAt = run.finishedAt
     }
     this.broadcastEvent(projectedEvent)
     if (continuation && this.deps.autoStartRuns !== false) {

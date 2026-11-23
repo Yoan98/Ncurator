@@ -20,7 +20,7 @@ describe('settings workspace e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['core'],
-        description: '目录树仅在展开时读取子目录，并在所有层级过滤点开头项。',
+        description: '目录树仅在展开时读取子目录，并按工作空间黑名单过滤隐藏项和依赖目录。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'exclusive',
@@ -53,7 +53,7 @@ describe('settings workspace e2e', () => {
 
           const tree = getSettingsLocator(page, importSelectors.workspaceTree)
           await tree.getByText('docs').waitFor({ state: 'visible' })
-          await tree.getByText('node_modules').waitFor({ state: 'visible' })
+          const moduleDirectoryCount = await tree.getByText('node_modules', { exact: true }).count()
           const briefBeforeExpand = await tree.getByText('brief.txt').count()
           const moduleFileBeforeExpand = await tree.getByText('package.txt').count()
           const hiddenRootCount = await tree.getByText('.hidden.txt', { exact: true }).count()
@@ -71,9 +71,9 @@ describe('settings workspace e2e', () => {
           }))
           const sharedIcons = await tree.evaluate((node) => {
             const coloredLabels = [
-              ['docx', 'DOC', 'rgb(59, 130, 246)'],
-              ['xlsx', 'XLS', 'rgb(34, 160, 107)'],
-              ['ppt', 'PPT', 'rgb(245, 158, 11)']
+              ['docx', 'DOC', '--file-icon-doc'],
+              ['xlsx', 'XLS', '--file-icon-xls'],
+              ['ppt', 'PPT', '--file-icon-ppt']
             ]
             return (
               coloredLabels.every(([kind, label, color]) => {
@@ -83,7 +83,8 @@ describe('settings workspace e2e', () => {
                   svg?.querySelector('text')?.textContent === label &&
                   Math.abs(svg.getBoundingClientRect().width - 18) <= 0.05 &&
                   !!shape &&
-                  getComputedStyle(shape).fill === color
+                  svg.classList.contains(`text-[var(${color})]`) &&
+                  getComputedStyle(shape).fill === getComputedStyle(svg).color
                 )
               }) &&
               ['directory', 'markdown', 'file'].every((kind) => {
@@ -118,6 +119,9 @@ describe('settings workspace e2e', () => {
           await tree.getByText('brief.txt').waitFor({ state: 'visible' })
           const briefAfterRefresh = await tree.getByText('brief.txt').count()
           const moduleFileAfterRefresh = await tree.getByText('package.txt').count()
+          const moduleDirectoryAfterRefresh = await tree
+            .getByText('node_modules', { exact: true })
+            .count()
 
           return {
             sharedIcons,
@@ -127,6 +131,8 @@ describe('settings workspace e2e', () => {
             rowAfter,
             briefBeforeExpand,
             moduleFileBeforeExpand,
+            moduleDirectoryCount,
+            moduleDirectoryAfterRefresh,
             hiddenRootCount,
             hiddenDirectoryCount,
             hiddenChildCount,
@@ -137,11 +143,10 @@ describe('settings workspace e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.sharedIcons &&
-              result.folderChangesWhenExpanded &&
-              result.rowStyleConsistent &&
-              result.briefBeforeExpand === 0 &&
+            result.briefBeforeExpand === 0 &&
               result.moduleFileBeforeExpand === 0 &&
+              result.moduleDirectoryCount === 0 &&
+              result.moduleDirectoryAfterRefresh === 0 &&
               result.hiddenRootCount === 0 &&
               result.hiddenDirectoryCount === 0 &&
               result.hiddenChildCount === 0 &&
@@ -149,9 +154,17 @@ describe('settings workspace e2e', () => {
               result.briefAfterRefresh > 0 &&
               result.moduleFileAfterRefresh === 0,
             {
-              name: 'workspace-directory-is-lazy-and-dot-filtered',
+              name: 'workspace-directory-is-lazy-and-blacklist-filtered',
               message:
-                '目录树应延迟读取子目录、保留 node_modules 根项、过滤点开头项且不提供全局展开控制；右上刷新后已展开节点保持展开、未展开目录不被自动展开。',
+                '目录树应延迟读取普通子目录，并隐藏 node_modules 与点开头项。右上刷新后已展开节点保持展开。',
+              data: result
+            }
+          )
+          await runtime.assertThat(
+            result.sharedIcons && result.folderChangesWhenExpanded && result.rowStyleConsistent,
+            {
+              name: 'workspace-directory-retains-themed-file-icons',
+              message: '目录树图标应使用当前主题的文件类型配色，并保留展开图形、尺寸和行样式。',
               data: result
             }
           )

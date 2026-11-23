@@ -1,9 +1,9 @@
 import { t } from '../../i18n'
-import { IMAGE_FILE_EXTENSIONS, imageMimeFromExtension } from '../../../../shared/imageFiles'
-export const FILE_PREVIEW_SUPPORT_SUMMARY = t(
-  ($) => $.editors.supportedFormatsPdfDocxPptxExcelMarkdownUtf8
-)
-
+import {
+  IMAGE_FILE_EXTENSIONS,
+  imageMimeFromExtension,
+  fileExtensionOf
+} from '../../../../shared/imageFiles'
 const IMAGE_TYPE_ALIASES: Record<string, string> = Object.fromEntries([
   ...IMAGE_FILE_EXTENSIONS.flatMap((extension) => {
     const canonical = extension === 'jpeg' ? 'jpg' : extension
@@ -17,6 +17,18 @@ const IMAGE_TYPE_ALIASES: Record<string, string> = Object.fromEntries([
 ])
 
 const TYPE_ALIASES: Record<string, string> = {
+  html: 'html',
+  htm: 'html',
+  'text/html': 'html',
+  mp4: 'video',
+  m4v: 'video',
+  mov: 'video',
+  webm: 'video',
+  mkv: 'video',
+  'video/mp4': 'video',
+  'video/quicktime': 'video',
+  'video/webm': 'video',
+  'video/x-matroska': 'video',
   ...IMAGE_TYPE_ALIASES,
   pdf: 'pdf',
   'application/pdf': 'pdf',
@@ -68,11 +80,7 @@ export const IMAGE_PREVIEW_FILE_TYPES = Array.from(
   )
 )
 
-export const getFileExtension = (fileName: string): string => {
-  const name = fileName.split(/[\\/]/).pop() || ''
-  const dotIndex = name.lastIndexOf('.')
-  return dotIndex >= 0 ? name.slice(dotIndex + 1).toLowerCase() : ''
-}
+export const getFileExtension = fileExtensionOf
 
 export const resolveRegisteredPreviewType = (
   fileName: string,

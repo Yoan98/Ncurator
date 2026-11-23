@@ -88,6 +88,7 @@ export const projectAiConversationMessages = (input: {
         id: run.assistantMessageId,
         partner_id: input.partnerId,
         role: 'assistant',
+        userMessageId: run.userMessageId,
         content: deliveryContent,
         timestamp:
           run.status === 'continued'

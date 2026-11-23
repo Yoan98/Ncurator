@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerHandlers, registerOpenExternalHandler } from './ipc/handlers'
+import { registerPreviewHandlers, registerPreviewScheme } from './ipc/preview'
 import { desktopProtocolLink } from './ipc/desktopAccount'
 import { cancelDomesticDesktopAuthorization } from './services/officialApi/desktopAccount'
 import { IngestionService } from './services/ingestion/loader'
@@ -46,6 +47,8 @@ import { AppErrorLogService } from './services/logging/AppErrorLogService'
 import { DatabaseVersionTooNewError, SqliteCore } from './services/storage/sqlite/SqliteCore'
 import { WpsSyncService } from './services/wps/WpsSyncService'
 import { setOfficeFileWriteListener } from './services/wps/officeFileWriteNotify'
+
+registerPreviewScheme()
 
 if (!app.isPackaged) {
   loadRootEnvOnce()
@@ -518,6 +521,9 @@ if (!singleInstanceLock) {
       return
     }
 
+    // Register the media loader before the first renderer frame is created.
+    const disposePreview = registerPreviewHandlers(() => mainAppWindow)
+    shutdownCoordinator.register({ name: 'file-previews', dispose: disposePreview })
     const mainWindow = createWindow()
     markStartup('window created')
     mainWindow.once('ready-to-show', () => markStartup('window ready-to-show'))

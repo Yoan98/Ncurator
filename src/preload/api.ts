@@ -17,6 +17,7 @@ import type {
   UserSkillResourcePreview
 } from '../shared/userSkills'
 import type { AppSettingsErrorCode } from '../shared/appErrors'
+import type { PreviewResource, VideoPreviewSnapshot, VideoPreviewOpenRequest, VideoPreviewConvertRequest } from '../shared/preview'
 import type { AppResolvedTheme } from '../shared/appPreferences'
 import type {
   GetFileReviewResponse,
@@ -421,5 +422,10 @@ export type DesktopApi = {
   onWindowPointerResync: (cb: (payload: { reason: string }) => void) => () => void
   nudgeWindowCursor: () => Promise<{ sent: boolean }>
   onSystemNotificationOpenPartner: (cb: (partnerId: string) => void) => () => void
+  previewHtmlOpen: (source: string) => Promise<PreviewResource>
+  previewResourceRelease: (id: string) => Promise<void>
+  previewVideoOpen: (request: VideoPreviewOpenRequest) => Promise<VideoPreviewSnapshot>
+  previewVideoGet: (id: string) => Promise<VideoPreviewSnapshot>
+  previewVideoConvert: (request: VideoPreviewConvertRequest) => Promise<VideoPreviewSnapshot>
   onWorkbenchUiFlushRequest: (cb: () => void | Promise<void>) => () => void
 }

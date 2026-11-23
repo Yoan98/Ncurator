@@ -20,6 +20,7 @@ import { ScheduledTaskStore } from './domains/ScheduledTaskStore'
 import { AiSubagentStore } from './domains/AiSubagentStore'
 import { ChatMessageLogStore } from './domains/ChatMessageLogStore'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
+import { pruneBlacklistedWorkspaceFiles } from '../workspace/workspaceEntryBlacklist'
 
 export class StorageService {
   private static instance: StorageService
@@ -91,6 +92,10 @@ export class StorageService {
     await this.sqlite.runPendingAfterCommitHooks({ lanceDbPath: this.vector.getDbPath() })
     await this.vector.initialize()
     await this.failInterruptedWorkspaceIndexJobs()
+    await pruneBlacklistedWorkspaceFiles({
+      workspaceStore: this.workspace,
+      documentsStore: this.documents
+    })
     await this.documents.purgeStaleChunks()
   }
 

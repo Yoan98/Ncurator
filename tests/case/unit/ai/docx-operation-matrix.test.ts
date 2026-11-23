@@ -36,6 +36,7 @@ describe('DOCX operation matrix', () => {
           },
           {
             type: 'table',
+            style: { layout: 'fixed' },
             children: ['A', 'B'].map((prefix) => ({
               type: 'table_row' as const,
               children: [`${prefix}1`, `${prefix}2`].map((text) => ({
@@ -61,6 +62,24 @@ describe('DOCX operation matrix', () => {
       const table = index.outline.find((node) => node.type === 'table')!
       const tableDetail = index.detailByNodeId.get(table.nodeId)
       if (!tableDetail || tableDetail.type !== 'table') throw new Error('table detail missing')
+      expect(tableDetail.style?.layout).toBe('fixed')
+      const initialZip = await JSZip.loadAsync(source)
+      expect(await initialZip.file('word/document.xml')!.async('text')).toContain(
+        '<w:tblLayout w:type="fixed"/>'
+      )
+
+      const autoFit = await applyDocxOps({
+        buffer: source,
+        ops: [{ type: 'format_table', nodeId: table.nodeId, format: { layout: 'autofit' } }]
+      })
+      const autoFitBundle = await loadDocxBundle(autoFit.buffer)
+      const autoFitIndex = buildDocumentNodeIndex(autoFitBundle)
+      const autoFitTable = autoFitIndex.detailByNodeId.get(table.nodeId)
+      expect(autoFitTable?.type === 'table' && autoFitTable.style?.layout).toBe('autofit')
+      expect(await autoFitBundle.zip.file('word/document.xml')!.async('text')).toContain(
+        '<w:tblLayout w:type="autofit"/>'
+      )
+
       const rowId = tableDetail.children[0]!.nodeId
       const cellId = tableDetail.children[0]!.children[0]!.nodeId
 

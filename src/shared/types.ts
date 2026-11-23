@@ -315,6 +315,7 @@ export interface WorkspaceTreeNodeView {
 
 export interface ReferenceItemListResponse {
   items: SelectedReference[]
+  workspaceRoots: Record<string, { name: string; path: string }>
   total: number
   hasMore: boolean
   offset: number
@@ -394,6 +395,7 @@ export interface ListWorkspaceTreeRequest {
 export interface ListWorkspaceDirectoryRequest {
   workspaceId: string
   relativePath?: string
+  purpose?: 'browse'
 }
 
 export interface WorkspaceDirectoryListResponse {
@@ -727,6 +729,8 @@ export interface ChatMessage {
   id: string
   partner_id: string
   role: 'user' | 'assistant' | 'system'
+  /** User question that owns this assistant message, independent of display order. */
+  userMessageId?: string
   content: string
   timestamp: number
   contentNodes?: ChatMessageContentNode[]
@@ -2147,10 +2151,12 @@ type AiRunEventPayload =
   | {
       type: 'run_completed'
       runId: string
+      finishedAt?: number
     }
   | {
       type: 'run_failed'
       runId: string
+      finishedAt?: number
       source: AiRunFailureSource
       message: string
       rawMessage?: string
@@ -2161,6 +2167,7 @@ type AiRunEventPayload =
   | {
       type: 'run_cancelled'
       runId: string
+      finishedAt?: number
     }
   | { type: 'run_pending_messages_parked'; runId: string; messageIds: string[] }
   | {

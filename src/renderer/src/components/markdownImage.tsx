@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react'
-import { HiOutlinePhoto } from 'react-icons/hi2'
+import FileIcon from './FileIcon'
 import { t } from '../i18n'
 import { basenamePath, resolveMarkdownImageLocalPath } from '../../../shared/markdownImagePath'
 import { readImageDisplayName } from '../../../shared/workbench/readImageThumbUtils'
 import { loadLocalImageUrl } from '../utils/localImageObjectUrl'
-import { renderReferenceIcon } from './markdownReference'
 
 /** Structurally matches the workbench lightbox payload without importing it. */
 export type MarkdownPreviewImage = {
@@ -48,13 +47,12 @@ export type MarkdownImageProps = {
 }
 
 const MarkdownImageFallback: React.FC<{
-  isRemote: boolean
   label: string
   title?: string
-}> = ({ isRemote, label, title }) => (
+}> = ({ label, title }) => (
   <span className="markdown-reference-unavailable" title={title}>
     <span className="markdown-reference-icon">
-      {renderReferenceIcon({ resourceType: isRemote ? 'web' : 'file', path: label })}
+      <FileIcon kind="image" className="h-[18px] w-[18px] shrink-0" />
     </span>
     <span className="min-w-0 break-words [overflow-wrap:anywhere]">{label}</span>
   </span>
@@ -71,7 +69,6 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
   const source = resolveImageSource(src, sourceFilePath)
   const localPath = source.kind === 'local' ? source.path : null
   const remoteUrl = source.kind === 'remote' ? source.url : null
-  const isRemote = remoteUrl !== null
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(remoteUrl)
   const [failed, setFailed] = useState(false)
 
@@ -107,7 +104,6 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
   if (unavailable || source.kind === 'none' || failed) {
     return (
       <MarkdownImageFallback
-        isRemote={isRemote}
         label={fallbackLabel}
         title={unavailable || failed ? t(($) => $.common.linkUnavailable) : title}
       />
@@ -118,7 +114,7 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
     return (
       <span className="markdown-image" data-image-state="loading">
         <span className="markdown-image-frame markdown-image-frame--placeholder" aria-hidden>
-          <HiOutlinePhoto className="h-5 w-5" />
+          <FileIcon kind="image" className="h-5 w-5" />
         </span>
       </span>
     )

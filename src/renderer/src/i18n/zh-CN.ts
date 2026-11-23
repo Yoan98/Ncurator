@@ -289,8 +289,8 @@ export const zh = {
     couldNotSaveNotificationSettings: '保存通知设置失败',
     couldNotOpenTheLogDirectory: '打开日志目录失败',
     generalSettings: '通用设置',
-    aiTaskNotifications: 'AI 完成通知',
-    sendDesktopNotificationsWhenAiTasksSucceedFailOr: '任务成功、失败或取消时发送系统通知。',
+    aiTaskNotifications: 'AI 运行通知',
+    sendDesktopNotificationsWhenAiTasksSucceedFailOr: '任务成功、失败、取消或等待回答时发送系统通知。',
     errorLog: '错误日志',
     runtimeAndIndexingErrorsAreLoggedLocallyShareApp: '打开日志目录，获取 app.log 排查问题。',
     openErrorLogDirectory: '打开错误日志目录',
@@ -494,6 +494,7 @@ export const zh = {
     backToWorkbench: '返回工作台'
   },
   workbench: {
+    completedAt: '完成于 {{time}}',
     loadingPartiallyFailed: '部分失败',
     noEffectiveFileChange: '本次未检测到文件内容变化',
     next: '下一步',
@@ -974,6 +975,15 @@ export const zh = {
     startCreatingWithAi: '开始 AI 创建'
   },
   editors: {
+    videoPreview: '视频预览',
+    htmlPreview: 'HTML 预览',
+    videoUnavailable: '视频文件不可用',
+    videoCannotPlay: '当前视频无法播放',
+    videoMayHaveMoved: '文件可能已移动或删除。',
+    videoRetryOrOpen: '可以重试，或使用系统播放器打开。',
+    openVideoWithSystem: '系统打开',
+    preparingVideo: '正在准备视频…',
+    loadingVideo: '视频加载中',
     add: '新增',
     formattingChanges: '格式修改',
     reference: '引用 #{{value1}}',
@@ -998,8 +1008,6 @@ export const zh = {
     changes: '变更',
     showAllSlides: '查看全部页',
     slide: '第 {{value1}} 页{{value2}}',
-    supportedFormatsPdfDocxPptxExcelMarkdownUtf8:
-      '当前支持 PDF、DOCX、PPTX、Excel、Markdown、UTF-8 文本，以及 PNG、JPG、GIF、WebP、BMP、SVG 图片。',
     unknownFormat: '未知格式',
     couldNotReadWordPreviewData: '读取 docx 预览数据失败',
     wordPreviewDataIsMissing: '缺少 docx 预览数据',
@@ -1009,7 +1017,7 @@ export const zh = {
     selectAFileToViewItsContentsHere: '选择一个文件后在这里查看内容。',
     fileDeleted: '文件已删除',
     filePreviewUnavailable: '文件暂时无法预览：{{value1}}',
-    previewIsNotSupportedForFiles: '{{value1}} 文件暂不支持预览。\n{{value2}}',
+    previewIsNotSupportedForFiles: '{{value1}} 文件暂不支持预览。',
     filePreviewUnavailable2: '文件暂时无法预览',
     filePreview: '文件预览',
     couldNotLoadTheTextPreview: '文本预览加载失败',

@@ -5,7 +5,7 @@ import type JSZip from 'jszip'
 import type { DocxBorders, DocxChangedNode, DocxOperation, DocxStylePatch } from '../../types'
 import { normalizeDocxHexColor } from '../../utils/color'
 import { buildDocumentNodeIndex, extractNodeText, loadDocxBundle } from './nodeIndex'
-import { createParagraphFromNode, createRelationshipWriter } from './createNodeDom'
+import { createParagraphFromNode, createRelationshipWriter, setTableLayout } from './createNodeDom'
 import { resolveDocxRelationshipTarget } from './relationshipPath'
 import {
   childElements,
@@ -2122,8 +2122,8 @@ const patchNodeStyle = (node: Element, patch: DocxStylePatch): void => {
     const pr = ensureProperties(node, 'tblPr')
     setValProperty(pr, 'jc', patch.alignment)
     setWidth(pr, 'tblW', patch.width)
-    setValProperty(pr, 'tblLayout', patch.layout)
     patchBorders(pr, 'tblBorders', patch.borders)
+    setTableLayout(pr, patch.layout)
     return
   }
   if (patch.kind === 'table_row') {

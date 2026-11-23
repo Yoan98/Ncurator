@@ -1,17 +1,6 @@
 import React from 'react'
-import type { IconType } from 'react-icons'
-import { LuFolder, LuGlobe } from 'react-icons/lu'
-import {
-  PiFileAudioLight,
-  PiFileDocLight,
-  PiFileImageLight,
-  PiFileMdLight,
-  PiFilePdfLight,
-  PiFilePptLight,
-  PiFileTextLight,
-  PiFileVideoLight,
-  PiFileXlsLight
-} from 'react-icons/pi'
+import FileIcon from './FileIcon'
+import { getFileIconKind, getFileVisualSpec } from '../utils/fileIcons'
 import {
   findMarkdownLinkAccess,
   transformAssistantMarkdownUrl,
@@ -25,7 +14,6 @@ import {
   repairInlineCodeWrappedNcuratorLinks
 } from '../../../shared/ncuratorRef'
 import type { MarkdownLinkResourceType } from '../../../shared/types'
-import { getFileIconKind, type FileIconKind } from '../utils/fileIcons'
 export type { OpenableMarkdownReference, ResolvedMarkdownLink }
 export {
   findMarkdownLinkAccess,
@@ -36,28 +24,17 @@ export {
 export const normalizeRefMarkdownLinks = normalizeNcuratorRefMarkdownLinks
 export { repairInlineCodeWrappedNcuratorLinks }
 
-const REFERENCE_ICON_BY_KIND: Record<FileIconKind, IconType> = {
-  directory: LuFolder,
-  web: LuGlobe,
-  pdf: PiFilePdfLight,
-  docx: PiFileDocLight,
-  xlsx: PiFileXlsLight,
-  ppt: PiFilePptLight,
-  audio: PiFileAudioLight,
-  video: PiFileVideoLight,
-  image: PiFileImageLight,
-  markdown: PiFileMdLight,
-  file: PiFileTextLight
-}
-
-/** Inline reference glyph keyed by link kind (web) or target file type. */
+/** All file-reference surfaces use the same glyph mapping. */
 export const renderReferenceIcon = (input: {
   resourceType: MarkdownLinkResourceType
   path: string
 }): React.ReactNode => {
-  const Icon =
-    input.resourceType === 'web'
-      ? REFERENCE_ICON_BY_KIND.web
-      : REFERENCE_ICON_BY_KIND[getFileIconKind(input.path)]
-  return <Icon aria-hidden />
+  const fileKind = getFileIconKind(input.path)
+  const kind = input.resourceType === 'web' && fileKind === 'file' ? 'web' : fileKind
+  return (
+    <FileIcon
+      kind={kind}
+      className={`h-[18px] w-[18px] shrink-0 ${getFileVisualSpec(kind).iconClassName}`}
+    />
+  )
 }

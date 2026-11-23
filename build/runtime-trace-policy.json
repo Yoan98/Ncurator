@@ -77,6 +77,20 @@
       "packagePattern": "^$",
       "pathPattern": "(?:^|/)\\.env$",
       "reason": "Local environment files are configuration assets, not JavaScript, and are excluded from the packaged application."
+    },
+    {
+      "id": "ffprobe-platform-package",
+      "kind": "resolve",
+      "package": "@ffprobe-installer/ffprobe",
+      "specifierPattern": "^@ffprobe-installer/[^/]+/package\\.json$",
+      "reason": "FFprobe selects its optional binary package from the running platform and architecture. The staged runtime check resolves and executes that binary."
+    },
+    {
+      "id": "ffmpeg-native-executable",
+      "kind": "parse",
+      "package": "ffmpeg-static",
+      "pathPattern": "/ffmpeg(?:\\.exe)?$",
+      "reason": "The FFmpeg native executable is a runtime asset rather than JavaScript. The staged runtime check executes it."
     }
   ],
   "requiredFiles": [

@@ -1,8 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react'
-import type { ReferenceKind, SelectedReference } from '../../../../../shared/types'
-import { REFERENCE_ITEM_PAGE_SIZE } from '../../../../../shared/types'
-import { COMPOSER_REFERENCE_KINDS } from './constants'
+import React, { useEffect, useRef } from 'react'
+import type { SelectedReference } from '../../../../../shared/types'
 import ReferenceMentionPanel from './ReferenceMentionPanel'
+import { useReferenceMention } from './useReferenceMention'
 import type { ComposerDraftValue } from './types'
 import {
   anchorCaretInTextNode,
@@ -54,37 +53,23 @@ const ComposerInputEditor: React.FC<Props> = ({
   const editorRef = useRef<HTMLSpanElement | null>(null)
   const knownScopesRef = useRef(new Map<string, SelectedReference>())
   const lastEmittedSignatureRef = useRef<string | null>(null)
-  const mentionRequestRef = useRef(0)
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
-  const [mentionOptions, setMentionOptions] = useState<SelectedReference[]>([])
-  const [mentionIndex, setMentionIndex] = useState(0)
+  const {
+    state: mention,
+    getCurrent: getCurrentMention,
+    search: searchMention,
+    close: closeMention,
+    loadMore: loadMoreMention,
+    move: moveMention,
+    canSelect: canSelectMention
+  } = useReferenceMention()
 
   const refreshMention = (): void => {
     const context = mentionContext()
     if (!context) {
-      setMentionQuery(null)
-      setMentionOptions([])
+      closeMention()
       return
     }
-    setMentionQuery(context.query)
-    const requestId = mentionRequestRef.current + 1
-    mentionRequestRef.current = requestId
-    void window.api
-      .referenceItemList({
-        referenceKinds: COMPOSER_REFERENCE_KINDS as ReferenceKind[],
-        query: context.query || undefined,
-        offset: 0,
-        limit: REFERENCE_ITEM_PAGE_SIZE
-      })
-      .then((response) => {
-        if (mentionRequestRef.current !== requestId) return
-        response.items.forEach((item) => knownScopesRef.current.set(getScopeKey(item), item))
-        setMentionOptions(response.items)
-        setMentionIndex(0)
-      })
-      .catch(() => {
-        if (mentionRequestRef.current === requestId) setMentionOptions([])
-      })
+    searchMention(context.query)
   }
 
   const sync = (): void => {
@@ -133,6 +118,7 @@ const ComposerInputEditor: React.FC<Props> = ({
   useEffect(() => {
     const signature = JSON.stringify({ input, contentNodes, selectedReferences })
     if (signature === lastEmittedSignatureRef.current) return
+    closeMention()
     const nodes = createComposerNodesFromDraftValue({
       input,
       contentNodes,
@@ -148,12 +134,13 @@ const ComposerInputEditor: React.FC<Props> = ({
       if (document.activeElement === editor) moveCaretToEnd(editor)
     }
     lastEmittedSignatureRef.current = signature
-  }, [contentNodes, input, selectedReferences])
+  }, [closeMention, contentNodes, input, selectedReferences])
 
   const insertMention = (reference: SelectedReference): void => {
     const context = mentionContext()
     const editor = editorRef.current
-    if (!context || !editor || !context.textNode.parentNode) return
+    if (!context || !editor || !context.textNode.parentNode || !canSelectMention(context.query))
+      return
     knownScopesRef.current.set(getScopeKey(reference), reference)
     const parent = context.textNode.parentNode
     const before = context.textNode.data.slice(0, context.triggerIndex)
@@ -164,23 +151,14 @@ const ComposerInputEditor: React.FC<Props> = ({
     parent.insertBefore(tail, context.textNode)
     parent.removeChild(context.textNode)
     moveCaretToTextNode(tail, 1)
-    setMentionQuery(null)
-    setMentionOptions([])
+    closeMention()
     sync()
   }
 
   return (
     <div className={`relative ${variant === 'inline' ? 'min-w-0 flex-1' : ''}`}>
-      {mentionQuery !== null ? (
-        <ReferenceMentionPanel
-          loading={false}
-          loadingMore={false}
-          options={mentionOptions}
-          activeIndex={mentionIndex}
-          hasMore={false}
-          onSelect={insertMention}
-          onLoadMore={() => undefined}
-        />
+      {mention.query !== null ? (
+        <ReferenceMentionPanel {...mention} onSelect={insertMention} onLoadMore={loadMoreMention} />
       ) : null}
       <span
         ref={editorRef}
@@ -228,33 +206,22 @@ const ComposerInputEditor: React.FC<Props> = ({
             Date.now() - compositionEndedAtRef.current < 80
           )
             return
-          if (mentionQuery !== null) {
-            if (event.key === 'ArrowDown') {
+          if (getCurrentMention().query !== null) {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
               event.preventDefault()
-              setMentionIndex((index) =>
-                mentionOptions.length ? (index + 1) % mentionOptions.length : 0
-              )
-              return
-            }
-            if (event.key === 'ArrowUp') {
-              event.preventDefault()
-              setMentionIndex((index) =>
-                mentionOptions.length
-                  ? (index + mentionOptions.length - 1) % mentionOptions.length
-                  : 0
-              )
+              moveMention(event.key === 'ArrowDown' ? 1 : -1)
               return
             }
             if (event.key === 'Enter') {
               event.preventDefault()
-              const option = mentionOptions[mentionIndex]
+              const { options, activeIndex } = getCurrentMention()
+              const option = options[activeIndex]
               if (option) insertMention(option)
               return
             }
             if (event.key === 'Escape') {
               event.preventDefault()
-              setMentionQuery(null)
-              setMentionOptions([])
+              closeMention()
               return
             }
           }

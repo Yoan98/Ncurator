@@ -3,6 +3,8 @@ import { messageTimeLabel } from '../i18n/systemText'
 import { t, getProductName, getContactUrl, getRendererRuntime } from '../i18n'
 import { useDesktopAccount } from '../contexts/DesktopAccountProvider'
 import FileIcon from '../components/FileIcon'
+import { isVideoPreviewSource } from '../../../shared/preview'
+import { decodeMarkdownHref } from '../../../shared/markdownLink'
 import {
   flushAllTextFiles,
   flushReferencedTextFiles
@@ -16,7 +18,6 @@ import {
   HiOutlineBookOpen,
   HiOutlinePencilSquare,
   HiOutlineQuestionMarkCircle,
-  HiPhoto,
   HiPlus,
   HiTrash
 } from 'react-icons/hi2'
@@ -43,7 +44,7 @@ import type {
   ScheduledTask,
   SelectedReference,
   WorkbenchModelSelection,
-  WorkspaceSource,
+  WorkspaceListItem,
   WorkspaceTreeEntry,
   PendingHumanInteraction,
   AskUserQuestionResult,
@@ -79,6 +80,7 @@ import { MessageTimeline } from '../components/workbench/MessageTimeline'
 import { ConversationOutline } from '../components/workbench/ConversationOutline'
 import {
   buildConversationOutline,
+  resolveConversationQuestion,
   type ConversationOutlineItem
 } from '../../../shared/workbench/conversationOutline'
 import {
@@ -636,7 +638,7 @@ const reduceAssistantTurnByRunEvent = (
       waitingApproval: false,
       waitingInteraction: false,
       pendingApprovalItems: [],
-      finishedAt: Date.now(),
+      finishedAt: event.finishedAt ?? Date.now(),
       error: formatRunFailureTitle(event),
       errorDetail: formatRunFailureDetail(event)
     }
@@ -651,7 +653,7 @@ const reduceAssistantTurnByRunEvent = (
       waitingApproval: false,
       waitingInteraction: false,
       pendingApprovalItems: [],
-      finishedAt: Date.now(),
+      finishedAt: event.finishedAt ?? Date.now(),
       error: undefined,
       errorDetail: undefined
     }
@@ -666,7 +668,7 @@ const reduceAssistantTurnByRunEvent = (
       waitingApproval: false,
       waitingInteraction: false,
       pendingApprovalItems: [],
-      finishedAt: Date.now(),
+      finishedAt: event.finishedAt ?? Date.now(),
       plan: []
     }
   }
@@ -954,7 +956,7 @@ const ChatPage: React.FC = () => {
   const [selectedReferences, setSelectedReferences] = useState<SelectedReference[]>([])
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [assetBucketId, setAssetBucketId] = useState<string | null>(null)
-  const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
+  const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([])
   const [workspaceLoadState, setWorkspaceLoadState] = useState<WorkspaceLoadState>('loading')
   const workspaceLoadRequestRef = useRef(0)
   const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
@@ -1026,6 +1028,9 @@ const ChatPage: React.FC = () => {
 
   const [pendingApprovalBatch, setPendingApprovalBatch] =
     useState<ApprovalBatchRequiredEvent | null>(null)
+  const [notificationQuestionId, setNotificationQuestionId] = useState<string | null>(() =>
+    window.sessionStorage.getItem('ncurator.pending-notification-interaction')
+  )
   const [pendingQuestion, setPendingQuestion] = useState<{
     runId: string
     interaction: Extract<PendingHumanInteraction, { kind: 'question' }>
@@ -1486,25 +1491,6 @@ const ChatPage: React.FC = () => {
     }
   }, [applyComposerDraft, saveComposerDraftForPartner])
 
-  const selectedWorkspace = useMemo(() => {
-    const normalizeRoot = (value: string): string => value.replace(/\\/g, '/').replace(/\/+$/g, '')
-    const matchByFilePath = (filePath: string): WorkspaceSource | undefined =>
-      workspaces.find((workspace) => {
-        const root = normalizeRoot(String(workspace.root_path || ''))
-        if (!root) return false
-        const normalizedFile = filePath.replace(/\\/g, '/')
-        return normalizedFile === root || normalizedFile.startsWith(`${root}/`)
-      })
-
-    if (contentPanel.kind === 'file_preview') {
-      return matchByFilePath(contentPanel.file.path) || workspaces[0] || null
-    }
-    if (contentPanel.kind === 'apply_workspace' && activeApplyRecord?.path) {
-      return matchByFilePath(activeApplyRecord.path) || workspaces[0] || null
-    }
-    return workspaces[0] || null
-  }, [activeApplyRecord?.path, contentPanel, workspaces])
-
   const currentPartner = useMemo(
     () => partners.find((session) => session.id === currentPartnerId) || null,
     [currentPartnerId, partners]
@@ -1852,7 +1838,8 @@ const ChatPage: React.FC = () => {
       if (element.getBoundingClientRect().bottom <= containerTop + 12) continue
       break
     }
-    return active ? { dayStart: startOfLocalDay(active.timestamp), messageId: active.id } : null
+    const question = active ? resolveConversationQuestion(currentMessages, active.id) : undefined
+    return question ? { dayStart: startOfLocalDay(question.timestamp), messageId: question.id } : null
   }, [currentMessages])
 
   /** 滚动高亮按帧节流：一帧最多解析一次，且值没变不写 state。 */
@@ -2015,13 +2002,13 @@ const ChatPage: React.FC = () => {
     return dataUrl
   }, [])
 
-  const collapseContentPanel = useCallback((): void => {
+  const collapseContentPanel = useCallback((captureBrowser = true): void => {
     const sessionKey = tabWorkspaceKey
     void (async () => {
       // Keep the ref in sync before any await so a concurrent session switch / flush
       // persists the collapsed intent instead of the stale expanded value.
       contentPanelCollapsedRef.current = true
-      if (contentPanel.kind === 'browser') {
+      if (captureBrowser && contentPanel.kind === 'browser') {
         await captureBrowserTransition(contentPanel.browserTabId)
       } else {
         setBrowserTransitionImage(null)
@@ -3124,6 +3111,7 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     const openNotificationPartner = async (partnerId: string): Promise<void> => {
+      setNotificationQuestionId(window.sessionStorage.getItem('ncurator.pending-notification-interaction'))
       const session = partners.find((item) => item.id === partnerId)
       if (session) {
         selectPartner(session)
@@ -3620,6 +3608,16 @@ const ChatPage: React.FC = () => {
 
   const openMarkdownReference = useCallback(
     async (reference: OpenableMarkdownReference): Promise<void> => {
+      if (reference.resourceType === 'web' && isVideoPreviewSource(reference.path)) {
+        await openFile({
+          path: reference.path,
+          fileName: decodeMarkdownHref(
+            new URL(reference.path).pathname.split('/').pop() || reference.label
+          ),
+          origin: 'preview'
+        })
+        return
+      }
       if (reference.resourceType === 'web') {
         const ownerId = currentPartnerIdRef.current
         if (!ownerId) return
@@ -3789,6 +3787,7 @@ const ChatPage: React.FC = () => {
       if (!nextTab) {
         setContentPanel(createEmptyPanel())
         resetApplyWorkspaceState()
+        collapseContentPanel(false)
         return
       }
       setContentPanel(nextTab.state)
@@ -3800,7 +3799,7 @@ const ChatPage: React.FC = () => {
         void loadApplyRecordRef.current({ applyId: nextTab.state.applyId })
       }
     },
-    [tabWorkspace, tabWorkspaceKey]
+    [collapseContentPanel, tabWorkspace, tabWorkspaceKey]
   )
 
   const addBrowserTab = useCallback((): void => {
@@ -4348,6 +4347,7 @@ const ChatPage: React.FC = () => {
       partner_id: submitPartnerId,
       role: 'assistant',
       content: '',
+      userMessageId: optimisticUserMessage.id,
       timestamp: optimisticUserMessage.timestamp + 1,
       error: false
     }
@@ -4721,6 +4721,21 @@ const ChatPage: React.FC = () => {
     setCreatePartnerOpen(true)
   }
 
+  useEffect(() => {
+    if (!pendingQuestion || pendingQuestion.interaction.interactionId !== notificationQuestionId)
+      return
+    const frame = requestAnimationFrame(() => {
+      const card = document.querySelector<HTMLElement>(
+        '[data-testid="workbench-human-question-card"]'
+      )
+      card?.scrollIntoView({ block: 'nearest' })
+      card?.querySelector<HTMLElement>('textarea, button')?.focus()
+      window.sessionStorage.removeItem('ncurator.pending-notification-interaction')
+      setNotificationQuestionId(null)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [notificationQuestionId, pendingQuestion])
+
   const submitHumanQuestion = async (answers: AskUserQuestionResult): Promise<void> => {
     if (!pendingQuestion) throw new Error(t(($) => $.workbench.thereAreNoQuestionsAwaitingAnAnswer))
     const response = await window.api.aiRunHumanInteractionSubmit({
@@ -4990,7 +5005,7 @@ const ChatPage: React.FC = () => {
                             />
                           ) : (
                             <span className="flex h-full w-full items-center justify-center bg-[var(--notion-surface)] text-[var(--notion-text-soft)]">
-                              <HiPhoto className="h-5 w-5" />
+                              <FileIcon kind="image" className="h-5 w-5" />
                             </span>
                           )
                         ) : attachment.kind === 'directory' ? (
@@ -5161,7 +5176,8 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     if (activeTimelineDayStart != null || currentMessages.length === 0) return
     const latest = currentMessages[currentMessages.length - 1]
-    if (latest) setActiveTimelineDayStart(startOfLocalDay(latest.timestamp))
+    const question = latest && resolveConversationQuestion(currentMessages, latest.id)
+    if (question) setActiveTimelineDayStart(startOfLocalDay(question.timestamp))
   }, [activeTimelineDayStart, currentMessages])
 
   const sessionSwitching = Boolean(switchingPartnerId)
@@ -5742,7 +5758,7 @@ const ChatPage: React.FC = () => {
                           />
                         </div>
 
-                        {outlineVisible && !isNewSession && outlineItems.length > 1 ? (
+                        {outlineVisible && !isNewSession && outlineItems.length > 0 ? (
                           <ConversationOutline
                             items={outlineItems}
                             activeId={outlineActiveId}
@@ -5989,7 +6005,6 @@ const ChatPage: React.FC = () => {
                         applyLoading={applyLoading}
                         applyReverting={applyReverting}
                         workspaces={workspaces}
-                        selectedWorkspace={selectedWorkspace || null}
                         workspaceLoadState={workspaceLoadState}
                         onOpenWorkspaceSettings={openWorkspaceSettings}
                         onReloadWorkspaces={loadWorkspaces}
@@ -6002,7 +6017,7 @@ const ChatPage: React.FC = () => {
                         onCloseTab={closeResourceTab}
                         onAddFileTab={addFileTab}
                         onAddBrowserTab={addBrowserTab}
-                        onCollapse={collapseContentPanel}
+                        onCollapse={() => collapseContentPanel()}
                         onBrowserStateChange={handleBrowserStateChange}
                         onOpenWorkspaceFile={openWorkspaceFile}
                         onWorkspaceFileRenamed={handleWorkspaceFileRenamed}

@@ -1,305 +1,131 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import os from 'node:os'
+import { copyFile } from 'node:fs/promises'
 import path from 'node:path'
-import { describe, it } from 'vitest'
+import { expect, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
   createRealWorkspaceWithRoot,
   getSettingsLocator,
+  getWorkspaceIndexCounts,
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
+import {
+  createEmptyE2EWorkspace,
+  E2E_WORKSPACE_FIXTURE_ROOT
+} from '../../../../harness/e2e/workspaceFixture'
 
-import { copyScenarioFixtureInto } from './realWorkspaceHelpers'
+const FILE_NAMES = ['workbench-preview.md', 'human-input.txt', 'subagent-checkout-config.ts']
 
-describe('settings workspace e2e', () => {
-  it(
-    'workspace-scan-progress-refresh',
-    async () => {
-      await runE2ECase({
-        caseId: 'workspace-scan-progress-refresh',
-        domain: 'settings',
-        suite: 'workspace',
-        groups: ['files'],
-        description: '点击检查更新后，页面展示执行中状态，并在完成后刷新目录树和索引摘要。',
-        fixtures: ['tests/fixtures/workspace-scenarios/workspace-scan-progress-refresh'],
-        knowledge: 'none',
-        serviceMode: 'real',
-        runMode: 'single',
-        execute: async (runtime) => {
-          const { page } = runtime
-          const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'ncurator-settings-scan-'))
-          runtime.registerResource({
-            name: `settings-workspace:${workspaceRoot}`,
-            phase: 'after-app-close',
-            dispose: async () => await rm(workspaceRoot, { recursive: true, force: true })
-          })
-          let workspaceId = ''
+it(
+  'workspace-scan-progress-refresh',
+  async () => {
+    await runE2ECase({
+      caseId: 'workspace-scan-progress-refresh',
+      domain: 'settings',
+      suite: 'workspace',
+      groups: ['files'],
+      description: '检查更新扫描三个真实文件，完成后刷新目录树并汇总两份待索引文件。',
+      fixtures: ['tests/fixtures/workspace'],
+      knowledge: 'none',
+      serviceMode: 'real',
+      runMode: 'single',
+      execute: async ({ page }) => {
+        const { rootPath } = await createEmptyE2EWorkspace(
+          'workspace-scan-progress-refresh',
+          'settings'
+        )
+        const response = await createRealWorkspaceWithRoot(page, { rootPath, name: '扫描工作区' })
+        const workspaceId = response.workspace!.id
+        await navigateToSettingsSection(page, 'workspace')
+        const initial = await waitForFileIndexJobIdle(page, workspaceId)
+        expect(initial.tree.summary.file_count).toBe(0)
+        const scan = getSettingsLocator(page, importSelectors.workspaceQuickScanButton)
+        await scan.waitFor({ state: 'visible' })
 
-          await runtime.step({
-            name: 'create-empty-workspace',
-            message: '通过 UI 创建并绑定一个真实空目录工作空间。',
-            run: async () => {
-              const workspace = await createRealWorkspaceWithRoot(page, {
-                rootPath: workspaceRoot,
-                name: '扫描工作区'
-              })
-              workspaceId = workspace.workspace!.id
-              await navigateToSettingsSection(page, 'workspace')
-              await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).waitFor({
-                state: 'visible'
-              })
-            }
-          })
+        await Promise.all(
+          FILE_NAMES.map((name) =>
+            copyFile(path.join(E2E_WORKSPACE_FIXTURE_ROOT, name), path.join(rootPath, name))
+          )
+        )
 
-          await runtime.step({
-            name: 'create-real-file-changes',
-            message: '在已绑定目录里写入真实文件，制造目录变化。',
-            run: async () => {
-              await copyScenarioFixtureInto('workspace-scan-progress-refresh', workspaceRoot)
-            }
-          })
-
-          let inProgressVisible = false
-          let buttonsDisabled = false
-          let scanProgressEvents: Array<{
-            phase: string
-            totalCount: number
-            processedCount: number
-            message?: string
-            status: string
-            directoryCallCount: number
-          }> = []
-          let scanRunningAfterReturn = false
-          let restoredProgressVisible = false
-          let restoredButtonsDisabled = false
-          let directoryCallBaseline = 0
-          let directoryCallsWhileRunning = -1
-
-          await runtime.step({
-            name: 'scan-workspace-through-ui',
-            message: '点击检查更新，并捕捉真实进度事件或执行中 UI。',
-            run: async () => {
-              await getSettingsLocator(page, importSelectors.workspaceTree).waitFor({
-                state: 'visible'
-              })
-              directoryCallBaseline = await page.evaluate(
-                () =>
-                  (
-                    window as typeof window & {
-                      __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
-                    }
-                  ).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
-                    (entry) => entry.name === 'workspaceDirectoryList'
-                  ).length || 0
-              )
-              const progressEventsPromise = page.evaluate(
-                (workspaceId) =>
-                  new Promise<
-                    Array<{
-                      phase: string
-                      totalCount: number
-                      processedCount: number
-                      message?: string
-                      status: string
-                      directoryCallCount: number
-                    }>
-                  >((resolve) => {
-                    let settled = false
-                    const events: Array<{
-                      phase: string
-                      totalCount: number
-                      processedCount: number
-                      message?: string
-                      status: string
-                      directoryCallCount: number
-                    }> = []
-                    const finish = (): void => {
-                      if (settled) return
-                      settled = true
-                      unsubscribe()
-                      resolve(events)
-                    }
-                    const unsubscribe = window.api.onWorkspaceIndexJobProgress((job) => {
-                      if (
-                        job.workspace_id === workspaceId &&
-                        job.source_kind === 'file' &&
-                        job.action === 'scan'
-                      ) {
-                        events.push({
-                          phase: job.phase,
-                          totalCount: job.total_count,
-                          processedCount: job.processed_count,
-                          message: job.message,
-                          status: job.status,
-                          directoryCallCount:
-                            (
-                              window as typeof window & {
-                                __NCURATOR_E2E_OBSERVER__?: {
-                                  ipcInvokeEntries: Array<{ name: string }>
-                                }
-                              }
-                            ).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
-                              (entry) => entry.name === 'workspaceDirectoryList'
-                            ).length || 0
-                        })
-                        if (job.status !== 'running') finish()
-                      }
-                    })
-                    window.setTimeout(finish, 3000)
-                  }),
-                workspaceId
-              )
-
-              await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).click()
-              inProgressVisible = await getSettingsLocator(
-                page,
-                importSelectors.workspaceIndexJobProgress
-              )
-                .waitFor({
-                  state: 'visible',
-                  timeout: 1000
-                })
-                .then(() => true)
-                .catch(() => false)
-              if (inProgressVisible) {
-                buttonsDisabled =
-                  (await getSettingsLocator(
-                    page,
-                    importSelectors.workspaceQuickScanButton
-                  ).isDisabled()) &&
-                  (await getSettingsLocator(
-                    page,
-                    importSelectors.workspaceQuickPrepareButton
-                  ).isDisabled())
+        const observer = await page.evaluateHandle((id) => {
+          const readCount = (): number =>
+            (
+              window as typeof window & {
+                __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
               }
-              scanProgressEvents = await progressEventsPromise
-              directoryCallsWhileRunning = Math.max(
-                0,
-                ...scanProgressEvents
-                  .filter((event) => event.status === 'running')
-                  .map((event) => event.directoryCallCount - directoryCallBaseline)
-              )
-              await navigateToSettingsSection(page, 'model')
-              await navigateToSettingsSection(page, 'workspace')
-              const restoredState = await page
-                .waitForFunction(
-                  async (input) => {
-                    const response = await window.api.workspaceIndexJobGet({
-                      workspaceId: input.workspaceId,
-                      sourceKind: 'file'
-                    })
-                    const running = response.job?.status === 'running'
-                    const progress = document.querySelector(
-                      `[data-testid="${input.progressTestId}"]`
-                    )
-                    const progressVisible =
-                      progress instanceof HTMLElement && progress.offsetParent !== null
-                    const scanButton = document.querySelector(
-                      `[data-testid="${input.scanButtonTestId}"]`
-                    )
-                    const prepareButton = document.querySelector(
-                      `[data-testid="${input.prepareButtonTestId}"]`
-                    )
-                    const buttonsDisabled =
-                      scanButton instanceof HTMLButtonElement &&
-                      scanButton.disabled &&
-                      prepareButton instanceof HTMLButtonElement &&
-                      prepareButton.disabled
-                    if (running === progressVisible && !buttonsDisabled) {
-                      return { running, progressVisible, buttonsDisabled }
-                    }
-                    return null
-                  },
-                  {
-                    workspaceId,
-                    progressTestId: importSelectors.workspaceIndexJobProgress,
-                    scanButtonTestId: importSelectors.workspaceQuickScanButton,
-                    prepareButtonTestId: importSelectors.workspaceQuickPrepareButton
-                  }
-                )
-                .then((handle) => handle.jsonValue())
-              scanRunningAfterReturn = restoredState.running
-              restoredProgressVisible = restoredState.progressVisible
-              restoredButtonsDisabled = restoredState.buttonsDisabled
-            }
+            ).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+              (entry) => entry.name === 'workspaceDirectoryList'
+            ).length || 0
+          const baseline = readCount()
+          const events: {
+            id: string
+            phase: string
+            status: string
+            total: number
+            reads: number
+          }[] = []
+          const done = new Promise<typeof events>((resolve) => {
+            const timeout = window.setTimeout(() => {
+              unsubscribe()
+              resolve(events)
+            }, 10_000)
+            const unsubscribe = window.api.onWorkspaceIndexJobProgress((job) => {
+              if (job.workspace_id !== id || job.source_kind !== 'file' || job.action !== 'scan')
+                return
+              events.push({
+                id: job.id,
+                phase: job.phase,
+                status: job.status,
+                total: job.total_count,
+                reads: readCount() - baseline
+              })
+              if (job.status !== 'running') {
+                window.clearTimeout(timeout)
+                unsubscribe()
+                resolve(events)
+              }
+            })
           })
+          return { done }
+        }, workspaceId)
+        await scan.click()
+        const events = await observer.evaluate(({ done }) => done)
+        await observer.dispose()
 
-          const result = await waitForFileIndexJobIdle(page, workspaceId)
-
-          return {
-            inProgressVisible,
-            buttonsDisabled,
-            scanProgressEvents,
-            scanRunningAfterReturn,
-            restoredProgressVisible,
-            restoredButtonsDisabled,
-            directoryCallsWhileRunning,
-            summary: result.tree.summary,
-            itemNames: result.tree.items.map((item) => item.name)
+        const tree = getSettingsLocator(page, importSelectors.workspaceTree)
+        for (const name of FILE_NAMES) await tree.getByText(name, { exact: true }).waitFor()
+        await page.waitForFunction(
+          (testId) =>
+            document.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim() === '2',
+          importSelectors.workspaceActionableIndexCount
+        )
+        const counts = await getWorkspaceIndexCounts(page)
+        const { tree: indexed } = await waitForFileIndexJobIdle(page, workspaceId)
+        return { events, counts, indexed: indexed.summary }
+      },
+      assert: async ({ events, counts, indexed }, runtime) => {
+        await runtime.assertThat(
+          new Set(events.map((event) => event.id)).size === 1 &&
+            events.some((event) => event.phase === 'scan' && event.status === 'running') &&
+            events.some((event) => event.phase === 'diff' && event.total === 2) &&
+            events
+              .filter((event) => event.status === 'running')
+              .every((event) => event.reads === 0) &&
+            events.at(-1)?.status === 'succeeded' &&
+            indexed.file_count === 2 &&
+            indexed.needs_index_count === 2 &&
+            counts.actionableCount === 2,
+          {
+            name: 'workspace-scan-refreshes-fixed-files',
+            message: '检查更新应完成两阶段，刷新实际目录，并且只统计两份可索引文件。',
+            data: { events, counts, indexed }
           }
-        },
-        assert: async (result, runtime) => {
-          await runtime.assertThat(
-            result.inProgressVisible || result.scanProgressEvents.length > 0,
-            {
-              name: 'scan-progress-is-observable',
-              message:
-                '检查更新应通过真实 UI 触发扫描，并能观察到执行中的 UI 或真实进度事件；扫描很快完成时进度块可能已恢复。',
-              data: result
-            }
-          )
-
-          const hasScanPhase = result.scanProgressEvents.some(
-            (event) => event.phase === 'scan' && event.processedCount > 0
-          )
-          const hasDiffPhase = result.scanProgressEvents.some(
-            (event) =>
-              event.phase === 'diff' && event.totalCount === 600 && event.processedCount > 0
-          )
-          await runtime.assertThat(
-            result.scanProgressEvents.length === 0 || (hasScanPhase && hasDiffPhase),
-            {
-              name: 'scan-uses-discovery-and-determinate-progress-phases',
-              message:
-                '若采到进度事件，检查更新应包含目录扫描与索引比对两阶段；过程很快时允许采不到中间事件，终态可索引数由后续断言覆盖，对齐 SET-WORKSPACE-003-AC5。',
-              data: result.scanProgressEvents
-            }
-          )
-          await runtime.assertThat(
-            result.restoredProgressVisible === result.scanRunningAfterReturn &&
-              !result.restoredButtonsDisabled,
-            {
-              name: 'scan-progress-restores-after-return',
-              message:
-                '检查更新执行中离开并返回工作空间页后，仍运行时应恢复进度块，已完成时应隐藏进度；两个操作按钮全程保持可用，对齐 SET-WORKSPACE-003-AC3。',
-              data: result
-            }
-          )
-
-          await runtime.assertThat(result.directoryCallsWhileRunning === 0, {
-            name: 'scan-does-not-refresh-directory-while-running',
-            message:
-              '检查更新执行期间不应读取目录，避免 loading 与空态闪烁；终态目录刷新由页面保留时的任务回调或重新进入时的选中加载承接。',
-            data: result
-          })
-
-          await runtime.assertThat(
-            result.summary.file_count === 600 &&
-              result.summary.needs_index_count === 600 &&
-              result.itemNames.includes('brief-001.txt'),
-            {
-              name: 'scan-refreshes-summary-and-tree',
-              message:
-                '检查成功后，文件索引摘要和目录树内容都应同步刷新，对齐 SET-WORKSPACE-003-AC2。',
-              data: result
-            }
-          )
-        }
-      })
-    },
-    SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
-  )
-})
+        )
+      }
+    })
+  },
+  SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
+)

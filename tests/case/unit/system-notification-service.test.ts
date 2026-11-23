@@ -48,6 +48,40 @@ describe('SystemNotificationService', () => {
     )
   })
 
+  it('notifies once per pending question batch and opens its partner and interaction', async () => {
+    const show = vi.fn()
+    let click: (() => void) | undefined
+    const send = vi.fn()
+    const window = {
+      isDestroyed: () => false,
+      isMinimized: () => false,
+      show: vi.fn(),
+      focus: vi.fn(),
+      webContents: { isLoading: () => false, isDestroyed: () => false, send }
+    }
+    const service = new SystemNotificationService({
+      settingsStore: settingsStore({
+        systemNotificationsEnabled: true,
+        knowledgeIndexSpeed: 'slow'
+      }) as never,
+      getMainWindow: () => window as never,
+      isSupported: () => true,
+      createNotification: () => ({
+        show,
+        on: (_event, listener) => {
+          click = listener
+        }
+      })
+    })
+    await service.notifyRunQuestion(run('waiting_human'), 'question-1')
+    await service.notifyRunQuestion(run('waiting_human'), 'question-1')
+    expect(show).toHaveBeenCalledOnce()
+    click?.()
+    expect(send).toHaveBeenCalledWith('system-notification-open-session', 'partner-1', 'question-1')
+    await service.notifyRunQuestion(run('waiting_human'), 'question-2')
+    expect(show).toHaveBeenCalledTimes(2)
+  })
+
   it('does not notify when disabled', async () => {
     const createNotification = vi.fn()
     const service = new SystemNotificationService({
