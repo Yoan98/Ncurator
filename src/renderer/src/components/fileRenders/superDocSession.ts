@@ -65,10 +65,9 @@ export async function openSuperDoc(
       toolbar: false,
       comments: { panel: false, highlights: false },
       loading: false,
-      search: {
-        replaceControls: Boolean(writable),
-        strings: t(($) => $.editors.wordSearch, { returnObjects: true })
-      }
+      // Only suppress the SDK surface/shortcut. ui.search still exposes the
+      // shared host search engine used by our application-owned find strip.
+      search: false
     },
     interaction: {
       comments: { level: 'read' },

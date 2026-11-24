@@ -1,0 +1,377 @@
+.docx-toolbar {
+  container-type: inline-size;
+}
+.docx-content[data-format-painter] .superdoc-page,
+.docx-content[data-format-painter] .superdoc-page * {
+  cursor: copy !important;
+}
+.nc-docx-ribbon,
+.nc-docx-statusbar {
+  color: var(--notion-text-soft);
+  font-size: 12px;
+}
+.nc-docx-ribbon button,
+.nc-docx-statusbar button,
+.nc-docx-color-panel button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.nc-docx-ribbon button:hover,
+.nc-docx-statusbar button:hover,
+.nc-docx-ribbon button[aria-pressed='true'],
+.nc-docx-color-panel button:hover {
+  background: var(--notion-surface-hover);
+  color: var(--notion-text);
+}
+.nc-docx-ribbon button:focus-visible,
+.nc-docx-statusbar button:focus-visible,
+.nc-docx-color-panel button:focus-visible {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: 1px;
+}
+.nc-docx-ribbon button:disabled,
+.nc-docx-statusbar button:disabled,
+.nc-docx-color-panel button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.nc-docx-ribbon button svg,
+.nc-docx-statusbar button svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.nc-docx-ribbon button sup {
+  margin-left: -6px;
+  font-size: 10px;
+}
+.nc-docx-ribbon-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 8px 0;
+  min-height: 33px;
+}
+.nc-docx-spacer {
+  flex: 1;
+  min-width: 0;
+}
+.nc-docx-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--notion-line);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+.nc-docx-ribbon .nc-docx-ribbon-tab {
+  border-radius: 0;
+  padding: 0 12px;
+  height: 30px;
+  border-bottom: 2px solid transparent;
+}
+.nc-docx-ribbon .nc-docx-ribbon-tab[aria-pressed='true'] {
+  background: transparent;
+  border-color: var(--notion-text);
+  color: var(--notion-text);
+}
+.nc-docx-ribbon-home {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 7px 10px 5px;
+}
+.nc-docx-font-group,
+.nc-docx-paragraph-group {
+  flex-shrink: 0;
+  border-right: 1px solid var(--notion-line);
+  padding-right: 10px;
+}
+.nc-docx-control-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 30px;
+}
+.nc-docx-control-row > .ant-select {
+  font-size: 12px;
+}
+.nc-docx-family {
+  width: 140px;
+}
+.nc-docx-size {
+  width: 82px;
+}
+.nc-docx-group-label {
+  text-align: center;
+  color: var(--notion-text-faint);
+  font-size: 11px;
+  padding-top: 3px;
+}
+.nc-docx-ribbon .nc-docx-caret {
+  width: 10px;
+  height: 10px;
+}
+.nc-docx-color-split {
+  display: inline-flex;
+  border-radius: 6px;
+}
+.nc-docx-color-split:hover {
+  background: var(--notion-surface-hover);
+}
+.nc-docx-ribbon .nc-docx-color-apply {
+  position: relative;
+  min-width: 26px;
+  padding: 0 5px;
+}
+.nc-docx-ribbon .nc-docx-color-arrow {
+  min-width: 14px;
+  padding: 0;
+}
+.nc-docx-ribbon .nc-docx-color-arrow svg {
+  width: 10px;
+  height: 10px;
+}
+.nc-docx-color-indicator {
+  position: absolute;
+  bottom: 2px;
+  left: 5px;
+  right: 5px;
+  height: 3px;
+  border: 1px solid var(--notion-line-strong);
+}
+.nc-docx-color-panel {
+  width: 214px;
+  color: var(--notion-text);
+  font-size: 12px;
+}
+.nc-docx-color-title {
+  margin-bottom: 10px;
+}
+.nc-docx-color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 7px;
+  margin-bottom: 8px;
+}
+.nc-docx-color-grid button {
+  width: 27px;
+  height: 24px;
+  min-width: 0;
+  border: 1px solid var(--notion-line-strong);
+  border-radius: 3px;
+}
+.nc-docx-color-grid button[aria-pressed='true'] {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: 1px;
+}
+.nc-docx-color-panel > button {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+}
+.nc-docx-custom-color {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+.nc-docx-custom-color input[type='color'] {
+  width: 30px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--notion-line-strong);
+  border-radius: 4px;
+  background: var(--notion-page);
+}
+.nc-docx-custom-color .ant-input {
+  width: 98px;
+  font-size: 12px;
+}
+.nc-docx-style-group {
+  flex: 1;
+  min-width: 80px;
+  display: flex;
+  flex-direction: column;
+}
+.nc-docx-style-gallery {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+  min-height: 30px;
+}
+.nc-docx-style-gallery button {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  min-height: 28px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-docx-style-select {
+  width: 100%;
+  font-size: 12px;
+}
+.nc-docx-ribbon-insert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  min-height: 82px;
+}
+.nc-docx-ribbon .nc-docx-ribbon-insert > button {
+  height: 58px;
+  flex-direction: column;
+  min-width: 52px;
+}
+.nc-docx-ribbon-insert > button > svg {
+  width: 20px;
+  height: 20px;
+}
+.nc-docx-search {
+  padding: 7px 10px;
+  border-top: 1px solid var(--notion-line);
+  background: var(--notion-sidebar);
+}
+.nc-docx-search-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.nc-docx-search-row + .nc-docx-search-row {
+  margin-top: 6px;
+}
+.nc-docx-search-row > .ant-input,
+.nc-docx-search-row > .ant-input-affix-wrapper {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.nc-docx-search-row > .ant-input-affix-wrapper input {
+  font-size: 12px;
+}
+.nc-docx-search-row > button {
+  flex-shrink: 0;
+}
+.nc-docx-search-count {
+  color: var(--notion-text-soft);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.nc-docx-search-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.nc-docx-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 30px;
+  flex-shrink: 0;
+  padding: 0 8px;
+  border-top: 1px solid var(--notion-line);
+  background: var(--notion-page);
+}
+.nc-docx-statusbar .ant-select {
+  width: 72px;
+  font-size: 12px;
+}
+.nc-docx-statusbar .ant-select-selector {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+@container (max-width: 850px) {
+  .nc-docx-style-gallery {
+    display: none;
+  }
+  .nc-docx-style-group {
+    justify-content: center;
+  }
+  .nc-docx-style-select {
+    max-width: 120px;
+  }
+}
+@container (max-width: 640px) {
+  .nc-docx-ribbon-home {
+    flex-wrap: wrap;
+    column-gap: 8px;
+    row-gap: 6px;
+  }
+  .nc-docx-font-group {
+    order: 0;
+    border: 0;
+    flex: 1;
+    padding-right: 0;
+  }
+  .nc-docx-style-group {
+    order: 1;
+    flex: 0 0 90px;
+  }
+  .nc-docx-paragraph-group {
+    order: 2;
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-top: 1px solid var(--notion-line);
+    padding: 4px 0 0;
+  }
+  .nc-docx-paragraph-group .nc-docx-group-label {
+    display: none;
+  }
+}
+@container (max-width: 420px) {
+  .nc-docx-family {
+    width: 118px;
+  }
+  .nc-docx-size {
+    width: 76px;
+  }
+  .nc-docx-style-group {
+    flex: 1 0 100%;
+  }
+  .nc-docx-style-group .nc-docx-group-label {
+    display: none;
+  }
+  .nc-docx-style-select {
+    max-width: 100%;
+  }
+  .nc-docx-ribbon-home {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+  .nc-docx-ribbon-tabs {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .nc-docx-ribbon .nc-docx-ribbon-tab {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .nc-docx-search {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+  .nc-docx-search-count {
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

@@ -271,7 +271,7 @@ describe('workbench result e2e', () => {
           await runtime.assertThat(
             (await reviewToolbar
               .locator(
-                '[data-item="btn-bold"], [data-item="btn-undo"], [data-item="btn-textAlign"]'
+                '[data-item="btn-bold"], [data-item="btn-undo"], [data-item^="btn-text-align"]'
               )
               .count()) === 0,
             {

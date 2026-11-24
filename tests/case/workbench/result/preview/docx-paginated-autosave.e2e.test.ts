@@ -116,17 +116,10 @@ describe('Word editor', () => {
             const first = doc.getElementsByTagNameNS(W, 'p')[0]!
             return first.getElementsByTagNameNS(W, 'jc')[0]?.getAttributeNS(W, 'val') || 'left'
           }
-          const clickToolbar = async (item: string) => {
-            const button = page.locator(`[data-item="btn-${item}"]`).last()
-            if (!(await button.isVisible()))
-              await toolbar.locator('[data-item="btn-overflow"]').click()
-            await button.click()
-          }
+          const clickToolbar = (item: string) =>
+            toolbar.locator(`[data-item="btn-${item}"]`).click()
           const originalAlignment = await alignment()
-          await clickToolbar('textAlign')
-          await page
-            .locator('[data-item="btn-textAlign-option"][aria-label="Align center"]')
-            .click()
+          await toolbar.getByRole('button', { name: '居中', exact: true }).click()
           await expect.poll(alignment, { timeout: 10000 }).toBe('center')
           await clickToolbar('undo')
           await expect.poll(alignment).toBe(originalAlignment)
@@ -147,9 +140,8 @@ describe('Word editor', () => {
           await clickToolbar('undo')
           await paragraph.click()
           await page.keyboard.press('ArrowRight')
-          await toolbar.getByRole('button', { name: '更多', exact: true }).click()
-          await page.getByRole('menuitem', { name: /^插入/ }).hover()
-          await page.getByRole('menuitem', { name: '插入表格', exact: true }).click()
+          await toolbar.getByRole('button', { name: '插入', exact: true }).click()
+          await toolbar.getByRole('button', { name: '插入表格', exact: true }).click()
           const tableDialog = page.getByRole('dialog', { name: '插入表格' })
           await tableDialog.getByRole('button', { name: /应\s*用/ }).click()
           await expect.poll(readXml, { timeout: 10000 }).toContain('<w:tbl')

@@ -1,4 +1,4 @@
-﻿.vue-office-docx {
+.vue-office-docx {
   overflow-y: unset !important;
 }
 
@@ -123,30 +123,15 @@
   outline-offset: 2px;
 }
 
-.nc-docx-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:4px; padding:5px 8px; color:var(--notion-text-soft); font-size:12px; }
-.nc-docx-toolbar-group { display:inline-flex; align-items:center; gap:2px; }
-.nc-docx-toolbar-group:not(:first-child) { border-left:1px solid var(--notion-line); padding-left:6px; }
-.nc-docx-toolbar button { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-width:28px; height:28px; padding:0 6px; border:0; border-radius:6px; background:transparent; color:inherit; cursor:pointer; }
-.nc-docx-toolbar button svg { width:16px; height:16px; }
-.nc-docx-toolbar button:hover, .nc-docx-toolbar button[aria-pressed="true"] { background:var(--notion-surface-hover); color:var(--notion-text); }
-.nc-docx-toolbar button:disabled { opacity:.35; cursor:default; }
-.nc-docx-toolbar .ant-select { width:76px; font-size:12px; }
-.nc-docx-toolbar-pickers .ant-select { width:105px; }
-.nc-docx-toolbar-pickers .ant-select:last-child { width:62px; }
-.docx-content { position:relative; }
-.docx-content [data-office-location-highlight="block"] { background:color-mix(in srgb, var(--notion-accent-blue) 16%, transparent); outline:2px solid color-mix(in srgb, var(--notion-accent-blue) 35%, transparent); border-radius:3px; }
-
-::highlight(ncurator-office-location) { background: color-mix(in srgb, var(--notion-accent-blue) 24%, transparent); }
-
-.docx-toolbar { container-type:inline-size; }
-.nc-docx-toolbar { flex-wrap:nowrap; }
-.nc-docx-toolbar-pickers .ant-select:last-child { width:72px; }
-.nc-docx-toolbar .ant-select-selector { border-color:transparent !important; background:transparent !important; box-shadow:none !important; }
-.nc-docx-toolbar .ant-select:hover .ant-select-selector { background:var(--notion-surface-hover) !important; }
-@container (max-width: 760px) {
-  .nc-docx-toolbar .nc-docx-toolbar-wide { display:none; }
-  .nc-docx-toolbar-pickers .ant-select { width:94px; }
+.docx-content {
+  position: relative;
 }
-@container (max-width: 440px) {
-  .nc-docx-toolbar { flex-wrap:wrap; }
+.docx-content [data-office-location-highlight='block'] {
+  background: color-mix(in srgb, var(--notion-accent-blue) 16%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--notion-accent-blue) 35%, transparent);
+  border-radius: 3px;
+}
+
+::highlight(ncurator-office-location) {
+  background: color-mix(in srgb, var(--notion-accent-blue) 24%, transparent);
 }

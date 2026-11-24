@@ -1131,6 +1131,27 @@ export const en = {
       'measurement-unit': 'Measurement unit',
       ruler: 'Show or hide ruler'
     },
+    wordRibbon: {
+      toolbar: 'Word toolbar',
+      home: 'Home',
+      insert: 'Insert',
+      table: 'Table',
+      font: 'Font',
+      growFont: 'Increase font size',
+      shrinkFont: 'Decrease font size',
+      noColor: 'No color',
+      customColor: 'Custom color…',
+      colorPicker: 'Choose custom color',
+      colorHex: 'Color value',
+      chooseColor: 'Choose {{value1}}',
+      searchOptions: 'Search options',
+      searchUnavailable: 'Search is unavailable for this document',
+      insertRow: 'Insert row',
+      insertColumn: 'Insert column',
+      pageCount: 'Page {{value1}} of {{value2}}',
+      zoomOut: 'Zoom out',
+      zoomIn: 'Zoom in'
+    },
     wordSearch: {
       findPlaceholder: 'Find text',
       findAriaLabel: 'Find text',

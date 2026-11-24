@@ -1,5 +1,5 @@
 import { message } from 'antd'
-import DocxToolbar from './DocxToolbar'
+import DocxToolbar, { DocxStatusBar } from './DocxToolbar'
 import { captureWordView, restoreWordView, flashWordLocation, officeViews } from './officeViewState'
 import { t } from '../../i18n'
 import { useOfficeReviewNavigation } from '../workbench/OfficeReviewContext'
@@ -252,6 +252,7 @@ export const DocxPreview = ({
         <DocxToolbar
           editor={ready ? session.current?.editor : undefined}
           writable={Boolean(session.current?.writable)}
+          container={container}
         />
       </div>
       <div className="relative flex min-h-0 flex-1">
@@ -332,6 +333,7 @@ export const DocxPreview = ({
           </div>
         ) : null}
       </div>
+      <DocxStatusBar editor={ready ? session.current?.editor : undefined} container={container} />
     </div>
   )
 }

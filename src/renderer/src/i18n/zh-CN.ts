@@ -1074,6 +1074,27 @@ export const zh = {
       'measurement-unit': '度量单位',
       ruler: '显示或隐藏标尺'
     },
+    wordRibbon: {
+      toolbar: 'Word 工具栏',
+      home: '开始',
+      insert: '插入',
+      table: '表格',
+      font: '字体',
+      growFont: '增大字号',
+      shrinkFont: '减小字号',
+      noColor: '无颜色',
+      customColor: '自定义颜色…',
+      colorPicker: '选择自定义颜色',
+      colorHex: '颜色值',
+      chooseColor: '选择{{value1}}',
+      searchOptions: '查找选项',
+      searchUnavailable: '当前文档暂时无法查找',
+      insertRow: '插入行',
+      insertColumn: '插入列',
+      pageCount: '第 {{value1}} 页，共 {{value2}} 页',
+      zoomOut: '缩小',
+      zoomIn: '放大'
+    },
     wordSearch: {
       findPlaceholder: '查找文字',
       findAriaLabel: '查找文字',
