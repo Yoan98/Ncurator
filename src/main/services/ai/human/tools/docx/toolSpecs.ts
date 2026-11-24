@@ -47,7 +47,7 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   inputSchema: docxOutlineSchema,
   promptSpec: {
     name: 'docx_read_outline',
-    description: '返回有序节 ID 和按比例展开的正文摘要，独立区域列在顶层 segments。'
+    description: '按文档比例返回 DOCX 结构大纲，包含分节和各部分概览，便于快速浏览和定位。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -63,7 +63,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   inputSchema: docxSearchSchema,
   promptSpec: {
     name: 'docx_search',
-    description: '按文字或正则搜索，可用节或页眉页脚 ID 限定范围。'
+    description: '在 DOCX 文档中按文字或正则搜索。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -79,8 +79,7 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
   inputSchema: docxReadNodesSchema,
   promptSpec: {
     name: 'docx_read_nodes',
-    description:
-      '读取指定 nodeId 或 nodeIndex 范围的语义节点树，节包含页面设置和页眉页脚位置，内容包含继承后的有效格式。'
+    description: '读取指定 nodeId 或 nodeIndex 范围的节点树，包含详细内容和继承后的有效格式。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -114,8 +113,7 @@ export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_content_edit',
   toolsetId: 'docx-write',
   schema: docxContentEditSchema,
-  description:
-    '创建 DOCX，或对正文、页眉页脚内容执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一。',
+  description: '创建 DOCX，或编辑文档中的文字、段落、图片等内容，支持表格单元格及页眉页脚。',
   modelResult: { renderSuccess: renderDocxContentEditModelResult }
 })
 
@@ -123,7 +121,7 @@ export const DOCX_FORMAT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_format',
   toolsetId: 'docx-write',
   schema: docxFormatSchema,
-  description: '修改已有内容的显示格式：局部文字、段落、命名样式、编号和 section。',
+  description: '修改文字、段落、命名样式、编号，以及节的页面布局。',
   modelResult: { renderSuccess: renderDocxMutationModelResult }
 })
 
@@ -131,7 +129,7 @@ export const DOCX_TABLE_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_table_edit',
   toolsetId: 'docx-write',
   schema: docxTableEditSchema,
-  description: '修改表格结构（行列、合并拆分）以及表、行、单元格外观。',
+  description: '创建、删除表格，修改表格结构（行列、合并拆分）以及表、行、单元格外观。',
   modelResult: { renderSuccess: renderDocxMutationModelResult }
 })
 
@@ -139,7 +137,7 @@ export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineMutationSpec({
   name: 'docx_comments_revisions',
   toolsetId: 'docx-write',
   schema: docxCommentsRevisionsSchema,
-  description: '新增、修改、回复或删除批注；开关修订模式；接受或拒绝修订。',
+  description: '新增、修改、回复或删除批注，开关修订模式，接受或拒绝修订。',
   modelResult: { renderSuccess: renderDocxMutationModelResult }
 })
 
@@ -150,7 +148,7 @@ export const DOCX_READ_ANNOTATIONS_TOOL_SPEC = {
   inputSchema: docxReadAnnotationsSchema,
   promptSpec: {
     name: 'docx_read_annotations',
-    description: '查询全文或指定内容的批注、回复及修订，返回可用于处理的记录 ID。'
+    description: '查询 DOCX 的批注（含回复）或修订记录。'
   },
   modelResult: { renderSuccess: ({ data }) => JSON.stringify(data) }
 } satisfies DocxToolSpec<

@@ -236,8 +236,16 @@ const searchScopeNodeIdField = z.string().min(1).describe('节、页眉页脚、
 export const docxOutlineSchema = z
   .object({
     sourcePath: sourcePathField,
-    fromPercent: z.number().min(0).max(100).describe('起始比例，0–100'),
-    toPercent: z.number().min(0).max(100).describe('结束比例，0–100')
+    fromPercent: z
+      .number()
+      .min(0)
+      .max(100)
+      .describe('起始比例，按段落、表格等根节点顺序计算，0–100'),
+    toPercent: z
+      .number()
+      .min(0)
+      .max(100)
+      .describe('结束比例，0–100，fromPercent=0、toPercent=100 查看全文大纲')
   })
   .strict()
   .refine((value) => value.toPercent >= value.fromPercent, {
@@ -248,9 +256,19 @@ export const docxOutlineSchema = z
 export const docxReadAnnotationsSchema = z
   .object({
     sourcePath: docxWriteSourcePathField,
-    type: z.enum(['comments', 'revisions']),
-    nodeIds: z.array(nodeIdField).min(1).optional(),
-    cursor: z.string().min(1).optional()
+    type: z
+      .enum(['comments', 'revisions'])
+      .describe('查询类型，comments 为批注（含回复），revisions 为修订'),
+    nodeIds: z
+      .array(nodeIdField)
+      .min(1)
+      .optional()
+      .describe('按节、页眉页脚或内容节点 ID 限定范围，省略时查询全文'),
+    cursor: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('续查时传上次返回的 nextCursor，每次最多 50 条，文件版本或查询条件改变后须重新查询')
   })
   .strict()
 
@@ -259,7 +277,11 @@ export const docxSearchSchema = z
     sourcePath: sourcePathField,
     query: z.string().min(1).describe('检索文字或正则'),
     mode: docxSearchModeSchema.optional().describe('literal 或 regex，缺省 literal'),
-    nodeIds: z.array(searchScopeNodeIdField).min(1).optional().describe('可选搜索范围'),
+    nodeIds: z
+      .array(searchScopeNodeIdField)
+      .min(1)
+      .optional()
+      .describe('搜索范围，可传节、页眉页脚、段落、表格或单元格 ID，省略时搜索全文'),
     includeContext: z.boolean().optional().describe('是否返回命中前后预览')
   })
   .strict()
@@ -271,7 +293,11 @@ export const docxReadNodesSchema = z
       z
         .object({
           type: z.literal('node_ids').describe('按 nodeId 读取'),
-          nodeIds: z.array(nodeIdField).min(1).max(20).describe('1 至 20 个 nodeId')
+          nodeIds: z
+            .array(nodeIdField)
+            .min(1)
+            .max(20)
+            .describe('1 至 20 个节点 ID，支持节、页眉页脚和内容节点')
         })
         .strict(),
       z
@@ -530,20 +556,49 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
     .object({
       ...contentEditBase,
       type: z.literal('format_section'),
-      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
+      nodeIds: z
+        .array(nodeIdField)
+        .min(1)
+        .max(DOCX_FORMAT_MAX_TARGETS)
+        .describe('要修改的节 ID，1 至 20 个'),
       format: z
         .object({
-          orientation: z.enum(['portrait', 'landscape']).optional(),
-          pageWidthPt: z.number().positive().optional(),
-          pageHeightPt: z.number().positive().optional(),
-          marginTopPt: z.number().nonnegative().optional(),
-          marginRightPt: z.number().nonnegative().optional(),
-          marginBottomPt: z.number().nonnegative().optional(),
-          marginLeftPt: z.number().nonnegative().optional(),
-          headerDistancePt: z.number().nonnegative().optional(),
-          footerDistancePt: z.number().nonnegative().optional(),
-          pageNumberStart: z.number().int().nonnegative().nullable().optional(),
-          differentFirstPage: z.boolean().optional()
+          orientation: z
+            .enum(['portrait', 'landscape'])
+            .optional()
+            .describe('纸张方向，portrait 为纵向，landscape 为横向'),
+          pageWidthPt: z
+            .number()
+            .positive()
+            .optional()
+            .describe('纸张宽度，单位磅，与 pageHeightPt 一起传入'),
+          pageHeightPt: z
+            .number()
+            .positive()
+            .optional()
+            .describe('纸张高度，单位磅，与 pageWidthPt 一起传入'),
+          marginTopPt: z.number().nonnegative().optional().describe('上页边距，单位磅'),
+          marginRightPt: z.number().nonnegative().optional().describe('右页边距，单位磅'),
+          marginBottomPt: z.number().nonnegative().optional().describe('下页边距，单位磅'),
+          marginLeftPt: z.number().nonnegative().optional().describe('左页边距，单位磅'),
+          headerDistancePt: z
+            .number()
+            .nonnegative()
+            .optional()
+            .describe('页眉距纸张上边缘的距离，单位磅'),
+          footerDistancePt: z
+            .number()
+            .nonnegative()
+            .optional()
+            .describe('页脚距纸张下边缘的距离，单位磅'),
+          pageNumberStart: z
+            .number()
+            .int()
+            .nonnegative()
+            .nullable()
+            .optional()
+            .describe('该节的起始页码，null 表示接续前节'),
+          differentFirstPage: z.boolean().optional().describe('是否为该节首页使用单独的页眉页脚')
         })
         .strict()
         .refine((f) => Object.keys(f).length > 0, 'format requires a section property')
@@ -561,6 +616,7 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
               : f.pageHeightPt >= f.pageWidthPt),
           'paper size conflicts with orientation'
         )
+        .describe('该节的页面布局设置，至少传一项')
     })
     .strict()
     .superRefine(rejectDuplicateNodeIds),
