@@ -366,7 +366,7 @@ const assertCompatibleInsertion = (parent: Element, node: Element): void => {
   if (containerParent && !isNodeElement(node)) {
     if (parent.localName === 'hdr' || parent.localName === 'ftr')
       throw new Error(
-        `页眉页脚容器内只能放 paragraph 或 table；${node.localName} 等行内内容需要放在段落内。`
+        `Header/footer containers can only contain paragraph or table nodes; inline content such as ${node.localName} must be placed inside a paragraph.`
       )
     throw new Error(`${node.localName} cannot be inserted directly inside ${parent.localName}`)
   }
@@ -2469,7 +2469,7 @@ async function insertStoryBlocks(
     for (const draft of op.nodes) {
       if (draft.type !== 'paragraph')
         throw new Error(
-          `页眉页脚容器内只能插入 paragraph，收到 ${draft.type}；field、run 等行内节点需要插入段落内。`
+          `Header/footer containers only accept paragraph nodes, but received ${draft.type}. Inline nodes such as field and run must be inserted inside a paragraph.`
         )
       blocks.push(contentDraftElement(story.dom, draft, writer))
     }

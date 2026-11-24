@@ -74,7 +74,7 @@ describe('section-scoped footer tools', () => {
               sourcePath: missing,
               ...operation
             })
-            expect(failure.error).toContain('文件不存在')
+            expect(failure.error).toContain('File not found')
             expect(failure.error).toContain(missing)
           }
           expect(await fs.readFile(sourcePath)).toEqual(original)

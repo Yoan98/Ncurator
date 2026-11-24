@@ -968,8 +968,8 @@ export const handleDocxWorkerRequest = async (
             )
               throw new Error(
                 op.type === 'format_paragraph'
-                  ? `format_paragraph 需要 paragraph 节点 ID，收到 ${slot.kind} 容器 ID；请读取容器 children 中的段落 ID。`
-                  : `${slot.kind} 容器仅支持通过 inside_start 或 inside_end 插入段落或表格；编辑内部内容请使用对应内容节点 ID。`
+                  ? `format_paragraph requires paragraph node IDs, but received a ${slot.kind} container ID. Read the container's children to find paragraph node IDs.`
+                  : `A ${slot.kind} container only supports inserting paragraphs or tables with inside_start or inside_end. To edit its contents, use the corresponding content node ID.`
               )
             const root = 'storyRoot:' + story
             bindIdentity(base.identity, root, root)
