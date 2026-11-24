@@ -1,5 +1,6 @@
 import { t } from '../../i18n'
 import FileIcon from '../FileIcon'
+import { getVisibleExpandedPaths, useWorkspaceTreeExpansion } from '../useWorkspaceTreeExpansion'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Button, Empty, Modal, Popover, Tabs, Tooltip, message } from 'antd'
 import type { EmbeddingIndexSnapshot } from '../../../../shared/embeddingModels'
@@ -34,6 +35,14 @@ type WorkspaceDirectoryMap = Record<string, Record<string, WorkspaceTreeEntry[]>
 type WorkspaceDirectoryLoadingMap = Record<string, Record<string, boolean>>
 type WorkspaceDirectoryErrorMap = Record<string, Record<string, string | undefined>>
 
+let treeSnapshot:
+  | {
+      workspaces: WorkspaceListItem[]
+      directories: WorkspaceDirectoryMap
+      summaries: Record<string, NonNullable<WorkspaceDirectoryListResponse['summary']>>
+    }
+  | undefined
+
 const HELD_FILE_PREPARE_JOB: WorkspaceIndexJobRecord = {
   id: 'held-file-prepare',
   workspace_id: '',
@@ -61,19 +70,30 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [embeddingIndex, setEmbeddingIndex] = useState<EmbeddingIndexSnapshot | null>(null)
   const previousModelState = useRef('')
   const { modal } = AntdApp.useApp()
-  const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([])
-  const [workspaceDirectories, setWorkspaceDirectories] = useState<WorkspaceDirectoryMap>({})
+  const [workspaces, setWorkspaces] = useState(() => treeSnapshot?.workspaces || [])
+  const [workspaceDirectories, setWorkspaceDirectories] = useState(
+    () => treeSnapshot?.directories || {}
+  )
   const [workspaceDirectoryLoading, setWorkspaceDirectoryLoading] =
     useState<WorkspaceDirectoryLoadingMap>({})
   const [workspaceDirectoryErrors, setWorkspaceDirectoryErrors] =
     useState<WorkspaceDirectoryErrorMap>({})
   const [workspaceTreeSummaries, setWorkspaceTreeSummaries] = useState<
     Record<string, NonNullable<WorkspaceDirectoryListResponse['summary']>>
-  >({})
-  const [workspaceExpandedKeys, setWorkspaceExpandedKeys] = useState<Record<string, string[]>>({})
-  const [collapsedRootIds, setCollapsedRootIds] = useState<string[]>([])
+  >(() => treeSnapshot?.summaries || {})
+  const { expandedDirectories: workspaceExpandedKeys, setDirectoryExpanded } =
+    useWorkspaceTreeExpansion('settings')
+  const [restoringTree, setRestoringTree] = useState(
+    () =>
+      !treeSnapshot ||
+      workspaces.some((workspace) =>
+        getVisibleExpandedPaths(workspaceExpandedKeys[workspace.id] || []).some(
+          (path) => !workspaceDirectories[workspace.id]?.[path]
+        )
+      )
+  )
   const [workspaceIndexJobs, setWorkspaceIndexJobs] = useState<WorkspaceJobMap>({})
-  const [workspaceLoading, setWorkspaceLoading] = useState(false)
+  const [workspaceLoading, setWorkspaceLoading] = useState(true)
   const [workspaceDirectoryReloadVersion, setWorkspaceDirectoryReloadVersion] = useState(0)
   const [selectedTabKey, setSelectedTabKey] = useState<'files' | 'web'>(requestedTab)
   const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null)
@@ -89,8 +109,19 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const workspaceDirectoryRequestIds = useRef<Record<string, Record<string, number>>>({})
   const workspaceDirectoriesRef = useRef<WorkspaceDirectoryMap>({})
   const workspacesRef = useRef(workspaces)
+  const workspaceExpandedKeysRef = useRef(workspaceExpandedKeys)
   workspaceDirectoriesRef.current = workspaceDirectories
   workspacesRef.current = workspaces
+  workspaceExpandedKeysRef.current = workspaceExpandedKeys
+
+  useEffect(() => {
+    if (restoringTree) return
+    treeSnapshot = {
+      workspaces,
+      directories: workspaceDirectories,
+      summaries: workspaceTreeSummaries
+    }
+  }, [restoringTree, workspaces, workspaceDirectories, workspaceTreeSummaries])
 
   const loadWorkspaceDirectory = useCallback(
     async (workspaceId: string, relativePath: string): Promise<void> => {
@@ -181,23 +212,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
     }
   }, [refreshWorkspaceDirectories])
 
-  const loadWorkspaces = useCallback(async (options?: { focusRootId?: string }): Promise<void> => {
+  const loadWorkspaces = useCallback(async (): Promise<void> => {
     setWorkspaceLoading(true)
     try {
       const workspaceResponse = await window.api.workspaceList()
       setWorkspaces(workspaceResponse.items)
-      setWorkspaceDirectories({})
-      setWorkspaceDirectoryLoading({})
-      setWorkspaceDirectoryErrors({})
-      setWorkspaceTreeSummaries({})
-      setWorkspaceExpandedKeys({})
-      setCollapsedRootIds(
-        options?.focusRootId
-          ? workspaceResponse.items
-              .map((item) => item.id)
-              .filter((id) => id !== options.focusRootId)
-          : []
-      )
       setWorkspaceDirectoryReloadVersion((value) => value + 1)
     } catch (error) {
       console.error(error)
@@ -327,14 +346,44 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }, [workspaces])
 
   useEffect(() => {
-    workspaces.forEach((workspace) => {
-      if (!workspace.root_path || workspace.root_kind === 'file') return
-      void loadWorkspaceDirectory(workspace.id, '')
+    if (workspaceLoading) return
+    const requests = workspaces.flatMap((workspace) => {
+      if (!workspace.root_path || workspace.root_kind === 'file') return []
+      const paths = new Set([
+        '',
+        ...getVisibleExpandedPaths(workspaceExpandedKeysRef.current[workspace.id] || [])
+      ])
+      return Array.from(paths, (path) => loadWorkspaceDirectory(workspace.id, path))
     })
-  }, [loadWorkspaceDirectory, workspaces, workspaceDirectoryReloadVersion])
+    void Promise.all(requests)
+  }, [loadWorkspaceDirectory, workspaces, workspaceDirectoryReloadVersion, workspaceLoading])
+
+  useEffect(() => {
+    if (!restoringTree || workspaceLoading) return
+    const pending = workspaces.some(
+      (workspace) =>
+        workspace.root_path &&
+        workspace.root_kind !== 'file' &&
+        ['', ...getVisibleExpandedPaths(workspaceExpandedKeys[workspace.id] || [])].some(
+          (path) =>
+            !workspaceDirectories[workspace.id]?.[path] &&
+            !workspaceDirectoryErrors[workspace.id]?.[path]
+        )
+    )
+    if (!pending) setRestoringTree(false)
+  }, [
+    restoringTree,
+    workspaceLoading,
+    workspaces,
+    workspaceExpandedKeys,
+    workspaceDirectories,
+    workspaceDirectoryErrors
+  ])
 
   const summedSummary = useMemo(() => {
-    const summaries = Object.values(workspaceTreeSummaries)
+    const summaries = workspaces.flatMap((workspace) =>
+      workspaceTreeSummaries[workspace.id] ? [workspaceTreeSummaries[workspace.id]] : []
+    )
     if (summaries.length === 0) {
       return workspaces.reduce(
         (acc, workspace) => ({
@@ -382,25 +431,20 @@ const WorkspaceSettingsPanel: React.FC = () => {
     setFileCancelModalOpen(false)
   }, [filePrepareHeld, runningFileJob])
 
-  const toggleWorkspaceDirectory = (workspaceId: string, entry: WorkspaceTreeEntry): void => {
-    if (entry.kind !== 'directory') return
-    const path = entry.relative_path
-    const expanded = new Set(workspaceExpandedKeys[workspaceId] || [])
-    if (expanded.has(path)) {
-      expanded.delete(path)
-    } else {
-      expanded.add(path)
-      if (
-        !workspaceDirectories[workspaceId]?.[path] &&
-        !workspaceDirectoryLoading[workspaceId]?.[path]
-      ) {
-        void loadWorkspaceDirectory(workspaceId, path)
-      }
+  const toggleWorkspaceDirectory = (workspaceId: string, relativePath: string): void => {
+    const paths = workspaceExpandedKeys[workspaceId] || []
+    const opening = !paths.includes(relativePath)
+    setDirectoryExpanded(workspaceId, relativePath, opening)
+    if (opening) {
+      getVisibleExpandedPaths([...paths, relativePath]).forEach((path) => {
+        if (
+          !workspaceDirectories[workspaceId]?.[path] &&
+          !workspaceDirectoryLoading[workspaceId]?.[path]
+        ) {
+          void loadWorkspaceDirectory(workspaceId, path)
+        }
+      })
     }
-    setWorkspaceExpandedKeys((previous) => ({
-      ...previous,
-      [workspaceId]: Array.from(expanded)
-    }))
   }
 
   const renderWorkspaceEntries = (
@@ -427,8 +471,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
                 className="ant-tree-treenode flex min-h-[30px] w-full items-center gap-1.5 rounded-[4px] px-2 text-left text-[13px] text-[var(--notion-text)]"
                 style={{ paddingLeft: 8 + depth * 18 }}
                 onClick={() =>
-                  isDirectory ? toggleWorkspaceDirectory(workspaceId, entry) : undefined
+                  isDirectory
+                    ? toggleWorkspaceDirectory(workspaceId, entry.relative_path)
+                    : undefined
                 }
+                aria-expanded={isDirectory ? isExpanded : undefined}
               >
                 <span className="ant-tree-switcher flex h-4 w-4 shrink-0 items-center justify-center text-[var(--notion-text-faint)]">
                   {isDirectory ? isExpanded ? <HiChevronDown /> : <HiChevronRight /> : null}
@@ -458,7 +505,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
           )
         })}
         {loading && entries.length === 0 ? (
-          <div className="px-3 py-2 text-[12px] text-[var(--notion-text-faint)]">{t(($) => $.settings.loading)}</div>
+          <div className="px-3 py-2 text-[12px] text-[var(--notion-text-faint)]">
+            {t(($) => $.settings.loading)}
+          </div>
         ) : null}
         {error ? (
           <button
@@ -493,14 +542,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
         }
       })
     }, 50)
-  }
-
-  const toggleRootCollapsed = (workspaceId: string): void => {
-    setCollapsedRootIds((previous) =>
-      previous.includes(workspaceId)
-        ? previous.filter((id) => id !== workspaceId)
-        : [...previous, workspaceId]
-    )
   }
 
   const handleAddRoot = async (): Promise<void> => {
@@ -540,7 +581,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       return
     }
     message.success(t(($) => $.settings.directoryAlreadyAdded))
-    await loadWorkspaces({ focusRootId: response.workspace.id })
+    await loadWorkspaces()
   }
 
   const handleWorkspaceScanAll = async (): Promise<void> => {
@@ -882,8 +923,16 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         <div
                           className="flex min-h-0 flex-1 overflow-auto px-2 py-3"
                           data-testid={importSelectors.workspaceTree}
+                          aria-busy={restoringTree}
                         >
-                          {workspaces.length === 0 ? (
+                          {restoringTree ? (
+                            <div
+                              role="status"
+                              className="px-3 py-2 text-xs text-[var(--notion-text-faint)]"
+                            >
+                              {t(($) => $.settings.loading)}
+                            </div>
+                          ) : workspaces.length === 0 ? (
                             <div
                               className="flex min-h-0 flex-1 items-center justify-center"
                               data-testid={importSelectors.workspaceEmptyState}
@@ -903,7 +952,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               data-testid={importSelectors.workspaceList}
                             >
                               {workspaces.map((workspace) => {
-                                const isRootCollapsed = collapsedRootIds.includes(workspace.id)
+                                const isRootCollapsed =
+                                  !workspaceExpandedKeys[workspace.id]?.includes('')
                                 const isDirectoryRoot = workspace.root_kind !== 'file'
                                 return (
                                   <div
@@ -914,9 +964,12 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                       <button
                                         type="button"
                                         className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                                        aria-expanded={
+                                          isDirectoryRoot ? !isRootCollapsed : undefined
+                                        }
                                         onClick={() =>
                                           isDirectoryRoot
-                                            ? toggleRootCollapsed(workspace.id)
+                                            ? toggleWorkspaceDirectory(workspace.id, '')
                                             : undefined
                                         }
                                       >

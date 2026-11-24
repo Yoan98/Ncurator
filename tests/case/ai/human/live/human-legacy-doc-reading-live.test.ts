@@ -174,6 +174,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.output?.status === 'completed' &&
               !editSucceeded &&
+              result.beforeHash === result.afterHash &&
               (editResults.length === 0 || rejectedProperly),
             {
               name: 'human-live-docx-does-not-edit-legacy-doc',

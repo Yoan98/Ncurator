@@ -622,6 +622,8 @@ describe('workbench result e2e', () => {
               await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
               await workspaceFileFilter.waitFor({ state: 'visible', timeout: 10_000 })
             }
+            const root = page.getByTitle(workspace.rootPath, { exact: true })
+            if ((await root.getAttribute('aria-expanded')) === 'false') await root.click()
             await workspaceFileFilter.fill(fileName)
             await page.getByTitle(fileName, { exact: true }).click()
             excelPreviewResults.push(await waitForExcelPreview(page, fileName))

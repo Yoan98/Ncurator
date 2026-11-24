@@ -17,6 +17,7 @@
 - Workbench e2e 按 `knowledge: none / cached / cold` 声明索引需求，默认 none。需要真实索引时复用生产 split/vector 计算缓存并隔离本用例统计；不自动追加 UI 预热用例，不复用存储和 UI 状态。缓存身份、按需预热与清理规则遵循 [测试规范](../test.md)。
 - Workbench 模型选择 helper 在 `custom` live 配置下直接进入「自定义模型」按名称搜索，等待异步返回的匹配选项可见后再判定是否存在，避免同名预设或免费模型改变测试入口；内置目标在同一自定义服务分组按公开内置型号的精确调用名选择；不因同名馆长或免费条目改变调用方式。
 - Workbench UI E2E 测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
+- 文件浏览用例通过真实点击展开工作地址根和所需子目录，已展开节点保持展开。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖列表打开/焦点刷新、右键行内新建和确认移到回收站，以及删除后禁止自动保存重建。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；用户行为见 `WB-WPS-001`。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
@@ -622,7 +623,7 @@ pnpm test:update:e2e
 
 #### `workspace-file-explorer-open-refresh`
 
-- Oracle 补充：常驻与悬浮「全部」列表按根节点展示所有已配置工作地址。第二个根里的黑名单目录及隐藏文件可浏览，文件可直接打开。操作目标按所属地址解析。
+- Oracle 补充：常驻与悬浮「全部」列表按根节点展示所有已配置工作地址。第二个根默认折叠，手动展开后黑名单目录及隐藏文件可浏览，文件可直接打开。操作目标按所属地址解析。根和子目录首次默认折叠，用户展开/折叠后关闭重开、设置往返以及重启恢复状态；通过只读 DOM 观察确认重开首帧包含原有展开子项，真实重启后的首次目录展示包含完整恢复层级；折叠根保留子目录记录，对齐 `WB-PANEL-003-AC13`。
 
 - 测试类型：`e2e`
 - What：无文件目录时统一空态与设置跳转、返回后的伙伴/草稿/资源 Tab 恢复、已配置空目录提示，以及文件列表打开/焦点刷新；常驻与悬浮列表右键新建/重命名、单框命名、持久选择与外部取消、删除确认与回收站、删除后停止文本保存。

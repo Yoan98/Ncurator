@@ -27,7 +27,7 @@ describe('settings workspace e2e', () => {
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
-          const { page } = runtime
+          let { page } = runtime
           const rootPath = await mkdtemp(path.join(os.tmpdir(), 'settings-workspace-lazy-'))
           runtime.registerResource({
             name: `settings-workspace:${rootPath}`,
@@ -51,7 +51,11 @@ describe('settings workspace e2e', () => {
           await createFixtureWorkspace(page, { name: '懒加载工作空间', rootPath })
           await navigateToSettingsSection(page, 'workspace')
 
-          const tree = getSettingsLocator(page, importSelectors.workspaceTree)
+          let tree = getSettingsLocator(page, importSelectors.workspaceTree)
+          const rootRow = () =>
+            tree.getByRole('button', { name: new RegExp(path.basename(rootPath)) }).first()
+          const initiallyCollapsed = (await rootRow().getAttribute('aria-expanded')) === 'false'
+          await rootRow().click()
           await tree.getByText('docs').waitFor({ state: 'visible' })
           const moduleDirectoryCount = await tree.getByText('node_modules', { exact: true }).count()
           const briefBeforeExpand = await tree.getByText('brief.txt').count()
@@ -123,7 +127,59 @@ describe('settings workspace e2e', () => {
             .getByText('node_modules', { exact: true })
             .count()
 
+          await navigateToSettingsSection(page, 'general')
+          const restoreObserver = await page.evaluateHandle((testId) => {
+            const snapshots: string[] = []
+            const observer = new MutationObserver(() => {
+              const tree = document.querySelector(`[data-testid="${testId}"]`)
+              if (!tree) return
+              const content = tree.textContent || ''
+              if (snapshots.at(-1) !== content) snapshots.push(content)
+            })
+            observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+            return { snapshots, observer }
+          }, importSelectors.workspaceTree)
+          await navigateToSettingsSection(page, 'workspace')
+          await tree.getByText('brief.txt', { exact: true }).waitFor()
+          const reopenSnapshots = await restoreObserver.evaluate(({ snapshots, observer }) => {
+            observer.disconnect()
+            return snapshots
+          })
+          await restoreObserver.dispose()
+          const expandedAfterReturn = (await rootRow().getAttribute('aria-expanded')) === 'true'
+          await rootRow().click()
+          ;({ page } = await runtime.restartApp())
+          await navigateToSettingsSection(page, 'workspace')
+          tree = getSettingsLocator(page, importSelectors.workspaceTree)
+          await rootRow().waitFor()
+          const collapsedAfterRestart =
+            (await rootRow().getAttribute('aria-expanded')) === 'false' &&
+            (await tree.getByText('docs', { exact: true }).count()) === 0
+          await rootRow().click()
+          await tree.getByText('brief.txt', { exact: true }).waitFor()
+          const childRestoredAfterParentExpansion =
+            (await tree
+              .getByRole('button', { name: 'docs', exact: true })
+              .getAttribute('aria-expanded')) === 'true'
+          await tree.getByRole('button', { name: 'docs', exact: true }).click()
+          ;({ page } = await runtime.restartApp())
+          await navigateToSettingsSection(page, 'workspace')
+          tree = getSettingsLocator(page, importSelectors.workspaceTree)
+          await tree.getByText('docs', { exact: true }).waitFor()
+          const childCollapsedAfterRestart =
+            (await rootRow().getAttribute('aria-expanded')) === 'true' &&
+            (await tree
+              .getByRole('button', { name: 'docs', exact: true })
+              .getAttribute('aria-expanded')) === 'false' &&
+            (await tree.getByText('brief.txt', { exact: true }).count()) === 0
+
           return {
+            initiallyCollapsed,
+            reopenSnapshots,
+            expandedAfterReturn,
+            collapsedAfterRestart,
+            childRestoredAfterParentExpansion,
+            childCollapsedAfterRestart,
             sharedIcons,
             folderChangesWhenExpanded,
             rowStyleConsistent,
@@ -142,6 +198,21 @@ describe('settings workspace e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.initiallyCollapsed &&
+              result.reopenSnapshots.length > 0 &&
+              result.reopenSnapshots.every((snapshot) => snapshot.includes('brief.txt')) &&
+              result.expandedAfterReturn &&
+              result.collapsedAfterRestart &&
+              result.childRestoredAfterParentExpansion &&
+              result.childCollapsedAfterRestart,
+            {
+              name: 'workspace-directory-expansion-persists',
+              message:
+                '根首次折叠，展开状态在返回后恢复；根与子目录折叠跨真实重启保存，重新展开根恢复子目录记录。',
+              data: result
+            }
+          )
           await runtime.assertThat(
             result.briefBeforeExpand === 0 &&
               result.moduleFileBeforeExpand === 0 &&

@@ -137,7 +137,7 @@ describe('workbench result e2e', () => {
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
-          const { page } = runtime
+          let { page } = runtime
           runtime.registerResource({
             name: 'empty-model-directory',
             phase: 'after-app-close',
@@ -151,9 +151,9 @@ describe('workbench result e2e', () => {
           const draft = '添加文件目录后继续查看这份资料。'
           await composer.fill(draft)
           await selectWorkbenchResourceMenuItem(runtime, 'file')
-          const tabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
+          let tabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
           const launcherId = await tabs.first().getAttribute('data-testid')
-          const emptyState = getWorkbenchLocator(page, workbenchSelectors.workspaceFilesEmptyState)
+          let emptyState = getWorkbenchLocator(page, workbenchSelectors.workspaceFilesEmptyState)
           await emptyState
             .getByText('尚未添加文件目录', { exact: true })
             .waitFor({ state: 'visible' })
@@ -184,6 +184,10 @@ describe('workbench result e2e', () => {
               'true'
           await addWorkspaceDirectoryThroughNativeDialog(page, workspace.rootPath)
           await getSettingsLocator(page, settingsSelectors.backRow).click()
+          const firstRoot = page.getByTitle(workspace.rootPath, { exact: true })
+          await firstRoot.waitFor()
+          const initiallyCollapsed = (await firstRoot.getAttribute('aria-expanded')) === 'false'
+          await firstRoot.click()
           await page.getByText('目录中暂无文件', { exact: true }).waitFor({ state: 'visible' })
           const selectedPartner = getWorkbenchPrefixLocator(
             page,
@@ -579,6 +583,14 @@ describe('workbench result e2e', () => {
           const secondRoot = allRoots.filter({
             has: page.getByTitle(second.rootPath, { exact: true })
           })
+          const newRootCollapsed =
+            (await secondRoot
+              .getByTitle(second.rootPath, { exact: true })
+              .getAttribute('aria-expanded')) === 'false' &&
+            (await primaryRoot
+              .getByTitle(workspace.rootPath, { exact: true })
+              .getAttribute('aria-expanded')) === 'true'
+          await secondRoot.getByTitle(second.rootPath, { exact: true }).click()
           await secondRoot.getByTitle('.hidden.txt', { exact: true }).waitFor()
           await secondRoot.getByTitle('node_modules', { exact: true }).click()
           await secondRoot.getByTitle('node_modules/module-notes.txt', { exact: true }).click()
@@ -595,6 +607,79 @@ describe('workbench result e2e', () => {
               .isVisible()) &&
             (await fs.stat(path.join(second.rootPath, 'second-root.md'))).isFile() &&
             (await primaryRoot.getByTitle('second-root.md', { exact: true }).count()) === 0
+
+          const observeExplorer = async (onlyTree: boolean) =>
+            page.evaluateHandle(
+              ({ testId, onlyTree }) => {
+                const snapshots: string[] = []
+                const observer = new MutationObserver(() => {
+                  const list = document.querySelector(`[data-testid="${testId}"]`)
+                  if (!list || (onlyTree && !list.querySelector('[data-workspace-root]'))) return
+                  const content = list.textContent || ''
+                  if (snapshots.at(-1) !== content) snapshots.push(content)
+                })
+                observer.observe(document.body, {
+                  childList: true,
+                  subtree: true,
+                  characterData: true
+                })
+                return { snapshots, observer }
+              },
+              { testId: workbenchSelectors.workspaceExplorerList, onlyTree }
+            )
+          await closeExplorerIfOpen(page)
+          const reopenObserver = await observeExplorer(false)
+          await openAllModeExplorer(page)
+          await secondRoot.getByTitle('node_modules/module-notes.txt', { exact: true }).waitFor()
+          const reopenSnapshots = await reopenObserver.evaluate(({ snapshots, observer }) => {
+            observer.disconnect()
+            return snapshots
+          })
+          await reopenObserver.dispose()
+          await secondRoot.getByTitle(second.rootPath, { exact: true }).click()
+          await closeExplorerIfOpen(page)
+          await openAllModeExplorer(page)
+          const rootCollapsedAfterReopen =
+            (await secondRoot
+              .getByTitle(second.rootPath, { exact: true })
+              .getAttribute('aria-expanded')) === 'false'
+          await secondRoot.getByTitle(second.rootPath, { exact: true }).click()
+          await secondRoot.getByTitle('node_modules/module-notes.txt', { exact: true }).waitFor()
+          const childRestoredAfterParentExpansion =
+            (await secondRoot
+              .getByTitle('node_modules', { exact: true })
+              .getAttribute('aria-expanded')) === 'true'
+          await secondRoot.getByTitle('node_modules', { exact: true }).click()
+          await secondRoot.getByTitle(second.rootPath, { exact: true }).click()
+          page = (await runtime.restartApp()).page
+          await navigateToWorkbench(page)
+          await getWorkbenchPrefixLocator(page, workbenchSelectors.partnerItemPrefix)
+            .filter({ hasText: workspaceName })
+            .click()
+          const restartObserver = await observeExplorer(true)
+          await selectWorkbenchResourceMenuItem(runtime, 'file')
+          await openAllModeExplorer(page)
+          const restoredFirstRoot = page.getByTitle(workspace.rootPath, { exact: true })
+          const restoredSecondRoot = page.getByTitle(second.rootPath, { exact: true })
+          await restoredSecondRoot.waitFor()
+          const restartSnapshots = await restartObserver.evaluate(({ snapshots, observer }) => {
+            observer.disconnect()
+            return snapshots
+          })
+          await restartObserver.dispose()
+          const rootsRestoredAfterRestart =
+            (await restoredFirstRoot.getAttribute('aria-expanded')) === 'true' &&
+            (await restoredSecondRoot.getAttribute('aria-expanded')) === 'false'
+          await restoredSecondRoot.click()
+          const restoredChild = page.getByTitle('node_modules', { exact: true })
+          await restoredChild.waitFor()
+          const childCollapsedAfterRestart =
+            (await restoredChild.getAttribute('aria-expanded')) === 'false' &&
+            (await page.getByTitle('node_modules/module-notes.txt', { exact: true }).count()) === 0
+          await page.getByTitle(SEED_FILE, { exact: true }).click()
+          await getWorkbenchLocator(page, workbenchSelectors.plainTextEditor).waitFor()
+          tabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
+          emptyState = getWorkbenchLocator(page, workbenchSelectors.workspaceFilesEmptyState)
 
           await closeExplorerIfOpen(page)
           const previewTabId = await tabs.first().getAttribute('data-testid')
@@ -671,10 +756,36 @@ describe('workbench result e2e', () => {
             deleteCancelled,
             deletedFileNotRecreated,
             allRootsBrowsable,
+            initiallyCollapsed,
+            reopenSnapshots,
+            restartSnapshots,
+            newRootCollapsed,
+            rootCollapsedAfterReopen,
+            childRestoredAfterParentExpansion,
+            rootsRestoredAfterRestart,
+            childCollapsedAfterRestart,
             workspaceRoot: workspace.rootPath
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.initiallyCollapsed &&
+              result.reopenSnapshots.length > 0 &&
+              result.reopenSnapshots.every((snapshot) => snapshot.includes('module-notes.txt')) &&
+              result.restartSnapshots.length > 0 &&
+              result.restartSnapshots.every((snapshot) => snapshot.includes(SEED_FILE)) &&
+              result.newRootCollapsed &&
+              result.rootCollapsedAfterReopen &&
+              result.childRestoredAfterParentExpansion &&
+              result.rootsRestoredAfterRestart &&
+              result.childCollapsedAfterRestart,
+            {
+              name: 'workspace-file-directory-expansion-persists',
+              message:
+                '首次及新增根折叠，根和子目录展开/折叠在重开列表与真实重启后恢复，父目录收起保留子目录记录。',
+              data: result
+            }
+          )
           await runtime.assertThat(
             result.rootCreationResults.every(Boolean) &&
               result.blankFilesValid &&

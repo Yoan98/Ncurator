@@ -11,6 +11,7 @@ import type {
 import { filterVisibleFileChangeRecords } from '../../../../shared/fileChangeVisibility'
 import { LuFilePlus2, LuPencil, LuTrash2 } from 'react-icons/lu'
 import FileIcon from '../FileIcon'
+import { getVisibleExpandedPaths, useWorkspaceTreeExpansion } from '../useWorkspaceTreeExpansion'
 import FileNameInput from './FileNameInput'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspaceFilesEmptyState from './WorkspaceFilesEmptyState'
@@ -54,6 +55,8 @@ type FileNameDraft = {
 const getDirectoryKey = (workspaceId: string, relativePath: string): string =>
   `${workspaceId}:${relativePath}`
 
+let directorySnapshot: Record<string, WorkspaceTreeEntry[]> = {}
+
 const getParentPath = (relativePath: string): string =>
   relativePath.split('/').slice(0, -1).join('/')
 
@@ -93,11 +96,15 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   onFileRenamed
 }) => {
   const { message } = App.useApp()
-  const [childrenByPath, setChildrenByPath] = useState<Record<string, WorkspaceTreeEntry[]>>({})
-  const [expanded, setExpanded] = useState<
-    Map<string, { workspaceId: string; relativePath: string }>
-  >(() => new Map())
-  const [collapsedRoots, setCollapsedRoots] = useState<Set<string>>(() => new Set())
+  const [childrenByPath, setChildrenByPath] = useState(() => directorySnapshot)
+  const { expandedDirectories, setDirectoryExpanded } = useWorkspaceTreeExpansion('workbench')
+  const [restoringTree, setRestoringTree] = useState(() =>
+    workspaces.some((workspace) =>
+      getVisibleExpandedPaths(expandedDirectories[workspace.id] || []).some(
+        (path) => !directorySnapshot[getDirectoryKey(workspace.id, path)]
+      )
+    )
+  )
   const [expandedChangeGroups, setExpandedChangeGroups] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState<Set<string>>(() => new Set())
   const [directoryErrors, setDirectoryErrors] = useState<Set<string>>(() => new Set())
@@ -115,14 +122,16 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   const mutationInFlightRef = useRef(false)
   const workspacesRef = useRef(workspaces)
   const directoryRequestIds = useRef<Record<string, number>>({})
-  const expandedRef = useRef(expanded)
-  const collapsedRootsRef = useRef(collapsedRoots)
+  const expandedRef = useRef(expandedDirectories)
   const appliedReloadTokenRef = useRef(reloadToken)
   useLayoutEffect(() => {
     workspacesRef.current = workspaces
-    expandedRef.current = expanded
-    collapsedRootsRef.current = collapsedRoots
-  }, [workspaces, expanded, collapsedRoots])
+    expandedRef.current = expandedDirectories
+  }, [workspaces, expandedDirectories])
+
+  useEffect(() => {
+    directorySnapshot = childrenByPath
+  }, [childrenByPath])
 
   const activeChanges = useMemo(
     () => groupSessionFileChanges(filterVisibleFileChangeRecords(changeRecords)),
@@ -179,18 +188,30 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     []
   )
 
-  const refreshVisibleDirectories = useCallback((): void => {
-    for (const workspace of workspacesRef.current) {
-      if (!collapsedRootsRef.current.has(workspace.id)) void loadDirectory(workspace.id, '')
-    }
-    for (const { workspaceId, relativePath } of expandedRef.current.values()) {
-      if (!collapsedRootsRef.current.has(workspaceId)) void loadDirectory(workspaceId, relativePath)
-    }
+  const refreshVisibleDirectories = useCallback(async (): Promise<void> => {
+    await Promise.all(
+      workspacesRef.current.flatMap((workspace) =>
+        getVisibleExpandedPaths(expandedRef.current[workspace.id] || []).map((path) =>
+          loadDirectory(workspace.id, path)
+        )
+      )
+    )
   }, [loadDirectory])
 
   useEffect(() => {
-    refreshVisibleDirectories()
-  }, [refreshVisibleDirectories])
+    void refreshVisibleDirectories()
+  }, [refreshVisibleDirectories, workspaces])
+
+  useEffect(() => {
+    if (!restoringTree) return
+    const pending = workspaces.some((workspace) =>
+      getVisibleExpandedPaths(expandedDirectories[workspace.id] || []).some((path) => {
+        const key = getDirectoryKey(workspace.id, path)
+        return !childrenByPath[key] && !directoryErrors.has(key)
+      })
+    )
+    if (!pending) setRestoringTree(false)
+  }, [restoringTree, workspaces, expandedDirectories, childrenByPath, directoryErrors])
 
   useEffect(() => {
     setDraft(null)
@@ -232,19 +253,9 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
         : getParentPath(contextTarget?.relative_path || '')
     const suffix = type === 'other' ? '' : `.${type}`
     setQuery('')
-    setCollapsedRoots((current) => {
-      if (!current.has(workspaceId)) return current
-      const next = new Set(current)
-      next.delete(workspaceId)
-      return next
-    })
+    setDirectoryExpanded(workspaceId, '', true)
     if (parentPath) {
-      setExpanded((current) =>
-        new Map(current).set(getDirectoryKey(workspaceId, parentPath), {
-          workspaceId,
-          relativePath: parentPath
-        })
-      )
+      setDirectoryExpanded(workspaceId, parentPath, true)
     }
     void loadDirectory(workspaceId, parentPath)
     setDraft({
@@ -434,16 +445,16 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   useEffect(() => {
     if (reloadToken === appliedReloadTokenRef.current) return
     appliedReloadTokenRef.current = reloadToken
-    refreshVisibleDirectories()
+    void refreshVisibleDirectories()
   }, [reloadToken, refreshVisibleDirectories])
 
   useEffect(() => {
     if (!liveRefreshEnabled) return
     const refreshOnFocus = (): void => {
-      refreshVisibleDirectories()
+      void refreshVisibleDirectories()
     }
     const refreshOnVisibility = (): void => {
-      if (!document.hidden) refreshVisibleDirectories()
+      if (!document.hidden) void refreshVisibleDirectories()
     }
     window.addEventListener('focus', refreshOnFocus)
     document.addEventListener('visibilitychange', refreshOnVisibility)
@@ -455,14 +466,16 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
 
   const toggleDirectory = (entry: WorkspaceTreeEntry): void => {
     const { workspace_id: workspaceId, relative_path: relativePath } = entry
-    const key = getDirectoryKey(workspaceId, relativePath)
-    if (!expanded.has(key)) void loadDirectory(workspaceId, relativePath)
-    setExpanded((current) => {
-      const next = new Map(current)
-      if (next.has(key)) next.delete(key)
-      else next.set(key, { workspaceId, relativePath })
-      return next
-    })
+    const paths = expandedDirectories[workspaceId] || []
+    const opening = !paths.includes(relativePath)
+    setDirectoryExpanded(workspaceId, relativePath, opening)
+    if (opening) {
+      for (const path of getVisibleExpandedPaths([...paths, relativePath])) {
+        if (!relativePath || path === relativePath || path.startsWith(`${relativePath}/`)) {
+          void loadDirectory(workspaceId, path)
+        }
+      }
+    }
   }
 
   const renderEntries = (
@@ -480,7 +493,8 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
           : null}
         {entries.map((entry, index) => {
           const isDirectory = entry.kind === 'directory'
-          const isExpanded = expanded.has(getDirectoryKey(workspaceId, entry.relative_path))
+          const isExpanded =
+            expandedDirectories[workspaceId]?.includes(entry.relative_path) === true
           const change = changesByPath.get(normalizePath(entry.absolute_path))
           const visible =
             !normalizedQuery || entry.relative_path.toLowerCase().includes(normalizedQuery)
@@ -522,6 +536,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                     setSelectedKey(entryKey)
                     isDirectory ? toggleDirectory(entry) : onOpenFile(entry)
                   }}
+                  aria-expanded={isDirectory ? isExpanded : undefined}
                 >
                   <span className="flex h-5 w-4 shrink-0 items-center justify-center text-[var(--notion-text-faint)]">
                     {isDirectory ? (
@@ -688,6 +703,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
         <div
           className="min-h-0 flex-1 overflow-auto pb-2"
           data-testid={workbenchSelectors.workspaceExplorerList}
+          aria-busy={mode === 'all' && restoringTree}
           onContextMenu={(event) => {
             if (
               !(event.target instanceof Element) ||
@@ -698,13 +714,18 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
             }
           }}
         >
-          {mode === 'all' ? (
+          {mode === 'all' && restoringTree ? (
+            <div role="status" className="px-3 py-2 text-xs text-[var(--notion-text-faint)]">
+              {t(($) => $.workbench.loadingFiles)}
+            </div>
+          ) : mode === 'all' ? (
             workspaces.map((workspace) => {
               const name =
                 workspace.root_path.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) ||
                 workspace.root_path
               const isDirectory = workspace.root_kind !== 'file'
-              const isExpanded = isDirectory && !collapsedRoots.has(workspace.id)
+              const isExpanded =
+                isDirectory && expandedDirectories[workspace.id]?.includes('') === true
               const root: WorkspaceTreeEntry = {
                 id: workspace.id,
                 workspace_id: workspace.id,
@@ -743,17 +764,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
                         onOpenFile(root)
                         return
                       }
-                      const next = new Set(collapsedRoots)
-                      if (isExpanded) next.add(workspace.id)
-                      else {
-                        next.delete(workspace.id)
-                        void loadDirectory(workspace.id, '')
-                        for (const { workspaceId, relativePath } of expanded.values()) {
-                          if (workspaceId === workspace.id)
-                            void loadDirectory(workspaceId, relativePath)
-                        }
-                      }
-                      setCollapsedRoots(next)
+                      toggleDirectory(root)
                     }}
                   >
                     <span className="flex h-5 w-4 shrink-0 items-center justify-center text-[var(--notion-text-faint)]">

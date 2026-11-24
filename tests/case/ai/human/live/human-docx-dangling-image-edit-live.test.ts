@@ -31,7 +31,12 @@ const readDocxContents = async (filePath: string) => {
       .map((text) => text.textContent || '')
       .join(' ')
   )
-  return { text: paragraphs.join('\n'), paragraphs, rows }
+  return {
+    text: paragraphs.join('\n'),
+    paragraphs,
+    rows,
+    tableCount: bundle.documentDom.getElementsByTagNameNS(WORD_NS, 'tbl').length
+  }
 }
 
 const countDurationEstimates = (text: string): number =>
@@ -87,7 +92,7 @@ describe('ai human live backend', () => {
           ).items.find((item) => item.path === reference.absolutePath && item.status === 'applied')
           const applied = applyRecord
             ? await readDocxContents(filePath)
-            : { text: '', paragraphs: [], rows: [] }
+            : { text: '', paragraphs: [], rows: [], tableCount: 0 }
           return {
             output,
             events: runtime.eventCollector.snapshot(),
@@ -102,6 +107,9 @@ describe('ai human live backend', () => {
           const toolNames = toolStarts.map((event) => event.toolName)
           const docxEditSucceeded = filterAiRunEventsByType(events, 'tool_call_result').some(
             (event) => event.toolName === 'docx_content_edit' && event.result?.ok === true
+          )
+          const tableEditSucceeded = filterAiRunEventsByType(events, 'tool_call_result').some(
+            (event) => event.toolName === 'docx_table_edit' && event.result?.ok === true
           )
           const estimatedRequirements = REQUIREMENTS.filter((requirement) =>
             result.applied.rows.some(
@@ -119,6 +127,8 @@ describe('ai human live backend', () => {
               toolNames.some((name) => name === 'docx_read_nodes' || name === 'docx_search') &&
               toolNames.includes('read_image') &&
               docxEditSucceeded &&
+              tableEditSucceeded &&
+              result.applied.tableCount > result.source.tableCount &&
               result.output?.finalArtifacts?.some(
                 (item) => item.kind === 'file' && item.capability === 'docx'
               ) === true &&
@@ -132,6 +142,8 @@ describe('ai human live backend', () => {
               data: {
                 toolNames,
                 docxEditSucceeded,
+                tableEditSucceeded,
+                tableCount: result.applied.tableCount,
                 sourcePreserved,
                 damagedImageTarget: result.damagedImageTarget,
                 estimatedRequirements,

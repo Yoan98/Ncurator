@@ -41,6 +41,10 @@ it(
         await navigateToSettingsSection(page, 'workspace')
         const initial = await waitForFileIndexJobIdle(page, workspaceId)
         expect(initial.tree.summary.file_count).toBe(0)
+        await getSettingsLocator(page, importSelectors.workspaceTree)
+          .getByRole('button', { name: new RegExp(path.basename(rootPath)) })
+          .first()
+          .click()
         const scan = getSettingsLocator(page, importSelectors.workspaceQuickScanButton)
         await scan.waitFor({ state: 'visible' })
 

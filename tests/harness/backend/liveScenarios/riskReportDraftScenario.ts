@@ -3,11 +3,10 @@ import path from 'node:path'
 import type { BackendTestRuntime } from '../test-types'
 
 export const RISK_REPORT_DRAFT_SHARED_WORKSPACE_FIXTURE_PATH = 'tests/fixtures/workspace' as const
-const RISK_REPORT_DRAFT_WORK_FIXTURE_DIR =
-  `${RISK_REPORT_DRAFT_SHARED_WORKSPACE_FIXTURE_PATH}/工作`
+const RISK_REPORT_DRAFT_WORK_FIXTURE_DIR = `${RISK_REPORT_DRAFT_SHARED_WORKSPACE_FIXTURE_PATH}/工作`
 
 export const HUMAN_RISK_REPORT_DRAFT_USER_INPUT =
-  '帮我写下这周的工作周报文件，基于我工作目录下的所有文件信息，记得参考我上周写的周报风格来哦'
+  '帮我写下这周的 Word 工作周报，基于“工作”文件夹里的材料，参考上周周报的风格。'
 
 const RISK_REPORT_DRAFT_LAST_WEEK_REPORT_FIXTURE_PATH =
   `${RISK_REPORT_DRAFT_WORK_FIXTURE_DIR}/上周周报-已发版.docx` as const

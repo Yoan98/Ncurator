@@ -282,6 +282,13 @@ export const openWorkbenchWorkspaceFile = async (
     }
   }
   await filter.waitFor({ state: 'visible' })
+  const roots = getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerList).locator(
+    '[data-workspace-root] > button'
+  )
+  await roots.first().waitFor({ state: 'visible' })
+  for (const root of await roots.all()) {
+    if ((await root.getAttribute('aria-expanded')) === 'false') await root.click()
+  }
   // Clear filter so lazy-loaded parents stay visible for nested fixture paths.
   await filter.evaluate((element) => {
     if (!(element instanceof HTMLInputElement)) {
@@ -306,7 +313,7 @@ export const openWorkbenchWorkspaceFile = async (
     prefix = prefix ? `${prefix}/${segment}` : segment
     const folder = page.getByTitle(prefix, { exact: true }).first()
     await folder.waitFor({ state: 'visible', timeout: 30_000 })
-    await folder.click({ force: true })
+    if ((await folder.getAttribute('aria-expanded')) === 'false') await folder.click()
     await page.waitForTimeout(200)
   }
 
