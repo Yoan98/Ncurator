@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { settingsSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
@@ -24,6 +24,23 @@ describe('settings system notification e2e', () => {
           await navigateToSettingsSection(page, 'general')
           const toggle = getSettingsLocator(page, settingsSelectors.systemNotificationsSwitch)
           await toggle.waitFor({ state: 'visible' })
+          const wps = page.getByTestId('settings-office-diff-wps')
+          await wps.waitFor({ state: 'visible' })
+          expect(await wps.isChecked()).toBe(false)
+          await wps.click()
+          await expect
+            .poll(
+              async () =>
+                (await page.evaluate(() => window.api.appSettingsGet())).openOfficeDiffInWps
+            )
+            .toBe(true)
+          await wps.click()
+          await expect
+            .poll(
+              async () =>
+                (await page.evaluate(() => window.api.appSettingsGet())).openOfficeDiffInWps
+            )
+            .toBe(false)
           const initial = await toggle.isChecked()
           await toggle.click()
           await page.waitForTimeout(100)

@@ -1,3 +1,6 @@
+import { message } from 'antd'
+import DocxToolbar from './DocxToolbar'
+import { captureWordView, restoreWordView, flashWordLocation, officeViews } from './officeViewState'
 import { t } from '../../i18n'
 import { useOfficeReviewNavigation } from '../workbench/OfficeReviewContext'
 import { useCallback, useEffect, useState, useRef } from 'react'
@@ -37,7 +40,6 @@ export const DocxPreview = ({
 }) => {
   const reviewNavigation = useOfficeReviewNavigation()
   const [container, setContainer] = useState<HTMLDivElement | null>(null)
-  const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null)
   const [renderedKey, setRenderedKey] = useState<string | null>(null)
   const [renderRevision, setRenderRevision] = useState(0)
   const [renderError, setRenderError] = useState<string | null>(null)
@@ -89,13 +91,26 @@ export const DocxPreview = ({
     currentDocument?.metadata?.docxOverview !== 'changes'
   )
   const onExternalReload = currentDocument?.metadata?.onExternalReload
+  const viewKey =
+    currentDocument?.metadata?.viewKey ||
+    `${filePath}:${currentDocument?.metadata?.docxOverview || 'preview'}`
+  const location = currentDocument?.metadata?.location
   const isReview = currentDocument?.metadata?.docxOverview === 'changes'
   useEffect(() => {
-    if (!container || !toolbar) return
+    if (!container) return
     const pointerObserver = observeWordPointers(container)
     setPointers(pointerObserver)
     let active = true
     let openedReady = false
+    let restored = false
+    let scrollFrame = 0
+    const saveView = () => {
+      cancelAnimationFrame(scrollFrame)
+      scrollFrame = requestAnimationFrame(() => {
+        if (openedReady && restored) captureWordView(container, viewKey, session.current?.editor)
+      })
+    }
+    container.addEventListener('scroll', saveView)
     const host = document.createElement('div')
     container.replaceChildren(host)
     setRenderedKey(null)
@@ -103,7 +118,7 @@ export const DocxPreview = ({
     setSaveStatus('idle')
     const start = async () => {
       let blob: Blob
-      if (writable && filePath)
+      if (filePath && !isReview && !/^[a-z][a-z0-9+.-]*:\/\//i.test(filePath))
         blob = new Blob([Uint8Array.from(await window.api.readFile(filePath))])
       else if (documentFile) blob = documentFile
       else if (documentFileData instanceof Blob) blob = documentFileData
@@ -112,43 +127,64 @@ export const DocxPreview = ({
       else throw new Error(t(($) => $.editors.fileDeleted))
       const { openSuperDoc } = await import('./superDocSession')
       if (!active) return
-      const opened = await openSuperDoc(host, blob, writable ? filePath : undefined, {
-        toolbar,
-        review: isReview,
-        ready() {
-          if (active) {
-            openedReady = true
-            setRenderedKey(renderKey)
-            setRenderRevision((n) => n + 1)
-            scrollToAnchor(container, anchorName)
-          }
-        },
-        layout() {
-          if (active) setRenderRevision((n) => n + 1)
-        },
-        status(value, message) {
-          if (active) {
-            if (!openedReady && value === 'error') {
-              setRenderError(message || t(($) => $.editors.couldNotRenderTheWordDocument))
-              return
+      const opened = await openSuperDoc(
+        host,
+        blob,
+        !isReview && filePath && !/^[a-z][a-z0-9+.-]*:\/\//i.test(filePath) ? filePath : undefined,
+        {
+          review: isReview,
+          writable,
+          ready() {
+            if (active) {
+              openedReady = true
+              setRenderedKey(renderKey)
+              setRenderRevision((n) => n + 1)
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => {
+                  const editor = session.current?.editor
+                  if (!active || !editor) return
+                  restoreWordView(container, viewKey, editor)
+                  if (anchorName) scrollToAnchor(container, anchorName)
+                  restored = true
+                  const target = officeViews.consume(viewKey, location)
+                  if (target?.kind === 'docx' && !flashWordLocation(container, target))
+                    message.info(t(($) => $.editors.changeNotFound))
+                })
+              )
             }
-            setSaveStatus(value)
-            setSaveMessage(message ?? '')
+          },
+          layout() {
+            if (active) setRenderRevision((n) => n + 1)
+          },
+          status(value, message) {
+            if (active) {
+              if (!openedReady && value === 'error') {
+                setRenderError(message || t(($) => $.editors.couldNotRenderTheWordDocument))
+                return
+              }
+              setSaveStatus(value)
+              setSaveMessage(message ?? '')
+            }
+          },
+          reload(external) {
+            if (!active) return
+            reload((n) => n + 1)
+            if (external) onExternalReload?.()
           }
-        },
-        reload(external) {
-          if (!active) return
-          reload((n) => n + 1)
-          if (external) onExternalReload?.()
         }
-      })
-      if (active) session.current = opened
-      else opened.close()
+      )
+      if (active) {
+        session.current = opened
+        setRenderRevision((n) => n + 1)
+      } else opened.close()
     }
     void start().catch((e: Error) => {
       if (active) setRenderError(e.message)
     })
     return () => {
+      if (openedReady && restored) captureWordView(container, viewKey, session.current?.editor)
+      cancelAnimationFrame(scrollFrame)
+      container.removeEventListener('scroll', saveView)
       active = false
       pointerObserver.close()
       session.current?.close()
@@ -157,7 +193,6 @@ export const DocxPreview = ({
     }
   }, [
     container,
-    toolbar,
     documentFile,
     documentFileData,
     documentUri,
@@ -167,7 +202,9 @@ export const DocxPreview = ({
     writable,
     generation,
     onExternalReload,
-    isReview
+    isReview,
+    viewKey,
+    location
   ])
 
   useEffect(() => {
@@ -209,10 +246,14 @@ export const DocxPreview = ({
       data-testid={workbenchSelectors.docxViewer}
     >
       <div
-        ref={setToolbar}
         data-testid={workbenchSelectors.docxToolbar}
         className="docx-toolbar min-w-0 shrink-0 border-b border-[var(--notion-line)] bg-[var(--notion-page)]"
-      />
+      >
+        <DocxToolbar
+          editor={ready ? session.current?.editor : undefined}
+          writable={Boolean(session.current?.writable)}
+        />
+      </div>
       <div className="relative flex min-h-0 flex-1">
         <div
           ref={setContainer}

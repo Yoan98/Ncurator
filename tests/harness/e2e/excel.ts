@@ -45,7 +45,11 @@ export const copyExcelCell = async (runtime: E2ETestRuntime, address: string): P
     if (await page.getByTestId('excel-selection-popup').count())
       await getWorkbenchLocator(page, workbenchSelectors.input).click({ position: { x: 3, y: 3 } })
     // A mounted canvas can precede its first grid paint; retry the actual UI action too.
-    await clickExcelCell(page, address)
+    const nameBox = getWorkbenchLocator(page, workbenchSelectors.excelViewer).locator(
+      '[data-u-comp="defined-name"] input'
+    )
+    await nameBox.fill(address)
+    await nameBox.press('Enter')
     await runtime.electronApp.evaluate(({ clipboard }) => clipboard.clear())
     await page.keyboard.press('ControlOrMeta+c')
     await page.waitForTimeout(100)

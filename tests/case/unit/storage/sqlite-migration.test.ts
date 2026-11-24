@@ -120,7 +120,7 @@ describe('SQLite migration contract', () => {
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
     expect(migrationRows).toContainEqual({ version: 20, name: 'skill_name_bindings' })
-    expect(migrationRows.at(-1)).toEqual({ version: 23, name: 'app_theme' })
+    expect(migrationRows.at(-1)).toEqual({ version: 24, name: 'office_diff_preference' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -135,6 +135,7 @@ describe('SQLite migration contract', () => {
     prepared.initialize()
     prepared.exec(`DROP TABLE partner_user_skill;
       ALTER TABLE llm_config DROP COLUMN manual_models_json;
+      ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps;
       ALTER TABLE app_settings DROP COLUMN theme;
       DROP TABLE embedding_settings;
       ALTER TABLE document DROP COLUMN embedding_identity;
@@ -168,6 +169,7 @@ describe('SQLite migration contract', () => {
     const previous = new SqliteCore(databasePath)
     previous.initialize()
     previous.exec(`ALTER TABLE llm_config DROP COLUMN manual_models_json;
+      ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps;
       ALTER TABLE app_settings DROP COLUMN theme;
       DROP TABLE embedding_settings;
       ALTER TABLE document DROP COLUMN embedding_identity;
@@ -206,6 +208,7 @@ describe('SQLite migration contract', () => {
     const previous = new SqliteCore(databasePath)
     previous.initialize()
     previous.exec(`ALTER TABLE llm_config DROP COLUMN manual_models_json;
+      ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps;
       ALTER TABLE app_settings DROP COLUMN theme;
       DELETE FROM schema_migrations WHERE version >= 22;
       INSERT INTO llm_config (id, name, providerKind, base_url, api_key)
@@ -239,6 +242,25 @@ describe('SQLite migration contract', () => {
         { id: 'manual-service', manual_models_json: '["Manual.Model"]' },
         { id: 'other-service', manual_models_json: '[]' }
       ])
+    } finally {
+      upgraded.close()
+    }
+  })
+
+  it('upgrades the released v23 preferences without resetting existing choices', async () => {
+    const databasePath = await createDatabasePath()
+    const prior = new SqliteCore(databasePath)
+    prior.initialize()
+    prior.exec(
+      "ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps; DELETE FROM schema_migrations WHERE version=24; UPDATE app_settings SET theme='dark', language='en';"
+    )
+    prior.close()
+    const upgraded = new SqliteCore(databasePath)
+    try {
+      upgraded.initialize()
+      expect(
+        upgraded.prepare('SELECT theme, language, open_office_diff_in_wps FROM app_settings').get()
+      ).toEqual({ theme: 'dark', language: 'en', open_office_diff_in_wps: 0 })
     } finally {
       upgraded.close()
     }

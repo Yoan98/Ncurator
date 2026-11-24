@@ -256,7 +256,8 @@ describe('sqlite storage core and stores', () => {
       { version: 20, name: 'skill_name_bindings' },
       { version: 21, name: 'embedding_models' },
       { version: 22, name: 'llm_manual_models' },
-      { version: 23, name: 'app_theme' }
+      { version: 23, name: 'app_theme' },
+      { version: 24, name: 'office_diff_preference' }
     ])
 
     const legacyTables = sqlite
@@ -285,6 +286,7 @@ describe('sqlite storage core and stores', () => {
 
     expect(tables).toEqual([{ name: 'app_settings' }])
     expect(saved).toEqual({
+      openOfficeDiffInWps: false,
       systemNotificationsEnabled: false,
       knowledgeIndexSpeed: 'fast',
       language: 'system',
@@ -292,6 +294,7 @@ describe('sqlite storage core and stores', () => {
       serviceRoute: 'domestic'
     })
     expect(await settingsStore.get()).toEqual({
+      openOfficeDiffInWps: false,
       systemNotificationsEnabled: false,
       knowledgeIndexSpeed: 'fast',
       language: 'system',

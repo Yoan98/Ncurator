@@ -11,6 +11,7 @@ import type { SqliteCore } from '../sqlite/SqliteCore'
 
 const SETTINGS_ROW_ID = 'singleton'
 type AppSettingsRow = {
+  open_office_diff_in_wps: number
   system_notifications_enabled: number
   knowledge_index_speed: string
   language: string
@@ -44,6 +45,7 @@ export class AppSettingsStore {
         .run(theme, SETTINGS_ROW_ID)
     }
     return {
+      openOfficeDiffInWps: row.open_office_diff_in_wps !== 0,
       systemNotificationsEnabled: row.system_notifications_enabled !== 0,
       knowledgeIndexSpeed: normalizeIndexSpeed(row.knowledge_index_speed),
       language,
@@ -69,11 +71,14 @@ export class AppSettingsStore {
     ) {
       throw new AppSettingsError('invalid_notification_setting')
     }
+    if (patch.openOfficeDiffInWps !== undefined && typeof patch.openOfficeDiffInWps !== 'boolean')
+      throw new Error('Invalid Office diff preference')
     await this.get()
     this.sqlite
       .prepare(
         `
       UPDATE app_settings SET
+        open_office_diff_in_wps = COALESCE(@officeDiff, open_office_diff_in_wps),
         system_notifications_enabled = COALESCE(@notifications, system_notifications_enabled),
         knowledge_index_speed = COALESCE(@speed, knowledge_index_speed),
         language = COALESCE(@language, language),
@@ -83,6 +88,8 @@ export class AppSettingsStore {
       )
       .run({
         id: SETTINGS_ROW_ID,
+        officeDiff:
+          patch.openOfficeDiffInWps === undefined ? null : Number(patch.openOfficeDiffInWps),
         notifications:
           patch.systemNotificationsEnabled === undefined
             ? null

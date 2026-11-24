@@ -1,6 +1,9 @@
+import type { ReviewLocation } from '../../../../shared/fileReview'
 import type { IDocument } from 'react-doc-viewer'
 
 export type FileRenderMetadata = {
+  viewKey?: string
+  location?: { id: number; target: ReviewLocation }
   pageNumber?: number
   anchorName?: string
   onExternalReload?: () => void

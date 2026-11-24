@@ -1,9 +1,13 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
-import { describe, it } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { runE2ECase, type E2ETestRuntime } from '../../../../harness/e2e/run-e2e-case'
-import { copyExcelCell, verifyExcelCellReadOnly } from '../../../../harness/e2e/excel'
+import {
+  copyExcelCell,
+  verifyExcelCellReadOnly,
+  clickExcelCell
+} from '../../../../harness/e2e/excel'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -189,6 +193,24 @@ describe('workbench result e2e', () => {
           await diffNotesSheetTab.click()
           const diffNotesSheetVisible = await diffNotesSheetTab.isVisible().catch(() => false)
           await viewer.getByText('Data', { exact: true }).last().click()
+          const reviewSelection = await viewer
+            .locator('[data-u-comp="defined-name"] input')
+            .inputValue()
+          const reviewUri = await viewer.getAttribute('data-excel-uri')
+          await clickExcelCell(page, 'B2')
+          await expect.poll(() => documentModeTag.textContent(), { timeout: 15000 }).toBe('预览')
+          await waitForExcelReady(reviewUri)
+          expect(Number(await copyExcelCell(runtime, 'B2'))).toBe(20)
+          await runtime.captureScreenshot({
+            name: 'excel-diff-internal-location',
+            message: '点击 Excel 差异后在正式工作簿中定位。'
+          })
+          await documentModeToggle.click()
+          await expect.poll(() => documentModeTag.textContent()).toBe('审核')
+          await waitForExcelReady()
+          await expect
+            .poll(() => viewer.locator('[data-u-comp="defined-name"] input').inputValue())
+            .toBe(reviewSelection)
           const external = new ExcelJS.Workbook()
           await external.xlsx.load(actualBytes as never)
           external.getWorksheet('Data')!.name = 'External C'
@@ -209,7 +231,18 @@ describe('workbench result e2e', () => {
           const previewDataTabHasDot = await sheetTabHasChangeDot('Data')
           const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const previewModeTag = (await documentModeTag.textContent())?.trim()
-          const fileReadOnly = await verifyExcelViewerReadOnly(runtime)
+          await copyExcelCell(runtime, 'B2')
+          await page.keyboard.type('45')
+          await page.keyboard.press('Enter')
+          const readManualValue = async () => {
+            const book = new ExcelJS.Workbook()
+            await book.xlsx.load((await fs.readFile(filePath)) as never)
+            return book.getWorksheet('External C')!.getCell('B2').value
+          }
+          await expect.poll(readManualValue, { timeout: 15000 }).toBe(45)
+          const fileEditable = true
+          await page.keyboard.press('ControlOrMeta+z')
+          await expect.poll(readManualValue, { timeout: 10000 }).toBe(30)
           const fileNotesSheetTab = viewer.getByText('Notes', { exact: true }).last()
           await fileNotesSheetTab.click()
           const fileModeNotesVisible = await fileNotesSheetTab.isVisible().catch(() => false)
@@ -281,7 +314,7 @@ describe('workbench result e2e', () => {
             initialModeTag,
             previewModeTag,
             restoredModeTag,
-            fileReadOnly,
+            fileEditable,
             restoredToggleLabel,
             fileModeNotesVisible,
             pptBeforeAfterVisible,
@@ -316,7 +349,7 @@ describe('workbench result e2e', () => {
               result.restoredModeTag === '审核' &&
               result.initialToggleLabel === '切换到预览模式' &&
               result.fileModeToggleLabel === '切换到审核模式' &&
-              result.fileReadOnly &&
+              result.fileEditable &&
               result.restoredToggleLabel === '切换到预览模式' &&
               result.fileModeNotesVisible &&
               result.pptBeforeAfterVisible === false &&

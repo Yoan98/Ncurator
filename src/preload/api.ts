@@ -17,7 +17,12 @@ import type {
   UserSkillResourcePreview
 } from '../shared/userSkills'
 import type { AppSettingsErrorCode } from '../shared/appErrors'
-import type { PreviewResource, VideoPreviewSnapshot, VideoPreviewOpenRequest, VideoPreviewConvertRequest } from '../shared/preview'
+import type {
+  PreviewResource,
+  VideoPreviewSnapshot,
+  VideoPreviewOpenRequest,
+  VideoPreviewConvertRequest
+} from '../shared/preview'
 import type { AppResolvedTheme } from '../shared/appPreferences'
 import type {
   GetFileReviewResponse,
@@ -161,7 +166,7 @@ import type {
   WorkspaceFileMutationResponse,
   WorkbenchUiStateResponse,
   WorkbenchUiStateSaveRequest,
-  WriteDocxFileRequest,
+  WriteOfficeFileRequest,
   WriteTextFileRequest,
   WriteTextFileResponse
 } from '../shared/types'
@@ -261,8 +266,14 @@ export type DesktopApi = {
   embeddingModelTest: (input: RemoteEmbeddingModelInput) => Promise<EmbeddingModelTestResponse>
   readFile: (filePath: string) => Promise<Uint8Array>
   fileExists: (filePath: string) => Promise<boolean>
-  canWriteDocx: (filePath: string) => Promise<boolean>
-  writeDocxFile: (payload: WriteDocxFileRequest) => Promise<WriteTextFileResponse>
+  canWriteOfficeFile: (filePath: string) => Promise<boolean>
+  exportExcelFile: (
+    payload: import('../shared/types').ExportExcelFileRequest
+  ) => Promise<Uint8Array>
+  writeExcelFile: (
+    payload: import('../shared/types').WriteExcelFileRequest
+  ) => Promise<WriteTextFileResponse>
+  writeOfficeFile: (payload: WriteOfficeFileRequest) => Promise<WriteTextFileResponse>
   writeTextFile: (payload: WriteTextFileRequest) => Promise<WriteTextFileResponse>
   attachmentPick: (payload: AttachmentPickRequest) => Promise<AttachmentPickResponse>
   attachmentGetSourcePath: (file: File) => string

@@ -15,7 +15,7 @@ import {
   loadDocxBundle
 } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import { readRunStyle } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/contentTree'
-import { describe, it } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -401,6 +401,37 @@ describe('workbench result e2e', () => {
           const documentModeTag = getWorkbenchLocator(page, workbenchSelectors.documentModeTag)
           const initialToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const initialModeTag = (await documentModeTag.textContent())?.trim()
+          const changeTarget = page
+            .locator('.docx-content [data-review-region]')
+            .filter({ hasText: '重点跟进' })
+            .last()
+          await changeTarget.scrollIntoViewIfNeeded()
+          await page.waitForTimeout(100)
+          const reviewScroll = await page.locator('.docx-content').evaluate((el) => el.scrollTop)
+          await changeTarget.click()
+          await expect.poll(() => documentModeTag.textContent(), { timeout: 15000 }).toBe('预览')
+          await page
+            .locator('.docx-content [data-office-location-highlight]')
+            .first()
+            .waitFor({ state: 'attached', timeout: 15000 })
+          await runtime.captureScreenshot({
+            name: 'docx-diff-internal-location',
+            message: '点击 Word 差异后在正式文档中定位并短暂高亮。'
+          })
+          await documentModeToggle.click()
+          await expect.poll(() => documentModeTag.textContent()).toBe('审核')
+          await readOnly.waitFor()
+          await expect
+            .poll(
+              async () =>
+                Math.abs(
+                  (await page.locator('.docx-content').evaluate((el) => el.scrollTop)) -
+                    reviewScroll
+                ),
+              { timeout: 10000 }
+            )
+            .toBeLessThan(3)
+
           await documentModeToggle.click()
           const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const previewModeTag = (await documentModeTag.textContent())?.trim()

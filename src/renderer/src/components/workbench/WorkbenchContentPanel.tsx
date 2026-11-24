@@ -1,3 +1,4 @@
+import type { ReviewLocation } from '../../../../shared/fileReview'
 import { t, getManualUrl } from '../../i18n'
 import FileIcon from '../FileIcon'
 import React, { useEffect, useMemo, useState } from 'react'
@@ -141,7 +142,10 @@ export const FileChangeNotice: React.FC<{ record: AiFileChangeRecord }> = ({ rec
               <div className="text-[11px] text-[var(--notion-text-faint)]">
                 {t(($) => $.workbench.originalFileName)}
               </div>
-              <div className="mt-0.5 truncate text-[var(--notion-text-soft)]" title={record.beforePath}>
+              <div
+                className="mt-0.5 truncate text-[var(--notion-text-soft)]"
+                title={record.beforePath}
+              >
                 {getPathFileName(record.beforePath)}
               </div>
             </div>
@@ -156,7 +160,9 @@ export const FileChangeNotice: React.FC<{ record: AiFileChangeRecord }> = ({ rec
             </div>
           </div>
         ) : null}
-        <div className="mt-2 text-[13px] leading-6 text-[var(--notion-text-soft)]">{description}</div>
+        <div className="mt-2 text-[13px] leading-6 text-[var(--notion-text-soft)]">
+          {description}
+        </div>
       </div>
     </div>
   )
@@ -585,7 +591,10 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
           {errorMessage}
         </div>
       ) : null}
-      <div className="min-h-0 flex-1 bg-[var(--notion-page)]" data-testid={workbenchSelectors.documentView}>
+      <div
+        className="min-h-0 flex-1 bg-[var(--notion-page)]"
+        data-testid={workbenchSelectors.documentView}
+      >
         {isDeletedCreatedFile && !content ? (
           <div className="flex h-full items-center justify-center">
             <Empty
@@ -687,13 +696,16 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     savedMode && savedMode.status === activeApplyRecord?.status
       ? savedMode.mode
       : getDefaultDocumentDisplayMode(activeApplyRecord?.status)
-  const setDocumentDisplayMode = (mode: DocumentDisplayMode): void => {
-    if (!activeApplyRecord) return
-    setDocumentDisplayModes((current) => ({
-      ...current,
-      [activeApplyRecord.id]: { mode, status: activeApplyRecord.status }
-    }))
-  }
+  const setDocumentDisplayMode = React.useCallback(
+    (mode: DocumentDisplayMode): void => {
+      if (!activeApplyRecord) return
+      setDocumentDisplayModes((current) => ({
+        ...current,
+        [activeApplyRecord.id]: { mode, status: activeApplyRecord.status }
+      }))
+    },
+    [activeApplyRecord]
+  )
   const [textReviewCounts, setTextReviewCounts] = useState<{
     id: string
     insertCount: number
@@ -706,14 +718,33 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     },
     [activeReviewId]
   )
-  const afterSave = (action: () => void): void => {
-    const filePath = state.kind === 'file_preview' ? state.file.path : activeApplyRecord?.path
-    void flushReferencedTextFiles(filePath ? [filePath] : [])
-      .then(action)
-      .catch((reason) =>
-        message.error(t(($) => $.workbench.couldNotSave2, { value1: String(reason) }))
-      )
-  }
+  const savingFilePath = state.kind === 'file_preview' ? state.file.path : activeApplyRecord?.path
+  const afterSave = React.useCallback(
+    (action: () => void): void => {
+      void flushReferencedTextFiles(savingFilePath ? [savingFilePath] : [])
+        .then(action)
+        .catch((reason) =>
+          message.error(t(($) => $.workbench.couldNotSave2, { value1: String(reason) }))
+        )
+    },
+    [savingFilePath]
+  )
+
+  const [officeLocation, setOfficeLocation] = useState<{
+    recordId: string
+    id: number
+    target: ReviewLocation
+  }>()
+  const locateOfficeChange = React.useCallback(
+    (target: ReviewLocation) => {
+      if (!activeReviewId) return
+      afterSave(() => {
+        setOfficeLocation({ recordId: activeReviewId, id: Date.now(), target })
+        setDocumentDisplayMode('preview')
+      })
+    },
+    [activeReviewId, afterSave, setDocumentDisplayMode]
+  )
   const [previewRevision, setPreviewRevision] = useState(0)
   const [editableKind, setEditableKind] = useState<EditableTextKind>(null)
   const aiRunActiveRef = React.useRef(isAiRunActive)
@@ -772,7 +803,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   const previewWatchPath =
     activeEditableFile &&
     editableKind === null &&
-    !/\.docx$/i.test(activeEditableFile.path) &&
+    !/\.(docx|xlsx)$/i.test(activeEditableFile.path) &&
     !/^https:\/\//iu.test(activeEditableFile.path)
       ? activeEditableFile.path
       : null
@@ -894,7 +925,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   }, [explorerOpen, floatingExplorer])
   const notifyExternalReload = React.useCallback(() => {
     if (!aiRunActiveRef.current && Date.now() > suppressExternalNoticeUntilRef.current) {
-      onSuccessMessage(t(($) => $.workbench.externalFileChangesDetectedTheFileWasRefreshedAutomatically))
+      onSuccessMessage(
+        t(($) => $.workbench.externalFileChangesDetectedTheFileWasRefreshedAutomatically)
+      )
     }
   }, [onSuccessMessage])
   const previewDocuments = useMemo<FileRenderDocument[]>(
@@ -905,8 +938,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               filePath: state.file.path,
               fileName: state.file.fileName,
               contentRevision: previewRevision,
-              editable: editableKind !== null || /\.docx$/i.test(state.file.path),
+              editable: editableKind !== null || /\.(docx|xlsx)$/i.test(state.file.path),
               metadata: {
+                viewKey: `${activeTabId}:preview`,
                 pageNumber: state.file.pageNumber,
                 onExternalReload: notifyExternalReload,
                 allowDocumentSelection: true,
@@ -915,7 +949,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
             }
           ]
         : [],
-    [previewRevision, state, editableKind, notifyExternalReload]
+    [previewRevision, state, editableKind, notifyExternalReload, activeTabId]
   )
   const previewChangeRecord = useMemo(() => {
     if (state.kind !== 'file_preview' || state.file.isDirectory) return null
@@ -949,7 +983,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     if (!filePath) return []
     const editable =
       documentDisplayMode === 'preview' &&
-      (editableKind !== null || activeApplyRecord.capability === 'docx') &&
+      (editableKind !== null || ['docx', 'excel'].includes(activeApplyRecord.capability)) &&
       filePath === activeApplyRecord.path
     return [
       {
@@ -958,6 +992,8 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         contentRevision: documentDisplayMode === 'preview' ? previewRevision : undefined,
         editable,
         metadata: {
+          viewKey: `${activeTabId}:preview`,
+          location: officeLocation?.recordId === activeApplyRecord.id ? officeLocation : undefined,
           onExternalReload: notifyExternalReload,
           docxOverview: documentDisplayMode === 'preview' ? 'references' : 'changes',
           excelReview: activeApplyRecord.capability === 'excel' && documentDisplayMode === 'review',
@@ -966,7 +1002,15 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         }
       }
     ]
-  }, [activeApplyRecord, documentDisplayMode, editableKind, previewRevision, notifyExternalReload])
+  }, [
+    activeApplyRecord,
+    documentDisplayMode,
+    editableKind,
+    previewRevision,
+    notifyExternalReload,
+    activeTabId,
+    officeLocation
+  ])
   const applyContent = useMemo(
     () =>
       activeApplyRecord &&
@@ -979,7 +1023,12 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       ) : activeApplyRecord &&
         ['docx', 'ppt', 'excel'].includes(activeApplyRecord.capability) &&
         documentDisplayMode === 'review' ? (
-        <OfficeFileReview key={activeApplyRecord.id} record={activeApplyRecord} />
+        <OfficeFileReview
+          key={activeApplyRecord.id}
+          record={activeApplyRecord}
+          viewKey={`${activeTabId}:review:${activeApplyRecord.id}`}
+          onInternalNavigate={locateOfficeChange}
+        />
       ) : activeApplyRecord?.capability === 'text_file' && documentDisplayMode === 'review' ? (
         <React.Suspense fallback={<Spin />}>
           <TextFileDiffViewer
@@ -989,7 +1038,13 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
           />
         </React.Suspense>
       ) : undefined,
-    [activeApplyRecord, documentDisplayMode, updateTextReviewCounts]
+    [
+      activeApplyRecord,
+      documentDisplayMode,
+      updateTextReviewCounts,
+      activeTabId,
+      locateOfficeChange
+    ]
   )
   const applyEmptyText =
     activeApplyRecord?.operation === 'created'

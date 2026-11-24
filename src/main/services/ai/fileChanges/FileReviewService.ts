@@ -68,9 +68,9 @@ export class FileReviewService {
       const filePath = record.afterPath || record.path
       const listed = await this.applications.list(filePath)
       if (!listed.success) throw new Error(listed.error)
-      const application = listed.applications.find((a) => a.id === listed.defaultApplicationId)
+      const application = listed.applications.find(isWpsApplication)
       if (!application || !isWpsApplication(application))
-        throw new Error('请先将 WPS 设为此类型文件在馆长内的默认应用')
+        throw new Error('未找到 WPS，请先安装 WPS，或使用应用内定位')
       // Resolve against the live WPS document, including unsaved edits. A whole-file
       // checksum cannot establish whether this particular cell or object moved.
       await fs.access(filePath)

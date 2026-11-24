@@ -6,18 +6,28 @@ import type { AiFileChangeRecord } from '../../../../shared/types'
 import {
   isWpsApplication,
   openWithExtension,
+  type ReviewLocation,
   type OfficeReviewIndex
 } from '../../../../shared/fileReview'
 import { FileRenderViewer } from '../fileRenders'
 import PptDiffViewer from './PptDiffViewer'
 import { resetWpsIntegrationFeedback, useWpsIntegrationFeedback } from './wpsIntegrationFeedback'
 
-export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
+export function OfficeFileReview({
+  record,
+  viewKey,
+  onInternalNavigate
+}: {
+  record: AiFileChangeRecord
+  viewKey: string
+  onInternalNavigate: (target: ReviewLocation) => void
+}) {
   const showIntegrationIssue = useWpsIntegrationFeedback()
   const [content, setContent] = useState<{ previewPath: string; index: OfficeReviewIndex } | null>(
     null
   )
   const [error, setError] = useState('')
+  const [useWps, setUseWps] = useState(false)
   const [enabled, setEnabled] = useState(false)
   const [navigationError, setNavigationError] = useState('')
   const sequence = useRef(0)
@@ -43,6 +53,10 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
   useEffect(() => {
     let cancelled = false
     const load = () => {
+      void window.api
+        .appSettingsGet()
+        .then((settings) => setUseWps(settings.openOfficeDiffInWps))
+        .catch(() => undefined)
       void window.api
         .listOpenWithApplications({ filePath: record.path })
         .then((result) => {
@@ -83,7 +97,13 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
   }, [record.path])
   const navigate = useCallback(
     (regionId: string) => {
-      if (!enabled) return
+      if (record.capability !== 'ppt' && !useWps) {
+        const target = content?.index.regions.find((region) => region.id === regionId)?.target
+        if (target) onInternalNavigate(target)
+        else message.info(t(($) => $.editors.changeNotFound))
+        return
+      }
+      if (!enabled && record.capability === 'ppt') return
       const requestSequence = ++sequence.current
       setNavigating(true)
       void window.api
@@ -97,9 +117,23 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
             )
             if (result.status === 'container')
               message.info(result.reason || t(($) => $.workbench.locatedTheRelevantContent))
-          } else if (result.status === 'failed')
+          } else if (result.status === 'failed') {
             message.error(result.reason || t(($) => $.workbench.couldNotLocateTheContent))
-          else message.info(result.reason || t(($) => $.workbench.fileOpened))
+          } else message.info(result.reason || t(($) => $.workbench.fileOpened))
+          if (
+            result.status !== 'located' &&
+            result.status !== 'container' &&
+            record.capability !== 'ppt'
+          ) {
+            const target = content?.index.regions.find((region) => region.id === regionId)?.target
+            if (target)
+              message.info(
+                <button onClick={() => onInternalNavigate(target)}>
+                  {t(($) => $.editors.internalLocation)}
+                </button>,
+                8
+              )
+          }
         })
         .catch((reason) => {
           if (requestSequence === sequence.current) message.error(String(reason))
@@ -108,7 +142,15 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
           if (requestSequence === sequence.current) setNavigating(false)
         })
     },
-    [enabled, record.id, record.capability, showIntegrationIssue]
+    [
+      enabled,
+      record.id,
+      record.capability,
+      showIntegrationIssue,
+      useWps,
+      content,
+      onInternalNavigate
+    ]
   )
   if (error) return <div className="p-6 text-sm text-[var(--notion-red)]">{error}</div>
   if (!content)
@@ -118,9 +160,13 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
       </div>
     )
   return (
-    <OfficeReviewContext.Provider value={{ index: content.index, enabled, navigate }}>
-      <div className={`relative h-full min-h-0 ${enabled ? 'office-review-navigable' : ''}`}>
-        {navigationError && (
+    <OfficeReviewContext.Provider
+      value={{ index: content.index, enabled: record.capability !== 'ppt' || enabled, navigate }}
+    >
+      <div
+        className={`relative h-full min-h-0 ${record.capability !== 'ppt' || enabled ? 'office-review-navigable' : ''}`}
+      >
+        {navigationError && (useWps || record.capability === 'ppt') && (
           <div
             role="status"
             className="absolute left-3 top-2 z-20 max-w-[90%] rounded bg-[var(--notion-page)]/95 px-3 py-1 text-xs text-[var(--notion-text-soft)] shadow"
@@ -145,6 +191,7 @@ export function OfficeFileReview({ record }: { record: AiFileChangeRecord }) {
                 filePath: content.previewPath,
                 fileName: record.fileName,
                 metadata: {
+                  viewKey,
                   docxOverview: record.capability === 'docx' ? 'changes' : undefined,
                   excelReview: record.capability === 'excel'
                 }

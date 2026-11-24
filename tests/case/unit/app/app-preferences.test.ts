@@ -53,7 +53,9 @@ describe('application language and service preferences', () => {
     const sqlite = new SqliteCore(path.join(directory, 'app.sqlite'))
     cores.push(sqlite)
     sqlite.initialize()
-    sqlite.prepare("UPDATE app_settings SET service_route = 'domestic' WHERE id = 'singleton'").run()
+    sqlite
+      .prepare("UPDATE app_settings SET service_route = 'domestic' WHERE id = 'singleton'")
+      .run()
     const international = new AppSettingsStore(sqlite, 'international')
     expect(await international.get()).toMatchObject({
       language: 'system',
@@ -72,6 +74,25 @@ describe('application language and service preferences', () => {
     expect((await domestic.get()).serviceRoute).toBe('domestic')
     await domestic.save({ serviceRoute: 'domestic' })
     expect((await international.get()).serviceRoute).toBe('international')
+  })
+
+  it('persists the independent Office navigation preference across reopening the database', async () => {
+    const directory = await temporary(),
+      file = path.join(directory, 'office.sqlite')
+    const first = new SqliteCore(file)
+    first.initialize()
+    const store = new AppSettingsStore(first, 'domestic')
+    expect((await store.get()).openOfficeDiffInWps).toBe(false)
+    await store.save({ openOfficeDiffInWps: true })
+    await store.save({ systemNotificationsEnabled: false })
+    first.close()
+    const second = new SqliteCore(file)
+    cores.push(second)
+    second.initialize()
+    expect(await new AppSettingsStore(second, 'domestic').get()).toMatchObject({
+      openOfficeDiffInWps: true,
+      systemNotificationsEnabled: false
+    })
   })
 
   it('separates help routing from distribution-specific download entrypoints', () => {

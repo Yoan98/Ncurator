@@ -1,3 +1,4 @@
+import type { IWorkbookData } from '@univerjs/core'
 import type { AppLanguage, AppRuntimeSnapshot, AppTheme, ServiceRoute } from './appPreferences'
 
 export type DocumentSourceType = 'file' | 'web'
@@ -945,7 +946,20 @@ export interface FileWatchChangeEvent {
   filePath: string
 }
 
-export interface WriteDocxFileRequest {
+export interface ExportExcelFileRequest {
+  bytes: Uint8Array
+  before: IWorkbookData
+  after: IWorkbookData
+}
+
+export interface WriteExcelFileRequest {
+  filePath: string
+  expectedHash: string
+  before: IWorkbookData
+  after: IWorkbookData
+}
+
+export interface WriteOfficeFileRequest {
   filePath: string
   bytes: Uint8Array
   expectedHash: string
@@ -1320,6 +1334,7 @@ export type HumanStepAction =
 export type HumanStepResultStatus = 'ok' | 'error'
 
 export type AppSettings = {
+  openOfficeDiffInWps: boolean
   systemNotificationsEnabled: boolean
   knowledgeIndexSpeed: KnowledgeIndexSpeed
   language: AppLanguage

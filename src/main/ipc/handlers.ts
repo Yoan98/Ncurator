@@ -1,3 +1,4 @@
+import { exportExcelEdits, canPreserveExcelWorkbook } from '../services/files/ExcelWorkbookEdit'
 import { UserSkillService } from '../services/skills/UserSkillService'
 import { registerDesktopAccount } from './desktopAccount'
 import type {
@@ -187,7 +188,7 @@ import type {
 import path from 'path'
 import fs from 'fs'
 import { WEB_INGEST_CONCURRENCY } from '../utils/constant'
-import { writeDocxFile } from '../services/files/DocxFileWriteService'
+import { writeOfficeFile, writeExcelFile } from '../services/files/OfficeFileWriteService'
 import { writeTextFileAtomically } from '../services/files/TextFileWriteService'
 import { ConfirmDialogWindowService } from '../services/ConfirmDialogWindowService'
 import type { ConfirmDialogRequest, ConfirmDialogResponse } from '../../shared/types'
@@ -2700,22 +2701,45 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('can-write-docx', async (_event, filePath: string) => {
-    if (typeof filePath !== 'string' || path.extname(filePath).toLowerCase() !== '.docx')
+  ipcMain.handle('can-write-office-file', async (_event, filePath: string) => {
+    if (
+      typeof filePath !== 'string' ||
+      !['.docx', '.xlsx'].includes(path.extname(filePath).toLowerCase())
+    )
       return false
     try {
       await fs.promises.access(filePath, fs.constants.W_OK)
       await fs.promises.access(path.dirname(filePath), fs.constants.W_OK)
+      if (
+        path.extname(filePath).toLowerCase() === '.xlsx' &&
+        !(await canPreserveExcelWorkbook(await fs.promises.readFile(filePath)))
+      )
+        return false
       return true
     } catch {
       return false
     }
   })
   ipcMain.handle(
-    'write-docx-file',
-    async (_event, payload: import('../../shared/types').WriteDocxFileRequest) => {
+    'write-office-file',
+    async (_event, payload: import('../../shared/types').WriteOfficeFileRequest) => {
       try {
-        return await writeDocxFile(payload)
+        return await writeOfficeFile(payload)
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+  ipcMain.handle(
+    'export-excel-file',
+    async (_event, payload: import('../../shared/types').ExportExcelFileRequest) =>
+      exportExcelEdits(payload.bytes, payload.before, payload.after)
+  )
+  ipcMain.handle(
+    'write-excel-file',
+    async (_event, payload: import('../../shared/types').WriteExcelFileRequest) => {
+      try {
+        return await writeExcelFile(payload)
       } catch (error) {
         return { success: false, error: getErrorMessage(error) }
       }
@@ -3842,6 +3866,10 @@ export function registerHandlers(services: {
     }
   )
   return registerDesktopAccount(
-    services.currentWindow, services.rendererUrl, chatRunService, confirmDialogService, services.onDevelopmentLogin
+    services.currentWindow,
+    services.rendererUrl,
+    chatRunService,
+    confirmDialogService,
+    services.onDevelopmentLogin
   )
 }

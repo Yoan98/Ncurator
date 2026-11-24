@@ -303,7 +303,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：通用设置中的 AI 运行完成通知开关可以关闭，并通过真实 IPC 持久化。
 - Why：通知是跨进程能力，开关状态必须由主进程保存，不能只停留在 Renderer 内存。
 - How：通过 Settings UI 打开通用页，关闭开关，重新读取 `app-settings-get`，再恢复开关。
-- Oracle：开关默认开启，对齐 `SET-GENERAL-001-AC1`；关闭后 UI 与主进程设置一致，仅覆盖 `SET-GENERAL-001-AC3` 的开关持久化前提。实际禁止发送由 backend Unit `tests/case/unit/system-notification-service.test.ts` 补充；真实 OS 效果见 §4 的补充检查。
+- Oracle：开关默认开启，对齐 `SET-GENERAL-001-AC1`；关闭后 UI 与主进程设置一致，仅覆盖 `SET-GENERAL-001-AC3` 的开关持久化前提；WPS 差异开关默认与持久化覆盖 `SET-GENERAL-008-AC1`，实际导航及不可用恢复 `SET-GENERAL-008-AC2/AC3` 保留人工验收。实际禁止发送由 backend Unit `tests/case/unit/system-notification-service.test.ts` 补充；真实 OS 效果见 §4 的补充检查。 同一「应用偏好」分组的 WPS 差异开关默认关闭，切换并读取真实持久化状态，覆盖 `SET-GENERAL-008-AC1` 的默认与保存。重启、实际 WPS 导航及不可用回退由 Workbench / 人工检查补充 `SET-GENERAL-008-AC1/AC2/AC3`。
 
 #### `error-log-open-directory`
 

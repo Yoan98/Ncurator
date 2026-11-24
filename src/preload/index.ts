@@ -22,7 +22,11 @@ import {
 } from '../shared/constants'
 import type { AppResolvedTheme } from '../shared/appPreferences'
 import type { DesktopApi, DownloadProgress } from './api'
-import { DESKTOP_ACCOUNT_CHANGED, DESKTOP_ACCOUNT_COMMAND, type DesktopAccountSnapshot } from '../shared/desktopAccount'
+import {
+  DESKTOP_ACCOUNT_CHANGED,
+  DESKTOP_ACCOUNT_COMMAND,
+  type DesktopAccountSnapshot
+} from '../shared/desktopAccount'
 import { MANAGED_MODELS_GET } from '../shared/managedModels'
 import { isModelSource, type ModelSource } from '../shared/modelSources'
 
@@ -127,7 +131,8 @@ const api: DesktopApi = {
   desktopAccount: (command) => ipcRenderer.invoke(DESKTOP_ACCOUNT_COMMAND, command),
   managedModelsGet: () => ipcRenderer.invoke(MANAGED_MODELS_GET),
   onDesktopAccountChanged(listener) {
-    const receive = (_event: Electron.IpcRendererEvent, snapshot: DesktopAccountSnapshot) => listener(snapshot)
+    const receive = (_event: Electron.IpcRendererEvent, snapshot: DesktopAccountSnapshot) =>
+      listener(snapshot)
     ipcRenderer.on(DESKTOP_ACCOUNT_CHANGED, receive)
     return () => ipcRenderer.removeListener(DESKTOP_ACCOUNT_CHANGED, receive)
   },
@@ -324,8 +329,10 @@ const api: DesktopApi = {
   previewVideoGet: (id) => ipcRenderer.invoke('preview-video-get', id),
   previewVideoConvert: (request) => ipcRenderer.invoke('preview-video-convert', request),
   fileExists: (filePath: string): Promise<boolean> => ipcRenderer.invoke('file-exists', filePath),
-  canWriteDocx: (filePath) => ipcRenderer.invoke('can-write-docx', filePath),
-  writeDocxFile: (payload) => ipcRenderer.invoke('write-docx-file', payload),
+  canWriteOfficeFile: (filePath) => ipcRenderer.invoke('can-write-office-file', filePath),
+  exportExcelFile: (payload) => ipcRenderer.invoke('export-excel-file', payload),
+  writeExcelFile: (payload) => ipcRenderer.invoke('write-excel-file', payload),
+  writeOfficeFile: (payload) => ipcRenderer.invoke('write-office-file', payload),
   writeTextFile: (payload) => {
     emitE2EIpcCall('writeTextFile', {
       filePath: String(payload?.filePath || '').trim()

@@ -41,6 +41,7 @@
 | 字段                           | 类型      | 说明                                                    |
 | ------------------------------ | --------- | ------------------------------------------------------- |
 | `id`                           | TEXT PK   | 固定 `singleton`                                        |
+| `open_office_diff_in_wps` | INTEGER | Word、Excel 差异点击优先使用 WPS，默认 `0` |
 | `system_notifications_enabled` | INTEGER   | AI 终态系统通知，默认 `1`                               |
 | `knowledge_index_speed`        | TEXT      | 索引速度 `slow` / `fast`，默认 `slow`                   |
 | `language`                     | TEXT      | 界面语言偏好 `system` / `zh-CN` / `en`，默认 `system`   |

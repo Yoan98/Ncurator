@@ -54,6 +54,9 @@ const cellStyle = (cell: ExcelJS.Cell): IStyleData => ({
   fs: cell.font?.size,
   bl: cell.font?.bold ? BooleanNumber.TRUE : BooleanNumber.FALSE,
   it: cell.font?.italic ? BooleanNumber.TRUE : BooleanNumber.FALSE,
+  ul: { s: cell.font?.underline ? BooleanNumber.TRUE : BooleanNumber.FALSE },
+  st: { s: cell.font?.strike ? BooleanNumber.TRUE : BooleanNumber.FALSE },
+  tr: { a: typeof cell.alignment?.textRotation === 'number' ? cell.alignment.textRotation : 0 },
   cl: excelColor(cell.font?.color),
   bg:
     cell.fill?.type === 'pattern' && cell.fill.fgColor ? excelColor(cell.fill.fgColor) : undefined,
@@ -97,7 +100,8 @@ const cellData = (cell: ExcelJS.Cell): ICellData => {
       : valueWithResult
   const value =
     rawValue instanceof Date
-      ? rawValue.getTime() / 86_400_000 + 25_569
+      ? rawValue.getTime() / 86_400_000 +
+        (cell.worksheet.workbook.properties.date1904 ? 24_107 : 25_569)
       : typeof rawValue === 'string' ||
           typeof rawValue === 'number' ||
           typeof rawValue === 'boolean'
@@ -130,16 +134,25 @@ export const toExcelWorkbookData = (workbook: ExcelJS.Workbook, name: string): I
         ;(cells[rowNumber - 1] ||= {})[columnNumber - 1] = cellData(cell)
       })
     })
-    const rowData: Record<number, { h: number }> = {}
+    const rowData: Record<number, { h?: number; hd?: BooleanNumber }> = {}
     sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-      if (row.height) rowData[rowNumber - 1] = { h: Math.round(row.height * 1.333) }
+      if (row.height || row.hidden)
+        rowData[rowNumber - 1] = {
+          h: row.height ? Math.round(row.height * 1.333) : undefined,
+          hd: row.hidden ? BooleanNumber.TRUE : BooleanNumber.FALSE
+        }
     })
     const columns = sheet.columns || []
     const layoutColumnCount = Math.max(sheet.columnCount, columns.length, 1)
-    const columnData: Record<number, { w: number }> = {}
+    const columnData: Record<number, { w?: number; hd?: BooleanNumber }> = {}
     for (let index = 1; index <= layoutColumnCount; index += 1) {
       const width = sheet.getColumn(index).width
-      if (width) columnData[index - 1] = { w: Math.round(width * 7) }
+      const hidden = sheet.getColumn(index).hidden
+      if (width || hidden)
+        columnData[index - 1] = {
+          w: width ? Math.round(width * 7) : undefined,
+          hd: hidden ? BooleanNumber.TRUE : BooleanNumber.FALSE
+        }
     }
     const mergeData = (sheet.model.merges || []).map((range) => {
       const parsed = sheet.getCell(range.split(':')[0])

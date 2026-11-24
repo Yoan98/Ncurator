@@ -156,10 +156,7 @@ const GeneralSettingsPanel: React.FC = () => {
       aria-label={t(($) => $.settings.generalSettings)}
     >
       <SettingsGroup title={t(($) => $.settings.visualStyle)}>
-        <SettingsRow
-          title={t(($) => $.preferences.theme)}
-          description={themeDescription}
-        >
+        <SettingsRow title={t(($) => $.preferences.theme)} description={themeDescription}>
           <SettingsChoiceCards
             label={t(($) => $.preferences.theme)}
             value={settings?.theme ?? 'system'}
@@ -197,6 +194,18 @@ const GeneralSettingsPanel: React.FC = () => {
             onChange={(enabled) => void updateNotifications(enabled)}
             data-testid={settingsSelectors.systemNotificationsSwitch}
             aria-label={t(($) => $.settings.aiTaskNotifications)}
+          />
+        </SettingsRow>
+        <SettingsRow
+          title={t(($) => $.editors.officeDiffWps)}
+          description={t(($) => $.editors.officeDiffWpsDescription)}
+        >
+          <Switch
+            checked={settings?.openOfficeDiffInWps ?? false}
+            disabled={!settings || saving}
+            data-testid="settings-office-diff-wps"
+            aria-label={t(($) => $.editors.officeDiffWps)}
+            onChange={(enabled) => void updatePreference({ openOfficeDiffInWps: enabled })}
           />
         </SettingsRow>
       </SettingsGroup>

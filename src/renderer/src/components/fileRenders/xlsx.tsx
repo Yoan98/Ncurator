@@ -1,3 +1,13 @@
+import type { FUniver } from '@univerjs/core/facade'
+import { message } from 'antd'
+import { createOfficeAutosave, type DocumentSaveStatus } from './officeAutosave'
+import {
+  excelEditFingerprint,
+  captureExcelView,
+  restoreExcelView,
+  revealExcelLocation
+} from './excelEditing'
+import { officeViews } from './officeViewState'
 import { t } from '../../i18n'
 import { getRendererRuntime } from '../../i18n'
 import { useOfficeReviewNavigation } from '../workbench/OfficeReviewContext'
@@ -26,6 +36,12 @@ type XlsxDocument = Omit<LoadedFileRenderDocument, 'fileData'> & {
 }
 
 const readBytes = async (document: XlsxDocument): Promise<ArrayBuffer> => {
+  if (
+    document.filePath &&
+    !document.metadata?.excelReview &&
+    !/^[a-z][a-z0-9+.-]*:\/\//i.test(document.filePath)
+  )
+    return Uint8Array.from(await window.api.readFile(document.filePath)).buffer
   if (document.file instanceof Blob) return document.file.arrayBuffer()
   if (document.fileData instanceof Blob) return document.fileData.arrayBuffer()
   if (document.fileData instanceof ArrayBuffer) return document.fileData
@@ -132,6 +148,14 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const selectionContainerRef = useRef<HTMLDivElement>(null)
   const [selectionAdapter, setSelectionAdapter] = useState<SelectionAdapter | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const autosaveRef = useRef<Awaited<ReturnType<typeof createOfficeAutosave>> | undefined>(
+    undefined
+  )
+  const copyRef = useRef<(() => Promise<void>) | undefined>(undefined)
+  const [generation, setGeneration] = useState(0)
+  const [readOnlyNote, setReadOnlyNote] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<DocumentSaveStatus>('idle')
+  const [saveMessage, setSaveMessage] = useState('')
   const [ready, setReady] = useState(false)
   const [changedSheetIds, setChangedSheetIds] = useState<string[]>([])
   const [changedSheetNames, setChangedSheetNames] = useState<string[]>([])
@@ -139,7 +163,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const themeRef = useRef(appearance.resolved)
   themeRef.current = appearance.resolved
   /** 表格实例创建后保留 API，供主题切换时同步，不必重建工作簿。 */
-  const univerApiRef = useRef<{ toggleDarkMode: (isDark: boolean) => void } | null>(null)
+  const univerApiRef = useRef<FUniver | null>(null)
 
   /**
    * 主题切换：Univer 自己维护 canvas 配色，CSS 变量管不到它，必须显式调用。
@@ -154,14 +178,26 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
     const container = containerRef.current
     let cancelled = false
     let dispose: (() => void) | undefined
+    let disposeEditing: (() => void) | undefined
     let detachNavigation: (() => void) | undefined
     setReady(false)
+    setSaveStatus('idle')
+    setReadOnlyNote(false)
     setSelectionAdapter(null)
     setError(null)
     setChangedSheetIds([])
     setChangedSheetNames([])
     void Promise.all([
-      readBytes(document).then((bytes) => toWorkbookData(bytes, document.fileName || 'Excel')),
+      readBytes(document).then(async (bytes) => ({
+        ...(await toWorkbookData(bytes, document.fileName || 'Excel')),
+        bytes,
+        writable: Boolean(
+          document.editable &&
+          document.filePath &&
+          !document.metadata?.excelReview &&
+          (await window.api.canWriteOfficeFile(document.filePath))
+        )
+      })),
       import('@univerjs/core'),
       import('@univerjs/core/facade'),
       import('@univerjs/preset-sheets-core'),
@@ -172,12 +208,13 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
       .then(
         async ([
           preview,
-          { Univer, LogLevel },
+          { Univer, LogLevel, CommandType },
           { FUniver },
           { UniverSheetsCorePreset, CalculationMode },
           localeModule
         ]) => {
           if (cancelled) return
+          setReadOnlyNote(Boolean(document.editable && !preview.writable))
           const univer = new Univer({
             logLevel: LogLevel.WARN,
             // 初始化即给对主题，避免表格先白后黑地闪一下。
@@ -194,8 +231,8 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
           }
           const preset = UniverSheetsCorePreset({
             container,
-            header: false,
-            toolbar: false,
+            header: true,
+            toolbar: preview.writable,
             formulaBar: true,
             formula: {
               initialFormulaComputing: document.metadata?.excelReview
@@ -205,9 +242,9 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             footer: {
               sheetBar: true,
               zoomSlider: true,
-              addSheetButtonConfig: { show: false }
+              addSheetButtonConfig: { show: preview.writable }
             },
-            contextMenu: false,
+            contextMenu: preview.writable,
             disableAutoFocus: true,
             sheets: sheetPreviewOptions
           })
@@ -216,14 +253,12 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             univer.registerPlugin(plugin, options)
           }
           const univerAPI = FUniver.newAPI(univer)
-          univerApiRef.current = univerAPI as unknown as {
-            toggleDarkMode: (isDark: boolean) => void
-          }
+          univerApiRef.current = univerAPI
           dispose = () => {
             univerApiRef.current = null
             univer.dispose()
           }
-          // Keep Univer's navigation and copy behavior while blocking workbook edits.
+          // Editing is enabled only for writable current XLSX files; review snapshots stay read-only.
           const workbook = univerAPI.createWorkbook(preview.data)
           let down: { x: number; y: number } | null = null
           const startNavigation = (event: PointerEvent) => {
@@ -294,9 +329,112 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             // Apply after UI permission initialization so its defaults cannot overwrite read-only.
             await workbook
               .getWorkbookPermission()
-              .setPoint(univerAPI.Enum.WorkbookPermissionPoint.Edit, false)
+              .setPoint(univerAPI.Enum.WorkbookPermissionPoint.Edit, preview.writable)
             univerAPI.setPermissionDialogVisible(false)
             if (cancelled) return
+            const viewKey =
+              document.metadata?.viewKey ||
+              `${document.filePath || document.uri}:${document.metadata?.excelReview ? 'review' : 'preview'}`
+            await restoreExcelView(univerAPI, viewKey)
+            const target = officeViews.consume(viewKey, document.metadata?.location)
+            if (target?.kind === 'excel' && !revealExcelLocation(univerAPI, target))
+              message.info(t(($) => $.editors.changeNotFound))
+            const originalSnapshot = structuredClone(workbook.save())
+            copyRef.current = async () => {
+              try {
+                const bytes = await window.api.exportExcelFile({
+                  bytes: new Uint8Array(preview.bytes),
+                  before: originalSnapshot,
+                  after: workbook.save()
+                })
+                const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes)]))
+                const link = window.document.createElement('a')
+                link.href = url
+                link.download = (document.fileName || 'Workbook.xlsx').replace(
+                  /\.xlsx$/i,
+                  '-copy.xlsx'
+                )
+                link.click()
+                setTimeout(() => URL.revokeObjectURL(url), 1000)
+              } catch (error) {
+                message.error(error instanceof Error ? error.message : String(error))
+              }
+            }
+            let baseline = originalSnapshot
+            let fingerprint = excelEditFingerprint(baseline)
+            const autosave =
+              document.filePath && !document.metadata?.excelReview
+                ? await createOfficeAutosave(
+                    document.filePath,
+                    new Uint8Array(preview.bytes),
+                    async (expectedHash) => {
+                      const after = structuredClone(workbook.save())
+                      const response = await window.api.writeExcelFile({
+                        filePath: document.filePath!,
+                        expectedHash,
+                        before: baseline,
+                        after
+                      })
+                      if (response.success) baseline = after
+                      return response
+                    },
+                    {
+                      readOnly: !preview.writable,
+                      status(value, text) {
+                        if (!cancelled) {
+                          setSaveStatus(value)
+                          setSaveMessage(text || '')
+                        }
+                      },
+                      reload(external) {
+                        if (!cancelled) {
+                          captureExcelView(univerAPI, viewKey)
+                          setGeneration((n) => n + 1)
+                          if (external) document.metadata?.onExternalReload?.()
+                        }
+                      },
+                      editable(value) {
+                        void workbook
+                          .getWorkbookPermission()
+                          .setPoint(univerAPI.Enum.WorkbookPermissionPoint.Edit, value)
+                      }
+                    }
+                  )
+                : undefined
+            if (cancelled) {
+              void autosave?.close()
+              return
+            }
+            autosaveRef.current = autosave
+            let checking = false
+            const changes = univerAPI.onCommandExecuted((command) => {
+              captureExcelView(univerAPI, viewKey)
+              if (
+                !autosave ||
+                !preview.writable ||
+                command.type !== CommandType.MUTATION ||
+                checking
+              )
+                return
+              checking = true
+              queueMicrotask(() => {
+                checking = false
+                if (cancelled) return
+                const next = excelEditFingerprint(workbook.save())
+                if (next !== fingerprint) {
+                  fingerprint = next
+                  autosave.changed()
+                }
+              })
+            })
+            disposeEditing = () => {
+              captureExcelView(univerAPI, viewKey)
+              changes.dispose()
+              autosaveRef.current = undefined
+              void (autosave?.close() || Promise.resolve())
+                .then(() => dispose?.())
+                .catch(() => undefined)
+            }
             setChangedSheetIds(preview.changedSheetIds)
             setChangedSheetNames(preview.changedSheetNames)
             setReady(true)
@@ -323,9 +461,10 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
     return () => {
       cancelled = true
       detachNavigation?.()
-      dispose?.()
+      if (disposeEditing) disposeEditing()
+      else dispose?.()
     }
-  }, [document])
+  }, [document, generation])
 
   if (!document) return null
   const sheetDotCss = changedSheetDotStyle(changedSheetIds)
@@ -338,6 +477,43 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
       data-excel-uri={document.uri || ''}
       data-excel-changed-sheets={JSON.stringify(changedSheetNames)}
     >
+      {readOnlyNote && (
+        <div
+          role="status"
+          className="pointer-events-none absolute right-3 top-2 z-20 rounded bg-[var(--notion-page)] p-2 text-xs text-[var(--notion-text-soft)]"
+        >
+          {t(($) => $.editors.excelReadOnlyNote)}
+        </div>
+      )}
+      {saveStatus === 'saving' && (
+        <span
+          role="status"
+          aria-label={t(($) => $.editors.wordSaving)}
+          className="absolute right-5 top-2 z-20 size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+        />
+      )}
+      {(saveStatus === 'error' || saveStatus === 'conflict') && (
+        <div
+          role="alert"
+          className="absolute bottom-8 left-2 z-20 rounded bg-[var(--notion-page)] p-2 shadow"
+        >
+          {saveMessage}{' '}
+          {saveStatus === 'conflict' ? (
+            <>
+              <button onClick={() => void copyRef.current?.()}>
+                {t(($) => $.editors.wordSaveCopy)}
+              </button>{' '}
+              <button onClick={() => autosaveRef.current?.discard()}>
+                {t(($) => $.editors.wordReopen)}
+              </button>
+            </>
+          ) : (
+            <button onClick={() => void autosaveRef.current?.flush().catch(() => undefined)}>
+              {t(($) => $.common.retry)}
+            </button>
+          )}
+        </div>
+      )}
       {sheetDotCss ? <style>{sheetDotCss}</style> : null}
       {error ? (
         <div className="flex h-full items-center justify-center text-sm text-[var(--notion-text-soft)]">
