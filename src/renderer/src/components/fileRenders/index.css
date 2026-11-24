@@ -46,6 +46,44 @@
   background: white;
 }
 
+.docx-toolbar {
+  --sd-ui-toolbar-bg: var(--notion-page);
+}
+
+.docx-loading-track {
+  width: 160px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--notion-line-strong);
+}
+
+.docx-loading-track::after {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--notion-text-faint);
+  content: '';
+  animation: docx-loading 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes docx-loading {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-loading-track::after {
+    animation: none;
+    margin: auto;
+  }
+}
+
 .docx-content ins {
   background: var(--notion-green-bg) !important;
   color: var(--notion-green) !important;

@@ -37,6 +37,7 @@ export const DocxPreview = ({
 }) => {
   const reviewNavigation = useOfficeReviewNavigation()
   const [container, setContainer] = useState<HTMLDivElement | null>(null)
+  const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null)
   const [renderedKey, setRenderedKey] = useState<string | null>(null)
   const [renderRevision, setRenderRevision] = useState(0)
   const [renderError, setRenderError] = useState<string | null>(null)
@@ -90,10 +91,11 @@ export const DocxPreview = ({
   const onExternalReload = currentDocument?.metadata?.onExternalReload
   const isReview = currentDocument?.metadata?.docxOverview === 'changes'
   useEffect(() => {
-    if (!container) return
+    if (!container || !toolbar) return
     const pointerObserver = observeWordPointers(container)
     setPointers(pointerObserver)
     let active = true
+    let openedReady = false
     const host = document.createElement('div')
     container.replaceChildren(host)
     setRenderedKey(null)
@@ -111,9 +113,11 @@ export const DocxPreview = ({
       const { openSuperDoc } = await import('./superDocSession')
       if (!active) return
       const opened = await openSuperDoc(host, blob, writable ? filePath : undefined, {
+        toolbar,
         review: isReview,
         ready() {
           if (active) {
+            openedReady = true
             setRenderedKey(renderKey)
             setRenderRevision((n) => n + 1)
             scrollToAnchor(container, anchorName)
@@ -124,6 +128,10 @@ export const DocxPreview = ({
         },
         status(value, message) {
           if (active) {
+            if (!openedReady && value === 'error') {
+              setRenderError(message || t(($) => $.editors.couldNotRenderTheWordDocument))
+              return
+            }
             setSaveStatus(value)
             setSaveMessage(message ?? '')
           }
@@ -149,6 +157,7 @@ export const DocxPreview = ({
     }
   }, [
     container,
+    toolbar,
     documentFile,
     documentFileData,
     documentUri,
@@ -196,68 +205,92 @@ export const DocxPreview = ({
 
   return (
     <div
-      className="relative flex h-full w-full min-w-0 bg-[var(--notion-surface-sunken)]"
+      className="relative flex h-full w-full min-w-0 flex-col bg-[var(--notion-surface-sunken)]"
       data-testid={workbenchSelectors.docxViewer}
     >
       <div
-        ref={setContainer}
-        className={`docx-content h-full min-w-0 flex-1 overflow-auto px-3 py-3 ${currentDocument.metadata?.docxOverview ? 'docx-content-with-overview' : ''}`}
+        ref={setToolbar}
+        data-testid={workbenchSelectors.docxToolbar}
+        className="docx-toolbar min-w-0 shrink-0 border-b border-[var(--notion-line)] bg-[var(--notion-page)]"
       />
-      {currentDocument.metadata?.allowDocumentSelection && currentDocument.filePath && ready ? (
-        <DocxSelectionLayer
-          container={container}
-          editor={session.current?.editor}
-          pointers={pointers}
-          filePath={currentDocument.filePath}
-          revision={renderRevision}
-          onTargetsChange={updateReferences}
-        />
-      ) : null}
-      {currentDocument.metadata?.docxOverview ? (
-        <DocxOverviewRuler
-          key={renderKey}
-          container={container}
-          mode={currentDocument.metadata.docxOverview}
-          revision={ready ? renderRevision : 0}
-          references={references}
-        />
-      ) : null}
-      {saveStatus === 'saving' && (
-        <span
-          role="status"
-          aria-label={t(($) => $.editors.wordSaving)}
-          className="absolute right-5 top-2 size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-        />
-      )}
-      {(saveStatus === 'error' || saveStatus === 'conflict') && (
+      <div className="relative flex min-h-0 flex-1">
         <div
-          role="alert"
-          className="absolute bottom-2 left-2 rounded bg-[var(--notion-page)] p-2 shadow"
-        >
-          {saveMessage}{' '}
-          {saveStatus === 'conflict' ? (
-            <>
-              <button onClick={() => void session.current?.copy()}>
-                {t(($) => $.editors.wordSaveCopy)}
-              </button>{' '}
-              <button onClick={() => session.current?.discard()}>
-                {t(($) => $.editors.wordReopen)}
+          ref={setContainer}
+          className={`docx-content h-full min-w-0 flex-1 overflow-auto px-3 py-3 ${currentDocument.metadata?.docxOverview ? 'docx-content-with-overview' : ''}`}
+        />
+        {!ready && !renderError && (
+          <div
+            data-testid={workbenchSelectors.docxLoading}
+            role="status"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--notion-surface-sunken)] text-sm text-[var(--notion-text-soft)]"
+          >
+            {t(($) => $.editors.wordLoading)}
+            <span
+              className="docx-loading-track"
+              role="progressbar"
+              aria-label={t(($) => $.editors.wordLoading)}
+            />
+          </div>
+        )}
+        {currentDocument.metadata?.allowDocumentSelection && currentDocument.filePath && ready ? (
+          <DocxSelectionLayer
+            container={container}
+            editor={session.current?.editor}
+            pointers={pointers}
+            filePath={currentDocument.filePath}
+            revision={renderRevision}
+            onTargetsChange={updateReferences}
+          />
+        ) : null}
+        {currentDocument.metadata?.docxOverview ? (
+          <DocxOverviewRuler
+            key={renderKey}
+            container={container}
+            mode={currentDocument.metadata.docxOverview}
+            revision={ready ? renderRevision : 0}
+            references={references}
+          />
+        ) : null}
+        {saveStatus === 'saving' && (
+          <span
+            role="status"
+            aria-label={t(($) => $.editors.wordSaving)}
+            className="absolute right-5 top-2 size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+          />
+        )}
+        {(saveStatus === 'error' || saveStatus === 'conflict') && (
+          <div
+            role="alert"
+            className="absolute bottom-2 left-2 rounded bg-[var(--notion-page)] p-2 shadow"
+          >
+            {saveMessage}{' '}
+            {saveStatus === 'conflict' ? (
+              <>
+                <button onClick={() => void session.current?.copy()}>
+                  {t(($) => $.editors.wordSaveCopy)}
+                </button>{' '}
+                <button onClick={() => session.current?.discard()}>
+                  {t(($) => $.editors.wordReopen)}
+                </button>
+              </>
+            ) : (
+              <button onClick={() => void session.current?.flush().catch(() => undefined)}>
+                {t(($) => $.common.retry)}
               </button>
-            </>
-          ) : (
-            <button onClick={() => void session.current?.flush().catch(() => undefined)}>
-              {t(($) => $.common.retry)}
-            </button>
-          )}
-        </div>
-      )}
-      {renderError ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-[var(--notion-surface-sunken)] px-6 text-center text-sm text-[var(--notion-text-soft)]">
-          <span className="max-w-[460px] whitespace-pre-wrap break-words">
-            {t(($) => $.editors.wordPreviewFailed, { value1: renderError })}
-          </span>
-        </div>
-      ) : null}
+            )}
+          </div>
+        )}
+        {renderError ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-[var(--notion-surface-sunken)] px-6 text-center text-sm text-[var(--notion-text-soft)]">
+            <span className="max-w-[460px] whitespace-pre-wrap break-words">
+              {t(($) => $.editors.wordPreviewFailed, { value1: renderError })}
+              <button className="mt-3 block w-full" onClick={() => reload((n) => n + 1)}>
+                {t(($) => $.common.retry)}
+              </button>
+            </span>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

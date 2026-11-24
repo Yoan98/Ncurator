@@ -349,6 +349,8 @@ export const workbenchSelectors = {
   applyRevertConfirmButton: 'workbench-apply-revert-confirm-button',
   applyRevertCancelButton: 'workbench-apply-revert-cancel-button',
   docxViewer: 'workbench-docx-viewer',
+  docxToolbar: 'workbench-docx-toolbar',
+  docxLoading: 'workbench-docx-loading',
   docxOverview: 'workbench-docx-overview',
   docxOverviewMarker: 'workbench-docx-overview-marker',
   docxOverviewThumb: 'workbench-docx-overview-thumb',

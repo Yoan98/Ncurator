@@ -740,8 +740,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
               toolName,
               toolCallId,
               reason: 'invalid_input',
-              error:
-                'When creating a DOCX, only paragraphs or tables can be inserted at document_end; other operations require existing document content',
+              error: `文件不存在：${requestedSourcePath}。请核对 sourcePath；新建 DOCX 仅支持在 document_end 插入段落或创建表格，其他操作需要已存在的文档。`,
               resourceContext: runtime.buildResourceContext({
                 sourcePath: requestedSourcePath,
                 effectKind: 'mutated'

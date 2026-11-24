@@ -46,10 +46,53 @@ describe('section-scoped footer tools', () => {
           if (real) await fs.copyFile(real, sourcePath)
           const section = (await outline()).sections[0]!
           const footer = (await read([section.nodeId])).nodes[0]!.footers[0]!
+          const original = await fs.readFile(sourcePath)
+          expect(
+            await insert(footer.nodeId, [{ type: 'field', instruction: 'PAGE' }])
+          ).toMatchObject({ error: expect.stringContaining('paragraph') })
+          expect(
+            await harness.invoke('docx_format', {
+              sourcePath,
+              type: 'format_paragraph',
+              nodeIds: [footer.nodeId],
+              format: { alignment: 'center' }
+            })
+          ).toMatchObject({ error: expect.stringMatching(/paragraph.*footer/) })
+          const missing = path.join(runtime.workspaceRoot, 'missing.docx')
+          for (const [tool, operation] of [
+            ['docx_content_edit', { type: 'delete_node', nodeId: footer.nodeId }],
+            [
+              'docx_format',
+              {
+                type: 'format_paragraph',
+                nodeIds: [footer.nodeId],
+                format: { alignment: 'center' }
+              }
+            ]
+          ] as const) {
+            const failure = await harness.invoke<{ error: string }>(tool, {
+              sourcePath: missing,
+              ...operation
+            })
+            expect(failure.error).toContain('文件不存在')
+            expect(failure.error).toContain(missing)
+          }
+          expect(await fs.readFile(sourcePath)).toEqual(original)
+          await expect(fs.stat(missing)).rejects.toMatchObject({ code: 'ENOENT' })
           const paragraph = await insert(footer.nodeId, [
             { type: 'paragraph', text: '', style: { alignment: 'center' } }
           ])
           expect(paragraph).toMatchObject({ createdIds: [expect.any(String)] })
+          const beforeInvalidReplacement = await fs.readFile(sourcePath)
+          expect(
+            await harness.invoke('docx_content_edit', {
+              sourcePath,
+              type: 'replace_node',
+              nodeId: paragraph.createdIds[0]!,
+              node: { type: 'field', instruction: 'PAGE' }
+            })
+          ).toMatchObject({ error: expect.stringContaining('paragraph') })
+          expect(await fs.readFile(sourcePath)).toEqual(beforeInvalidReplacement)
           expect(
             await insert(paragraph.createdIds[0]!, [
               { type: 'run', text: '第 ' },

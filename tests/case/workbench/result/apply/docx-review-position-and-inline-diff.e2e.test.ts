@@ -266,6 +266,19 @@ describe('workbench result e2e', () => {
             .locator('.docx-content [data-role="v2-stage"][aria-readonly="true"]')
             .first()
           await readOnly.waitFor()
+          const reviewToolbar = page.getByTestId(workbenchSelectors.docxToolbar)
+          await reviewToolbar.getByRole('toolbar').waitFor()
+          await runtime.assertThat(
+            (await reviewToolbar
+              .locator(
+                '[data-item="btn-bold"], [data-item="btn-undo"], [data-item="btn-textAlign"]'
+              )
+              .count()) === 0,
+            {
+              name: 'word-review-viewing-toolbar',
+              message: '历史审核只提供查看操作，没有文字编辑和撤销入口。'
+            }
+          )
           await readOnly.click()
           await page.keyboard.insertText('历史审核只读')
           await assertDocxReviewOverview(runtime)

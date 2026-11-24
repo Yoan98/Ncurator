@@ -452,7 +452,10 @@ export const docxContentEditSchema = z.discriminatedUnion('type', [
       position: z
         .enum(['before', 'after', 'inside_start', 'inside_end', 'document_end'])
         .describe('插入位置'),
-      nodes: z.array(docxContentInsertNodeDraftSchema).min(1).describe('插入的节点')
+      nodes: z
+        .array(docxContentInsertNodeDraftSchema)
+        .min(1)
+        .describe('插入的节点；页眉页脚内放段落，run、field 等行内节点放在段落内')
     })
     .strict()
     .superRefine((value, ctx) => {
@@ -547,7 +550,11 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
     .object({
       ...contentEditBase,
       type: z.literal('format_paragraph'),
-      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
+      nodeIds: z
+        .array(nodeIdField)
+        .min(1)
+        .max(DOCX_FORMAT_MAX_TARGETS)
+        .describe('段落节点 ID，不能传节、页眉或页脚容器 ID'),
       format: nonEmptyParagraphStyleSchema.describe('段落格式 patch')
     })
     .strict()

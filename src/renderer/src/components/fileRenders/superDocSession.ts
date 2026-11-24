@@ -10,6 +10,7 @@ export async function openSuperDoc(
   source: Blob,
   filePath: string | undefined,
   events: {
+    toolbar: HTMLElement
     review: boolean
     ready: () => void
     layout: () => void
@@ -45,6 +46,43 @@ export async function openSuperDoc(
     selector: host,
     document: new File([review?.document ?? source], 'document.docx'),
     documentMode: writable ? 'editing' : 'viewing',
+    ui: {
+      toolbar: {
+        container: events.toolbar,
+        ...(writable
+          ? {
+              excludeItems: [
+                'ai',
+                'document-mode',
+                'comments-layout',
+                'track-changes-accept-selection',
+                'track-changes-reject-selection'
+              ] as const
+            }
+          : { items: { left: ['search'], right: ['zoom'] } as const }),
+        responsiveTo: 'container',
+        overflow: 'menu',
+        strings: t(($) => $.editors.wordToolbar, { returnObjects: true })
+      },
+      comments: { panel: false, highlights: false },
+      loading: false,
+      search: {
+        replaceControls: Boolean(writable),
+        strings: t(($) => $.editors.wordSearch, { returnObjects: true })
+      }
+    },
+    interaction: {
+      comments: { level: 'read' },
+      trackedChanges: { allowDecisions: false }
+    },
+    handleImageUpload: (file) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () =>
+          reject(reader.error ?? new Error(t(($) => $.editors.wordImageLoadFailed)))
+        reader.readAsDataURL(file)
+      }),
     // References and immutable review marks use browser Range geometry across pages.
     layoutEngineOptions: { virtualization: { enabled: false } },
     zoom: { mode: 'fit-width', fitWidth: { max: 100 } },
@@ -57,6 +95,16 @@ export async function openSuperDoc(
       layout()
     },
     onContentError: ({ error }) => events.status('error', String(error)),
+    onException(payload) {
+      if (
+        !ready &&
+        'error' in payload &&
+        !('itemName' in payload) &&
+        !('source' in payload) &&
+        !('diagnosticCode' in payload)
+      )
+        events.status('error', String(payload.error))
+    },
     onPaginationUpdate: layout,
     onEditorUpdate() {
       if (!ready || !writable || disposed) return
