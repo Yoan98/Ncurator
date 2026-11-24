@@ -84,10 +84,7 @@ export const notifyWpsFileOpened = (filePath: string): void => {
   if (resolved) void listener?.notifyOpened?.(resolved).catch(() => undefined)
 }
 
-export const withOfficeFileWrite = async <T>(
-  filePath: string,
-  write: () => Promise<T>
-): Promise<T> => {
+const prepareOfficeWrite = async <T>(filePath: string, write: () => Promise<T>): Promise<T> => {
   const resolved = resolveOfficeWritePath(filePath)
   if (!resolved) return await write()
   let released = false
@@ -102,6 +99,27 @@ export const withOfficeFileWrite = async <T>(
   } catch (error) {
     if (released) notifyOfficeFileWritten(resolved)
     throw error
+  }
+}
+
+const pendingWrites = new Map<string, Promise<void>>()
+export async function withOfficeFileWrite<T>(
+  filePath: string,
+  write: () => Promise<T>
+): Promise<T> {
+  if (!isOfficeWritePath(filePath)) return write()
+  const key = normalizeOfficePath(filePath)
+  const previous = pendingWrites.get(key) ?? Promise.resolve()
+  const running = previous.then(() => prepareOfficeWrite(filePath, write))
+  const done = running.then(
+    () => {},
+    () => {}
+  )
+  pendingWrites.set(key, done)
+  try {
+    return await running
+  } finally {
+    if (pendingWrites.get(key) === done) pendingWrites.delete(key)
   }
 }
 

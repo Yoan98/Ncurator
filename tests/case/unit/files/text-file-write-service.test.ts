@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
+import { writeDocxFile } from '../../../../src/main/services/files/DocxFileWriteService'
 import { writeTextFileAtomically } from '../../../../src/main/services/files/TextFileWriteService'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
@@ -73,7 +74,19 @@ describe('unit text-file-write-service', () => {
         )
         const invalidFileNotCreated = !(await pathExists(path.join(workspaceRoot, 'invalid.txt')))
 
+        const shared = path.join(workspaceRoot, 'concurrent.docx')
+        await fs.writeFile(shared, 'original')
+        const expectedHash = hashOf(await fs.readFile(shared))
+        const competing = await Promise.all(
+          ['first', 'second'].map((value) =>
+            writeDocxFile({ filePath: shared, bytes: Buffer.from(value), expectedHash })
+          )
+        )
+        const savedHash = hashOf(await fs.readFile(shared))
         return {
+          coordinated:
+            competing.filter((r) => r.success && r.hash === savedHash).length === 1 &&
+            competing.filter((r) => r.conflict).length === 1,
           created: created.ok && createdBytes === 'hello\nworld\n' && Boolean(created.hash),
           noTempLeftovers: tempFilesLeft.length === 0,
           matchedHashRejected:
@@ -87,7 +100,8 @@ describe('unit text-file-write-service', () => {
       },
       assert: async (result, runtime) => {
         await runtime.assertThat(
-          result.created &&
+          result.coordinated &&
+            result.created &&
             result.noTempLeftovers &&
             result.matchedHashRejected &&
             result.overwriteOk &&

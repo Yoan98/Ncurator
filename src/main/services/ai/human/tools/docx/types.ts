@@ -131,13 +131,10 @@ type DocxOutlineContainerMeta = {
   visuals?: DocxVisualSummary
 }
 
-export type DocxOutlineContainerNode =
-  | (DocxOutlineContainerMeta & { type: 'content_control'; tag?: string })
-  | (DocxOutlineContainerMeta & {
-      type: 'revision'
-      revisionId: string
-      revisionKind: 'insert' | 'delete' | 'move_from' | 'move_to'
-    })
+export type DocxOutlineContainerNode = DocxOutlineContainerMeta & {
+  type: 'content_control'
+  tag?: string
+}
 
 export type DocxVisualSummary = {
   count: number
@@ -151,6 +148,8 @@ export type DocxOutlineNode =
   | DocxOutlineContainerNode
 
 type DocxDetailedNodeMeta = {
+  commentIds?: string[]
+  revisionIds?: string[]
   nodeId: string
   nodeIndex: number
   layoutMode: DocxLayoutMode
@@ -178,13 +177,10 @@ type DocxDetailedContainerMeta = DocxDetailedNodeMeta & {
   children: DocxReadContentNode[]
 }
 
-export type DocxDetailedContainerNode =
-  | (DocxDetailedContainerMeta & { type: 'content_control'; tag?: string })
-  | (DocxDetailedContainerMeta & {
-      type: 'revision'
-      revisionId: string
-      revisionKind: 'insert' | 'delete' | 'move_from' | 'move_to'
-    })
+export type DocxDetailedContainerNode = DocxDetailedContainerMeta & {
+  type: 'content_control'
+  tag?: string
+}
 
 export type DocxDetailedNode =
   | DocxDetailedParagraphNode
@@ -205,9 +201,10 @@ export type DocxNodeSearchRequest = z.infer<typeof docxSearchSchema>
 export type DocxNodeReadRequest = z.infer<typeof docxReadNodesSchema>
 
 export type DocxSearchMatch = {
+  sectionNodeIds?: string[]
   nodeId: string
   nodeIndex: number
-  type: 'paragraph' | 'table' | 'table_cell' | 'content_control' | 'revision'
+  type: 'paragraph' | 'table' | 'table_cell' | 'content_control'
   matchText: string
   textContext: string
   tableNodeId?: string
@@ -219,11 +216,12 @@ export type DocxSearchMatch = {
 export type DocxSearchNeighbor = {
   nodeId: string
   nodeIndex: number
-  type: 'paragraph' | 'table' | 'table_cell' | 'content_control' | 'revision'
+  type: 'paragraph' | 'table' | 'table_cell' | 'content_control'
   textPreview: string
 }
 
 export type DocxOutlineSegment = {
+  sectionNodeIds?: string[]
   story: DocxStoryRef['type']
   fromNodeIndex: number
   toNodeIndex: number
@@ -246,7 +244,7 @@ export type DocxChangedNode = {
 
 export type DocxCreatedNode = {
   nodeId: string
-  type: 'paragraph' | 'table' | 'table_cell' | 'content_control' | 'revision'
+  type: 'paragraph' | 'table' | 'table_cell' | 'content_control'
 }
 
 export type DocxValidationProblem = {

@@ -11,7 +11,11 @@ import type {
 } from '../../../../shared/types'
 import { calculateFileStats, fileExists } from '../human/tools/docx/review/utils'
 import { FileChangeSessions } from './FileChangeSession'
-import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../wps/officeFileWriteNotify'
+import {
+  normalizeOfficePath,
+  notifyOfficeFileWritten,
+  withOfficeFileWrite
+} from '../../wps/officeFileWriteNotify'
 
 const FORCE_REVERT_WARNING =
   '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
@@ -62,23 +66,22 @@ export class AiFileChangeService {
     }
 
     const currentPath = record.afterPath || record.path
-    const sourceExists = await fileExists(currentPath)
-    const shouldExist = record.operation !== 'deleted'
-    if (sourceExists !== shouldExist && !request.force) {
-      return { success: false, record, requiresForce: true, warning: FORCE_REVERT_WARNING }
+    const matchesExpected = async () => {
+      if (request.force) return true
+      const exists = await fileExists(currentPath)
+      if (exists !== (record.operation !== 'deleted')) return false
+      return (
+        !exists ||
+        !record.afterChecksum ||
+        (await calculateFileStats(currentPath)).checksum === record.afterChecksum
+      )
     }
-    if (sourceExists && record.afterChecksum) {
-      const currentStats = await calculateFileStats(currentPath)
-      if (currentStats.checksum !== record.afterChecksum && !request.force) {
-        return { success: false, record, requiresForce: true, warning: FORCE_REVERT_WARNING }
-      }
-    }
-
     const updatedAt = Date.now()
     try {
       const restorePath =
         record.operation === 'created' ? currentPath : record.beforePath || record.path
-      const applyRevert = async (): Promise<void> => {
+      const applyRevert = async (): Promise<boolean> => {
+        if (!(await matchesExpected())) return false
         if (record.operation === 'created') {
           await fs.rm(currentPath, { force: true })
         } else {
@@ -98,14 +101,18 @@ export class AiFileChangeService {
         if (record.operation !== 'created' && restorePath !== currentPath) {
           notifyOfficeFileWritten(restorePath)
         }
+        return true
       }
-      await withOfficeFileWrite(currentPath, async () => {
-        if (restorePath !== currentPath) {
-          await withOfficeFileWrite(restorePath, applyRevert)
-          return
-        }
-        await applyRevert()
-      })
+      const [first, second] = [currentPath, restorePath].sort((a, b) =>
+        normalizeOfficePath(a).localeCompare(normalizeOfficePath(b))
+      )
+      const applied = await withOfficeFileWrite(first!, () =>
+        normalizeOfficePath(first!) === normalizeOfficePath(second!)
+          ? applyRevert()
+          : withOfficeFileWrite(second!, applyRevert)
+      )
+      if (!applied)
+        return { success: false, record, requiresForce: true, warning: FORCE_REVERT_WARNING }
 
       const reverted: AiFileChangeRecord = {
         ...record,

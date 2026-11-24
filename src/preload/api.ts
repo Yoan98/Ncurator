@@ -161,6 +161,7 @@ import type {
   WorkspaceFileMutationResponse,
   WorkbenchUiStateResponse,
   WorkbenchUiStateSaveRequest,
+  WriteDocxFileRequest,
   WriteTextFileRequest,
   WriteTextFileResponse
 } from '../shared/types'
@@ -260,6 +261,8 @@ export type DesktopApi = {
   embeddingModelTest: (input: RemoteEmbeddingModelInput) => Promise<EmbeddingModelTestResponse>
   readFile: (filePath: string) => Promise<Uint8Array>
   fileExists: (filePath: string) => Promise<boolean>
+  canWriteDocx: (filePath: string) => Promise<boolean>
+  writeDocxFile: (payload: WriteDocxFileRequest) => Promise<WriteTextFileResponse>
   writeTextFile: (payload: WriteTextFileRequest) => Promise<WriteTextFileResponse>
   attachmentPick: (payload: AttachmentPickRequest) => Promise<AttachmentPickResponse>
   attachmentGetSourcePath: (file: File) => string

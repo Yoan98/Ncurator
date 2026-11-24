@@ -33,6 +33,7 @@ extraResources:
   - from: build/app-update.yml
     to: app-update.yml
 asarUnpack:
+  - 'out/renderer/superdoc/**/*'
   - '**/node_modules/ffmpeg-static/ffmpeg*'
   - '**/node_modules/@ffprobe-installer/*/ffprobe*'
   - '**/node_modules/onnxruntime-node/bin/napi-v3/**/*'

@@ -4456,9 +4456,13 @@ const ChatPage: React.FC = () => {
     submitInFlightRef.current = true
     setSubmittingPartnerId(submitPartnerId)
     try {
-      await flushReferencedTextFiles(
-        documentSelections(submittedContentNodes).map((node) => node.filePath)
-      )
+      await flushReferencedTextFiles([
+        ...documentSelections(submittedContentNodes).map((node) => node.filePath),
+        ...chatReferences(submittedContentNodes).flatMap((ref) =>
+          ref.kind === 'file' ? [ref.absolutePath] : []
+        ),
+        ...submittedAttachments.map((file) => file.path)
+      ])
       const response = await window.api.chatSubmit({
         partnerId: submitPartnerId,
         preference: composerAiPreference,

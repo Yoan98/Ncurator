@@ -51,7 +51,7 @@ describe('docx recursive content tree visuals', () => {
     )
   })
 
-  it('keeps content controls and revisions as real root nodes', () => {
+  it('projects visible revision content inside content controls', () => {
     const xml = `
       <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
@@ -71,8 +71,8 @@ describe('docx recursive content tree visuals', () => {
 
     expect(
       index.outline.filter((node) => node.type !== 'table_cell').map((node) => node.text)
-    ).toEqual(['A\nB', 'deleted', 'C'])
-    expect(index.rootNodeCount).toBe(3)
+    ).toEqual(['A\nB', 'C'])
+    expect(index.rootNodeCount).toBe(2)
     expect(
       projectDocxReadNodes([index.detailByNodeId.get('body:content_control:0')!])
     ).toMatchObject([
@@ -84,8 +84,7 @@ describe('docx recursive content tree visuals', () => {
             type: 'paragraph'
           },
           {
-            type: 'revision',
-            kind: 'insert'
+            type: 'paragraph'
           }
         ]
       }

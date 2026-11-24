@@ -356,8 +356,16 @@ describe('DOCX net review public tool matrix', () => {
             const args: Record<string, object | string | number> = { sourcePath, type: operation }
             if (operation === 'format_paragraph')
               Object.assign(args, { nodeIds: [nodeId], format: { alignment: 'center' } })
-            if (operation === 'format_section')
-              Object.assign(args, { nodeIds: [nodeId], orientation: 'landscape' })
+            if (operation === 'format_section') {
+              const { sections } = await harness.invoke<{ sections: Array<{ nodeId: string }> }>(
+                'docx_read_outline',
+                { sourcePath, fromPercent: 0, toPercent: 100 }
+              )
+              Object.assign(args, {
+                nodeIds: [sections[0]!.nodeId],
+                format: { orientation: 'landscape' }
+              })
+            }
             if (operation === 'reset_format') Object.assign(args, { nodeIds: [nodeId] })
             if (operation === 'apply_named_style')
               Object.assign(args, { nodeIds: [nodeId], styleId: 'Local' })

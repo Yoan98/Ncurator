@@ -26,3 +26,4 @@ doc/ai-tool-prompt-audit.md
 
 .venv
 tmp-ui-preview
+/src/renderer/public/superdoc/

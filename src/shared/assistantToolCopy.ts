@@ -211,6 +211,8 @@ const TOOL_ITEM_RENDERERS: Record<RuntimeToolName, ToolItemRenderer> = {
       '在 Word 文档中搜索',
       sentence(text('在 Word 文档中搜索 '), param(readToolQueryLabel(input)))
     ),
+  docx_read_annotations: (input) =>
+    toolCopy('查询 Word 批注和修订', sentence(param(readToolFileLabel(input)))),
   docx_read_nodes: (input) =>
     toolCopy(
       '读取 Word 文档',

@@ -16,7 +16,10 @@ import type {
   IndexedNode
 } from '../adapters/ooxml/types'
 import { isEditableNode, isRootNode, isVisualNode } from '../adapters/ooxml/types'
-import { childElements, getAttr } from '../adapters/ooxml/dom'
+import { collectLogicalBodyElements } from '../adapters/ooxml/nodeIndex'
+import { indexAnnotations, joinedParagraph, paragraphMark } from '../adapters/ooxml/annotations'
+import type { ParsedDocxBundle } from '../adapters/ooxml/types'
+import { childElements } from '../adapters/ooxml/dom'
 
 export type DocxIdentityIndex = {
   publicIdByInternalId: Map<string, string>
@@ -27,7 +30,7 @@ export type DocxIdentityIndex = {
 
 type LogicalRootNode = {
   nodeId: string
-  kind: 'paragraph' | 'table' | 'content_control' | 'revision'
+  kind: 'paragraph' | 'table' | 'content_control'
   storyId: string
   cellNodeIds: string[]
 }
@@ -60,7 +63,7 @@ const createNodeId = (): string => `node_${randomUUID().replace(/-/g, '')}`
 const stableNestedId = (prefix: 'node' | 'visual', nodeId: string, relativeKey: string): string =>
   `${prefix}_${createHash('sha256').update(`${nodeId}\u0000${relativeKey}`).digest('hex').slice(0, 24)}`
 
-const bindIdentity = (
+export const bindIdentity = (
   identity: DocxIdentityIndex,
   internalId: string,
   publicId = createNodeId()
@@ -353,15 +356,7 @@ export const toPublicDetailedNode = (
       ) as typeof mapped.children
     }
   }
-  if (mapped.type === 'content_control') {
-    return {
-      ...mapped,
-      nodeId: requirePublicNodeId(identity, mapped.nodeId),
-      children: mapped.children.map((child) =>
-        toPublicReadNode(identity, child)
-      ) as typeof mapped.children
-    }
-  }
+
   return {
     ...mapped,
     nodeId: requirePublicNodeId(identity, mapped.nodeId),
@@ -576,51 +571,6 @@ const applyLogicalOp = (
   previousIdentity: DocxIdentityIndex
 ): void => {
   if (
-    ['accept_revision', 'reject_revision', 'accept_all_revisions', 'reject_all_revisions'].includes(
-      op.type
-    )
-  ) {
-    const accepting = op.type === 'accept_revision' || op.type === 'accept_all_revisions'
-    const revisionId = 'revisionId' in op ? op.revisionId : undefined
-    const exposed = (node: Element, storyId: string): LogicalRootNode[] => {
-      if (
-        ['ins', 'del', 'moveFrom', 'moveTo'].includes(node.localName) &&
-        (!revisionId || getAttr(node, 'id') === revisionId)
-      ) {
-        const insertion = node.localName === 'ins' || node.localName === 'moveTo'
-        return accepting === insertion
-          ? childElements(node).flatMap((child) => exposed(child, storyId))
-          : []
-      }
-      const kind =
-        node.localName === 'p'
-          ? 'paragraph'
-          : node.localName === 'tbl'
-            ? 'table'
-            : node.localName === 'sdt'
-              ? 'content_control'
-              : 'revision'
-      return [
-        {
-          nodeId: createNodeId(),
-          kind,
-          storyId,
-          cellNodeIds:
-            kind === 'table' ? Array.from(node.getElementsByTagName('w:tc'), createNodeId) : []
-        }
-      ]
-    }
-    const next = body.flatMap((logical) => {
-      if (logical.kind !== 'revision') return [logical]
-      const internal = previousIdentity.internalIdByPublicId.get(logical.nodeId)
-      const node = internal && previousIndex.nodesById.get(internal)?.node
-      if (!node || (revisionId && getAttr(node, 'id') !== revisionId)) return [logical]
-      return exposed(node, logical.storyId)
-    })
-    body.splice(0, body.length, ...next)
-    return
-  }
-  if (
     op.type === 'create_document' ||
     op.type === 'replace_text' ||
     op.type.startsWith('format_') ||
@@ -817,14 +767,106 @@ const applyLogicalOp = (
 }
 
 export const createNextIdentityIndex = (input: {
+  previousBundle?: ParsedDocxBundle
   previousIndex: NodeIndex
   previousIdentity: DocxIdentityIndex
   nextIndex: NodeIndex
   publicOps: DocxOperation[]
 }): DocxIdentityIndex => {
-  const logicalRoots = currentLogicalRoots(input.previousIndex, input.previousIdentity)
+  let logicalRoots = currentLogicalRoots(input.previousIndex, input.previousIdentity)
+  const previousStories = new Set(logicalRoots.map((r) => r.storyId))
+  // Use native Word wrapper identity to account for paragraphs restored by rejection,
+  // including identical adjacent paragraphs and both endpoints of a move.
   for (const op of input.publicOps) {
-    applyLogicalOp(logicalRoots, op, input.previousIndex, input.previousIdentity)
+    if (
+      input.previousBundle &&
+      [
+        'accept_revision',
+        'reject_revision',
+        'accept_all_revisions',
+        'reject_all_revisions'
+      ].includes(op.type)
+    ) {
+      const oldRoots = new Map(
+        input.previousIndex.rootNodeIds.map((id, i) => [
+          input.previousIndex.nodesById.get(id)!.node,
+          logicalRoots[i]!
+        ])
+      )
+      const changes = indexAnnotations(input.previousBundle, input.previousIndex).revisions
+      const selected = new Set(
+        [...changes]
+          .filter(([id]) => !('revisionId' in op) || op.revisionId === id)
+          .flatMap(([, change]) => change.elements)
+      )
+      const reject = op.type.startsWith('reject')
+      const merged = new Set(
+        [...selected].filter((el) => joinedParagraph(el, !reject)).map(paragraphMark)
+      )
+      logicalRoots = input.previousBundle.stories.flatMap((story) =>
+        collectLogicalBodyElements(childElements(story.root), (el) => {
+          const visible = el.localName === 'ins' || el.localName === 'moveTo'
+          return selected.has(el) && reject ? !visible : visible
+        })
+          .filter(({ node }) => !merged.has(node))
+          .map(
+            ({ node }) =>
+              oldRoots.get(node) ?? {
+                nodeId: createNodeId(),
+                storyId: story.story.storyId,
+                kind:
+                  node.localName === 'tbl'
+                    ? 'table'
+                    : node.localName === 'sdt'
+                      ? 'content_control'
+                      : 'paragraph',
+                cellNodeIds:
+                  node.localName === 'tbl'
+                    ? childElements(node, 'tr').flatMap((row) =>
+                        childElements(row, 'tc').map(() => createNodeId())
+                      )
+                    : []
+              }
+          )
+      )
+    } else applyLogicalOp(logicalRoots, op, input.previousIndex, input.previousIdentity)
+  }
+  // Only copied stories and blocks explicitly inserted in a slot need fresh IDs.
+  const allocate = new Set<string>()
+  for (const op of input.publicOps) {
+    if (
+      (op.type !== 'insert_nodes' && op.type !== 'create_table') ||
+      !op.nodeId?.startsWith('storyRoot:')
+    )
+      continue
+    const story = op.nodeId.slice('storyRoot:'.length)
+    const roots = input.nextIndex.outline.filter(
+      (n) => n.story.storyId === story && n.type !== 'table_cell'
+    )
+    const count = op.type === 'create_table' ? 1 : op.nodes.length
+    for (const n of op.position === 'inside_start' ? roots.slice(0, count) : roots.slice(-count))
+      allocate.add(n.nodeId)
+  }
+  for (const [position, id] of input.nextIndex.rootNodeIds.entries()) {
+    const entry = input.nextIndex.nodesById.get(id)
+    if (!entry || !isRootNode(entry) || entry.kind === 'table_cell') continue
+    const story = entry.story.storyId
+    if (
+      !allocate.has(id) &&
+      (previousStories.has(story) || story === 'body' || input.publicOps.length > 0)
+    )
+      continue
+    logicalRoots.splice(position, 0, {
+      kind: entry.kind,
+      nodeId: createNodeId(),
+      storyId: story,
+      cellNodeIds:
+        entry.kind === 'table'
+          ? input.nextIndex.outline
+              .filter((c) => c.type === 'table_cell' && c.tableNodeId === id)
+              .map(() => createNodeId())
+          : []
+    })
   }
   if (logicalRoots.length !== input.nextIndex.rootNodeIds.length) {
     throw new Error(

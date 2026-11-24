@@ -8,7 +8,12 @@ import {
   readPreviewText,
   textRangesForLocation
 } from './textIndex'
-import { newSelection, type SelectionAdapter, type SelectionGeometry } from './types'
+import {
+  newSelection,
+  type SelectionAdapter,
+  type SelectionCandidate,
+  type SelectionGeometry
+} from './types'
 
 export function createTextAdapter(
   container: HTMLElement,
@@ -20,19 +25,22 @@ export function createTextAdapter(
     ignore?: (element: Element) => boolean
     navigate?: SelectionAdapter['navigate']
   } = {}
-): SelectionAdapter {
+): Omit<SelectionAdapter, 'capture'> & {
+  capture: (e: PointerEvent | KeyboardEvent, range?: Range) => SelectionCandidate | null
+} {
   const root = () => options.root?.() || container
   const read = () => readPreviewText(root(), options.ignore)
-  const locate = (node: DocumentSelectionNode, saved?: SelectionLocation) => {
+  const locate = (node: DocumentSelectionNode, saved?: SelectionLocation, preview = read()) => {
     if (options.accepts && !options.accepts(node)) return null
-    const preview = read()
     return locateSelection(preview, node, saved)
   }
   return {
-    capture: () => {
+    capture: (_event, explicitRange) => {
       const selection = window.getSelection()
-      if (!selection?.rangeCount || selection.isCollapsed) return null
-      const range = selection.getRangeAt(0)
+      const range =
+        explicitRange ??
+        (selection?.rangeCount && !selection.isCollapsed ? selection.getRangeAt(0) : null)
+      if (!range) return null
       const element = root()
       if (!element.contains(range.commonAncestorContainer)) return null
       const preview = read()
@@ -45,9 +53,9 @@ export function createTextAdapter(
       return { node, location }
     },
     locate: (node, saved): SelectionGeometry | null => {
-      const location = locate(node, saved)
-      if (!location) return null
       const preview = read()
+      const location = locate(node, saved, preview)
+      if (!location) return null
       const range = rangeForLocation(preview, location)
       if (!range) return null
       const textRanges = textRangesForLocation(preview, location)

@@ -22,9 +22,12 @@ export type SelectionAdapter = {
   /** Canvas text beneath a transparent text layer needs translucent highlight backgrounds. */
   highlightOpacity?: number
   /** A preview gesture may consume pointer input before it reaches the shared reference UI. */
+  pointerOrigin?: () => { x: number; y: number } | undefined
   acceptPointer?: (event: PointerEvent) => boolean
   hitTest?: (node: DocumentSelectionNode, event: PointerEvent) => boolean
-  capture: (event: PointerEvent | KeyboardEvent) => SelectionCandidate | null
+  capture: (
+    event: PointerEvent | KeyboardEvent
+  ) => SelectionCandidate | null | Promise<SelectionCandidate | null>
   locate: (node: DocumentSelectionNode, saved?: SelectionLocation) => SelectionGeometry | null
   overlaps: (
     node: DocumentSelectionNode,

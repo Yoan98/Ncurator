@@ -6,7 +6,7 @@
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; font-src 'self' data: blob:; connect-src 'self' blob: data: https: ncurator-preview:; media-src 'self' blob: https: ncurator-preview:; frame-src 'self' blob: ncurator-preview:;"
+      content="default-src 'self'; script-src 'self' ncurator-editor://superdoc; worker-src 'self' blob: ncurator-editor://superdoc; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; font-src 'self' data: blob:; connect-src 'self' blob: data: https: ncurator-preview:; media-src 'self' blob: https: ncurator-preview:; frame-src 'self' blob: ncurator-preview:;"
     />
     <style>
       /* 启动加载画面：内联在 HTML 里，首帧即可见，不依赖 React 挂载。

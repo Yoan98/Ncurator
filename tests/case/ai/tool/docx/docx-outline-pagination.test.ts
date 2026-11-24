@@ -17,6 +17,7 @@ type OutlineResult = {
   fromNodeIndex: number
   toNodeIndex: number
   totalRootCount: number
+  sections: Array<{ nodeId: string; segments: OutlineSegment[] }>
   segments: OutlineSegment[]
 }
 
@@ -108,7 +109,11 @@ describe('ai tool docx outline pagination backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const unionSegments = [...result.head.segments, ...result.tail.segments]
+        const segments = (r: OutlineResult) => [
+          ...r.sections.flatMap((s) => s.segments),
+          ...r.segments
+        ]
+        const unionSegments = [...segments(result.head), ...segments(result.tail)]
         const unionKeys = new Set(
           unionSegments.map(
             (segment) =>
@@ -116,7 +121,7 @@ describe('ai tool docx outline pagination backend', () => {
           )
         )
         const fullKeys = new Set(
-          result.full.segments.map(
+          segments(result.full).map(
             (segment) =>
               `${segment.story}:${String(segment.fromNodeIndex)}:${String(segment.toNodeIndex)}`
           )
@@ -124,28 +129,28 @@ describe('ai tool docx outline pagination backend', () => {
         runtime.assertThat(
           result.full.fromPercent === 0 &&
             result.full.toPercent === 100 &&
-            result.full.totalRootCount === coveredNodeCount(result.full.segments) &&
-            result.full.segments.length > 0 &&
-            result.full.segments.every((segment) => Array.from(segment.textMap).length <= 360) &&
-            result.full.segments.some(
+            result.full.totalRootCount === coveredNodeCount(segments(result.full)) &&
+            segments(result.full).length > 0 &&
+            segments(result.full).every((segment) => Array.from(segment.textMap).length <= 360) &&
+            segments(result.full).some(
               (segment) =>
                 segment.textMap.includes('表格 2x2') &&
                 segment.fromNodeIndex === segment.toNodeIndex
             ) &&
-            result.full.segments.some(
+            segments(result.full).some(
               (segment) => segment.story === 'header' && segment.textMap.includes('Header outline')
             ) &&
-            !JSON.stringify(result.full).includes('nodeId') &&
+            Boolean(result.full.sections[0]?.nodeId) &&
             result.head.toPercent === 50 &&
             result.tail.fromPercent === 50 &&
-            result.tail.segments.some((segment) => segment.textMap.includes('表格 2x2')) &&
+            segments(result.tail).some((segment) => segment.textMap.includes('表格 2x2')) &&
             [...fullKeys].every((key) => unionKeys.has(key)) &&
             result.empty.totalRootCount === 0 &&
-            result.empty.segments.length === 0 &&
+            segments(result.empty).length === 0 &&
             result.denseTables.fromPercent === 0 &&
             result.denseTables.toPercent === 100 &&
             result.denseTables.totalRootCount === 50 &&
-            result.denseTables.segments.length === 50,
+            segments(result.denseTables).length === 50,
           {
             name: 'docx-outline-segment-percent-range',
             message: 'DOCX outline 应按根节点比例返回该区间内的全部完整 segment。',

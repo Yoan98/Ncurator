@@ -114,11 +114,11 @@ describe('workbench result e2e', () => {
             state: 'visible',
             timeout: 30_000
           })
-          await panel.getByText('Alice', { exact: true }).waitFor({
+          await panel.locator('.superdoc-page').getByText('Alice', { exact: true }).waitFor({
             state: 'visible',
             timeout: 30_000
           })
-          await panel.getByText('Bob', { exact: true }).waitFor({
+          await panel.locator('.superdoc-page').getByText('Bob', { exact: true }).waitFor({
             state: 'visible',
             timeout: 30_000
           })
@@ -169,7 +169,11 @@ describe('workbench result e2e', () => {
             'cell-diff-external-preview.docx',
             'external asset preview content'
           )
-          const assetPreviewRefreshed = await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
+          const assetPreviewRefreshed = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.docxViewer
+          )
+            .locator('.superdoc-page')
             .getByText('external asset preview content', { exact: true })
             .waitFor({ state: 'visible', timeout: 30_000 })
             .then(() => true)
@@ -180,11 +184,11 @@ describe('workbench result e2e', () => {
                 .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
           )
           await documentModeToggle.click()
-          await panel.getByText('Alice', { exact: true }).waitFor({
+          await panel.locator('.superdoc-page').getByText('Alice', { exact: true }).waitFor({
             state: 'visible',
             timeout: 30_000
           })
-          await panel.getByText('Bob', { exact: true }).waitFor({
+          await panel.locator('.superdoc-page').getByText('Bob', { exact: true }).waitFor({
             state: 'visible',
             timeout: 30_000
           })
@@ -206,8 +210,9 @@ describe('workbench result e2e', () => {
           )
           await page.waitForTimeout(1_000)
           const reviewRemainedSnapshot =
-            (await panel.getByText('Alice', { exact: true }).count()) > 0 &&
-            (await panel.getByText('Bob', { exact: true }).count()) > 0
+            (await panel.locator('.superdoc-page').getByText('Alice', { exact: true }).count()) >
+              0 &&
+            (await panel.locator('.superdoc-page').getByText('Bob', { exact: true }).count()) > 0
           const signals = await runtime.collectSignals()
 
           return {

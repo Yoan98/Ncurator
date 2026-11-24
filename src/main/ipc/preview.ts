@@ -1,5 +1,8 @@
 import { app, ipcMain, protocol, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import path from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { brotliDecompress } from 'node:zlib'
+import { promisify } from 'node:util'
 import ffmpeg from 'ffmpeg-static'
 import ffprobe from '@ffprobe-installer/ffprobe'
 import { z } from 'zod'
@@ -10,6 +13,10 @@ import { VideoPreviewService } from '../services/preview/VideoPreviewService'
 /** Registers before app.ready so child frames and media use standard URL semantics. */
 export const registerPreviewScheme = (): void => {
   protocol.registerSchemesAsPrivileged([
+    {
+      scheme: 'ncurator-editor',
+      privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true }
+    },
     {
       scheme: PREVIEW_SCHEME,
       privileges: {
@@ -38,6 +45,30 @@ export const registerPreviewHandlers = (
     .pruneCache()
     .catch((error) => console.error('[VIDEO-PREVIEW] cache cleanup failed:', error))
   protocol.handle(PREVIEW_SCHEME, (request) => resources.handle(request))
+  const editorDir = path.join(
+    app.getAppPath(),
+    process.env.ELECTRON_RENDERER_URL && !app.isPackaged ? 'src/renderer/public' : 'out/renderer',
+    'superdoc'
+  )
+  const decompress = promisify(brotliDecompress)
+  protocol.handle('ncurator-editor', async (request) => {
+    const url = new URL(request.url)
+    if (
+      url.hostname !== 'superdoc' ||
+      !/^\/(?:editor|assets\/[a-zA-Z0-9_.-]+)\.js$/.test(url.pathname)
+    )
+      return new Response(null, { status: 404 })
+    try {
+      const bytes = await decompress(
+        await readFile(path.join(editorDir, url.pathname.slice(1) + '.br'))
+      )
+      return new Response(Uint8Array.from(bytes), {
+        headers: { 'Content-Type': 'application/javascript', 'Access-Control-Allow-Origin': '*' }
+      })
+    } catch {
+      return new Response(null, { status: 404 })
+    }
+  })
   const channels = [
     'preview-html-open',
     'preview-resource-release',
@@ -84,6 +115,7 @@ export const registerPreviewHandlers = (
   return () => {
     channels.forEach((channel) => ipcMain.removeHandler(channel))
     protocol.unhandle(PREVIEW_SCHEME)
+    protocol.unhandle('ncurator-editor')
     video.dispose()
     resources.dispose()
   }

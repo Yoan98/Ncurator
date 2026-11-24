@@ -31,7 +31,7 @@ export type IndexedNode =
     }
   | {
       category: 'root'
-      kind: 'content_control' | 'revision'
+      kind: 'content_control'
       nodeId: string
       nodeIndex: number
       layoutMode: DocxLayoutMode
@@ -83,7 +83,7 @@ export type DocxEditableNode = {
     | 'hyperlink'
     | 'field'
     | 'content_control'
-    | 'revision'
+
   node: Element
 }
 
@@ -137,6 +137,7 @@ export type DocxStoryPart = {
 
 export type ParsedDocxBundle = {
   zip: JSZip
+  evenAndOddHeaders: boolean
   documentXml: string
   documentDom: Document
   stylesDom?: Document

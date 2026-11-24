@@ -105,6 +105,22 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - How：创建真实 DOCX，通过生产公共工具执行 outline/read/search、内容替换、段落格式、表格结构、图片与批注操作，并再次 read/search；另用真实 OOXML 样式准备文档默认、段落与字符多层继承、直接加粗和直接取消加粗，检查结构化读取与生产 modelResult 投影。
 - Oracle：读取正确合并默认、段落、字符样式及直接格式；继承加粗可见，直接取消加粗保留为 false，普通文字不误加粗，缺失或循环样式不阻塞读取；模型文本的样式目录与文字节点引用对应。每次写入只接收一个 discriminated operation；未删除节点的 `nodeId` 保持稳定；普通写入返回空领域结果，创建操作只返回 `createdIds`；四个写工具看到同一 Working 状态，最终状态可由读取工具确认。
 
+##### `docx-annotation-records`
+
+- 测试类型：`backend`
+- What：查询跨段批注、同文回复、文字和段落格式、删除及成对移动修订。
+- Why：编辑操作需要准确的记录 ID 和锚点。
+- How：构造原生 OOXML 审阅标记，按锚点和游标查询，回复批注并拒绝修订。
+- Oracle：跨段锚点和回复 ID 准确，移动仅返回一项，拒绝后旧文字和格式恢复。
+
+##### `docx-section-footers`
+
+- 测试类型：`backend`
+- What：按节创建页脚、插入 PAGE 字段、隔离继承的页脚。
+- Why：多节共享同一部件时，修改必须只对目标节生效。
+- How：通过公共工具定位页脚并插入居中段落与页码，再用三节样本修改中间一节。
+- Oracle：字段可回读，第一节和末节保留原文字，中间节使用独立页脚。
+
 ##### `docx-outline-pagination`
 
 - 测试类型：`backend`
@@ -160,6 +176,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 | `docx_content_edit`       | `replace_text`、`insert_nodes`、`replace_node`、`delete_node`、`move_node`                                                                                                                                | `docx-public-tools`、`docx-net-review-matrix`：文字/visual 创建替换删除移动、首尾顺序重建、等价路径、无变化移动、跨区域拒绝无部分提交           |
 | `docx_format`             | `format_text`、`format_paragraph`、`format_section`、`reset_format`、`apply_named_style`、`create_named_style`、`update_named_style`、`delete_named_style`、`set_numbering`                               | `docx-public-tools`、`docx-net-review-matrix`：实际范围、纯格式 +0/-0、独立样式记录、恢复消除、批量无效目标不得部分生效                         |
 | `docx_table_edit`         | `create_table`、`delete_table`、`insert_row`、`delete_row`、`insert_column`、`delete_column`、`merge_cells`、`split_cell`、`format_table`、`format_row`、`format_cell`                                    | `docx-net-review-matrix`：首尾行列/合并拓扑、对应单元格、格式范围、逐字节回退                                                                   |
+| `docx_read_annotations` | 按节或内容锚点分页查询批注和修订 | 查询 ID 可直接用于回复、接受和拒绝 |
 | `docx_comments_revisions` | `add_comment`、`update_comment`、`reply_comment`、`delete_comment`、`enable_track_changes`、`disable_track_changes`、`accept_revision`、`reject_revision`、`accept_all_revisions`、`reject_all_revisions` | `docx-public-tools`、`docx-net-review-matrix`、`docx-apply-diff`：批注/设置独立变化、根级修订结构、原有用户修订保留、恢复/回退                  |
 
 Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大范围文字变化与长段落耗时/输出规模；`docx-review-resources` 补超链接、旧新资源冲突、源文件已有 NULL/缺失图片关系、命名样式/默认样式/主题继承、缺失定义补全、节范围、用户修订保真。已有损坏图片关系保留原始目标，不复制不存在的资源；真实图片仍完整导入，审核不得产生新增校验问题或因残留图片阻断文字差异。`docx-node-identity`、`docx-operation-matrix` 和现有递归/visual 测试继续保障编辑能力；这些测试不能替代上述真实公开工具覆盖。Workbench 用例归属及界面 Oracle 见 Workbench 测试计划。

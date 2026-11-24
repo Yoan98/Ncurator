@@ -768,10 +768,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       cancelled = true
     }
   }, [activeEditableFile?.path, activeEditableFile?.fileName])
-  // 可编辑文本由编辑器自行处理外部变更；面板级 watch 仅覆盖不可编辑预览（docx/ppt/excel 等）
+  // 文本和 DOCX 编辑器自行协调外部文件变更。
   const previewWatchPath =
     activeEditableFile &&
     editableKind === null &&
+    !/\.docx$/i.test(activeEditableFile.path) &&
     !/^https:\/\//iu.test(activeEditableFile.path)
       ? activeEditableFile.path
       : null
@@ -891,6 +892,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [explorerOpen, floatingExplorer])
+  const notifyExternalReload = React.useCallback(() => {
+    if (!aiRunActiveRef.current && Date.now() > suppressExternalNoticeUntilRef.current) {
+      onSuccessMessage(t(($) => $.workbench.externalFileChangesDetectedTheFileWasRefreshedAutomatically))
+    }
+  }, [onSuccessMessage])
   const previewDocuments = useMemo<FileRenderDocument[]>(
     () =>
       state.kind === 'file_preview'
@@ -899,16 +905,17 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               filePath: state.file.path,
               fileName: state.file.fileName,
               contentRevision: previewRevision,
-              editable: editableKind !== null,
+              editable: editableKind !== null || /\.docx$/i.test(state.file.path),
               metadata: {
                 pageNumber: state.file.pageNumber,
+                onExternalReload: notifyExternalReload,
                 allowDocumentSelection: true,
                 docxOverview: 'references'
               }
             }
           ]
         : [],
-    [previewRevision, state, editableKind]
+    [previewRevision, state, editableKind, notifyExternalReload]
   )
   const previewChangeRecord = useMemo(() => {
     if (state.kind !== 'file_preview' || state.file.isDirectory) return null
@@ -942,7 +949,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     if (!filePath) return []
     const editable =
       documentDisplayMode === 'preview' &&
-      editableKind !== null &&
+      (editableKind !== null || activeApplyRecord.capability === 'docx') &&
       filePath === activeApplyRecord.path
     return [
       {
@@ -951,6 +958,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         contentRevision: documentDisplayMode === 'preview' ? previewRevision : undefined,
         editable,
         metadata: {
+          onExternalReload: notifyExternalReload,
           docxOverview: documentDisplayMode === 'preview' ? 'references' : 'changes',
           excelReview: activeApplyRecord.capability === 'excel' && documentDisplayMode === 'review',
           allowDocumentSelection:
@@ -958,7 +966,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         }
       }
     ]
-  }, [activeApplyRecord, documentDisplayMode, editableKind, previewRevision])
+  }, [activeApplyRecord, documentDisplayMode, editableKind, previewRevision, notifyExternalReload])
   const applyContent = useMemo(
     () =>
       activeApplyRecord &&
@@ -1025,8 +1033,8 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         activeTabId={activeTabId}
         onActivateTab={(id) => afterSave(() => onActivateTab(id))}
         onCloseTab={(id) => afterSave(() => onCloseTab(id))}
-        onAddFileTab={onAddFileTab}
-        onAddBrowserTab={onAddBrowserTab}
+        onAddFileTab={() => afterSave(onAddFileTab)}
+        onAddBrowserTab={() => afterSave(onAddBrowserTab)}
         onCollapse={() => afterSave(onCollapse)}
       />
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -1073,7 +1081,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                 canOpen={!state.file.isDirectory}
                 workspaces={workspaces}
                 backTarget={state.backTarget}
-                onBackToPanelState={onBackToPanelState}
+                onBackToPanelState={(next) => afterSave(() => onBackToPanelState(next))}
                 onRevealPath={onRevealPath}
                 onInfoMessage={onInfoMessage}
                 explorerOpen={explorerOpen}
@@ -1110,7 +1118,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   }
                   emptyText={applyEmptyText}
                   workspaces={workspaces}
-                  onBackToPanelState={onBackToPanelState}
+                  onBackToPanelState={(next) => afterSave(() => onBackToPanelState(next))}
                   onRevealPath={onRevealPath}
                   onInfoMessage={onInfoMessage}
                   onRevert={() => afterSave(onRevertApply)}

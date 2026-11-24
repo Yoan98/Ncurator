@@ -593,19 +593,22 @@ const buildTextMap = (segment: DraftSegment, idf: Map<string, number>): string =
 
 export const buildDocxSegmentMap = (
   index: NodeIndex,
-  bundle?: Pick<ParsedDocxBundle, 'stylesDom'>
+  bundle?: Pick<ParsedDocxBundle, 'stylesDom'>,
+  sectionIds?: (node: RootItem['node']) => string[]
 ): DocxOutlineSegment[] => {
   const items = buildRootItems(index, bundle)
   const stories = new Map<string, RootItem[]>()
   items.forEach((item) => {
-    const list = stories.get(item.node.story.storyId) || []
+    const key = item.node.story.storyId + '@' + (sectionIds?.(item.node) ?? []).join(',')
+    const list = stories.get(key) || []
     list.push(item)
-    stories.set(item.node.story.storyId, list)
+    stories.set(key, list)
   })
   const drafts = [...stories.values()].flatMap(segmentStory)
   const idf = buildIdf(drafts)
   return drafts.map((segment) => ({
     story: segment.story,
+    sectionNodeIds: sectionIds?.(segment.items[0]!.node),
     fromNodeIndex: segment.items[0]!.node.nodeIndex,
     toNodeIndex: segment.items[segment.items.length - 1]!.node.nodeIndex,
     textMap: buildTextMap(segment, idf)

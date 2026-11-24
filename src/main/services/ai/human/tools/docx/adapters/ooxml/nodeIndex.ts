@@ -233,25 +233,25 @@ type LogicalBodyElement = {
   node: Element
 }
 
-const collectLogicalBodyElements = (nodes: readonly Element[]): LogicalBodyElement[] => {
+export const collectLogicalBodyElements = (
+  nodes: readonly Element[],
+  includeChange = (node: Element) => node.localName === 'ins' || node.localName === 'moveTo'
+): LogicalBodyElement[] => {
   const output: LogicalBodyElement[] = []
   nodes.forEach((node) => {
-    if (
-      node.localName === 'p' ||
-      node.localName === 'tbl' ||
-      node.localName === 'sdt' ||
-      ['ins', 'del', 'moveFrom', 'moveTo'].includes(node.localName)
-    ) {
+    if (node.localName === 'p' || node.localName === 'tbl' || node.localName === 'sdt') {
       output.push({ node })
       return
     }
+    if (['ins', 'del', 'moveFrom', 'moveTo'].includes(node.localName) && !includeChange(node))
+      return
     if (node.localName === 'sectPr') return
     if (node.localName === 'AlternateContent') {
-      output.push(...collectLogicalBodyElements(selectAlternateContent(node)))
+      output.push(...collectLogicalBodyElements(selectAlternateContent(node), includeChange))
       return
     }
     if (!['drawing', 'pict', 'object', 'txbxContent'].includes(node.localName)) {
-      output.push(...collectLogicalBodyElements(childElements(node)))
+      output.push(...collectLogicalBodyElements(childElements(node), includeChange))
     }
   })
   return output
@@ -334,47 +334,22 @@ export const buildNodeIndex = (
   for (const logical of bodyChildren) {
     const child = logical.node
 
-    if (
-      child.localName === 'sdt' ||
-      ['ins', 'del', 'moveFrom', 'moveTo'].includes(child.localName)
-    ) {
-      const properties = child.localName === 'sdt' ? firstChildElement(child, 'sdtPr') : null
-      const tagNode = properties ? firstChildElement(properties, 'tag') : null
-      const isContentControl = child.localName === 'sdt'
-      const kind = isContentControl ? ('content_control' as const) : ('revision' as const)
-      const revisionKind =
-        child.localName === 'del'
-          ? ('delete' as const)
-          : child.localName === 'moveFrom'
-            ? ('move_from' as const)
-            : child.localName === 'moveTo'
-              ? ('move_to' as const)
-              : ('insert' as const)
-      const nodeId = `${idPrefix}${kind}:${storyRootCount}`
-      const layoutMode: DocxLayoutMode = 'normal'
+    if (child.localName === 'sdt') {
+      const properties = firstChildElement(child, 'sdtPr')
+      const tagNode = properties && firstChildElement(properties, 'tag')
+      const kind = 'content_control'
+      const nodeId = idPrefix + kind + ':' + storyRootCount
+      const layoutMode = 'normal'
       rootNodeIds.push(nodeId)
-      if (isContentControl) {
-        outlineDraft.push({
-          nodeId,
-          type: 'content_control',
-          nodeIndex,
-          layoutMode,
-          text: '',
-          story,
-          tag: tagNode ? getAttr(tagNode, 'val') || undefined : undefined
-        })
-      } else {
-        outlineDraft.push({
-          nodeId,
-          type: 'revision',
-          nodeIndex,
-          layoutMode,
-          text: '',
-          story,
-          revisionId: getAttr(child, 'id'),
-          revisionKind
-        })
-      }
+      outlineDraft.push({
+        nodeId,
+        type: kind,
+        nodeIndex,
+        layoutMode,
+        text: '',
+        story,
+        tag: tagNode ? getAttr(tagNode, 'val') || undefined : undefined
+      })
       nodesById.set(nodeId, {
         category: 'root',
         kind,
@@ -658,7 +633,7 @@ export const getNodeStructureFacts = (
   index: NodeIndex,
   nodeId: string
 ): {
-  nodeType: 'paragraph' | 'table' | 'table_cell' | 'content_control' | 'revision'
+  nodeType: 'paragraph' | 'table' | 'table_cell' | 'content_control'
   nodeIndex: number
   previousNodeId?: string
   nextNodeId?: string
@@ -694,6 +669,12 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
   }
   const documentDom = parseXml(documentXml)
   const stylesXml = await readZipText(zip, 'word/styles.xml')
+  const settingsXml = await readZipText(zip, 'word/settings.xml')
+  const oddEven =
+    settingsXml && parseXml(settingsXml).getElementsByTagNameNS('*', 'evenAndOddHeaders').item(0)
+  const evenAndOddHeaders = Boolean(
+    oddEven && !['0', 'off', 'false'].includes(getAttr(oddEven, 'val'))
+  )
   const stylesDom = stylesXml ? parseXml(stylesXml) : undefined
   const documentRelationships = await parsePartRelationships(zip, 'word/document.xml')
   const relationshipTargets = documentRelationships.targets
@@ -788,6 +769,7 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
     documentXml,
     documentDom,
     stylesDom,
+    evenAndOddHeaders,
     relationshipTargets,
     relationshipTypes,
     relationshipTargetModes,

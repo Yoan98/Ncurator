@@ -1,3 +1,5 @@
+import { indexAnnotations, decideRevision } from './annotations'
+import { sectionProperties, writeSectionFormat, sectionChild } from './sections'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
@@ -172,14 +174,6 @@ const createPlainRow = (doc: Document, cells: readonly string[]): Element => {
   const row = wordElement(doc, 'tr')
   cells.forEach((text) => row.appendChild(createPlainCell(doc, text)))
   return row
-}
-
-const ensureChild = (parent: Element, name: string): Element => {
-  const existing = firstChildElement(parent, name)
-  if (existing) return existing
-  const child = wordElement(parent.ownerDocument, name)
-  parent.appendChild(child)
-  return child
 }
 
 const applyMoveNode = async (
@@ -771,35 +765,19 @@ const patchNamedStyle = (
   if (patch.run) patchRunProperties(style, { kind: 'run', ...patch.run })
 }
 
-const ensureSectionProperties = (
+const resolveSectionProperties = (
   bundle: Awaited<ReturnType<typeof loadDocxBundle>>,
-  target: Element
-): Element => {
-  const body = bundle.documentDom.getElementsByTagNameNS(WORD_NS, 'body').item(0)
-  if (!body) throw new Error('DOCX body is missing')
-  let root: Element = target
-  while (root.parentNode && root.parentNode !== body) root = root.parentNode as Element
-  const bodyContent = childElements(body).filter((node) => node.localName !== 'sectPr')
-  const targetIndex = bodyContent.indexOf(root)
-  const sectionParagraph =
-    targetIndex >= 0
-      ? bodyContent
-          .slice(targetIndex)
-          .find(
-            (node) =>
-              node.localName === 'p' &&
-              Boolean(firstChildElement(firstChildElement(node, 'pPr') || node, 'sectPr'))
-          )
-      : undefined
-  const paragraphSection = sectionParagraph
-    ? firstChildElement(firstChildElement(sectionParagraph, 'pPr')!, 'sectPr')
-    : undefined
-  if (paragraphSection) return paragraphSection
-  const existing = childElements(body, 'sectPr').at(-1)
-  if (existing) return existing
-  const section = wordElement(bundle.documentDom, 'sectPr')
-  body.appendChild(section)
-  return section
+  id: string
+) => {
+  const match = /^section:(\d+)$/.exec(id)
+  const sections = sectionProperties(bundle)
+  if (!match || Number(match[1]) >= sections.length)
+    throw new Error('format_section requires a section nodeId')
+  const section = sections[Number(match[1])]
+  if (section) return section
+  const final = wordElement(bundle.documentDom, 'sectPr')
+  bundle.stories[0]!.root.appendChild(final)
+  return final
 }
 
 const applyFormatDomainOp = async (
@@ -833,31 +811,7 @@ const applyFormatDomainOp = async (
     }
   }
   if (op.type === 'format_section') {
-    const targetEntry = index.nodesById.get(op.nodeId)
-    if (!targetEntry || targetEntry.story.type !== 'body') {
-      throw new Error('format_section target must be in the document body')
-    }
-    const section = ensureSectionProperties(bundle, targetEntry.node)
-    if (op.orientation) {
-      const size = ensureChild(section, 'pgSz')
-      const currentWidth = getAttr(size, 'w') || '11906'
-      const currentHeight = getAttr(size, 'h') || '16838'
-      setWordAttr(size, 'orient', op.orientation)
-      setWordAttr(size, 'w', op.orientation === 'landscape' ? currentHeight : currentWidth)
-      setWordAttr(size, 'h', op.orientation === 'landscape' ? currentWidth : currentHeight)
-    }
-    const marginValues = [
-      ['top', op.marginTopPt],
-      ['right', op.marginRightPt],
-      ['bottom', op.marginBottomPt],
-      ['left', op.marginLeftPt]
-    ] as const
-    if (marginValues.some(([, value]) => value !== undefined)) {
-      const margins = ensureChild(section, 'pgMar')
-      marginValues.forEach(([name, value]) => {
-        if (value !== undefined) setWordAttr(margins, name, String(ptToTwips(value)))
-      })
-    }
+    writeSectionFormat(resolveSectionProperties(bundle, op.nodeId), op.format)
     return {
       buffer: await writeDocumentXml(bundle),
       changedNodes: index.rootNodeIds.map((id) => changedNode(index, id))
@@ -938,13 +892,6 @@ type RevisionDomainOp = Extract<
   }
 >
 
-const unwrapElement = (node: Element): void => {
-  const parent = node.parentNode
-  if (!parent) return
-  while (node.firstChild) parent.insertBefore(node.firstChild, node)
-  parent.removeChild(node)
-}
-
 const applyRevisionDomainOp = async (
   buffer: Buffer,
   op: RevisionDomainOp
@@ -979,20 +926,14 @@ const applyRevisionDomainOp = async (
   const accepting = op.type === 'accept_revision' || op.type === 'accept_all_revisions'
   const revisionId =
     op.type === 'accept_revision' || op.type === 'reject_revision' ? op.revisionId : undefined
-  const candidates = storyDocuments(bundle).flatMap((document) =>
-    ['ins', 'del', 'moveFrom', 'moveTo'].flatMap((name) =>
-      descendantElements(document.documentElement, name)
-    )
-  )
-  let matched = 0
-  candidates.forEach((node) => {
-    if (revisionId && getAttr(node, 'id') !== revisionId) return
-    matched += 1
-    const insertion = node.localName === 'ins' || node.localName === 'moveTo'
-    if ((accepting && insertion) || (!accepting && !insertion)) unwrapElement(node)
-    else node.parentNode?.removeChild(node)
-  })
-  if (revisionId && matched === 0) throw new Error(`revision not found: ${revisionId}`)
+  const all = indexAnnotations(bundle, index).revisions
+  const chosen = revisionId ? [all.get(revisionId)] : [...all.values()]
+  for (const record of chosen) {
+    if (!record) throw new Error('revision not found: ' + revisionId)
+    if (record.record.unsupportedReason)
+      throw new Error(record.record.revisionId + ': ' + record.record.unsupportedReason)
+  }
+  for (const record of chosen) if (record) decideRevision(record, accepting)
   return {
     buffer: await writeDocumentXml(bundle),
     changedNodes: index.rootNodeIds.map((id) => changedNode(index, id, 'replace_node'))
@@ -1859,11 +1800,15 @@ const applyCommentDomainOp = async (
       })
     } else {
       const parentParagraph = descendantElements(comment, 'p').at(-1)
-      const parentParagraphId = parentParagraph
+      let parentParagraphId = parentParagraph
         ? parentParagraph.getAttributeNS(WORD_2010_NS, 'paraId') ||
           parentParagraph.getAttribute('w14:paraId')
         : ''
-      if (!parentParagraphId) throw new Error(`comment cannot receive a reply: ${op.commentId}`)
+      if (!parentParagraph) throw new Error('Missing parent comment paragraph')
+      if (!parentParagraphId) {
+        parentParagraphId = randomHexId()
+        parentParagraph.setAttributeNS(WORD_2010_NS, 'w14:paraId', parentParagraphId)
+      }
       const replyId = nextCommentId(comments)
       const replyParagraphId = randomHexId()
       comments.documentElement.appendChild(
@@ -2322,6 +2267,10 @@ export const validateDocxOperationTargets = async (
     ) {
       return
     }
+    if (operation.type === 'format_section') {
+      resolveSectionProperties(bundle, operation.nodeId)
+      return
+    }
     const node = index.nodesById.get(operation.nodeId)
     const actualKind = node?.kind
     const element = node?.node
@@ -2341,11 +2290,6 @@ export const validateDocxOperationTargets = async (
       !['r', 'p', 'tbl', 'tr', 'tc'].includes(element.localName)
     ) {
       throw new Error(`reset_format does not support ${element.localName}`)
-    }
-    if (operation.type === 'format_section') {
-      if (node?.story.type !== 'body') {
-        throw new Error('format_section target must be in the document body')
-      }
     }
     const requiredKind =
       operation.type === 'format_paragraph' || operation.type === 'apply_named_style'
@@ -2433,6 +2377,102 @@ const applyDirectFormat = async (buffer: Buffer, op: DirectFormatOp) => {
   }
 }
 
+export async function privateSlotPart(
+  buffer: Buffer,
+  sectionIndex: number,
+  kind: 'header' | 'footer',
+  variant: string,
+  oldPart: string | undefined,
+  oldRel: string | undefined
+) {
+  const bundle = await loadDocxBundle(buffer)
+  const props = sectionProperties(bundle)
+  const relationships = await documentRelationships(bundle.zip)
+  const directory = oldPart ? path.posix.dirname(oldPart) : 'word'
+  async function makePart(copy?: string) {
+    let suffix = 1
+    while (bundle.zip.file(directory + '/' + kind + suffix + '.xml')) suffix++
+    const name = directory + '/' + kind + suffix + '.xml'
+    const tag = kind === 'header' ? 'hdr' : 'ftr'
+    const xml = copy ? await bundle.zip.file(copy)?.async('string') : undefined
+    bundle.zip.file(name, xml ?? '<w:' + tag + ' xmlns:w="' + WORD_NS + '"/>')
+    if (copy) {
+      const rels = bundle.zip.file(
+        path.posix.join(directory, '_rels', path.posix.basename(copy) + '.rels')
+      )
+      if (rels)
+        bundle.zip.file(
+          path.posix.join(directory, '_rels', path.posix.basename(name) + '.rels'),
+          await rels.async('nodebuffer')
+        )
+    }
+    const id = nextRelationshipId(relationships)
+    appendRelationship(relationships, id, path.posix.relative('word', name), REL_NS + '/' + kind)
+    await ensureContentTypeOverride(
+      bundle.zip,
+      '/' + name,
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.' + kind + '+xml'
+    )
+    return { name, id }
+  }
+  function bind(ordinal: number, id: string) {
+    const section = resolveSectionProperties(bundle, 'section:' + ordinal)
+    const ref =
+      childElements(section, kind + 'Reference').find((e) => getAttr(e, 'type') === variant) ??
+      sectionChild(section, kind + 'Reference', true)
+    setWordAttr(ref, 'type', variant)
+    setRelAttr(ref, 'id', id)
+  }
+  const own = await makePart(oldPart)
+  bind(sectionIndex, own.id)
+  if (
+    sectionIndex + 1 < props.length &&
+    !childElements(
+      resolveSectionProperties(bundle, 'section:' + (sectionIndex + 1)),
+      kind + 'Reference'
+    ).some((e) => getAttr(e, 'type') === variant)
+  ) {
+    bind(sectionIndex + 1, oldRel ?? (await makePart()).id)
+  }
+  bundle.zip.file(
+    'word/_rels/document.xml.rels',
+    new XMLSerializer().serializeToString(relationships)
+  )
+  bundle.zip.file('word/document.xml', new XMLSerializer().serializeToString(bundle.documentDom))
+  return { partName: own.name, buffer: await writeZip(bundle.zip) }
+}
+
+async function insertStoryBlocks(
+  buffer: Buffer,
+  op: Extract<DocxOperation, { type: 'insert_nodes' | 'create_table' }>,
+  storyId: string
+) {
+  const bundle = await loadDocxBundle(buffer)
+  const story = bundle.stories.find((p) => p.story.storyId === storyId)
+  if (
+    !story ||
+    !['header', 'footer'].includes(story.story.type) ||
+    !['inside_start', 'inside_end'].includes(op.position)
+  )
+    throw new Error('invalid header/footer insertion target')
+  const writer = await createRelationshipWriter(bundle.zip, story.partName)
+  const blocks: Element[] = []
+  if (op.type === 'create_table') {
+    const table = wordElement(story.dom, 'tbl')
+    op.rows.forEach((row) => table.appendChild(createPlainRow(story.dom, row)))
+    blocks.push(table)
+  } else {
+    for (const draft of op.nodes) {
+      if (draft.type !== 'paragraph') throw new Error('header/footer content requires a paragraph')
+      blocks.push(contentDraftElement(story.dom, draft, writer))
+    }
+  }
+  const next = op.position === 'inside_start' ? story.root.firstChild : null
+  blocks.forEach((block) => story.root.insertBefore(block, next))
+  await writer.persist()
+  return writeDocumentXml(bundle)
+}
+
 export const applyDocxOps = async (input: {
   buffer: Buffer
   ops: DocxOperation[]
@@ -2440,6 +2480,13 @@ export const applyDocxOps = async (input: {
   let buffer = input.buffer
   const changedNodes: DocxChangedNode[] = []
   for (const op of input.ops) {
+    if (
+      (op.type === 'insert_nodes' || op.type === 'create_table') &&
+      op.nodeId?.startsWith('storyRoot:')
+    ) {
+      buffer = await insertStoryBlocks(buffer, op, op.nodeId.slice('storyRoot:'.length))
+      continue
+    }
     if (op.type === 'create_document') continue
     if (
       op.type === 'replace_text' ||

@@ -422,18 +422,24 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
       description: 'act 执行说明（成败由 ToolCallResult.ok 表达）'
     }
   ],
+  docx_read_annotations: [
+    { path: 'comments[] / revisions[]', description: '记录 ID 与内容锚点' },
+    { path: 'trackChanges / nextCursor?', description: '修订开关与续读游标' }
+  ],
   docx_read_outline: [
+    { path: 'sections[].nodeId / segments', description: '有序节和正文摘要' },
     { path: 'fromPercent / toPercent', description: '比例区间' },
     { path: 'fromNodeIndex / toNodeIndex', description: '根节点区间' },
     { path: 'totalRootCount', description: '根节点总数' },
-    { path: 'segments[].story', description: '故事区域' },
+    { path: 'sections[].nodeId / segments', description: '节 ID 与正文摘要' },
+    { path: 'segments[].story', description: '独立故事区域' },
     { path: 'segments[].fromNodeIndex / toNodeIndex', description: '段内索引' },
     { path: 'segments[].textMap', description: '结构缩略文本' }
   ],
   docx_search: [
     { path: 'totalMatchCount / returnedMatchCount', description: '命中计数' },
     { path: 'matches[].nodeId / nodeIndex / type / story', description: '节点定位' },
-    { path: 'matches[].tableNodeId?', description: '表格命中' },
+    { path: 'matches[].sectionNodeIds? / tableNodeId?', description: '所属节与表格' },
     { path: 'matches[].matchText / textContext', description: '命中与上下文' },
     { path: 'matches[].before[] / after[]', description: '邻节点 preview' }
   ],
@@ -982,6 +988,14 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
     },
     { label: '浏览器错误', ok: false, data: { error: 'Browser service unavailable' } }
   ],
+  docx_read_annotations: [
+    {
+      label: '批注',
+      input: { sourcePath: '/workspace/reports/q3.docx', type: 'comments' },
+      ok: true,
+      data: { comments: [{ commentId: '0', text: '请核对', anchorNodeIds: ['node_14'] }] }
+    }
+  ],
   docx_read_outline: [
     {
       label: '成功',
@@ -997,19 +1011,27 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
         fromNodeIndex: 0,
         toNodeIndex: 6,
         totalRootCount: 18,
-        segments: [
+        segments: [],
+        sections: [
           {
-            story: 'body',
-            fromNodeIndex: 0,
-            toNodeIndex: 2,
-            textMap:
-              '结构：标题 + 摘要段\n关键词：Q3、营收、同比\n代表句：[1] 第三季度业务回顾\n代表句：[2] 核心指标如下表'
-          },
-          {
-            story: 'body',
-            fromNodeIndex: 3,
-            toNodeIndex: 6,
-            textMap: '结构：表格 4x3 KPI 表\n关键词：GMV、转化率、留存\n代表句：[5] 华东区增长最快'
+            type: 'section',
+            nodeId: 'section-a',
+            segments: [
+              {
+                story: 'body',
+                fromNodeIndex: 0,
+                toNodeIndex: 2,
+                textMap:
+                  '结构：标题 + 摘要段\n关键词：Q3、营收、同比\n代表句：[1] 第三季度业务回顾\n代表句：[2] 核心指标如下表'
+              },
+              {
+                story: 'body',
+                fromNodeIndex: 3,
+                toNodeIndex: 6,
+                textMap:
+                  '结构：表格 4x3 KPI 表\n关键词：GMV、转化率、留存\n代表句：[5] 华东区增长最快'
+              }
+            ]
           }
         ]
       }
@@ -1128,13 +1150,13 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
       input: {
         sourcePath: '/workspace/reports/q3-summary.docx',
         type: 'insert_nodes',
-        anchorNodeId: 'node_10',
+        nodeId: 'node_10',
         position: 'after',
         nodes: [
           {
             type: 'paragraph',
-            kind: 'paragraph',
-            runs: [{ text: '本段为模型新增的执行摘要补充。', bold: true }]
+            text: '本段为模型新增的执行摘要补充。',
+            runStyle: { bold: true }
           }
         ]
       },
@@ -1149,9 +1171,8 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
       input: {
         sourcePath: '/workspace/reports/q3-summary.docx',
         type: 'format_text',
-        nodeId: 'n:14:1',
-        bold: true,
-        color: 'C00000'
+        targets: [{ nodeId: 'n:14:1' }],
+        format: { bold: true, color: 'C00000' }
       },
       ok: true,
       data: {}
@@ -1164,8 +1185,7 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
         sourcePath: '/workspace/reports/q3-summary.docx',
         type: 'insert_row',
         tableNodeId: 'node_15',
-        rowIndex: 2,
-        cells: [{ paragraphs: [{ kind: 'paragraph', runs: [{ text: '华南' }] }] }]
+        cells: ['华南']
       },
       ok: true,
       data: { createdIds: ['row:4'] }
@@ -1178,7 +1198,8 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
         sourcePath: '/workspace/reports/q3-summary.docx',
         type: 'add_comment',
         nodeId: 'node_14',
-        text: '请核对 GMV 口径是否与 BI 一致'
+        text: 'GMV',
+        comment: '请核对 GMV 口径是否与 BI 一致'
       },
       ok: true,
       data: { createdIds: ['comment-8'] }

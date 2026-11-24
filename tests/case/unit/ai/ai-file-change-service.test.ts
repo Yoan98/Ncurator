@@ -10,6 +10,8 @@ import type {
   TextFileDiffArtifact
 } from '../../../../src/shared/types'
 import { AiFileChangeService } from '../../../../src/main/services/ai/fileChanges/AiFileChangeService'
+import { writeDocxFile } from '../../../../src/main/services/files/DocxFileWriteService'
+import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { setOfficeFileWriteListener } from '../../../../src/main/services/wps/officeFileWriteNotify'
 
 class MemoryStore {
@@ -58,6 +60,52 @@ describe('confirmed file sessions', () => {
       buffer: Buffer.from(content),
       capability: 'text_file'
     })
+
+  it('checks the disk version again when an AI write waits behind a Word autosave', async () => {
+    const make = (name: string, text: string) =>
+      writeTestDocxFile(root, name, [{ type: 'paragraph', text }])
+    const source = await make('working.docx', '原件')
+    const manual = await fs.readFile(await make('manual.docx', '人工编辑'))
+    const ai = await fs.readFile(await make('ai.docx', 'AI 编辑'))
+    const expectedChecksum = hash(await fs.readFile(source))
+    let enter!: () => void, unlock!: () => void
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve
+    })
+    const release = new Promise<void>((resolve) => {
+      unlock = resolve
+    })
+    setOfficeFileWriteListener({
+      notifyWritten: () => {},
+      prepareClose: async () => {
+        enter()
+        await release
+        return false
+      }
+    })
+    const saving = writeDocxFile({
+      filePath: source,
+      bytes: manual,
+      expectedHash: expectedChecksum
+    })
+    await entered
+    const writing = service.sessions.write('partner', 'owner', {
+      sourcePath: source,
+      buffer: ai,
+      capability: 'docx',
+      expectedChecksum
+    })
+    const rejected = expect(writing).rejects.toThrow()
+    try {
+      await expect.poll(() => service.sessions.read('partner', 'owner', source)).toBeDefined()
+    } finally {
+      unlock()
+    }
+    await rejected
+    expect((await saving).success).toBe(true)
+    expect(await fs.readFile(source)).toEqual(manual)
+    expect(await service.sessions.read('partner', 'owner', source)).toBeUndefined()
+  })
 
   it('publishes only the latest confirmed B and recovers an immutable review after external C', async () => {
     const source = path.join(root, 'text.md'),

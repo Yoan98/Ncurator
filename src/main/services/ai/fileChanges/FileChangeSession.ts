@@ -169,6 +169,11 @@ export class FileChangeSessions {
       await withOfficeFileWrite(input.sourcePath, async () => {
         await fs.writeFile(sourceTemp!, input.buffer, { flag: 'wx', mode })
         await fs.chmod(sourceTemp!, mode)
+        if (
+          input.expectedChecksum &&
+          hash(await fs.readFile(input.sourcePath)) !== input.expectedChecksum
+        )
+          throw new Error('文件在操作期间发生变化，请重新读取后再修改')
         attempted = true
         await fs.rename(sourceTemp!, input.sourcePath)
         written = true

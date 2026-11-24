@@ -84,6 +84,7 @@ describe('workbench result e2e', () => {
             timeout: 30_000
           })
           await getWorkbenchLocator(page, workbenchSelectors.applyPanel)
+            .locator('.superdoc-page')
             .getByText(MARKER)
             .waitFor({ state: 'visible', timeout: 30_000 })
           await getWorkbenchLocator(page, workbenchSelectors.applyOpenSystemButton).click()
@@ -91,6 +92,10 @@ describe('workbench result e2e', () => {
             .locator(`[data-testid^="${workbenchSelectors.openWithApplicationPrefix}-"]`)
             .first()
           await docxOpenWithApplication.waitFor({ state: 'visible', timeout: 10_000 })
+          const wpsNotice = page.getByRole('dialog').filter({ hasText: 'WPS 联动暂不可用' })
+          await page.addLocatorHandler(wpsNotice, () =>
+            wpsNotice.getByRole('button', { name: /稍\s*后/ }).click()
+          )
           await docxOpenWithApplication.click()
           const externalApplicationHintVisible = await page
             .getByText(EXTERNAL_APPLICATION_NOTICE, { exact: true })

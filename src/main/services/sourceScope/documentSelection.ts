@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises'
+import { loadDocxBundle } from '../ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import path from 'node:path'
 import type { DocumentSelectionNode } from '../../../shared/types'
 import { MAX_EXCEL_SELECTION_CELLS } from '../../../shared/documentSelection'
@@ -89,4 +91,43 @@ export function validateDocumentSelection(node: DocumentSelectionNode): void {
       end = `${column(a.endColumn)}${a.endRow + 1}`
     if (a.range !== (start === end ? start : `${start}:${end}`)) fail()
   } else fail()
+}
+
+const compactText = (text: string) => text.replace(/\s+/gu, '')
+/** Match rendered selections against the saved package, before creating a chat run. */
+export async function readDocxSelectionStories(filePath: string): Promise<string[]> {
+  const bundle = await loadDocxBundle(await fs.readFile(filePath))
+  return bundle.stories.map(({ root }) =>
+    compactText(
+      Array.from(
+        root.getElementsByTagNameNS(
+          'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+          't'
+        )
+      )
+        .filter((t) => {
+          for (let n = t.parentNode; n && n !== root; n = n.parentNode)
+            if (['del', 'moveFrom', 'txbxContent'].includes((n as Element).localName)) return false
+          return true
+        })
+        .map((t) => t.textContent)
+        .join('')
+    )
+  )
+}
+
+export function verifySavedDocxSelection(node: DocumentSelectionNode, stories: string[]): void {
+  const quote = compactText(node.selectedText)
+  const before = compactText(node.contextBefore),
+    after = compactText(node.contextAfter)
+  let count = 0,
+    matches = 0
+  for (const story of stories) {
+    for (let at = story.indexOf(quote); at >= 0; at = story.indexOf(quote, at + 1)) {
+      count++
+      if (story.slice(0, at).endsWith(before) && story.slice(at + quote.length).startsWith(after))
+        matches++
+    }
+  }
+  if (count !== 1 && matches !== 1) throw new Error('Word 选区已变化或无法唯一定位，请重新选择原文')
 }

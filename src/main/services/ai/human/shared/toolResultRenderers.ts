@@ -157,7 +157,11 @@ const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
           ['nodeIndex', typeof nodeIndex === 'number' ? String(nodeIndex) : undefined],
           ['story', readStringField(item, 'story')],
           ['matchText', readStringField(item, 'matchText')],
-          ['tableNodeId', readStringField(item, 'tableNodeId')]
+          ['tableNodeId', readStringField(item, 'tableNodeId')],
+          [
+            'sectionNodeIds',
+            Array.isArray(item.sectionNodeIds) ? item.sectionNodeIds.join(', ') : undefined
+          ]
         ]) || undefined
       const neighbors = [
         Array.isArray(item.before) ? `  before:\n${renderDocxNodes(item.before)}` : '',
@@ -197,6 +201,9 @@ const renderDocxOutlineResult = (obj: JsonObject): string =>
       ['toNodeIndex', readNumberTextField(obj, 'toNodeIndex')],
       ['totalRootCount', readNumberTextField(obj, 'totalRootCount')]
     ]),
+    ...(Array.isArray(obj.sections)
+      ? obj.sections.map((section) => renderGenericObject(isJsonObject(section) ? section : {}))
+      : []),
     'segments:',
     Array.isArray(obj.segments) && obj.segments.length > 0
       ? obj.segments

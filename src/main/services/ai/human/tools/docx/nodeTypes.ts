@@ -155,14 +155,6 @@ export type DocxReadContentControlNode = {
   children: DocxReadNode[]
 }
 
-export type DocxReadRevisionNode = {
-  type: 'revision'
-  nodeId: string
-  revisionId: string
-  kind: 'insert' | 'delete' | 'move_from' | 'move_to'
-  children: DocxReadNode[]
-}
-
 export type DocxReadFieldNode = {
   type: 'field'
   nodeId: string
@@ -245,7 +237,6 @@ export type DocxReadInlineNode =
   | DocxReadRunNode
   | DocxReadHyperlinkNode
   | DocxReadContentControlNode
-  | DocxReadRevisionNode
   | DocxReadFieldNode
   | DocxReadBookmarkNode
   | DocxReadMathNode
@@ -255,7 +246,6 @@ export type DocxReadContentNode =
   | DocxReadParagraphNode
   | DocxReadTableNode
   | DocxReadContentControlNode
-  | DocxReadRevisionNode
   | DocxReadOpaqueNode
 
 export type DocxReadNode =
@@ -307,13 +297,6 @@ export type DocxPublicReadInlineContentControlNode = {
   tag?: string
   children: DocxPublicReadInlineNode[]
 }
-export type DocxPublicReadInlineRevisionNode = {
-  type: 'revision'
-  nodeId: string
-  revisionId: string
-  kind: 'insert' | 'delete' | 'move_from' | 'move_to'
-  children: DocxPublicReadInlineNode[]
-}
 export type DocxPublicReadFieldNode = {
   type: 'field'
   nodeId: string
@@ -336,7 +319,6 @@ export type DocxPublicReadInlineNode =
   | DocxPublicReadRunNode
   | DocxPublicReadHyperlinkNode
   | DocxPublicReadInlineContentControlNode
-  | DocxPublicReadInlineRevisionNode
   | DocxPublicReadFieldNode
   | DocxPublicReadBookmarkNode
   | DocxPublicReadMathNode
@@ -382,13 +364,6 @@ export type DocxPublicReadContentControlNode = {
   tag?: string
   children: DocxPublicReadNestedNode[]
 }
-export type DocxPublicReadRevisionNode = {
-  type: 'revision'
-  nodeId: string
-  revisionId: string
-  kind: 'insert' | 'delete' | 'move_from' | 'move_to'
-  children: DocxPublicReadNestedNode[]
-}
 export type DocxPublicReadOpaqueNode = {
   type: 'opaque'
   name: string
@@ -398,7 +373,6 @@ export type DocxPublicReadNestedNode =
   | DocxPublicReadNestedParagraphNode
   | DocxPublicReadNestedTableNode
   | DocxPublicReadContentControlNode
-  | DocxPublicReadRevisionNode
   | DocxPublicReadOpaqueNode
 export type DocxPublicReadVisualContentNode =
   | DocxPublicReadNestedParagraphNode
@@ -417,22 +391,13 @@ export type DocxPublicReadRootCellNode = Omit<DocxPublicReadTableCellNode, 'row'
   col: number
   story: DocxStoryRef
 }
-export type DocxPublicReadRootContainerNode =
-  | {
-      type: 'content_control'
-      nodeId: string
-      story: DocxStoryRef
-      tag?: string
-      children: DocxPublicReadNestedNode[]
-    }
-  | {
-      type: 'revision'
-      nodeId: string
-      story: DocxStoryRef
-      revisionId: string
-      kind: 'insert' | 'delete' | 'move_from' | 'move_to'
-      children: DocxPublicReadNestedNode[]
-    }
+export type DocxPublicReadRootContainerNode = {
+  type: 'content_control'
+  nodeId: string
+  story: DocxStoryRef
+  tag?: string
+  children: DocxPublicReadNestedNode[]
+}
 export type DocxPublicReadRootNode =
   | DocxPublicReadRootParagraphNode
   | DocxPublicReadRootTableNode

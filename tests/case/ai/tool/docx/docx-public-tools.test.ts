@@ -16,6 +16,7 @@ type OutlineResult = {
   fromNodeIndex: number
   toNodeIndex: number
   totalRootCount: number
+  sections: Array<{ nodeId: string; segments: OutlineResult['segments'] }>
   segments: Array<{ story: string; fromNodeIndex: number; toNodeIndex: number; textMap: string }>
 }
 type SearchResult = {
@@ -365,8 +366,8 @@ describe('ai tool docx backend', () => {
           const sectionFormat = await harness.invoke<MutationResult>('docx_format', {
             sourcePath,
             type: 'format_section',
-            nodeIds: [paragraph.nodeId, secondParagraph.nodeId],
-            orientation: 'landscape'
+            nodeIds: [outline.sections[0]!.nodeId],
+            format: { orientation: 'landscape' }
           })
           const resetFormat = await harness.invoke<MutationResult>('docx_format', {
             sourcePath,
@@ -501,10 +502,11 @@ describe('ai tool docx backend', () => {
           result.outline.totalRootCount > 0 &&
             result.outline.fromPercent === 0 &&
             result.outline.toPercent === 100 &&
-            result.outline.segments.length === 3 &&
-            result.outline.segments.filter((segment) => segment.textMap.includes('表格 2x2'))
-              .length === 2 &&
-            !JSON.stringify(result.outline).includes('nodeId') &&
+            result.outline.sections[0]!.segments.length === 3 &&
+            result.outline.sections[0]!.segments.filter((segment) =>
+              segment.textMap.includes('表格 2x2')
+            ).length === 2 &&
+            Boolean(result.outline.sections[0]?.nodeId) &&
             result.created.createdIds?.length === 2 &&
             result.createdReadback.nodes.length === 2 &&
             result.createdReadback.nodes.every((node) => nodeText(node).includes('Created')) &&

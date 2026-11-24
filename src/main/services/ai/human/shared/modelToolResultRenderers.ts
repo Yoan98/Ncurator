@@ -279,17 +279,22 @@ export const renderKbListDocumentsModelResult: ModelResultRenderer = ({ data }) 
 
 export const renderDocxOutlineModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
-  const segments = Array.isArray(obj.segments) ? obj.segments.filter(isObject) : []
+  const renderSegments = (segments: JsonValue | undefined) =>
+    (Array.isArray(segments) ? segments.filter(isObject) : []).flatMap((segment, index) => [
+      `  ${index + 1}. story=${readString(segment.story) || ''}; nodeIndex=${readNumber(segment.fromNodeIndex) ?? ''}-${readNumber(segment.toNodeIndex) ?? ''}`,
+      indentBlock(readString(segment.textMap) || '', 2)
+    ])
+  const sections = Array.isArray(obj.sections) ? obj.sections.filter(isObject) : []
+  const segments = renderSegments(obj.segments)
   return joinGroupedSections([
     renderGroupedHeader('DOCX outline read completed successfully.'),
     `Range: ${readNumber(obj.fromPercent) ?? ''}-${readNumber(obj.toPercent) ?? ''}%; nodeIndex=${readNumber(obj.fromNodeIndex) ?? ''}-${readNumber(obj.toNodeIndex) ?? ''}; totalRootCount=${readNumber(obj.totalRootCount) ?? ''}`,
+    ...sections.flatMap((section, index) => [
+      `Section ${index + 1}: type=section; nodeId=${readString(section.nodeId)}`,
+      ...renderSegments(section.segments)
+    ]),
     'Segments:',
-    ...(segments.length
-      ? segments.flatMap((segment, index) => [
-          `  ${index + 1}. story=${readString(segment.story) || ''}; nodeIndex=${readNumber(segment.fromNodeIndex) ?? ''}-${readNumber(segment.toNodeIndex) ?? ''}`,
-          indentBlock(readString(segment.textMap) || '', 2)
-        ])
-      : ['  none'])
+    ...(segments.length ? segments : ['  none'])
   ])
 }
 
@@ -319,6 +324,9 @@ export const renderDocxSearchModelResult: ModelResultRenderer = ({ data }) => {
     ...(matches.length
       ? matches.flatMap((item, index) => [
           `  ${index + 1}. nodeId=${readString(item.nodeId) || ''}; nodeIndex=${readNumber(item.nodeIndex) ?? ''}; type=${readString(item.type) || ''}; story=${readString(item.story) || ''}${readString(item.tableNodeId) ? `; tableNodeId=${readString(item.tableNodeId)}` : ''}`,
+          ...(Array.isArray(item.sectionNodeIds)
+            ? [`    sectionNodeIds=${item.sectionNodeIds.join(', ')}`]
+            : []),
           `    matchText=${JSON.stringify(readString(item.matchText) || '')}`,
           '    context:',
           indentBlock(readString(item.textContext) || '', 3),
@@ -470,7 +478,9 @@ export const renderDocxMutationModelResult: ModelResultRenderer = ({ args, data 
   const createdIds = readCreatedIds(data)
   return renderFileMutationProse({
     path,
-    suffix: createdIds.length ? `Created node IDs: ${createdIds.join(', ')}` : undefined
+    suffix: createdIds.length
+      ? `${['add_comment', 'reply_comment'].includes(readString(args.type) ?? '') ? 'Created comment IDs' : 'Created node IDs'}: ${createdIds.join(', ')}`
+      : undefined
   })
 }
 

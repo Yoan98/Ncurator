@@ -95,11 +95,13 @@ describe('workbench result e2e', () => {
           const modeToggle = getWorkbenchLocator(page, workbenchSelectors.documentModeToggle)
           await modeToggle.click()
           await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
+            .locator('.superdoc-page')
             .getByText(`external-${MARKER}`, { exact: false })
             .waitFor({ state: 'visible', timeout: 30_000 })
           const previewContainsExternalC = true
           await modeToggle.click()
           await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
+            .locator('.superdoc-page')
             .getByText(`Workbench force revert marker ${MARKER}`, { exact: false })
             .waitFor({ state: 'visible', timeout: 30_000 })
           const reviewText =

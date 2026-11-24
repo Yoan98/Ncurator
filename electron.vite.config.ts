@@ -7,6 +7,9 @@ import { createKnowledgeCacheIdentity } from './scripts/build/runtime/knowledge-
 
 export default defineConfig(async (): Promise<UserConfig> => {
   execFileSync(process.execPath, [resolve('scripts/build/vditor-assets.mjs')], { stdio: 'inherit' })
+  execFileSync(process.execPath, [resolve('scripts/build/superdoc-assets.mjs')], {
+    stdio: 'inherit'
+  })
   const knowledgeIdentity = await createKnowledgeCacheIdentity()
 
   return {

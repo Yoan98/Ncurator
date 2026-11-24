@@ -49,6 +49,7 @@ export default function DocumentSelectionLayer({
   useLayoutEffect(() => {
     latest.current = { state, adapter, popup }
   }, [state, adapter, popup])
+  const available = Boolean(revision)
   const noticeKey = `${testPrefix}-selection`
   const open = useCallback(
     (candidate: SelectionCandidate, mode: SelectionPopup['mode']) => {
@@ -61,7 +62,7 @@ export default function DocumentSelectionLayer({
   )
 
   useEffect(() => {
-    if (!container || !state?.enabled || !revision) return
+    if (!container || !state?.enabled || !available) return
     let start: { x: number; y: number } | null = null
     let clicked: SelectionTarget | undefined
     let pointer: PointerEvent | null = null
@@ -83,11 +84,14 @@ export default function DocumentSelectionLayer({
       if (manageCursor) container.toggleAttribute('data-document-selection-hover', Boolean(target))
       setHoveredId(target?.node.id || null)
     }
-    const capture = (event: PointerEvent | KeyboardEvent) => {
+    let generation = 0
+    const capture = async (event: PointerEvent | KeyboardEvent) => {
       const current = latest.current
       if (current.state?.locked) return
       try {
-        const candidate = current.adapter.capture(event)
+        const version = ++generation
+        const candidate = await current.adapter.capture(event)
+        if (version !== generation) return
         if (!candidate) return
         const nodes = current.state?.selections.filter((n) => n.filePath === filePath) || []
         if (
@@ -123,13 +127,14 @@ export default function DocumentSelectionLayer({
         clicked = undefined
         return
       }
+      const origin = latest.current.adapter.pointerOrigin?.() ?? start
       clicked =
-        start &&
+        origin &&
         !e.shiftKey &&
         !e.ctrlKey &&
         !e.metaKey &&
         !e.altKey &&
-        Math.hypot(e.clientX - start.x, e.clientY - start.y) <= POINTER_CLICK_THRESHOLD
+        Math.hypot(e.clientX - origin.x, e.clientY - origin.y) <= POINTER_CLICK_THRESHOLD
           ? hit(e)
           : undefined
       start = null
@@ -157,6 +162,7 @@ export default function DocumentSelectionLayer({
       hover(pointer && !latest.current.state?.locked ? hit(pointer) : undefined)
     }
     const key = (e: KeyboardEvent) => {
+      if (testPrefix === 'docx' && e.key === 'Shift') return
       if (
         (['Enter', ' '].includes(e.key) &&
           e.target instanceof Element &&
@@ -168,20 +174,21 @@ export default function DocumentSelectionLayer({
       )
         capture(e)
     }
-    container.addEventListener('pointerdown', down)
-    container.addEventListener('pointerup', up)
+    container.addEventListener('pointerdown', down, testPrefix === 'docx')
+    container.addEventListener('pointerup', up, testPrefix === 'docx')
     container.addEventListener('pointercancel', leave)
-    container.addEventListener('click', click)
+    container.addEventListener('click', click, testPrefix === 'docx')
     container.addEventListener('pointermove', move)
     container.addEventListener('pointerleave', leave)
     container.addEventListener('keyup', key)
     document.addEventListener('scroll', scroll, true)
     window.addEventListener('blur', leave)
     return () => {
-      container.removeEventListener('pointerdown', down)
-      container.removeEventListener('pointerup', up)
+      generation++
+      container.removeEventListener('pointerdown', down, testPrefix === 'docx')
+      container.removeEventListener('pointerup', up, testPrefix === 'docx')
       container.removeEventListener('pointercancel', leave)
-      container.removeEventListener('click', click)
+      container.removeEventListener('click', click, testPrefix === 'docx')
       container.removeEventListener('pointermove', move)
       container.removeEventListener('pointerleave', leave)
       container.removeEventListener('keyup', key)
@@ -189,7 +196,17 @@ export default function DocumentSelectionLayer({
       window.removeEventListener('blur', leave)
       if (manageCursor) container.removeAttribute('data-document-selection-hover')
     }
-  }, [container, filePath, state?.enabled, revision, open, message, noticeKey, manageCursor])
+  }, [
+    container,
+    filePath,
+    state?.enabled,
+    available,
+    open,
+    message,
+    noticeKey,
+    manageCursor,
+    testPrefix
+  ])
 
   useLayoutEffect(() => () => onTargetsChange?.([]), [onTargetsChange])
 
@@ -376,7 +393,7 @@ export default function DocumentSelectionLayer({
     setHoveredId(null)
     setBoxes([])
     message.destroy(noticeKey)
-  }, [filePath, revision, state?.enabled, state?.partnerId, noticeKey, message])
+  }, [filePath, available, state?.enabled, state?.partnerId, noticeKey, message])
 
   if (!state?.enabled || !container) return null
   const save = () => {

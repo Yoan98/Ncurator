@@ -945,6 +945,12 @@ export interface FileWatchChangeEvent {
   filePath: string
 }
 
+export interface WriteDocxFileRequest {
+  filePath: string
+  bytes: Uint8Array
+  expectedHash: string
+}
+
 export interface WriteTextFileRequest {
   filePath: string
   content: string

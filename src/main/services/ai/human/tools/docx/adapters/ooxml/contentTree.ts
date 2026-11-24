@@ -12,7 +12,6 @@ import type {
   DocxReadInlineNode,
   DocxReadNode,
   DocxReadParagraphNode,
-  DocxReadRevisionNode,
   DocxReadRunChildNode,
   DocxReadRunNode,
   DocxReadTableCellNode,
@@ -392,11 +391,7 @@ const parseVisual = (
   context.nodesById.set(id, descriptor)
 
   const textBox = firstDescendant(node, 'txbxContent')
-  const children = textBox
-    ? childElements(textBox)
-        .map((child, index) => parseContentNode(child, context, `${currentPath}.textbox.${index}`))
-        .filter((child): child is DocxReadContentNode => Boolean(child))
-    : []
+  const children = textBox ? parseBlockChildren(textBox, context, currentPath + '.textbox') : []
   return {
     type: 'visual',
     nodeId: id,
@@ -479,13 +474,6 @@ const parseHyperlink = (
   }
 }
 
-const revisionKind = (name: string): DocxReadRevisionNode['kind'] => {
-  if (name === 'del') return 'delete'
-  if (name === 'moveFrom') return 'move_from'
-  if (name === 'moveTo') return 'move_to'
-  return 'insert'
-}
-
 const parseContainerChildren = (
   node: Element,
   context: ContentTreeContext,
@@ -530,17 +518,9 @@ const parseContentElement = (
   if (child.localName === 'r') return [parseRun(child, context, currentPath)]
   if (child.localName === 'hyperlink') return [parseHyperlink(child, context, currentPath)]
   if (child.localName === 'sdt') return [parseContentControl(child, context, currentPath)]
-  if (['ins', 'del', 'moveFrom', 'moveTo'].includes(child.localName)) {
-    return [
-      {
-        type: 'revision',
-        nodeId: bindEditableNode(context, currentPath, 'revision', child),
-        revisionId: getAttr(child, 'id'),
-        kind: revisionKind(child.localName),
-        children: parseContainerChildren(child, context, currentPath)
-      }
-    ]
-  }
+  if (child.localName === 'ins' || child.localName === 'moveTo')
+    return parseContainerChildren(child, context, currentPath)
+  if (child.localName === 'del' || child.localName === 'moveFrom') return []
   if (child.localName === 'fldSimple') return [parseSimpleField(child, context, currentPath)]
   if (child.localName === 'bookmarkStart' || child.localName === 'bookmarkEnd') {
     return [
@@ -646,7 +626,6 @@ const readNodeText = (node: DocxReadNode): string => {
   if (node.type === 'tab') return '\t'
   if (node.type === 'break') return '\n'
   if (node.type === 'math') return node.text
-  if (node.type === 'revision' && (node.kind === 'delete' || node.kind === 'move_from')) return ''
   if (!('children' in node) || !node.children) return ''
   return node.children.map((child) => readNodeText(child)).join('')
 }
@@ -699,9 +678,7 @@ const parseCell = (
       node: cell
     })
   }
-  const children = childElements(cell)
-    .map((child, index) => parseContentNode(child, cellContext, `${currentPath}.${index}`))
-    .filter((child): child is DocxReadContentNode => Boolean(child))
+  const children = parseBlockChildren(cell, cellContext, currentPath)
   return {
     type: 'table_cell',
     nodeId: id,
@@ -775,6 +752,19 @@ const parseTable = (
   }
 }
 
+const parseBlockChildren = (
+  parent: Element,
+  context: ContentTreeContext,
+  path: string
+): DocxReadContentNode[] =>
+  childElements(parent).flatMap((child, i) => {
+    const at = path + '.' + i
+    if (child.localName === 'ins' || child.localName === 'moveTo')
+      return parseBlockChildren(child, context, at)
+    const block = parseContentNode(child, context, at)
+    return block ? [block] : []
+  })
+
 const parseContentNode = (
   node: Element,
   context: ContentTreeContext,
@@ -783,15 +773,6 @@ const parseContentNode = (
   if (node.localName === 'p') return parseParagraph(node, context, currentPath)
   if (node.localName === 'tbl') return parseTable(node, context, currentPath)
   if (node.localName === 'sdt') return parseContentControl(node, context, currentPath)
-  if (['ins', 'del', 'moveFrom', 'moveTo'].includes(node.localName)) {
-    return {
-      type: 'revision',
-      nodeId: bindEditableNode(context, currentPath, 'revision', node),
-      revisionId: getAttr(node, 'id'),
-      kind: revisionKind(node.localName),
-      children: parseContainerChildren(node, context, currentPath)
-    }
-  }
   return null
 }
 
@@ -883,7 +864,7 @@ export const buildContainerDetail = (input: {
   styleContext: DocxStyleContext
 }): DocxDetailedContainerNode => {
   const parsed = parseContentNode(input.container, createContext(input), 'root')
-  if (!parsed || (parsed.type !== 'content_control' && parsed.type !== 'revision')) {
+  if (!parsed || parsed.type !== 'content_control') {
     throw new Error(`unsupported DOCX root container: ${input.container.localName}`)
   }
   const children = parsed.children.filter(
@@ -891,7 +872,6 @@ export const buildContainerDetail = (input: {
       child.type === 'paragraph' ||
       child.type === 'table' ||
       child.type === 'content_control' ||
-      child.type === 'revision' ||
       child.type === 'opaque'
   )
   const shared = {
@@ -905,14 +885,7 @@ export const buildContainerDetail = (input: {
     text: children.map(readNodeText).join('\n'),
     children
   }
-  return parsed.type === 'content_control'
-    ? { ...shared, type: 'content_control', tag: parsed.tag }
-    : {
-        ...shared,
-        type: 'revision',
-        revisionId: parsed.revisionId,
-        revisionKind: parsed.kind
-      }
+  return { ...shared, type: 'content_control', tag: parsed.tag }
 }
 
 const collectVisualKinds = (node: DocxReadNode, out: DocxReadVisualNode[]): void => {

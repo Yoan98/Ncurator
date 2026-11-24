@@ -135,6 +135,7 @@
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0",
     "rxjs": "7.8.2",
+    "superdoc": "2.34.0",
     "uuid": "^13.0.0",
     "vditor": "^3.11.3",
     "word-extractor": "^1.0.4",

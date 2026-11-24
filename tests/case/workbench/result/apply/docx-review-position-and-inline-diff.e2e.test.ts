@@ -9,6 +9,11 @@ import JSZip from 'jszip'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import { readReviewPart } from '../../../../harness/backend/docxReviewAssertions'
 import { createStyleContext } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/styleResolver'
+import { applyDocxOps } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/opExecutor'
+import {
+  buildDocumentNodeIndex,
+  loadDocxBundle
+} from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import { readRunStyle } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/contentTree'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -162,7 +167,21 @@ describe('workbench result e2e', () => {
           props.appendChild(shade)
           run.insertBefore(props, run.firstChild)
           zip.file('word/document.xml', new XMLSerializer().serializeToString(doc))
-          await fs.writeFile(targetPath, await zip.generateAsync({ type: 'nodebuffer' }))
+          const styled = await zip.generateAsync({ type: 'nodebuffer' })
+          const titleId = buildDocumentNodeIndex(await loadDocxBundle(styled)).outline[0]!.nodeId
+          const annotated = await applyDocxOps({
+            buffer: styled,
+            ops: [
+              {
+                type: 'add_comment',
+                nodeId: titleId,
+                text: '标题',
+                comment: '保留原生标题批注',
+                author: '审稿人'
+              }
+            ]
+          })
+          await fs.writeFile(targetPath, annotated.buffer)
           const beforeBytes = await fs.readFile(targetPath)
           const beforeText = await readDocxPlainText(targetPath)
           const beforePositioning = await readPositioningParagraph(beforeBytes)
@@ -218,14 +237,45 @@ describe('workbench result e2e', () => {
             timeout: 30_000
           })
           await getWorkbenchLocator(page, workbenchSelectors.applyPanel)
-            .getByText(MARKER)
+            .locator('.superdoc-page [data-run-id]')
+            .filter({ hasText: MARKER })
+            .first()
             .waitFor({ state: 'visible', timeout: 30_000 })
+          const artifact = evidence.events.find(
+            (event) =>
+              event.type === 'file_artifact' && event.fileName === path.basename(targetPath)
+          )
+          if (artifact?.type !== 'file_artifact' || !artifact.applyId)
+            throw new Error('Missing run-owned review record')
+          const reviewPath = await page.evaluate(
+            async (changeId) =>
+              (await window.api.aiFileChangeGet({ changeId })).record?.previewPath,
+            artifact.applyId
+          )
+          if (!reviewPath) throw new Error('Missing historical Word document')
+          const fixedReview = await fs.readFile(reviewPath)
+          const commentsPart = await (await JSZip.loadAsync(fixedReview))
+            .file('word/comments.xml')
+            ?.async('text')
+          await runtime.assertThat(Boolean(commentsPart?.includes('保留原生标题批注')), {
+            name: 'native-comments-in-review',
+            message: '馆长审核快照保留 Word 原生批注。'
+          })
+          const formalBeforeViewing = await fs.readFile(targetPath)
+          const readOnly = page
+            .locator('.docx-content [data-role="v2-stage"][aria-readonly="true"]')
+            .first()
+          await readOnly.waitFor()
+          await readOnly.click()
+          await page.keyboard.insertText('历史审核只读')
           await assertDocxReviewOverview(runtime)
           const reviewVisual = await getWorkbenchLocator(
             page,
             workbenchSelectors.docxViewer
           ).evaluate((element) => {
-            const paragraphs = Array.from(element.querySelectorAll('p')).map((p) => {
+            const paragraphs = Array.from(
+              element.querySelectorAll('.superdoc-page [data-para-id]')
+            ).map((p) => {
               const fragments: Array<{
                 text: string
                 color: string
@@ -316,9 +366,15 @@ describe('workbench result e2e', () => {
             .locator(`[data-testid^="${workbenchSelectors.openWithApplicationPrefix}-"]`)
             .first()
           await docxOpenWithApplication.waitFor({ state: 'visible', timeout: 10_000 })
+          const wpsNotice = page.getByRole('dialog').filter({ hasText: 'WPS 联动暂不可用' })
+          await page.addLocatorHandler(wpsNotice, async () => {
+            await wpsNotice.getByRole('button', { name: /稍\s*后/ }).click()
+          })
           await docxOpenWithApplication.click()
           const externalApplicationHintVisible = await page
             .getByText(EXTERNAL_APPLICATION_NOTICE, { exact: true })
+            .or(wpsNotice)
+            .first()
             .waitFor({ state: 'visible', timeout: 10_000 })
             .then(() => true)
             .catch(() => false)
@@ -343,10 +399,18 @@ describe('workbench result e2e', () => {
             workbenchSelectors.applyRevertButton
           ).count()
           const previewPositioning = await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
-            .locator('p')
+            .locator('.superdoc-page [data-para-id]')
             .filter({ hasText: CORE_NAMES[0]! })
             .first()
           await previewPositioning.waitFor({ state: 'visible', timeout: 30_000 })
+          await runtime.assertThat(
+            (await fs.readFile(reviewPath)).equals(fixedReview) &&
+              (await fs.readFile(targetPath)).equals(formalBeforeViewing),
+            {
+              name: 'docx-readonly-history',
+              message: '历史审核中尝试输入并切换至正式文件，审核产物和正式文件字节均保持一致。'
+            }
+          )
           await assertEmptyDocxOverview(runtime)
           const previewPositioningText = await previewPositioning.textContent()
           const previewBoldText = await previewPositioning.evaluate((paragraph) => {

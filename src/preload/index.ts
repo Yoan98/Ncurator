@@ -324,6 +324,8 @@ const api: DesktopApi = {
   previewVideoGet: (id) => ipcRenderer.invoke('preview-video-get', id),
   previewVideoConvert: (request) => ipcRenderer.invoke('preview-video-convert', request),
   fileExists: (filePath: string): Promise<boolean> => ipcRenderer.invoke('file-exists', filePath),
+  canWriteDocx: (filePath) => ipcRenderer.invoke('can-write-docx', filePath),
+  writeDocxFile: (payload) => ipcRenderer.invoke('write-docx-file', payload),
   writeTextFile: (payload) => {
     emitE2EIpcCall('writeTextFile', {
       filePath: String(payload?.filePath || '').trim()

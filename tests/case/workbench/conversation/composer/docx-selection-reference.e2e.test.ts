@@ -4,8 +4,9 @@ import {
   assertEmptyDocxOverview
 } from '../../../../harness/e2e/docxOverview'
 import fs from 'node:fs/promises'
+import JSZip from 'jszip'
 import path from 'node:path'
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { Page } from 'playwright'
 import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -31,7 +32,7 @@ const textPoint = (
   page: Page,
   paragraph: number,
   offset: number,
-  selector = 'article p',
+  selector = '.superdoc-page [data-para-id]',
   center = false
 ) =>
   page
@@ -70,7 +71,7 @@ const clickSavedText = async (
   page: Page,
   paragraph: number,
   offset: number,
-  selector = 'article p'
+  selector = '.superdoc-page [data-para-id]'
 ) => {
   await page.locator('.docx-content').locator(selector).nth(paragraph).scrollIntoViewIfNeeded()
   const point = await textPoint(page, paragraph, offset, selector, true)
@@ -123,25 +124,33 @@ const selectText = async (
   await page.locator('.docx-content').click({ position: { x: 5, y: 5 } })
   await page
     .locator('.docx-content')
-    .locator(options.selector || 'article p')
+    .locator(options.selector || '.superdoc-page [data-para-id]')
     .nth(startParagraph)
     .scrollIntoViewIfNeeded()
   const startPoint = await textPoint(page, startParagraph, start, options.selector)
-  // Hold Shift before releasing the first click so saved text remains a selection anchor.
-  await page.mouse.move(startPoint.x, startPoint.y)
-  await page.mouse.down()
-  await page.keyboard.down('Shift')
-  try {
-    await page.mouse.up()
-    await page
-      .locator('.docx-content')
-      .locator(options.selector || 'article p')
-      .nth(endParagraph)
-      .scrollIntoViewIfNeeded()
+  if (startParagraph === endParagraph) {
     const endPoint = await textPoint(page, endParagraph, end, options.selector)
-    await page.mouse.click(endPoint.x, endPoint.y)
-  } finally {
-    await page.keyboard.up('Shift')
+    await page.mouse.move(startPoint.x, startPoint.y)
+    await page.mouse.down()
+    await page.mouse.move(endPoint.x, endPoint.y, { steps: 8 })
+    await page.mouse.up()
+  } else {
+    // Hold Shift before releasing the first click so saved text remains a selection anchor.
+    await page.mouse.move(startPoint.x, startPoint.y)
+    await page.mouse.down()
+    await page.keyboard.down('Shift')
+    try {
+      await page.mouse.up()
+      await page
+        .locator('.docx-content')
+        .locator(options.selector || '.superdoc-page [data-para-id]')
+        .nth(endParagraph)
+        .scrollIntoViewIfNeeded()
+      const endPoint = await textPoint(page, endParagraph, end, options.selector)
+      await page.mouse.click(endPoint.x, endPoint.y)
+    } finally {
+      await page.keyboard.up('Shift')
+    }
   }
   if (options.popup !== false) {
     await page.getByTestId('docx-selection-ai-reference').waitFor({ state: 'visible' })
@@ -216,7 +225,25 @@ describe('workbench conversation e2e', () => {
             await openWorkbenchWorkspaceFile(runtime, name)
             await page.keyboard.press('Escape')
           }
-          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          const tailParagraph = '窄栏分页选区'
+          const setup = await setupWorkbenchWithTempWorkspace(page, {
+            caseId: CASE_ID,
+            prepareWorkspace: async (root) => {
+              const filename = path.join(root, '工作/客户周会纪要.docx')
+              const zip = await JSZip.loadAsync(await fs.readFile(filename))
+              const xml = await zip.file('word/document.xml')!.async('string')
+              const pages = ['滚动分页一', '滚动分页二', tailParagraph]
+                .map(
+                  (text) =>
+                    '<w:p><w:pPr><w:pageBreakBefore/></w:pPr><w:r><w:t>' +
+                    text +
+                    '</w:t></w:r></w:p>'
+                )
+                .join('')
+              zip.file('word/document.xml', xml.replace(/<w:sectPr\b/, pages + '<w:sectPr'))
+              await fs.writeFile(filename, await zip.generateAsync({ type: 'nodebuffer' }))
+            }
+          })
           const composer = getWorkbenchLocator(page, workbenchSelectors.input)
           const sourcePaths = ['工作/客户周会纪要.docx', 'docx-selection-layout.docx'].map((name) =>
             path.join(setup.workspace.rootPath, name)
@@ -241,7 +268,10 @@ describe('workbench conversation e2e', () => {
               }))
             )
           await openDocxFile('sample-edit.docx')
-          await page.locator('.docx-content article p').first().waitFor({ state: 'visible' })
+          await page
+            .locator('.docx-content .superdoc-page [data-para-id]')
+            .first()
+            .waitFor({ state: 'visible' })
           await assertEmptyDocxOverview(runtime)
           for (const selection of [
             { start: 0, end: 5, thought: '第一段' },
@@ -253,7 +283,7 @@ describe('workbench conversation e2e', () => {
             await page.getByTestId('docx-selection-thought').fill(selection.thought)
             await page.getByRole('button', { name: '添加到输入框', exact: true }).click()
           }
-          await page.locator('.docx-content article p').first().hover()
+          await page.locator('.docx-content .superdoc-page [data-para-id]').first().hover()
           await assertDocxReferenceOverview(runtime)
           const savedUi = await observeSavedSelections(page)
           const hoveredSelections: Awaited<ReturnType<typeof observeHover>>[] = []
@@ -262,7 +292,13 @@ describe('workbench conversation e2e', () => {
             { offset: 7, quote: 'from' },
             { offset: 12, quote: 'fixture' }
           ]) {
-            const point = await textPoint(page, 0, selection.offset, 'article p', true)
+            const point = await textPoint(
+              page,
+              0,
+              selection.offset,
+              '.superdoc-page [data-para-id]',
+              true
+            )
             await page.mouse.move(point.x, point.y, { steps: 2 })
             await page.waitForFunction(
               (quote) =>
@@ -277,7 +313,7 @@ describe('workbench conversation e2e', () => {
             )
             hoveredSelections.push(await observeHover(page, point))
           }
-          const spacePoint = await textPoint(page, 0, 5, 'article p', true)
+          const spacePoint = await textPoint(page, 0, 5, '.superdoc-page [data-para-id]', true)
           await page.mouse.move(spacePoint.x, spacePoint.y)
           await page.waitForFunction(
             () =>
@@ -361,7 +397,7 @@ describe('workbench conversation e2e', () => {
             await page.getByTestId('docx-selection-thought').fill('位置顺序验证')
             await page.getByTestId('docx-selection-save').click()
           }
-          await page.locator('.docx-content article p').first().hover()
+          await page.locator('.docx-content .superdoc-page [data-para-id]').first().hover()
           await assertDocxReferenceOverview(runtime)
           await composer.fill('')
           await selectText(page, 0, 0, 0, 5)
@@ -387,7 +423,7 @@ describe('workbench conversation e2e', () => {
           await composer.fill('')
           await openDocxFile('工作/客户周会纪要.docx')
           await page
-            .locator('.docx-content article p')
+            .locator('.docx-content .superdoc-page [data-para-id]')
             .first()
             .waitFor({ state: 'visible', timeout: 30_000 })
           await selectText(page, 0, 0, 1, 8, { editor: false })
@@ -452,7 +488,7 @@ describe('workbench conversation e2e', () => {
           const highlightedQuote = await observeSavedSelections(page)
           await assertDocxSharedScrollTrack(runtime)
           const blankPoint = await page
-            .locator('.docx-content article p')
+            .locator('.docx-content .superdoc-page [data-para-id]')
             .nth(1)
             .evaluate((paragraph) => {
               const rect = paragraph.getBoundingClientRect()
@@ -500,11 +536,19 @@ describe('workbench conversation e2e', () => {
             )
           }
           await resizePanel(360)
-          const lastParagraphLength = await page
-            .locator('.docx-content article p')
-            .nth(9)
-            .evaluate((paragraph) => paragraph.textContent?.length || 0)
-          await selectText(page, 9, lastParagraphLength - 2, 9, lastParagraphLength)
+          const tailIndex = await page
+            .locator('.docx-content .superdoc-page [data-para-id]')
+            .evaluateAll(
+              (blocks, text) => blocks.findIndex((p) => p.textContent === text),
+              tailParagraph
+            )
+          await selectText(
+            page,
+            tailIndex,
+            tailParagraph.length - 2,
+            tailIndex,
+            tailParagraph.length
+          )
           await page.getByTestId('docx-selection-thought').fill('缩放保留此输入')
           const scroll = await page.evaluate(() => {
             const viewer = document.querySelector('.docx-content')!
@@ -557,7 +601,11 @@ describe('workbench conversation e2e', () => {
             originalSize
           )
           await windowHandle.dispose()
-          await page.locator('.docx-content article p').nth(9).scrollIntoViewIfNeeded()
+          await page
+            .locator('.docx-content .superdoc-page [data-para-id]')
+            .filter({ hasText: tailParagraph })
+            .first()
+            .scrollIntoViewIfNeeded()
           await runtime.captureScreenshot({
             name: 'selection-resized',
             message: '窗口恢复后的选区和输入条'
@@ -641,11 +689,29 @@ describe('workbench conversation e2e', () => {
           await composer.locator('[data-role="document-selection-token"]').waitFor()
           const memoryRestored = (await composer.textContent())?.includes('风险控制建议') || false
           await openDocxFile('航空航天模型课程标准（试行版）.docx')
+          const viewer = page.locator('.docx-content')
+          await viewer.locator('.superdoc-page').first().waitFor()
+          await viewer.hover()
+          // The course standard starts with several pages of prose. Follow the paper
+          // through the editor's progressively painted pages to reach its first table.
+          await expect
+            .poll(
+              async () => {
+                const table = viewer.locator('.superdoc-table-fragment [data-para-id]').first()
+                if (await table.count()) return true
+                await page.mouse.wheel(0, await viewer.evaluate((el) => el.clientHeight))
+                return false
+              },
+              { timeout: 45_000, intervals: [150] }
+            )
+            .toBe(true)
           await page
-            .locator('.docx-content article td p')
+            .locator('.docx-content .superdoc-table-fragment [data-para-id]')
             .first()
             .waitFor({ state: 'visible', timeout: 30_000 })
-          await selectText(page, 0, 0, 0, 2, { selector: 'article td p' })
+          await selectText(page, 0, 0, 0, 2, {
+            selector: '.superdoc-table-fragment [data-para-id]'
+          })
           const cellQuote = (await observeSelectionUi(page)).quote
           await page.getByTestId('docx-selection-thought').fill('解释这个表格字段。')
           await page.getByTestId('docx-selection-save').click()
@@ -656,25 +722,29 @@ describe('workbench conversation e2e', () => {
           await page.keyboard.press('Backspace')
           const atomicDeleted =
             (await composer.locator('[data-role="document-selection-token"]').count()) === 1
-          await selectText(page, 0, 0, 1, 2, { selector: 'article td p' })
+          await selectText(page, 0, 0, 1, 2, {
+            selector: '.superdoc-table-fragment [data-para-id]'
+          })
           await page.getByTestId('docx-selection-thought').fill('解释这两个课程等级字段。')
           await page.getByTestId('docx-selection-save').click()
           const crossCellQuote = (await readDraftSelections()).at(-1)?.quote
-          await clickSavedText(page, 1, 1, 'article td p')
+          await clickSavedText(page, 1, 1, '.superdoc-table-fragment [data-para-id]')
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
-          await selectText(page, 0, 0, 0, 2, { selector: 'article td p' })
+          await selectText(page, 0, 0, 0, 2, {
+            selector: '.superdoc-table-fragment [data-para-id]'
+          })
           await page.getByTestId('docx-selection-thought').fill('临时引用。')
           await page.getByTestId('docx-selection-save').click()
           const resetLabel = await composer
             .locator('[data-role="document-selection-token"]')
             .last()
             .getAttribute('aria-label')
-          await clickSavedText(page, 0, 0, 'article td p')
+          await clickSavedText(page, 0, 0, '.superdoc-table-fragment [data-para-id]')
           await page.getByRole('button', { name: '删除引用', exact: true }).click()
 
           await openDocxFile('docx-selection-layout.docx')
-          await page.locator('.docx-content article table').waitFor({ state: 'visible' })
-          const cellSelector = 'article table td p'
+          await page.locator('.docx-content .superdoc-table-fragment').waitFor({ state: 'visible' })
+          const cellSelector = '.superdoc-table-fragment [data-para-id]'
           const cellTexts = await page
             .locator('.docx-content')
             .locator(cellSelector)
@@ -690,7 +760,7 @@ describe('workbench conversation e2e', () => {
           const removeExcerpt = async (
             paragraph: number,
             offset: number,
-            selector = 'article p'
+            selector = '.superdoc-page [data-para-id]'
           ) => {
             await clickSavedText(page, paragraph, offset, selector)
             await page.getByRole('button', { name: '删除引用', exact: true }).click()
@@ -716,7 +786,7 @@ describe('workbench conversation e2e', () => {
 
           const paragraphIndex = (text: string) =>
             page
-              .locator('.docx-content article p')
+              .locator('.docx-content .superdoc-page [data-para-id]')
               .evaluateAll(
                 (paragraphs, text) =>
                   paragraphs.findIndex((paragraph) => paragraph.textContent === text),
@@ -727,17 +797,21 @@ describe('workbench conversation e2e', () => {
           await selectText(page, beforeTable, 0, afterTable, 'Text after table.'.length)
           const mixedTableQuote = await confirmExcerpt('解释表格及前后正文。')
           await removeExcerpt(beforeTable, 2)
-          await selectText(page, 0, 0, 0, 'Selection header'.length, { selector: 'header p' })
+          await selectText(page, 0, 0, 0, 'Selection header'.length, {
+            selector: '.superdoc-page-header [data-para-id]'
+          })
           const headerQuote = await confirmExcerpt('解释页眉。')
-          await removeExcerpt(0, 1, 'header p')
-          await selectText(page, 0, 0, 0, 'Selection footer'.length, { selector: 'footer p' })
+          await removeExcerpt(0, 1, '.superdoc-page-header [data-para-id]')
+          await selectText(page, 0, 0, 0, 'Selection footer'.length, {
+            selector: '.superdoc-page-footer [data-para-id]'
+          })
           const footerQuote = await confirmExcerpt('解释页脚。')
-          await removeExcerpt(0, 1, 'footer p')
+          await removeExcerpt(0, 1, '.superdoc-page-footer [data-para-id]')
           const firstPage = await paragraphIndex('Page one end.')
           const secondPage = await paragraphIndex('Page two start.')
           await selectText(page, firstPage, 0, secondPage, 'Page two start.'.length)
           const crossPageQuote = await confirmExcerpt('解释跨页选区。')
-          const pageCount = await page.locator('.docx-content section.docx').count()
+          const pageCount = await page.locator('.docx-content .superdoc-page').count()
           await removeExcerpt(secondPage, 1)
 
           const imageBefore = await paragraphIndex('Image before.')
@@ -800,7 +874,7 @@ describe('workbench conversation e2e', () => {
           )
           await composer.locator('[data-role="document-selection-token"]').click()
           await page
-            .locator('.docx-content article p')
+            .locator('.docx-content .superdoc-page [data-para-id]')
             .first()
             .waitFor({ state: 'visible', timeout: 30_000 })
           await runtime.captureScreenshot({

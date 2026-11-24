@@ -29,6 +29,7 @@ export const RUNTIME_TOOL_CATALOG = {
   file_edit: { familyId: 'text-file', toolsetId: 'text-file' },
   kb_search: { familyId: 'kb', toolsetId: 'kb-retrieval' },
   kb_list_documents: { familyId: 'kb', toolsetId: 'kb-retrieval' },
+  docx_read_annotations: { familyId: 'docx', toolsetId: 'docx-read' },
   docx_read_outline: { familyId: 'docx', toolsetId: 'docx-read' },
   docx_search: { familyId: 'docx', toolsetId: 'docx-read' },
   docx_read_nodes: { familyId: 'docx', toolsetId: 'docx-read' },

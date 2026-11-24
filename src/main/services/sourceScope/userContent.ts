@@ -1,4 +1,8 @@
-import { validateDocumentSelection } from './documentSelection'
+import {
+  readDocxSelectionStories,
+  verifySavedDocxSelection,
+  validateDocumentSelection
+} from './documentSelection'
 import path from 'node:path'
 import type { ChatMessageContentNode, ChatSubmitRequest } from '../../../shared/types'
 import { chatContentText, chatReferences, hasUserText } from '../../../shared/chatContent'
@@ -39,6 +43,7 @@ export const resolveUserContent = async (
     }
     return pending
   }
+  const savedDocx = new Map<string, string[]>()
   const resolve = async (nodes: ChatMessageContentNode[]): Promise<void> => {
     for (const node of nodes) {
       if (node.kind === 'text') {
@@ -75,6 +80,12 @@ export const resolveUserContent = async (
         node.contextBefore = Array.from(node.contextBefore).slice(-150).join('')
         node.contextAfter = Array.from(node.contextAfter).slice(0, 150).join('')
         node.filePath = path.normalize(node.filePath)
+        if (!node.anchor && path.extname(node.filePath).toLowerCase() === '.docx') {
+          const stories =
+            savedDocx.get(node.filePath) ?? (await readDocxSelectionStories(node.filePath))
+          savedDocx.set(node.filePath, stories)
+          verifySavedDocxSelection(node, stories)
+        }
         node.knowledge = await knowledge(node.filePath)
         await resolve(node.children)
       } else throw new Error('正文节点无效')

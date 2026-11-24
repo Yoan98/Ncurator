@@ -21,6 +21,7 @@ export type DocxWorkerAction =
   | 'get_nodes_by_ids'
   | 'get_nodes_by_range'
   | 'get_nodes_by_index_range'
+  | 'read_structure'
   | 'get_annotations'
   | 'search'
   | 'get_visual'
@@ -32,8 +33,14 @@ export type DocxWorkerRequest =
   | {
       requestId: string
       runId: string
+      action: 'read_structure'
+      payload: { docId: string; nodeIds: string[] }
+    }
+  | {
+      requestId: string
+      runId: string
       action: 'get_annotations'
-      payload: { docId: string }
+      payload: { docId: string; nodeIds?: string[] }
     }
   | {
       requestId: string
@@ -143,18 +150,19 @@ export type DocxWorkerRequest =
 export type DocxWorkerSuccessPayload =
   | {
       action: 'get_annotations'
+      checksum: string
       trackChanges: boolean
       comments: Array<{
+        anchorNodeIds: string[]
+        anchorText?: string
         commentId: string
         text: string
-        author: string
+        author?: string
         parentCommentId?: string
       }>
-      revisions: Array<{
-        revisionId: string
-        kind: 'insert' | 'delete' | 'move_from' | 'move_to'
-      }>
+      revisions: import('../adapters/ooxml/annotations').RevisionRecord[]
     }
+  | { action: 'read_structure'; nodes: import('../../../../../../../shared/types').JsonObject[] }
   | {
       action: 'get_visual'
       nodeId: string
@@ -181,6 +189,7 @@ export type DocxWorkerSuccessPayload =
     }
   | {
       action: 'segment_map'
+      sectionIds: string[]
       segments: DocxOutlineSegment[]
     }
   | {
@@ -210,6 +219,7 @@ export type DocxWorkerSuccessPayload =
       action: 'apply_operations'
       newDocId: string
       stats: DocxOpenStats
+      createdNodes?: import('../types').DocxCreatedNode[]
       changedNodes: DocxChangedNode[]
     }
   | {
@@ -232,11 +242,15 @@ export type DocxWorkerResponse =
   | {
       requestId: string
       ok: false
-      code: 'failed' | 'invalid_input'
+      code: 'failed' | 'invalid_input' | 'ambiguous_section'
+      sectionNodeIds?: string[]
       error: string
     }
 
 type DocSnapshotBase = {
+  aliases?: Map<string, string>
+  annotationIds?: Map<string, { commentIds?: string[]; revisionIds?: string[] }>
+  structure?: ReturnType<typeof import('../adapters/ooxml/sections').buildSectionIndex>
   docId: string
   sourcePath: string
   createdAt: number

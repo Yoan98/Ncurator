@@ -1,8 +1,9 @@
+import { readSuperDocText } from './superDocText'
 import type { DocumentSelectionNode } from '../../../../../shared/types'
 import type { SelectionLocation } from '../../workbench/composer/DocumentSelectionContext'
 
 type TextRun = { node: Text; start: number; end: number }
-export type PreviewText = { text: string; runs: TextRun[] }
+export type PreviewText = { text: string; runs: TextRun[]; repeatedRuns?: Map<Text, TextRun> }
 const blocks = new Set([
   'P',
   'TABLE',
@@ -101,7 +102,8 @@ export function readPreviewText(
       if (block || text.length > start) hasContent = true
     }
   }
-  visit(container.querySelector('.docx-wrapper') || container)
+  if (container.querySelector('.superdoc-page')) return readSuperDocText(container)
+  visit(container)
   return { text, runs }
 }
 
@@ -112,19 +114,36 @@ export function captureSelection(
 ): SelectionLocation | null {
   if (!container.contains(range.startContainer) || !container.contains(range.endContainer))
     return null
-  const intersected = preview.runs.flatMap((run) => {
-    if (!range.intersectsNode(run.node)) return []
-    const start = range.startContainer === run.node ? range.startOffset : 0
-    const end = range.endContainer === run.node ? range.endOffset : run.node.length
-    return end > start ? [{ start: run.start + start, end: run.start + end }] : []
-  })
-  const first = intersected[0]
-  const last = intersected.at(-1)
+  // A cross-page Word range can span repeated headers and footers in the painted DOM.
+  // Its endpoints still map directly into the continuous text of the selected story.
+  const startRun =
+    (range.startContainer instanceof Text
+      ? preview.repeatedRuns?.get(range.startContainer)
+      : undefined) ?? preview.runs.find((run) => run.node === range.startContainer)
+  const endRun =
+    (range.endContainer instanceof Text
+      ? preview.repeatedRuns?.get(range.endContainer)
+      : undefined) ?? preview.runs.find((run) => run.node === range.endContainer)
+  const intersected =
+    startRun && endRun
+      ? [
+          { start: startRun.start + range.startOffset, end: startRun.start + range.startOffset },
+          { start: endRun.start + range.endOffset, end: endRun.start + range.endOffset }
+        ]
+      : preview.runs.flatMap((run) => (range.intersectsNode(run.node) ? [run] : []))
+  const first = intersected[0],
+    last = intersected.at(-1)
   if (!first || !last) return null
   const { start } = first
   const { end } = last
   if (!preview.text.slice(start, end).trim()) return null
-  return { start, end, previewText: preview.text }
+  const page = range.startContainer.parentElement?.closest<HTMLElement>('.superdoc-page')
+  return {
+    start,
+    end,
+    previewText: preview.text,
+    ...(page ? { pageIndex: Number(page.dataset.pageIndex) } : {})
+  }
 }
 
 export function locateSelection(
@@ -156,9 +175,24 @@ export function locateSelection(
   }
 }
 
+function runsForLocation(preview: PreviewText, location: SelectionLocation): TextRun[] {
+  const runs = preview.runs.filter((run) => run.end > location.start && run.start < location.end)
+  if (location.pageIndex === undefined || !preview.repeatedRuns?.size) return runs
+  const peers = new Map<TextRun, Text>()
+  for (const [node, original] of preview.repeatedRuns) {
+    if (
+      node.parentElement?.closest<HTMLElement>('.superdoc-page')?.dataset.pageIndex ===
+      String(location.pageIndex)
+    )
+      peers.set(original, node)
+  }
+  return runs.map((run) => ({ ...run, node: peers.get(run) ?? run.node }))
+}
+
 export function rangeForLocation(preview: PreviewText, location: SelectionLocation): Range | null {
-  const first = preview.runs.find((run) => run.end > location.start)
-  const last = preview.runs.findLast((run) => run.start < location.end && run.end > location.start)
+  const runs = runsForLocation(preview, location)
+  const first = runs[0],
+    last = runs.at(-1)
   if (!first || !last) return null
   const range = document.createRange()
   range.setStart(first.node, Math.max(0, location.start - first.start))
@@ -168,12 +202,10 @@ export function rangeForLocation(preview: PreviewText, location: SelectionLocati
 
 // Text-only ranges exclude the empty part of paragraph boxes from the clickable area.
 export function textRangesForLocation(preview: PreviewText, location: SelectionLocation): Range[] {
-  return preview.runs
-    .filter((run) => run.end > location.start && run.start < location.end)
-    .map((run) => {
-      const range = document.createRange()
-      range.setStart(run.node, Math.max(0, location.start - run.start))
-      range.setEnd(run.node, Math.min(run.node.length, location.end - run.start))
-      return range
-    })
+  return runsForLocation(preview, location).map((run) => {
+    const range = document.createRange()
+    range.setStart(run.node, Math.max(0, location.start - run.start))
+    range.setEnd(run.node, Math.min(run.node.length, location.end - run.start))
+    return range
+  })
 }

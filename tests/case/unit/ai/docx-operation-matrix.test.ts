@@ -120,7 +120,7 @@ describe('DOCX operation matrix', () => {
           ops: [
             { type: 'format_row', nodeId: rowId, format: { repeatHeader: true } },
             { type: 'format_cell', nodeId: cellId, format: { shading: 'FFFF00' } },
-            { type: 'format_section', nodeId: paragraphs[0]!.nodeId, orientation: 'landscape' }
+            { type: 'format_section', nodeId: 'section:0', format: { orientation: 'landscape' } }
           ]
         })
       ).resolves.toBeDefined()

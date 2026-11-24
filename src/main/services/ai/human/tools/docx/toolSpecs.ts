@@ -4,6 +4,7 @@ import type { z } from 'zod/v4'
 import type { RuntimeToolsetId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import {
+  docxReadAnnotationsSchema,
   docxCommentsRevisionsSchema,
   docxContentEditSchema,
   docxFormatSchema,
@@ -46,7 +47,7 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   inputSchema: docxOutlineSchema,
   promptSpec: {
     name: 'docx_read_outline',
-    description: '按根节点比例返回 DOCX 结构缩略图。'
+    description: '返回有序节 ID 和按比例展开的正文摘要，独立区域列在顶层 segments。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -62,7 +63,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   inputSchema: docxSearchSchema,
   promptSpec: {
     name: 'docx_search',
-    description: '在 DOCX 全文中按文字或正则搜索。'
+    description: '按文字或正则搜索，可用节或页眉页脚 ID 限定范围。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -78,7 +79,8 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
   inputSchema: docxReadNodesSchema,
   promptSpec: {
     name: 'docx_read_nodes',
-    description: '读取指定 nodeId 或 nodeIndex 范围的语义节点树，包含继承后的有效格式。'
+    description:
+      '读取指定 nodeId 或 nodeIndex 范围的语义节点树，节包含页面设置和页眉页脚位置，内容包含继承后的有效格式。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -113,7 +115,7 @@ export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineMutationSpec({
   toolsetId: 'docx-write',
   schema: docxContentEditSchema,
   description:
-    '创建 DOCX，或对正文节点执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一。',
+    '创建 DOCX，或对正文、页眉页脚内容执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一。',
   modelResult: { renderSuccess: renderDocxContentEditModelResult }
 })
 
@@ -141,7 +143,23 @@ export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineMutationSpec({
   modelResult: { renderSuccess: renderDocxMutationModelResult }
 })
 
+export const DOCX_READ_ANNOTATIONS_TOOL_SPEC = {
+  ...DOCX_READ_NODES_TOOL_SPEC,
+  name: 'docx_read_annotations',
+  activityActionType: 'docx_read_annotations',
+  inputSchema: docxReadAnnotationsSchema,
+  promptSpec: {
+    name: 'docx_read_annotations',
+    description: '查询全文或指定内容的批注、回复及修订，返回可用于处理的记录 ID。'
+  },
+  modelResult: { renderSuccess: ({ data }) => JSON.stringify(data) }
+} satisfies DocxToolSpec<
+  z.infer<typeof docxReadAnnotationsSchema>,
+  'docx_read_annotations',
+  'docx-read'
+>
 export const DOCX_READ_TOOL_SPECS = [
+  DOCX_READ_ANNOTATIONS_TOOL_SPEC,
   DOCX_READ_OUTLINE_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC,
   DOCX_READ_NODES_TOOL_SPEC

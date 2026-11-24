@@ -10,7 +10,7 @@
 }
 
 .docx-content {
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .docx-content-with-overview {
@@ -42,22 +42,8 @@
   color: inherit;
 }
 
-.docx-content .docx-wrapper {
-  box-sizing: border-box !important;
-  width: 100% !important;
-  min-width: 0 !important;
-  overflow-x: hidden !important;
-  background: var(--notion-surface-sunken) !important;
-  padding: 16px !important;
-  padding-bottom: 0 !important;
-}
-
-.docx-content .docx-wrapper > section.docx,
-.docx-content section.docx {
-  box-sizing: border-box !important;
-  max-width: 100% !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
+.docx-content .superdoc-page {
+  background: white;
 }
 
 .docx-content ins {

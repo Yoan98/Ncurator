@@ -133,6 +133,9 @@ export default function DocxOverviewRuler({
     cycles.current.clear()
     gesture.current = null
     setDragging(false)
+  }, [container, mode])
+
+  useEffect(() => {
     if (!container || !rail.current || !revision) {
       setMarkers([])
       setScrollbar(null)
@@ -177,7 +180,7 @@ export default function DocxOverviewRuler({
     resize.observe(rail.current)
     const observeContent = () => {
       container
-        .querySelectorAll('.docx-wrapper, section.docx, img, table')
+        .querySelectorAll('.superdoc-page, img, table')
         .forEach((element) => resize.observe(element))
     }
     observeContent()
@@ -267,7 +270,17 @@ export default function DocxOverviewRuler({
     const bottom = Math.max(...rects.map((r) => r.bottom))
     const offset =
       bottom - top >= container.clientHeight ? 0 : (container.clientHeight - (bottom - top)) / 2
+    const left = Math.min(...rects.map((r) => r.left)),
+      right = Math.max(...rects.map((r) => r.right))
+    const viewport = container.getBoundingClientRect()
     container.scrollTo({
+      left:
+        left >= viewport.left && right <= viewport.right
+          ? container.scrollLeft
+          : container.scrollLeft +
+            left -
+            viewport.left -
+            Math.max(0, (viewport.width - (right - left)) / 2),
       top:
         container.scrollTop +
         top -

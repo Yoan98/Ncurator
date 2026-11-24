@@ -6,6 +6,7 @@ import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { DocxToolRuntime } from '../runtime'
 import type { DocxDetailedNode, DocxReadNode, DocxReadSession, DocxSearchMatch } from '../types'
 import {
+  DOCX_READ_ANNOTATIONS_TOOL_SPEC,
   DOCX_READ_OUTLINE_TOOL_SPEC,
   DOCX_READ_NODES_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC
@@ -242,6 +243,7 @@ const buildSearchResult = (input: {
     nodeIndex: match.nodeIndex,
     type: match.type,
     story: match.story.type,
+    sectionNodeIds: match.sectionNodeIds,
     matchText: match.matchText,
     textContext: match.textContext,
     tableNodeId: match.tableNodeId,
@@ -301,6 +303,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           toPercent: args.toPercent,
           totalRootCount
         })
+        const sectionIds = segmentResponse.payload.sectionIds
         const selectedSegments = nodeRange
           ? selectOutlineSegmentsForNodeRange(allSegments, nodeRange)
           : []
@@ -318,7 +321,19 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           fromNodeIndex: coveredFromNodeIndex,
           toNodeIndex: coveredToNodeIndex,
           totalRootCount,
-          segments: selectedSegments
+          sections: sectionIds.map((nodeId) => ({
+            type: 'section',
+            nodeId,
+            segments: selectedSegments
+              .filter((s) => s.story === 'body' && s.sectionNodeIds?.includes(nodeId))
+              .map(({ story, fromNodeIndex, toNodeIndex, textMap }) => ({
+                story,
+                fromNodeIndex,
+                toNodeIndex,
+                textMap
+              }))
+          })),
+          segments: selectedSegments.filter((s) => !sectionIds.length || s.story !== 'body')
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -331,6 +346,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             fromNodeIndex: result.fromNodeIndex,
             toNodeIndex: result.toNodeIndex,
             totalRootCount: result.totalRootCount,
+            sections: result.sections,
             segments: result.segments
           },
           draftDocId: sessionResult.docId,
@@ -474,30 +490,61 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       if ('failure' in sessionResult) return sessionResult.failure
 
       try {
-        let nodes: DocxDetailedNode[]
+        let result
         if (args.range.type === 'node_ids') {
-          nodes = await fetchNodesByNodeIds({
-            runtime,
-            session: sessionResult.readSession,
-            docId: sessionResult.docId,
-            nodeIds: args.range.nodeIds
+          const read = await runtime.callWorker({
+            action: 'read_structure',
+            payload: { docId: sessionResult.docId, nodeIds: args.range.nodeIds }
           })
+          if (!read.ok) throw new Error(read.error)
+          if (read.payload.action !== 'read_structure') throw new Error('worker protocol mismatch')
+          const shells = read.payload.nodes
+          const ids = shells.flatMap((node) =>
+            node.type === 'section'
+              ? []
+              : Array.isArray(node.children)
+                ? node.children.map((child) => String((child as { nodeId: string }).nodeId))
+                : [String(node.nodeId)]
+          )
+          const details = await fetchNodesByNodeIds({
+            runtime,
+            docId: sessionResult.docId,
+            nodeIds: ids
+          })
+          await materializeDocxVisuals({
+            runtime,
+            docId: sessionResult.docId,
+            nodes: details,
+            sourcePrefix: 'docx_read_nodes'
+          })
+          const byId = new Map(projectDocxReadNodes(details).map((n) => [n.nodeId, n]))
+          result = {
+            nodes: shells.map((node) =>
+              node.type === 'section'
+                ? node
+                : Array.isArray(node.children)
+                  ? {
+                      ...node,
+                      children: node.children.map(
+                        (child) => byId.get(String((child as { nodeId: string }).nodeId))!
+                      )
+                    }
+                  : byId.get(String(node.nodeId))!
+            )
+          }
         } else {
-          nodes = await fetchNodesByNodeIndexRange({
+          const nodes = await fetchNodesByNodeIndexRange({
             runtime,
             docId: sessionResult.docId,
-            fromNodeIndex: args.range.fromNodeIndex,
-            toNodeIndex: args.range.toNodeIndex
+            ...args.range
           })
-        }
-        await materializeDocxVisuals({
-          runtime,
-          docId: sessionResult.docId,
-          nodes,
-          sourcePrefix: 'docx_read_nodes'
-        })
-        const result = {
-          nodes: projectDocxReadNodes(nodes)
+          await materializeDocxVisuals({
+            runtime,
+            docId: sessionResult.docId,
+            nodes,
+            sourcePrefix: 'docx_read_nodes'
+          })
+          result = { nodes: projectDocxReadNodes(nodes) }
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -537,5 +584,52 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     }
   })
 
-  return [docxOutlineTool, docxSearchTool, docxReadNodesTool]
+  const annotations = createDocxTool({
+    runtime,
+    name: DOCX_READ_ANNOTATIONS_TOOL_SPEC.name,
+    description: DOCX_READ_ANNOTATIONS_TOOL_SPEC.promptSpec.description,
+    schema: DOCX_READ_ANNOTATIONS_TOOL_SPEC.inputSchema,
+    execute: async ({ args, toolName, toolCallId }) => {
+      const session = await runtime.ensureReadSession({
+        sourcePath: args.sourcePath,
+        toolName,
+        toolCallId
+      })
+      if ('failure' in session) return session.failure
+      const response = await runtime.callWorker({
+        action: 'get_annotations',
+        payload: { docId: session.docId, nodeIds: args.nodeIds }
+      })
+      if (!response.ok) throw new Error(response.error)
+      if (response.payload.action !== 'get_annotations') throw new Error('worker protocol mismatch')
+      const records = response.payload
+      const token = createHash('sha256')
+        .update(
+          JSON.stringify([
+            path.resolve(args.sourcePath),
+            records.checksum,
+            args.type,
+            [...(args.nodeIds ?? [])].sort()
+          ])
+        )
+        .digest('hex')
+      const [key, raw] = args.cursor?.split('.') ?? [token, '0']
+      const offset = Number(raw)
+      if (
+        key !== token ||
+        (args.cursor && args.cursor !== token + '.' + offset) ||
+        !Number.isSafeInteger(offset) ||
+        offset < 0
+      )
+        throw new Error('查询游标与当前文件或范围不匹配')
+      const entries = records[args.type]
+      const result = {
+        [args.type]: entries.slice(offset, offset + 50),
+        ...(args.type === 'revisions' ? { trackChanges: records.trackChanges } : {}),
+        ...(entries.length > offset + 50 ? { nextCursor: token + '.' + (offset + 50) } : {})
+      }
+      return finalizeDocxToolSuccess({ runtime, toolName, toolCallId, result })
+    }
+  })
+  return [docxOutlineTool, docxSearchTool, docxReadNodesTool, annotations]
 }

@@ -194,6 +194,11 @@ export async function assertDocxSharedScrollTrack(runtime: E2ETestRuntime): Prom
   await rail.press('Home')
   await waitSynchronized()
   const initial = await read()
+  await runtime.assertThat(initial.max > 50, {
+    name: 'scrollable-document',
+    message: '短视口有足够的纵向滚动空间',
+    data: initial
+  })
   await page.mouse.click(initial.rail.x + 7, initial.rail.y + initial.rail.height - 5)
   await page.waitForFunction(() => document.querySelector('.docx-content')!.scrollTop > 50)
   await waitSynchronized()

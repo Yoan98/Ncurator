@@ -190,9 +190,12 @@ describe('workbench result e2e', () => {
 
           await openWorkspaceFile('external-watch.docx')
           const docxViewer = getWorkbenchLocator(page, workbenchSelectors.docxViewer)
-          await docxViewer.getByText('original docx content', { exact: true }).waitFor({
-            timeout: 30_000
-          })
+          await docxViewer
+            .locator('.superdoc-page')
+            .getByText('original docx content', { exact: true })
+            .waitFor({
+              timeout: 30_000
+            })
           const replacementDocxPath = await writeRichTestDocxFile(
             workspace.rootPath,
             'external-watch-replacement.docx',
@@ -206,9 +209,12 @@ describe('workbench result e2e', () => {
           const previousDocxPath = path.join(workspace.rootPath, 'external-watch-previous.docx')
           await fs.rename(docxPath, previousDocxPath)
           await fs.rename(replacementDocxPath, docxPath)
-          await docxViewer.getByText('refreshed docx content', { exact: true }).waitFor({
-            timeout: 30_000
-          })
+          await docxViewer
+            .locator('.superdoc-page')
+            .getByText('refreshed docx content', { exact: true })
+            .waitFor({
+              timeout: 30_000
+            })
           await page.waitForFunction(
             (expectedCount) =>
               (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })

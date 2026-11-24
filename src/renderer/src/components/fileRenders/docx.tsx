@@ -1,71 +1,15 @@
 import { t } from '../../i18n'
 import { useOfficeReviewNavigation } from '../workbench/OfficeReviewContext'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import type { DocRendererProps } from 'react-doc-viewer'
-import '@js-preview/docx/lib/index.css'
+import type { openSuperDoc, DocumentSaveStatus } from './superDocSession'
 import './index.css'
 import DocxSelectionLayer from './DocxSelectionLayer'
+import { observeWordPointers } from './selection/superDocSelection'
 import DocxOverviewRuler from './DocxOverviewRuler'
 import type { SelectionTarget } from './selection/types'
 import { workbenchSelectors } from '../../testing/selectors'
-import { normalizeUserFacingError } from '../../utils/userFacingError'
 import type { LoadedFileRenderDocument } from './types'
-
-type BrowserProcessShim = {
-  env: Record<string, string | undefined>
-  browser: true
-  version: string
-  versions: Record<string, string>
-  platform: 'browser'
-  argv: string[]
-  pid: number
-  nextTick: (callback: (...args: unknown[]) => void, ...args: unknown[]) => void
-  cwd: () => string
-  emit: () => false
-  on: () => BrowserProcessShim
-  once: () => BrowserProcessShim
-  off: () => BrowserProcessShim
-  removeListener: () => BrowserProcessShim
-}
-
-let docxPreviewModulePromise: Promise<typeof import('@js-preview/docx')> | null = null
-
-const ensureBrowserProcessShim = (): void => {
-  const runtime = globalThis as unknown as { process?: unknown }
-  if (runtime.process) return
-
-  const shim = {} as BrowserProcessShim
-  Object.assign(shim, {
-    env: {},
-    browser: true,
-    version: '',
-    versions: {},
-    platform: 'browser',
-    argv: [],
-    pid: 0,
-    nextTick: (callback: (...args: unknown[]) => void, ...args: unknown[]) => {
-      queueMicrotask(() => callback(...args))
-    },
-    cwd: () => '/',
-    emit: () => false,
-    on: () => shim,
-    once: () => shim,
-    off: () => shim,
-    removeListener: () => shim
-  } satisfies BrowserProcessShim)
-
-  Object.defineProperty(runtime, 'process', {
-    configurable: true,
-    value: shim,
-    writable: true
-  })
-}
-
-const loadDocxPreview = async (): Promise<(typeof import('@js-preview/docx'))['default']> => {
-  ensureBrowserProcessShim()
-  docxPreviewModulePromise ||= import('@js-preview/docx')
-  return (await docxPreviewModulePromise).default
-}
 
 const scrollToAnchor = (container: HTMLDivElement, anchorName?: string): void => {
   if (!anchorName) {
@@ -130,87 +74,91 @@ export const DocxPreview = ({
     '\u0000'
   )
 
+  const [pointers, setPointers] = useState<ReturnType<typeof observeWordPointers>>()
+  const session = useRef<Awaited<ReturnType<typeof openSuperDoc>> | undefined>(undefined)
+  const [generation, reload] = useState(0)
+  const [saveStatus, setSaveStatus] = useState<DocumentSaveStatus>('idle')
+  const [saveMessage, setSaveMessage] = useState('')
+  const filePath = currentDocument?.filePath
+  const writable = Boolean(
+    currentDocument?.editable &&
+    filePath &&
+    !/^[a-z][a-z0-9+.-]*:\/\//i.test(filePath) &&
+    /\.docx$/i.test(filePath) &&
+    currentDocument?.metadata?.docxOverview !== 'changes'
+  )
+  const onExternalReload = currentDocument?.metadata?.onExternalReload
+  const isReview = currentDocument?.metadata?.docxOverview === 'changes'
   useEffect(() => {
-    if (!container || !currentDocument) return
-    if (renderedKey === renderKey && container.childNodes.length > 0) {
-      scrollToAnchor(container, anchorName)
-      return
-    }
-
-    let cancelled = false
-    const renderDocx = async (): Promise<void> => {
-      setRenderError(null)
-      let file = documentFile
-      if (!file && documentFileData instanceof Blob) {
-        file = documentFileData
-      }
-      if (!file && documentFileData instanceof ArrayBuffer) {
-        file = new Blob([documentFileData], {
-          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        })
-      }
-      if (!file && documentUri) {
-        try {
-          const response = await fetch(documentUri)
-          file = await response.blob()
-        } catch (error) {
-          console.error('Failed to fetch docx', error)
-          if (!cancelled) {
-            setRenderError(
-              normalizeUserFacingError(
-                error instanceof Error ? error.message : error,
-                t(($) => $.editors.couldNotReadWordPreviewData)
-              )
-            )
+    if (!container) return
+    const pointerObserver = observeWordPointers(container)
+    setPointers(pointerObserver)
+    let active = true
+    const host = document.createElement('div')
+    container.replaceChildren(host)
+    setRenderedKey(null)
+    setRenderError(null)
+    setSaveStatus('idle')
+    const start = async () => {
+      let blob: Blob
+      if (writable && filePath)
+        blob = new Blob([Uint8Array.from(await window.api.readFile(filePath))])
+      else if (documentFile) blob = documentFile
+      else if (documentFileData instanceof Blob) blob = documentFileData
+      else if (documentFileData instanceof ArrayBuffer) blob = new Blob([documentFileData])
+      else if (documentUri) blob = await (await fetch(documentUri)).blob()
+      else throw new Error(t(($) => $.editors.fileDeleted))
+      const { openSuperDoc } = await import('./superDocSession')
+      if (!active) return
+      const opened = await openSuperDoc(host, blob, writable ? filePath : undefined, {
+        review: isReview,
+        ready() {
+          if (active) {
+            setRenderedKey(renderKey)
+            setRenderRevision((n) => n + 1)
+            scrollToAnchor(container, anchorName)
           }
-          return
+        },
+        layout() {
+          if (active) setRenderRevision((n) => n + 1)
+        },
+        status(value, message) {
+          if (active) {
+            setSaveStatus(value)
+            setSaveMessage(message ?? '')
+          }
+        },
+        reload(external) {
+          if (!active) return
+          reload((n) => n + 1)
+          if (external) onExternalReload?.()
         }
-      }
-      if (!file || cancelled) {
-        if (!file && !cancelled) {
-          setRenderError(t(($) => $.editors.wordPreviewDataIsMissing))
-        }
-        return
-      }
-
-      setRenderRevision(0)
-      container.replaceChildren()
-      const jsPreviewDocx = await loadDocxPreview()
-      if (cancelled) return
-      const previewer = jsPreviewDocx.init(container)
-      try {
-        await previewer.preview(file)
-        if (!cancelled) {
-          setRenderRevision((value) => value + 1)
-          setRenderedKey(renderKey)
-          scrollToAnchor(container, anchorName)
-        }
-      } catch (error) {
-        console.error('Failed to render docx preview', error)
-        if (!cancelled) {
-          setRenderError(
-            normalizeUserFacingError(
-              error instanceof Error ? error.message : error,
-              t(($) => $.editors.couldNotRenderTheWordDocument)
-            )
-          )
-        }
-      }
+      })
+      if (active) session.current = opened
+      else opened.close()
     }
-
-    void renderDocx()
+    void start().catch((e: Error) => {
+      if (active) setRenderError(e.message)
+    })
     return () => {
-      cancelled = true
+      active = false
+      pointerObserver.close()
+      session.current?.close()
+      session.current = undefined
+      host.remove()
     }
   }, [
-    anchorName,
     container,
-    currentDocument,
     documentFile,
     documentFileData,
     documentUri,
     renderKey,
-    renderedKey
+    anchorName,
+    filePath,
+    writable,
+    generation,
+    onExternalReload,
+    isReview
   ])
 
   useEffect(() => {
@@ -258,6 +206,8 @@ export const DocxPreview = ({
       {currentDocument.metadata?.allowDocumentSelection && currentDocument.filePath && ready ? (
         <DocxSelectionLayer
           container={container}
+          editor={session.current?.editor}
+          pointers={pointers}
           filePath={currentDocument.filePath}
           revision={renderRevision}
           onTargetsChange={updateReferences}
@@ -272,6 +222,35 @@ export const DocxPreview = ({
           references={references}
         />
       ) : null}
+      {saveStatus === 'saving' && (
+        <span
+          role="status"
+          aria-label={t(($) => $.editors.wordSaving)}
+          className="absolute right-5 top-2 size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+        />
+      )}
+      {(saveStatus === 'error' || saveStatus === 'conflict') && (
+        <div
+          role="alert"
+          className="absolute bottom-2 left-2 rounded bg-[var(--notion-page)] p-2 shadow"
+        >
+          {saveMessage}{' '}
+          {saveStatus === 'conflict' ? (
+            <>
+              <button onClick={() => void session.current?.copy()}>
+                {t(($) => $.editors.wordSaveCopy)}
+              </button>{' '}
+              <button onClick={() => session.current?.discard()}>
+                {t(($) => $.editors.wordReopen)}
+              </button>
+            </>
+          ) : (
+            <button onClick={() => void session.current?.flush().catch(() => undefined)}>
+              {t(($) => $.common.retry)}
+            </button>
+          )}
+        </div>
+      )}
       {renderError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-[var(--notion-surface-sunken)] px-6 text-center text-sm text-[var(--notion-text-soft)]">
           <span className="max-w-[460px] whitespace-pre-wrap break-words">

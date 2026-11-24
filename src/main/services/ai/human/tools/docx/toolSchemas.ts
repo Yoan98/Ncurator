@@ -231,7 +231,7 @@ const docxWriteSourcePathField = z.string().min(1).describe('Word 文件本机�
 
 const sourcePathField = docxReadSourcePathField
 const nodeIdField = z.string().min(1).describe('节点 ID')
-const searchScopeNodeIdField = z.string().min(1).describe('根节点或单元格 nodeId')
+const searchScopeNodeIdField = z.string().min(1).describe('节、页眉页脚、内容根节点或单元格 nodeId')
 
 export const docxOutlineSchema = z
   .object({
@@ -244,6 +244,15 @@ export const docxOutlineSchema = z
     path: ['toPercent'],
     message: 'toPercent must be greater than or equal to fromPercent'
   })
+
+export const docxReadAnnotationsSchema = z
+  .object({
+    sourcePath: docxWriteSourcePathField,
+    type: z.enum(['comments', 'revisions']),
+    nodeIds: z.array(nodeIdField).min(1).optional(),
+    cursor: z.string().min(1).optional()
+  })
+  .strict()
 
 export const docxSearchSchema = z
   .object({
@@ -522,22 +531,38 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
       ...contentEditBase,
       type: z.literal('format_section'),
       nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
-      orientation: z.enum(['portrait', 'landscape']).optional().describe('页面方向'),
-      marginTopPt: z.number().min(0).optional().describe('上页边距，磅'),
-      marginRightPt: z.number().min(0).optional().describe('右页边距，磅'),
-      marginBottomPt: z.number().min(0).optional().describe('下页边距，磅'),
-      marginLeftPt: z.number().min(0).optional().describe('左页边距，磅')
+      format: z
+        .object({
+          orientation: z.enum(['portrait', 'landscape']).optional(),
+          pageWidthPt: z.number().positive().optional(),
+          pageHeightPt: z.number().positive().optional(),
+          marginTopPt: z.number().nonnegative().optional(),
+          marginRightPt: z.number().nonnegative().optional(),
+          marginBottomPt: z.number().nonnegative().optional(),
+          marginLeftPt: z.number().nonnegative().optional(),
+          headerDistancePt: z.number().nonnegative().optional(),
+          footerDistancePt: z.number().nonnegative().optional(),
+          pageNumberStart: z.number().int().nonnegative().nullable().optional(),
+          differentFirstPage: z.boolean().optional()
+        })
+        .strict()
+        .refine((f) => Object.keys(f).length > 0, 'format requires a section property')
+        .refine(
+          (f) => (f.pageWidthPt === undefined) === (f.pageHeightPt === undefined),
+          'paper dimensions must be supplied together'
+        )
+        .refine(
+          (f) =>
+            !f.orientation ||
+            !f.pageWidthPt ||
+            !f.pageHeightPt ||
+            (f.orientation === 'landscape'
+              ? f.pageWidthPt >= f.pageHeightPt
+              : f.pageHeightPt >= f.pageWidthPt),
+          'paper size conflicts with orientation'
+        )
     })
     .strict()
-    .refine(
-      (value) =>
-        value.orientation !== undefined ||
-        value.marginTopPt !== undefined ||
-        value.marginRightPt !== undefined ||
-        value.marginBottomPt !== undefined ||
-        value.marginLeftPt !== undefined,
-      { message: 'format_section must specify at least one formatting property' }
-    )
     .superRefine(rejectDuplicateNodeIds),
   z
     .object({
@@ -613,7 +638,9 @@ const createTableSchema = z
     ...contentEditBase,
     type: z.literal('create_table'),
     nodeId: nodeIdField.optional().describe('锚点 nodeId'),
-    position: z.enum(['before', 'after', 'document_end']).describe('表格插入位置'),
+    position: z
+      .enum(['before', 'after', 'inside_start', 'inside_end', 'document_end'])
+      .describe('表格插入位置'),
     rows: tableRowsField
   })
   .strict()

@@ -1,7 +1,12 @@
 import { createContext } from 'react'
 import type { DocumentSelectionNode } from '../../../../../shared/types'
 
-export type SelectionLocation = { start: number; end: number; previewText: string }
+export type SelectionLocation = {
+  start: number
+  end: number
+  previewText: string
+  pageIndex?: number
+}
 export type DocumentSelectionState = {
   partnerId: string
   enabled: boolean

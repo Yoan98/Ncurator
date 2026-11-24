@@ -187,6 +187,7 @@ import type {
 import path from 'path'
 import fs from 'fs'
 import { WEB_INGEST_CONCURRENCY } from '../utils/constant'
+import { writeDocxFile } from '../services/files/DocxFileWriteService'
 import { writeTextFileAtomically } from '../services/files/TextFileWriteService'
 import { ConfirmDialogWindowService } from '../services/ConfirmDialogWindowService'
 import type { ConfirmDialogRequest, ConfirmDialogResponse } from '../../shared/types'
@@ -2699,6 +2700,27 @@ export function registerHandlers(services: {
     }
   })
 
+  ipcMain.handle('can-write-docx', async (_event, filePath: string) => {
+    if (typeof filePath !== 'string' || path.extname(filePath).toLowerCase() !== '.docx')
+      return false
+    try {
+      await fs.promises.access(filePath, fs.constants.W_OK)
+      await fs.promises.access(path.dirname(filePath), fs.constants.W_OK)
+      return true
+    } catch {
+      return false
+    }
+  })
+  ipcMain.handle(
+    'write-docx-file',
+    async (_event, payload: import('../../shared/types').WriteDocxFileRequest) => {
+      try {
+        return await writeDocxFile(payload)
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
   ipcMain.handle('file-exists', (_event, filePath: string): boolean => {
     const normalizedPath = String(filePath || '').trim()
     return Boolean(normalizedPath) && fs.existsSync(normalizedPath)

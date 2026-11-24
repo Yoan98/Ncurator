@@ -476,12 +476,14 @@ const applyEdit = async (input: {
     }
   }
   const appliedPayload = workerResponse.payload
-  const createdNodes = await resolveCreatedNodes({
-    runtime: input.runtime,
-    previousDocId: input.currentDocId,
-    nextDocId: appliedPayload.newDocId,
-    operation: operations[0]!
-  })
+  const createdNodes =
+    appliedPayload.createdNodes ??
+    (await resolveCreatedNodes({
+      runtime: input.runtime,
+      previousDocId: input.currentDocId,
+      nextDocId: appliedPayload.newDocId,
+      operation: operations[0]!
+    }))
   let result: WriteToolResult
   try {
     result = await buildWriteToolResult({
@@ -610,24 +612,17 @@ const buildWriteToolResult = async (input: {
     if (response.payload.action !== 'get_annotations') {
       throw new Error('worker protocol mismatch (get_annotations)')
     }
-    const comment =
-      operation.type === 'add_comment'
-        ? [...response.payload.comments]
-            .reverse()
-            .find((candidate) => candidate.text === operation.comment)
-        : operation.type === 'reply_comment'
-          ? [...response.payload.comments]
-              .reverse()
-              .find(
-                (candidate) =>
-                  candidate.parentCommentId === operation.commentId &&
-                  candidate.text === operation.comment
-              )
-          : response.payload.comments.find(
-              (candidate) => candidate.commentId === operation.commentId
-            )
-    if (!comment) throw new Error('written comment could not be read back')
-    return operation.type === 'update_comment' ? {} : { createdIds: [comment.commentId] }
+    if (operation.type === 'update_comment') return {}
+    const before = await input.runtime.callWorker({
+      action: 'get_annotations',
+      payload: { docId: input.previousDocId }
+    })
+    if (!before.ok || before.payload.action !== 'get_annotations')
+      throw new Error('Cannot identify added comment')
+    const existing = new Set(before.payload.comments.map((c) => c.commentId))
+    const added = response.payload.comments.filter((c) => !existing.has(c.commentId))
+    if (added.length !== 1) throw new Error('Expected one new comment')
+    return { createdIds: [added[0]!.commentId] }
   }
   const createdIds = new Set(input.createdNodes.map((node) => node.nodeId))
   const uniqueCreated = [...new Map(input.createdNodes.map((node) => [node.nodeId, node])).values()]

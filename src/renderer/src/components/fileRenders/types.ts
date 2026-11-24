@@ -3,6 +3,7 @@ import type { IDocument } from 'react-doc-viewer'
 export type FileRenderMetadata = {
   pageNumber?: number
   anchorName?: string
+  onExternalReload?: () => void
   allowDocumentSelection?: boolean
   docxOverview?: 'references' | 'changes'
   excelReview?: boolean

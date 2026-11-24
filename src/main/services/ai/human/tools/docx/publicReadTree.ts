@@ -78,9 +78,7 @@ const projectInline = (node: DocxReadInlineNode): DocxPublicReadInlineNode => {
   return compact({
     type: node.type,
     nodeId: node.nodeId,
-    ...(node.type === 'content_control'
-      ? { tag: node.tag }
-      : { revisionId: node.revisionId, kind: node.kind }),
+    tag: node.tag,
     children: node.children.map((child) => projectInline(child as DocxReadInlineNode))
   }) as DocxPublicReadInlineNode
 }
@@ -131,9 +129,7 @@ const projectNestedNode = (node: DocxReadContentNode): DocxPublicReadNestedNode 
   return compact({
     type: node.type,
     nodeId: node.nodeId,
-    ...(node.type === 'content_control'
-      ? { tag: node.tag }
-      : { revisionId: node.revisionId, kind: node.kind }),
+    tag: node.tag,
     children: node.children.map((child) => projectNestedNode(child as DocxReadContentNode))
   }) as DocxPublicReadNestedNode
 }
@@ -144,6 +140,8 @@ export const projectDocxReadNode = (node: DocxDetailedNode): DocxPublicReadRootN
       type: 'paragraph' as const,
       nodeId: node.nodeId,
       story: node.story,
+      ...(node.commentIds ? { commentIds: node.commentIds } : {}),
+      ...(node.revisionIds ? { revisionIds: node.revisionIds } : {}),
       style: node.style,
       children: node.children.map(projectInline)
     })
@@ -153,6 +151,8 @@ export const projectDocxReadNode = (node: DocxDetailedNode): DocxPublicReadRootN
       type: 'table' as const,
       nodeId: node.nodeId,
       story: node.story,
+      ...(node.commentIds ? { commentIds: node.commentIds } : {}),
+      ...(node.revisionIds ? { revisionIds: node.revisionIds } : {}),
       style: node.style,
       children: node.children.map(projectRow)
     })
@@ -162,19 +162,11 @@ export const projectDocxReadNode = (node: DocxDetailedNode): DocxPublicReadRootN
       type: 'content_control' as const,
       nodeId: node.nodeId,
       story: node.story,
+      ...(node.commentIds ? { commentIds: node.commentIds } : {}),
+      ...(node.revisionIds ? { revisionIds: node.revisionIds } : {}),
       tag: node.tag,
       children: node.children.map(projectNestedNode)
     })
-  }
-  if (node.type === 'revision') {
-    return {
-      type: 'revision',
-      nodeId: node.nodeId,
-      story: node.story,
-      revisionId: node.revisionId || '',
-      kind: node.revisionKind || 'insert',
-      children: node.children.map(projectNestedNode)
-    }
   }
   if (node.type !== 'table_cell') {
     throw new Error('unsupported DOCX root node')
@@ -183,6 +175,8 @@ export const projectDocxReadNode = (node: DocxDetailedNode): DocxPublicReadRootN
     type: 'table_cell' as const,
     nodeId: node.nodeId,
     story: node.story,
+    ...(node.commentIds ? { commentIds: node.commentIds } : {}),
+    ...(node.revisionIds ? { revisionIds: node.revisionIds } : {}),
     tableNodeId: node.tableNodeId,
     row: node.row,
     col: node.col,
