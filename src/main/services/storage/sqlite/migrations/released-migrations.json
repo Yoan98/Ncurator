@@ -1,5 +1,5 @@
 {
-  "publishedThrough": 23,
+  "publishedThrough": 25,
   "migrations": [
     {
       "version": 1,
@@ -138,6 +138,18 @@
       "name": "app_theme",
       "file": "023_app_theme.ts",
       "sha256": "6d495c01b1d56716dd4263ac9df254256e3174c5a9b59ee417e4f36c28c34077"
+    },
+    {
+      "version": 24,
+      "name": "office_diff_preference",
+      "file": "024_office_diff_preference.ts",
+      "sha256": "7127c3a42d6f7e62f03bacd28799ec6d75f90ace3032860b24c68c77be18c9bc"
+    },
+    {
+      "version": 25,
+      "name": "partner_memory",
+      "file": "025_partner_memory.ts",
+      "sha256": "d8e9f00565b45f29d13b7e69299b0af3ff49444543ad7b842a07029afe45a768"
     }
   ]
 }
