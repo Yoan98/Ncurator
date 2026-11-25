@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { createPackage } from '@electron/asar'
+import ffprobeInstaller from '@ffprobe-installer/ffprobe'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertSafePackagePaths,
@@ -152,6 +153,26 @@ describe('package content policy paths', () => {
     await writeFile(nodePtyHelperPath, '', { mode: 0o755 })
     await writeFile(sidecarExecutablePath, '', { mode: 0o755 })
     await writeFile(playwrightDriverPath, 'module.exports = {}\n')
+    const mediaModules = path.join(packagedApp, 'resources', 'app.asar.unpacked', 'node_modules')
+    const suffix = process.platform === 'win32' ? '.exe' : ''
+    for (const [source, target] of [
+      [
+        path.resolve('node_modules/ffmpeg-static', `ffmpeg${suffix}`),
+        path.join(mediaModules, 'ffmpeg-static', `ffmpeg${suffix}`)
+      ],
+      [
+        ffprobeInstaller.path,
+        path.join(
+          mediaModules,
+          '@ffprobe-installer',
+          `${process.platform}-${process.arch}`,
+          `ffprobe${suffix}`
+        )
+      ]
+    ]) {
+      await mkdir(path.dirname(target), { recursive: true })
+      await copyFile(source, target)
+    }
     for (const binary of resolvePackagedWindowsNativeBinaries(packagedApp)) {
       const vcRuntimeDllDirectory = path.dirname(binary)
       await mkdir(vcRuntimeDllDirectory, { recursive: true })

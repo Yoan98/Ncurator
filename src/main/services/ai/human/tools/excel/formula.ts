@@ -18,7 +18,8 @@ import {
 
 /** Calculate the real source workbook before review rows/columns are aligned. */
 export const calculateExcelFormulas = async (workbook: ExcelJS.Workbook): Promise<void> => {
-  const data = toExcelWorkbookData(workbook, 'Excel review source')
+  // Univer date functions use the 1900 epoch, even for 1904 source workbooks.
+  const data = toExcelWorkbookData(workbook, 'Excel review source', false)
   if (!hasExcelFormulas(data)) return
 
   const { Univer, LocaleType, LogLevel, CellValueType } = UniverCore

@@ -49,9 +49,9 @@ describe('package size budget', () => {
     const config = loadPackageSizeBudgetConfig(path.resolve('build/package-size-budgets.json'))
 
     expect(config.platforms['darwin-arm64']).toMatchObject({
-      installedApp: { baselineMiB: 776.2, hardLimitMiB: 870 },
-      appAsar: { baselineMiB: 184.0, hardLimitMiB: 205 },
-      dmg: { baselineMiB: 273.9, hardLimitMiB: 310 },
+      installedApp: { baselineMiB: 857.2, hardLimitMiB: 870 },
+      appAsar: { baselineMiB: 199.2, hardLimitMiB: 205 },
+      dmg: { baselineMiB: 303.7, hardLimitMiB: 310 },
       zip: { baselineMiB: 289.1, hardLimitMiB: 325 }
     })
     expect(config.platforms['darwin-x64']).toBeUndefined()

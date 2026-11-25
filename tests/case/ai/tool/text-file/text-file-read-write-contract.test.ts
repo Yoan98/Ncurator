@@ -199,7 +199,7 @@ describe('ai tool text-file backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.duplicateError.includes('matches 2 locations') &&
-            result.duplicateError.includes('Use replaceAll') &&
+            result.duplicateError.includes('Include more surrounding text') &&
             result.unchangedAfterFailedEdit &&
             result.replaceResult ===
               `已在 ${path.join(runtime.workspaceRoot, 'keywords.txt')} 中替换 2 处内容。` &&

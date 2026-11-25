@@ -10,7 +10,7 @@ import type {
   TextFileDiffArtifact
 } from '../../../../src/shared/types'
 import { AiFileChangeService } from '../../../../src/main/services/ai/fileChanges/AiFileChangeService'
-import { writeDocxFile } from '../../../../src/main/services/files/DocxFileWriteService'
+import { writeOfficeFile } from '../../../../src/main/services/files/OfficeFileWriteService'
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { setOfficeFileWriteListener } from '../../../../src/main/services/wps/officeFileWriteNotify'
 
@@ -83,7 +83,7 @@ describe('confirmed file sessions', () => {
         return false
       }
     })
-    const saving = writeDocxFile({
+    const saving = writeOfficeFile({
       filePath: source,
       bytes: manual,
       expectedHash: expectedChecksum

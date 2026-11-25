@@ -86,7 +86,7 @@ const cellStyle = (cell: ExcelJS.Cell): IStyleData => ({
   }
 })
 
-const cellData = (cell: ExcelJS.Cell): ICellData => {
+const cellData = (cell: ExcelJS.Cell, date1904: boolean): ICellData => {
   const mergedSlave = cell.isMerged && cell.master.address !== cell.address
   const formula = mergedSlave ? undefined : cell.formula || undefined
   const valueWithResult = excelCellValue(cell)
@@ -100,8 +100,7 @@ const cellData = (cell: ExcelJS.Cell): ICellData => {
       : valueWithResult
   const value =
     rawValue instanceof Date
-      ? rawValue.getTime() / 86_400_000 +
-        (cell.worksheet.workbook.properties.date1904 ? 24_107 : 25_569)
+      ? rawValue.getTime() / 86_400_000 + (date1904 ? 24_107 : 25_569)
       : typeof rawValue === 'string' ||
           typeof rawValue === 'number' ||
           typeof rawValue === 'boolean'
@@ -122,7 +121,11 @@ const cellData = (cell: ExcelJS.Cell): ICellData => {
   }
 }
 
-export const toExcelWorkbookData = (workbook: ExcelJS.Workbook, name: string): IWorkbookData => {
+export const toExcelWorkbookData = (
+  workbook: ExcelJS.Workbook,
+  name: string,
+  date1904 = Boolean(workbook.properties.date1904)
+): IWorkbookData => {
   const sheets: Record<string, Partial<IWorksheetData>> = {}
   const sheetOrder: string[] = []
   workbook.eachSheet((sheet) => {
@@ -131,7 +134,7 @@ export const toExcelWorkbookData = (workbook: ExcelJS.Workbook, name: string): I
     const cells: Record<number, Record<number, ICellData>> = {}
     sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
       row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-        ;(cells[rowNumber - 1] ||= {})[columnNumber - 1] = cellData(cell)
+        ;(cells[rowNumber - 1] ||= {})[columnNumber - 1] = cellData(cell, date1904)
       })
     })
     const rowData: Record<number, { h?: number; hd?: BooleanNumber }> = {}
