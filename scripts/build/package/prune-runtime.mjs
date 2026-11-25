@@ -53,7 +53,30 @@ const UNUSED_DISTRIBUTIONS = [
     ]
   })),
   { packageName: 'js-tiktoken', paths: ['dist/index.js', 'dist/index.cjs', 'dist/ranks'] },
-  { packageName: 'ffmpeg-static', paths: ['install.js'] }
+  { packageName: 'ffmpeg-static', paths: ['install.js'] },
+  {
+    packageName: 'pdfjs-dist',
+    paths: [
+      'build',
+      'web',
+      'webpack.mjs',
+      'legacy/build/pdf.min.mjs',
+      'legacy/build/pdf.worker.min.mjs',
+      'legacy/build/pdf.sandbox.min.mjs'
+    ]
+  },
+  {
+    packageName: '@huggingface/transformers',
+    paths: [
+      'dist/transformers.js',
+      'dist/transformers.min.js',
+      'dist/transformers.web.js',
+      'dist/transformers.web.min.js',
+      'dist/transformers.node.cjs',
+      'dist/transformers.node.min.cjs',
+      'dist/transformers.node.min.mjs'
+    ]
+  }
 ]
 
 const unusedDistributionTargets = (runtimeTrace) => {

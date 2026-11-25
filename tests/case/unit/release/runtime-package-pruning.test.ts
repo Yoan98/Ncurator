@@ -40,14 +40,18 @@ const writeFixture = async (relativePath: string): Promise<void> => {
 }
 
 describe('targeted runtime package pruning', () => {
-  it('retains traced Node entries while removing unused Univer and tokenizer distributions', async () => {
+  it('retains traced Node entries while removing unused runtime distributions', async () => {
     temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-runtime-pruning-'))
     const retained = [
       '@univerjs/sheets-formula/lib/cjs/index.js',
       '@univerjs/sheets-formula/lib/es/index.js',
       'js-tiktoken/dist/lite.cjs',
       'js-tiktoken/dist/lite.js',
-      'js-tiktoken/dist/chunk-VL2OQCWN.js'
+      'js-tiktoken/dist/chunk-VL2OQCWN.js',
+      'pdfjs-dist/legacy/build/pdf.mjs',
+      'pdfjs-dist/legacy/build/pdf.worker.mjs',
+      'pdfjs-dist/legacy/build/pdf.sandbox.mjs',
+      '@huggingface/transformers/dist/transformers.node.mjs'
     ]
     const removable = [
       '@univerjs/sheets-formula/lib/umd/index.js',
@@ -57,7 +61,20 @@ describe('targeted runtime package pruning', () => {
       '@univerjs/sheets-formula/lib/es/locale/en-US.js',
       'js-tiktoken/dist/index.cjs',
       'js-tiktoken/dist/index.js',
-      'js-tiktoken/dist/ranks/cl100k_base.js'
+      'js-tiktoken/dist/ranks/cl100k_base.js',
+      'pdfjs-dist/build/pdf.mjs',
+      'pdfjs-dist/web/pdf_viewer.mjs',
+      'pdfjs-dist/webpack.mjs',
+      'pdfjs-dist/legacy/build/pdf.min.mjs',
+      'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
+      'pdfjs-dist/legacy/build/pdf.sandbox.min.mjs',
+      '@huggingface/transformers/dist/transformers.js',
+      '@huggingface/transformers/dist/transformers.min.js',
+      '@huggingface/transformers/dist/transformers.web.js',
+      '@huggingface/transformers/dist/transformers.web.min.js',
+      '@huggingface/transformers/dist/transformers.node.cjs',
+      '@huggingface/transformers/dist/transformers.node.min.cjs',
+      '@huggingface/transformers/dist/transformers.node.min.mjs'
     ]
     await Promise.all([...retained, ...removable].map(writeFixture))
     const result = pruneRuntimePackages({
@@ -84,7 +101,10 @@ describe('targeted runtime package pruning', () => {
       '@univerjs/engine-render/lib/umd/index.js',
       '@univerjs/sheets-formula/lib/cjs/locale/zh-CN.js',
       'js-tiktoken/dist/index.cjs',
-      'js-tiktoken/dist/ranks/o200k_base.js'
+      'js-tiktoken/dist/ranks/o200k_base.js',
+      'pdfjs-dist/build/pdf.mjs',
+      'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
+      '@huggingface/transformers/dist/transformers.node.cjs'
     ]) {
       expect(() =>
         assertRuntimePruningTrace({
