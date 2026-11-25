@@ -72,7 +72,7 @@ Workbench 伙伴。
 | ------------ | ------------- | ---------------------------------------------------- |
 | `partner_id` | TEXT FK       | 所属伙伴                                             |
 | `category`   | TEXT          | `cooperation_preferences` 或 `project_background`    |
-| `enabled`    | INTEGER       | 是否启用，默认 1                                     |
+| `enabled`    | INTEGER       | 伙伴长期记忆总开关，默认 1，两行同步更新             |
 | `confirmed`  | TEXT          | 已确认正文，默认空文本                               |
 | `draft`      | TEXT nullable | AI 待确认稿；NULL 表示无变化，空串表示待确认清空     |
 | `revision`   | INTEGER       | 正文、草稿或启用状态变化时递增，保存和审核检查此版本 |

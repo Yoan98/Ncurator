@@ -25,6 +25,8 @@ export const en = {
   },
   partnerMemory: {
     title: 'Long-term memory',
+    configHelp:
+      'Remember collaboration preferences and project context so you do not have to repeat them. AI changes are saved after your approval. Turning this off stops using and proposing memories; saved content is kept.',
     preferences: 'Collaboration preferences',
     background: 'Project background',
     preferencesPlaceholder: 'e.g. Lead with conclusions and keep answers concise.',
@@ -37,7 +39,7 @@ export const en = {
     reject: 'Reject',
     saving: 'Saving…',
     retry: 'Retry',
-    disabled: 'This category is off. Its content is kept. Enable it in partner settings.',
+    disabled: 'Long-term memory is off. Its content is kept. Enable it in partner settings.',
     loadError: 'Could not load memory. Please retry.',
     saveError: 'Could not save. Your edits are kept. Please retry.',
     reviewChanged: 'Memory has changed. Review it before accepting or rejecting.',

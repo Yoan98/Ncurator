@@ -3,7 +3,6 @@ import {
   PARTNER_MEMORY_LIMITS,
   type PartnerMemory,
   type PartnerMemoryCategory,
-  type PartnerMemoryEnabled,
   type PartnerMemorySnapshot,
   type PartnerMemoryUpdateRequest,
   type PartnerMemoryUpdateResult
@@ -39,18 +38,18 @@ export class PartnerMemoryStore {
       this.sqlite.transaction(() => this.ensure(partnerId))
       rows = query.all(partnerId) as MemoryRow[]
     }
-    return { partnerId, memories: rows.map((row) => ({ ...row, enabled: row.enabled === 1 })) }
+    const enabled = rows.every((row) => row.enabled === 1)
+    return { partnerId, memories: rows.map((row) => ({ ...row, enabled })) }
   }
 
-  public setEnabled(partnerId: string, enabled: PartnerMemoryEnabled): void {
+  public setEnabled(partnerId: string, enabled: boolean): void {
     this.sqlite.transaction(() => {
       this.ensure(partnerId)
-      const update = this.sqlite.prepare(
-        'UPDATE partner_memory SET enabled = ?, revision = revision + 1 WHERE partner_id = ? AND category = ? AND enabled != ?'
-      )
-      PARTNER_MEMORY_CATEGORIES.forEach((category) =>
-        update.run(Number(enabled[category]), partnerId, category, Number(enabled[category]))
-      )
+      this.sqlite
+        .prepare(
+          'UPDATE partner_memory SET enabled = ?, revision = revision + 1 WHERE partner_id = ? AND enabled != ?'
+        )
+        .run(Number(enabled), partnerId, Number(enabled))
     })
   }
 
@@ -61,7 +60,7 @@ export class PartnerMemoryStore {
   public propose(partnerId: string, category: PartnerMemoryCategory, change: MemoryChange): void {
     this.sqlite.transaction(() => {
       const memory = this.getCategory(partnerId, category)
-      if (!memory.enabled) throw new Error('This memory category is disabled')
+      if (!memory.enabled) throw new Error('Long-term memory is disabled')
       const current = memory.draft ?? memory.confirmed
       const next =
         change.action === 'append'

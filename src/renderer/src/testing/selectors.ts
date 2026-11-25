@@ -432,5 +432,5 @@ export const partnerMemorySelectors = {
   accept: 'partner-memory-accept',
   reject: 'partner-memory-reject',
   config: 'partner-memory-config',
-  configTogglePrefix: 'partner-memory-config-toggle'
+  configToggle: 'partner-memory-config-toggle'
 } as const

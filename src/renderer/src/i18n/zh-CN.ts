@@ -25,6 +25,8 @@ export const zh = {
   },
   partnerMemory: {
     title: '长期记忆',
+    configHelp:
+      '记住合作偏好和项目背景，减少重复交代。AI 提出的修改经你确认后保存；关闭后停止使用和提出修改，已有内容保留。',
     preferences: '合作偏好',
     background: '项目背景',
     preferencesPlaceholder: '例如：先给结论、表达简洁、使用简体中文',
@@ -36,7 +38,7 @@ export const zh = {
     reject: '拒绝',
     saving: '正在保存…',
     retry: '重试',
-    disabled: '此类记忆已关闭，内容保留，可在伙伴配置中开启。',
+    disabled: '长期记忆已关闭，内容保留，可在伙伴配置中开启。',
     loadError: '暂时无法读取记忆，请重试。',
     saveError: '保存失败，编辑内容已保留，请重试。',
     reviewChanged: '记忆有新修改，请查看后再接受或拒绝。',

@@ -6,7 +6,6 @@ import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteC
 import { PartnerMemoryStore } from '../../../../src/main/services/storage/domains/PartnerMemoryStore'
 import { refreshSystemContext } from '../../../../src/main/services/ai/human/systemContext'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
-import { defaultPartnerMemoryEnabled } from '../../../../src/shared/partnerMemory'
 import { describe, expect, it } from 'vitest'
 import {
   buildBrainSystemPrompt,
@@ -138,19 +137,14 @@ describe('ai unit brain prompt formatting', () => {
       expect(confirmedSystem).not.toContain('正在开发桌面应用')
       await refreshSystemContext({ ctx, cache, state })
       expect(String(cache.messages[0].content)).toBe(confirmedSystem)
-      memory.setEnabled(ctx.partnerId, {
-        ...defaultPartnerMemoryEnabled(),
-        cooperation_preferences: false
-      })
+      memory.setEnabled(ctx.partnerId, false)
       await refreshSystemContext({ ctx, cache, state })
       expect(String(cache.messages[0].content)).not.toContain('<合作偏好>')
-      expect(String(cache.messages[0].content)).toContain('<项目背景>')
-      memory.setEnabled(ctx.partnerId, {
-        cooperation_preferences: false,
-        project_background: false
-      })
-      await refreshSystemContext({ ctx, cache, state })
+      expect(String(cache.messages[0].content)).not.toContain('<项目背景>')
       expect(String(cache.messages[0].content)).not.toContain('<长期记忆>')
+      memory.setEnabled(ctx.partnerId, true)
+      await refreshSystemContext({ ctx, cache, state })
+      expect(String(cache.messages[0].content)).toContain('<合作偏好>\n只写简体中文\n</合作偏好>')
     } finally {
       sqlite.close()
       await fs.rm(directory, { recursive: true, force: true })

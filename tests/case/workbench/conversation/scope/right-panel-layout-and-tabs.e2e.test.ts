@@ -1,6 +1,9 @@
 import { describe, it } from 'vitest'
 import type { Event } from 'electron'
-import { windowSelectors } from '../../../../../src/renderer/src/testing/selectors'
+import {
+  partnerMemorySelectors,
+  windowSelectors
+} from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
@@ -68,8 +71,57 @@ describe('workbench conversation e2e', () => {
             workbenchSelectors.contentPanelShell
           ).count()
 
+          const readTitlebarIcons = async () =>
+            page.evaluate(
+              (ids) => {
+                const memory = document
+                  .querySelector(`[data-testid="${ids.memory}"]`)!
+                  .getBoundingClientRect()
+                return [ids.left, ids.right].map((id) => {
+                  const icon = document.querySelector(`[data-testid="${id}"] svg`)!
+                  const rect = icon.getBoundingClientRect()
+                  const alignedBar =
+                    id === ids.left && document.querySelector('.nc-window-frame-windows')
+                      ? document.querySelector('.nc-left-titlebar-chrome')!.getBoundingClientRect()
+                      : memory
+                  return {
+                    width: rect.width,
+                    height: rect.height,
+                    expectedSize:
+                      parseFloat(getComputedStyle(document.documentElement).fontSize) * 1.25,
+                    centerOffset:
+                      rect.top + rect.height / 2 - alignedBar.top - alignedBar.height / 2
+                  }
+                })
+              },
+              {
+                memory: partnerMemorySelectors.trigger,
+                left: workbenchSelectors.partnersToggle,
+                right: workbenchSelectors.contentPanelToggle
+              }
+            )
+          const emptyTitlebarIcons = await readTitlebarIcons()
+
           await ensureWorkbenchContentPanelExpanded(page)
           await page.waitForTimeout(300)
+          const expandedTitlebarIcons = await readTitlebarIcons()
+          await runtime.assertThat(
+            [...emptyTitlebarIcons, ...expandedTitlebarIcons].every(
+              (icon) =>
+                Math.abs(icon.width - icon.expectedSize) <= 0.05 &&
+                Math.abs(icon.height - icon.expectedSize) <= 0.05 &&
+                Math.abs(icon.centerOffset) < 1
+            ),
+            {
+              name: 'empty-and-expanded-titlebar-icon-alignment',
+              message: '空会话与资源展开态的两侧图标与清空记录同为 1.25rem，在各自顶栏中纵向居中。',
+              data: { emptyTitlebarIcons, expandedTitlebarIcons }
+            }
+          )
+          await runtime.captureScreenshot({
+            name: 'workbench-titlebar-icon-alignment',
+            message: '左右折叠图标与记忆入口对齐。'
+          })
           const windowHandle = await runtime.electronApp.browserWindow(page)
           const cursorObserver = await windowHandle.evaluateHandle((window) => {
             const events: string[] = []

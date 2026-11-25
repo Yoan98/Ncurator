@@ -2,8 +2,8 @@
   --overview-removed: #d86a63;
   --overview-added: #5d9a6a;
   position: relative;
-  width: 27px;
-  flex: 0 0 27px;
+  width: 18px;
+  flex: 0 0 18px;
   padding: 0;
   border: 0;
   border-radius: 2px;
@@ -39,7 +39,7 @@
   position: absolute;
   z-index: 2;
   left: 1px;
-  width: 11px;
+  width: 7px;
   min-height: 3px;
   padding: 0;
   border: 0;
@@ -48,12 +48,12 @@
   cursor: pointer;
 }
 .nc-change-overview-marker.added {
-  left: 14px;
+  left: 10px;
   background: var(--overview-added);
 }
 .nc-change-overview-marker.reference {
   left: 2px;
-  width: 23px;
+  width: 14px;
   background: #a480c5;
 }
 .nc-change-overview:focus-visible,
@@ -79,8 +79,4 @@
 .nc-change-overview[data-variant='scrollbar']:hover .nc-change-overview-viewport,
 .nc-change-overview[data-variant='scrollbar'][data-dragging='true'] .nc-change-overview-viewport {
   background: var(--notion-scrollbar-thumb-hover);
-}
-.nc-change-overview[data-variant='scrollbar'] .nc-change-overview-marker.reference {
-  left: 1px;
-  width: 6px;
 }

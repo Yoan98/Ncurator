@@ -375,7 +375,7 @@ export default function DocxOverviewRuler({
   return (
     <>
       <ChangeOverviewRuler
-        variant={mode === 'changes' ? 'overview' : 'scrollbar'}
+        variant="overview"
         key={mode}
         trackRef={rail}
         className="docx-overview"

@@ -5470,10 +5470,7 @@ const ChatPage: React.FC = () => {
               : t(($) => $.workbench.collapseSidebar)
           }
         >
-          <SidebarPanelIcon
-            className="h-4 w-4"
-            variant={sidebarCollapsed ? 'expand' : 'collapse'}
-          />
+          <SidebarPanelIcon variant={sidebarCollapsed ? 'expand' : 'collapse'} />
         </button>
         <div className="nc-left-titlebar-drag" aria-hidden="true" />
       </div>
@@ -5666,7 +5663,7 @@ const ChatPage: React.FC = () => {
                         data-testid={workbenchSelectors.contentPanelToggle}
                         aria-label={t(($) => $.workbench.expandRightSidebar)}
                       >
-                        <SidebarPanelIcon className="h-4 w-4" variant="expand" />
+                        <SidebarPanelIcon variant="expand" />
                       </button>
                     ) : null}
                   </div>
@@ -5735,7 +5732,7 @@ const ChatPage: React.FC = () => {
                         data-testid={workbenchSelectors.contentPanelToggle}
                         aria-label={t(($) => $.workbench.expandRightSidebar)}
                       >
-                        <SidebarPanelIcon className="h-4 w-4" variant="expand" />
+                        <SidebarPanelIcon variant="expand" />
                       </button>
                     ) : null}
                   </div>

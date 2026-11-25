@@ -6,8 +6,6 @@ export const PARTNER_MEMORY_LIMITS: Record<PartnerMemoryCategory, number> = {
   project_background: 4000
 }
 
-export type PartnerMemoryEnabled = Record<PartnerMemoryCategory, boolean>
-
 export interface PartnerMemory {
   category: PartnerMemoryCategory
   enabled: boolean
@@ -32,8 +30,3 @@ export interface PartnerMemoryUpdateRequest {
 export type PartnerMemoryUpdateResult =
   | { status: 'saved'; snapshot: PartnerMemorySnapshot }
   | { status: 'conflict'; snapshot: PartnerMemorySnapshot }
-
-export const defaultPartnerMemoryEnabled = (): PartnerMemoryEnabled => ({
-  cooperation_preferences: true,
-  project_background: true
-})

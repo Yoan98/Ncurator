@@ -95,10 +95,7 @@ const SettingsPage: React.FC = () => {
                   : t(($) => $.settings.collapseSettingsSidebar)
               }
             >
-              <SidebarPanelIcon
-                className="h-4 w-4"
-                variant={sidebarCollapsed ? 'expand' : 'collapse'}
-              />
+              <SidebarPanelIcon variant={sidebarCollapsed ? 'expand' : 'collapse'} />
             </button>
           ) : null}
           <div

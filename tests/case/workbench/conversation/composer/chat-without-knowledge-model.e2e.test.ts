@@ -14,7 +14,8 @@ import {
   sendWorkbenchMessage,
   waitForWorkbenchAiRunCompletion,
   collectWorkbenchLlmIoRecords,
-  loadWorkbenchLiveModelEnv
+  loadWorkbenchLiveModelEnv,
+  workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'chat-without-knowledge-model'
@@ -56,10 +57,52 @@ describe('workbench conversation', () => {
             )
             if (!partner) throw new Error('Partner missing')
             const trigger = page.getByTestId(memorySelectors.trigger)
+            const topbarIcons = await page.evaluate(
+              (ids) => {
+                const memory = document.querySelector(`[data-testid="${ids.memory}"]`)!
+                const clear = document.querySelector(`[data-testid="${ids.clear}"] > span`)!
+                return [ids.left, ids.right].map((id) => {
+                  const icon = document.querySelector(`[data-testid="${id}"] svg`)!
+                  const rect = icon.getBoundingClientRect()
+                  const clearRect = clear.getBoundingClientRect()
+                  const memoryRect = memory.getBoundingClientRect()
+                  const alignedBar =
+                    id === ids.left && document.querySelector('.nc-window-frame-windows')
+                      ? document.querySelector('.nc-left-titlebar-chrome')!.getBoundingClientRect()
+                      : memoryRect
+                  return {
+                    width: rect.width,
+                    height: rect.height,
+                    clearWidth: clearRect.width,
+                    centerOffset:
+                      rect.top + rect.height / 2 - alignedBar.top - alignedBar.height / 2
+                  }
+                })
+              },
+              {
+                memory: memorySelectors.trigger,
+                clear: workbenchSelectors.clearContextButton,
+                left: workbenchSelectors.partnersToggle,
+                right: workbenchSelectors.contentPanelToggle
+              }
+            )
+            await runtime.assertThat(
+              topbarIcons.every(
+                (icon) =>
+                  Math.abs(icon.width - icon.clearWidth) <= 0.05 &&
+                  Math.abs(icon.height - icon.clearWidth) <= 0.05 &&
+                  Math.abs(icon.centerOffset) < 1
+              ),
+              {
+                name: 'chat-titlebar-icon-alignment',
+                message: '两侧折叠图标与清空记录同尺寸，并与记忆入口纵向居中。',
+                data: topbarIcons
+              }
+            )
             await trigger.click()
             const pane = page.getByTestId(`${memorySelectors.panePrefix}-cooperation_preferences`)
             const baseline =
-              '保持自然表达。\n' +
+              '保持自然表达。验证类诉求要求看真实证据：涉及记忆、工具或系统状态时，要用数据库查询或终端实际输出证明生效与否，并说明证据来源路径，不接受口头断言。\n' +
               Array.from(
                 { length: 50 },
                 (_, i) => `长期约定${i + 1}：交付时说明结论与依据，保留重要事实。`
@@ -70,6 +113,17 @@ describe('workbench conversation', () => {
               page,
               partner.id,
               (snapshot) => snapshot.memories[0].confirmed === baseline
+            )
+            const projectBaseline =
+              '验证类诉求要求看真实证据：涉及记忆、工具或系统状态时，要用数据库查询或终端实际输出证明生效与否，并说明证据来源路径，不接受口头断言。'
+            await page.getByTestId(`${memorySelectors.tabPrefix}-project_background`).click()
+            const projectPane = page.getByTestId(`${memorySelectors.panePrefix}-project_background`)
+            await projectPane.locator('.monaco-editor textarea').last().focus()
+            await page.keyboard.insertText(projectBaseline)
+            await waitForPartnerMemory(
+              page,
+              partner.id,
+              (snapshot) => snapshot.memories[1].confirmed === projectBaseline
             )
             await trigger.click()
             const proposalStartedAt = Date.now()
@@ -117,6 +171,62 @@ describe('workbench conversation', () => {
               name: 'memory-character-diff',
               message: '合作偏好顶部的逐字删除和增加。'
             })
+            const readDiffLayout = async (category: string) =>
+              page.getByTestId(`${memorySelectors.panePrefix}-${category}`).evaluate((pane) => {
+                const host = pane.querySelector('.nc-memory-editor')!
+                const original = host.querySelector('.editor.original')!
+                const modified = host.querySelector('.editor.modified')!
+                const bounds = host.getBoundingClientRect()
+                const starts = [...modified.querySelectorAll('.view-lines > .view-line')].flatMap(
+                  (line) => {
+                    const box = line.getBoundingClientRect()
+                    if (box.bottom <= bounds.top || box.top >= bounds.bottom) return []
+                    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT)
+                    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                      const start = (node.textContent ?? '').search(/\S/)
+                      if (start < 0) continue
+                      const range = document.createRange()
+                      range.setStart(node, start)
+                      range.setEnd(node, start + 1)
+                      return [
+                        {
+                          text: line.textContent,
+                          left: range.getBoundingClientRect().left - bounds.left
+                        }
+                      ]
+                    }
+                    return []
+                  }
+                )
+                return {
+                  originalWidth: original.getBoundingClientRect().width,
+                  modifiedLeft: modified.getBoundingClientRect().left - bounds.left,
+                  starts
+                }
+              })
+            const replacementLayout = await readDiffLayout('cooperation_preferences')
+            await page.getByTestId(`${memorySelectors.tabPrefix}-project_background`).click()
+            await projectPane.locator('.nc-memory-marker.added').waitFor({ state: 'visible' })
+            const appendLayout = await readDiffLayout('project_background')
+            await runtime.captureScreenshot({
+              name: 'memory-wrapped-append-diff',
+              message: '长中文记忆换行与追加 diff 对齐，旧稿不露出裁切文字。'
+            })
+            await runtime.assertThat(
+              [replacementLayout, appendLayout].every(
+                (layout) =>
+                  layout.originalWidth <= 0.05 &&
+                  Math.abs(layout.modifiedLeft) <= 0.05 &&
+                  layout.starts.length >= 3 &&
+                  layout.starts.every((line) => Math.abs(line.left) <= 0.5)
+              ),
+              {
+                name: 'memory-inline-diff-text-alignment',
+                message: '替换与追加 diff 均不保留旧稿窄栏，所有可见中文换行从同一起点显示。',
+                data: { replacementLayout, appendLayout }
+              }
+            )
+            await page.getByTestId(`${memorySelectors.tabPrefix}-cooperation_preferences`).click()
             const railTopBefore = await pane
               .locator('.nc-memory-viewport')
               .evaluate((element) => parseFloat((element as HTMLElement).style.top))
@@ -207,7 +317,7 @@ describe('workbench conversation', () => {
               confirmedEdited:
                 confirmedSnapshot.memories[0].confirmed.endsWith('USER-MEMORY-EDIT-593'),
               rejectedProject:
-                confirmedSnapshot.memories[1].confirmed === '' &&
+                confirmedSnapshot.memories[1].confirmed === projectBaseline &&
                 confirmedSnapshot.memories[1].draft === null,
               nextSystemUpdated: Boolean(
                 nextRequest?.requestWire?.messages.some(
@@ -236,9 +346,9 @@ describe('workbench conversation', () => {
                 result.memoryResult.latestEdit &&
                 result.memoryResult.pendingCategories === 2 &&
                 result.memoryResult.memoryCalls >= 5 &&
-                Math.abs(result.memoryResult.overviewStyle.width - 27) <= 0.05 &&
-                Math.abs(result.memoryResult.overviewStyle.thumbWidth - 27) <= 0.05 &&
-                Math.abs(result.memoryResult.overviewStyle.markerWidth - 11) <= 0.05 &&
+                Math.abs(result.memoryResult.overviewStyle.width - 18) <= 0.05 &&
+                Math.abs(result.memoryResult.overviewStyle.thumbWidth - 18) <= 0.05 &&
+                Math.abs(result.memoryResult.overviewStyle.markerWidth - 7) <= 0.05 &&
                 result.memoryResult.overviewStyle.border === '1px' &&
                 result.memoryResult.overviewStyle.radius === '2px' &&
                 !result.memoryResult.overviewStyle.hasTitle &&

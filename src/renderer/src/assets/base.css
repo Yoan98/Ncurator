@@ -593,7 +593,7 @@ textarea,
 
 .nc-left-titlebar-chrome {
   position: absolute;
-  top: 0;
+  top: 1px;
   left: 0;
   z-index: 100;
   display: flex;
@@ -605,6 +605,7 @@ textarea,
 
 .nc-window-frame-windows .nc-left-titlebar-chrome {
   position: fixed;
+  top: 0;
   top: 0;
   width: var(--window-native-control-button-width) !important;
   height: var(--window-native-titlebar-height);
@@ -1425,6 +1426,7 @@ textarea,
   left: 0;
   z-index: 3;
   display: flex;
+  align-items: center;
   height: var(--workbench-titlebar-height);
   background: transparent;
   pointer-events: none;

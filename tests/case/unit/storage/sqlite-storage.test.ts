@@ -1,5 +1,4 @@
 import { PartnerMemoryStore } from '../../../../src/main/services/storage/domains/PartnerMemoryStore'
-import { defaultPartnerMemoryEnabled } from '../../../../src/shared/partnerMemory'
 import { OpenWithPreferenceStore } from '../../../../src/main/services/storage/domains/OpenWithPreferenceStore'
 import { LlmConfigStore } from '../../../../src/main/services/storage/domains/LlmConfigStore'
 import { projectMessageLogRecords } from '../../../../src/main/services/ai/human/memory/transcript'
@@ -203,15 +202,16 @@ describe('sqlite storage core and stores', () => {
     update('write', current().revision, '简洁\n用中文\n先给结论')
     update('reject', current().revision)
     expect(current()).toMatchObject({ confirmed: '简洁', draft: null })
-    store.setEnabled('partner-1', {
-      ...defaultPartnerMemoryEnabled(),
-      cooperation_preferences: false
-    })
+    store.setEnabled('partner-1', false)
+    expect(store.get('partner-1').memories.every((memory) => !memory.enabled)).toBe(true)
     expect(() =>
       store.propose('partner-1', 'cooperation_preferences', {
         action: 'append',
         content: '不应保存'
       })
+    ).toThrow(/disabled/)
+    expect(() =>
+      store.propose('partner-1', 'project_background', { action: 'append', content: '不应保存' })
     ).toThrow(/disabled/)
     sqlite.close()
     sqlite = new SqliteCore(path.join(tempDir, 'app.sqlite'))
@@ -222,7 +222,9 @@ describe('sqlite storage core and stores', () => {
       draft: null,
       enabled: false
     })
-    reopened.setEnabled('partner-1', defaultPartnerMemoryEnabled())
+    expect(reopened.get('partner-1').memories.every((memory) => !memory.enabled)).toBe(true)
+    reopened.setEnabled('partner-1', true)
+    expect(reopened.get('partner-1').memories.every((memory) => memory.enabled)).toBe(true)
     expect(reopened.get('partner-1').memories[0].confirmed).toBe('简洁')
     await new PartnerStore(sqlite).deletePartner('partner-1')
     expect(sqlite.prepare('SELECT * FROM partner_memory').all()).toEqual([])

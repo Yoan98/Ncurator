@@ -66,13 +66,35 @@ describe('workbench conversation e2e', () => {
             .locator('.nc-configuration-field-label')
             .filter({ hasText: '名称' })
             .isVisible()
-          const memoryDefaults = await modal
+          const memoryToggle = modal.getByTestId(memorySelectors.configToggle)
+          const memoryDefault = await memoryToggle.getAttribute('aria-checked')
+          const memoryConfigLayout = await modal
             .getByTestId(memorySelectors.config)
-            .locator('input[type="checkbox"]')
-            .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).checked))
+            .evaluate((section) => {
+              const label = section
+                .querySelector('.nc-configuration-field-label')!
+                .getBoundingClientRect()
+              const help = section
+                .querySelector('button[aria-label="查看说明"]')!
+                .getBoundingClientRect()
+              const toggle = section.querySelector('[role="switch"]')!.getBoundingClientRect()
+              return {
+                switches: section.querySelectorAll('[role="switch"]').length,
+                helps: section.querySelectorAll('button[aria-label="查看说明"]').length,
+                checkboxes: section.querySelectorAll('input[type="checkbox"]').length,
+                centers: [label, help, toggle].map((rect) => rect.top + rect.height / 2),
+                ordered: label.right <= help.left && help.right < toggle.left
+              }
+            })
           await modal
-            .getByTestId(`${memorySelectors.configTogglePrefix}-project_background`)
-            .uncheck()
+            .getByTestId(memorySelectors.config)
+            .getByRole('button', { name: '查看说明', exact: true })
+            .hover()
+          await page
+            .getByRole('tooltip')
+            .filter({ hasText: '减少重复交代' })
+            .waitFor({ state: 'visible' })
+          await memoryToggle.click()
           await nameInput.fill(UPDATED_NAME)
           await modal.getByRole('button', { name: 'pill' }).click()
           await modal.locator('.nc-config-footer .ant-btn-primary').click()
@@ -82,6 +104,29 @@ describe('workbench conversation e2e', () => {
           })
           await updatedPlaceholder.waitFor({ state: 'visible' })
           const placeholderAfterRename = await updatedPlaceholder.textContent()
+          const memoryDisabledSnapshot = await page.evaluate(
+            (id) => window.api.partnerMemoryGet(id),
+            created.id
+          )
+          await partnerItem.hover()
+          await editButton.click({ force: true })
+          await memoryToggle.waitFor({ state: 'visible' })
+          await page.waitForFunction(
+            (id) =>
+              document.querySelector(`[data-testid="${id}"]`)?.getAttribute('aria-checked') ===
+              'false',
+            memorySelectors.configToggle
+          )
+          const memoryReopened = await memoryToggle.getAttribute('aria-checked')
+          await memoryToggle.click()
+          await runtime.captureScreenshot({
+            name: 'partner-memory-single-switch',
+            message: '长期记忆文案旁一个问号，右侧一个总开关。'
+          })
+          await modal.locator('.nc-config-footer .ant-btn-primary').click()
+          await waitForPartnerMemory(page, created.id, (snapshot) =>
+            snapshot.memories.every((memory) => memory.enabled)
+          )
 
           const updated = await page.evaluate(async (partnerId) => {
             const partners = await window.api.partnerList()
@@ -263,7 +308,10 @@ describe('workbench conversation e2e', () => {
             mediumHeight,
             placeholderText,
             backgroundPlaceholder,
-            memoryDefaults,
+            memoryDefault,
+            memoryConfigLayout,
+            memoryDisabledSnapshot,
+            memoryReopened,
             memorySnapshot,
             reopenedText,
             bottomLine,
@@ -290,12 +338,19 @@ describe('workbench conversation e2e', () => {
               result.mediumHeight < result.cappedHeight &&
               result.placeholderText.includes('先给结论') &&
               result.backgroundPlaceholder.includes('项目目标') &&
-              result.memoryDefaults.every(Boolean) &&
-              result.memoryDefaults.length === 2 &&
+              result.memoryDefault === 'true' &&
+              result.memoryReopened === 'false' &&
+              result.memoryConfigLayout.switches === 1 &&
+              result.memoryConfigLayout.helps === 1 &&
+              result.memoryConfigLayout.checkboxes === 0 &&
+              result.memoryConfigLayout.ordered &&
+              Math.max(...result.memoryConfigLayout.centers) -
+                Math.min(...result.memoryConfigLayout.centers) <
+                1 &&
+              result.memoryDisabledSnapshot.memories.every((memory) => !memory.enabled) &&
               result.memorySnapshot.memories[0].confirmed === '简明表达，先给结论。' &&
               result.memorySnapshot.memories[1].confirmed === '持续开发桌面端' &&
-              !result.memorySnapshot.memories[1].enabled &&
-              result.memorySnapshot.memories[0].enabled &&
+              result.memorySnapshot.memories.every((memory) => memory.enabled) &&
               result.reopenedText.includes('简明表达') &&
               result.bottomLine &&
               result.modalTitle === '编辑伙伴' &&

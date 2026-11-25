@@ -1,7 +1,4 @@
-import {
-  defaultPartnerMemoryEnabled,
-  type PartnerMemoryUpdateRequest
-} from '../../shared/partnerMemory'
+import type { PartnerMemoryUpdateRequest } from '../../shared/partnerMemory'
 import { exportExcelEdits, canPreserveExcelWorkbook } from '../services/files/ExcelWorkbookEdit'
 import { UserSkillService } from '../services/skills/UserSkillService'
 import { registerDesktopAccount } from './desktopAccount'
@@ -3356,10 +3353,7 @@ export function registerHandlers(services: {
         storageService.sqlite.transaction(() => {
           partnerStore.savePartner(partner)
           userSkillService.setEnabled(partner.id, payload.skillNames)
-          partnerMemory.setEnabled(
-            partner.id,
-            payload.memoryEnabled ?? defaultPartnerMemoryEnabled()
-          )
+          partnerMemory.setEnabled(partner.id, payload.memoryEnabled ?? true)
         })
         await workbenchUiStore.savePartnerState(partner.id, createEmptyPartnerUiState())
         return { success: true, partner }
@@ -3389,7 +3383,8 @@ export function registerHandlers(services: {
         storageService.sqlite.transaction(() => {
           partnerStore.savePartner(partner)
           userSkillService.setEnabled(partner.id, payload.skillNames)
-          if (payload.memoryEnabled) partnerMemory.setEnabled(partner.id, payload.memoryEnabled)
+          if (payload.memoryEnabled !== undefined)
+            partnerMemory.setEnabled(partner.id, payload.memoryEnabled)
         })
         partnerMemory.notify(partner.id)
         return { success: true, partner }

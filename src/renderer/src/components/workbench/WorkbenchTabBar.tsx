@@ -203,7 +203,7 @@ const WorkbenchTabBar = ({
         data-testid={workbenchSelectors.contentPanelToggle}
         onClick={onCollapse}
       >
-        <SidebarPanelIcon className="h-4 w-4" variant="collapse" />
+        <SidebarPanelIcon variant="collapse" />
       </button>
     </div>
   )

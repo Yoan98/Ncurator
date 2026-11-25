@@ -1,33 +1,26 @@
 import { useEffect, useState } from 'react'
-import {
-  defaultPartnerMemoryEnabled,
-  PARTNER_MEMORY_CATEGORIES
-} from '../../../../shared/partnerMemory'
 import { t } from '../../i18n'
 
 export function usePartnerMemoryConfig(open: boolean, partnerId: string | null) {
-  const [enabled, setEnabled] = useState(defaultPartnerMemoryEnabled)
-  const [initial, setInitial] = useState(defaultPartnerMemoryEnabled)
+  const [enabled, setEnabled] = useState(true)
+  const [initial, setInitial] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   useEffect(() => {
     if (!open) return
     let active = true
     setError('')
-    setEnabled(defaultPartnerMemoryEnabled())
-    setInitial(defaultPartnerMemoryEnabled())
+    setEnabled(true)
+    setInitial(true)
     setLoading(Boolean(partnerId))
     if (partnerId)
       void window.api
         .partnerMemoryGet(partnerId)
         .then((snapshot) => {
           if (!active) return
-          const flags = defaultPartnerMemoryEnabled()
-          snapshot.memories.forEach((memory) => {
-            flags[memory.category] = memory.enabled
-          })
-          setEnabled(flags)
-          setInitial(flags)
+          const enabled = snapshot.memories.every((memory) => memory.enabled)
+          setEnabled(enabled)
+          setInitial(enabled)
         })
         .catch(() => {
           if (active) setError(t(($) => $.partnerMemory.loadError))
@@ -44,6 +37,6 @@ export function usePartnerMemoryConfig(open: boolean, partnerId: string | null) 
     setEnabled,
     loading,
     error,
-    dirty: PARTNER_MEMORY_CATEGORIES.some((category) => enabled[category] !== initial[category])
+    dirty: enabled !== initial
   }
 }

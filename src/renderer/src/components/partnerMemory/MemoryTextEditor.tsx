@@ -71,6 +71,9 @@ export default function MemoryTextEditor({
       readOnly: false,
       editContext: false,
       wordWrap: 'on',
+      wrappingIndent: 'none',
+      wrappingStrategy: 'advanced',
+      disableMonospaceOptimizations: true,
       automaticLayout: true,
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
       fontSize: 14,
@@ -97,6 +100,8 @@ export default function MemoryTextEditor({
       ? monaco.editor.createDiffEditor(host.current, {
           ...options,
           renderSideBySide: false,
+          // Inline mode otherwise retains a 5px original pane and clips its first character.
+          compactMode: true,
           experimental: { useTrueInlineView: true, showEmptyDecorations: false },
           originalEditable: false,
           renderIndicators: false,
@@ -162,7 +167,7 @@ export default function MemoryTextEditor({
           column: safeColumn
         })
       }
-      for (const change of diff?.getLineChanges() ?? []) {
+      for (const change of (latest.current.pending && diff?.getLineChanges()) || []) {
         if (change.charChanges?.length)
           for (const chars of change.charChanges) {
             if (
@@ -196,7 +201,9 @@ export default function MemoryTextEditor({
               change.modifiedStartLineNumber,
               1,
               change.modifiedEndLineNumber,
-              modified.getLineMaxColumn(Math.max(1, change.modifiedEndLineNumber)),
+              modified.getLineMaxColumn(
+                Math.max(1, Math.min(modified.getLineCount(), change.modifiedEndLineNumber))
+              ),
               false
             )
         }
