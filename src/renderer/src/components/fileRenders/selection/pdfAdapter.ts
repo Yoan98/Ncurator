@@ -12,10 +12,15 @@ export function pdfAdapter(container: HTMLElement, filePath: string): SelectionA
       if (!start || !end)
         throw new Error(t(($) => $.editors.couldNotLocateThePdfPageContainingThisText))
       const offset = (page: HTMLElement, endpoint: Node, at: number) => {
+        const preview = readPreviewText(page)
+        const run = preview.runs.find((run) => run.node === endpoint)
+        // Preserve a partial text-node boundary; intersecting the whole node
+        // makes both ends of a same-span selection point to the span's end.
+        if (run) return run.start + at
         const prefix = window.document.createRange()
         prefix.selectNodeContents(page)
         prefix.setEnd(endpoint, at)
-        return captureSelection(page, readPreviewText(page), prefix)?.end || 0
+        return captureSelection(page, preview, prefix)?.end || 0
       }
       node.anchor = {
         kind: 'pdf',

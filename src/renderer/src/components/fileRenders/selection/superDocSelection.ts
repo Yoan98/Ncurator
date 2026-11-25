@@ -1,4 +1,4 @@
-import type { SuperDoc } from 'superdoc'
+import type { SelectionInfo, SuperDoc } from 'superdoc'
 import { createTextAdapter } from './textAdapter'
 import { POINTER_CLICK_THRESHOLD } from './types'
 
@@ -68,19 +68,42 @@ function paintedCaret(container: HTMLElement, event: PointerEvent): Range | null
 export function observeWordPointers(container: HTMLElement) {
   let anchor: Range | null = null
   let origin: { x: number; y: number } | undefined
+  let generation = 0
   // The editor consumes inactive header/footer presses in the window capture phase.
   // Register before mounting it and observe the gesture without preventing editor input.
   const down = (event: PointerEvent) => {
-    if (!(event.target instanceof Node) || !container.contains(event.target) || event.button !== 0)
+    generation++
+    if (
+      !(event.target instanceof Node) ||
+      !container.contains(event.target) ||
+      event.button !== 0
+    ) {
+      origin = undefined
+      anchor = null
       return
+    }
     origin = { x: event.clientX, y: event.clientY }
     if (!event.shiftKey) anchor = paintedCaret(container, event)
   }
+  const cancel = () => {
+    generation++
+  }
+  const key = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') cancel()
+  }
   window.addEventListener('pointerdown', down, true)
+  window.addEventListener('keydown', key, true)
+  window.addEventListener('blur', cancel)
   return {
     anchor: () => anchor,
     origin: () => origin,
-    close: () => window.removeEventListener('pointerdown', down, true)
+    generation: () => generation,
+    close: () => {
+      cancel()
+      window.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('keydown', key, true)
+      window.removeEventListener('blur', cancel)
+    }
   }
 }
 export type WordPointers = ReturnType<typeof observeWordPointers>
@@ -96,8 +119,16 @@ export function createWordSelectionAdapter(
     pointerOrigin: pointers?.origin,
     async capture(event: PointerEvent | KeyboardEvent) {
       const anchor = pointers?.anchor()
+      const generation = pointers?.generation()
+      const current = () => pointers?.generation() === generation
+      const origin = pointers?.origin()
+      const dragged =
+        event instanceof PointerEvent &&
+        origin &&
+        Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > POINTER_CLICK_THRESHOLD
       // Clicking the canvas margin dismisses the popup even if the SDK keeps its last selection.
-      if (event instanceof PointerEvent && !anchor && !event.shiftKey) return null
+      // A drag starting after the last glyph is still a valid reverse selection.
+      if (event instanceof PointerEvent && !anchor && !event.shiftKey && !dragged) return null
       if (event instanceof PointerEvent && anchor) {
         const end = paintedCaret(container, event)
         const start = anchor
@@ -109,19 +140,20 @@ export function createWordSelectionAdapter(
           resolved.setEnd(b.startContainer, b.startOffset)
           return text.capture(event, resolved)
         }
-        const origin = pointers?.origin()
         // A drag may finish in the whitespace after a shorter line. The editor still has
         // a valid text selection; only a plain click should dismiss it without capturing.
-        if (
-          !event.shiftKey &&
-          (!origin ||
-            Math.hypot(event.clientX - origin.x, event.clientY - origin.y) <=
-              POINTER_CLICK_THRESHOLD)
-        )
-          return null
+        if (!event.shiftKey && !dragged) return null
       }
       await new Promise(requestAnimationFrame)
-      const selected = await editor?.activeEditor?.doc?.selection.current({ includeText: true })
+      if (!current()) return null
+      let selected: SelectionInfo | undefined
+      try {
+        selected = await editor?.activeEditor?.doc?.selection.current({ includeText: true })
+      } catch (error) {
+        if (!current()) return null
+        throw error
+      }
+      if (!current()) return null
       if (!selected?.target || selected.empty) return text.capture(event)
       const segments = selected.target.segments
       const point = (blockId: string, offset: number) => {

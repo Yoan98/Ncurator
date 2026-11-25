@@ -287,7 +287,122 @@ describe('workbench conversation e2e', () => {
             )
           await openDocxFile('跨样式划选.docx')
           const mixedParagraphs = page.locator('.docx-content .superdoc-page [data-para-id]')
+          await mixedParagraphs.first().waitFor({ state: 'visible', timeout: 30_000 })
+          await page.getByTestId(workbenchSelectors.docxLoading).waitFor({ state: 'hidden' })
           await expect.poll(() => mixedParagraphs.count()).toBe(4)
+          const repeatedGestures = []
+          for (let round = 0; round < 4; round++) {
+            for (const gesture of [
+              'forward',
+              'backward',
+              'backward-from-whitespace',
+              'backward-to-whitespace',
+              'short-backward-from-whitespace'
+            ]) {
+              const first = await textPoint(page, 0, 0)
+              const last = await textPoint(page, 3, '一、探究目标'.length)
+              const short = gesture === 'short-backward-from-whitespace'
+              const [from, to] =
+                gesture === 'forward'
+                  ? [first, { ...last, x: last.x + 24 }]
+                  : [
+                      { ...last, x: last.x + (gesture.includes('from-whitespace') ? 24 : 0) },
+                      short
+                        ? await textPoint(page, 3, 0)
+                        : { ...first, x: first.x - (gesture === 'backward-to-whitespace' ? 16 : 0) }
+                    ]
+              await page.mouse.move(from.x, from.y)
+              await page.mouse.down()
+              await page.mouse.move(to.x, to.y, { steps: round % 2 ? 1 : 16 })
+              await page.mouse.up()
+              runtime.signal({
+                name: 'repeated-docx-pointer-selection',
+                message: '记录连续正反向划选后的实际选区和浮层状态。',
+                data: {
+                  round,
+                  gesture,
+                  from,
+                  to,
+                  ui: await observeSelectionUi(page),
+                  native: await page.evaluate(() => window.getSelection()?.toString() || '')
+                }
+              })
+              await page
+                .getByTestId('docx-selection-ai-reference')
+                .waitFor({ state: 'visible', timeout: 3000 })
+              const ui = await observeSelectionUi(page)
+              expect(ui.quote).toBe(
+                short
+                  ? '一、探究目标'
+                  : '下面是生成的案例：高中地理产业转移AI 主导的路径与说明一、探究目标'
+              )
+              expect(ui.withinViewport).toBe(true)
+              repeatedGestures.push({ round, gesture, quote: ui.quote })
+              if (round === 0 && gesture === 'backward-from-whitespace')
+                await runtime.captureScreenshot({
+                  name: 'backward-selection-from-line-whitespace',
+                  message: '从行尾空白向前拖选，原文完整且 AI 引用入口可见'
+                })
+              await page.keyboard.press('Escape')
+              await page.getByTestId('docx-selection-popup').waitFor({ state: 'detached' })
+            }
+          }
+          await runtime.assertThat(repeatedGestures.length === 20, {
+            name: 'repeated-bidirectional-selection',
+            message: '同一区域连续 20 次正反向与空白边界拖选均显示入口，引用原文准确。',
+            data: repeatedGestures
+          })
+          const reverseFromWhitespace = async () => {
+            const first = await textPoint(page, 0, 0)
+            const last = await textPoint(page, 3, '一、探究目标'.length)
+            await page.mouse.move(last.x + 24, last.y)
+            await page.mouse.down()
+            await page.mouse.move(first.x, first.y, { steps: 1 })
+            await page.mouse.up()
+          }
+          const assertNoLatePopup = () =>
+            page.evaluate(async () => {
+              for (let frame = 0; frame < 12; frame++) {
+                await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+                if (document.querySelector('[data-testid="docx-selection-popup"]')) return false
+              }
+              return true
+            })
+          const cancelledGestures = []
+          for (let round = 0; round < 3; round++) {
+            await reverseFromWhitespace()
+            await page.keyboard.press('Escape')
+            const escaped = await assertNoLatePopup()
+            expect(escaped).toBe(true)
+            await reverseFromWhitespace()
+            const first = await textPoint(page, 0, 0)
+            const end = await textPoint(page, 0, 5)
+            await page.mouse.move(first.x, first.y)
+            await page.mouse.down()
+            const dragging = await assertNoLatePopup()
+            expect(dragging).toBe(true)
+            await page.mouse.move(end.x, end.y, { steps: 2 })
+            await page.mouse.up()
+            await page.getByTestId('docx-selection-ai-reference').waitFor({ state: 'visible' })
+            const quote = (await observeSelectionUi(page)).quote
+            expect(quote).toBe('下面是生成')
+            await page.keyboard.press('Escape')
+            await page.locator('.docx-content').click({ position: { x: 5, y: 5 } })
+            const blank = await assertNoLatePopup()
+            expect(blank).toBe(true)
+            cancelledGestures.push({ escaped, dragging, quote, blank })
+          }
+          await runtime.assertThat(
+            cancelledGestures.every(
+              (g) => g.escaped && g.dragging && g.blank && g.quote === '下面是生成'
+            ),
+            {
+              name: 'selection-cancels-outdated-capture',
+              message:
+                '取消或开始新拖动后旧选区不再打开入口，新选区原文正确，空白点击不恢复旧入口。',
+              data: cancelledGestures
+            }
+          )
           for (const backwards of [false, true]) {
             await page.locator('.docx-content').click({ position: { x: 5, y: 5 } })
             const first = await textPoint(page, 0, 0)

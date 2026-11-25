@@ -88,8 +88,8 @@ export default function DocumentSelectionLayer({
     const capture = async (event: PointerEvent | KeyboardEvent) => {
       const current = latest.current
       if (current.state?.locked) return
+      const version = ++generation
       try {
-        const version = ++generation
         const candidate = await current.adapter.capture(event)
         if (version !== generation) return
         if (!candidate) return
@@ -104,6 +104,7 @@ export default function DocumentSelectionLayer({
         }
         open(candidate, 'action')
       } catch (error) {
+        if (version !== generation) return
         setPopup(null)
         void message.warning({
           key: noticeKey,
@@ -115,6 +116,7 @@ export default function DocumentSelectionLayer({
       }
     }
     const down = (e: PointerEvent) => {
+      generation++
       pointer = null
       clicked = undefined
       start = e.button === 0 ? { x: e.clientX, y: e.clientY } : null
