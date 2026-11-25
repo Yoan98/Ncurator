@@ -4,6 +4,7 @@ import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { resolveRunArtifactsDir } from '../../../../harness/core/write-run-log'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { partnerMemorySelectors } from '../../../../../src/renderer/src/testing/selectors'
 import {
   openNativeConfirmation,
   dismissNativeConfirmation,
@@ -174,9 +175,15 @@ describe('workbench conversation e2e', () => {
           const clearButton = getWorkbenchLocator(page, workbenchSelectors.clearContextButton)
           await clearButton.waitFor({ state: 'visible' })
           await page.mouse.move(500, 300)
-          const iconGeometry = await clearButton.evaluate((button) => {
+          const iconGeometry = await clearButton.evaluate((button, memoryTestId) => {
             const frame = button.querySelector('span')!
             const [bubble, eraser] = frame.querySelectorAll('svg')
+            const memory = document.querySelector<SVGSVGElement>(
+              `[data-testid="${memoryTestId}"] svg`
+            )!
+            const visibleStrokeWidth = (svg: SVGSVGElement): number =>
+              (parseFloat(getComputedStyle(svg).strokeWidth) * svg.getBoundingClientRect().width) /
+              svg.viewBox.baseVal.width
             const frameRect = frame.getBoundingClientRect()
             const bubbleRect = bubble.getBoundingClientRect()
             const eraserRect = eraser.getBoundingClientRect()
@@ -189,9 +196,15 @@ describe('workbench conversation e2e', () => {
               eraserWidth: eraserRect.width,
               eraserHeight: eraserRect.height,
               eraserRightOffset: frameRect.right - eraserRect.right,
-              eraserBottomOffset: frameRect.bottom - eraserRect.bottom
+              eraserBottomOffset: frameRect.bottom - eraserRect.bottom,
+              bubbleStroke: visibleStrokeWidth(bubble),
+              eraserStroke: visibleStrokeWidth(eraser),
+              memoryStroke: visibleStrokeWidth(memory),
+              bubbleColor: getComputedStyle(bubble).color,
+              eraserColor: getComputedStyle(eraser).color,
+              memoryColor: getComputedStyle(memory).color
             }
-          })
+          }, partnerMemorySelectors.trigger)
           await runtime.assertThat(
             Math.abs(iconGeometry.frameWidth - 18) <= 0.05 &&
               Math.abs(iconGeometry.frameHeight - 18) <= 0.05 &&
@@ -200,10 +213,16 @@ describe('workbench conversation e2e', () => {
               Math.abs(iconGeometry.eraserWidth - 10) <= 0.05 &&
               Math.abs(iconGeometry.eraserHeight - 10) <= 0.05 &&
               Math.abs(iconGeometry.eraserRightOffset) <= 0.05 &&
-              Math.abs(iconGeometry.eraserBottomOffset) <= 0.05,
+              Math.abs(iconGeometry.eraserBottomOffset) <= 0.05 &&
+              Math.abs(iconGeometry.memoryStroke - 1.5) <= 0.05 &&
+              Math.abs(iconGeometry.bubbleStroke - iconGeometry.memoryStroke) <= 0.05 &&
+              Math.abs(iconGeometry.eraserStroke - iconGeometry.memoryStroke) <= 0.05 &&
+              iconGeometry.bubbleColor === iconGeometry.memoryColor &&
+              iconGeometry.eraserColor === iconGeometry.memoryColor,
             {
               name: 'clear-icon-part-geometry',
-              message: '真实应用内气泡为 16px、橡皮为 10px，均收在 18px 外框内，不随根字号缩小。',
+              message:
+                '真实应用内气泡为 16px、橡皮为 10px，均收在 18px 外框内，颜色与 1.5px 可见线宽和记忆图标一致。',
               data: iconGeometry
             }
           )
