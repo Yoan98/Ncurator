@@ -8,6 +8,7 @@ import {
   createTemporaryWorkbenchWorkspace,
   getWorkbenchLocator,
   navigateToWorkbench,
+  openWorkbenchWorkspaceFile,
   prepareWorkbenchWorkspaceThroughUi,
   selectWorkbenchResourceMenuItem,
   selectWorkbenchWorkspace,
@@ -15,21 +16,6 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'markdown-editor-edit-save'
-
-const openWorkspaceFile = async (
-  page: import('playwright').Page,
-  fileFilter: import('playwright').Locator,
-  fileName: string
-): Promise<void> => {
-  if (!(await fileFilter.isVisible().catch(() => false))) {
-    await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
-    await fileFilter.waitFor({ state: 'visible' })
-  }
-  await fileFilter.fill(fileName)
-  await page.getByTitle(fileName, { exact: true }).click()
-  await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
-  await fileFilter.waitFor({ state: 'hidden' })
-}
 
 const waitForDiskIncludes = async (
   filePath: string,
@@ -85,7 +71,9 @@ describe('workbench result e2e', () => {
           await selectWorkbenchResourceMenuItem(runtime, 'file')
 
           const fileFilter = page.getByPlaceholder('筛选文件…')
-          await openWorkspaceFile(page, fileFilter, 'edit-first.md')
+          await openWorkbenchWorkspaceFile(runtime, 'edit-first.md')
+          await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+          await fileFilter.waitFor({ state: 'hidden' })
           const editor = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
           await editor.waitFor({ state: 'visible', timeout: 30_000 })
 
@@ -138,7 +126,9 @@ describe('workbench result e2e', () => {
           await fs.writeFile(firstPath, '# First Title\n\nexternal override content')
           const editingOverwroteExternal = await waitForDiskIncludes(firstPath, 'my edit')
 
-          await openWorkspaceFile(page, fileFilter, 'edit-empty.md')
+          await openWorkbenchWorkspaceFile(runtime, 'edit-empty.md')
+          await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+          await fileFilter.waitFor({ state: 'hidden' })
           const emptyEditor = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
           await emptyEditor.waitFor({ state: 'visible', timeout: 30_000 })
           const emptyInput = emptyEditor.locator('.vditor-ir > pre[contenteditable="true"]')
@@ -151,7 +141,9 @@ describe('workbench result e2e', () => {
           )
 
           const layoutProbe = await (async () => {
-            await openWorkspaceFile(page, fileFilter, 'edit-first.md')
+            await openWorkbenchWorkspaceFile(runtime, 'edit-first.md')
+            await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+            await fileFilter.waitFor({ state: 'hidden' })
             const editorProbe = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
             await editorProbe.waitFor({ state: 'visible', timeout: 30_000 })
             await page.waitForTimeout(800)

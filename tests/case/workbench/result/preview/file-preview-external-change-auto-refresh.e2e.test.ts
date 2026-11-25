@@ -5,14 +5,15 @@ import { addBlankSlide, addSlideTextBox, createPresentation, savePresentation } 
 import { describe, it } from 'vitest'
 import { writeRichTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { copyExcelCell } from '../../../../harness/e2e/excel'
 import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
   createTemporaryWorkbenchWorkspace,
   getWorkbenchLocator,
   navigateToWorkbench,
+  openWorkbenchWorkspaceFile,
   prepareWorkbenchWorkspaceThroughUi,
-  selectWorkbenchResourceMenuItem,
   selectWorkbenchWorkspace,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -53,6 +54,7 @@ describe('workbench result e2e', () => {
           '普通文本、DOCX、PPTX、XLSX 被外部保存后自动刷新，切换或关闭文件后停止旧监听。',
         fixtures: [],
         serviceMode: 'real',
+        execution: 'exclusive',
         extraEnv: {
           NCURATOR_E2E_OPEN_WITH_NOOP: '1'
         },
@@ -82,15 +84,7 @@ describe('workbench result e2e', () => {
           })
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, workspaceName)
-          const panelToggle = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
-          if ((await panelToggle.getAttribute('aria-label')) === '展开右侧栏') {
-            await panelToggle.click()
-          }
-          await selectWorkbenchResourceMenuItem(runtime, 'file')
-
-          const fileFilter = page.getByPlaceholder('筛选文件…')
-          await fileFilter.fill('external-watch.md')
-          await page.getByTitle('external-watch.md', { exact: true }).click()
+          await openWorkbenchWorkspaceFile(runtime, 'external-watch.md')
           const markdownEditor = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
           await markdownEditor
             .getByText('original markdown content', { exact: true })
@@ -145,16 +139,7 @@ describe('workbench result e2e', () => {
                   .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
             )) === 0
 
-          const openWorkspaceFile = async (fileName: string): Promise<void> => {
-            if (!(await fileFilter.isVisible().catch(() => false))) {
-              await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
-              await fileFilter.waitFor({ state: 'visible' })
-            }
-            await fileFilter.fill(fileName)
-            await page.getByTitle(fileName, { exact: true }).click()
-          }
-
-          await openWorkspaceFile('external-watch.txt')
+          await openWorkbenchWorkspaceFile(runtime, 'external-watch.txt')
           const textEditor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
           await page.waitForFunction(
             (testId) =>
@@ -188,7 +173,7 @@ describe('workbench result e2e', () => {
           const ordinaryOpenHintAbsent =
             (await page.getByText(EXTERNAL_APPLICATION_NOTICE, { exact: true }).count()) === 0
 
-          await openWorkspaceFile('external-watch.docx')
+          await openWorkbenchWorkspaceFile(runtime, 'external-watch.docx')
           const docxViewer = getWorkbenchLocator(page, workbenchSelectors.docxViewer)
           await docxViewer
             .locator('.superdoc-page')
@@ -227,7 +212,7 @@ describe('workbench result e2e', () => {
                 .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
           )
 
-          await openWorkspaceFile('external-watch.pptx')
+          await openWorkbenchWorkspaceFile(runtime, 'external-watch.pptx')
           const pptViewer = page.getByTestId('ppt-preview-viewer')
           await pptViewer.locator('img').first().waitFor({ state: 'visible', timeout: 30_000 })
           const originalPptImage = await pptViewer.locator('img').first().getAttribute('src')
@@ -260,8 +245,9 @@ describe('workbench result e2e', () => {
                 .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
           )
 
-          await openWorkspaceFile('external-watch.xlsx')
-          const excelViewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
+          await openWorkbenchWorkspaceFile(runtime, 'external-watch.xlsx')
+          await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+          await page.getByPlaceholder('筛选文件…').waitFor({ state: 'hidden' })
           await page.waitForFunction(
             (testId) =>
               document
@@ -270,23 +256,18 @@ describe('workbench result e2e', () => {
             workbenchSelectors.excelViewer,
             { timeout: 30_000 }
           )
-          const originalExcelUri = await excelViewer.getAttribute('data-excel-uri')
+          const originalExcelCell = await copyExcelCell(runtime, 'A1')
           await writeXlsx(xlsxPath, 'refreshed xlsx content')
-          const xlsxPreviewRefreshed = await page
-            .waitForFunction(
-              ({ originalExcelUri, testId }) => {
-                const viewer = document.querySelector(`[data-testid="${testId}"]`)
-                return (
-                  viewer?.getAttribute('data-excel-ready') === 'true' &&
-                  Boolean(viewer.getAttribute('data-excel-uri')) &&
-                  viewer.getAttribute('data-excel-uri') !== originalExcelUri
-                )
-              },
-              { originalExcelUri, testId: workbenchSelectors.excelViewer },
-              { timeout: 30_000 }
-            )
-            .then(() => true)
-            .catch(() => false)
+          let refreshedExcelCell = ''
+          const excelRefreshDeadline = Date.now() + 30_000
+          while (Date.now() < excelRefreshDeadline) {
+            refreshedExcelCell = await copyExcelCell(runtime, 'A1')
+            if (refreshedExcelCell === 'refreshed xlsx content') break
+            await page.waitForTimeout(150)
+          }
+          const xlsxPreviewRefreshed =
+            originalExcelCell === 'original xlsx content' &&
+            refreshedExcelCell === 'refreshed xlsx content'
           await page.waitForFunction(
             (expectedCount) =>
               (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
@@ -344,6 +325,8 @@ describe('workbench result e2e', () => {
             pptxPreviewRefreshed,
             pptxRefreshNoticeCount,
             xlsxPreviewRefreshed,
+            originalExcelCell,
+            refreshedExcelCell,
             xlsxRefreshNoticeCount,
             closedFileNoticeAbsent,
             watchStartCalls: signals.ipcInvokeEntries.filter(

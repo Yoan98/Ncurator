@@ -8,6 +8,7 @@ import {
   createTemporaryWorkbenchWorkspace,
   getWorkbenchLocator,
   navigateToWorkbench,
+  openWorkbenchWorkspaceFile,
   prepareWorkbenchWorkspaceThroughUi,
   selectWorkbenchResourceMenuItem,
   selectWorkbenchWorkspace,
@@ -20,21 +21,6 @@ const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64'
 )
-
-const openWorkspaceFile = async (
-  page: import('playwright').Page,
-  fileFilter: import('playwright').Locator,
-  fileName: string
-): Promise<void> => {
-  if (!(await fileFilter.isVisible().catch(() => false))) {
-    await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
-    await fileFilter.waitFor({ state: 'visible' })
-  }
-  await fileFilter.fill(fileName)
-  await page.getByTitle(fileName, { exact: true }).click()
-  await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
-  await fileFilter.waitFor({ state: 'hidden' })
-}
 
 describe('workbench result e2e', () => {
   it(
@@ -89,7 +75,9 @@ describe('workbench result e2e', () => {
           await selectWorkbenchResourceMenuItem(runtime, 'file')
 
           const fileFilter = page.getByPlaceholder('筛选文件…')
-          await openWorkspaceFile(page, fileFilter, 'image-preview.md')
+          await openWorkbenchWorkspaceFile(runtime, 'image-preview.md')
+          await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+          await fileFilter.waitFor({ state: 'hidden' })
           const editor = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
           await editor.waitFor({ state: 'visible', timeout: 30_000 })
 

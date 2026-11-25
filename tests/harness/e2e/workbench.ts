@@ -483,10 +483,73 @@ if let app = targetApp {
 
 Thread.sleep(forTimeInterval: 0.25)
 guard let nativePanel = sheet(AXUIElementCreateApplication(processId)) else {
-  fatalError("No native directory panel belongs to the target process")
+  FileHandle.standardError.write(Data("No native directory panel belongs to the target process\\n".utf8))
+  exit(1)
 }
 // macOS hosts the panel in an XPC process; send keys to that panel, never globally.
 eventProcessId = panelProcess(nativePanel, processId) ?? processId
+
+// Skill fixtures are direct children of Home, so native AX controls can select them
+// without routing keyboard events through whichever application is frontmost.
+let targetURL = URL(fileURLWithPath: targetPath).standardizedFileURL
+if targetURL.deletingLastPathComponent().path == NSHomeDirectory() {
+  func text(_ element: AXUIElement, _ attribute: String) -> String {
+    var value: CFTypeRef?
+    AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+    return value as? String ?? ""
+  }
+  func find(_ element: AXUIElement, _ predicate: (AXUIElement) -> Bool, _ depth: Int = 0) -> AXUIElement? {
+    if predicate(element) { return element }
+    if depth < 12 {
+      for child in children(element) {
+        if let found = find(child, predicate, depth + 1) { return found }
+      }
+    }
+    return nil
+  }
+  func fail(_ reason: String) -> Never {
+    FileHandle.standardError.write(Data((reason + "\\n").utf8))
+    exit(1)
+  }
+  guard let location = find(nativePanel, { text($0, "AXIdentifier") == "where popup" }),
+        AXUIElementPerformAction(location, kAXPressAction as CFString) == .success else {
+    fail("Native directory location menu is unavailable")
+  }
+  let homeName = FileManager.default.displayName(atPath: NSHomeDirectory())
+  guard let home = find(location, {
+    text($0, kAXRoleAttribute) == "AXMenuItem" && text($0, kAXTitleAttribute) == homeName
+  }), AXUIElementPerformAction(home, kAXPressAction as CFString) == .success else {
+    fail("Home is unavailable in the native directory location menu")
+  }
+  var selected: AXUIElement?
+  let deadline = Date().addingTimeInterval(5)
+  while selected == nil && Date() < deadline {
+    selected = find(nativePanel, { row in
+      text(row, kAXRoleAttribute) == "AXRow" && find(row, {
+        text($0, kAXValueAttribute) == targetURL.lastPathComponent ||
+          text($0, kAXTitleAttribute) == targetURL.lastPathComponent
+      }) != nil
+    })
+    if selected == nil { Thread.sleep(forTimeInterval: 0.05) }
+  }
+  guard let row = selected else { fail("Native directory fixture row is unavailable") }
+  let selection = AXUIElementSetAttributeValue(row, kAXSelectedAttribute as CFString, kCFBooleanTrue)
+  guard selection == .success else { fail("Native directory selection failed: \\(selection.rawValue)") }
+  guard let confirm = find(nativePanel, { text($0, "AXIdentifier") == "OKButton" }) else {
+    fail("Native directory confirmation is unavailable")
+  }
+  let confirmationDeadline = Date().addingTimeInterval(2)
+  var enabled: CFTypeRef?
+  repeat {
+    AXUIElementCopyAttributeValue(confirm, kAXEnabledAttribute as CFString, &enabled)
+    if (enabled as? Bool) == true { break }
+    Thread.sleep(forTimeInterval: 0.05)
+  } while Date() < confirmationDeadline
+  let confirmation = AXUIElementPerformAction(confirm, kAXPressAction as CFString)
+  guard confirmation == .success else { fail("Native directory confirmation failed: \\(confirmation.rawValue)") }
+  print("native-directory-selected=\\(targetURL.path)")
+  exit(0)
+}
 
 postKey(5, [.maskCommand, .maskShift])
 Thread.sleep(forTimeInterval: 0.6)

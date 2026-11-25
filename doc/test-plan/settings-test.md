@@ -66,7 +66,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：文件 tab 可以直接添加目录作为工作地址，并立即刷新目录树；顶层节点就是各地址。
 - Why：文件地址已从“具名容器再绑目录”改为直接丢入路径。
-- How：进入无地址页面检查空态，再通过目录选择器添加一条真实目录；再尝试添加已包含的子路径，确认弹出「目录已包含」并拒绝；再验证父路径自动替换子根。包含关系判定另由 unit `workspace-root-containment-contract` 覆盖。
+- How：进入无地址页面检查空态，再通过目录选择器添加一条真实目录；再尝试添加已包含的子路径，确认弹出「目录已包含」并拒绝；再验证父路径自动替换子根。检查子文件前先正常点击展开默认折叠的地址根节点，再展开子目录。包含关系判定另由 unit `workspace-root-containment-contract` 覆盖。
 - Oracle：空态提示还没有文件地址，对齐 `SET-WORKSPACE-007-AC1`；成功添加后写入地址并刷新真实目录树，顶层即该地址，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC1`；添加子路径弹窗拒绝、添加父路径自动替换对齐 `SET-WORKSPACE-006-AC5`；添加后启动扫描且结束后可索引数更新，对齐 `SET-WORKSPACE-006-AC4`。`SET-WORKSPACE-007-AC2`（地址内无可显示文件的树空态）不测。
 
 #### `workspace-directory-lazy-load`

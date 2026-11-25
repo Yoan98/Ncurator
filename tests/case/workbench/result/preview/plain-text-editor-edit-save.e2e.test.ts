@@ -8,6 +8,7 @@ import {
   createTemporaryWorkbenchWorkspace,
   getWorkbenchLocator,
   navigateToWorkbench,
+  openWorkbenchWorkspaceFile,
   prepareWorkbenchWorkspaceThroughUi,
   selectWorkbenchResourceMenuItem,
   selectWorkbenchWorkspace,
@@ -15,19 +16,6 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'plain-text-editor-edit-save'
-
-const openWorkspaceFile = async (
-  page: import('playwright').Page,
-  fileFilter: import('playwright').Locator,
-  fileName: string
-): Promise<void> => {
-  if (!(await fileFilter.isVisible().catch(() => false))) {
-    await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
-    await fileFilter.waitFor({ state: 'visible' })
-  }
-  await fileFilter.fill(fileName)
-  await page.getByTitle(fileName, { exact: true }).click()
-}
 
 const waitForDiskIncludes = async (
   filePath: string,
@@ -83,8 +71,7 @@ describe('workbench result e2e', () => {
           }
           await selectWorkbenchResourceMenuItem(runtime, 'file')
 
-          const fileFilter = page.getByPlaceholder('筛选文件…')
-          await openWorkspaceFile(page, fileFilter, 'notes-crlf.txt')
+          await openWorkbenchWorkspaceFile(runtime, 'notes-crlf.txt')
           const textEditor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
           await textEditor.waitFor({ state: 'visible', timeout: 30_000 })
           await page.waitForFunction(
@@ -109,7 +96,7 @@ describe('workbench result e2e', () => {
           const lineNumbersShown =
             gutterText.includes('1') && gutterText.includes('2') && gutterText.includes('3')
 
-          await openWorkspaceFile(page, fileFilter, 'config.json')
+          await openWorkbenchWorkspaceFile(runtime, 'config.json')
           const jsonEditor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
           await page.waitForFunction(
             (testId) =>

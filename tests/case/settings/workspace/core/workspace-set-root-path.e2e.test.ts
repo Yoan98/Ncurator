@@ -108,6 +108,13 @@ describe('settings workspace e2e', () => {
               await waitForFileIndexJobIdle(page, workspaceId)
               await navigateToSettingsSection(page, 'workspace')
               const tree = getSettingsLocator(page, importSelectors.workspaceTree)
+              const root = getSettingsLocator(
+                page,
+                `${importSelectors.workspaceCardPrefix}-${workspaceId}`
+              )
+                .locator('button[aria-expanded]')
+                .first()
+              if ((await root.getAttribute('aria-expanded')) === 'false') await root.click()
               const docsNode = tree.getByText('docs').first()
               await docsNode.waitFor({ state: 'visible' })
               await docsNode.click()

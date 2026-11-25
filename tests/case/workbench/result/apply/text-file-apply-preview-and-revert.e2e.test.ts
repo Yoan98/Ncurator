@@ -271,8 +271,10 @@ describe('workbench result e2e', () => {
             (await diffViewer.locator('.editor.modified .line-numbers').count()) > 0
           const addedRowColumnCount = await diffViewer.locator('.monaco-diff-editor').count()
           await addedLines.last().click()
+          await diffViewer.locator('.editor.modified [role="textbox"]').focus()
           await page.keyboard.press(process.platform === 'darwin' ? 'Meta+End' : 'Control+End')
-          await page.keyboard.insertText('\nREVIEW_MANUAL_C')
+          await page.keyboard.press('Enter')
+          await page.keyboard.type('REVIEW_MANUAL_C')
           let reviewEditSaved = false
           for (let i = 0; i < 100; i++) {
             if ((await fs.readFile(targetPath, 'utf8')).includes('REVIEW_MANUAL_C')) {
@@ -290,10 +292,12 @@ describe('workbench result e2e', () => {
             }
             await page.waitForTimeout(100)
           }
-          const resourceTabCount = await getWorkbenchPrefixLocator(
+          const targetResourceTabCount = await getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.resourceTabPrefix
-          ).count()
+          )
+            .filter({ hasText: 'workbench-preview.md' })
+            .count()
           const standaloneArtifactCount = await getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.assistantTurnArtifactPrefix
@@ -540,7 +544,7 @@ describe('workbench result e2e', () => {
             hasOldLineNumber,
             hasNewLineNumber,
             addedRowColumnCount,
-            resourceTabCount,
+            targetResourceTabCount,
             standaloneArtifactCount,
             omittedLineLabels,
             compactReviewToolbar,
@@ -617,7 +621,7 @@ describe('workbench result e2e', () => {
               result.hasOldLineNumber &&
               result.hasNewLineNumber &&
               result.addedRowColumnCount === 1 &&
-              result.resourceTabCount === 1 &&
+              result.targetResourceTabCount === 1 &&
               result.standaloneArtifactCount === 0 &&
               result.applyEntryCountDuringRun === 0 &&
               result.modificationCountsVisibleBeforeClick &&

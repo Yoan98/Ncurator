@@ -5,9 +5,10 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
 import type { Page } from 'playwright'
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { runE2ECase, type E2ETestRuntime } from '../../../../harness/e2e/run-e2e-case'
 import {
+  clickExcelCell,
   copyExcelCell,
   getExcelGridCanvas,
   verifyExcelCellReadOnly
@@ -155,10 +156,24 @@ const waitForExcelPreview = async (page: Page, fileName: string): Promise<boolea
   return (await viewer.locator('canvas').count()) > 0
 }
 
-const verifyExcelPreviewReadOnly = async (runtime: E2ETestRuntime): Promise<boolean> => {
+const verifyEditableExcelPreview = async (
+  runtime: E2ETestRuntime,
+  filePath: string
+): Promise<boolean> => {
   const { page } = runtime
   const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
-  const cellContentPreserved = await verifyExcelCellReadOnly(runtime, 'B1')
+  const readManualValue = async () => {
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load((await fs.readFile(filePath)) as never)
+    return workbook.getWorksheet('Data')!.getCell('B1').value
+  }
+  const originalValue = await readManualValue()
+  await copyExcelCell(runtime, 'B1')
+  await page.keyboard.type('45')
+  await page.keyboard.press('Enter')
+  await expect.poll(readManualValue, { timeout: 15_000 }).toBe(45)
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect.poll(readManualValue, { timeout: 10_000 }).toEqual(originalValue)
   const box = await viewer.boundingBox()
   if (!box) return false
   const notesTab = viewer.getByText('Notes', { exact: true }).last()
@@ -173,7 +188,7 @@ const verifyExcelPreviewReadOnly = async (runtime: E2ETestRuntime): Promise<bool
     (element) => element.getAttribute('data-excel-ready') === 'true'
   )
   const canvasStillVisible = (await viewer.locator('canvas').count()) > 0
-  return cellContentPreserved && sheetSwitchWorks && previewStillReady && canvasStillVisible
+  return sheetSwitchWorks && previewStillReady && canvasStillVisible
 }
 
 const verifyExcelSelectionReference = async (runtime: E2ETestRuntime): Promise<void> => {
@@ -246,7 +261,7 @@ const verifyExcelSelectionReference = async (runtime: E2ETestRuntime): Promise<v
   await tokens.waitFor({ state: 'detached' })
   const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
   await viewer.getByText('Notes', { exact: true }).last().click()
-  await copyExcelCell(runtime, 'B1')
+  await clickExcelCell(page, 'B1')
   await page.getByTestId('excel-selection-ai-reference').waitFor({ state: 'visible' })
   await page.getByTestId('excel-selection-ai-reference').click()
   await page.getByTestId('excel-selection-thought').fill('解释 Notes 单元格。')
@@ -377,6 +392,10 @@ const verifyInteractivePreviews = async (
   }
   await open('interactive-report.html')
   const report = page.frameLocator('[data-testid="workbench-html-preview"]')
+  await expect
+    .poll(() => report.locator('body').evaluate(() => document.readyState))
+    .toBe('complete')
+  await page.bringToFront()
   await report.getByRole('button', { name: '读取报表数据' }).click()
   await report.getByText('报表值 42', { exact: true }).waitFor()
   const isolation = await report.locator('body').evaluate(() => {
@@ -610,7 +629,9 @@ describe('workbench result e2e', () => {
             .isVisible()
             .catch(() => false)
           const excelPreviewResults: boolean[] = []
-          let excelPreviewReadOnly = false
+          let excelPreviewEditable = false
+          const macroPreviewReadOnlyResults: boolean[] = []
+          let previewPreservedBytes = false
           let xlsxOpenWithHasWps = false
           let xlsxWpsHintVisible = false
           let xlsmWpsHintVisible = false
@@ -632,19 +653,26 @@ describe('workbench result e2e', () => {
             if (extension === 'xlsx') {
               for (const address of ['C1', 'C2', 'C3', 'C4'])
                 calculatedValues.push(await copyExcelCell(runtime, address))
-              excelPreviewReadOnly = await verifyExcelPreviewReadOnly(runtime)
+              const filePath = path.join(workspace.rootPath, fileName)
+              previewPreservedBytes = (await fs.readFile(filePath)).equals(workspace.workbookBytes)
+              excelPreviewEditable = await verifyEditableExcelPreview(runtime, filePath)
               await verifyExcelSelectionReference(runtime)
               xlsxOpenWithHasWps = await readOpenWithHasWps(page)
               xlsxWpsHintVisible = await readWpsHintVisible(page)
+            }
+            if (extension !== 'xlsx') {
+              const filePath = path.join(workspace.rootPath, fileName)
+              const before = await fs.readFile(filePath)
+              const readOnly = await verifyExcelCellReadOnly(runtime, 'B1')
+              macroPreviewReadOnlyResults.push(
+                readOnly && (await fs.readFile(filePath)).equals(before)
+              )
             }
             if (extension === 'xlsm') xlsmWpsHintVisible = await readWpsHintVisible(page)
           }
           const resourceTabCount = await resourceTabs.count()
           const launcherTabCount = await resourceTabs.filter({ hasText: '打开文件' }).count()
           const signals = await runtime.collectSignals()
-          const previewPreservedBytes = (
-            await fs.readFile(path.join(workspace.rootPath, 'normal-preview.xlsx'))
-          ).equals(workspace.workbookBytes)
 
           return {
             rootPath: workspace.rootPath,
@@ -680,7 +708,8 @@ describe('workbench result e2e', () => {
             markdownPreviewVisible,
             plainTextPreviewVisible,
             excelPreviewResults,
-            excelPreviewReadOnly,
+            excelPreviewEditable,
+            macroPreviewReadOnlyResults,
             calculatedValues,
             previewPreservedBytes,
             reopenedMarkdownVisible,
@@ -717,7 +746,9 @@ describe('workbench result e2e', () => {
               result.plainTextPreviewVisible &&
               result.excelPreviewResults.length === 4 &&
               result.excelPreviewResults.every(Boolean) &&
-              result.excelPreviewReadOnly &&
+              result.excelPreviewEditable &&
+              result.macroPreviewReadOnlyResults.length === 3 &&
+              result.macroPreviewReadOnlyResults.every(Boolean) &&
               result.reopenedMarkdownVisible &&
               result.fileLauncherVisible &&
               result.workspaceFileFilterVisible &&
@@ -745,7 +776,7 @@ describe('workbench result e2e', () => {
             {
               name: 'excel-preview-forced-formulas',
               message:
-                '真实只读网格显示无缓存、过期缓存、零值和跨 Sheet 公式的重算结果，预览不写回源文件。',
+                '真实网格显示无缓存、过期缓存、零值和跨 Sheet 公式的重算结果，未编辑时打开和复制预览不写回源文件。',
               data: {
                 values: result.calculatedValues,
                 preservedBytes: result.previewPreservedBytes

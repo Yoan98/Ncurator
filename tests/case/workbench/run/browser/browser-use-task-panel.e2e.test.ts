@@ -12,6 +12,7 @@ import {
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   selectWorkbenchResourceMenuItem,
+  openWorkbenchWorkspaceFile,
   setupWorkbenchWithTempWorkspace,
   startLocalWorkbenchHttpServer,
   workbenchSelectors
@@ -373,21 +374,7 @@ describe('workbench run e2e', () => {
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID
           })
-          const panelToggleForFile = getWorkbenchLocator(
-            page,
-            workbenchSelectors.contentPanelToggle
-          )
-          if ((await panelToggleForFile.getAttribute('aria-label')) === '展开右侧栏') {
-            await panelToggleForFile.click()
-          }
-          await selectWorkbenchResourceMenuItem(runtime, 'file')
-          const fileFilter = page.getByPlaceholder('筛选文件…')
-          if (!(await fileFilter.isVisible().catch(() => false))) {
-            await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
-            await fileFilter.waitFor({ state: 'visible' })
-          }
-          await fileFilter.fill('workbench-preview.md')
-          await page.getByTitle('workbench-preview.md', { exact: true }).click()
+          await openWorkbenchWorkspaceFile(runtime, 'workbench-preview.md')
           await getWorkbenchLocator(page, workbenchSelectors.markdownEditor).waitFor({
             state: 'visible',
             timeout: 30_000

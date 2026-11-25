@@ -52,7 +52,8 @@ describe('workbench conversation e2e', () => {
           )
 
           await partnerA.hover()
-          await pinButton.click({ force: true })
+          await pinButton.click()
+          await partnerA.getByRole('button', { name: '取消置顶', exact: true }).waitFor()
           await page.mouse.move(0, 0)
           await pinButton.waitFor({ state: 'visible' })
 
@@ -66,6 +67,7 @@ describe('workbench conversation e2e', () => {
 
           await pinButton.click()
           await page.mouse.move(0, 0)
+          await pinButton.waitFor({ state: 'hidden' })
           const partnerVisibleAfterUnpin = await partnerA.isVisible()
           const pinHiddenAfterUnpin = !(await pinButton.isVisible().catch(() => false))
 

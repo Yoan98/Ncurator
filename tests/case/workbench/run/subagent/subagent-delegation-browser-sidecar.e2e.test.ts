@@ -9,7 +9,7 @@ import { runE2ECase, type E2ETestRuntime } from '../../../../harness/e2e/run-e2e
 import {
   selectWorkbenchModel,
   selectWorkbenchExecutionPermission,
-  selectWorkbenchResourceMenuItem,
+  openWorkbenchWorkspaceFile,
   setupWorkbenchWithTempWorkspace,
   sendWorkbenchMessage,
   collectWorkbenchAiRunEvents,
@@ -392,23 +392,7 @@ describe('subagent browser and sidecar real UI', () => {
           const baseline = await fs.readFile(config, 'utf8')
           const report = path.join(setup.workspace.rootPath, '网页交接.md')
           const screenshot = path.join(setup.workspace.rootPath, '表单核验.png')
-          const initialPanelToggle = getWorkbenchLocator(
-            runtime.page,
-            workbenchSelectors.contentPanelToggle
-          )
-          if ((await initialPanelToggle.getAttribute('aria-label')) === '展开右侧栏')
-            await initialPanelToggle.click()
-          const fileFilter = runtime.page.getByPlaceholder('筛选文件…')
-          if (!(await fileFilter.isVisible().catch(() => false))) {
-            const explorerToggle = getWorkbenchLocator(
-              runtime.page,
-              workbenchSelectors.workspaceExplorerToggle
-            )
-            if (await explorerToggle.isVisible().catch(() => false)) await explorerToggle.click()
-            else await selectWorkbenchResourceMenuItem(runtime, 'file')
-          }
-          await fileFilter.fill('subagent-checkout-config.ts')
-          await runtime.page.getByTitle('subagent-checkout-config.ts', { exact: true }).click()
+          await openWorkbenchWorkspaceFile(runtime, 'subagent-checkout-config.ts')
           const selectedResource = getWorkbenchPrefixLocator(
             runtime.page,
             workbenchSelectors.resourceTabPrefix

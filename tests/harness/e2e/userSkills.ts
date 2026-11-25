@@ -135,13 +135,15 @@ export const setupSkillPartners = async (page: Page): Promise<void> => {
   await openSkills(page)
 }
 export const copySkillFixture = async (runtime: E2ETestRuntime): Promise<string> => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-skill-input-'))
+  const root = await fs.mkdtemp(
+    path.join(process.platform === 'darwin' ? os.homedir() : os.tmpdir(), 'ncurator-skill-input-')
+  )
   runtime.registerResource({
     name: 'skill-input',
     phase: 'after-app-close',
     dispose: () => fs.rm(root, { recursive: true, force: true })
   })
-  const source = path.join(root, 'weekly-report')
+  const source = process.platform === 'darwin' ? root : path.join(root, 'weekly-report')
   await fs.cp(path.resolve('tests/fixtures/workspace/skills/weekly-report'), source, {
     recursive: true
   })

@@ -1,4 +1,7 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import ffmpeg from 'ffmpeg-static'
 import os from 'node:os'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
@@ -73,10 +76,33 @@ const createAttachmentFixtures = async (): Promise<{
     writeFile(xltxPath, workbookBytes),
     writeFile(xltmPath, workbookBytes),
     writeFile(audioPath, 'audio attachment fixture'),
-    writeFile(videoPath, 'video attachment fixture'),
     writeFile(zipPath, 'unknown extension attachment fixture'),
     writeFile(largePath, Buffer.alloc(11 * 1024 * 1024, 65)),
     writeFile(droppedFilePath, '# Dropped path attachment')
+  ])
+  if (!ffmpeg) throw new Error('FFmpeg is unavailable')
+  await promisify(execFile)(ffmpeg, [
+    '-nostdin',
+    '-y',
+    '-v',
+    'error',
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=160x90:rate=12:duration=2',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=440:duration=2',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'ultrafast',
+    '-threads',
+    '1',
+    '-c:a',
+    'aac',
+    videoPath
   ])
   return {
     rootPath,
@@ -185,11 +211,32 @@ describe('workbench conversation e2e', () => {
             (await audioCard.locator('[data-reference-icon-kind="audio"]').count()) > 0
           const videoIconVisible =
             (await videoCard.locator('[data-reference-icon-kind="video"]').count()) > 0
+          await page.bringToFront()
           await audioCard.click()
-          await videoCard.click()
           const mediaRevealCalls = (await runtime.collectSignals()).ipcInvokeEntries.filter(
             (entry) => entry.name === 'revealPath'
           )
+          await page.bringToFront()
+          await videoCard.click()
+          const videoPreview = page.getByTestId('workbench-video-preview')
+          await videoPreview.locator('[data-video-state="ready"]').waitFor({ timeout: 30_000 })
+          await videoPreview.getByRole('button', { name: '播放', exact: true }).last().click()
+          await page.waitForFunction(() => {
+            const video = document.querySelector<HTMLVideoElement>(
+              '[data-testid="workbench-video-preview"] video'
+            )
+            return Boolean(video && video.currentTime > 0.2 && !video.paused)
+          })
+          await videoPreview.locator('video').hover()
+          await videoPreview.getByRole('button', { name: '暂停', exact: true }).last().click()
+          const videoPlayback = await videoPreview
+            .locator('video')
+            .evaluate((video: HTMLVideoElement) => ({
+              duration: video.duration,
+              width: video.videoWidth,
+              currentTime: video.currentTime,
+              paused: video.paused
+            }))
           await selectWorkbenchDirectoryThroughNativeDialog(page, attachments.folderPath)
           await waitForAttachmentCardByName(page, 'reference-folder')
           const folderCard = getWorkbenchPrefixLocator(
@@ -528,6 +575,7 @@ describe('workbench conversation e2e', () => {
             audioPath: attachments.audioPath,
             videoPath: attachments.videoPath,
             mediaRevealPaths: mediaRevealCalls.map((entry) => entry.payload),
+            videoPlayback,
             folderCardText,
             submittedAttachmentKinds: submittedAttachments.map((attachment) => attachment.kind),
             submittedAttachmentNames: submittedAttachments.map((attachment) => attachment.name),
@@ -574,7 +622,10 @@ describe('workbench conversation e2e', () => {
               result.audioIconVisible &&
               result.videoIconVisible &&
               result.mediaRevealPaths.includes(result.audioPath) &&
-              result.mediaRevealPaths.includes(result.videoPath) &&
+              result.videoPlayback.duration > 1 &&
+              result.videoPlayback.width === 160 &&
+              result.videoPlayback.currentTime > 0.2 &&
+              result.videoPlayback.paused &&
               [
                 'workbench-preview.md',
                 'qa-image.png',
