@@ -99,6 +99,19 @@ describe('workbench conversation', () => {
               message: '真实 AI 生成的长记忆逐字差异、类别红点和红绿轨道。'
             })
             const rail = pane.locator('.nc-memory-rail')
+            const overviewStyle = await rail.evaluate((element) => {
+              const thumb = element.querySelector<HTMLElement>('.nc-memory-viewport')!
+              const mark = element.querySelector<HTMLElement>('.nc-memory-marker')!
+              return {
+                width: element.getBoundingClientRect().width,
+                thumbWidth: thumb.getBoundingClientRect().width,
+                radius: getComputedStyle(thumb).borderRadius,
+                border: getComputedStyle(thumb).borderTopWidth,
+                markerWidth: mark.getBoundingClientRect().width,
+                hasTitle: [...element.querySelectorAll('[title]')].length > 0
+              }
+            })
+
             await rail.click({ position: { x: 6, y: 5 } })
             await runtime.captureScreenshot({
               name: 'memory-character-diff',
@@ -133,16 +146,30 @@ describe('workbench conversation', () => {
             await waitForPartnerMemory(page, partner.id, (snapshot) =>
               Boolean(snapshot.memories[0].draft?.endsWith('USER-MEMORY-EDIT-593'))
             )
-            await pane.getByTestId(memorySelectors.accept).click()
+            await page
+              .getByTestId(memorySelectors.panel)
+              .getByTestId(memorySelectors.accept)
+              .click()
             await page
               .getByTestId(`${memorySelectors.tabDotPrefix}-cooperation_preferences`)
               .waitFor({ state: 'hidden' })
+            await pane.locator('.monaco-editor textarea').last().focus()
+            await page.keyboard.press('ControlOrMeta+z')
+            await waitForPartnerMemory(
+              page,
+              partner.id,
+              (snapshot) => !snapshot.memories[0].confirmed.endsWith('USER-MEMORY-EDIT-593')
+            )
+            await page.keyboard.press('ControlOrMeta+Shift+z')
+            await waitForPartnerMemory(page, partner.id, (snapshot) =>
+              snapshot.memories[0].confirmed.endsWith('USER-MEMORY-EDIT-593')
+            )
             await page
               .getByTestId(`${memorySelectors.tabDotPrefix}-project_background`)
               .waitFor({ state: 'visible' })
             await page.getByTestId(`${memorySelectors.tabPrefix}-project_background`).click()
             await page
-              .getByTestId(`${memorySelectors.panePrefix}-project_background`)
+              .getByTestId(memorySelectors.panel)
               .getByTestId(memorySelectors.reject)
               .click()
             await page.getByTestId(memorySelectors.dot).waitFor({ state: 'hidden' })
@@ -173,6 +200,7 @@ describe('workbench conversation', () => {
                   event.result?.toolName === 'memory' &&
                   event.result.ok
               ).length,
+              overviewStyle,
               redDots,
               railTopBefore,
               railTopAfter,
@@ -208,6 +236,12 @@ describe('workbench conversation', () => {
                 result.memoryResult.latestEdit &&
                 result.memoryResult.pendingCategories === 2 &&
                 result.memoryResult.memoryCalls >= 5 &&
+                Math.abs(result.memoryResult.overviewStyle.width - 27) <= 0.05 &&
+                Math.abs(result.memoryResult.overviewStyle.thumbWidth - 27) <= 0.05 &&
+                Math.abs(result.memoryResult.overviewStyle.markerWidth - 11) <= 0.05 &&
+                result.memoryResult.overviewStyle.border === '1px' &&
+                result.memoryResult.overviewStyle.radius === '2px' &&
+                !result.memoryResult.overviewStyle.hasTitle &&
                 result.memoryResult.redDots === 2 &&
                 result.memoryResult.railTopAfter > result.memoryResult.railTopBefore &&
                 result.memoryResult.confirmedEdited &&

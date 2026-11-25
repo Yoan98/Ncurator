@@ -225,7 +225,9 @@ describe('user instruction skill runtime', () => {
       orderedPrompt.indexOf('<工具组目录>')
     )
     expect(orderedPrompt).toContain('</工具组目录>')
-    expect(orderedPrompt.indexOf('</工具组目录>')).toBeLessThan(orderedPrompt.indexOf('技能：'))
+    expect(orderedPrompt.indexOf('</工具组目录>')).toBeLessThan(
+      orderedPrompt.indexOf('<skill目录>')
+    )
     expect(orderedPrompt).not.toContain('user:')
   })
 

@@ -1,13 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { applyReviewTheme, monaco, reviewThemeFor } from '../workbench/monacoReview'
 import 'monaco-editor/editor/contrib/placeholderText/browser/placeholderText.contribution.js'
+import ChangeOverviewRuler, { type OverviewMarker } from '../workbench/ChangeOverviewRuler'
+import { measureOverviewViewport, type OverviewViewport } from '../workbench/changeOverviewGeometry'
 import { useAppearance } from '../../contexts/AppearanceContext'
 import { t } from '../../i18n'
 
-interface Marker {
-  top: number
-  removed: boolean
-}
+type Marker = OverviewMarker & { line: number; column: number }
 
 export default function MemoryTextEditor({
   text,
@@ -28,53 +27,55 @@ export default function MemoryTextEditor({
 }) {
   const host = useRef<HTMLDivElement>(null)
   const rail = useRef<HTMLDivElement>(null)
-  const editor = useRef<monaco.editor.IStandaloneDiffEditor | null>(null)
-  const original = useRef<monaco.editor.ITextModel | null>(null)
-  const modified = useRef<monaco.editor.ITextModel | null>(null)
+  const models = useRef<{
+    original: monaco.editor.ITextModel
+    modified: monaco.editor.ITextModel
+  } | null>(null)
+  const editor = useRef<monaco.editor.ICodeEditor | null>(null)
   const suppress = useRef(false)
   const scrollTop = useRef(0)
+  const viewState = useRef<monaco.editor.ICodeEditorViewState | null>(null)
   const latest = useRef({ text, confirmed, pending, active, placeholder, onChange })
   useLayoutEffect(() => {
     latest.current = { text, confirmed, pending, active, placeholder, onChange }
   }, [text, confirmed, pending, active, placeholder, onChange])
   const appearance = useAppearance()
   const theme = useRef(appearance.resolved)
-  const [markers, setMarkers] = useState<Marker[]>([])
-  const [viewport, setViewport] = useState({ top: 0, height: 100 })
+  const [overview, setOverview] = useState<{
+    markers: Marker[]
+    viewport: OverviewViewport | null
+  }>({ markers: [], viewport: null })
   const [contentHeight, setContentHeight] = useState(64)
-  const refreshRail = useRef<() => void>(() => undefined)
+  const refresh = useRef<() => void>(() => undefined)
 
+  // Models outlive the plain/diff widgets, retaining native undo and cursor history on review.
   useEffect(() => {
-    if (!host.current) return
-    const left = monaco.editor.createModel(
+    const original = monaco.editor.createModel(
       latest.current.pending ? latest.current.confirmed : latest.current.text,
       'plaintext'
     )
-    const right = monaco.editor.createModel(latest.current.text, 'plaintext')
-    original.current = left
-    modified.current = right
-    const diff = monaco.editor.createDiffEditor(host.current, {
+    const modified = monaco.editor.createModel(latest.current.text, 'plaintext')
+    models.current = { original, modified }
+    return () => {
+      models.current = null
+      original.dispose()
+      modified.dispose()
+    }
+  }, [label])
+
+  useEffect(() => {
+    if (!host.current || !models.current) return
+    const { original, modified } = models.current
+    const options: monaco.editor.IStandaloneEditorConstructionOptions = {
       theme: reviewThemeFor(theme.current),
-      renderSideBySide: false,
-      experimental: { useTrueInlineView: true, showEmptyDecorations: false },
-      originalEditable: false,
       readOnly: false,
       editContext: false,
-      renderIndicators: false,
-      renderMarginRevertIcon: false,
-      renderGutterMenu: false,
-      renderOverviewRuler: false,
-      enableSplitViewResizing: false,
-      hideUnchangedRegions: { enabled: false },
-      ignoreTrimWhitespace: false,
-      diffAlgorithm: 'advanced',
-      diffWordWrap: 'on',
       wordWrap: 'on',
       automaticLayout: true,
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
       fontSize: 14,
       lineHeight: 25,
-      padding: { top: 10, bottom: 28 },
+      padding: { top: 10, bottom: 14 },
       minimap: { enabled: false },
       lineNumbers: 'off',
       lineNumbersMinChars: 0,
@@ -91,96 +92,193 @@ export default function MemoryTextEditor({
       suggestOnTriggerCharacters: false,
       contextmenu: true,
       ariaLabel: label
-    })
-    diff.setModel({ original: left, modified: right })
-    editor.current = diff
-    const edit = diff.getModifiedEditor()
+    }
+    const diff = pending
+      ? monaco.editor.createDiffEditor(host.current, {
+          ...options,
+          renderSideBySide: false,
+          experimental: { useTrueInlineView: true, showEmptyDecorations: false },
+          originalEditable: false,
+          renderIndicators: false,
+          renderMarginRevertIcon: false,
+          renderGutterMenu: false,
+          renderOverviewRuler: false,
+          enableSplitViewResizing: false,
+          hideUnchangedRegions: { enabled: false },
+          ignoreTrimWhitespace: false,
+          diffAlgorithm: 'advanced',
+          diffWordWrap: 'on'
+        })
+      : null
+    diff?.setModel({ original, modified })
+    const plain = diff ? null : monaco.editor.create(host.current, { ...options, model: modified })
+    const edit = diff?.getModifiedEditor() ?? plain!
+    editor.current = edit
+    const layout = (): void => {
+      if (diff) diff.layout()
+      else plain?.layout()
+    }
     edit.updateOptions({
-      placeholder:
-        latest.current.pending && latest.current.confirmed ? undefined : latest.current.placeholder
+      placeholder: pending && latest.current.confirmed ? undefined : latest.current.placeholder
     })
-    const updateRail = (): void => {
+    edit.restoreViewState(viewState.current)
+    edit.setScrollTop(scrollTop.current)
+
+    const measure = (): void => {
       if (latest.current.active) setContentHeight(Math.max(64, Math.ceil(edit.getContentHeight())))
-      const height = Math.max(1, edit.getScrollHeight())
-      const visibleHeight = edit.getLayoutInfo().height
-      setViewport({
-        top: (edit.getScrollTop() / height) * 100,
-        height: Math.min(100, (visibleHeight / height) * 100)
-      })
-      const next: Marker[] = []
-      const add = (line: number, column: number, removed: boolean): void => {
-        const safeLine = Math.max(1, Math.min(right.getLineCount(), line))
-        const safeColumn = Math.max(1, Math.min(right.getLineMaxColumn(safeLine), column))
-        next.push({
-          top: Math.min(99, (edit.getTopForPosition(safeLine, safeColumn) / height) * 100),
-          removed
+      const trackHeight = rail.current?.clientHeight ?? 0
+      if (!trackHeight) return
+      const totalHeight = Math.max(1, edit.getScrollHeight())
+      const viewport = measureOverviewViewport(
+        edit.getScrollTop(),
+        edit.getLayoutInfo().height,
+        totalHeight,
+        trackHeight
+      )
+      const markers: Marker[] = []
+      const add = (
+        line: number,
+        column: number,
+        endLine: number,
+        endColumn: number,
+        removed: boolean
+      ): void => {
+        const safeLine = Math.max(1, Math.min(modified.getLineCount(), line))
+        const safeColumn = Math.max(1, Math.min(modified.getLineMaxColumn(safeLine), column))
+        const lastLine = Math.max(safeLine, Math.min(modified.getLineCount(), endLine))
+        const lastColumn = Math.max(1, Math.min(modified.getLineMaxColumn(lastLine), endColumn))
+        const start = edit.getTopForPosition(safeLine, safeColumn)
+        const extent = removed
+          ? 25
+          : Math.max(25, edit.getTopForPosition(lastLine, lastColumn) - start + 25)
+        const top = Math.max(0, Math.min(trackHeight - 3, (start / totalHeight) * trackHeight))
+        markers.push({
+          key: `${markers.length}-${removed}`,
+          top,
+          height: Math.min(trackHeight - top, Math.max(3, (extent / totalHeight) * trackHeight)),
+          tone: removed ? 'removed' : 'added',
+          label: removed ? t(($) => $.common.delete) : t(($) => $.editors.add),
+          line: safeLine,
+          column: safeColumn
         })
       }
-      if (latest.current.pending)
-        for (const change of diff.getLineChanges() ?? []) {
-          if (change.charChanges?.length)
-            for (const chars of change.charChanges) {
-              if (
-                chars.originalStartLineNumber !== chars.originalEndLineNumber ||
-                chars.originalStartColumn !== chars.originalEndColumn
+      for (const change of diff?.getLineChanges() ?? []) {
+        if (change.charChanges?.length)
+          for (const chars of change.charChanges) {
+            if (
+              chars.originalStartLineNumber !== chars.originalEndLineNumber ||
+              chars.originalStartColumn !== chars.originalEndColumn
+            )
+              add(
+                chars.modifiedStartLineNumber,
+                chars.modifiedStartColumn,
+                chars.modifiedStartLineNumber,
+                chars.modifiedStartColumn,
+                true
               )
-                add(chars.modifiedStartLineNumber, chars.modifiedStartColumn, true)
-              if (
-                chars.modifiedStartLineNumber !== chars.modifiedEndLineNumber ||
-                chars.modifiedStartColumn !== chars.modifiedEndColumn
+            if (
+              chars.modifiedStartLineNumber !== chars.modifiedEndLineNumber ||
+              chars.modifiedStartColumn !== chars.modifiedEndColumn
+            )
+              add(
+                chars.modifiedStartLineNumber,
+                chars.modifiedStartColumn,
+                chars.modifiedEndLineNumber,
+                chars.modifiedEndColumn,
+                false
               )
-                add(chars.modifiedStartLineNumber, chars.modifiedStartColumn, false)
-            }
-          else {
-            if (change.originalEndLineNumber) add(change.modifiedStartLineNumber, 1, true)
-            if (change.modifiedEndLineNumber) add(change.modifiedStartLineNumber, 1, false)
           }
+        else {
+          if (change.originalEndLineNumber)
+            add(change.modifiedStartLineNumber, 1, change.modifiedStartLineNumber, 1, true)
+          if (change.modifiedEndLineNumber)
+            add(
+              change.modifiedStartLineNumber,
+              1,
+              change.modifiedEndLineNumber,
+              modified.getLineMaxColumn(Math.max(1, change.modifiedEndLineNumber)),
+              false
+            )
         }
-      setMarkers(next)
+      }
+      setOverview((previous) =>
+        previous.viewport?.top === viewport?.top &&
+        previous.viewport?.height === viewport?.height &&
+        previous.markers.length === markers.length &&
+        previous.markers.every(
+          (mark, index) =>
+            mark.top === markers[index].top &&
+            mark.height === markers[index].height &&
+            mark.tone === markers[index].tone &&
+            mark.line === markers[index].line &&
+            mark.column === markers[index].column
+        )
+          ? previous
+          : { markers, viewport }
+      )
     }
-    refreshRail.current = updateRail
-    let previousValue = right.getValue()
+    refresh.current = () => {
+      layout()
+      measure()
+    }
+    let previousValue = modified.getValue()
     const disposables = [
-      right.onDidChangeContent(() => {
-        const value = right.getValue()
-        const before = previousValue
+      modified.onDidChangeContent(() => {
+        const value = modified.getValue(),
+          before = previousValue
         previousValue = value
         if (suppress.current) return
-        if (!latest.current.pending) left.setValue(value)
+        if (!latest.current.pending) original.setValue(value)
         latest.current.onChange(value, before)
       }),
       edit.onDidScrollChange(() => {
         if (latest.current.active) scrollTop.current = edit.getScrollTop()
-        updateRail()
+        measure()
       }),
-      edit.onDidLayoutChange(updateRail),
-      edit.onDidContentSizeChange(updateRail),
-      diff.onDidUpdateDiff(updateRail)
+      edit.onDidLayoutChange(measure),
+      edit.onDidContentSizeChange(measure)
     ]
-    updateRail()
-    return () => {
-      disposables.forEach((item) => item.dispose())
-      editor.current = null
-      original.current = null
-      modified.current = null
-      refreshRail.current = () => undefined
-      diff.dispose()
-      left.dispose()
-      right.dispose()
+    if (diff) disposables.push(diff.onDidUpdateDiff(measure))
+    const resize = new ResizeObserver(measure)
+    const track = rail.current
+    if (track) resize.observe(track)
+    const wheel = (event: WheelEvent): void => {
+      event.preventDefault()
+      event.stopPropagation()
+      const unit =
+        event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? edit.getLayoutInfo().height
+          : event.deltaMode === WheelEvent.DOM_DELTA_LINE
+            ? 25
+            : 1
+      edit.setScrollTop(edit.getScrollTop() + event.deltaY * unit)
     }
-  }, [label])
+    track?.addEventListener('wheel', wheel, { passive: false })
+    measure()
+    return () => {
+      viewState.current = edit.saveViewState()
+      disposables.forEach((item) => item.dispose())
+      resize.disconnect()
+      track?.removeEventListener('wheel', wheel)
+      editor.current = null
+      refresh.current = () => undefined
+      diff?.setModel(null)
+      plain?.setModel(null)
+      diff?.dispose()
+      plain?.dispose()
+    }
+  }, [label, pending])
 
   useEffect(() => {
     applyReviewTheme(appearance.resolved)
   }, [appearance.resolved])
   useLayoutEffect(() => {
-    const right = modified.current
-    const left = original.current
-    const edit = editor.current?.getModifiedEditor()
-    if (!right || !left || !edit) return
-    if (right.getValue() !== text) {
-      // Apply a minimal edit, preserving the native undo stack and cursor around incoming changes.
-      const previous = right.getValue()
+    const current = models.current,
+      edit = editor.current
+    if (!current || !edit) return
+    const { original, modified } = current
+    if (modified.getValue() !== text) {
+      const previous = modified.getValue()
       let start = 0
       while (start < previous.length && start < text.length && previous[start] === text[start])
         start++
@@ -190,9 +288,9 @@ export default function MemoryTextEditor({
         end--
         nextEnd--
       }
+      const from = modified.getPositionAt(start),
+        to = modified.getPositionAt(end)
       suppress.current = true
-      const from = right.getPositionAt(start),
-        to = right.getPositionAt(end)
       edit.executeEdits('memory-update', [
         {
           range: new monaco.Range(from.lineNumber, from.column, to.lineNumber, to.column),
@@ -202,83 +300,65 @@ export default function MemoryTextEditor({
       suppress.current = false
     }
     const baseline = pending ? confirmed : text
-    if (left.getValue() !== baseline) left.setValue(baseline)
+    if (original.getValue() !== baseline) original.setValue(baseline)
     edit.updateOptions({ placeholder: pending && confirmed ? undefined : placeholder })
-    refreshRail.current()
+    refresh.current()
   }, [text, confirmed, pending, placeholder])
   useLayoutEffect(() => {
     if (!active || !editor.current) return
     const savedTop = scrollTop.current
     const restore = (): void => {
-      editor.current?.layout()
-      editor.current?.getModifiedEditor().setScrollTop(savedTop)
-      refreshRail.current()
+      refresh.current()
+      editor.current?.setScrollTop(savedTop)
     }
     restore()
     const frame = requestAnimationFrame(restore)
     return () => cancelAnimationFrame(frame)
   }, [active])
 
-  const scrollTo = (clientY: number): void => {
-    const element = rail.current
-    const edit = editor.current?.getModifiedEditor()
-    if (!element || !edit) return
-    const bounds = element.getBoundingClientRect()
-    const ratio = Math.max(0, Math.min(1, (clientY - bounds.top) / bounds.height))
-    edit.setScrollTop(ratio * edit.getScrollHeight() - edit.getLayoutInfo().height / 2)
-  }
+  const visible = overview.viewport !== null || (pending && overview.markers.length > 0)
   return (
     <div className="nc-memory-input" data-pending={pending} style={{ height: contentHeight }}>
-      <div ref={host} className="nc-memory-editor" />
-      <div
-        ref={rail}
+      <div ref={host} className={`nc-memory-editor${pending ? '' : ' editor modified'}`} />
+      <ChangeOverviewRuler
+        variant={pending ? 'overview' : 'scrollbar'}
+        trackRef={rail}
         className="nc-memory-rail"
-        data-overflow={viewport.height < 99.9}
-        aria-hidden={viewport.height >= 99.9}
-        role="scrollbar"
+        data-visible={visible}
+        aria-hidden={!visible}
+        role="navigation"
         aria-label={t(($) => $.partnerMemory.scroll)}
-        aria-orientation="vertical"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(viewport.top)}
-        tabIndex={viewport.height < 100 ? 0 : -1}
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId)
-          scrollTo(event.clientY)
+        tabIndex={visible ? 0 : -1}
+        markers={pending ? overview.markers : []}
+        viewport={overview.viewport}
+        markerClassName="nc-memory-marker"
+        viewportClassName="nc-memory-viewport"
+        onActivate={(index) => {
+          const mark = overview.markers[index]
+          editor.current?.revealPositionInCenter({ lineNumber: mark.line, column: mark.column })
         }}
-        onPointerMove={(event) => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) scrollTo(event.clientY)
+        onScrollRatio={(ratio) => {
+          const edit = editor.current
+          if (edit)
+            edit.setScrollTop(ratio * (edit.getScrollHeight() - edit.getLayoutInfo().height))
         }}
         onKeyDown={(event) => {
-          const edit = editor.current?.getModifiedEditor()
+          if (event.target !== event.currentTarget) return
+          const edit = editor.current
           if (!edit) return
-          const delta = { ArrowDown: 25, ArrowUp: -25, PageDown: 250, PageUp: -250 }[event.key]
-          if (delta) {
-            event.preventDefault()
-            edit.setScrollTop(edit.getScrollTop() + delta)
+          const steps: Record<string, number> = {
+            ArrowDown: 25,
+            ArrowUp: -25,
+            PageDown: edit.getLayoutInfo().height,
+            PageUp: -edit.getLayoutInfo().height,
+            Home: -edit.getScrollHeight(),
+            End: edit.getScrollHeight()
           }
-          if (event.key === 'Home' || event.key === 'End') {
-            event.preventDefault()
-            edit.setScrollTop(event.key === 'Home' ? 0 : edit.getScrollHeight())
-          }
+          if (!(event.key in steps)) return
+          event.preventDefault()
+          edit.setScrollTop(edit.getScrollTop() + steps[event.key])
         }}
-      >
-        <span
-          className="nc-memory-viewport"
-          style={{
-            top: `${viewport.top}%`,
-            height: `${viewport.height}%`,
-            visibility: viewport.height >= 100 ? 'hidden' : 'visible'
-          }}
-        />
-        {markers.map((marker, index) => (
-          <span
-            key={index}
-            className={`nc-memory-marker ${marker.removed ? 'removed' : 'added'}`}
-            style={{ top: `${marker.top}%` }}
-          />
-        ))}
-      </div>
+      />
     </div>
   )
 }

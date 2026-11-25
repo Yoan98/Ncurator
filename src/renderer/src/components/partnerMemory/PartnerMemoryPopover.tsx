@@ -30,6 +30,7 @@ export default function PartnerMemoryPopover({ partnerId }: { partnerId: string 
     else memory.flush()
     setOpen(next)
   }
+  const activeEntry = memory.entries.find((entry) => entry.memory.category === tab)
   const content = (
     <div
       className="nc-memory-panel"
@@ -41,47 +42,83 @@ export default function PartnerMemoryPopover({ partnerId }: { partnerId: string 
         }
       }}
     >
-      <div className="nc-memory-tabs" role="tablist" aria-label={t(($) => $.partnerMemory.title)}>
-        {memory.entries.map(({ memory: item }) => (
-          <div key={item.category} className="nc-memory-tab-wrap">
-            <button
-              type="button"
-              role="tab"
-              id={`memory-tab-${item.category}`}
-              aria-controls={`memory-pane-${item.category}`}
-              aria-selected={tab === item.category}
-              className="nc-memory-tab"
-              onClick={() => setTab(item.category)}
-              data-testid={`${selectors.tabPrefix}-${item.category}`}
-            >
-              {item.category === 'cooperation_preferences'
-                ? t(($) => $.partnerMemory.preferences)
-                : t(($) => $.partnerMemory.background)}
-              {item.draft !== null && (
-                <span
-                  className="nc-memory-dot tab"
-                  data-testid={`${selectors.tabDotPrefix}-${item.category}`}
-                />
-              )}
-            </button>
-            <Tooltip
-              title={
-                item.category === 'cooperation_preferences'
-                  ? t(($) => $.partnerMemory.preferencesHelp)
-                  : t(($) => $.partnerMemory.backgroundHelp)
-              }
-              trigger={['hover', 'focus']}
-            >
+      <div className="nc-memory-toolbar">
+        <div className="nc-memory-tabs" role="tablist" aria-label={t(($) => $.partnerMemory.title)}>
+          {memory.entries.map(({ memory: item }) => (
+            <div key={item.category} className="nc-memory-tab-wrap">
               <button
                 type="button"
-                className="nc-memory-help"
-                aria-label={t(($) => $.partnerMemory.help)}
+                role="tab"
+                id={`memory-tab-${item.category}`}
+                aria-controls={`memory-pane-${item.category}`}
+                aria-selected={tab === item.category}
+                className="nc-memory-tab"
+                onClick={() => setTab(item.category)}
+                data-testid={`${selectors.tabPrefix}-${item.category}`}
               >
-                <HiOutlineQuestionMarkCircle />
+                {item.category === 'cooperation_preferences'
+                  ? t(($) => $.partnerMemory.preferences)
+                  : t(($) => $.partnerMemory.background)}
+                {item.draft !== null && (
+                  <span
+                    className="nc-memory-dot tab"
+                    data-testid={`${selectors.tabDotPrefix}-${item.category}`}
+                  />
+                )}
               </button>
-            </Tooltip>
+              <Tooltip
+                title={
+                  item.category === 'cooperation_preferences'
+                    ? t(($) => $.partnerMemory.preferencesHelp)
+                    : t(($) => $.partnerMemory.backgroundHelp)
+                }
+                trigger={['hover', 'focus']}
+              >
+                <button
+                  type="button"
+                  className="nc-memory-help"
+                  aria-label={t(($) => $.partnerMemory.help)}
+                >
+                  <HiOutlineQuestionMarkCircle />
+                </button>
+              </Tooltip>
+            </div>
+          ))}
+        </div>
+        {activeEntry && activeEntry.memory.draft !== null && (
+          <div className="nc-memory-review" data-testid={selectors.review}>
+            <button
+              type="button"
+              disabled={activeEntry.dirty || activeEntry.saving}
+              onClick={() =>
+                void memory.review(
+                  activeEntry.memory.category,
+                  'reject',
+                  activeEntry.memory.revision
+                )
+              }
+              data-testid={selectors.reject}
+            >
+              <LuX />
+              {t(($) => $.partnerMemory.reject)}
+            </button>
+            <button
+              type="button"
+              disabled={activeEntry.dirty || activeEntry.saving}
+              onClick={() =>
+                void memory.review(
+                  activeEntry.memory.category,
+                  'accept',
+                  activeEntry.memory.revision
+                )
+              }
+              data-testid={selectors.accept}
+            >
+              <LuCheck />
+              {t(($) => $.partnerMemory.accept)}
+            </button>
           </div>
-        ))}
+        )}
       </div>
       {memory.error && (
         <div role="alert" className="nc-memory-status error">
@@ -111,28 +148,6 @@ export default function PartnerMemoryPopover({ partnerId }: { partnerId: string 
             hidden={tab !== item.category}
             data-testid={`${selectors.panePrefix}-${item.category}`}
           >
-            {item.draft !== null && (
-              <div className="nc-memory-review" data-testid={selectors.review}>
-                <button
-                  type="button"
-                  disabled={entry.dirty || entry.saving}
-                  onClick={() => void memory.review(item.category, 'reject', item.revision)}
-                  data-testid={selectors.reject}
-                >
-                  <LuX />
-                  {t(($) => $.partnerMemory.reject)}
-                </button>
-                <button
-                  type="button"
-                  disabled={entry.dirty || entry.saving}
-                  onClick={() => void memory.review(item.category, 'accept', item.revision)}
-                  data-testid={selectors.accept}
-                >
-                  <LuCheck />
-                  {t(($) => $.partnerMemory.accept)}
-                </button>
-              </div>
-            )}
             {!item.enabled && (
               <p className="nc-memory-status">{t(($) => $.partnerMemory.disabled)}</p>
             )}

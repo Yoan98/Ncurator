@@ -1,4 +1,4 @@
-import { HUMAN_TOOLSET_SOURCES, RUNTIME_TOOLSET_IDS } from './constants'
+import { HUMAN_MAX_ACTIVE_TOOLS, HUMAN_TOOLSET_SOURCES, RUNTIME_TOOLSET_IDS } from './constants'
 import {
   RUNTIME_TOOL_CATALOG,
   RUNTIME_TOOL_NAMES,
@@ -110,14 +110,14 @@ export const RUNTIME_TOOLSET_CATALOG = {
     countsTowardToolBudget: false,
     title: 'agent-control',
     description:
-      '管理任务推进：加载工具组和 Skill 说明、维护计划、调整长期记忆，并加载图片到主模型上下文。'
+      '管理任务推进：加载工具组和 skill 说明、维护计划、调整长期记忆，并加载图片到主模型上下文。'
   },
   'skill-management': {
     familyId: 'skill-management',
     source: 'external',
     countsTowardToolBudget: true,
     title: 'skill 管理',
-    description: '查询和批量配置当前伙伴的 Skill 启用状态。'
+    description: '查询和批量配置当前伙伴的 skill 启用状态。'
   },
   'scheduled-tasks': {
     familyId: 'scheduled-tasks',
@@ -218,4 +218,23 @@ export const findEffectiveToolsetIdByToolName = (input: {
   return getEffectiveLoadedToolsetIds(input.loadedToolsetIds).find((toolsetId) =>
     getToolsetDefinition(toolsetId).toolNames.includes(target)
   )
+}
+
+const renderToolsetLine = (toolsetName: string, description: string, toolCount: number): string =>
+  `- ${toolsetName}（${toolCount} 个工具）：${description}`
+
+export const renderToolsetCatalog = (): string => {
+  const builtin = listBuiltinToolsetDefinitions()
+  const external = listExternalToolsetDefinitions()
+  return `
+<工具组目录>
+toolset 是预注册的工具组，目录中每项以稳定名称开头。内置工具组始终可用；外部工具组通过 load_toolset 的 toolsetNames 参数按目录中的名称加载后才能使用。当前最多同时激活 ${HUMAN_MAX_ACTIVE_TOOLS} 个工具，加载新工具组超出上限时系统按最早加载顺序淘汰旧的外部工具组。
+
+始终可用的内置工具组：
+${builtin.map((toolset) => renderToolsetLine(toolset.toolsetId, toolset.description, toolset.toolNames.length)).join('\n')}
+
+需要先加载才能使用的外部工具组：
+${external.map((toolset) => renderToolsetLine(toolset.toolsetId, toolset.description, toolset.toolNames.length)).join('\n')}
+</工具组目录>
+`.trim()
 }

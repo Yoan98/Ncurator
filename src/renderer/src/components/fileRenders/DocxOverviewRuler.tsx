@@ -1,6 +1,8 @@
+import ChangeOverviewRuler from '../workbench/ChangeOverviewRuler'
+import { measureOverviewViewport, type OverviewViewport } from '../workbench/changeOverviewGeometry'
 import { t } from '../../i18n'
 import { message } from 'antd'
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { workbenchSelectors } from '../../testing/selectors'
 import type { SuperDoc } from 'superdoc'
@@ -19,16 +21,6 @@ type Target = {
   reveal?: () => Promise<void>
 }
 type Marker = { key: string; top: number; bottom: number; targets: Target[] }
-type Scrollbar = { top: number; height: number }
-type ScrollGesture = {
-  pointerId: number
-  startY: number
-  grabOffset: number
-  onThumb: boolean
-  dragging: boolean
-  marker?: Marker
-  button: HTMLButtonElement | null
-}
 const colors = {
   reference: '#A480C5',
   inserted: '#2F6F4E',
@@ -41,17 +33,13 @@ const changeLabels = {
   formatted: t(($) => $.editors.formattingChanges)
 }
 
-function measureScrollbar(container: HTMLElement, height: number): Scrollbar | null {
-  const maxScroll = container.scrollHeight - container.clientHeight
-  if (maxScroll <= 1 || height <= 0) return null
-  const thumbHeight = Math.min(
-    height,
-    Math.max(24, (height * container.clientHeight) / container.scrollHeight)
+function measureScrollbar(container: HTMLElement, height: number): OverviewViewport | null {
+  return measureOverviewViewport(
+    container.scrollTop,
+    container.clientHeight,
+    container.scrollHeight,
+    height
   )
-  return {
-    top: Math.max(0, Math.min(1, container.scrollTop / maxScroll)) * (height - thumbHeight),
-    height: thumbHeight
-  }
 }
 
 function reviewTargets(
@@ -180,18 +168,14 @@ export default function DocxOverviewRuler({
   const rail = useRef<HTMLDivElement>(null)
   const cycles = useRef(new Map<string, number>())
   const navigation = useRef({ sequence: 0 })
-  const gesture = useRef<ScrollGesture | null>(null)
   const [markers, setMarkers] = useState<Marker[]>([])
-  const [scrollbar, setScrollbar] = useState<Scrollbar | null>(null)
-  const [dragging, setDragging] = useState(false)
+  const [scrollbar, setScrollbar] = useState<OverviewViewport | null>(null)
   const [active, setActive] = useState<Target | null>(null)
   const [focusRects, setFocusRects] = useState<SelectionRect[]>([])
 
   useEffect(() => {
     setActive(null)
     cycles.current.clear()
-    gesture.current = null
-    setDragging(false)
     const pending = navigation.current
     return () => {
       pending.sequence++
@@ -366,146 +350,70 @@ export default function DocxOverviewRuler({
     setActive({ ...target })
   }
 
-  const scrollAtPointer = (clientY: number, grabOffset: number) => {
-    if (!container || !rail.current) return
-    const thumb = measureScrollbar(container, rail.current.clientHeight)
-    if (!thumb) return
-    const travel = rail.current.clientHeight - thumb.height
-    const top = clientY - rail.current.getBoundingClientRect().top - grabOffset
-    container.scrollTo({
-      top:
-        (Math.max(0, Math.min(travel, top)) / Math.max(1, travel)) *
-        (container.scrollHeight - container.clientHeight),
-      behavior: 'instant'
-    })
-  }
-
-  const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (!container || event.button !== 0 || !event.isPrimary) return
-    event.preventDefault()
-    const element = event.currentTarget
-    const thumb = measureScrollbar(container, element.clientHeight)
-    const y = event.clientY - element.getBoundingClientRect().top
-    const onThumb = !!thumb && y >= thumb.top && y <= thumb.top + thumb.height
-    const button =
-      event.target instanceof Element
-        ? event.target.closest<HTMLButtonElement>('[data-marker-index]')
-        : null
-    gesture.current = {
-      pointerId: event.pointerId,
-      startY: event.clientY,
-      grabOffset: thumb && onThumb ? y - thumb.top : (thumb?.height || 0) / 2,
-      onThumb,
-      dragging: false,
-      marker: button ? markers[Number(button.dataset.markerIndex)] : undefined,
-      button
+  const overviewMarkers = markers.map((marker) => {
+    const kind = marker.targets[0].kind
+    return {
+      key: marker.key,
+      top: marker.top,
+      height: marker.bottom - marker.top,
+      tone:
+        kind === 'reference'
+          ? ('reference' as const)
+          : kind === 'deleted'
+            ? ('removed' as const)
+            : ('added' as const),
+      kinds: [...new Set(marker.targets.map((target) => target.kind))].join(' '),
+      label:
+        [...new Set(marker.targets.map((target) => target.label))].join('、') +
+        (marker.targets.length > 1
+          ? t(($) => $.editors.locationsClickRepeatedlyToCycleThroughThem, {
+              value1: marker.targets.length
+            })
+          : '')
     }
-    element.setPointerCapture(event.pointerId)
-  }
-
-  const pointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    const current = gesture.current
-    if (!current || current.pointerId !== event.pointerId) return
-    if (!current.dragging && Math.abs(event.clientY - current.startY) > 3) {
-      current.dragging = true
-      setDragging(true)
-    }
-    if (current.dragging) scrollAtPointer(event.clientY, current.grabOffset)
-  }
-
-  const endGesture = () => {
-    gesture.current = null
-    setDragging(false)
-  }
-
-  const pointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    const current = gesture.current
-    if (!current || current.pointerId !== event.pointerId) return
-    endGesture()
-    if (event.currentTarget.hasPointerCapture(event.pointerId))
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    if (current.dragging) return
-    if (current.marker) {
-      current.button?.focus({ preventScroll: true })
-      activate(current.marker)
-    } else if (!current.onThumb && container) {
-      const thumb = measureScrollbar(container, event.currentTarget.clientHeight)
-      if (thumb) scrollAtPointer(event.clientY, thumb.height / 2)
-    }
-  }
-
+  })
   return (
-    <div
-      ref={rail}
-      className="docx-overview relative h-full w-[16px] shrink-0 touch-none select-none bg-[var(--notion-surface-sunken)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--notion-accent-blue)]"
-      data-testid={workbenchSelectors.docxOverview}
-      data-mode={mode}
-      data-dragging={dragging}
-      role="navigation"
-      aria-label={t(($) => $.editors.documentPosition)}
-      tabIndex={0}
-      onPointerDown={pointerDown}
-      onPointerMove={pointerMove}
-      onPointerUp={pointerUp}
-      onPointerCancel={endGesture}
-      onLostPointerCapture={endGesture}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget || !container) return
-        const steps: Record<string, number> = {
-          ArrowUp: -40,
-          ArrowDown: 40,
-          PageUp: -container.clientHeight,
-          PageDown: container.clientHeight,
-          Home: -container.scrollHeight,
-          End: container.scrollHeight
-        }
-        if (!(event.key in steps)) return
-        event.preventDefault()
-        container.scrollBy({ top: steps[event.key], behavior: 'instant' })
-      }}
-    >
-      {markers.map((marker, index) => {
-        const kind = marker.targets[0].kind
-        const label =
-          [...new Set(marker.targets.map((t) => t.label))].join('、') +
-          (marker.targets.length > 1
-            ? t(($) => $.editors.locationsClickRepeatedlyToCycleThroughThem, {
-                value1: marker.targets.length
-              })
-            : '')
-        return (
-          <button
-            key={marker.key}
-            type="button"
-            title={label}
-            aria-label={label}
-            data-testid={workbenchSelectors.docxOverviewMarker}
-            data-marker-index={index}
-            data-kinds={[...new Set(marker.targets.map((t) => t.kind))].join(' ')}
-            className="absolute cursor-pointer rounded-[1px] border-0 p-0 hover:brightness-90 focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--notion-accent-blue)]"
-            style={{
-              top: marker.top,
-              height: marker.bottom - marker.top,
-              left: kind === 'reference' || kind === 'deleted' ? 1 : 8,
-              width: kind === 'reference' ? 13 : 6,
-              backgroundColor: colors[kind]
-            }}
-            onClick={(event) => {
-              // Pointer gestures are handled by the shared track; native button
-              // activation (Enter/Space and assistive technology) still locates.
-              if (event.detail === 0) activate(marker)
-            }}
-          />
-        )
-      })}
-      {scrollbar && (
-        <div
-          aria-hidden="true"
-          data-testid={workbenchSelectors.docxOverviewThumb}
-          className="docx-overview-thumb pointer-events-none absolute left-[1px] w-[14px] rounded-[2px]"
-          style={{ top: scrollbar.top, height: scrollbar.height }}
-        />
-      )}
+    <>
+      <ChangeOverviewRuler
+        variant={mode === 'changes' ? 'overview' : 'scrollbar'}
+        key={mode}
+        trackRef={rail}
+        className="docx-overview"
+        markers={overviewMarkers}
+        viewport={scrollbar}
+        data-testid={workbenchSelectors.docxOverview}
+        data-mode={mode}
+        role="navigation"
+        aria-label={t(($) => $.editors.documentPosition)}
+        tabIndex={0}
+        markerTestId={workbenchSelectors.docxOverviewMarker}
+        viewportTestId={workbenchSelectors.docxOverviewThumb}
+        viewportClassName="docx-overview-thumb"
+        onActivate={(index) => {
+          void activate(markers[index])
+        }}
+        onScrollRatio={(ratio) => {
+          if (container)
+            container.scrollTo({
+              top: ratio * (container.scrollHeight - container.clientHeight),
+              behavior: 'instant'
+            })
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || !container) return
+          const steps: Record<string, number> = {
+            ArrowUp: -40,
+            ArrowDown: 40,
+            PageUp: -container.clientHeight,
+            PageDown: container.clientHeight,
+            Home: -container.scrollHeight,
+            End: container.scrollHeight
+          }
+          if (!(event.key in steps)) return
+          event.preventDefault()
+          container.scrollBy({ top: steps[event.key], behavior: 'instant' })
+        }}
+      />
       {active &&
         createPortal(
           focusRects.map((rect, index) => (
@@ -525,6 +433,6 @@ export default function DocxOverviewRuler({
           )),
           document.body
         )}
-    </div>
+    </>
   )
 }

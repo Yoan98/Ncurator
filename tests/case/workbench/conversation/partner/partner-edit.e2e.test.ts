@@ -139,6 +139,17 @@ describe('workbench conversation e2e', () => {
             .locator('.nc-memory-input')
             .evaluate((element) => element.getBoundingClientRect().height)
           const longRailVisible = await preferencePane.locator('.nc-memory-rail').isVisible()
+          const normalRailStyle = await preferencePane
+            .locator('.nc-memory-rail')
+            .evaluate((element) => {
+              const thumb = element.querySelector<HTMLElement>('.nc-memory-viewport')!
+              return {
+                width: element.getBoundingClientRect().width,
+                radius: getComputedStyle(thumb).borderRadius,
+                border: getComputedStyle(thumb).borderTopWidth
+              }
+            })
+
           await page.keyboard.press('ControlOrMeta+a')
           const mediumMemory = '第一行\n第二行\n第三行\n第四行'
           await page.keyboard.insertText(mediumMemory)
@@ -220,6 +231,13 @@ describe('workbench conversation e2e', () => {
           const reopenedText = await preferencePane
             .locator('.editor.modified .view-lines')
             .innerText()
+          const plainEditor = await preferencePane
+            .locator('.nc-memory-editor')
+            .evaluate((element) => ({
+              striped: [...element.querySelectorAll('.diagonal-fill')].some(
+                (node) => getComputedStyle(node).backgroundImage !== 'none'
+              )
+            }))
           const memorySnapshot = await page.evaluate(
             (id) => window.api.partnerMemoryGet(id),
             created.id
@@ -236,6 +254,8 @@ describe('workbench conversation e2e', () => {
           })
           await trigger.click()
           return {
+            plainEditor,
+            normalRailStyle,
             emptyHeight,
             emptyRailHidden,
             cappedHeight,
@@ -258,7 +278,11 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.emptyHeight <= 90 &&
+            !result.plainEditor.striped &&
+              Math.abs(result.normalRailStyle.width - 8) <= 0.05 &&
+              result.normalRailStyle.radius === '4px' &&
+              result.normalRailStyle.border === '0px' &&
+              result.emptyHeight <= 90 &&
               result.emptyRailHidden &&
               result.cappedHeight <= 361 &&
               result.longRailVisible &&

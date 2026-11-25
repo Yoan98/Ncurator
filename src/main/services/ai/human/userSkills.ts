@@ -43,17 +43,17 @@ export const renderUserSkills = (
   )
   if (!skills.length) return ''
   return [
-    '技能：',
-    '技能提供任务说明，通过 load_skill 按名称加载。',
+    '<skill目录>',
+    'skill 提供任务说明，通过 load_skill 按名称加载。',
     '',
-    '可用技能：',
+    '可用 skill：',
     ...[...skills]
       .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
       .map(({ name, description }) => `- ${name}：${description}`),
     ...(loaded.length
       ? [
           '',
-          '已加载技能：',
+          '已加载 skill：',
           '',
           loaded
             .map(
@@ -62,6 +62,7 @@ export const renderUserSkills = (
             )
             .join('\n\n')
         ]
-      : [])
+      : []),
+    '</skill目录>'
   ].join('\n')
 }

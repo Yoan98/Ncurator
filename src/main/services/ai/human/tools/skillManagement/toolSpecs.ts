@@ -15,7 +15,7 @@ export const SKILL_CONFIG_TOOL_SPEC: HumanToolSpec<
   familyId: 'skill-management',
   toolsetIds: ['skill-management'],
   inputSchema: SKILL_CONFIG_SCHEMA,
-  promptSpec: { name: 'skill_config', description: '查询或批量修改当前伙伴的 Skill 启用状态。' },
+  promptSpec: { name: 'skill_config', description: '查询或批量修改当前伙伴的 skill 启用状态。' },
   resolveExecutionMeta: (args) => ({
     mutability: args.action === 'list' ? 'read_only' : 'mutating',
     resourceKey: 'skill-config'

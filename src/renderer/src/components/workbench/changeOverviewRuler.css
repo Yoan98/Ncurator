@@ -1,0 +1,86 @@
+.nc-change-overview {
+  --overview-removed: #d86a63;
+  --overview-added: #5d9a6a;
+  position: relative;
+  width: 27px;
+  flex: 0 0 27px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--notion-surface);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: pointer;
+}
+[data-theme='dark'] .nc-change-overview {
+  --overview-removed: #ec8c84;
+  --overview-added: #8fbd96;
+}
+.nc-change-overview-viewport {
+  position: absolute;
+  inset-inline: 0;
+  z-index: 1;
+  border-radius: 2px;
+  background: light-dark(#52688017, #b4c7dc21);
+  border: 1px solid light-dark(#657b9745, #b4c7dc45);
+  pointer-events: none;
+}
+.nc-change-overview:hover .nc-change-overview-viewport {
+  background: light-dark(#52688024, #b4c7dc30);
+}
+.nc-change-overview[data-dragging='true'] {
+  cursor: grabbing;
+}
+.nc-change-overview[data-dragging='true'] .nc-change-overview-viewport {
+  background: light-dark(#52688030, #b4c7dc40);
+}
+.nc-change-overview-marker {
+  position: absolute;
+  z-index: 2;
+  left: 1px;
+  width: 11px;
+  min-height: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  background: var(--overview-removed);
+  cursor: pointer;
+}
+.nc-change-overview-marker.added {
+  left: 14px;
+  background: var(--overview-added);
+}
+.nc-change-overview-marker.reference {
+  left: 2px;
+  width: 23px;
+  background: #a480c5;
+}
+.nc-change-overview:focus-visible,
+.nc-change-overview-marker:focus-visible {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: -2px;
+}
+.nc-change-overview-marker:hover {
+  filter: brightness(0.92);
+}
+
+.nc-change-overview[data-variant='scrollbar'] {
+  width: 8px;
+  flex-basis: 8px;
+  border-radius: 4px;
+  background: transparent;
+}
+.nc-change-overview[data-variant='scrollbar'] .nc-change-overview-viewport {
+  border: 0;
+  border-radius: 4px;
+  background: var(--notion-scrollbar-thumb);
+}
+.nc-change-overview[data-variant='scrollbar']:hover .nc-change-overview-viewport,
+.nc-change-overview[data-variant='scrollbar'][data-dragging='true'] .nc-change-overview-viewport {
+  background: var(--notion-scrollbar-thumb-hover);
+}
+.nc-change-overview[data-variant='scrollbar'] .nc-change-overview-marker.reference {
+  left: 1px;
+  width: 6px;
+}

@@ -21,20 +21,8 @@
   width: 0;
 }
 
-.docx-overview-thumb {
-  background: color-mix(in srgb, var(--notion-text-soft) 26%, transparent);
-}
-
-.docx-overview:hover .docx-overview-thumb {
-  background: color-mix(in srgb, var(--notion-text-soft) 38%, transparent);
-}
-
-.docx-overview[data-dragging='true'] .docx-overview-thumb {
-  background: color-mix(in srgb, var(--notion-text-soft) 48%, transparent);
-}
-
-.docx-overview[data-dragging='true'] {
-  cursor: grabbing;
+.docx-overview {
+  margin: 12px 8px 12px 0;
 }
 
 .docx-content ::selection {

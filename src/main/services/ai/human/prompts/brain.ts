@@ -13,8 +13,7 @@ import {
   getPartnerScriptsRootDir
 } from '../../../assets/WorkspaceAssetService'
 import type { HumanState } from '../types'
-import { HUMAN_MAX_ACTIVE_TOOLS } from '../constants'
-import { listBuiltinToolsetDefinitions, listExternalToolsetDefinitions } from '../toolsets'
+import { renderToolsetCatalog } from '../toolsets'
 
 export const renderLocalContextText = (
   ctx: Pick<AiRunContext, 'partnerId' | 'platform' | 'userSkillService'>
@@ -24,8 +23,8 @@ export const renderLocalContextText = (
     `操作系统：${{ macos: 'macOS', windows: 'Windows', linux: 'Linux' }[ctx.platform]}`,
     `临时脚本目录：${getPartnerScriptsRootDir(ctx.partnerId)}`,
     `运行资源目录：${getPartnerAssetsRootDir(ctx.partnerId)}`,
-    `Skill 目录：${ctx.userSkillService?.getRootDirectory() ?? getSkillRootDirectory()}`,
-    'Skill 结构：每个 Skill 一个同名目录，包含 SKILL.md；可选子目录 scripts/、references/、assets/。',
+    `skill 目录：${ctx.userSkillService?.getRootDirectory() ?? getSkillRootDirectory()}`,
+    'skill 结构：每个 skill 一个同名目录，包含 SKILL.md；可选子目录 scripts/、references/、assets/。',
     'SKILL.md 示例：',
     '---',
     'name: weekly-report',
@@ -61,23 +60,6 @@ const renderPreferenceText = (preference: AiRunContext['preference']): string =>
     return '必须只能使用知识库内容和用户工作区域文件内容作为依据来推进任务，禁止使用其他信息与模型能力本身的信息'
   }
   return ''
-}
-
-const renderToolsetLine = (toolsetName: string, description: string, toolCount: number): string =>
-  `- ${toolsetName}（${toolCount} 个工具）：${description}`
-
-const renderToolsetCatalog = (): string => {
-  const builtin = listBuiltinToolsetDefinitions()
-  const external = listExternalToolsetDefinitions()
-  return `
-toolset 是预注册的工具组，目录中每项以稳定名称开头。内置工具组始终可用；外部工具组通过 load_toolset 的 toolsetNames 参数按目录中的名称加载后才能使用。当前最多同时激活 ${HUMAN_MAX_ACTIVE_TOOLS} 个工具，加载新工具组超出上限时系统按最早加载顺序淘汰旧的外部工具组。
-
-始终可用的内置工具组：
-${builtin.map((toolset) => renderToolsetLine(toolset.toolsetId, toolset.description, toolset.toolNames.length)).join('\n')}
-
-需要先加载才能使用的外部工具组：
-${external.map((toolset) => renderToolsetLine(toolset.toolsetId, toolset.description, toolset.toolNames.length)).join('\n')}
-`.trim()
 }
 
 export const buildBrainSystemPrompt = (input: {
@@ -121,9 +103,7 @@ ${renderLocalContextText(input.ctx)}
 
 ${renderPartnerMemory(input.ctx)}
 
-<工具组目录>
 ${renderToolsetCatalog()}
-</工具组目录>
 
 ${renderUserSkills(input.ctx, input.loadedSkills)}
 `.trim()

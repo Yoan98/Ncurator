@@ -8,7 +8,7 @@ export async function assertEmptyDocxOverview(runtime: E2ETestRuntime): Promise<
     return (
       rail?.getAttribute('data-mode') === 'references' &&
       !rail.querySelector('button') &&
-      Math.abs(rail.getBoundingClientRect().width - 16) <= 0.05
+      Math.abs(rail.getBoundingClientRect().width - 8) <= 0.05
     )
   }, workbenchSelectors)
   const evidence = await runtime.page
@@ -20,11 +20,11 @@ export async function assertEmptyDocxOverview(runtime: E2ETestRuntime): Promise<
     }))
   await runtime.assertThat(
     evidence.mode === 'references' &&
-      Math.abs(evidence.width - 16) <= 0.05 &&
+      Math.abs(evidence.width - 8) <= 0.05 &&
       evidence.markerCount === 0,
     {
       name: 'docx-overview-empty-preview',
-      message: '预览无引用时保留 16px 空条，没有审核残留。',
+      message: '预览无引用时保留 8px 空条，没有审核残留。',
       data: evidence
     }
   )
@@ -138,10 +138,14 @@ export async function assertDocxReviewOverview(runtime: E2ETestRuntime): Promise
       .first()
       .waitFor({ state: 'detached' })
   }
+  const overviewWidth = await page
+    .getByTestId(workbenchSelectors.docxOverview)
+    .evaluate((element) => element.getBoundingClientRect().width)
   await runtime.assertThat(
-    evidence.every((e) => e.visible && e.matches.length > 0) &&
-      evidence[0].color === 'rgb(179, 38, 30)' &&
-      evidence[1].color === 'rgb(47, 111, 78)' &&
+    Math.abs(overviewWidth - 27) <= 0.05 &&
+      evidence.every((e) => e.visible && e.matches.length > 0) &&
+      evidence[0].color === 'rgb(216, 106, 99)' &&
+      evidence[1].color === 'rgb(93, 154, 106)' &&
       evidence[0].left < evidence[1].left,
     {
       name: 'docx-overview-review-navigation',
@@ -250,8 +254,8 @@ export async function assertDocxSharedScrollTrack(runtime: E2ETestRuntime): Prom
   const draggedFromMarker = await read()
   await runtime.assertThat(
     initial.max > 50 &&
-      Math.abs(initial.rail.width - 16) <= 0.05 &&
-      Math.abs(initial.thumb.width - 14) <= 0.05 &&
+      Math.abs(initial.rail.width - 8) <= 0.05 &&
+      Math.abs(initial.thumb.width - 8) <= 0.05 &&
       initial.nativeWidth === '0px' &&
       clicked.scrollTop > 50 &&
       wheeled.scrollTop < clicked.scrollTop &&
@@ -267,7 +271,7 @@ export async function assertDocxSharedScrollTrack(runtime: E2ETestRuntime): Prom
     {
       name: 'docx-shared-scroll-track',
       message:
-        'DOCX 仅保留 16px 共用轨道；空白点击、滚轮与拖动同步滑块，覆盖色块可定位，从色块拖动不误触定位。',
+        'DOCX 仅保留 8px 共用轨道；空白点击、滚轮与拖动同步滑块，与色块重叠时可定位，从色块拖动不误触定位。',
       data: { initial, clicked, wheeled, dragged, overlapsThumb, focused, draggedFromMarker }
     }
   )

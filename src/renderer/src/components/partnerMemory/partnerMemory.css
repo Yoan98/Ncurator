@@ -13,11 +13,19 @@
   padding: 8px 18px 6px;
   color: var(--notion-text);
 }
+.nc-memory-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--notion-line);
+}
 .nc-memory-tabs {
   display: flex;
   align-items: center;
-  gap: 24px;
-  border-bottom: 1px solid var(--notion-line);
+  gap: 18px;
+  min-width: 0;
 }
 .nc-memory-tab-wrap {
   display: flex;
@@ -33,7 +41,7 @@
 }
 .nc-memory-tab[aria-selected='true'] {
   color: var(--notion-text);
-  border-bottom-color: var(--notion-accent-blue);
+  border-bottom-color: var(--notion-text);
 }
 .nc-memory-help {
   color: var(--notion-text-faint);
@@ -57,7 +65,8 @@
   justify-content: flex-end;
   align-items: center;
   gap: 6px;
-  padding-top: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .nc-memory-review button {
   display: flex;
@@ -107,40 +116,29 @@
   color: var(--notion-text-faint);
 }
 .nc-memory-rail {
-  position: relative;
-  width: 8px;
-  margin: 12px 0 12px 10px;
-  flex-shrink: 0;
-  border-radius: 6px;
-  background: var(--notion-surface);
-  cursor: pointer;
-  touch-action: none;
+  margin: 10px 0 10px 10px;
 }
-.nc-memory-rail[data-overflow='false'] {
+.nc-memory-rail[data-visible='false'] {
   visibility: hidden;
 }
-.nc-memory-viewport {
-  position: absolute;
-  inset-inline: 0;
-  min-height: 12px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--notion-text-faint) 20%, transparent);
-  pointer-events: none;
+.nc-memory-editor .diagonal-fill {
+  background: none !important;
 }
-.nc-memory-marker {
-  position: absolute;
-  height: 3px;
-  width: 3px;
-  border-radius: 1px;
-  pointer-events: none;
+.nc-memory-editor .monaco-editor .line-insert,
+.nc-memory-editor .monaco-editor .line-delete {
+  background: transparent !important;
+  border: 0;
 }
-.nc-memory-marker.removed {
-  left: 1px;
-  background: var(--notion-red);
+.nc-memory-editor .char-insert,
+.nc-memory-editor .char-insert span {
+  color: var(--notion-green) !important;
+  background: var(--notion-green-bg);
 }
-.nc-memory-marker.added {
-  right: 1px;
-  background: var(--notion-green);
+.nc-memory-editor .char-delete,
+.nc-memory-editor .inline-deleted-text,
+.nc-memory-editor .inline-deleted-text span {
+  color: var(--notion-red) !important;
+  background: var(--notion-red-bg);
 }
 .nc-memory-status {
   display: flex;

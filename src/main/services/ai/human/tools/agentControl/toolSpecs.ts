@@ -72,7 +72,7 @@ export const LOAD_SKILL_TOOL_SPEC: HumanToolSpec<
   inputSchema: LOAD_SKILL_SCHEMA,
   promptSpec: {
     name: 'load_skill',
-    description: '加载技能说明和资源目录。'
+    description: '加载skill说明和资源目录。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
