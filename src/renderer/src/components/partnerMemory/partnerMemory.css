@@ -84,7 +84,8 @@
 .nc-memory-input {
   display: flex;
   position: relative;
-  height: min(360px, max(150px, calc(100dvh - 280px)));
+  min-height: 64px;
+  max-height: min(360px, max(150px, calc(100dvh - 280px)));
   border-bottom: 1px solid var(--notion-line);
 }
 .nc-memory-input:focus-within {
@@ -102,6 +103,9 @@
 .nc-memory-editor .monaco-diff-editor .margin-view-overlays {
   display: none;
 }
+.nc-memory-editor .editorPlaceholder {
+  color: var(--notion-text-faint);
+}
 .nc-memory-rail {
   position: relative;
   width: 8px;
@@ -111,6 +115,9 @@
   background: var(--notion-surface);
   cursor: pointer;
   touch-action: none;
+}
+.nc-memory-rail[data-overflow='false'] {
+  visibility: hidden;
 }
 .nc-memory-viewport {
   position: absolute;

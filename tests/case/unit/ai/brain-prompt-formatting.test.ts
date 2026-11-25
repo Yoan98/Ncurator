@@ -47,6 +47,54 @@ const titledSection = (text: string, title: string): string => {
 }
 
 describe('ai unit brain prompt formatting', () => {
+  it('places the tagged toolset catalog below memory and the loaded skills below the catalog', () => {
+    const ctx = createFakeCtx()
+    const loaded = {
+      skill: { name: 'weekly-report', description: '整理周报时使用。' },
+      body: '# 周报规范\n先给结论，再列进展和风险。',
+      resourceBase: '/skills/weekly-report'
+    }
+    ctx.userSkillService = {
+      getRootDirectory: () => '/skills',
+      listEnabled: () => [loaded.skill],
+      loadEnabled: () => loaded
+    }
+    ctx.partnerMemory = {
+      get: (partnerId) => ({
+        partnerId,
+        memories: [
+          {
+            category: 'cooperation_preferences',
+            enabled: true,
+            confirmed: '表达简洁。',
+            draft: null,
+            revision: 1
+          },
+          {
+            category: 'project_background',
+            enabled: true,
+            confirmed: '持续开发桌面端。',
+            draft: null,
+            revision: 1
+          }
+        ]
+      }),
+      propose: () => undefined
+    }
+    const system = buildBrainSystemPrompt({ ctx, loadedSkills: [loaded] })
+    const catalogStart = system.indexOf('<工具组目录>')
+    const catalogEnd = system.indexOf('</工具组目录>')
+    expect(catalogStart).toBeGreaterThan(system.indexOf('</长期记忆>'))
+    expect(catalogEnd).toBeGreaterThan(catalogStart)
+    expect(system.indexOf('可用技能：')).toBeGreaterThan(catalogEnd)
+    expect(system.indexOf('<skill\n')).toBeGreaterThan(catalogEnd)
+    expect(system.slice(catalogStart, catalogEnd)).toContain('agent-control')
+    expect(system.slice(catalogStart, catalogEnd)).not.toContain(loaded.body)
+    expect(system.endsWith('</skill>')).toBe(true)
+    expect(system.match(/<工具组目录>/g)).toHaveLength(1)
+    expect(system).not.toContain('工具组目录：')
+  })
+
   it('refreshes only enabled confirmed memories before the next inference in the same run', async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-memory-prompt-'))
     const sqlite = new SqliteCore(path.join(directory, 'app.sqlite'))

@@ -27,6 +27,8 @@ export const en = {
     title: 'Long-term memory',
     preferences: 'Collaboration preferences',
     background: 'Project background',
+    preferencesPlaceholder: 'e.g. Lead with conclusions and keep answers concise.',
+    backgroundPlaceholder: 'e.g. Project goals, key facts, and lasting agreements.',
     preferencesHelp:
       'Lasting preferences for communication, wording, delivery formats, and collaboration.',
     backgroundHelp: 'Goals, important facts, and lasting agreements for ongoing projects.',

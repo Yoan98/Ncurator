@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { applyReviewTheme, monaco, reviewThemeFor } from '../workbench/monacoReview'
+import 'monaco-editor/editor/contrib/placeholderText/browser/placeholderText.contribution.js'
 import { useAppearance } from '../../contexts/AppearanceContext'
 import { t } from '../../i18n'
 
@@ -14,6 +15,7 @@ export default function MemoryTextEditor({
   pending,
   active,
   label,
+  placeholder,
   onChange
 }: {
   text: string
@@ -21,6 +23,7 @@ export default function MemoryTextEditor({
   pending: boolean
   active: boolean
   label: string
+  placeholder: string
   onChange: (text: string, previous: string) => void
 }) {
   const host = useRef<HTMLDivElement>(null)
@@ -30,14 +33,15 @@ export default function MemoryTextEditor({
   const modified = useRef<monaco.editor.ITextModel | null>(null)
   const suppress = useRef(false)
   const scrollTop = useRef(0)
-  const latest = useRef({ text, confirmed, pending, active, onChange })
+  const latest = useRef({ text, confirmed, pending, active, placeholder, onChange })
   useLayoutEffect(() => {
-    latest.current = { text, confirmed, pending, active, onChange }
-  }, [text, confirmed, pending, active, onChange])
+    latest.current = { text, confirmed, pending, active, placeholder, onChange }
+  }, [text, confirmed, pending, active, placeholder, onChange])
   const appearance = useAppearance()
   const theme = useRef(appearance.resolved)
   const [markers, setMarkers] = useState<Marker[]>([])
   const [viewport, setViewport] = useState({ top: 0, height: 100 })
+  const [contentHeight, setContentHeight] = useState(64)
   const refreshRail = useRef<() => void>(() => undefined)
 
   useEffect(() => {
@@ -91,7 +95,12 @@ export default function MemoryTextEditor({
     diff.setModel({ original: left, modified: right })
     editor.current = diff
     const edit = diff.getModifiedEditor()
+    edit.updateOptions({
+      placeholder:
+        latest.current.pending && latest.current.confirmed ? undefined : latest.current.placeholder
+    })
     const updateRail = (): void => {
+      if (latest.current.active) setContentHeight(Math.max(64, Math.ceil(edit.getContentHeight())))
       const height = Math.max(1, edit.getScrollHeight())
       const visibleHeight = edit.getLayoutInfo().height
       setViewport({
@@ -194,8 +203,9 @@ export default function MemoryTextEditor({
     }
     const baseline = pending ? confirmed : text
     if (left.getValue() !== baseline) left.setValue(baseline)
+    edit.updateOptions({ placeholder: pending && confirmed ? undefined : placeholder })
     refreshRail.current()
-  }, [text, confirmed, pending])
+  }, [text, confirmed, pending, placeholder])
   useLayoutEffect(() => {
     if (!active || !editor.current) return
     const savedTop = scrollTop.current
@@ -218,11 +228,13 @@ export default function MemoryTextEditor({
     edit.setScrollTop(ratio * edit.getScrollHeight() - edit.getLayoutInfo().height / 2)
   }
   return (
-    <div className="nc-memory-input" data-pending={pending}>
+    <div className="nc-memory-input" data-pending={pending} style={{ height: contentHeight }}>
       <div ref={host} className="nc-memory-editor" />
       <div
         ref={rail}
         className="nc-memory-rail"
+        data-overflow={viewport.height < 99.9}
+        aria-hidden={viewport.height >= 99.9}
         role="scrollbar"
         aria-label={t(($) => $.partnerMemory.scroll)}
         aria-orientation="vertical"

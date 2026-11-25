@@ -119,10 +119,11 @@ export const buildBrainSystemPrompt = (input: {
 
 ${renderLocalContextText(input.ctx)}
 
-工具组目录：
-${renderToolsetCatalog()}
-
 ${renderPartnerMemory(input.ctx)}
+
+<工具组目录>
+${renderToolsetCatalog()}
+</工具组目录>
 
 ${renderUserSkills(input.ctx, input.loadedSkills)}
 `.trim()

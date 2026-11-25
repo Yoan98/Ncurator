@@ -222,9 +222,10 @@ describe('user instruction skill runtime', () => {
     expect(state.skills.loadedSkillNames).toEqual(['a', 'b'])
     expect(orderedPrompt.indexOf('BODY_A')).toBeLessThan(orderedPrompt.indexOf('BODY_B'))
     expect(orderedPrompt.indexOf('<本机信息与文件约定>')).toBeLessThan(
-      orderedPrompt.indexOf('工具组目录：')
+      orderedPrompt.indexOf('<工具组目录>')
     )
-    expect(orderedPrompt.indexOf('工具组目录：')).toBeLessThan(orderedPrompt.indexOf('技能：'))
+    expect(orderedPrompt).toContain('</工具组目录>')
+    expect(orderedPrompt.indexOf('</工具组目录>')).toBeLessThan(orderedPrompt.indexOf('技能：'))
     expect(orderedPrompt).not.toContain('user:')
   })
 

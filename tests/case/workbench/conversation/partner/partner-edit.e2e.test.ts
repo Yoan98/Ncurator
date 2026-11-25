@@ -103,7 +103,64 @@ describe('workbench conversation e2e', () => {
             `${memorySelectors.panePrefix}-cooperation_preferences`
           )
           const preferenceInput = preferencePane.locator('.monaco-editor textarea').last()
+          const emptyPlaceholder = preferencePane.locator('.editor.modified .editorPlaceholder')
+          await emptyPlaceholder.waitFor({ state: 'visible' })
+          const placeholderText = await emptyPlaceholder.innerText()
+          const emptyHeight = await preferencePane
+            .locator('.nc-memory-input')
+            .evaluate((element) => element.getBoundingClientRect().height)
+          const emptyRailHidden = !(await preferencePane.locator('.nc-memory-rail').isVisible())
+          await runtime.captureScreenshot({
+            name: 'partner-memory-empty',
+            message: '紧凑的记忆空态、分类 placeholder，未溢出时隐藏滚动条。'
+          })
           await preferenceInput.focus()
+          const longMemory = Array.from(
+            { length: 30 },
+            (_, i) => `长期偏好${i + 1}：先给结论，再说明依据。`
+          ).join('\n')
+          await page.keyboard.insertText(longMemory)
+          await waitForPartnerMemory(
+            page,
+            created.id,
+            (snapshot) => snapshot.memories[0].confirmed === longMemory
+          )
+          await page.waitForFunction((id) => {
+            const input = document.querySelector<HTMLElement>(
+              `[data-testid="${id}"] .nc-memory-input`
+            )
+            return (
+              input &&
+              input.getBoundingClientRect().height > 300 &&
+              input.getBoundingClientRect().height <= 361
+            )
+          }, `${memorySelectors.panePrefix}-cooperation_preferences`)
+          const cappedHeight = await preferencePane
+            .locator('.nc-memory-input')
+            .evaluate((element) => element.getBoundingClientRect().height)
+          const longRailVisible = await preferencePane.locator('.nc-memory-rail').isVisible()
+          await page.keyboard.press('ControlOrMeta+a')
+          const mediumMemory = '第一行\n第二行\n第三行\n第四行'
+          await page.keyboard.insertText(mediumMemory)
+          await waitForPartnerMemory(
+            page,
+            created.id,
+            (snapshot) => snapshot.memories[0].confirmed === mediumMemory
+          )
+          await page.waitForFunction((id) => {
+            const input = document.querySelector<HTMLElement>(
+              `[data-testid="${id}"] .nc-memory-input`
+            )
+            return (
+              input &&
+              input.getBoundingClientRect().height > 100 &&
+              input.getBoundingClientRect().height < 200
+            )
+          }, `${memorySelectors.panePrefix}-cooperation_preferences`)
+          const mediumHeight = await preferencePane
+            .locator('.nc-memory-input')
+            .evaluate((element) => element.getBoundingClientRect().height)
+          await page.keyboard.press('ControlOrMeta+a')
           const memoryText = '简明表达，先给结论。'
           await page.keyboard.insertText(memoryText)
           await waitForPartnerMemory(
@@ -140,6 +197,9 @@ describe('workbench conversation e2e', () => {
           const backgroundPane = page.getByTestId(
             `${memorySelectors.panePrefix}-project_background`
           )
+          const backgroundPlaceholder = await backgroundPane
+            .locator('.editor.modified .editorPlaceholder')
+            .innerText()
           await backgroundPane.locator('.monaco-editor textarea').last().focus()
           await page.keyboard.insertText('持续开发桌面端')
           await waitForPartnerMemory(
@@ -176,6 +236,13 @@ describe('workbench conversation e2e', () => {
           })
           await trigger.click()
           return {
+            emptyHeight,
+            emptyRailHidden,
+            cappedHeight,
+            longRailVisible,
+            mediumHeight,
+            placeholderText,
+            backgroundPlaceholder,
             memoryDefaults,
             memorySnapshot,
             reopenedText,
@@ -191,7 +258,15 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.memoryDefaults.every(Boolean) &&
+            result.emptyHeight <= 90 &&
+              result.emptyRailHidden &&
+              result.cappedHeight <= 361 &&
+              result.longRailVisible &&
+              result.mediumHeight > result.emptyHeight &&
+              result.mediumHeight < result.cappedHeight &&
+              result.placeholderText.includes('先给结论') &&
+              result.backgroundPlaceholder.includes('项目目标') &&
+              result.memoryDefaults.every(Boolean) &&
               result.memoryDefaults.length === 2 &&
               result.memorySnapshot.memories[0].confirmed === '简明表达，先给结论。' &&
               result.memorySnapshot.memories[1].confirmed === '持续开发桌面端' &&

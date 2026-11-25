@@ -149,6 +149,11 @@ export default function PartnerMemoryPopover({ partnerId }: { partnerId: string 
                 pending={item.draft !== null}
                 active={open && tab === item.category}
                 label={label}
+                placeholder={
+                  item.category === 'cooperation_preferences'
+                    ? t(($) => $.partnerMemory.preferencesPlaceholder)
+                    : t(($) => $.partnerMemory.backgroundPlaceholder)
+                }
                 onChange={(text, previous) => memory.edit(item.category, text, previous)}
               />
             </Suspense>

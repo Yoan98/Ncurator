@@ -27,6 +27,8 @@ export const zh = {
     title: '长期记忆',
     preferences: '合作偏好',
     background: '项目背景',
+    preferencesPlaceholder: '例如：先给结论、表达简洁、使用简体中文',
+    backgroundPlaceholder: '例如：项目目标、重要事实和需要长期遵守的约定',
     preferencesHelp: '长期的沟通方式、表达偏好、交付格式和协作习惯。',
     backgroundHelp: '持续项目的目标、重要事实和长期约定。',
     help: '查看说明',
