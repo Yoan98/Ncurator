@@ -2,6 +2,7 @@ import type { ReviewLocation } from '../../../../shared/fileReview'
 import type { SuperDoc } from 'superdoc'
 import { t } from '../../i18n'
 import { message } from 'antd'
+import type { WordSourceParagraph } from './superDocReview'
 
 type WordView = {
   kind: 'docx'
@@ -76,6 +77,7 @@ export function wordParagraphs(container: HTMLElement) {
   return [...groups.values()]
 }
 export function captureWordView(container: HTMLElement, key: string, editor?: SuperDoc) {
+  if (!container.isConnected) return
   const top = container.getBoundingClientRect().top
   const anchorY = top + container.clientHeight / 2
   const paragraphs = [...container.querySelectorAll<HTMLElement>('.superdoc-page')]
@@ -96,6 +98,7 @@ export function captureWordView(container: HTMLElement, key: string, editor?: Su
         Math.abs((b.rect.top + b.rect.bottom) / 2 - anchorY)
     )[0]
   const element = visible?.el
+  if (!element) return
   const id = element?.dataset.paraId
   const fragments = id
     ? [
@@ -120,11 +123,34 @@ export function captureWordView(container: HTMLElement, key: string, editor?: Su
     zoomMode: editor?.ui.zoom.getSnapshot().mode
   })
 }
-export function restoreWordView(container: HTMLElement, key: string, editor: SuperDoc) {
+export async function restoreWordView(
+  container: HTMLElement,
+  key: string,
+  editor: SuperDoc,
+  source: WordSourceParagraph[] = [],
+  current: () => boolean = () => true
+) {
   const view = officeViews.get(key)
   if (view?.kind !== 'docx') return
   if (view.zoomMode === 'fit-width') editor.ui.zoom.setMode('fit-width')
   else if (view.zoom) editor.ui.zoom.set(view.zoom)
+  await new Promise(requestAnimationFrame)
+  if (!current()) return
+  const body = source.filter((p) => p.part === 'word/document.xml')
+  const matching = body.filter((p) => p.text === view.text)
+  const id =
+    body.find((p) => p.id === view.paragraphId && p.text === view.text)?.id ||
+    (matching.length === 1 ? matching[0].id : view.paragraphId)
+  if (id) {
+    await editor.activeEditor?.doc?.info({})
+    if (!current()) return
+    await editor.activeEditor?.pageMetrics?.revealBodyTarget({
+      paraId: id,
+      blockOffset: view.textOffset
+    })
+  }
+  await new Promise(requestAnimationFrame)
+  if (!current()) return
   const paragraphs = wordParagraphs(container)
   const paragraph =
     paragraphs.find((p) => p.id === view.paragraphId && p.text === view.text) ||
@@ -146,10 +172,13 @@ export function restoreWordView(container: HTMLElement, key: string, editor: Sup
     : view.scrollTop
   container.scrollLeft = view.scrollLeft
 }
-export function flashWordLocation(
+export async function flashWordLocation(
   container: HTMLElement,
-  target: Extract<ReviewLocation, { kind: 'docx' }>
-): boolean {
+  target: Extract<ReviewLocation, { kind: 'docx' }>,
+  editor?: SuperDoc,
+  source: WordSourceParagraph[] = [],
+  current: () => boolean = () => true
+): Promise<boolean> {
   const kind = /header/i.test(target.part)
     ? 'header'
     : /footer/i.test(target.part)
@@ -159,45 +188,78 @@ export function flashWordLocation(
         : /endnote/i.test(target.part)
           ? 'endnote'
           : 'body'
-  const paragraphs = wordParagraphs(container).filter((p) =>
-    kind === 'body' ? p.story === 'body' : p.story.toLowerCase().includes(kind)
-  )
+  const painted = wordParagraphs(container)
+  const paragraphs = source.length
+    ? source.filter((p) => p.part === target.part)
+    : painted.filter((p) =>
+        kind === 'body' ? p.story === 'body' : p.story.toLowerCase().includes(kind)
+      )
   const original = normalize(target.text),
     quote = normalize(target.quote || '')
   const candidates = paragraphs
     .flatMap((p, index) => {
       const text = normalize(p.text)
       const context =
-        Number(
-          Boolean(
-            target.previous &&
-            normalize(paragraphs[index - 1]?.text || '') === normalize(target.previous)
-          )
-        ) +
-        Number(
-          Boolean(
-            target.next && normalize(paragraphs[index + 1]?.text || '') === normalize(target.next)
-          )
-        )
+        target.previous || target.next
+          ? Number(normalize(paragraphs[index - 1]?.text || '') === normalize(target.previous)) +
+            Number(normalize(paragraphs[index + 1]?.text || '') === normalize(target.next))
+          : 0
       const exact = Boolean(original && text === original)
       const retained = Boolean(quote && text.includes(quote))
       if (!exact && !retained && context < 2) return []
       return [{ p, score: Number(exact) * 4 + Number(retained) * 2 + context, exact }]
     })
     .sort((a, b) => b.score - a.score)
-  const candidate = candidates[0]
+  let candidate = candidates[0]
+  if (!candidate && target.container && (target.previous || target.next)) {
+    const gaps = paragraphs.flatMap((p, index) => {
+      if (!target.next) {
+        return normalize(p.text) === normalize(target.previous) &&
+          paragraphs.slice(index + 1).every((after) => !normalize(after.text))
+          ? [{ p, score: 2, exact: false }]
+          : []
+      }
+      if (normalize(p.text) !== normalize(target.next)) return []
+      let previous = index - 1
+      while (previous >= 0 && !normalize(paragraphs[previous].text)) previous--
+      const confirmed = target.previous
+        ? previous >= 0 && normalize(paragraphs[previous].text) === normalize(target.previous)
+        : previous < 0
+      return confirmed ? [{ p, score: 2, exact: false }] : []
+    })
+    if (gaps.length === 1) candidate = gaps[0]
+  }
   if (!candidate || candidates[1]?.score === candidate.score) return false
-  const element = candidate.p.elements[0]
+  if (!normalize(candidate.p.text)) {
+    const index = paragraphs.indexOf(candidate.p)
+    const neighbor =
+      paragraphs.slice(index + 1).find((p) => normalize(p.text)) ||
+      paragraphs
+        .slice(0, index)
+        .reverse()
+        .find((p) => normalize(p.text))
+    if (neighbor) candidate = { ...candidate, p: neighbor, exact: false }
+  }
+  if (kind === 'body') {
+    await editor?.activeEditor?.doc?.info({})
+    if (!current()) return false
+    await editor?.activeEditor?.pageMetrics?.revealBodyTarget({ paraId: candidate.p.id })
+  }
+  await new Promise(requestAnimationFrame)
+  if (!current()) return false
+  const paragraph = wordParagraphs(container).find((p) => p.id === candidate.p.id)
+  if (!paragraph) return false
+  const element = paragraph.elements[0]
 
   let range: Range | undefined
   const rawQuote = target.quote || ''
-  const at = rawQuote ? candidate.p.text.indexOf(rawQuote) : -1
-  if (at >= 0 && candidate.p.text.indexOf(rawQuote, at + 1) < 0) {
+  const at = rawQuote ? paragraph.text.indexOf(rawQuote) : -1
+  if (at >= 0 && paragraph.text.indexOf(rawQuote, at + 1) < 0) {
     let offset = 0
     const current = document.createRange()
     let started = false,
       ended = false
-    for (const block of candidate.p.elements)
+    for (const block of paragraph.elements)
       for (const run of block.querySelectorAll('[data-run-id]')) {
         const walker = document.createTreeWalker(run, NodeFilter.SHOW_TEXT)
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -221,10 +283,10 @@ export function flashWordLocation(
   })
   const highlight = range ? new Highlight(range) : undefined
   if (highlight) CSS.highlights.set('ncurator-office-location', highlight)
-  for (const block of candidate.p.elements)
+  for (const block of paragraph.elements)
     block.setAttribute('data-office-location-highlight', highlight ? 'text' : 'block')
   setTimeout(() => {
-    candidate.p.elements.forEach((el) => el.removeAttribute('data-office-location-highlight'))
+    paragraph.elements.forEach((el) => el.removeAttribute('data-office-location-highlight'))
     if (highlight && CSS.highlights.get('ncurator-office-location') === highlight)
       CSS.highlights.delete('ncurator-office-location')
   }, 1500)

@@ -1,5 +1,6 @@
 import type { SuperDoc } from 'superdoc'
 import { createTextAdapter } from './textAdapter'
+import { POINTER_CLICK_THRESHOLD } from './types'
 
 function paintedCaret(container: HTMLElement, event: PointerEvent): Range | null {
   const elements = document.elementsFromPoint(event.clientX, event.clientY)
@@ -108,7 +109,16 @@ export function createWordSelectionAdapter(
           resolved.setEnd(b.startContainer, b.startOffset)
           return text.capture(event, resolved)
         }
-        if (!event.shiftKey) return null
+        const origin = pointers?.origin()
+        // A drag may finish in the whitespace after a shorter line. The editor still has
+        // a valid text selection; only a plain click should dismiss it without capturing.
+        if (
+          !event.shiftKey &&
+          (!origin ||
+            Math.hypot(event.clientX - origin.x, event.clientY - origin.y) <=
+              POINTER_CLICK_THRESHOLD)
+        )
+          return null
       }
       await new Promise(requestAnimationFrame)
       const selected = await editor?.activeEditor?.doc?.selection.current({ includeText: true })

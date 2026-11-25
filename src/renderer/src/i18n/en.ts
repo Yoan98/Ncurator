@@ -1131,7 +1131,20 @@ export const en = {
       'measurement-unit': 'Measurement unit',
       ruler: 'Show or hide ruler'
     },
+    wordStyles: {
+      normal: 'Normal',
+      heading: 'Heading {{value1}}',
+      title: 'Title',
+      subtitle: 'Subtitle',
+      quote: 'Quote',
+      intensequote: 'Intense Quote',
+      listparagraph: 'List Paragraph',
+      nospacing: 'No Spacing',
+      caption: 'Caption',
+      tocheading: 'TOC Heading'
+    },
     wordRibbon: {
+      allStyles: 'All styles',
       toolbar: 'Word toolbar',
       home: 'Home',
       insert: 'Insert',

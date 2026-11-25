@@ -153,6 +153,41 @@ describe('DOCX first/final net review', () => {
       reviewRuns(result.document).every((r) => r.xml.includes('w:bdr') && !r.xml.includes('E9F7EF'))
     ).toBe(true)
   })
+  it('keeps an unchanged complex hyperlink when baseline defaults are materialized', async () => {
+    const field =
+      '<w:p>' +
+      [
+        '<w:fldChar w:fldCharType="begin"/>',
+        '<w:instrText> HYPERLINK "https://example.com" </w:instrText>',
+        '<w:fldChar w:fldCharType="separate"/>',
+        '<w:t>https://example.com</w:t>',
+        '<w:fldChar w:fldCharType="end"/>'
+      ]
+        .map(
+          (xml) =>
+            '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="24"/></w:rPr>' +
+            xml +
+            '</w:r>'
+        )
+        .join('') +
+      '</w:p>'
+    const styles = (size: number) =>
+      `<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="${size}"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
+    const result = await compare(
+      field + p('delete this line') + p('tail'),
+      field + p('tail'),
+      { 'word/styles.xml': styles(24) },
+      { 'word/styles.xml': styles(26) }
+    )
+    const paragraph = result.document.getElementsByTagName('w:p')[0]
+    expect(paragraph.getElementsByTagName('w:instrText').length).toBe(1)
+    expect(
+      Array.from(paragraph.getElementsByTagName('*')).some((el) =>
+        ['inserted', 'deleted'].includes(el.getAttribute('ncr:change') || '')
+      )
+    ).toBe(false)
+    expect(storyText(result.document, true)[0]).toBe('https://example.com')
+  })
   it('does not split complex fields into visible characters', async () => {
     const field = (result: string) =>
       `<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>DATE</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>${result}</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`

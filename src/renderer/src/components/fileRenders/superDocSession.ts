@@ -1,5 +1,5 @@
 import 'superdoc/style.css'
-import { prepareSuperDocReview } from './superDocReview'
+import { prepareSuperDocDocument } from './superDocReview'
 import { t } from '../../i18n'
 import { createOfficeAutosave, type DocumentSaveStatus } from './officeAutosave'
 export type { DocumentSaveStatus } from './officeAutosave'
@@ -42,7 +42,8 @@ export async function openSuperDoc(
           }
         )
       : undefined
-  const review = events.review ? await prepareSuperDocReview(source) : undefined
+  const document = await prepareSuperDocDocument(source, events.review)
+  const review = events.review ? document : undefined
   let frame = 0
   const layout = () => {
     cancelAnimationFrame(frame)
@@ -59,7 +60,7 @@ export async function openSuperDoc(
   const { SuperDoc }: typeof import('superdoc') = await import(/* @vite-ignore */ moduleUrl)
   const editor = new SuperDoc({
     selector: host,
-    document: new File([review?.document ?? source], 'document.docx'),
+    document: new File([document.document], 'document.docx'),
     documentMode: writable ? 'editing' : 'viewing',
     ui: {
       toolbar: false,
@@ -88,9 +89,15 @@ export async function openSuperDoc(
     allowSelectionInViewMode: true,
     telemetry: { enabled: false },
     onReady() {
-      ready = true
-      events.ready()
-      layout()
+      void (async () => {
+        // A review directory covers the whole immutable document, even when only
+        // the initial page window has been painted by the editor.
+        if (events.review) await editor.activeEditor?.doc?.info({})
+        if (disposed) return
+        ready = true
+        events.ready()
+        layout()
+      })().catch((error: Error) => events.status('error', error.message))
     },
     onContentError: ({ error }) => events.status('error', String(error)),
     onException(payload) {
@@ -123,6 +130,8 @@ export async function openSuperDoc(
         .catch(() => undefined)
     },
     editor,
+    paragraphs: document.paragraphs,
+    reviewMarkers: document.markers,
     writable
   }
 }

@@ -178,7 +178,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   }, [draftValue])
 
   useLayoutEffect(() => {
-    if (editorRef.current) syncComposerTokens(editorRef.current, draftValue.contentNodes)
+    if (editorRef.current)
+      syncComposerTokens(
+        editorRef.current,
+        draftValue.contentNodes,
+        onPreviewFile
+          ? (file) =>
+              onPreviewFile({ path: file.absolutePath, fileName: file.name, origin: 'preview' })
+          : undefined
+      )
   })
 
   const getInsertedScopeKeys = useCallback((): Set<string> => {

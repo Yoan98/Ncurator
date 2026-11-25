@@ -46,6 +46,8 @@ const INTRO_PARTS = [
     bold: false
   }
 ]
+const DELETED_LINE = '深页待删除：能明确区分转出地与转入地的不同作用'
+const DELETE_AFTER = '删除位置的后文：进入下一节多因素分析。'
 const CORE_NAMES = ['公开资料整理工作台', '文件归档式', '主题检索式', '协作校对式']
 
 const readPositioningParagraph = async (buffer: Buffer) => {
@@ -105,7 +107,30 @@ describe('workbench result e2e', () => {
             { type: 'paragraph', text: '本周结论：二期尾款126万元，需重点跟进。' },
             { type: 'paragraph', text: '三、风险与问题' },
             { type: 'paragraph', text: '风险段落：客户验收延期。' },
-            { type: 'paragraph', text: '其他内容保持不变。' }
+            { type: 'paragraph', text: '其他内容保持不变。' },
+            ...Array.from({ length: 8 }, (_, page) => [
+              { type: 'paragraph' as const, text: `远端审阅第${page + 1}页` },
+              ...Array.from({ length: 5 }, (_, row) => ({
+                type: 'paragraph' as const,
+                text:
+                  `第${page + 1}页第${row + 1}段：` +
+                  '用于验证长文全局差异标记，未编辑的正文应保持原样。'.repeat(4)
+              })),
+              ...(page === 6
+                ? [
+                    {
+                      type: 'paragraph' as const,
+                      text: '删除位置的前文：学生能用推力与拉力解释迁移。'
+                    },
+                    { type: 'paragraph' as const, text: DELETED_LINE },
+                    { type: 'paragraph' as const, text: '' },
+                    { type: 'paragraph' as const, text: DELETE_AFTER }
+                  ]
+                : [
+                    { type: 'paragraph' as const, text: '' },
+                    { type: 'paragraph' as const, text: '' }
+                  ])
+            ]).flat()
           ])
           const initial = await fs.readFile(targetPath),
             zip = await JSZip.loadAsync(initial),
@@ -142,6 +167,17 @@ describe('workbench result e2e', () => {
             run.appendChild(text)
             intro.appendChild(run)
           }
+          for (const paragraph of Array.from(doc.getElementsByTagNameNS(W, 'p'))) {
+            if (!(paragraph.textContent || '').startsWith('远端审阅第')) continue
+            const props = doc.createElementNS(W, 'w:pPr')
+            props.appendChild(doc.createElementNS(W, 'w:pageBreakBefore'))
+            paragraph.insertBefore(props, paragraph.firstChild)
+          }
+          const link = new DOMParser().parseFromString(
+            `<w:p xmlns:w="${W}"><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> HYPERLINK "https://example.com/unchanged" </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>https://example.com/unchanged</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`,
+            'application/xml'
+          ).documentElement
+          intro.parentNode!.insertBefore(doc.importNode(link, true), intro)
           const stylesDoc = await readReviewPart(initial, 'word/styles.xml')
           const inherited = new DOMParser().parseFromString(
             `<w:styles xmlns:w="${W}">
@@ -189,7 +225,7 @@ describe('workbench result e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请直接修改我刚选中的 sample-edit.docx。精简“本产品”开头的产品定位段落，保留产品名称、三种工作模式名称、核心概念和原有格式。将完整的“风险段落：客户验收延期。”移到“日期”之后、“本周结论”之前；将本周结论中的126改为128；将“重点跟进”加粗；另将“其他内容”四个字加粗，保留该段已有字体颜色和黄色底色；其余文字与格式保留。在文末新增一段：“Workbench apply marker ${MARKER}”。完成后告诉我已写回。`
+            `请直接修改我刚选中的 sample-edit.docx。精简“本产品”开头的产品定位段落，保留产品名称、三种工作模式名称、核心概念和原有格式。将完整的“风险段落：客户验收延期。”移到“日期”之后、“本周结论”之前；将本周结论中的126改为128；将“重点跟进”加粗；另将“其他内容”四个字加粗，保留该段已有字体颜色和黄色底色；删除完整的“${DELETED_LINE}”这一段，保留前后文及其他空段。其余文字与格式保留。在文末新增一段：“Workbench apply marker ${MARKER}”。完成后告诉我已写回。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
@@ -236,11 +272,7 @@ describe('workbench result e2e', () => {
             state: 'visible',
             timeout: 30_000
           })
-          await getWorkbenchLocator(page, workbenchSelectors.applyPanel)
-            .locator('.superdoc-page [data-run-id]')
-            .filter({ hasText: MARKER })
-            .first()
-            .waitFor({ state: 'visible', timeout: 30_000 })
+          await page.getByTestId(workbenchSelectors.docxLoading).waitFor({ state: 'hidden' })
           const artifact = evidence.events.find(
             (event) =>
               event.type === 'file_artifact' && event.fileName === path.basename(targetPath)
@@ -254,6 +286,23 @@ describe('workbench result e2e', () => {
           )
           if (!reviewPath) throw new Error('Missing historical Word document')
           const fixedReview = await fs.readFile(reviewPath)
+          const linkReview = (await readReviewPart(fixedReview)).getElementsByTagNameNS(W, 'p')
+          const linkParagraphs = Array.from(linkReview).filter((p) =>
+            (p.textContent || '').includes('https://example.com/unchanged')
+          )
+          expect(linkParagraphs).toHaveLength(1)
+          expect(
+            Array.from(linkParagraphs[0].getElementsByTagNameNS(W, 't'))
+              .map((n) => n.textContent)
+              .join('')
+          ).toBe('https://example.com/unchanged')
+          expect(
+            Array.from(linkParagraphs[0].getElementsByTagName('*')).some((n) =>
+              ['inserted', 'deleted'].includes(
+                n.getAttributeNS('urn:ncurator:docx-review', 'change') || ''
+              )
+            )
+          ).toBe(false)
           const commentsPart = await (await JSZip.loadAsync(fixedReview))
             .file('word/comments.xml')
             ?.async('text')
@@ -279,8 +328,76 @@ describe('workbench result e2e', () => {
               message: '历史审核只提供查看操作，没有文字编辑和撤销入口。'
             }
           )
-          await readOnly.click()
+          await readOnly.click({ position: { x: 10, y: 10 } })
           await page.keyboard.insertText('历史审核只读')
+          const documentModeToggle = getWorkbenchLocator(
+            page,
+            workbenchSelectors.documentModeToggle
+          )
+          const rail = page.getByTestId(workbenchSelectors.docxOverview)
+          const deepMarker = rail.locator('button[data-kinds~="deleted"]').last()
+          await deepMarker.waitFor({ state: 'visible' })
+          await expect.poll(() => page.locator('.nc-docx-statusbar').innerText()).toMatch(/共 9 页/)
+          const globalMarker = await deepMarker.evaluate((el) => ({
+            top: el.getBoundingClientRect().top - el.parentElement!.getBoundingClientRect().top,
+            height: el.parentElement!.clientHeight
+          }))
+          expect(globalMarker.top / globalMarker.height).toBeGreaterThan(0.6)
+          // Read-only focus can scroll a few pixels; the document must still be at its opening viewport.
+          expect(
+            await page.locator('.docx-content').evaluate((el) => el.scrollTop / el.clientHeight)
+          ).toBeLessThan(0.1)
+          await deepMarker.click()
+          const deletion = page
+            .locator('.docx-content [data-review-region]')
+            .filter({ hasText: DELETED_LINE })
+            .last()
+          await deletion.waitFor({ state: 'visible' })
+          await page
+            .getByTestId(workbenchSelectors.docxOverviewFocus)
+            .first()
+            .waitFor({ state: 'detached' })
+          const reviewPoint = await deletion.evaluate(
+            (el) =>
+              el.getBoundingClientRect().top -
+              el.closest('.docx-content')!.getBoundingClientRect().top
+          )
+          for (let round = 0; round < 2; round++) {
+            await deletion.click()
+            await expect
+              .poll(() =>
+                getWorkbenchLocator(page, workbenchSelectors.documentModeTag).textContent()
+              )
+              .toBe('预览')
+            const located = page.locator('.docx-content [data-office-location-highlight]').first()
+            await located.waitFor({ state: 'visible' })
+            expect(await located.innerText()).toContain(DELETE_AFTER)
+            expect(
+              await located.evaluate((el) => {
+                const target = el.getBoundingClientRect(),
+                  viewport = el.closest('.docx-content')!.getBoundingClientRect()
+                return target.top >= viewport.top - 1 && target.bottom <= viewport.bottom + 1
+              })
+            ).toBe(true)
+            await documentModeToggle.click()
+            await page.getByTestId(workbenchSelectors.docxLoading).waitFor({ state: 'hidden' })
+            await deletion.waitFor({ state: 'visible' })
+            await expect
+              .poll(async () =>
+                Math.abs(
+                  (await deletion.evaluate(
+                    (el) =>
+                      el.getBoundingClientRect().top -
+                      el.closest('.docx-content')!.getBoundingClientRect().top
+                  )) - reviewPoint
+                )
+              )
+              .toBeLessThan(4)
+          }
+          await runtime.captureScreenshot({
+            name: 'deep-deletion-review-return',
+            message: '远端删除差异在首次加载即有标记，点击定位前后文，返回审核恢复原文位置'
+          })
           await assertDocxReviewOverview(runtime)
           const reviewVisual = await getWorkbenchLocator(
             page,
@@ -394,10 +511,6 @@ describe('workbench result e2e', () => {
           const applyPanelText = (
             (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
           ).trim()
-          const documentModeToggle = getWorkbenchLocator(
-            page,
-            workbenchSelectors.documentModeToggle
-          )
           const documentModeTag = getWorkbenchLocator(page, workbenchSelectors.documentModeTag)
           const initialToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const initialModeTag = (await documentModeTag.textContent())?.trim()

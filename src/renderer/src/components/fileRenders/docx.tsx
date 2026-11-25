@@ -137,17 +137,34 @@ export const DocxPreview = ({
           ready() {
             if (active) {
               openedReady = true
-              setRenderedKey(renderKey)
               setRenderRevision((n) => n + 1)
               requestAnimationFrame(() =>
-                requestAnimationFrame(() => {
+                requestAnimationFrame(async () => {
                   const editor = session.current?.editor
                   if (!active || !editor) return
-                  restoreWordView(container, viewKey, editor)
+                  await restoreWordView(
+                    container,
+                    viewKey,
+                    editor,
+                    session.current?.paragraphs,
+                    () => active
+                  )
+                  if (!active) return
                   if (anchorName) scrollToAnchor(container, anchorName)
                   restored = true
+                  setRenderedKey(renderKey)
                   const target = officeViews.consume(viewKey, location)
-                  if (target?.kind === 'docx' && !flashWordLocation(container, target))
+                  if (
+                    target?.kind === 'docx' &&
+                    !(await flashWordLocation(
+                      container,
+                      target,
+                      editor,
+                      session.current?.paragraphs,
+                      () => active
+                    )) &&
+                    active
+                  )
                     message.info(t(($) => $.editors.changeNotFound))
                 })
               )
@@ -291,6 +308,9 @@ export const DocxPreview = ({
             mode={currentDocument.metadata.docxOverview}
             revision={ready ? renderRevision : 0}
             references={references}
+            editor={ready ? session.current?.editor : undefined}
+            reviewMarkers={session.current?.reviewMarkers}
+            paragraphs={session.current?.paragraphs}
           />
         ) : null}
         {saveStatus === 'saving' && (

@@ -1,7 +1,10 @@
 import { t } from '../../i18n'
+import { message } from 'antd'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { workbenchSelectors } from '../../testing/selectors'
+import type { SuperDoc } from 'superdoc'
+import type { WordReviewMarker, WordSourceParagraph } from './superDocReview'
 import type { SelectionRect } from './selection/floatingLayout'
 import type { SelectionTarget } from './selection/types'
 
@@ -11,6 +14,8 @@ type Target = {
   kind: MarkerKind
   label: string
   rects: () => SelectionRect[]
+  overviewRects?: () => SelectionRect[]
+  reveal?: () => Promise<void>
 }
 type Marker = { key: string; top: number; bottom: number; targets: Target[] }
 type Scrollbar = { top: number; height: number }
@@ -48,9 +53,14 @@ function measureScrollbar(container: HTMLElement, height: number): Scrollbar | n
   }
 }
 
-function reviewTargets(container: HTMLElement): Target[] {
-  return [...container.querySelectorAll<HTMLElement>('[data-docx-change]')].flatMap(
-    (element, index) => {
+function reviewTargets(
+  container: HTMLElement,
+  editor?: SuperDoc,
+  markers: WordReviewMarker[] = [],
+  paragraphs: WordSourceParagraph[] = []
+): Target[] {
+  const painted = [...container.querySelectorAll<HTMLElement>('[data-docx-change]')].flatMap(
+    (element, index): Target[] => {
       const kind = element.dataset.docxChange
       if (kind !== 'inserted' && kind !== 'deleted' && kind !== 'formatted') return []
       // A marked paragraph/table already includes same-kind children; keep other kinds.
@@ -65,6 +75,58 @@ function reviewTargets(container: HTMLElement): Target[] {
       ]
     }
   )
+  if (!markers.length) return painted
+  const body = paragraphs.filter((p) => p.part === 'word/document.xml')
+  const paintedRects = (id: string) =>
+    [...container.querySelectorAll<HTMLElement>(`[data-review-region="${CSS.escape(id)}"]`)]
+      .flatMap((el) => [...el.getClientRects()])
+      .filter((r) => r.width > 0 && r.height > 0)
+  return markers.map(
+    (marker): Target => ({
+      id: marker.id,
+      kind: marker.kind,
+      label: changeLabels[marker.kind],
+      reveal: async () => {
+        await editor?.activeEditor?.pageMetrics?.revealBodyTarget({ paraId: marker.paragraphId })
+        await new Promise(requestAnimationFrame)
+      },
+      rects: () => paintedRects(marker.id),
+      overviewRects: () => {
+        const rects = paintedRects(marker.id)
+        if (rects.length) return rects
+        const metrics = editor?.activeEditor?.pageMetrics
+        const index = metrics?.pageIndexForBodyTarget({ paraId: marker.paragraphId })
+        const pages = metrics?.getSnapshot().pages || []
+        const page = index == null ? undefined : pages[index]
+        const firstElement = container.querySelector<HTMLElement>('.superdoc-page')
+        const first = firstElement?.getBoundingClientRect()
+        const firstPage = pages[Number(firstElement?.dataset.pageIndex || 0)]
+        const bodyIndex = body.findIndex((p) => p.id === marker.paragraphId)
+        if (!page && bodyIndex < 0) return []
+        // Unpainted changes remain in the global directory. Page metrics take over
+        // as pagination settles; painted fragments provide the precise range.
+        const top =
+          page && first
+            ? first.top -
+              (firstPage?.viewport.yPx || 0) +
+              page.viewport.yPx +
+              page.base.marginTopPx * (metrics?.getSnapshot().zoom.scale || 1)
+            : container.getBoundingClientRect().top -
+              container.scrollTop +
+              (bodyIndex / Math.max(1, body.length)) * container.scrollHeight
+        return [
+          {
+            top,
+            bottom: top + 1,
+            left: first?.left || 0,
+            right: (first?.left || 0) + 1,
+            width: 1,
+            height: 1
+          }
+        ]
+      }
+    })
+  )
 }
 
 function measureMarkers(targets: Target[], container: HTMLElement, height: number): Marker[] {
@@ -72,7 +134,9 @@ function measureMarkers(targets: Target[], container: HTMLElement, height: numbe
   const scale = height / Math.max(1, container.scrollHeight)
   const items = targets
     .flatMap((target) => {
-      const rects = target.rects().filter((rect) => rect.width > 0 && rect.height > 0)
+      const rects = (target.overviewRects?.() || target.rects()).filter(
+        (rect) => rect.width > 0 && rect.height > 0
+      )
       if (!rects.length) return []
       const start = Math.min(...rects.map((r) => r.top)) - origin + container.scrollTop
       const end = Math.max(...rects.map((r) => r.bottom)) - origin + container.scrollTop
@@ -112,15 +176,22 @@ export default function DocxOverviewRuler({
   container,
   mode,
   revision,
-  references
+  references,
+  editor,
+  reviewMarkers,
+  paragraphs
 }: {
   container: HTMLDivElement | null
   mode: 'references' | 'changes'
   revision: number
   references: SelectionTarget[]
+  editor?: SuperDoc
+  reviewMarkers?: WordReviewMarker[]
+  paragraphs?: WordSourceParagraph[]
 }) {
   const rail = useRef<HTMLDivElement>(null)
   const cycles = useRef(new Map<string, number>())
+  const navigation = useRef({ sequence: 0 })
   const gesture = useRef<ScrollGesture | null>(null)
   const [markers, setMarkers] = useState<Marker[]>([])
   const [scrollbar, setScrollbar] = useState<Scrollbar | null>(null)
@@ -133,6 +204,10 @@ export default function DocxOverviewRuler({
     cycles.current.clear()
     gesture.current = null
     setDragging(false)
+    const pending = navigation.current
+    return () => {
+      pending.sequence++
+    }
   }, [container, mode])
 
   useEffect(() => {
@@ -143,7 +218,7 @@ export default function DocxOverviewRuler({
     }
     let targets =
       mode === 'changes'
-        ? reviewTargets(container)
+        ? reviewTargets(container, editor, reviewMarkers, paragraphs)
         : [...references]
             .sort((a, b) => {
               const first = a.geometry.ranges?.[0],
@@ -185,7 +260,7 @@ export default function DocxOverviewRuler({
     }
     observeContent()
     const mutations = new MutationObserver(() => {
-      if (mode === 'changes') targets = reviewTargets(container)
+      if (mode === 'changes') targets = reviewTargets(container, editor, reviewMarkers, paragraphs)
       observeContent()
       schedule()
     })
@@ -201,8 +276,10 @@ export default function DocxOverviewRuler({
     void document.fonts.ready.then(() => {
       if (!cancelled) schedule()
     })
+    const stopMetrics = editor?.activeEditor?.pageMetrics?.subscribe(schedule)
     measure()
     return () => {
+      stopMetrics?.()
       cancelled = true
       cancelAnimationFrame(frame)
       resize.disconnect()
@@ -211,7 +288,7 @@ export default function DocxOverviewRuler({
       container.removeEventListener('scroll', updateScrollbar)
       document.fonts.removeEventListener('loadingdone', schedule)
     }
-  }, [container, mode, revision, references])
+  }, [container, mode, revision, references, editor, reviewMarkers, paragraphs])
 
   useEffect(() => {
     const element = rail.current
@@ -259,11 +336,19 @@ export default function DocxOverviewRuler({
     }
   }, [active, container])
 
-  const activate = (marker: Marker) => {
+  const activate = async (marker: Marker) => {
     if (!container) return
     const index = cycles.current.get(marker.key) || 0
     const target = marker.targets[index % marker.targets.length]
     cycles.current.set(marker.key, index + 1)
+    const request = ++navigation.current.sequence
+    try {
+      await target.reveal?.()
+    } catch {
+      if (request === navigation.current.sequence) message.info(t(($) => $.editors.changeNotFound))
+      return
+    }
+    if (request !== navigation.current.sequence || !container.isConnected) return
     const rects = target.rects().filter((rect) => rect.width > 0 && rect.height > 0)
     if (!rects.length) return
     const top = Math.min(...rects.map((r) => r.top))

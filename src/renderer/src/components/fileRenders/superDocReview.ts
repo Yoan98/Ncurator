@@ -4,6 +4,12 @@ const word = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const word14 = 'http://schemas.microsoft.com/office/word/2010/wordml'
 const review = 'urn:ncurator:docx-review'
 
+export type WordSourceParagraph = { id: string; part: string; text: string }
+export type WordReviewMarker = {
+  id: string
+  kind: 'inserted' | 'deleted' | 'formatted'
+  paragraphId: string
+}
 type Marker = { id: string; kind: string }
 type Paragraph = {
   block?: Marker
@@ -23,12 +29,15 @@ function nearestMarker(element: Element, stop?: Element): Marker | undefined {
   return undefined
 }
 
-/** Only the read-only import receives generated paragraph IDs. The historical package stays byte-exact. */
-export async function prepareSuperDocReview(source: Blob) {
+/** Paragraph IDs belong to the render import; opening never exports or changes the file on disk. */
+export async function prepareSuperDocDocument(source: Blob, isReview: boolean) {
   const zip = await JSZip.loadAsync(await source.arrayBuffer())
   const paragraphs = new Map<string, Paragraph>()
+  const sourceParagraphs: WordSourceParagraph[] = []
+  const markers = new Map<string, WordReviewMarker>()
   const used = new Set<string>()
   let sequence = 0x60000000
+  let assignedIds = false
   for (const part of Object.values(zip.files)) {
     if (!/^word\/(document|header[^/]*|footer[^/]*|footnotes|endnotes)\.xml$/.test(part.name))
       continue
@@ -40,8 +49,62 @@ export async function prepareSuperDocReview(source: Blob) {
           id = (sequence++).toString(16).toUpperCase()
         } while (used.has(id))
         p.setAttributeNS(word14, 'w14:paraId', id)
+        assignedIds = true
       }
       used.add(id)
+      sourceParagraphs.push({
+        id,
+        part: part.name,
+        text: Array.from(p.getElementsByTagNameNS(word, 't'))
+          .map((n) => n.textContent || '')
+          .join('')
+      })
+      if (!isReview) continue
+      for (const el of [p, ...Array.from(p.getElementsByTagName('*'))]) {
+        const marker = nearestMarker(el)
+        let owner: Element | null = el
+        while (owner && !owner.getAttributeNS(review, 'region')) owner = owner.parentElement
+        // Field instructions and delimiter runs have no painted range. Their
+        // displayed result (or enclosing paragraph) supplies the visible marker.
+        if (
+          owner?.localName === 'r' &&
+          !Array.from(owner.getElementsByTagNameNS(word, '*')).some(
+            (n) =>
+              (n.localName === 't' && Boolean(n.textContent)) ||
+              [
+                'drawing',
+                'pict',
+                'object',
+                'tab',
+                'br',
+                'cr',
+                'footnoteReference',
+                'endnoteReference'
+              ].includes(n.localName)
+          )
+        )
+          continue
+        let parent = owner?.parentElement
+        let duplicate = false
+        while (parent) {
+          if (parent.getAttributeNS(review, 'change') === marker?.kind) {
+            duplicate = true
+            break
+          }
+          parent = parent.parentElement
+        }
+        if (
+          marker &&
+          !duplicate &&
+          ['inserted', 'deleted', 'formatted'].includes(marker.kind) &&
+          !markers.has(marker.id)
+        )
+          markers.set(marker.id, {
+            id: marker.id,
+            kind: marker.kind as WordReviewMarker['kind'],
+            paragraphId: id
+          })
+      }
       const paragraph: Paragraph = { block: nearestMarker(p), runs: [] }
       let offset = 0
       for (const run of p.getElementsByTagNameNS(word, 'r')) {
@@ -107,5 +170,10 @@ export async function prepareSuperDocReview(source: Blob) {
       if (block.dataset.layoutStory === 'body') offsets.set(id, offset)
     }
   }
-  return { document: await zip.generateAsync({ type: 'blob' }), decorate }
+  return {
+    document: assignedIds ? await zip.generateAsync({ type: 'blob' }) : source,
+    decorate,
+    paragraphs: sourceParagraphs,
+    markers: [...markers.values()]
+  }
 }

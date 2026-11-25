@@ -153,7 +153,8 @@ const updateSelectionToken = (token: HTMLElement, selection: DocumentSelectionNo
 /** Refresh atomic token visuals and metadata without replacing editable content or the caret. */
 export const syncComposerTokens = (
   editor: HTMLElement,
-  contentNodes: ChatMessageContentNode[]
+  contentNodes: ChatMessageContentNode[],
+  onOpenFile?: (file: Extract<SelectedReference, { kind: 'file' }>) => void
 ): void => {
   const references = new Map(
     chatReferences(contentNodes).map((scope) => [getScopeKey(scope), scope])
@@ -162,7 +163,25 @@ export const syncComposerTokens = (
     const scope = references.get(token.dataset.scopeKey || '') || referenceElements.get(token)
     if (!scope) continue
     referenceElements.set(token, scope)
-    token.className = REFERENCE_TOKEN_CLASS_NAME
+    const openable = scope.kind === 'file' && Boolean(onOpenFile)
+    token.className =
+      REFERENCE_TOKEN_CLASS_NAME + (openable ? ' cursor-pointer hover:underline' : '')
+    if (scope.kind === 'file' && onOpenFile) {
+      token.setAttribute('role', 'button')
+      token.tabIndex = 0
+      token.onmousedown = (event) => event.preventDefault()
+      token.onclick = () => onOpenFile(scope)
+      token.onkeydown = (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        event.stopPropagation()
+        token.click()
+      }
+    } else {
+      token.removeAttribute('role')
+      token.removeAttribute('tabindex')
+      token.onmousedown = token.onclick = token.onkeydown = null
+    }
     const markup = referenceIconMarkup(scope)
     const icon = token.firstElementChild
     if (icon?.outerHTML === markup) continue

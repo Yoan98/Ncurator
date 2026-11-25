@@ -1,6 +1,6 @@
 import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { describe, it } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
@@ -86,6 +86,28 @@ describe('workbench conversation e2e', () => {
           await createPartnerThroughWorkbenchUi(page, setup.workspaceName)
           await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
           const afterFile = await getWorkbenchReferenceTokenTexts(page)
+          const composer = getWorkbenchLocator(page, workbenchSelectors.input)
+          const fileToken = composer
+            .locator('[data-role="scope-token"]')
+            .filter({ hasText: 'sample-edit.docx' })
+          await appendWorkbenchInputText(page, '保留这段草稿 ')
+          const draftBeforeOpen = await composer.innerText()
+          await fileToken.click()
+          await page.locator('.superdoc-page [data-para-id]').first().waitFor({ state: 'visible' })
+          const fileTabs = page
+            .getByTestId(workbenchSelectors.resourceTabBar)
+            .locator(`[data-testid^="${workbenchSelectors.resourceTabPrefix}-"]`)
+            .filter({ hasText: 'sample-edit' })
+          await expect.poll(() => fileTabs.count()).toBe(1)
+          for (const key of ['Enter', 'Space']) {
+            await fileToken.press(key)
+            await expect.poll(() => fileTabs.count()).toBe(1)
+            expect(await composer.innerText()).toBe(draftBeforeOpen)
+          }
+          expect(await fileToken.getAttribute('role')).toBe('button')
+          expect(
+            await page.locator(`[data-testid^="${workbenchSelectors.userMessagePrefix}-"]`).count()
+          ).toBe(0)
           await insertWorkbenchReferenceToken(page, '工作')
           const afterDirectory = await getWorkbenchReferenceTokenTexts(page)
 
@@ -101,7 +123,9 @@ describe('workbench conversation e2e', () => {
             { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
           )
           const mentionPanelText = ((await mentionPanel.textContent()) || '').trim()
-          const fileGroupVisible = await mentionPanel.getByText('文件').isVisible()
+          const workspaceGroupVisible = await mentionPanel
+            .getByRole('group', { name: path.basename(setup.workspace.rootPath), exact: true })
+            .isVisible()
           const webGroupVisible = await mentionPanel.getByText('网页').isVisible()
           const legacyDirectoryGroupVisible = await mentionPanel
             .getByText('目录')
@@ -185,6 +209,27 @@ describe('workbench conversation e2e', () => {
             .click()
           const afterWeb = await getWorkbenchReferenceTokenTexts(page)
           const tokensBeforeSubmit = await getWorkbenchReferenceTokenTexts(page)
+          const tabsBeforeNonFiles = await page
+            .getByTestId(workbenchSelectors.resourceTabBar)
+            .locator(`[data-testid^="${workbenchSelectors.resourceTabPrefix}-"]`)
+            .count()
+          const draftWithReferences = await composer.innerText()
+          for (const name of ['工作', 'Workbench Web Fixture']) {
+            const token = composer.locator('[data-role="scope-token"]').filter({ hasText: name })
+            expect(await token.getAttribute('role')).toBeNull()
+            await token.click()
+            expect(await composer.innerText()).toBe(draftWithReferences)
+          }
+          expect(
+            await page
+              .getByTestId(workbenchSelectors.resourceTabBar)
+              .locator(`[data-testid^="${workbenchSelectors.resourceTabPrefix}-"]`)
+              .count()
+          ).toBe(tabsBeforeNonFiles)
+          await runtime.captureScreenshot({
+            name: 'file-mention-opens-common-preview',
+            message: '输入区文件引用打开右侧 Word 并保留全部草稿和引用'
+          })
           const composerReferenceIconKinds = await getWorkbenchLocator(
             page,
             workbenchSelectors.input
@@ -216,13 +261,28 @@ describe('workbench conversation e2e', () => {
           await createWorkbenchNewSession(page)
           const afterNewPartner = await getWorkbenchReferenceTokenTexts(page)
           const emptyPanelText = await waitForWorkbenchSearchScopeEmptyThroughUi(page)
+          await page.keyboard.press('Escape')
+          await insertWorkbenchReferenceToken(page, 'human-input.txt')
+          const textToken = composer
+            .locator('[data-role="scope-token"]')
+            .filter({ hasText: 'human-input.txt' })
+          await textToken.click()
+          await expect
+            .poll(() => page.getByTestId(workbenchSelectors.resourceTabBar).innerText())
+            .toContain('human-input')
+          await page.getByTestId(workbenchSelectors.plainTextEditor).waitFor({ state: 'visible' })
+          expect(await getWorkbenchReferenceTokenTexts(page)).toHaveLength(1)
+          await runtime.captureScreenshot({
+            name: 'text-mention-opens-common-preview',
+            message: '普通 TXT 文件引用同样打开通用文本编辑器'
+          })
 
           return {
             afterFile,
             afterDirectory,
             afterWeb,
             mentionPanelText,
-            fileGroupVisible,
+            workspaceGroupVisible,
             webGroupVisible,
             legacyDirectoryGroupVisible,
             legacyTypeTagVisible,
@@ -257,7 +317,7 @@ describe('workbench conversation e2e', () => {
               result.afterWeb.some(
                 (text) => text.includes('Workbench Web Fixture') || text.includes('127.0.0.1')
               ) &&
-              result.fileGroupVisible &&
+              result.workspaceGroupVisible &&
               result.webGroupVisible &&
               !result.legacyDirectoryGroupVisible &&
               !result.legacyTypeTagVisible &&
@@ -286,7 +346,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-reference-token-real-lifecycle',
               message:
-                '@ 参考资料应来自真实文件地址和全局网页；候选按文件/网页分组，索引后直接新增的文件无需检查更新也应出现并显示未索引；选择文件、目录、网页时应追加共存，同一资料不重复出现，删除后移除 token，新伙伴草稿为空，空候选给出提示，对齐 WB-SCOPE-001 至 WB-SCOPE-004。',
+                '@ 参考资料应来自真实文件地址和全局网页；候选按工作地址根及网页分组，索引后直接新增的文件无需检查更新也应出现并显示未索引；选择文件、目录、网页时应追加共存，同一资料不重复出现，删除后移除 token，新伙伴草稿为空，空候选给出提示，对齐 WB-SCOPE-001 至 WB-SCOPE-004。',
               data: result
             }
           )

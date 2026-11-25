@@ -1074,7 +1074,20 @@ export const zh = {
       'measurement-unit': '度量单位',
       ruler: '显示或隐藏标尺'
     },
+    wordStyles: {
+      normal: '正文',
+      heading: '标题 {{value1}}',
+      title: '标题',
+      subtitle: '副标题',
+      quote: '引用',
+      intensequote: '明显引用',
+      listparagraph: '列表段落',
+      nospacing: '无间距',
+      caption: '题注',
+      tocheading: '目录标题'
+    },
     wordRibbon: {
+      allStyles: '全部样式',
       toolbar: 'Word 工具栏',
       home: '开始',
       insert: '插入',

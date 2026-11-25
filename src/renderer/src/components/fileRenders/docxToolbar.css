@@ -113,6 +113,22 @@
 .nc-docx-size {
   width: 82px;
 }
+/* Popup width is independent of the compact fields, including space for its scrollbar. */
+.nc-docx-select-dropdown {
+  max-width: calc(100vw - 24px);
+}
+.nc-docx-select-dropdown .ant-select-item {
+  font-size: 12px;
+  padding-right: 24px;
+}
+.nc-docx-ribbon .ant-select-focused .ant-select-selector {
+  border-color: var(--notion-accent-blue) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--notion-accent-blue) 18%, transparent) !important;
+}
+.nc-docx-ribbon .ant-select-selection-search-input {
+  outline: none !important;
+  box-shadow: none !important;
+}
 .nc-docx-group-label {
   text-align: center;
   color: var(--notion-text-faint);
@@ -206,21 +222,49 @@
   display: flex;
   flex-direction: column;
 }
+.nc-docx-style-controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 60px;
+}
 .nc-docx-style-gallery {
   display: flex;
   flex: 1;
-  gap: 3px;
-  min-height: 30px;
-}
-.nc-docx-style-gallery button {
-  flex: 1;
   min-width: 0;
-  height: auto;
-  min-height: 28px;
+  gap: 3px;
+  height: 60px;
+}
+.nc-docx-ribbon .nc-docx-style-gallery button {
+  flex: 1;
+  min-width: 54px;
+  height: 60px;
+  padding: 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.nc-docx-ribbon .nc-docx-style-gallery button[aria-pressed='true'] {
+  border-color: var(--notion-line-strong);
+  background: var(--notion-surface);
+}
+.nc-docx-style-gallery button[data-style-preview='heading1'] {
+  font-size: 19px;
+  font-weight: 500;
+}
+.nc-docx-style-gallery button[data-style-preview='heading2'] {
+  font-size: 16px;
+  font-weight: 500;
+}
+.nc-docx-ribbon .nc-docx-style-more {
+  width: 26px;
+  min-width: 26px;
+  height: 60px;
+  padding: 0;
+}
 .nc-docx-style-select {
+  display: none;
   width: 100%;
   font-size: 12px;
 }
@@ -288,21 +332,26 @@
   background: var(--notion-page);
 }
 .nc-docx-statusbar .ant-select {
-  width: 72px;
+  width: 88px;
   font-size: 12px;
 }
 .nc-docx-statusbar .ant-select-selector {
   border-color: transparent !important;
   background: transparent !important;
 }
-@container (max-width: 850px) {
+@container (max-width: 740px) {
   .nc-docx-style-gallery {
     display: none;
   }
   .nc-docx-style-group {
     justify-content: center;
   }
+  .nc-docx-ribbon .nc-docx-style-more {
+    display: none;
+  }
   .nc-docx-style-select {
+    display: block;
+    width: 100%;
     max-width: 120px;
   }
 }
@@ -338,6 +387,9 @@
   }
 }
 @container (max-width: 420px) {
+  .nc-docx-style-controls {
+    min-height: 28px;
+  }
   .nc-docx-family {
     width: 118px;
   }
@@ -351,6 +403,7 @@
     display: none;
   }
   .nc-docx-style-select {
+    width: 100%;
     max-width: 100%;
   }
   .nc-docx-ribbon-home {

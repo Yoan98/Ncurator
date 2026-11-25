@@ -226,10 +226,25 @@ export const paragraphTokens = (paragraph: Element, context: DocumentContext): I
       } while (depth > 0 && i < children.length)
       i--
       tokens.push({
-        key: `field:${group.map((e) => canonical(e, context)).join('')}`,
+        key: `field:${group
+          .map((e) => {
+            const copy = e.cloneNode(true) as Element
+            // Run formatting may have been materialized while importing the baseline.
+            // Keep field identity separate from its effective visual formatting.
+            for (const props of Array.from(copy.getElementsByTagNameNS(W, 'rPr')))
+              props.parentNode?.removeChild(props)
+            return canonical(copy, context)
+          })
+          .join('')}`,
         text: '',
         fragments: group.map((node) => ({ node, wrappers: [] })),
-        format: ''
+        format: group
+          .flatMap((e) =>
+            e.localName === 'r'
+              ? [format(e, e.getElementsByTagNameNS(W, 't')[0]?.textContent || undefined)]
+              : []
+          )
+          .join('|')
       })
     } else visit(element, [])
   }

@@ -44,6 +44,17 @@ describe('Word toolbar', () => {
                 { type: 'paragraph', text: 'Case CASE case' },
                 { type: 'paragraph', text: '其他段落保留原样。' }
               ])
+              const file = path.join(root, name)
+              const zip = await JSZip.loadAsync(await fs.readFile(file))
+              const styles = await zip.file('word/styles.xml')!.async('string')
+              zip.file(
+                'word/styles.xml',
+                styles.replace(
+                  '</w:styles>',
+                  '<w:style w:type="paragraph" w:customStyle="1" w:styleId="TeamHeading"><w:name w:val="Team Heading"/><w:basedOn w:val="Normal"/></w:style></w:styles>'
+                )
+              )
+              await fs.writeFile(file, await zip.generateAsync({ type: 'nodebuffer' }))
               await fs.writeFile(path.join(root, '切换文件.txt'), '切换文件以重新打开 Word')
               if (process.platform !== 'win32') {
                 await fs.copyFile(path.join(root, name), path.join(root, '只读.docx'))
@@ -97,6 +108,56 @@ describe('Word toolbar', () => {
           }
           await open()
           await paragraph().click()
+          const assertDropdown = async (label: string, option: string, screenshot: string) => {
+            const input = toolbar.getByRole('combobox', { name: label, exact: true })
+            await toolbar.locator(label === '字体' ? '.nc-docx-family' : '.nc-docx-size').click()
+            const popup = page.locator('.nc-docx-select-dropdown:visible')
+            await popup.waitFor({ state: 'visible' })
+            await expect
+              .poll(() => popup.evaluate((el) => Number(getComputedStyle(el).opacity)))
+              .toBe(1)
+            expect(
+              await popup
+                .locator('.ant-select-item-option-content')
+                .evaluateAll((items) => items.every((el) => el.scrollWidth <= el.clientWidth + 1))
+            ).toBe(true)
+            await runtime.captureScreenshot({
+              name: screenshot,
+              message: `${label}完整列表及滚动条不遮挡文字`
+            })
+            await input.fill(option)
+            const item = page
+              .locator('.nc-docx-select-dropdown:visible .ant-select-item-option')
+              .filter({ hasText: option })
+              .first()
+            await item.waitFor({ state: 'visible' })
+            const bounds = await item.locator('.ant-select-item-option-content').evaluate((el) => {
+              const range = document.createRange()
+              range.selectNodeContents(el)
+              const text = range.getBoundingClientRect()
+              const box = el.getBoundingClientRect()
+              return {
+                fits: text.right <= box.right + 0.5,
+                scroll: el.scrollWidth,
+                width: el.clientWidth
+              }
+            })
+            expect(bounds.fits && bounds.scroll <= bounds.width + 1).toBe(true)
+            await input.press('Escape')
+            await popup.waitFor({ state: 'hidden' })
+          }
+          await assertDropdown('字体', 'Times New Roman', 'font-dropdown-full-label')
+          await assertDropdown('字号', '小五 (9)', 'size-dropdown-full-label')
+          const styleInput = toolbar.getByRole('combobox', { name: '段落样式', exact: true })
+          await toolbar.locator('.nc-docx-style-select').click()
+          await styleInput.fill('Team Heading')
+          await page
+            .locator('.nc-docx-select-dropdown:visible .ant-select-item-option-content')
+            .filter({ hasText: /^Team Heading$/ })
+            .waitFor({ state: 'visible' })
+          await styleInput.press('Escape')
+          await page.locator('.nc-docx-select-dropdown:visible').waitFor({ state: 'hidden' })
+          await expect.poll(async () => Buffer.compare(before, await fs.readFile(filePath))).toBe(0)
           // Get real glyph geometry, then select using a real mouse drag.
           const selectRange = async (target: Locator, length: number) => {
             await target.scrollIntoViewIfNeeded()
@@ -404,10 +465,10 @@ describe('Word toolbar', () => {
             .toBe(true)
           await paragraph().click()
           await toolbar.locator('.nc-docx-style-select').click()
-          await toolbar.getByRole('combobox', { name: '段落样式', exact: true }).fill('Heading 1')
+          await toolbar.getByRole('combobox', { name: '段落样式', exact: true }).fill('标题 1')
           await page
             .locator('.ant-select-dropdown:visible .ant-select-item-option')
-            .filter({ hasText: /heading 1|标题 ?1/i })
+            .filter({ hasText: '标题 1' })
             .first()
             .click()
           await expect.poll(async () => (await read()).paragraphs[0].style).toMatch(/heading1/i)
@@ -475,10 +536,10 @@ describe('Word toolbar', () => {
           const reopenedStyle = (await read()).paragraphs[0].style
           await paragraph().click()
           await toolbar.locator('.nc-docx-style-select').click()
-          await toolbar.getByRole('combobox', { name: '段落样式', exact: true }).fill('Heading 1')
+          await toolbar.getByRole('combobox', { name: '段落样式', exact: true }).fill('标题 1')
           await page
             .locator('.ant-select-dropdown:visible .ant-select-item-option')
-            .filter({ hasText: /heading 1|标题 ?1/i })
+            .filter({ hasText: '标题 1' })
             .first()
             .click()
           await expect.poll(async () => (await read()).paragraphs[0].style).toMatch(/heading1/i)
@@ -498,7 +559,7 @@ describe('Word toolbar', () => {
           // Drag the actual panel divider; common operations remain visible at each width.
           const shell = page.getByTestId(workbenchSelectors.contentPanelShell)
           await page.getByTestId(workbenchSelectors.sessionsToggle).click()
-          for (const width of [900, 520, 360]) {
+          for (const width of [900, 780, 520, 360, 900]) {
             // Its hit area is a pseudo-element on a zero-width divider, so
             // measure stable layout before driving the real mouse gesture.
             await page.getByTestId(workbenchSelectors.contentPanelResizer).evaluate(async (el) => {
@@ -534,10 +595,28 @@ describe('Word toolbar', () => {
                 )
               )
               .toBeLessThan(3)
-            if (width === 900)
-              await expect
-                .poll(() => toolbar.locator('.nc-docx-style-gallery button:visible').count())
-                .toBeGreaterThan(0)
+            if (width >= 780) {
+              const cards = toolbar.locator('.nc-docx-style-gallery button:visible')
+              await expect.poll(() => cards.count()).toBe(3)
+              expect(await cards.allTextContents()).toEqual(['正文', '标题 1', '标题 2'])
+              const sizes = await cards.evaluateAll((els) =>
+                els.map((el) => ({
+                  size: parseFloat(getComputedStyle(el).fontSize),
+                  height: el.getBoundingClientRect().height
+                }))
+              )
+              expect(sizes[1].size).toBeGreaterThan(sizes[0].size)
+              expect(sizes.every((s) => s.height >= 58)).toBe(true)
+              await click('全部样式')
+              await page
+                .getByRole('menuitem', { name: 'Team Heading', exact: true })
+                .waitFor({ state: 'visible' })
+              await page.keyboard.press('Escape')
+              await click('插入')
+              await click('开始')
+              expect(await cards.count()).toBe(3)
+            } else
+              expect(await toolbar.locator('.nc-docx-style-gallery button:visible').count()).toBe(0)
             for (const label of [
               '斜体',
               '下划线',

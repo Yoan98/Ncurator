@@ -8,7 +8,7 @@ import JSZip from 'jszip'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Page } from 'playwright'
-import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import { writeTestDocxFile, writeRichTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import { copyDocumentSelection } from '../../../../harness/e2e/documentSelection'
 import {
@@ -229,6 +229,24 @@ describe('workbench conversation e2e', () => {
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
             prepareWorkspace: async (root) => {
+              await writeRichTestDocxFile(root, '跨样式划选.docx', [
+                { type: 'paragraph', paragraph: { runs: [{ text: '下面是生成的案例：' }] } },
+                {
+                  type: 'heading',
+                  level: 1,
+                  paragraph: { runs: [{ text: '高中地理产业转移', bold: true }] }
+                },
+                {
+                  type: 'paragraph',
+                  paragraph: {
+                    runs: [
+                      { text: 'AI 主导的路径' },
+                      { text: '与说明', bold: true, color: '336699' }
+                    ]
+                  }
+                },
+                { type: 'heading', level: 2, paragraph: { runs: [{ text: '一、探究目标' }] } }
+              ])
               const filename = path.join(root, '工作/客户周会纪要.docx')
               const zip = await JSZip.loadAsync(await fs.readFile(filename))
               const xml = await zip.file('word/document.xml')!.async('string')
@@ -267,6 +285,34 @@ describe('workbench conversation e2e', () => {
                   ?.textContent
               }))
             )
+          await openDocxFile('跨样式划选.docx')
+          const mixedParagraphs = page.locator('.docx-content .superdoc-page [data-para-id]')
+          await expect.poll(() => mixedParagraphs.count()).toBe(4)
+          for (const backwards of [false, true]) {
+            await page.locator('.docx-content').click({ position: { x: 5, y: 5 } })
+            const first = await textPoint(page, 0, 0)
+            const last = await textPoint(page, 3, '一、探究目标'.length)
+            // Finish forward selection after the shorter heading, outside its text run.
+            const [from, to] = backwards ? [last, first] : [first, { ...last, x: last.x + 24 }]
+            await page.mouse.move(from.x, from.y)
+            await page.mouse.down()
+            await page.mouse.move(to.x, to.y, { steps: 16 })
+            await page.mouse.up()
+            await page.getByTestId('docx-selection-ai-reference').waitFor({ state: 'visible' })
+            await page.getByTestId('docx-selection-ai-reference').click()
+            await page.getByTestId('docx-selection-thought').fill('核对跨样式原文')
+            await page.getByTestId('docx-selection-save').click()
+            const selected = await readDraftSelections()
+            expect(selected[0].quote).toBe(
+              '下面是生成的案例：\n高中地理产业转移\nAI 主导的路径与说明\n一、探究目标'
+            )
+            expect(selected[0].thought).toBe('核对跨样式原文')
+            await runtime.captureScreenshot({
+              name: backwards ? 'mixed-style-backward' : 'mixed-style-line-end',
+              message: '跨正文、标题和加粗划选后可引用，原文及段落完整保留'
+            })
+            await composer.fill('')
+          }
           await openDocxFile('sample-edit.docx')
           await page
             .locator('.docx-content .superdoc-page [data-para-id]')

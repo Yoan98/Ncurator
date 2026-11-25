@@ -86,6 +86,14 @@ export default function DocxToolbar({
   const image = useRef<HTMLInputElement>(null)
   const text = labels()
   const ribbon = t(($) => $.editors.wordRibbon, { returnObjects: true })
+  const styleLabels = t(($) => $.editors.wordStyles, { returnObjects: true })
+  const styleName = (style: { name: string; builtin: boolean; custom: boolean }) => {
+    if (!style.builtin || style.custom) return style.name
+    const name = style.name.toLowerCase().replace(/\s/g, '')
+    const heading = /^heading([1-9])$/.exec(name)
+    if (heading) return t(($) => $.editors.wordStyles.heading, { value1: heading[1] })
+    return styleLabels[name as keyof typeof styleLabels] || style.name
+  }
   const alignment = t(($) => $.editors.wordAlignment, { returnObjects: true })
   const capture = () => {
     selection.current = editor?.ui.selection.getSnapshot().selectionTarget ?? null
@@ -278,7 +286,15 @@ export default function DocxToolbar({
   const styles = (catalog?.styles || quickStyles).filter(
     (style) => style.type === 'paragraph' || style.type === 'linked'
   )
-  const gallery = quickStyles.length ? quickStyles : styles
+  const preferredStyles = ['normal', 'heading1', 'heading2'].flatMap((name) => {
+    const style = styles.find(
+      (s) => s.builtin && !s.custom && s.name.toLowerCase().replace(/\s/g, '') === name
+    )
+    return style ? [style] : []
+  })
+  const gallery = [
+    ...new Map([...preferredStyles, ...quickStyles, ...styles].map((s) => [s.id, s])).values()
+  ]
   const styleState = editor?.ui.styles.getSnapshot()
   const inTable = Boolean(editor?.ui.tables.isInTable())
   const activeTab = tab === 'table' && !inTable ? 'home' : tab
@@ -356,6 +372,8 @@ export default function DocxToolbar({
                   size="small"
                   showSearch
                   optionFilterProp="label"
+                  popupMatchSelectWidth={260}
+                  popupClassName="nc-docx-select-dropdown"
                   className="nc-docx-family"
                   aria-label={text['font-family']}
                   placeholder={t(($) => $.editors.mixed)}
@@ -368,6 +386,8 @@ export default function DocxToolbar({
                   size="small"
                   showSearch
                   optionFilterProp="label"
+                  popupMatchSelectWidth={160}
+                  popupClassName="nc-docx-select-dropdown"
                   className="nc-docx-size"
                   aria-label={text['font-size']}
                   placeholder="—"
@@ -508,37 +528,69 @@ export default function DocxToolbar({
               <div className="nc-docx-group-label">{t(($) => $.editors.paragraph)}</div>
             </section>
             <section className="nc-docx-style-group" aria-label={text['linked-style']}>
-              <div className="nc-docx-style-gallery">
-                {gallery.slice(0, 3).map((style) => (
-                  <Tooltip key={style.id} title={style.name}>
-                    <button
-                      type="button"
-                      aria-label={style.name}
-                      aria-pressed={styleState?.activeParagraphStyleId === style.id}
-                      disabled={!state('linked-style')?.enabled || pending}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => void run('linked-style', style.id)}
-                    >
-                      {style.name}
-                    </button>
-                  </Tooltip>
-                ))}
+              <div className="nc-docx-style-controls">
+                <div className="nc-docx-style-gallery">
+                  {gallery.slice(0, 3).map((style) => (
+                    <Tooltip key={style.id} title={styleName(style)}>
+                      <button
+                        type="button"
+                        aria-label={styleName(style)}
+                        data-style-preview={
+                          /^heading\s*1$/i.test(style.name)
+                            ? 'heading1'
+                            : /^heading\s*2$/i.test(style.name)
+                              ? 'heading2'
+                              : 'normal'
+                        }
+                        aria-pressed={styleState?.activeParagraphStyleId === style.id}
+                        disabled={!state('linked-style')?.enabled || pending}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => void run('linked-style', style.id)}
+                      >
+                        {styleName(style)}
+                      </button>
+                    </Tooltip>
+                  ))}
+                </div>
+                <Dropdown
+                  trigger={['click']}
+                  menu={{
+                    items: styles.map((style) => ({ key: style.id, label: styleName(style) })),
+                    selectable: true,
+                    selectedKeys: styleState?.activeParagraphStyleId
+                      ? [styleState.activeParagraphStyleId]
+                      : [],
+                    style: { maxHeight: 280, overflowY: 'auto', minWidth: 180 },
+                    onClick: ({ key }) => void run('linked-style', key)
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="nc-docx-style-more"
+                    aria-label={ribbon.allStyles}
+                    disabled={!state('linked-style')?.enabled || pending}
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <PiCaretDown />
+                  </button>
+                </Dropdown>
+                <Select
+                  size="small"
+                  showSearch
+                  optionFilterProp="label"
+                  popupMatchSelectWidth={220}
+                  popupClassName="nc-docx-select-dropdown"
+                  className="nc-docx-style-select"
+                  aria-label={text['linked-style']}
+                  placeholder={
+                    styleState?.mixedSelection ? t(($) => $.editors.mixed) : text['linked-style']
+                  }
+                  value={styleState?.activeParagraphStyleId || undefined}
+                  disabled={!state('linked-style')?.enabled || pending}
+                  options={styles.map((style) => ({ value: style.id, label: styleName(style) }))}
+                  onChange={(value) => void run('linked-style', value)}
+                />
               </div>
-              <Select
-                size="small"
-                showSearch
-                optionFilterProp="label"
-                popupMatchSelectWidth={180}
-                className="nc-docx-style-select"
-                aria-label={text['linked-style']}
-                placeholder={
-                  styleState?.mixedSelection ? t(($) => $.editors.mixed) : text['linked-style']
-                }
-                value={styleState?.activeParagraphStyleId || undefined}
-                disabled={!state('linked-style')?.enabled || pending}
-                options={styles.map((style) => ({ value: style.id, label: style.name }))}
-                onChange={(value) => void run('linked-style', value)}
-              />
               <div className="nc-docx-group-label">{text['linked-style-label']}</div>
             </section>
           </div>
@@ -745,15 +797,21 @@ export function DocxStatusBar({
       const nodes = [...container.querySelectorAll('.superdoc-page')]
       const top = container.getBoundingClientRect().top
       const index = nodes.findIndex((node) => node.getBoundingClientRect().bottom > top + 1)
-      setPages({ current: index < 0 ? 0 : index + 1, total: nodes.length })
+      setPages({
+        current:
+          index < 0 ? 0 : Number((nodes[index] as HTMLElement).dataset.pageIndex || index) + 1,
+        total: editor.activeEditor?.pageMetrics?.getSnapshot().pages.length || nodes.length
+      })
     }
     const stopZoom = editor.ui.zoom.observe((value) => setZoom(value.value))
     const stopViewport = editor.ui.viewport.observe(measure)
+    const stopMetrics = editor.activeEditor?.pageMetrics?.subscribe(measure)
     setZoom(editor.ui.zoom.getSnapshot().value)
     measure()
     return () => {
       stopZoom()
       stopViewport()
+      stopMetrics?.()
     }
   }, [editor, container])
   return (
