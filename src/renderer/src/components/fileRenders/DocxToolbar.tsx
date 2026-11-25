@@ -365,7 +365,19 @@ export default function DocxToolbar({
           )}
         </div>
         {writable && activeTab === 'home' && (
-          <div className="nc-docx-ribbon-home">
+          <div
+            className="nc-docx-ribbon-home"
+            role="group"
+            aria-label={ribbon.home}
+            tabIndex={0}
+            onFocusCapture={(event) => {
+              // A combobox focuses a small inner input. Reveal the entire control
+              // when tabbing through a ribbon narrower than its grouped tools.
+              const control = event.target.closest<HTMLElement>('.ant-select, button')
+              if (control && event.currentTarget.contains(control))
+                control.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+            }}
+          >
             <section className="nc-docx-font-group" aria-label={ribbon.font}>
               <div className="nc-docx-control-row">
                 <Select

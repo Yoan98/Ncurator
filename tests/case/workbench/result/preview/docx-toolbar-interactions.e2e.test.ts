@@ -559,7 +559,7 @@ describe('Word toolbar', () => {
           // Drag the actual panel divider; common operations remain visible at each width.
           const shell = page.getByTestId(workbenchSelectors.contentPanelShell)
           await page.getByTestId(workbenchSelectors.sessionsToggle).click()
-          for (const width of [900, 780, 520, 360, 900]) {
+          for (const width of [900, 780, 650, 630, 600, 520, 360, 900]) {
             // Its hit area is a pseudo-element on a zero-width divider, so
             // measure stable layout before driving the real mouse gesture.
             await page.getByTestId(workbenchSelectors.contentPanelResizer).evaluate(async (el) => {
@@ -595,6 +595,59 @@ describe('Word toolbar', () => {
                 )
               )
               .toBeLessThan(3)
+            const home = toolbar.getByRole('group', { name: '开始', exact: true })
+            const layout = await home.evaluate((el) => ({
+              height: el.getBoundingClientRect().height,
+              scrollWidth: el.scrollWidth,
+              width: el.clientWidth,
+              tops: [...el.querySelectorAll(':scope > section')].map(
+                (group) => group.getBoundingClientRect().top - el.getBoundingClientRect().top
+              ),
+              isolated: el.parentElement!.scrollWidth <= el.parentElement!.clientWidth + 1
+            }))
+            expect(layout.tops.length).toBe(3)
+            expect(Math.max(...layout.tops) - Math.min(...layout.tops)).toBeLessThan(1)
+            expect(layout.height).toBeLessThan(110)
+            expect(layout.isolated).toBe(true)
+            if (width <= 520) {
+              expect(layout.scrollWidth).toBeGreaterThan(layout.width)
+              // Tab through real controls to reach the right-hand style selector;
+              // native focus scrolling must reveal it inside the ribbon only.
+              await toolbar.getByRole('button', { name: '格式刷', exact: true }).press('Tab')
+              for (let step = 0; step < 12; step++) {
+                if (
+                  await home
+                    .locator('.nc-docx-style-select')
+                    .evaluate((el) => el.contains(document.activeElement))
+                )
+                  break
+                await page.keyboard.press('Tab')
+              }
+              await expect
+                .poll(() =>
+                  home.locator('.nc-docx-style-select').evaluate((el) => {
+                    const viewport = el.closest('.nc-docx-ribbon-home')!.getBoundingClientRect()
+                    const box = el.getBoundingClientRect()
+                    return (
+                      el.contains(document.activeElement) &&
+                      box.left >= viewport.left &&
+                      box.right <= viewport.right + 1
+                    )
+                  })
+                )
+                .toBe(true)
+              const box = await home.boundingBox()
+              if (!box) throw new Error('Missing ribbon scroll area')
+              await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+              await page.mouse.wheel(-1000, 0)
+              await expect.poll(() => home.evaluate((el) => el.scrollLeft)).toBe(0)
+            }
+            await click('插入')
+            await click('开始')
+            expect(await home.evaluate((el) => el.getBoundingClientRect().height)).toBeCloseTo(
+              layout.height,
+              0
+            )
             if (width >= 780) {
               const cards = toolbar.locator('.nc-docx-style-gallery button:visible')
               await expect.poll(() => cards.count()).toBe(3)

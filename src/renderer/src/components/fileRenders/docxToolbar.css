@@ -91,6 +91,13 @@
   align-items: stretch;
   gap: 12px;
   padding: 7px 10px 5px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.nc-docx-ribbon-home:focus-visible {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: -2px;
 }
 .nc-docx-font-group,
 .nc-docx-paragraph-group {
@@ -357,38 +364,16 @@
 }
 @container (max-width: 640px) {
   .nc-docx-ribbon-home {
-    flex-wrap: wrap;
-    column-gap: 8px;
-    row-gap: 6px;
+    gap: 8px;
+    padding-left: 6px;
+    padding-right: 6px;
   }
-  .nc-docx-font-group {
-    order: 0;
-    border: 0;
-    flex: 1;
-    padding-right: 0;
+  .nc-docx-font-group,
+  .nc-docx-paragraph-group {
+    padding-right: 8px;
   }
   .nc-docx-style-group {
-    order: 1;
-    flex: 0 0 90px;
-  }
-  .nc-docx-paragraph-group {
-    order: 2;
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    border: 0;
-    border-top: 1px solid var(--notion-line);
-    padding: 4px 0 0;
-  }
-  .nc-docx-paragraph-group .nc-docx-group-label {
-    display: none;
-  }
-}
-@container (max-width: 420px) {
-  .nc-docx-style-controls {
-    min-height: 28px;
+    flex: 1 0 90px;
   }
   .nc-docx-family {
     width: 118px;
@@ -396,20 +381,8 @@
   .nc-docx-size {
     width: 76px;
   }
-  .nc-docx-style-group {
-    flex: 1 0 100%;
-  }
-  .nc-docx-style-group .nc-docx-group-label {
-    display: none;
-  }
-  .nc-docx-style-select {
-    width: 100%;
-    max-width: 100%;
-  }
-  .nc-docx-ribbon-home {
-    padding-left: 6px;
-    padding-right: 6px;
-  }
+}
+@container (max-width: 420px) {
   .nc-docx-ribbon-tabs {
     padding-left: 4px;
     padding-right: 4px;

@@ -14,7 +14,8 @@ type Target = {
   kind: MarkerKind
   label: string
   rects: () => SelectionRect[]
-  overviewRects?: () => SelectionRect[]
+  /** Document-wide ratio, independent of the painted page window and scroll offset. */
+  overviewPosition?: () => number | undefined
   reveal?: () => Promise<void>
 }
 type Marker = { key: string; top: number; bottom: number; targets: Target[] }
@@ -76,7 +77,7 @@ function reviewTargets(
     }
   )
   if (!markers.length) return painted
-  const body = paragraphs.filter((p) => p.part === 'word/document.xml')
+  const body = new Set(paragraphs.filter((p) => p.part === 'word/document.xml').map((p) => p.id))
   const paintedRects = (id: string) =>
     [...container.querySelectorAll<HTMLElement>(`[data-review-region="${CSS.escape(id)}"]`)]
       .flatMap((el) => [...el.getClientRects()])
@@ -91,40 +92,22 @@ function reviewTargets(
         await new Promise(requestAnimationFrame)
       },
       rects: () => paintedRects(marker.id),
-      overviewRects: () => {
-        const rects = paintedRects(marker.id)
-        if (rects.length) return rects
-        const metrics = editor?.activeEditor?.pageMetrics
-        const index = metrics?.pageIndexForBodyTarget({ paraId: marker.paragraphId })
-        const pages = metrics?.getSnapshot().pages || []
-        const page = index == null ? undefined : pages[index]
-        const firstElement = container.querySelector<HTMLElement>('.superdoc-page')
-        const first = firstElement?.getBoundingClientRect()
-        const firstPage = pages[Number(firstElement?.dataset.pageIndex || 0)]
-        const bodyIndex = body.findIndex((p) => p.id === marker.paragraphId)
-        if (!page && bodyIndex < 0) return []
-        // Unpainted changes remain in the global directory. Page metrics take over
-        // as pagination settles; painted fragments provide the precise range.
-        const top =
-          page && first
-            ? first.top -
-              (firstPage?.viewport.yPx || 0) +
-              page.viewport.yPx +
-              page.base.marginTopPx * (metrics?.getSnapshot().zoom.scale || 1)
-            : container.getBoundingClientRect().top -
-              container.scrollTop +
-              (bodyIndex / Math.max(1, body.length)) * container.scrollHeight
-        return [
-          {
-            top,
-            bottom: top + 1,
-            left: first?.left || 0,
-            right: (first?.left || 0) + 1,
-            width: 1,
-            height: 1
+      ...(body.has(marker.paragraphId)
+        ? {
+            overviewPosition: () => {
+              const metrics = editor?.activeEditor?.pageMetrics
+              const index = metrics?.pageIndexForBodyTarget({ paraId: marker.paragraphId })
+              const pages = metrics?.getSnapshot().pages || []
+              const page = index == null ? undefined : pages[index]
+              const extent = Math.max(0, ...pages.map((p) => p.viewport.yPx + p.viewport.heightPx))
+              if (!page || !extent) return undefined
+              // The overview groups body changes by page; activation still uses
+              // precise painted ranges. Never replace a page anchor with DOM
+              // geometry when scrolling mounts or unmounts its paragraph.
+              return (page.viewport.yPx + page.viewport.heightPx / 2) / extent
+            }
           }
-        ]
-      }
+        : {})
     })
   )
 }
@@ -134,18 +117,23 @@ function measureMarkers(targets: Target[], container: HTMLElement, height: numbe
   const scale = height / Math.max(1, container.scrollHeight)
   const items = targets
     .flatMap((target) => {
-      const rects = (target.overviewRects?.() || target.rects()).filter(
-        (rect) => rect.width > 0 && rect.height > 0
-      )
-      if (!rects.length) return []
-      const start = Math.min(...rects.map((r) => r.top)) - origin + container.scrollTop
-      const end = Math.max(...rects.map((r) => r.bottom)) - origin + container.scrollTop
-      const top = Math.max(0, Math.min(Math.max(0, height - 4), start * scale))
+      let start: number, end: number
+      if (target.overviewPosition) {
+        const position = target.overviewPosition()
+        if (position == null) return []
+        start = end = position * height
+      } else {
+        const rects = target.rects().filter((rect) => rect.width > 0 && rect.height > 0)
+        if (!rects.length) return []
+        start = (Math.min(...rects.map((r) => r.top)) - origin + container.scrollTop) * scale
+        end = (Math.max(...rects.map((r) => r.bottom)) - origin + container.scrollTop) * scale
+      }
+      const top = Math.max(0, Math.min(Math.max(0, height - 4), start))
       return [
         {
           key: target.id,
           top,
-          bottom: Math.min(height, Math.max(top + 4, end * scale)),
+          bottom: Math.min(height, Math.max(top + 4, end)),
           targets: [target]
         }
       ]

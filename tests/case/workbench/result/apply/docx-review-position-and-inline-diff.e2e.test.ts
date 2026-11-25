@@ -335,6 +335,15 @@ describe('workbench result e2e', () => {
             workbenchSelectors.documentModeToggle
           )
           const rail = page.getByTestId(workbenchSelectors.docxOverview)
+          const readMarkers = () =>
+            rail.locator('button[data-kinds]').evaluateAll((elements) =>
+              elements.map((el) => ({
+                kinds: el.getAttribute('data-kinds'),
+                label: el.getAttribute('aria-label'),
+                top: el.getBoundingClientRect().top - el.parentElement!.getBoundingClientRect().top,
+                height: el.getBoundingClientRect().height
+              }))
+            )
           const deepMarker = rail.locator('button[data-kinds~="deleted"]').last()
           await deepMarker.waitFor({ state: 'visible' })
           await expect.poll(() => page.locator('.nc-docx-statusbar').innerText()).toMatch(/共 9 页/)
@@ -347,11 +356,56 @@ describe('workbench result e2e', () => {
           expect(
             await page.locator('.docx-content').evaluate((el) => el.scrollTop / el.clientHeight)
           ).toBeLessThan(0.1)
+          const openingMarkers = await readMarkers()
+          const assertFixedMarkers = async (name: string) => {
+            // Wait for paint/decoration notifications before measuring the rail.
+            await rail.evaluate(async () => {
+              for (let frame = 0; frame < 6; frame++)
+                await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+            })
+            const actual = await readMarkers()
+            await runtime.assertThat(
+              actual.length === openingMarkers.length &&
+                actual.every((marker, index) => {
+                  const before = openingMarkers[index]
+                  return (
+                    marker.kinds === before.kinds &&
+                    marker.label === before.label &&
+                    Math.abs(marker.top - before.top) < 1 &&
+                    Math.abs(marker.height - before.height) < 1
+                  )
+                }),
+              {
+                name,
+                message: '滚动与页面绘制前后，全局差异标记保持相同分组和固定位置。',
+                data: { before: openingMarkers, actual }
+              }
+            )
+          }
           await deepMarker.click()
           const deletion = page
             .locator('.docx-content [data-review-region]')
             .filter({ hasText: DELETED_LINE })
             .last()
+          await deletion.waitFor({ state: 'visible' })
+          await page
+            .getByTestId(workbenchSelectors.docxOverviewFocus)
+            .first()
+            .waitFor({ state: 'detached' })
+          await assertFixedMarkers('review-markers-after-deep-page-paint')
+          await rail.press('End')
+          await expect
+            .poll(() =>
+              page.locator('.docx-content').evaluate((el) =>
+                Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop)
+              )
+            )
+            .toBeLessThan(2)
+          await assertFixedMarkers('review-markers-at-document-end')
+          await rail.press('Home')
+          await expect.poll(() => page.locator('.docx-content').evaluate((el) => el.scrollTop)).toBe(0)
+          await assertFixedMarkers('review-markers-return-to-document-start')
+          await deepMarker.click()
           await deletion.waitFor({ state: 'visible' })
           await page
             .getByTestId(workbenchSelectors.docxOverviewFocus)
