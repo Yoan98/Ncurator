@@ -23,6 +23,24 @@ export const zh = {
     openWebsiteError: '无法打开官网，请稍后重试。',
     storage: '暂时无法读取或保存登录凭证，请重试。'
   },
+  partnerMemory: {
+    title: '长期记忆',
+    preferences: '合作偏好',
+    background: '项目背景',
+    preferencesHelp: '长期的沟通方式、表达偏好、交付格式和协作习惯。',
+    backgroundHelp: '持续项目的目标、重要事实和长期约定。',
+    help: '查看说明',
+    accept: '接受',
+    reject: '拒绝',
+    saving: '正在保存…',
+    retry: '重试',
+    disabled: '此类记忆已关闭，内容保留，可在伙伴配置中开启。',
+    loadError: '暂时无法读取记忆，请重试。',
+    saveError: '保存失败，编辑内容已保留，请重试。',
+    reviewChanged: '记忆有新修改，请查看后再接受或拒绝。',
+    tooLong: '最多 {{limit}} 字，请精简后保存。',
+    scroll: '滚动记忆内容'
+  },
   userSkills: {
     contentChanged: 'skill 已更新。当前草稿已保留，重新打开可查看最新内容。',
     selectionChanged: 'skill 已更新，已保留你的未保存选择。',

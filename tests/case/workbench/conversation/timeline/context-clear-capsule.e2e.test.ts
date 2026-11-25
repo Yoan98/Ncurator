@@ -177,7 +177,13 @@ describe('workbench conversation e2e', () => {
             name: 'clear-messages-topbar',
             message: '清空消息记录入口位于主区标题栏右端。'
           })
-          const clearLabel = ((await clearButton.textContent()) || '').replace(/\s+/g, '')
+          const clearLabel = ((await clearButton.getAttribute('aria-label')) || '').replace(
+            /\s+/g,
+            ''
+          )
+          const clearHasIcon =
+            (await clearButton.locator('svg').count()) === 2 &&
+            !(await clearButton.textContent())?.trim()
           await clearButton.hover()
           const tooltipText = await page.locator('.ant-tooltip-inner').first().textContent()
           const inputBeforeClear = (
@@ -343,6 +349,7 @@ describe('workbench conversation e2e', () => {
 
           return {
             clearLabel,
+            clearHasIcon,
             deleteHistoryDefault,
             confirmationText,
             historyHelpText,
@@ -375,7 +382,8 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.clearLabel.includes('清空消息记录') &&
+            result.clearHasIcon &&
+              result.clearLabel.includes('清空消息记录') &&
               !result.deleteHistoryDefault &&
               result.confirmationText?.includes('全部对话消息及临时缓存。') &&
               !result.confirmationText.includes('伙伴和工作目录') &&

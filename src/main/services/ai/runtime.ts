@@ -168,6 +168,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         : deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,
     scheduledTaskService: deps.scheduledTaskService,
+    partnerMemory: deps.partnerMemory,
     userSkillService: deps.userSkillService,
     appendMessageLog,
     loadMessageLog,

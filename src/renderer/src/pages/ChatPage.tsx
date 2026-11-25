@@ -98,6 +98,11 @@ import { collectUserMessageTimeIds } from '../../../shared/workbench/messageTime
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import UserSkillsView from '../components/userSkills/UserSkillsView'
 import PartnerSkillPicker from '../components/userSkills/PartnerSkillPicker'
+import PartnerMemoryPopover, {
+  ClearChatIcon
+} from '../components/partnerMemory/PartnerMemoryPopover'
+import PartnerMemoryConfig from '../components/partnerMemory/PartnerMemoryConfig'
+import { usePartnerMemoryConfig } from '../components/partnerMemory/usePartnerMemoryConfig'
 import { usePartnerSkillDraft } from '../components/userSkills/usePartnerSkillDraft'
 import { skillError } from '../components/userSkills/skillErrors'
 import ConfigurationDrawer from '../components/workbench/ConfigurationDrawer'
@@ -942,6 +947,7 @@ const ChatPage: React.FC = () => {
   const [createPartnerColor, setCreatePartnerColor] = useState<PartnerAvatarColor>('blue')
   const [createPartnerSubmitting, setCreatePartnerSubmitting] = useState(false)
   const partnerSkills = usePartnerSkillDraft(createPartnerOpen, editingPartnerId)
+  const partnerMemoryConfig = usePartnerMemoryConfig(createPartnerOpen, editingPartnerId)
   const originalPartnerForm = useRef('')
   const [busyCancelTask, setBusyCancelTask] = useState<ScheduledTask | null>(null)
   const [activeTimelineDayStart, setActiveTimelineDayStart] = useState<number | null>(null)
@@ -1840,7 +1846,9 @@ const ChatPage: React.FC = () => {
       break
     }
     const question = active ? resolveConversationQuestion(currentMessages, active.id) : undefined
-    return question ? { dayStart: startOfLocalDay(question.timestamp), messageId: question.id } : null
+    return question
+      ? { dayStart: startOfLocalDay(question.timestamp), messageId: question.id }
+      : null
   }, [currentMessages])
 
   /** 滚动高亮按帧节流：一帧最多解析一次，且值没变不写 state。 */
@@ -2003,27 +2011,30 @@ const ChatPage: React.FC = () => {
     return dataUrl
   }, [])
 
-  const collapseContentPanel = useCallback((captureBrowser = true): void => {
-    const sessionKey = tabWorkspaceKey
-    void (async () => {
-      // Keep the ref in sync before any await so a concurrent session switch / flush
-      // persists the collapsed intent instead of the stale expanded value.
-      contentPanelCollapsedRef.current = true
-      if (captureBrowser && contentPanel.kind === 'browser') {
-        await captureBrowserTransition(contentPanel.browserTabId)
-      } else {
-        setBrowserTransitionImage(null)
-      }
-      setPanelCollapsedForSession(sessionKey, true)
-      if ((currentPartnerIdRef.current || '') !== sessionKey) {
-        setBrowserTransitionImage(null)
-        return
-      }
-      setBrowserPresentationEnabled(false)
-      void window.api.browserPanelHide()
-      setContentPanelCollapsed(true)
-    })()
-  }, [captureBrowserTransition, contentPanel, setPanelCollapsedForSession, tabWorkspaceKey])
+  const collapseContentPanel = useCallback(
+    (captureBrowser = true): void => {
+      const sessionKey = tabWorkspaceKey
+      void (async () => {
+        // Keep the ref in sync before any await so a concurrent session switch / flush
+        // persists the collapsed intent instead of the stale expanded value.
+        contentPanelCollapsedRef.current = true
+        if (captureBrowser && contentPanel.kind === 'browser') {
+          await captureBrowserTransition(contentPanel.browserTabId)
+        } else {
+          setBrowserTransitionImage(null)
+        }
+        setPanelCollapsedForSession(sessionKey, true)
+        if ((currentPartnerIdRef.current || '') !== sessionKey) {
+          setBrowserTransitionImage(null)
+          return
+        }
+        setBrowserPresentationEnabled(false)
+        void window.api.browserPanelHide()
+        setContentPanelCollapsed(true)
+      })()
+    },
+    [captureBrowserTransition, contentPanel, setPanelCollapsedForSession, tabWorkspaceKey]
+  )
 
   const collapseContentPanelRef = useRef(collapseContentPanel)
   collapseContentPanelRef.current = collapseContentPanel
@@ -2427,9 +2438,7 @@ const ChatPage: React.FC = () => {
       const cached = partnerUiStatesRef.current[partnerId] || null
       const fromServer = opened.uiState || null
       const uiState =
-        fromServer && fromServer.composer?.modelSelection
-          ? fromServer
-          : cached || fromServer
+        fromServer && fromServer.composer?.modelSelection ? fromServer : cached || fromServer
       applyPartnerUiState(partnerId, uiState)
       setActiveTimelineDayStart(null)
       pendingTimelineJumpDayRef.current = null
@@ -2609,11 +2618,10 @@ const ChatPage: React.FC = () => {
            拿它去判定会把用户存下的选择覆盖掉。 */
         if (uiStateReadyKeyRef.current !== currentPartnerIdRef.current) return
         const nextSelection: WorkbenchModelSelection = {
-          mainModel:
-            modelSelectionRef.current.mainModel
-              ? resolveModel(modelSelectionRef.current.mainModel) ||
-                modelSelectionRef.current.mainModel
-              : null,
+          mainModel: modelSelectionRef.current.mainModel
+            ? resolveModel(modelSelectionRef.current.mainModel) ||
+              modelSelectionRef.current.mainModel
+            : null,
           ...(modelSelectionRef.current.effortMemory && {
             effortMemory: modelSelectionRef.current.effortMemory
           })
@@ -3112,7 +3120,9 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     const openNotificationPartner = async (partnerId: string): Promise<void> => {
-      setNotificationQuestionId(window.sessionStorage.getItem('ncurator.pending-notification-interaction'))
+      setNotificationQuestionId(
+        window.sessionStorage.getItem('ncurator.pending-notification-interaction')
+      )
       const session = partners.find((item) => item.id === partnerId)
       if (session) {
         selectPartner(session)
@@ -4635,7 +4645,14 @@ const ChatPage: React.FC = () => {
       message.warning(t(($) => $.workbench.enterAPartnerName))
       return
     }
-    if (createPartnerSubmitting || partnerSkills.loading || partnerSkills.error) return
+    if (
+      createPartnerSubmitting ||
+      partnerSkills.loading ||
+      partnerSkills.error ||
+      partnerMemoryConfig.loading ||
+      partnerMemoryConfig.error
+    )
+      return
     setCreatePartnerSubmitting(true)
     try {
       if (editingPartnerId) {
@@ -4644,7 +4661,8 @@ const ChatPage: React.FC = () => {
           name,
           avatar_shape: createPartnerShape,
           avatar_color: createPartnerColor,
-          skillNames: partnerSkills.names
+          skillNames: partnerSkills.names,
+          memoryEnabled: partnerMemoryConfig.enabled
         })
         if (!response.success || !response.partner) {
           emitErrorMessage(
@@ -4662,7 +4680,8 @@ const ChatPage: React.FC = () => {
         name,
         avatar_shape: createPartnerShape,
         avatar_color: createPartnerColor,
-        skillNames: partnerSkills.names
+        skillNames: partnerSkills.names,
+        memoryEnabled: partnerMemoryConfig.enabled
       })
       if (!response.success || !response.partner) {
         emitErrorMessage(
@@ -4693,6 +4712,9 @@ const ChatPage: React.FC = () => {
     partnerSkills.names,
     partnerSkills.loading,
     partnerSkills.error,
+    partnerMemoryConfig.enabled,
+    partnerMemoryConfig.loading,
+    partnerMemoryConfig.error,
     editingPartnerId,
     emitErrorMessage,
     loadPartners,
@@ -5504,7 +5526,9 @@ const ChatPage: React.FC = () => {
           >
             <HiOutlineClock
               className={`h-[18px] w-[18px] shrink-0 ${
-                scheduledTaskEnabledCount > 0 ? 'text-[var(--notion-blue)]' : 'text-[var(--notion-text-soft)]'
+                scheduledTaskEnabledCount > 0
+                  ? 'text-[var(--notion-blue)]'
+                  : 'text-[var(--notion-text-soft)]'
               }`}
             />
             <span className="min-w-0 flex-1 truncate text-left">
@@ -5614,7 +5638,7 @@ const ChatPage: React.FC = () => {
             <div className="nc-main-split flex h-full min-h-0 overflow-hidden" ref={mainSplitRef}>
               <div className="relative flex min-w-0 flex-1 flex-col">
                 {isNewSession ? (
-                  <div className="nc-main-empty-titlebar" aria-hidden="true">
+                  <div className="nc-main-empty-titlebar">
                     <div
                       className="nc-main-empty-titlebar-safe-zone"
                       style={{
@@ -5625,6 +5649,11 @@ const ChatPage: React.FC = () => {
                       className="nc-main-empty-titlebar-drag-region"
                       data-testid={workbenchSelectors.emptyDragRegion}
                     />
+                    {currentPartnerId && (
+                      <div className="pointer-events-auto ml-auto flex items-center pr-3">
+                        <PartnerMemoryPopover key={currentPartnerId} partnerId={currentPartnerId} />
+                      </div>
+                    )}
                     {contentPanelCollapsed && !contentPanelShellMounted ? (
                       <button
                         type="button"
@@ -5670,6 +5699,10 @@ const ChatPage: React.FC = () => {
 
                     <div className="nc-topbar-drag-spacer" aria-hidden="true" />
 
+                    {currentPartnerId && (
+                      <PartnerMemoryPopover key={currentPartnerId} partnerId={currentPartnerId} />
+                    )}
+
                     {clearContextVisible ? (
                       <Tooltip
                         placement="bottomRight"
@@ -5683,8 +5716,9 @@ const ChatPage: React.FC = () => {
                           style={WORKBENCH_NO_DRAG_REGION_STYLE}
                           onClick={handleClearPartnerContext}
                           data-testid={workbenchSelectors.clearContextButton}
+                          aria-label={t(($) => $.workbench.clearMessageHistory)}
                         >
-                          {t(($) => $.workbench.clearMessageHistory)}
+                          <ClearChatIcon />
                         </button>
                       </Tooltip>
                     ) : null}
@@ -5907,7 +5941,9 @@ const ChatPage: React.FC = () => {
                                 showCancel={Boolean(aiRunId)}
                                 draftValue={composerDraftValue}
                                 draftKey={composerDraftKey}
-                                contextUsage={contextUsage?.partnerId === currentPartnerId ? contextUsage : null}
+                                contextUsage={
+                                  contextUsage?.partnerId === currentPartnerId ? contextUsage : null
+                                }
                                 plan={composerPlan}
                                 requestAttachmentTarget={ensureAttachmentTarget}
                                 onPreviewFile={(file) => void openFile(file)}
@@ -6130,9 +6166,14 @@ const ChatPage: React.FC = () => {
           saveText={editingPartnerId ? t(($) => $.common.save) : t(($) => $.workbench.create)}
           busy={createPartnerSubmitting}
           disabled={
-            partnerSkills.loading || Boolean(partnerSkills.error) || !createPartnerName.trim()
+            partnerSkills.loading ||
+            Boolean(partnerSkills.error) ||
+            partnerMemoryConfig.loading ||
+            Boolean(partnerMemoryConfig.error) ||
+            !createPartnerName.trim()
           }
           dirty={
+            partnerMemoryConfig.dirty ||
             partnerSkills.dirty ||
             JSON.stringify([createPartnerName, createPartnerShape, createPartnerColor]) !==
               originalPartnerForm.current
@@ -6209,7 +6250,9 @@ const ChatPage: React.FC = () => {
                     key={color}
                     type="button"
                     className={`h-6 w-6 rounded-full ${
-                      createPartnerColor === color ? 'ring-2 ring-[var(--notion-accent)] ring-offset-2' : ''
+                      createPartnerColor === color
+                        ? 'ring-2 ring-[var(--notion-accent)] ring-offset-2'
+                        : ''
                     }`}
                     style={{ backgroundColor: PARTNER_AVATAR_COLOR_HEX[color] }}
                     onClick={() => setCreatePartnerColor(color)}
@@ -6218,6 +6261,7 @@ const ChatPage: React.FC = () => {
                 ))}
               </div>
             </div>
+            <PartnerMemoryConfig draft={partnerMemoryConfig} disabled={createPartnerSubmitting} />
             <PartnerSkillPicker draft={partnerSkills} disabled={createPartnerSubmitting} />
           </div>
         </ConfigurationDrawer>

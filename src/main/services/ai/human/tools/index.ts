@@ -10,6 +10,7 @@ import { textFileToolFamily } from './textFile'
 import { webToolFamily } from './web'
 import { agentControlToolFamily } from './agentControl'
 import { scheduledTasksToolFamily } from './scheduledTasks'
+import { memoryToolFamily } from './memory'
 import { skillManagementToolFamily } from './skillManagement'
 
 export const kbToolFamily: ToolFamilyDefinition = {
@@ -18,6 +19,7 @@ export const kbToolFamily: ToolFamilyDefinition = {
 }
 
 export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinition> = {
+  memory: memoryToolFamily,
   terminal: terminalToolFamily,
   'text-file': textFileToolFamily,
   kb: kbToolFamily,

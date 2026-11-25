@@ -354,6 +354,16 @@ const api: DesktopApi = {
   },
 
   // Chat & LLM
+  partnerMemoryGet: (partnerId) => ipcRenderer.invoke('partner-memory-get', partnerId),
+  partnerMemoryUpdate: (request) => ipcRenderer.invoke('partner-memory-update', request),
+  onPartnerMemoryChanged: (callback) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      snapshot: import('../shared/partnerMemory').PartnerMemorySnapshot
+    ): void => callback(snapshot)
+    ipcRenderer.on('partner-memory-changed', handler)
+    return () => ipcRenderer.removeListener('partner-memory-changed', handler)
+  },
   partnerList: () => ipcRenderer.invoke('chat-session-list'),
   partnerCreate: (payload) => ipcRenderer.invoke('partner-create', payload),
   partnerUpdate: (payload) => ipcRenderer.invoke('partner-update', payload),

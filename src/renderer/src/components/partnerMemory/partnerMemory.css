@@ -1,0 +1,149 @@
+.nc-memory-popover {
+  max-width: calc(100vw - 24px);
+}
+.nc-memory-popover .ant-popover-inner {
+  padding: 0;
+  background: var(--notion-page);
+  border: 1px solid var(--notion-line);
+  box-shadow: var(--shadow-lg);
+  border-radius: 10px;
+}
+.nc-memory-panel {
+  width: min(480px, calc(100vw - 32px));
+  padding: 8px 18px 6px;
+  color: var(--notion-text);
+}
+.nc-memory-tabs {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  border-bottom: 1px solid var(--notion-line);
+}
+.nc-memory-tab-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nc-memory-tab {
+  position: relative;
+  padding: 12px 0;
+  font-size: 13px;
+  color: var(--notion-text-soft);
+  border-bottom: 2px solid transparent;
+}
+.nc-memory-tab[aria-selected='true'] {
+  color: var(--notion-text);
+  border-bottom-color: var(--notion-accent-blue);
+}
+.nc-memory-help {
+  color: var(--notion-text-faint);
+  font-size: 14px;
+}
+.nc-memory-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: var(--notion-red);
+  border-radius: 50%;
+  top: 3px;
+  right: 2px;
+}
+.nc-memory-dot.tab {
+  top: 8px;
+  right: -6px;
+}
+.nc-memory-review {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+}
+.nc-memory-review button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: var(--notion-text-soft);
+  font-size: 12px;
+}
+.nc-memory-review button:hover {
+  background: var(--notion-surface);
+  color: var(--notion-text);
+}
+.nc-memory-review button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.nc-memory-review svg {
+  width: 14px;
+  height: 14px;
+}
+.nc-memory-input {
+  display: flex;
+  position: relative;
+  height: min(360px, max(150px, calc(100dvh - 280px)));
+  border-bottom: 1px solid var(--notion-line);
+}
+.nc-memory-input:focus-within {
+  border-bottom-color: var(--notion-accent-blue);
+}
+.nc-memory-editor {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.nc-memory-editor .monaco-editor,
+.nc-memory-editor .monaco-diff-editor {
+  outline: none !important;
+}
+.nc-memory-editor .monaco-diff-editor .margin-view-overlays {
+  display: none;
+}
+.nc-memory-rail {
+  position: relative;
+  width: 8px;
+  margin: 12px 0 12px 10px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: var(--notion-surface);
+  cursor: pointer;
+  touch-action: none;
+}
+.nc-memory-viewport {
+  position: absolute;
+  inset-inline: 0;
+  min-height: 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--notion-text-faint) 20%, transparent);
+  pointer-events: none;
+}
+.nc-memory-marker {
+  position: absolute;
+  height: 3px;
+  width: 3px;
+  border-radius: 1px;
+  pointer-events: none;
+}
+.nc-memory-marker.removed {
+  left: 1px;
+  background: var(--notion-red);
+}
+.nc-memory-marker.added {
+  right: 1px;
+  background: var(--notion-green);
+}
+.nc-memory-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 25px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--notion-text-faint);
+}
+.nc-memory-status.error {
+  color: var(--notion-red);
+}

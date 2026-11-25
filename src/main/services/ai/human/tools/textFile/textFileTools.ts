@@ -1,3 +1,4 @@
+import { applyUniqueTextEdits } from '../../../../../utils/textEdits'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { tool, type StructuredToolInterface } from '@langchain/core/tools'
@@ -67,18 +68,6 @@ const safeEmitActivity = (
   }
 }
 
-const countOccurrences = (content: string, search: string): number => {
-  let count = 0
-  let offset = 0
-  while (offset <= content.length - search.length) {
-    const match = content.indexOf(search, offset)
-    if (match < 0) break
-    count += 1
-    offset = match + search.length
-  }
-  return count
-}
-
 const findAllOccurrences = (content: string, search: string): number[] => {
   const matches: number[] = []
   let offset = 0
@@ -104,43 +93,7 @@ const applyUniqueEdits = (
   edits: Extract<FileEditInput, { action: 'edit' }>['edits'],
   sourcePath: string
 ): { content: string; changeCount: number } => {
-  const replacements: MatchedReplacement[] = edits.map((edit, editIndex) => {
-    const oldText = normalizeToLf(edit.oldText)
-    const newText = normalizeToLf(edit.newText)
-    const occurrences = countOccurrences(content, oldText)
-    if (occurrences === 0) {
-      throw new Error(
-        `edits[${editIndex}].oldText was not found in ${sourcePath}. Use the exact file text; line numbers from file_read are display-only and must not be included.`
-      )
-    }
-    if (occurrences > 1) {
-      throw new Error(
-        `edits[${editIndex}].oldText matches ${occurrences} locations in ${sourcePath}. Use replaceAll for all matches, or include more surrounding text so it matches exactly once.`
-      )
-    }
-    const start = content.indexOf(oldText)
-    return {
-      start,
-      end: start + oldText.length,
-      newText,
-      editIndex
-    }
-  })
-
-  const ordered = replacements.slice().sort((left, right) => left.start - right.start)
-  for (let index = 1; index < ordered.length; index += 1) {
-    const previous = ordered[index - 1]
-    const current = ordered[index]
-    if (previous && current && previous.end > current.start) {
-      throw new Error(
-        `The edit ranges of edits[${previous.editIndex}] and edits[${current.editIndex}] overlap in ${sourcePath}.`
-      )
-    }
-  }
-
-  const nextContent = applyReplacements(content, replacements)
-  if (nextContent === content) throw new Error(`No changes were made to ${sourcePath}.`)
-  return { content: nextContent, changeCount: edits.length }
+  return { content: applyUniqueTextEdits(content, edits, sourcePath), changeCount: edits.length }
 }
 
 const applyReplaceAll = (input: {

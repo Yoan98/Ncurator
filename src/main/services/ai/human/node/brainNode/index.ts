@@ -1,4 +1,4 @@
-import { refreshUserSkillContext } from '../../userSkillContext'
+import { refreshSystemContext } from '../../systemContext'
 import { randomUUID } from 'node:crypto'
 import { AIMessage, SystemMessage } from '@langchain/core/messages'
 import { getToolCalls } from '../../../../../utils/aiCapabilityUtils'
@@ -80,7 +80,7 @@ export const createBrainNode = (input: {
       input.cache.currentUserMessageIndex = brainProjection.currentUserMessageIndex + 1
     }
 
-    state = await refreshUserSkillContext({ ...input, state })
+    state = await refreshSystemContext({ ...input, state })
 
     const tools = buildAvailableTools({
       cache: input.cache,
@@ -457,8 +457,12 @@ export const createBrainNode = (input: {
         })
         const budget = state.execution.contextBudget
         if (
-          input.ctx.recordContextBudget && budget && inputTokens !== undefined &&
-          Number.isFinite(inputTokens) && inputTokens >= 0 && result.usage?.source !== 'unavailable'
+          input.ctx.recordContextBudget &&
+          budget &&
+          inputTokens !== undefined &&
+          Number.isFinite(inputTokens) &&
+          inputTokens >= 0 &&
+          result.usage?.source !== 'unavailable'
         ) {
           // A final answer is written to the transcript but never returns to the budget node.
           // Record it for display only: it was not part of the provider's measured input.

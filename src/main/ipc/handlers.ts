@@ -1,3 +1,7 @@
+import {
+  defaultPartnerMemoryEnabled,
+  type PartnerMemoryUpdateRequest
+} from '../../shared/partnerMemory'
 import { exportExcelEdits, canPreserveExcelWorkbook } from '../services/files/ExcelWorkbookEdit'
 import { UserSkillService } from '../services/skills/UserSkillService'
 import { registerDesktopAccount } from './desktopAccount'
@@ -428,7 +432,18 @@ export function registerHandlers(services: {
   })
   userSkillService.startWatching()
   app.once('will-quit', () => userSkillService.dispose())
+  const partnerMemory = storageService.partnerMemory
+  partnerMemory.onChanged = (snapshot) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send('partner-memory-changed', snapshot)
+    }
+  }
+  ipcMain.handle('partner-memory-get', (_event, partnerId: string) => partnerMemory.get(partnerId))
+  ipcMain.handle('partner-memory-update', (_event, request: PartnerMemoryUpdateRequest) =>
+    partnerMemory.update(request)
+  )
   const chatRunService = new ChatRunService({
+    partnerMemory,
     userSkillService,
     partnerStore,
     partnerCacheService,
@@ -3341,6 +3356,10 @@ export function registerHandlers(services: {
         storageService.sqlite.transaction(() => {
           partnerStore.savePartner(partner)
           userSkillService.setEnabled(partner.id, payload.skillNames)
+          partnerMemory.setEnabled(
+            partner.id,
+            payload.memoryEnabled ?? defaultPartnerMemoryEnabled()
+          )
         })
         await workbenchUiStore.savePartnerState(partner.id, createEmptyPartnerUiState())
         return { success: true, partner }
@@ -3370,7 +3389,9 @@ export function registerHandlers(services: {
         storageService.sqlite.transaction(() => {
           partnerStore.savePartner(partner)
           userSkillService.setEnabled(partner.id, payload.skillNames)
+          if (payload.memoryEnabled) partnerMemory.setEnabled(partner.id, payload.memoryEnabled)
         })
+        partnerMemory.notify(partner.id)
         return { success: true, partner }
       } catch (e: unknown) {
         console.error('[PARTNER-UPDATE] Error:', e)

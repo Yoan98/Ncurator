@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import { partnerMemorySelectors as memorySelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
@@ -6,6 +7,7 @@ import {
   createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
   navigateToWorkbench,
+  waitForPartnerMemory,
   waitForVisiblePartnerRow,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -64,6 +66,13 @@ describe('workbench conversation e2e', () => {
             .locator('.nc-configuration-field-label')
             .filter({ hasText: '名称' })
             .isVisible()
+          const memoryDefaults = await modal
+            .getByTestId(memorySelectors.config)
+            .locator('input[type="checkbox"]')
+            .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).checked))
+          await modal
+            .getByTestId(`${memorySelectors.configTogglePrefix}-project_background`)
+            .uncheck()
           await nameInput.fill(UPDATED_NAME)
           await modal.getByRole('button', { name: 'pill' }).click()
           await modal.locator('.nc-config-footer .ant-btn-primary').click()
@@ -88,7 +97,89 @@ describe('workbench conversation e2e', () => {
             (await getWorkbenchLocator(page, workbenchSelectors.partnersList).textContent()) || ''
           ).trim()
 
+          const trigger = page.getByTestId(memorySelectors.trigger)
+          await trigger.click()
+          const preferencePane = page.getByTestId(
+            `${memorySelectors.panePrefix}-cooperation_preferences`
+          )
+          const preferenceInput = preferencePane.locator('.monaco-editor textarea').last()
+          await preferenceInput.focus()
+          const memoryText = '简明表达，先给结论。'
+          await page.keyboard.insertText(memoryText)
+          await waitForPartnerMemory(
+            page,
+            created.id,
+            (snapshot) => snapshot.memories[0].confirmed === memoryText
+          )
+          await page.keyboard.insertText('优先使用中文。')
+          await waitForPartnerMemory(
+            page,
+            created.id,
+            (snapshot) => snapshot.memories[0].confirmed === memoryText + '优先使用中文。'
+          )
+          await page.keyboard.press('ControlOrMeta+z')
+          await waitForPartnerMemory(
+            page,
+            created.id,
+            (snapshot) => snapshot.memories[0].confirmed !== memoryText + '优先使用中文。'
+          )
+          await page.keyboard.press('ControlOrMeta+Shift+z')
+          await waitForPartnerMemory(
+            page,
+            created.id,
+            (snapshot) => snapshot.memories[0].confirmed === memoryText + '优先使用中文。'
+          )
+          await page.keyboard.press('ControlOrMeta+a')
+          await page.keyboard.insertText(memoryText)
+          await waitForPartnerMemory(
+            page,
+            created.id,
+            (snapshot) => snapshot.memories[0].confirmed === memoryText
+          )
+          await page.getByTestId(`${memorySelectors.tabPrefix}-project_background`).click()
+          const backgroundPane = page.getByTestId(
+            `${memorySelectors.panePrefix}-project_background`
+          )
+          await backgroundPane.locator('.monaco-editor textarea').last().focus()
+          await page.keyboard.insertText('持续开发桌面端')
+          await waitForPartnerMemory(
+            page,
+            created.id,
+            (snapshot) => snapshot.memories[1].confirmed === '持续开发桌面端'
+          )
+          await trigger.click()
+          await trigger.click()
+          await page.getByTestId(`${memorySelectors.tabPrefix}-cooperation_preferences`).click()
+          await page.waitForFunction(
+            (paneId) =>
+              document
+                .querySelector(`[data-testid="${paneId}"] .editor.modified .view-lines`)
+                ?.textContent?.includes('简明表达'),
+            `${memorySelectors.panePrefix}-cooperation_preferences`
+          )
+          const reopenedText = await preferencePane
+            .locator('.editor.modified .view-lines')
+            .innerText()
+          const memorySnapshot = await page.evaluate(
+            (id) => window.api.partnerMemoryGet(id),
+            created.id
+          )
+          const bottomLine = await preferencePane
+            .locator('.nc-memory-input')
+            .evaluate((element) => {
+              const style = getComputedStyle(element)
+              return style.borderBottomWidth === '1px' && style.borderLeftWidth === '0px'
+            })
+          await runtime.captureScreenshot({
+            name: 'partner-memory-editing',
+            message: '记忆气泡、两个 tab 与底边线输入。'
+          })
+          await trigger.click()
           return {
+            memoryDefaults,
+            memorySnapshot,
+            reopenedText,
+            bottomLine,
             modalTitle,
             prefilledName,
             nameLabelVisible,
@@ -100,7 +191,15 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.modalTitle === '编辑伙伴' &&
+            result.memoryDefaults.every(Boolean) &&
+              result.memoryDefaults.length === 2 &&
+              result.memorySnapshot.memories[0].confirmed === '简明表达，先给结论。' &&
+              result.memorySnapshot.memories[1].confirmed === '持续开发桌面端' &&
+              !result.memorySnapshot.memories[1].enabled &&
+              result.memorySnapshot.memories[0].enabled &&
+              result.reopenedText.includes('简明表达') &&
+              result.bottomLine &&
+              result.modalTitle === '编辑伙伴' &&
               result.prefilledName === ORIGINAL_NAME &&
               result.nameLabelVisible &&
               result.placeholderBeforeRename?.includes(ORIGINAL_NAME) &&

@@ -1,3 +1,4 @@
+import { renderPartnerMemory } from '../partnerMemoryContext'
 import type { AiRunContext } from '../../types'
 import { renderUserSkills, type LoadedUserSkill } from '../userSkills'
 import { getSkillRootDirectory } from '../../../skills/UserSkillService'
@@ -12,7 +13,6 @@ import {
   getPartnerScriptsRootDir
 } from '../../../assets/WorkspaceAssetService'
 import type { HumanState } from '../types'
-import type { AiRuntimePlatform } from '../../types'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../constants'
 import { listBuiltinToolsetDefinitions, listExternalToolsetDefinitions } from '../toolsets'
 
@@ -66,9 +66,15 @@ const renderPreferenceText = (preference: AiRunContext['preference']): string =>
 const renderToolsetLine = (toolsetName: string, description: string, toolCount: number): string =>
   `- ${toolsetName}（${toolCount} 个工具）：${description}`
 
-const renderToolsetCatalog = (platform: AiRuntimePlatform): string => {
-  void platform
-  const builtin = listBuiltinToolsetDefinitions()
+const renderToolsetCatalog = (
+  ctx: Pick<AiRunContext, 'partnerId' | 'partnerMemory'> & { isSubagent?: boolean }
+): string => {
+  const builtin = listBuiltinToolsetDefinitions().filter(
+    (toolset) =>
+      toolset.toolsetId !== 'memory' ||
+      (!ctx.isSubagent &&
+        ctx.partnerMemory?.get(ctx.partnerId).memories.some((memory) => memory.enabled))
+  )
   const external = listExternalToolsetDefinitions()
   return `
 toolset 是预注册的工具组，目录中每项以稳定名称开头。内置工具组始终可用；外部工具组通过 load_toolset 的 toolsetNames 参数按目录中的名称加载后才能使用。当前最多同时激活 ${HUMAN_MAX_ACTIVE_TOOLS} 个工具，加载新工具组超出上限时系统按最早加载顺序淘汰旧的外部工具组。
@@ -82,7 +88,10 @@ ${external.map((toolset) => renderToolsetLine(toolset.toolsetId, toolset.descrip
 }
 
 export const buildBrainSystemPrompt = (input: {
-  ctx: Pick<AiRunContext, 'partnerId' | 'partnerName' | 'platform' | 'userSkillService'>
+  ctx: Pick<
+    AiRunContext,
+    'partnerId' | 'partnerName' | 'platform' | 'userSkillService' | 'partnerMemory'
+  > & { isSubagent?: boolean }
   loadedSkills?: readonly LoadedUserSkill[]
 }): string => {
   const partnerName = input.ctx.partnerName.trim() || PRODUCT_NAME_ZH
@@ -118,7 +127,9 @@ export const buildBrainSystemPrompt = (input: {
 ${renderLocalContextText(input.ctx)}
 
 工具组目录：
-${renderToolsetCatalog(input.ctx.platform)}
+${renderToolsetCatalog(input.ctx)}
+
+${renderPartnerMemory(input.ctx)}
 
 ${renderUserSkills(input.ctx, input.loadedSkills)}
 `.trim()

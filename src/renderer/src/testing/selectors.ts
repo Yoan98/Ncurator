@@ -420,3 +420,17 @@ export const userSkillsSelectors = {
   togglePrefix: 'user-skill-toggle',
   deletePrefix: 'user-skill-delete'
 } as const
+
+export const partnerMemorySelectors = {
+  trigger: 'partner-memory-trigger',
+  dot: 'partner-memory-dot',
+  panel: 'partner-memory-panel',
+  tabPrefix: 'partner-memory-tab',
+  tabDotPrefix: 'partner-memory-tab-dot',
+  panePrefix: 'partner-memory-pane',
+  review: 'partner-memory-review',
+  accept: 'partner-memory-accept',
+  reject: 'partner-memory-reject',
+  config: 'partner-memory-config',
+  configTogglePrefix: 'partner-memory-config-toggle'
+} as const

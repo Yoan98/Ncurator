@@ -363,6 +363,10 @@ export type AiRunDeps = {
   chatToolsWrapper?: (real: AiRunContext['chatTools']) => AiRunContext['chatTools']
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
+  partnerMemory?: Pick<
+    import('../storage/domains/PartnerMemoryStore').PartnerMemoryStore,
+    'get' | 'propose'
+  >
   userSkillService?: import('./human/userSkills').UserSkillAccess
   scheduledTaskService?: import('../scheduler/ScheduledTaskService').ScheduledTaskService
   humanRuntimeOverrides?: {
@@ -446,6 +450,10 @@ export type AiRunContext = {
   getLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
+  partnerMemory?: Pick<
+    import('../storage/domains/PartnerMemoryStore').PartnerMemoryStore,
+    'get' | 'propose'
+  >
   userSkillService?: import('./human/userSkills').UserSkillAccess
   scheduledTaskService?: import('../scheduler/ScheduledTaskService').ScheduledTaskService
   appendMessageLog: (entries: ChatMessageLogEntry[], options?: { runId?: string }) => Promise<void>

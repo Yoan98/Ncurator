@@ -281,6 +281,15 @@ export type DesktopApi = {
     payload: AttachmentCreateFromPathRequest
   ) => Promise<AttachmentProcessResponse>
   attachmentSaveFile: (payload: AttachmentSaveRequest) => Promise<AttachmentProcessResponse>
+  partnerMemoryGet: (
+    partnerId: string
+  ) => Promise<import('../shared/partnerMemory').PartnerMemorySnapshot>
+  partnerMemoryUpdate: (
+    request: import('../shared/partnerMemory').PartnerMemoryUpdateRequest
+  ) => Promise<import('../shared/partnerMemory').PartnerMemoryUpdateResult>
+  onPartnerMemoryChanged: (
+    callback: (snapshot: import('../shared/partnerMemory').PartnerMemorySnapshot) => void
+  ) => () => void
   partnerList: () => Promise<PartnerListItem[]>
   partnerCreate: (payload: PartnerCreateRequest) => Promise<PartnerCreateResponse>
   partnerUpdate: (payload: PartnerUpdateRequest) => Promise<PartnerUpdateResponse>

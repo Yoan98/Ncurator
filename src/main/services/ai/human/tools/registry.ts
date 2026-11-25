@@ -1,3 +1,4 @@
+import { MEMORY_TOOL_SPEC } from './memory/toolSpecs'
 import { DOCX_TOOL_SPECS } from './docx/toolSpecs'
 import { IMAGE_GENERATION_TOOL_SPECS } from './imageGeneration/toolSpecs'
 import { KB_TOOL_SPECS } from './kb/toolSpecs'
@@ -19,6 +20,7 @@ import type { AiRuntimePlatform } from '../../types'
 import type { RuntimeToolName } from '../../../../../shared/runtimeCapabilities'
 
 export const ALL_TOOL_SPECS = [
+  MEMORY_TOOL_SPEC,
   ...TERMINAL_TOOL_SPECS,
   ...TEXT_FILE_TOOL_SPECS,
   ...KB_TOOL_SPECS,

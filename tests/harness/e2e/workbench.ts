@@ -2518,3 +2518,20 @@ export const readOfficePlainText = async (filePath: string): Promise<string> => 
   if (extension === '.pptx') return readPptxPlainText(filePath)
   throw new Error(`unsupported office text path: ${filePath}`)
 }
+
+/** IPC is read-only here; all memory changes under test must go through the UI or the real model. */
+export async function waitForPartnerMemory(
+  page: Page,
+  partnerId: string,
+  predicate: (
+    snapshot: import('../../../src/shared/partnerMemory').PartnerMemorySnapshot
+  ) => boolean
+): Promise<void> {
+  const deadline = Date.now() + 10_000
+  do {
+    const snapshot = await page.evaluate((id) => window.api.partnerMemoryGet(id), partnerId)
+    if (predicate(snapshot)) return
+    await page.waitForTimeout(100)
+  } while (Date.now() < deadline)
+  throw new Error('Memory did not reach the expected persisted state')
+}

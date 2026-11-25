@@ -120,6 +120,7 @@ type ChatRunServiceDeps = {
   runResourceManager: AiRunResourceManager
   browserUseService?: BrowserEmbedService
   webCrawlerService?: WebCrawlerService
+  partnerMemory?: AiRunDeps['partnerMemory']
   userSkillService?: AiRunDeps['userSkillService']
   scheduledTaskService?:
     | import('../scheduler/ScheduledTaskService').ScheduledTaskService
@@ -1316,6 +1317,7 @@ export class ChatRunService {
           browserUseService: this.deps.browserUseService,
           webCrawlerService: this.deps.webCrawlerService,
           scheduledTaskService,
+          partnerMemory: this.deps.partnerMemory,
           userSkillService: this.deps.userSkillService,
           humanRuntimeOverrides
         }

@@ -120,7 +120,7 @@ describe('SQLite migration contract', () => {
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
     expect(migrationRows).toContainEqual({ version: 20, name: 'skill_name_bindings' })
-    expect(migrationRows.at(-1)).toEqual({ version: 24, name: 'office_diff_preference' })
+    expect(migrationRows.at(-1)).toEqual({ version: 25, name: 'partner_memory' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -133,6 +133,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const prepared = new SqliteCore(databasePath)
     prepared.initialize()
+    prepared.exec('DROP TABLE partner_memory')
     prepared.exec(`DROP TABLE partner_user_skill;
       ALTER TABLE llm_config DROP COLUMN manual_models_json;
       ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps;
@@ -168,6 +169,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const previous = new SqliteCore(databasePath)
     previous.initialize()
+    previous.exec('DROP TABLE partner_memory')
     previous.exec(`ALTER TABLE llm_config DROP COLUMN manual_models_json;
       ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps;
       ALTER TABLE app_settings DROP COLUMN theme;
@@ -207,6 +209,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const previous = new SqliteCore(databasePath)
     previous.initialize()
+    previous.exec('DROP TABLE partner_memory')
     previous.exec(`ALTER TABLE llm_config DROP COLUMN manual_models_json;
       ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps;
       ALTER TABLE app_settings DROP COLUMN theme;
@@ -251,8 +254,9 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const prior = new SqliteCore(databasePath)
     prior.initialize()
+    prior.exec('DROP TABLE partner_memory')
     prior.exec(
-      "ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps; DELETE FROM schema_migrations WHERE version=24; UPDATE app_settings SET theme='dark', language='en';"
+      "ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps; DELETE FROM schema_migrations WHERE version>=24; UPDATE app_settings SET theme='dark', language='en';"
     )
     prior.close()
     const upgraded = new SqliteCore(databasePath)
@@ -261,6 +265,41 @@ describe('SQLite migration contract', () => {
       expect(
         upgraded.prepare('SELECT theme, language, open_office_diff_in_wps FROM app_settings').get()
       ).toEqual({ theme: 'dark', language: 'en', open_office_diff_in_wps: 0 })
+    } finally {
+      upgraded.close()
+    }
+  })
+
+  it('upgrades v24 partners with both memory categories enabled and preserves partner data', async () => {
+    const databasePath = await createDatabasePath()
+    const previous = new SqliteCore(databasePath)
+    previous.initialize()
+    previous.exec(`DROP TABLE partner_memory; DELETE FROM schema_migrations WHERE version=25;
+      INSERT INTO partner (id,name,avatar_shape,avatar_color,created_at,updated_at,last_viewed_at)
+      VALUES ('existing','Existing','circle','blue',1,1,1);`)
+    previous.close()
+    const upgraded = new SqliteCore(databasePath)
+    try {
+      upgraded.initialize()
+      expect(
+        upgraded
+          .prepare(
+            'SELECT category, enabled, confirmed, draft, revision FROM partner_memory ORDER BY category'
+          )
+          .all()
+      ).toEqual([
+        {
+          category: 'cooperation_preferences',
+          enabled: 1,
+          confirmed: '',
+          draft: null,
+          revision: 0
+        },
+        { category: 'project_background', enabled: 1, confirmed: '', draft: null, revision: 0 }
+      ])
+      expect(upgraded.prepare("SELECT name FROM partner WHERE id='existing'").get()).toEqual({
+        name: 'Existing'
+      })
     } finally {
       upgraded.close()
     }
@@ -410,6 +449,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const prepared = new SqliteCore(databasePath)
     prepared.initialize()
+    prepared.exec('DROP TABLE partner_memory')
     prepared.prepare('DELETE FROM schema_migrations WHERE version >= 11').run()
     prepared.exec(`DROP INDEX idx_chat_session_message_log_subagent_seq;
       DROP INDEX idx_chat_session_message_log_partner_seq;

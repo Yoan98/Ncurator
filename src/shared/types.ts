@@ -793,6 +793,7 @@ export interface PartnerListItem extends Partner {
 }
 
 export type PartnerCreateRequest = {
+  memoryEnabled?: import('./partnerMemory').PartnerMemoryEnabled
   skillNames: string[]
   name: string
   avatar_shape: PartnerAvatarShape
@@ -806,6 +807,7 @@ export type PartnerCreateResponse = {
 }
 
 export type PartnerUpdateRequest = {
+  memoryEnabled?: import('./partnerMemory').PartnerMemoryEnabled
   skillNames: string[]
   id: string
   name: string

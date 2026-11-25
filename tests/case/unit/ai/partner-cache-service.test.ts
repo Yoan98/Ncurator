@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteCore'
 import { PartnerStore } from '../../../../src/main/services/storage/domains/PartnerStore'
+import { PartnerMemoryStore } from '../../../../src/main/services/storage/domains/PartnerMemoryStore'
 import {
   WorkbenchUiStore,
   createEmptyPartnerUiState
@@ -293,6 +294,16 @@ describe('partner-cache-service', () => {
   })
 
   it('partner-cache-clear-context-can-preserve-or-delete-history', async () => {
+    const memory = new PartnerMemoryStore(sqlite)
+    memory.update({
+      partnerId: 'a',
+      category: 'cooperation_preferences',
+      revision: 0,
+      action: 'write',
+      content: '先给结论'
+    })
+    memory.propose('a', 'project_background', { action: 'append', content: '持续开发桌面端' })
+    const beforeMemory = memory.get('a')
     const source = path.join(root, 'formal.md')
     await fs.writeFile(source, 'A')
     const record = await edit(source, 'first', 'B', old)
@@ -305,5 +316,6 @@ describe('partner-cache-service', () => {
     expect((await records.getRecord({ changeId: record.id })).record).toBeUndefined()
     expect(await exists(record.beforeSnapshotPath!)).toBe(false)
     expect(await fs.readFile(source, 'utf8')).toBe('B')
+    expect(memory.get('a')).toEqual(beforeMemory)
   })
 })

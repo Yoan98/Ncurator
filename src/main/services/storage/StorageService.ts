@@ -1,4 +1,5 @@
 import { PartnerSkillStore } from './domains/PartnerSkillStore'
+import { PartnerMemoryStore } from './domains/PartnerMemoryStore'
 import { EmbeddingSettingsStore } from './domains/EmbeddingSettingsStore'
 import { OpenWithPreferenceStore } from './domains/OpenWithPreferenceStore'
 import path from 'node:path'
@@ -26,6 +27,7 @@ export class StorageService {
   private static instance: StorageService
 
   public readonly partnerSkills: PartnerSkillStore
+  public readonly partnerMemory: PartnerMemoryStore
   public readonly embeddingSettings: EmbeddingSettingsStore
   public readonly sqlite: SqliteCore
   public readonly vector: LanceDbCore
@@ -59,6 +61,7 @@ export class StorageService {
       (input.dbPath ? path.join(path.dirname(input.dbPath), 'app.sqlite') : undefined)
     this.sqlite = new SqliteCore(sqlitePath)
     this.partnerSkills = new PartnerSkillStore(this.sqlite)
+    this.partnerMemory = new PartnerMemoryStore(this.sqlite)
     this.embeddingSettings = new EmbeddingSettingsStore(this.sqlite)
     this.vector = new LanceDbCore(input.vectorPath || input.dbPath, input.errorLogService)
     this.documents = new DocumentsStore(this.sqlite, this.vector)

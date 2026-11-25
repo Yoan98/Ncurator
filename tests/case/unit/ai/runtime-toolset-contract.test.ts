@@ -1,3 +1,4 @@
+import { MEMORY_SCHEMA } from '../../../../src/main/services/ai/human/tools/memory/toolSpecs'
 import { describe, expect, it } from 'vitest'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import { buildModelToolResultDelivery } from '../../../../src/main/services/ai/human/shared/modelToolResult'
@@ -15,6 +16,43 @@ import {
 } from '../../../../src/main/services/ai/human/tools/scheduledTasks/toolSpecs'
 
 describe('ai unit runtime toolset contract', () => {
+  it('exposes only incremental memory writes as a builtin main-agent tool and returns immediately', async () => {
+    expect(getToolsetDefinition('memory')).toMatchObject({
+      source: 'builtin',
+      countsTowardToolBudget: false,
+      toolNames: ['memory']
+    })
+    expect(isToolAllowed({ isSubagent: true }, 'memory')).toBe(false)
+    expect(
+      MEMORY_SCHEMA.safeParse({
+        category: 'project_background',
+        action: 'append',
+        content: '项目目标'
+      }).success
+    ).toBe(true)
+    expect(
+      MEMORY_SCHEMA.safeParse({
+        category: 'cooperation_preferences',
+        action: 'edit',
+        edits: [{ oldText: '简短', newText: '' }]
+      }).success
+    ).toBe(true)
+    for (const args of [
+      { category: 'other', action: 'append', content: '无效' },
+      { category: 'project_background', action: 'read' },
+      { category: 'project_background', action: 'rewrite', content: '无效' },
+      { category: 'project_background', action: 'edit', edits: [] }
+    ])
+      expect(MEMORY_SCHEMA.safeParse(args).success).toBe(false)
+    const result = await buildModelToolResultDelivery({
+      ctx: { platform: 'macos' } as AiRunContext,
+      toolCallId: 'memory-write',
+      args: { category: 'project_background', action: 'append', content: '项目目标' },
+      result: { toolName: 'memory', ok: true, data: {} }
+    })
+    expect(result).toEqual({ ok: true, content: '修改已提交，待用户确认。' })
+  })
+
   it('keeps skill management minimal and restricted to the main partner', () => {
     expect(getToolsetDefinition('agent-control').toolNames).not.toContain('skill_config')
     expect(getToolsetDefinition('skill-management')).toMatchObject({
@@ -98,7 +136,8 @@ describe('ai unit runtime toolset contract', () => {
       'text-file',
       'kb-retrieval',
       'web-browsing',
-      'agent-control'
+      'agent-control',
+      'memory'
     ])
     expect(listExternalToolsetDefinitions().map((definition) => definition.toolsetId)).toEqual([
       'docx-read',
@@ -197,7 +236,8 @@ describe('ai unit runtime toolset contract', () => {
       'text-file',
       'kb-retrieval',
       'web-browsing',
-      'agent-control'
+      'agent-control',
+      'memory'
     ])
   })
 })

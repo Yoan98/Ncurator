@@ -1,3 +1,12 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { SystemMessage } from '@langchain/core/messages'
+import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteCore'
+import { PartnerMemoryStore } from '../../../../src/main/services/storage/domains/PartnerMemoryStore'
+import { refreshSystemContext } from '../../../../src/main/services/ai/human/systemContext'
+import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
+import { defaultPartnerMemoryEnabled } from '../../../../src/shared/partnerMemory'
 import { describe, expect, it } from 'vitest'
 import {
   buildBrainSystemPrompt,
@@ -38,6 +47,65 @@ const titledSection = (text: string, title: string): string => {
 }
 
 describe('ai unit brain prompt formatting', () => {
+  it('refreshes only enabled confirmed memories before the next inference in the same run', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-memory-prompt-'))
+    const sqlite = new SqliteCore(path.join(directory, 'app.sqlite'))
+    try {
+      sqlite.initialize()
+      const ctx = createFakeCtx()
+      sqlite
+        .prepare(
+          'INSERT INTO partner (id,name,avatar_shape,avatar_color,created_at,updated_at,last_viewed_at) VALUES (?, ?, ?, ?, 1,1,1)'
+        )
+        .run(ctx.partnerId, ctx.partnerName, 'circle', 'blue')
+      const memory = new PartnerMemoryStore(sqlite)
+      ctx.partnerMemory = memory
+      memory.propose(ctx.partnerId, 'cooperation_preferences', {
+        action: 'append',
+        content: '只写简体中文'
+      })
+      memory.propose(ctx.partnerId, 'project_background', {
+        action: 'append',
+        content: '正在开发桌面应用'
+      })
+      const cache = createHumanRuntimeCache()
+      cache.messages = [new SystemMessage(buildBrainSystemPrompt({ ctx }))]
+      const state = createInitialHumanState({ taskId: 'memory-task', userInput: '继续' })
+      await refreshSystemContext({ ctx, cache, state })
+      expect(String(cache.messages[0].content)).not.toContain('只写简体中文')
+      const preference = memory.get(ctx.partnerId).memories[0]
+      memory.update({
+        partnerId: ctx.partnerId,
+        category: preference.category,
+        revision: preference.revision,
+        action: 'accept'
+      })
+      await refreshSystemContext({ ctx, cache, state })
+      const confirmedSystem = String(cache.messages[0].content)
+      expect(confirmedSystem).toContain('<长期记忆>')
+      expect(confirmedSystem).toContain('<合作偏好>\n只写简体中文\n</合作偏好>')
+      expect(confirmedSystem).not.toContain('正在开发桌面应用')
+      await refreshSystemContext({ ctx, cache, state })
+      expect(String(cache.messages[0].content)).toBe(confirmedSystem)
+      memory.setEnabled(ctx.partnerId, {
+        ...defaultPartnerMemoryEnabled(),
+        cooperation_preferences: false
+      })
+      await refreshSystemContext({ ctx, cache, state })
+      expect(String(cache.messages[0].content)).not.toContain('<合作偏好>')
+      expect(String(cache.messages[0].content)).toContain('<项目背景>')
+      memory.setEnabled(ctx.partnerId, {
+        cooperation_preferences: false,
+        project_background: false
+      })
+      await refreshSystemContext({ ctx, cache, state })
+      expect(String(cache.messages[0].content)).not.toContain('<长期记忆>')
+    } finally {
+      sqlite.close()
+      await fs.rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('uses the current partner name and keeps workspace roots out of the stable system prompt', () => {
     const ctx = createFakeCtx()
     const system = buildBrainSystemPrompt({ ctx })

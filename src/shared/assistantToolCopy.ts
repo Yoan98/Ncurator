@@ -340,6 +340,7 @@ const TOOL_ITEM_RENDERERS: Record<RuntimeToolName, ToolItemRenderer> = {
     return loadingCopy(label || 'skill', input)
   },
   load_toolset: (input) => loadingCopy(readLoadToolsetNames(input), input),
+  memory: () => toolCopy('更新长期记忆', sentence(text('更新长期记忆'))),
   skill_config: (input) => {
     const label =
       input && 'action' in input && input.action === 'update'

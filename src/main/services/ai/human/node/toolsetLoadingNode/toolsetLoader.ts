@@ -11,6 +11,7 @@ const TOOL_FAMILY_BUILDERS: Record<
   AiToolFamilyId,
   (input: ToolFamilyBuildInput) => StructuredToolInterface[]
 > = {
+  memory: TOOL_FAMILY_DEFINITIONS.memory.buildTools,
   terminal: TOOL_FAMILY_DEFINITIONS.terminal.buildTools,
   'text-file': TOOL_FAMILY_DEFINITIONS['text-file'].buildTools,
   kb: TOOL_FAMILY_DEFINITIONS.kb.buildTools,
@@ -90,6 +91,14 @@ export const buildAvailableTools = (input: {
     })) {
       const name = String(tool.name || '').trim()
       if (!name || seenNames.has(name)) continue
+      if (
+        name === 'memory' &&
+        (!input.ctx.partnerMemory ||
+          !input.ctx.partnerMemory
+            .get(input.ctx.partnerId)
+            .memories.some((memory) => memory.enabled))
+      )
+        continue
       seenNames.add(name)
       tools.push(tool)
     }

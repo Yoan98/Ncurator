@@ -1648,6 +1648,28 @@ const renderSkillPromptExample = (): string => {
   const ctx = {
     partnerId: 'prompt-example',
     partnerName: '周报助手',
+    partnerMemory: {
+      get: (partnerId: string) => ({
+        partnerId,
+        memories: [
+          {
+            category: 'cooperation_preferences' as const,
+            enabled: true,
+            confirmed: '先给结论，使用简体中文。',
+            draft: null,
+            revision: 0
+          },
+          {
+            category: 'project_background' as const,
+            enabled: true,
+            confirmed: '每周整理项目进展和风险。',
+            draft: null,
+            revision: 0
+          }
+        ]
+      }),
+      propose: () => undefined
+    },
     platform: 'macos' as const,
     userSkillService: {
       getRootDirectory: () => path.dirname(directory),

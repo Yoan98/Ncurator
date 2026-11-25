@@ -115,6 +115,7 @@ const TOOL_UI_KINDS = {
   image_generate: 'image-generation',
   load_toolset: 'toolset_loading',
   load_skill: 'skill_loading',
+  memory: 'generic',
   skill_config: 'generic',
   update_plan: 'generic',
   read_image: 'image-read',

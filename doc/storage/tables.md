@@ -41,7 +41,7 @@
 | 字段                           | 类型      | 说明                                                    |
 | ------------------------------ | --------- | ------------------------------------------------------- |
 | `id`                           | TEXT PK   | 固定 `singleton`                                        |
-| `open_office_diff_in_wps` | INTEGER | Word、Excel 差异点击优先使用 WPS，默认 `0` |
+| `open_office_diff_in_wps`      | INTEGER   | Word、Excel 差异点击优先使用 WPS，默认 `0`              |
 | `system_notifications_enabled` | INTEGER   | AI 终态系统通知，默认 `1`                               |
 | `knowledge_index_speed`        | TEXT      | 索引速度 `slow` / `fast`，默认 `slow`                   |
 | `language`                     | TEXT      | 界面语言偏好 `system` / `zh-CN` / `en`，默认 `system`   |
@@ -63,6 +63,19 @@ Workbench 伙伴。
 | `created_at`     | INTEGER | 创建时间       |
 | `updated_at`     | INTEGER | 更新时间       |
 | `last_viewed_at` | INTEGER | 最近查看时间   |
+
+### `partner_memory`
+
+每个伙伴固定两类记忆，以 `(partner_id, category)` 为主键，外键删除伙伴时级联删除。
+
+| 字段         | 类型          | 说明                                                 |
+| ------------ | ------------- | ---------------------------------------------------- |
+| `partner_id` | TEXT FK       | 所属伙伴                                             |
+| `category`   | TEXT          | `cooperation_preferences` 或 `project_background`    |
+| `enabled`    | INTEGER       | 是否启用，默认 1                                     |
+| `confirmed`  | TEXT          | 已确认正文，默认空文本                               |
+| `draft`      | TEXT nullable | AI 待确认稿；NULL 表示无变化，空串表示待确认清空     |
+| `revision`   | INTEGER       | 正文、草稿或启用状态变化时递增，保存和审核检查此版本 |
 
 ### `partner_user_skill`
 

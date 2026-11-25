@@ -5,9 +5,9 @@ import { buildBrainSystemPrompt } from './prompts/brain'
 import { loadCurrentUserSkills } from './userSkills'
 
 /** Rebuild, rather than append, the sole instruction snapshot before budget checks and inference.
- * Bodies never enter the transcript/compaction, so restoring names always reads current bindings/files.
+ * Skills and confirmed memories are read from their current sources, including during an active run.
  */
-export const refreshUserSkillContext = async (input: {
+export const refreshSystemContext = async (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState

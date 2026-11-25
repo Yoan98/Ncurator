@@ -87,6 +87,10 @@ graph 从 `context_budget` 进入；当前 `user` 的写入分工见第 2.2 节�
 
 Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `messagesFromLogEntries`，与新 run 投影同一入口。System、Compact User、当前 build User 除外。禁止 push 流式 AIMessage；`context_budget` 已写入的 log `user` 不得再投影一遍。
 
+### 伙伴长期记忆注入
+
+每次预算检查和 brain 推理前重建唯一 System，读取当前伙伴启用的已确认文本，放入 `<长期记忆>` 下的 `<合作偏好>`、`<项目背景>` 块；两类含义及主动使用 `memory` 的规则只在 System 定义，用户本次明确要求优先。未确认稿不注入，关闭的类别省略，两类均关闭时省略整块且不暴露工具。当前运行中确认后，下一次推理读取最新正文；已发出的请求不改写。复用同一刷新入口处理新 run、resume、compaction 后续请求，未变内容保持稳定，不追加重复 System 块。工具历史仍按现有 transcript 管道保存。
+
 ### 1.6 运行中追加消息的安全交接
 
 - 普通 `running` run 可在 `ai_run.pending_messages_json` 保存多条待处理消息。等待审批或提问时，Main 拒绝普通消息追加。
@@ -942,7 +946,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1      | HTTP status         | 401/402/403 → 不重试；408/429/500/502/503/504 → 可重试（有上限）；**429 使用指数退避**（2s 起、上限 15s）                                                                                                                                                                                |
 | 2      | providerCode / type | `insufficient_balance`、`quota_exceeded`、`invalid_api_key`、`authentication_error`… → 不重试；`rate_limit_exceeded`、`timeout`、`request_timeout`、`server_error`、`service_unavailable`、`resource_exhausted`… → 可重试；`rate_limit_exceeded` / `resource_exhausted` 使用同上指数退避 |
-| 3      | 类型信号            | `constructor.name` 为 `APIConnectionError` / `APIConnectionTimeoutError`，或 `error.name === 'TimeoutError'`（含一层 `cause`）→ 可重试、短退避；馆长瞬时传输失败使用固定 5 秒的连接退避，并用同一 requestId 去重                                                                                                    |
+| 3      | 类型信号            | `constructor.name` 为 `APIConnectionError` / `APIConnectionTimeoutError`，或 `error.name === 'TimeoutError'`（含一层 `cause`）→ 可重试、短退避；馆长瞬时传输失败使用固定 5 秒的连接退避，并用同一 requestId 去重                                                                         |
 | 4      | unknown             | **不重试**；不匹配文案                                                                                                                                                                                                                                                                   |
 
 #### 告警（不停跑）

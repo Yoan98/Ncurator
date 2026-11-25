@@ -23,6 +23,25 @@ export const en = {
     openWebsiteError: 'Could not open the website. Please try again.',
     storage: 'Couldn’t read or save your sign-in credentials. Try again.'
   },
+  partnerMemory: {
+    title: 'Long-term memory',
+    preferences: 'Collaboration preferences',
+    background: 'Project background',
+    preferencesHelp:
+      'Lasting preferences for communication, wording, delivery formats, and collaboration.',
+    backgroundHelp: 'Goals, important facts, and lasting agreements for ongoing projects.',
+    help: 'About this memory',
+    accept: 'Accept',
+    reject: 'Reject',
+    saving: 'Saving…',
+    retry: 'Retry',
+    disabled: 'This category is off. Its content is kept. Enable it in partner settings.',
+    loadError: 'Could not load memory. Please retry.',
+    saveError: 'Could not save. Your edits are kept. Please retry.',
+    reviewChanged: 'Memory has changed. Review it before accepting or rejecting.',
+    tooLong: 'Limit: {{limit}} characters. Shorten the text to save.',
+    scroll: 'Scroll memory'
+  },
   userSkills: {
     contentChanged:
       'This skill was updated. Your draft is preserved; reopen to view the latest content.',

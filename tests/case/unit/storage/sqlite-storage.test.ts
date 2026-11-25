@@ -1,3 +1,5 @@
+import { PartnerMemoryStore } from '../../../../src/main/services/storage/domains/PartnerMemoryStore'
+import { defaultPartnerMemoryEnabled } from '../../../../src/shared/partnerMemory'
 import { OpenWithPreferenceStore } from '../../../../src/main/services/storage/domains/OpenWithPreferenceStore'
 import { LlmConfigStore } from '../../../../src/main/services/storage/domains/LlmConfigStore'
 import { projectMessageLogRecords } from '../../../../src/main/services/ai/human/memory/transcript'
@@ -103,6 +105,161 @@ describe('sqlite storage core and stores', () => {
   afterEach(async () => {
     sqlite.close()
     if (tempDir) await fs.rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('accumulates memory appends and edits against the latest draft, then accepts categories independently', () => {
+    const store = new PartnerMemoryStore(sqlite)
+    const get = () => store.get('partner-1').memories[0]
+    expect(store.get('partner-1').memories).toHaveLength(2)
+    expect(
+      store
+        .get('partner-1')
+        .memories.every(
+          (memory) => memory.enabled && memory.confirmed === '' && memory.draft === null
+        )
+    ).toBe(true)
+    store.propose('partner-1', 'cooperation_preferences', { action: 'append', content: '语言自然' })
+    store.propose('partner-1', 'cooperation_preferences', { action: 'append', content: '结果简洁' })
+    store.propose('partner-1', 'cooperation_preferences', {
+      action: 'edit',
+      edits: [{ oldText: '自然', newText: '直接' }]
+    })
+    store.propose('partner-1', 'cooperation_preferences', {
+      action: 'edit',
+      edits: [{ oldText: '简洁', newText: '精炼' }]
+    })
+    store.propose('partner-1', 'cooperation_preferences', {
+      action: 'edit',
+      edits: [{ oldText: '直接', newText: '清楚' }]
+    })
+    store.propose('partner-1', 'project_background', { action: 'append', content: '发布桌面端' })
+    expect(get()).toMatchObject({ confirmed: '', draft: '语言清楚\n结果精炼' })
+    expect(
+      store.update({
+        partnerId: 'partner-1',
+        category: 'cooperation_preferences',
+        revision: get().revision,
+        action: 'accept'
+      }).status
+    ).toBe('saved')
+    expect(get()).toMatchObject({ confirmed: '语言清楚\n结果精炼', draft: null })
+    expect(store.get('partner-1').memories[1].draft).toBe('发布桌面端')
+    expect(new PartnerMemoryStore(sqlite).get('partner-1')).toEqual(store.get('partner-1'))
+  })
+
+  it('applies a memory batch atomically and rejects missing, ambiguous and overlapping anchors', () => {
+    const store = new PartnerMemoryStore(sqlite)
+    store.propose('partner-1', 'cooperation_preferences', {
+      action: 'append',
+      content: '自然表达，保持自然。答案简短。'
+    })
+    const before = store.get('partner-1')
+    for (const edits of [
+      [
+        { oldText: '答案', newText: '回复' },
+        { oldText: '不存在', newText: '无' }
+      ],
+      [{ oldText: '自然', newText: '直接' }],
+      [
+        { oldText: '答案简短', newText: '回复简洁' },
+        { oldText: '简短', newText: '详细' }
+      ],
+      [{ oldText: '', newText: '无' }]
+    ]) {
+      expect(() =>
+        store.propose('partner-1', 'cooperation_preferences', { action: 'edit', edits })
+      ).toThrow()
+      expect(store.get('partner-1')).toEqual(before)
+    }
+    store.propose('partner-1', 'cooperation_preferences', {
+      action: 'edit',
+      edits: [{ oldText: '自然表达', newText: '直接表达' }]
+    })
+    expect(() =>
+      store.propose('partner-1', 'cooperation_preferences', {
+        action: 'edit',
+        edits: [{ oldText: '自然表达', newText: '随意表达' }]
+      })
+    ).toThrow(/not found/)
+  })
+
+  it('protects user edits and unseen AI updates with revisions and retains data on disable and restart', async () => {
+    const store = new PartnerMemoryStore(sqlite)
+    const current = () => store.get('partner-1').memories[0]
+    const update = (action: 'write' | 'accept' | 'reject', revision: number, content?: string) =>
+      store.update({
+        partnerId: 'partner-1',
+        category: 'cooperation_preferences',
+        action,
+        revision,
+        content
+      })
+    update('write', current().revision, '简洁')
+    store.propose('partner-1', 'cooperation_preferences', { action: 'append', content: '用中文' })
+    const shown = current()
+    store.propose('partner-1', 'cooperation_preferences', { action: 'append', content: '先给结果' })
+    expect(update('accept', shown.revision).status).toBe('conflict')
+    expect(update('write', shown.revision, '旧编辑').status).toBe('conflict')
+    update('write', current().revision, '简洁\n用中文\n先给结论')
+    update('reject', current().revision)
+    expect(current()).toMatchObject({ confirmed: '简洁', draft: null })
+    store.setEnabled('partner-1', {
+      ...defaultPartnerMemoryEnabled(),
+      cooperation_preferences: false
+    })
+    expect(() =>
+      store.propose('partner-1', 'cooperation_preferences', {
+        action: 'append',
+        content: '不应保存'
+      })
+    ).toThrow(/disabled/)
+    sqlite.close()
+    sqlite = new SqliteCore(path.join(tempDir, 'app.sqlite'))
+    sqlite.initialize()
+    const reopened = new PartnerMemoryStore(sqlite)
+    expect(reopened.get('partner-1').memories[0]).toMatchObject({
+      confirmed: '简洁',
+      draft: null,
+      enabled: false
+    })
+    reopened.setEnabled('partner-1', defaultPartnerMemoryEnabled())
+    expect(reopened.get('partner-1').memories[0].confirmed).toBe('简洁')
+    await new PartnerStore(sqlite).deletePartner('partner-1')
+    expect(sqlite.prepare('SELECT * FROM partner_memory').all()).toEqual([])
+  })
+
+  it('keeps an empty pending deletion distinct from no draft and never truncates over-limit content', () => {
+    const store = new PartnerMemoryStore(sqlite)
+    const current = () => store.get('partner-1').memories[0]
+    store.update({
+      partnerId: 'partner-1',
+      category: 'cooperation_preferences',
+      revision: current().revision,
+      action: 'write',
+      content: '简洁'
+    })
+    store.propose('partner-1', 'cooperation_preferences', {
+      action: 'edit',
+      edits: [{ oldText: '简洁', newText: '' }]
+    })
+    expect(current()).toMatchObject({ confirmed: '简洁', draft: '' })
+    const before = current()
+    expect(() =>
+      store.propose('partner-1', 'cooperation_preferences', {
+        action: 'append',
+        content: '字'.repeat(2001)
+      })
+    ).toThrow(/2000/)
+    expect(current()).toEqual(before)
+    store.update({
+      partnerId: 'partner-1',
+      category: 'cooperation_preferences',
+      revision: current().revision,
+      action: 'write',
+      content: '简洁'
+    })
+    expect(current().draft).toBeNull()
+    expect(() => store.get('missing-partner')).toThrow(/not found/)
   })
 
   it('keeps exact manual model names with their service through edits and reopening the database', async () => {
@@ -257,7 +414,8 @@ describe('sqlite storage core and stores', () => {
       { version: 21, name: 'embedding_models' },
       { version: 22, name: 'llm_manual_models' },
       { version: 23, name: 'app_theme' },
-      { version: 24, name: 'office_diff_preference' }
+      { version: 24, name: 'office_diff_preference' },
+      { version: 25, name: 'partner_memory' }
     ])
 
     const legacyTables = sqlite

@@ -8,7 +8,7 @@ import {
   renderUserSkills,
   type UserSkillReader
 } from '../../../../src/main/services/ai/human/userSkills'
-import { refreshUserSkillContext } from '../../../../src/main/services/ai/human/userSkillContext'
+import { refreshSystemContext } from '../../../../src/main/services/ai/human/systemContext'
 import { MAX_USER_SKILL_BODY_BYTES } from '../../../../src/shared/userSkills'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../../../../src/main/services/ai/human/constants'
 import { EXTERNAL_RUNTIME_TOOLSET_IDS } from '../../../../src/main/services/ai/human/toolsets'
@@ -208,16 +208,16 @@ describe('user instruction skill runtime', () => {
       loadedSkillNames: [],
       skippedDuplicateSkillNames: ['a']
     })
-    state = await refreshUserSkillContext({ ...f, state })
+    state = await refreshSystemContext({ ...f, state })
     const firstPrompt = String(f.cache.messages![0].content)
-    await refreshUserSkillContext({ ...f, state })
+    await refreshSystemContext({ ...f, state })
     expect(String(f.cache.messages![0].content)).toBe(firstPrompt)
     expect(firstPrompt.split('BODY_A')).toHaveLength(2)
     expect(firstPrompt).toContain('/skills/a')
     expect(JSON.stringify(f.log)).not.toContain('BODY_A')
     state = await f.loadSkills(['b'], state)
     state = await f.loadSkills(['a'], state)
-    await refreshUserSkillContext({ ...f, state })
+    await refreshSystemContext({ ...f, state })
     const orderedPrompt = String(f.cache.messages![0].content)
     expect(state.skills.loadedSkillNames).toEqual(['a', 'b'])
     expect(orderedPrompt.indexOf('BODY_A')).toBeLessThan(orderedPrompt.indexOf('BODY_B'))
@@ -289,13 +289,13 @@ describe('user instruction skill runtime', () => {
     const f = fixture()
     let state = await f.loadToolsets(['docx-read'])
     state = await f.loadSkills(['a'], state)
-    state = await refreshUserSkillContext({ ...f, state })
+    state = await refreshSystemContext({ ...f, state })
     f.enabled.set('a', 'UPDATED_BODY')
-    state = await refreshUserSkillContext({ ...f, state })
+    state = await refreshSystemContext({ ...f, state })
     expect(String(f.cache.messages![0].content)).toContain('UPDATED_BODY')
     expect(String(f.cache.messages![0].content)).not.toContain('BODY_A')
     f.enabled.delete('a')
-    state = await refreshUserSkillContext({ ...f, state })
+    state = await refreshSystemContext({ ...f, state })
     expect(state.skills.loadedSkillNames).toEqual([])
     expect(state.toolsets.loadedToolsetIds).toEqual(['docx-read'])
     expect(Object.keys(f.cache.toolsetTools)).toEqual(['docx-read'])
@@ -305,7 +305,7 @@ describe('user instruction skill runtime', () => {
       payload: { loadedSkillNames: [] }
     })
     f.enabled.set('a', 'RE_ENABLED')
-    await refreshUserSkillContext({ ...f, state })
+    await refreshSystemContext({ ...f, state })
     expect(String(f.cache.messages![0].content)).not.toContain('RE_ENABLED')
   })
 
@@ -375,7 +375,7 @@ describe('user instruction skill runtime', () => {
     f.enabled.delete('b')
     f.enabled.set('a', 'CURRENT_BODY')
     f.cache.messages = [new SystemMessage('rebuilt'), new HumanMessage('compacted summary')]
-    const restored = await refreshUserSkillContext({
+    const restored = await refreshSystemContext({
       ...f,
       state: {
         ...f.state,

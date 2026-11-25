@@ -18,6 +18,13 @@ type RuntimeToolsetCatalogEntry = {
 }
 
 export const RUNTIME_TOOLSET_CATALOG = {
+  memory: {
+    familyId: 'memory',
+    source: 'builtin',
+    countsTowardToolBudget: false,
+    title: 'memory',
+    description: '新增或修改当前伙伴的长期记忆。'
+  },
   terminal: {
     familyId: 'terminal',
     source: 'builtin',
