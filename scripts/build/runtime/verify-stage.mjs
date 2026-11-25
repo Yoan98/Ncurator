@@ -202,6 +202,21 @@ export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDire
   for (const specifier of formulaModules) {
     loadStageModule(stageRequire, stageNodeModules, specifier)
   }
+  for (const [specifier, exportName] of [
+    ['@google/genai', 'GoogleGenAI'],
+    ['@browserbasehq/stagehand', 'Stagehand']
+  ]) {
+    await loadStageExport(stageRequire, stageNodeModules, specifier, exportName)
+  }
+  const fontkit = loadStageModule(stageRequire, stageNodeModules, 'fontkit')
+  const previewManifest = stageRequire.resolve('pptx-kit-preview/package.json')
+  assertInside(stageNodeModules, previewManifest, 'PPT preview fonts')
+  const font = fontkit.create(
+    fs.readFileSync(path.join(path.dirname(previewManifest), 'fonts', 'Carlito-Regular.ttf'))
+  )
+  const fontGlyphCount = font.layout('NCurator 2026').glyphs.length
+  if (!fontGlyphCount) throw new Error('staged font layout returned no glyphs')
+
   const { Tiktoken } = loadStageModule(stageRequire, stageNodeModules, 'js-tiktoken/lite')
   if (typeof Tiktoken !== 'function') throw new Error('staged tokenizer constructor is missing')
 
@@ -215,6 +230,7 @@ export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDire
     formulaSvgBytes: Buffer.byteLength(formulaMarkup),
     excelWorkbookBytes: workbookBytes.byteLength,
     excelFormulaModules: formulaModules.length,
-    suppressedPdfWarnings
+    suppressedPdfWarnings,
+    fontGlyphCount
   }
 }

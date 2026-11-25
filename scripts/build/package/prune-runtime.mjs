@@ -76,6 +76,55 @@ const UNUSED_DISTRIBUTIONS = [
       'dist/transformers.node.min.cjs',
       'dist/transformers.node.min.mjs'
     ]
+  },
+  {
+    packageName: '@google/genai',
+    paths: ['dist/web', 'dist/index.cjs', 'dist/index.mjs', 'web']
+  },
+  {
+    packageName: '@langchain/community',
+    paths: [
+      'dist/vectorstores',
+      'dist/chat_models',
+      'dist/tools',
+      'dist/embeddings',
+      'dist/llms',
+      'dist/agents',
+      'dist/chains',
+      'dist/retrievers',
+      'dist/graphs',
+      'dist/caches',
+      'dist/stores',
+      'dist/storage',
+      'dist/document_compressors',
+      'dist/document_transformers',
+      'dist/experimental',
+      'dist/indexes',
+      'dist/memory',
+      'dist/structured_query'
+    ]
+  },
+  {
+    packageName: '@langchain/classic',
+    paths: [
+      'dist/chains',
+      'dist/agents',
+      'dist/experimental',
+      'dist/output_parsers',
+      'dist/retrievers',
+      'dist/evaluation',
+      'dist/memory',
+      'dist/hub',
+      'dist/smith',
+      'dist/util',
+      'dist/vectorstores',
+      'dist/chat_models',
+      'dist/cache'
+    ]
+  },
+  {
+    packageName: 'fontkit',
+    paths: ['dist/browser.cjs', 'dist/browser-module.mjs']
   }
 ]
 

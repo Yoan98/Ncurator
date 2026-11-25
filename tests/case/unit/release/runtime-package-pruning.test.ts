@@ -51,7 +51,14 @@ describe('targeted runtime package pruning', () => {
       'pdfjs-dist/legacy/build/pdf.mjs',
       'pdfjs-dist/legacy/build/pdf.worker.mjs',
       'pdfjs-dist/legacy/build/pdf.sandbox.mjs',
-      '@huggingface/transformers/dist/transformers.node.mjs'
+      '@huggingface/transformers/dist/transformers.node.mjs',
+      '@google/genai/dist/node/index.cjs',
+      '@google/genai/dist/node/index.mjs',
+      '@langchain/community/dist/document_loaders/fs/docx.cjs',
+      '@langchain/community/dist/document_loaders/web/cheerio.js',
+      '@langchain/classic/dist/document_loaders/fs/buffer.js',
+      'fontkit/dist/main.cjs',
+      'fontkit/dist/module.mjs'
     ]
     const removable = [
       '@univerjs/sheets-formula/lib/umd/index.js',
@@ -74,7 +81,13 @@ describe('targeted runtime package pruning', () => {
       '@huggingface/transformers/dist/transformers.web.min.js',
       '@huggingface/transformers/dist/transformers.node.cjs',
       '@huggingface/transformers/dist/transformers.node.min.cjs',
-      '@huggingface/transformers/dist/transformers.node.min.mjs'
+      '@huggingface/transformers/dist/transformers.node.min.mjs',
+      '@google/genai/dist/web/index.mjs',
+      '@google/genai/dist/index.cjs',
+      '@langchain/community/dist/vectorstores/unused.js',
+      '@langchain/classic/dist/agents/unused.cjs',
+      'fontkit/dist/browser.cjs',
+      'fontkit/dist/browser-module.mjs'
     ]
     await Promise.all([...retained, ...removable].map(writeFixture))
     const result = pruneRuntimePackages({
@@ -104,7 +117,11 @@ describe('targeted runtime package pruning', () => {
       'js-tiktoken/dist/ranks/o200k_base.js',
       'pdfjs-dist/build/pdf.mjs',
       'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
-      '@huggingface/transformers/dist/transformers.node.cjs'
+      '@huggingface/transformers/dist/transformers.node.cjs',
+      '@google/genai/dist/web/index.mjs',
+      '@langchain/community/dist/vectorstores/required.js',
+      '@langchain/classic/dist/agents/required.cjs',
+      'fontkit/dist/browser.cjs'
     ]) {
       expect(() =>
         assertRuntimePruningTrace({

@@ -52,7 +52,7 @@ describe('package size budget', () => {
       installedApp: { baselineMiB: 857.2, hardLimitMiB: 870 },
       appAsar: { baselineMiB: 199.2, hardLimitMiB: 205 },
       dmg: { baselineMiB: 303.7, hardLimitMiB: 310 },
-      zip: { baselineMiB: 289.1, hardLimitMiB: 325 }
+      zip: { baselineMiB: 320.8, hardLimitMiB: 325 }
     })
     expect(config.platforms['darwin-x64']).toBeUndefined()
   })

@@ -67,7 +67,7 @@ for (const name of await readdir(outDir, { recursive: true })) {
   const file = path.join(outDir, name)
   await writeFile(
     file + '.br',
-    brotliCompressSync(await readFile(file), { params: { [constants.BROTLI_PARAM_QUALITY]: 7 } })
+    brotliCompressSync(await readFile(file), { params: { [constants.BROTLI_PARAM_QUALITY]: 11 } })
   )
   await unlink(file)
 }
