@@ -26,7 +26,7 @@ export const en = {
   partnerMemory: {
     title: 'Long-term memory',
     configHelp:
-      'Remember preferences and project context. AI changes need approval. Turning off keeps saved memories.',
+      'Memories of your collaboration preferences and project context will gradually form as you chat. Each memory change will require your confirmation.',
     preferences: 'Collaboration preferences',
     background: 'Project background',
     preferencesPlaceholder: 'e.g. Lead with conclusions and keep answers concise.',
