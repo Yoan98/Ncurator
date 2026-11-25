@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react'
 import { Popover, Spin, Tooltip } from 'antd'
-import { LuBrain, LuCheck, LuX, LuRotateCw, LuMessageSquare, LuEraser } from 'react-icons/lu'
+import { LuBrain, LuCheck, LuX, LuRotateCw } from 'react-icons/lu'
 import { HiOutlineQuestionMarkCircle } from 'react-icons/hi2'
 import { PARTNER_MEMORY_LIMITS, type PartnerMemoryCategory } from '../../../../shared/partnerMemory'
 import { t } from '../../i18n'
@@ -9,15 +9,6 @@ import { usePartnerMemory } from './usePartnerMemory'
 import './partnerMemory.css'
 
 const MemoryTextEditor = lazy(() => import('./MemoryTextEditor'))
-
-export function ClearChatIcon() {
-  return (
-    <span className="relative inline-flex h-5 w-5" aria-hidden="true">
-      <LuMessageSquare className="h-[18px] w-[18px]" />
-      <LuEraser className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-[var(--notion-page)]" />
-    </span>
-  )
-}
 
 export default function PartnerMemoryPopover({ partnerId }: { partnerId: string }) {
   const memory = usePartnerMemory(partnerId)

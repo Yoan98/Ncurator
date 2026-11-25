@@ -173,6 +173,67 @@ describe('workbench conversation e2e', () => {
 
           const clearButton = getWorkbenchLocator(page, workbenchSelectors.clearContextButton)
           await clearButton.waitFor({ state: 'visible' })
+          await page.mouse.move(500, 300)
+          const iconGeometry = await clearButton.evaluate((button) => {
+            const frame = button.querySelector('span')!
+            const [bubble, eraser] = frame.querySelectorAll('svg')
+            const frameRect = frame.getBoundingClientRect()
+            const bubbleRect = bubble.getBoundingClientRect()
+            const eraserRect = eraser.getBoundingClientRect()
+            return {
+              rootFontSize: getComputedStyle(document.documentElement).fontSize,
+              frameWidth: frameRect.width,
+              frameHeight: frameRect.height,
+              bubbleWidth: bubbleRect.width,
+              bubbleHeight: bubbleRect.height,
+              eraserWidth: eraserRect.width,
+              eraserHeight: eraserRect.height,
+              eraserRightOffset: frameRect.right - eraserRect.right,
+              eraserBottomOffset: frameRect.bottom - eraserRect.bottom
+            }
+          })
+          await runtime.assertThat(
+            Math.abs(iconGeometry.frameWidth - 18) <= 0.05 &&
+              Math.abs(iconGeometry.frameHeight - 18) <= 0.05 &&
+              Math.abs(iconGeometry.bubbleWidth - 16) <= 0.05 &&
+              Math.abs(iconGeometry.bubbleHeight - 16) <= 0.05 &&
+              Math.abs(iconGeometry.eraserWidth - 10) <= 0.05 &&
+              Math.abs(iconGeometry.eraserHeight - 10) <= 0.05 &&
+              Math.abs(iconGeometry.eraserRightOffset) <= 0.05 &&
+              Math.abs(iconGeometry.eraserBottomOffset) <= 0.05,
+            {
+              name: 'clear-icon-part-geometry',
+              message: '真实应用内气泡为 16px、橡皮为 10px，均收在 18px 外框内，不随根字号缩小。',
+              data: iconGeometry
+            }
+          )
+          const captureTopbarActions = async (name: string): Promise<void> => {
+            const bar = await page.locator('.nc-topbar').boundingBox()
+            if (!bar) throw new Error('聊天顶栏不可见')
+            const relativePath = `${name}.png`
+            await page.screenshot({
+              path: path.join(
+                resolveRunArtifactsDir({
+                  scope: 'workbench/conversation/timeline',
+                  caseId: CASE_ID,
+                  runId: runtime.runId
+                }),
+                relativePath
+              ),
+              clip: {
+                x: Math.max(bar.x, bar.x + bar.width - 120),
+                y: bar.y,
+                width: Math.min(120, bar.width),
+                height: bar.height
+              }
+            })
+            await runtime.captureArtifact({
+              kind: 'screenshot',
+              relativePath,
+              message: '真实聊天顶栏操作图标近景。'
+            })
+          }
+          await captureTopbarActions('clear-icon-default')
           await runtime.captureScreenshot({
             name: 'clear-messages-topbar',
             message: '清空消息记录入口位于主区标题栏右端。'
@@ -185,6 +246,14 @@ describe('workbench conversation e2e', () => {
             (await clearButton.locator('svg').count()) === 2 &&
             !(await clearButton.textContent())?.trim()
           await clearButton.hover()
+          await page.waitForFunction((testId) => {
+            const button = document.querySelector(`[data-testid="${testId}"]`)!
+            const eraser = button.querySelector('span > svg:last-child')!
+            return (
+              getComputedStyle(button).backgroundColor === getComputedStyle(eraser).backgroundColor
+            )
+          }, workbenchSelectors.clearContextButton)
+          await captureTopbarActions('clear-icon-hover')
           const tooltipText = await page.locator('.ant-tooltip-inner').first().textContent()
           const inputBeforeClear = (
             (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
@@ -414,7 +483,7 @@ describe('workbench conversation e2e', () => {
               result.selectedDeletesHistory &&
               result.formalFileUnchanged &&
               result.tooltipText.includes(`「${result.partnerName}」`) &&
-              result.tooltipText.includes('无法恢复') &&
+              !result.tooltipText.includes('无法恢复') &&
               result.userStillVisibleAfterCancel &&
               result.userMessageCount === 0 &&
               result.messageLogEmpty &&

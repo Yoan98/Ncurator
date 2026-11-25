@@ -18,9 +18,9 @@ import {
   HiOutlineBookOpen,
   HiOutlinePencilSquare,
   HiOutlineQuestionMarkCircle,
-  HiPlus,
   HiTrash
 } from 'react-icons/hi2'
+import { LuPlus } from 'react-icons/lu'
 import { BsPinAngle, BsPinAngleFill } from 'react-icons/bs'
 import type {
   AiArtifactRef,
@@ -96,11 +96,10 @@ import {
 } from '../../../shared/workbench/messageTimeline'
 import { collectUserMessageTimeIds } from '../../../shared/workbench/messageTimeLabel'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
+import ClearChatIcon from '../components/workbench/ClearChatIcon'
 import UserSkillsView from '../components/userSkills/UserSkillsView'
 import PartnerSkillPicker from '../components/userSkills/PartnerSkillPicker'
-import PartnerMemoryPopover, {
-  ClearChatIcon
-} from '../components/partnerMemory/PartnerMemoryPopover'
+import PartnerMemoryPopover from '../components/partnerMemory/PartnerMemoryPopover'
 import PartnerMemoryConfig from '../components/partnerMemory/PartnerMemoryConfig'
 import { usePartnerMemoryConfig } from '../components/partnerMemory/usePartnerMemoryConfig'
 import { usePartnerSkillDraft } from '../components/userSkills/usePartnerSkillDraft'
@@ -5507,7 +5506,10 @@ const ChatPage: React.FC = () => {
             data-testid={workbenchSelectors.newPartnerButton}
             aria-label={t(($) => $.workbench.createPartner)}
           >
-            <HiPlus className="h-[18px] w-[18px] shrink-0 text-[var(--notion-text-soft)]" />
+            <LuPlus
+              className="h-[18px] w-[18px] shrink-0 text-[var(--notion-text-soft)]"
+              aria-hidden="true"
+            />
             <span>{t(($) => $.workbench.createPartner)}</span>
           </button>
           <button
@@ -5647,7 +5649,7 @@ const ChatPage: React.FC = () => {
                       data-testid={workbenchSelectors.emptyDragRegion}
                     />
                     {currentPartnerId && (
-                      <div className="pointer-events-auto ml-auto flex items-center pr-3">
+                      <div className="pointer-events-auto ml-auto flex items-center pr-1">
                         <PartnerMemoryPopover key={currentPartnerId} partnerId={currentPartnerId} />
                       </div>
                     )}
@@ -5703,13 +5705,13 @@ const ChatPage: React.FC = () => {
                     {clearContextVisible ? (
                       <Tooltip
                         placement="bottomRight"
-                        title={t(($) => $.workbench.clearAllMessagesForThisCannotBeUndone, {
+                        title={t(($) => $.workbench.clearAllMessagesForPartner, {
                           value1: currentPartner?.name || t(($) => $.common.partner)
                         })}
                       >
                         <button
                           type="button"
-                          className="nc-topbar-action workbench-no-drag"
+                          className="nc-topbar-action workbench-no-drag group"
                           style={WORKBENCH_NO_DRAG_REGION_STYLE}
                           onClick={handleClearPartnerContext}
                           data-testid={workbenchSelectors.clearContextButton}

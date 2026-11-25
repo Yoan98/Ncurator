@@ -927,7 +927,7 @@ export const zh = {
     thePartnerWasBusyWhenWasScheduledSoThis:
       '「{{value1}}」到点时伙伴正忙，本次已取消。点击可立即按该定时任务执行。',
     clearMessageHistory: '清空消息记录',
-    clearAllMessagesForThisCannotBeUndone: '清空「{{value1}}」的全部消息记录，无法恢复。',
+    clearAllMessagesForPartner: '清空「{{value1}}」的全部消息记录。',
     dropToAddFilesOrFolders: '松开以添加文件或文件夹',
     revertThisChangeAnyway: '仍然回退这次修改？',
     revertThisChange3: '回退这次修改？',

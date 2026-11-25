@@ -583,12 +583,43 @@ textarea,
   opacity: 0;
 }
 
-.nc-sidebar-titlebar-toggle {
-  @apply flex h-8 w-8 items-center justify-center rounded-[6px] text-[var(--notion-text-faint)] transition-colors hover:bg-[var(--notion-surface-hover)] hover:text-[var(--notion-text)];
-  background: transparent;
+.nc-sidebar-titlebar-toggle,
+.nc-topbar-action,
+.nc-content-panel-titlebar-toggle,
+.nc-resource-tabbar-action {
+  display: inline-flex;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 0;
+  border-radius: 6px;
+  color: var(--notion-text-soft);
+  background: transparent;
+  cursor: pointer;
   pointer-events: auto;
   -webkit-app-region: no-drag;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.nc-sidebar-titlebar-toggle:hover,
+.nc-topbar-action:hover,
+.nc-content-panel-titlebar-toggle:hover,
+.nc-resource-tabbar-action:hover {
+  color: var(--notion-text);
+  background: var(--notion-surface-hover);
+}
+
+.nc-sidebar-titlebar-toggle:focus-visible,
+.nc-topbar-action:focus-visible,
+.nc-content-panel-titlebar-toggle:focus-visible,
+.nc-resource-tabbar-action:focus-visible {
+  outline: 2px solid var(--notion-accent-blue);
+  outline-offset: 2px;
 }
 
 .nc-left-titlebar-chrome {
@@ -1282,6 +1313,7 @@ textarea,
 }
 
 .nc-topbar {
+  column-gap: 4px;
   @apply flex shrink-0 items-center justify-between border-b border-[var(--notion-line)] bg-[var(--notion-page)] px-4;
   position: relative;
   z-index: 4;
@@ -1306,29 +1338,9 @@ textarea,
   z-index: 2;
 }
 
-/* Topbar 里的低频会话操作：常态中性灰，hover / 聚焦才提亮，不抢标题。 */
 .nc-topbar-action {
   position: relative;
   z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  height: 26px;
-  padding: 0 8px;
-  border-radius: 6px;
-  color: var(--notion-text-faint, var(--notion-text-faint));
-  font-size: 12px;
-  line-height: 1;
-  white-space: nowrap;
-  transition:
-    color 160ms ease,
-    background-color 160ms ease;
-}
-
-.nc-topbar-action:hover,
-.nc-topbar-action:focus-visible {
-  color: var(--notion-text, var(--notion-text));
-  background: var(--notion-wash, var(--notion-surface));
-  outline: none;
 }
 
 .nc-resource-tabbar {
@@ -1370,30 +1382,7 @@ textarea,
 .nc-content-panel-titlebar-toggle {
   position: relative;
   z-index: 5;
-  display: inline-flex;
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  color: var(--notion-text-soft);
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
   margin-right: 8px;
-  pointer-events: auto;
-  -webkit-app-region: no-drag;
-  transition:
-    color 150ms ease,
-    background-color 150ms ease;
-}
-
-.nc-content-panel-titlebar-toggle:hover,
-.nc-content-panel-titlebar-toggle:focus-visible {
-  color: var(--notion-text);
-  background: var(--notion-surface);
-  outline: none;
 }
 
 .nc-topbar-collapsed-safe-zone {

@@ -1,4 +1,5 @@
 import React from 'react'
+import { LuPanelLeft, LuPanelRight } from 'react-icons/lu'
 
 type SidebarPanelIconProps = {
   className?: string
@@ -6,33 +7,8 @@ type SidebarPanelIconProps = {
 }
 
 const SidebarPanelIcon: React.FC<SidebarPanelIconProps> = ({ className, variant = 'collapse' }) => {
-  const dividerX = variant === 'collapse' ? 5.5 : 10.5
-
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-      className={`h-5 w-5 shrink-0 ${className ?? ''}`}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <rect
-        x="1.5"
-        y="1.5"
-        width="13"
-        height="13"
-        rx="3.25"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <path
-        d={`M${dividerX} 3.75V12.25`}
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
+  const Icon = variant === 'collapse' ? LuPanelLeft : LuPanelRight
+  return <Icon aria-hidden="true" className={`h-[18px] w-[18px] shrink-0 ${className ?? ''}`} />
 }
 
 export default SidebarPanelIcon

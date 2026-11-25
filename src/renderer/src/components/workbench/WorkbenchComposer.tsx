@@ -12,7 +12,8 @@ import React, {
 } from 'react'
 import { DocumentSelectionContext } from './composer/DocumentSelectionContext'
 import { App as AntdApp, Spin, Tooltip } from 'antd'
-import { HiArrowUp, HiPhoto, HiPlus, HiStop, HiXMark } from 'react-icons/hi2'
+import { HiArrowUp, HiPhoto, HiStop, HiXMark } from 'react-icons/hi2'
+import { LuPlus } from 'react-icons/lu'
 import type {
   ChatAttachment,
   LLMConfig,
@@ -1039,7 +1040,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               data-testid={workbenchSelectors.attachmentAddButton}
               onClick={() => void handlePickAttachments()}
             >
-              <HiPlus className="h-5 w-5" />
+              <LuPlus className="h-[18px] w-[18px]" aria-hidden="true" />
             </button>
 
             <WorkbenchSelect

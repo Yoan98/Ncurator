@@ -976,8 +976,7 @@ export const en = {
     thePartnerWasBusyWhenWasScheduledSoThis:
       'The partner was busy when “{{value1}}” was scheduled, so this occurrence was cancelled. Click to run it now.',
     clearMessageHistory: 'Clear message history',
-    clearAllMessagesForThisCannotBeUndone:
-      'Clear all messages for “{{value1}}”? This cannot be undone.',
+    clearAllMessagesForPartner: 'Clear all messages for “{{value1}}”.',
     dropToAddFilesOrFolders: 'Drop to add files or folders',
     revertThisChangeAnyway: 'Revert this change anyway?',
     revertThisChange3: 'Revert this change?',

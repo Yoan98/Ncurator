@@ -1,7 +1,8 @@
 import { t } from '../../i18n'
 import { useCallback, useEffect, useRef, useState, type WheelEvent } from 'react'
 import { Tooltip, message } from 'antd'
-import { HiPlus, HiXMark } from 'react-icons/hi2'
+import { HiXMark } from 'react-icons/hi2'
+import { LuPlus } from 'react-icons/lu'
 import FileIcon from '../FileIcon'
 import { getFileIconKind, getFileVisualSpec } from '../../utils/fileIcons'
 import type { WorkbenchResourceTab } from './types'
@@ -187,17 +188,17 @@ const WorkbenchTabBar = ({
       </div>
       <button
         type="button"
-        className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)]"
+        className="nc-resource-tabbar-action ml-1"
         aria-label={t(($) => $.workbench.newTab)}
         aria-expanded={addMenuOpen}
         data-testid={workbenchSelectors.resourceTabAddButton}
         onClick={(event) => void openAddMenu(event.currentTarget)}
       >
-        <HiPlus className="h-5 w-5" />
+        <LuPlus className="h-[18px] w-[18px]" aria-hidden="true" />
       </button>
       <button
         type="button"
-        className="ml-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[var(--notion-text-soft)] hover:bg-[var(--notion-surface)] hover:text-[var(--notion-text)]"
+        className="nc-resource-tabbar-action ml-1"
         aria-label={t(($) => $.workbench.collapseRightSidebar)}
         title={t(($) => $.workbench.collapseRightSidebar)}
         data-testid={workbenchSelectors.contentPanelToggle}

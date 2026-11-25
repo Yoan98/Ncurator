@@ -77,32 +77,52 @@ describe('workbench conversation e2e', () => {
                 const memory = document
                   .querySelector(`[data-testid="${ids.memory}"]`)!
                   .getBoundingClientRect()
-                return [ids.left, ids.right].map((id) => {
-                  const icon = document.querySelector(`[data-testid="${id}"] svg`)!
-                  const rect = icon.getBoundingClientRect()
-                  const alignedBar =
-                    id === ids.left && document.querySelector('.nc-window-frame-windows')
-                      ? document.querySelector('.nc-left-titlebar-chrome')!.getBoundingClientRect()
-                      : memory
-                  return {
-                    width: rect.width,
-                    height: rect.height,
-                    expectedSize:
-                      parseFloat(getComputedStyle(document.documentElement).fontSize) * 1.25,
-                    centerOffset:
-                      rect.top + rect.height / 2 - alignedBar.top - alignedBar.height / 2
-                  }
-                })
+                return [ids.left, ids.right, ids.memory, ids.create, ids.add]
+                  .filter((id) => document.querySelector(`[data-testid="${id}"]`))
+                  .map((id) => {
+                    const icon = document.querySelector(`[data-testid="${id}"] svg`)!
+                    const rect = icon.getBoundingClientRect()
+                    const button = icon.closest('button')!
+                    const buttonRect = button.getBoundingClientRect()
+                    const alignedBar =
+                      id === ids.left && document.querySelector('.nc-window-frame-windows')
+                        ? document
+                            .querySelector('.nc-left-titlebar-chrome')!
+                            .getBoundingClientRect()
+                        : memory
+                    return {
+                      width: rect.width,
+                      height: rect.height,
+                      expectedSize: 18,
+                      color: getComputedStyle(icon).color,
+                      expectedColor: getComputedStyle(
+                        document.querySelector('.nc-sidebar-new-chat svg')!
+                      ).color,
+                      buttonWidth: buttonRect.width,
+                      buttonHeight: buttonRect.height,
+                      isTitlebarButton: id !== ids.create,
+                      isNativeButton:
+                        id === ids.left && !!document.querySelector('.nc-window-frame-windows'),
+                      centerOffset:
+                        id === ids.create
+                          ? 0
+                          : rect.top + rect.height / 2 - alignedBar.top - alignedBar.height / 2
+                    }
+                  })
               },
               {
                 memory: partnerMemorySelectors.trigger,
                 left: workbenchSelectors.partnersToggle,
-                right: workbenchSelectors.contentPanelToggle
+                right: workbenchSelectors.contentPanelToggle,
+                create: workbenchSelectors.newPartnerButton,
+                add: workbenchSelectors.resourceTabAddButton
               }
             )
+          await page.mouse.move(500, 300)
           const emptyTitlebarIcons = await readTitlebarIcons()
 
           await ensureWorkbenchContentPanelExpanded(page)
+          await page.mouse.move(500, 300)
           await page.waitForTimeout(300)
           const expandedTitlebarIcons = await readTitlebarIcons()
           await runtime.assertThat(
@@ -110,11 +130,17 @@ describe('workbench conversation e2e', () => {
               (icon) =>
                 Math.abs(icon.width - icon.expectedSize) <= 0.05 &&
                 Math.abs(icon.height - icon.expectedSize) <= 0.05 &&
-                Math.abs(icon.centerOffset) < 1
+                Math.abs(icon.centerOffset) < 1 &&
+                (!icon.isTitlebarButton ||
+                  icon.isNativeButton ||
+                  (Math.abs(icon.buttonWidth - 32) <= 0.05 &&
+                    Math.abs(icon.buttonHeight - 32) <= 0.05)) &&
+                icon.color === icon.expectedColor
             ),
             {
               name: 'empty-and-expanded-titlebar-icon-alignment',
-              message: '空会话与资源展开态的两侧图标与清空记录同为 1.25rem，在各自顶栏中纵向居中。',
+              message:
+                '空会话与资源展开态的操作图标统一 18px 和中灰色；顶栏按钮统一 32px 并纵向居中。',
               data: { emptyTitlebarIcons, expandedTitlebarIcons }
             }
           )
