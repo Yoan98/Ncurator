@@ -92,7 +92,7 @@ describe('workbench conversation e2e', () => {
             .hover()
           await page
             .getByRole('tooltip')
-            .filter({ hasText: '减少重复交代' })
+            .filter({ hasText: 'AI 修改需确认' })
             .waitFor({ state: 'visible' })
           await memoryToggle.click()
           await nameInput.fill(UPDATED_NAME)

@@ -26,7 +26,7 @@ export const en = {
   partnerMemory: {
     title: 'Long-term memory',
     configHelp:
-      'Remember collaboration preferences and project context so you do not have to repeat them. AI changes are saved after your approval. Turning this off stops using and proposing memories; saved content is kept.',
+      'Remember preferences and project context. AI changes need approval. Turning off keeps saved memories.',
     preferences: 'Collaboration preferences',
     background: 'Project background',
     preferencesPlaceholder: 'e.g. Lead with conclusions and keep answers concise.',

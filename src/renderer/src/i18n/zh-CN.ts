@@ -25,8 +25,7 @@ export const zh = {
   },
   partnerMemory: {
     title: '长期记忆',
-    configHelp:
-      '记住合作偏好和项目背景，减少重复交代。AI 提出的修改经你确认后保存；关闭后停止使用和提出修改，已有内容保留。',
+    configHelp: '记住合作偏好和项目背景，AI 修改需确认。关闭不删除记忆。',
     preferences: '合作偏好',
     background: '项目背景',
     preferencesPlaceholder: '例如：先给结论、表达简洁、使用简体中文',
