@@ -123,7 +123,7 @@ Main 解析安装包内只读发行标识，固定官方业务入口，并管理
 
 运行中追加消息由 Main 接收，在当前执行的安全边界交接；中断恢复重建上下文，不自动重放操作。具体流转与不变量见 [Human Harness](ai-harness/human-harness.md)。Toolset 管理预注册工具的装载与预算；用户 Skill 是共享文件资产，按伙伴绑定并加载说明，不注册工具。Tool 提供共用契约与执行管道，见 [Tool Design](ai-harness/tool-design.md)。
 
-伙伴长期记忆由 SQLite 保存两类正文及待确认稿；主模型通过内置 `memory` 工具增量提出修改，Renderer 气泡内直接编辑和独立审核。已确认且启用的正文在每次推理前重建进 System，待确认稿不生效。定义与验收见 [Workbench PRD](prd/workbench.md#614-长期记忆)，持久化见 [存储设计](storage/design.md#伙伴长期记忆)。
+伙伴长期记忆由 SQLite 保存两类正文及待确认稿；主模型通过内置工具包 `agent-control` 中的 `memory` 工具增量提出修改，Renderer 气泡内直接编辑和独立审核。已确认且启用的正文在每次推理前重建进 System，待确认稿不生效。定义与验收见 [Workbench PRD](prd/workbench.md#614-长期记忆)，持久化见 [存储设计](storage/design.md#伙伴长期记忆)。
 
 ### 资料索引与检索
 

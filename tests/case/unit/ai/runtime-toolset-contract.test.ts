@@ -1,5 +1,7 @@
-import { MEMORY_SCHEMA } from '../../../../src/main/services/ai/human/tools/memory/toolSpecs'
-import { describe, expect, it } from 'vitest'
+import { MEMORY_SCHEMA } from '../../../../src/main/services/ai/human/tools/agentControl/toolSchemas'
+import { describe, expect, it, vi } from 'vitest'
+import { getToolFamilyDefinition } from '../../../../src/main/services/ai/human/tools'
+import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import { buildModelToolResultDelivery } from '../../../../src/main/services/ai/human/shared/modelToolResult'
 import { SKILL_CONFIG_SCHEMA } from '../../../../src/main/services/ai/human/tools/skillManagement/toolSchemas'
@@ -17,10 +19,10 @@ import {
 
 describe('ai unit runtime toolset contract', () => {
   it('exposes only incremental memory writes as a builtin main-agent tool and returns immediately', async () => {
-    expect(getToolsetDefinition('memory')).toMatchObject({
+    expect(getToolsetDefinition('agent-control')).toMatchObject({
       source: 'builtin',
       countsTowardToolBudget: false,
-      toolNames: ['memory']
+      toolNames: expect.arrayContaining(['memory'])
     })
     expect(isToolAllowed({ isSubagent: true }, 'memory')).toBe(false)
     expect(
@@ -51,6 +53,28 @@ describe('ai unit runtime toolset contract', () => {
       result: { toolName: 'memory', ok: true, data: {} }
     })
     expect(result).toEqual({ ok: true, content: '修改已提交，待用户确认。' })
+
+    const propose = vi.fn()
+    const ctx = {
+      runId: 'memory-run',
+      partnerId: 'memory-partner',
+      isSubagent: false,
+      checkCancelled: vi.fn(),
+      sendEvent: vi.fn(),
+      partnerMemory: { propose }
+    } as Partial<AiRunContext> as AiRunContext
+    const tools = getToolFamilyDefinition('agent-control').buildTools({
+      ctx,
+      cache: createHumanRuntimeCache(),
+      runId: ctx.runId,
+      partnerId: ctx.partnerId,
+      taskId: 'memory-task'
+    })
+    const memory = tools.find((tool) => tool.name === 'memory')
+    if (!memory) throw new Error('agent-control must build the memory tool')
+    const args = { category: 'project_background', action: 'append', content: '项目目标' }
+    expect(await memory.invoke(args)).toEqual({})
+    expect(propose).toHaveBeenCalledWith(ctx.partnerId, 'project_background', args)
   })
 
   it('keeps skill management minimal and restricted to the main partner', () => {
@@ -136,8 +160,7 @@ describe('ai unit runtime toolset contract', () => {
       'text-file',
       'kb-retrieval',
       'web-browsing',
-      'agent-control',
-      'memory'
+      'agent-control'
     ])
     expect(listExternalToolsetDefinitions().map((definition) => definition.toolsetId)).toEqual([
       'docx-read',
@@ -236,8 +259,7 @@ describe('ai unit runtime toolset contract', () => {
       'text-file',
       'kb-retrieval',
       'web-browsing',
-      'agent-control',
-      'memory'
+      'agent-control'
     ])
   })
 })

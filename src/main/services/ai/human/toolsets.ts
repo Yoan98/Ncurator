@@ -18,13 +18,6 @@ type RuntimeToolsetCatalogEntry = {
 }
 
 export const RUNTIME_TOOLSET_CATALOG = {
-  memory: {
-    familyId: 'memory',
-    source: 'builtin',
-    countsTowardToolBudget: false,
-    title: 'memory',
-    description: '新增或修改当前伙伴的长期记忆。'
-  },
   terminal: {
     familyId: 'terminal',
     source: 'builtin',
@@ -116,7 +109,8 @@ export const RUNTIME_TOOLSET_CATALOG = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'agent-control',
-    description: '管理任务推进：加载工具组和 Skill 说明、维护计划，并加载图片到主模型上下文。'
+    description:
+      '管理任务推进：加载工具组和 Skill 说明、维护计划、调整长期记忆，并加载图片到主模型上下文。'
   },
   'skill-management': {
     familyId: 'skill-management',

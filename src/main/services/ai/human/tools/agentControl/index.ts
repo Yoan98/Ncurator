@@ -1,3 +1,4 @@
+import { buildMemoryTool } from './memory'
 import { tool } from '@langchain/core/tools'
 import type { ToolFamilyDefinition } from '../types'
 import {
@@ -102,6 +103,15 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
       description: LIST_AGENT_TOOL_SPEC.promptSpec.description,
       schema: LIST_AGENT_TOOL_SPEC.inputSchema
     })
-    return [list, loadToolset, loadSkill, updatePlan, readImage, askUserQuestion, delegate]
+    return [
+      list,
+      loadToolset,
+      loadSkill,
+      updatePlan,
+      readImage,
+      askUserQuestion,
+      delegate,
+      buildMemoryTool(input)
+    ]
   }
 }

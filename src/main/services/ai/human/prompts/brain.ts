@@ -66,15 +66,8 @@ const renderPreferenceText = (preference: AiRunContext['preference']): string =>
 const renderToolsetLine = (toolsetName: string, description: string, toolCount: number): string =>
   `- ${toolsetName}（${toolCount} 个工具）：${description}`
 
-const renderToolsetCatalog = (
-  ctx: Pick<AiRunContext, 'partnerId' | 'partnerMemory'> & { isSubagent?: boolean }
-): string => {
-  const builtin = listBuiltinToolsetDefinitions().filter(
-    (toolset) =>
-      toolset.toolsetId !== 'memory' ||
-      (!ctx.isSubagent &&
-        ctx.partnerMemory?.get(ctx.partnerId).memories.some((memory) => memory.enabled))
-  )
+const renderToolsetCatalog = (): string => {
+  const builtin = listBuiltinToolsetDefinitions()
   const external = listExternalToolsetDefinitions()
   return `
 toolset 是预注册的工具组，目录中每项以稳定名称开头。内置工具组始终可用；外部工具组通过 load_toolset 的 toolsetNames 参数按目录中的名称加载后才能使用。当前最多同时激活 ${HUMAN_MAX_ACTIVE_TOOLS} 个工具，加载新工具组超出上限时系统按最早加载顺序淘汰旧的外部工具组。
@@ -127,7 +120,7 @@ export const buildBrainSystemPrompt = (input: {
 ${renderLocalContextText(input.ctx)}
 
 工具组目录：
-${renderToolsetCatalog(input.ctx)}
+${renderToolsetCatalog()}
 
 ${renderPartnerMemory(input.ctx)}
 

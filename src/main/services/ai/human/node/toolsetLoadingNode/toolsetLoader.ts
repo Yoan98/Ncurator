@@ -11,7 +11,6 @@ const TOOL_FAMILY_BUILDERS: Record<
   AiToolFamilyId,
   (input: ToolFamilyBuildInput) => StructuredToolInterface[]
 > = {
-  memory: TOOL_FAMILY_DEFINITIONS.memory.buildTools,
   terminal: TOOL_FAMILY_DEFINITIONS.terminal.buildTools,
   'text-file': TOOL_FAMILY_DEFINITIONS['text-file'].buildTools,
   kb: TOOL_FAMILY_DEFINITIONS.kb.buildTools,

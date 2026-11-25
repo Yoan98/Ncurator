@@ -2,6 +2,7 @@ import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import {
+  renderGenericModelError,
   renderAskUserQuestionModelResult,
   renderLoadToolsetModelResult,
   renderLoadSkillModelResult,
@@ -9,6 +10,7 @@ import {
   renderReadImageModelResult
 } from '../../shared/modelToolResultRenderers'
 import {
+  MEMORY_SCHEMA,
   DELEGATE_TO_SUBAGENT_SCHEMA,
   LIST_AGENT_SCHEMA,
   LOAD_TOOLSET_SCHEMA,
@@ -162,6 +164,26 @@ export const LIST_AGENT_TOOL_SPEC: HumanToolSpec<
   modelResult: { renderSuccess: ({ data }) => JSON.stringify(data) }
 }
 
+export const MEMORY_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof MEMORY_SCHEMA>,
+  'memory',
+  'agent-control'
+> = {
+  name: 'memory',
+  familyId: 'agent-control',
+  toolsetIds: ['agent-control'],
+  inputSchema: MEMORY_SCHEMA,
+  promptSpec: { name: 'memory', description: '新增或修改当前伙伴的长期记忆，待用户确认后生效。' },
+  resolveExecutionMeta: (args) => ({
+    mutability: 'mutating',
+    resourceKey: `memory:${args.category}`
+  }),
+  modelResult: {
+    renderSuccess: () => '修改已提交，待用户确认。',
+    renderError: renderGenericModelError
+  }
+}
+
 export const AGENT_CONTROL_TOOL_SPECS = [
   DELEGATE_TO_SUBAGENT_TOOL_SPEC,
   LIST_AGENT_TOOL_SPEC,
@@ -169,5 +191,6 @@ export const AGENT_CONTROL_TOOL_SPECS = [
   LOAD_SKILL_TOOL_SPEC,
   UPDATE_PLAN_TOOL_SPEC,
   READ_IMAGE_TOOL_SPEC,
-  ASK_USER_QUESTION_TOOL_SPEC
+  ASK_USER_QUESTION_TOOL_SPEC,
+  MEMORY_TOOL_SPEC
 ] as const
