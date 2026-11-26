@@ -165,6 +165,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const draftValueRef = useRef<ComposerDraftValue>(draftValue)
   const knownScopesRef = useRef(new Map<string, SelectedReference>())
   const mentionRefreshFrameRef = useRef<number | null>(null)
+  const mentionContextRef = useRef<MentionContext | null>(null)
   const controlFocusTimeoutRef = useRef<number | null>(null)
   const compositionGuardTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
@@ -372,6 +373,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   const refreshMentionContext = useCallback(() => {
     const context = getMentionContext()
+    mentionContextRef.current = context
     if (!context) {
       closeMention()
       return
@@ -441,8 +443,18 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const insertMentionScope = useCallback(
     (scope: SelectedReference) => {
       const editor = editorRef.current
-      const context = getMentionContext()
-      if (!editor || !context || !canSelectMention(context.query)) return
+      // A document preview can move the native selection while this menu is open.
+      // Insert at the still-valid query that produced the selected candidate.
+      const context = getMentionContext() || mentionContextRef.current
+      if (
+        !editor ||
+        !context ||
+        !editor.contains(context.textNode) ||
+        context.textNode.data.slice(context.triggerIndex, context.caretOffset) !==
+          `@${context.query}` ||
+        !canSelectMention(context.query)
+      )
+        return
 
       knownScopesRef.current.set(getScopeKey(scope), scope)
 
@@ -465,7 +477,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       nodes.forEach((node) => parent.insertBefore(node, context.textNode))
       parent.removeChild(context.textNode)
 
+      editor.focus({ preventScroll: true })
       moveCaretToTextNode(trailingTextNode, Math.min(1, trailingTextNode.data.length))
+      mentionContextRef.current = null
       closeMention()
       syncDraftFromEditor()
     },

@@ -746,6 +746,7 @@ pnpm test:update:e2e
 
 #### `wps-sync-dispatch-on-write-and-revert`
 
+- 引用前置：连续处理三种格式时，Excel 预览异步刷新后点击下一个 PPT 引用仍须插入真实 token 并恢复 Composer 输入焦点；候选使用其生成时的有效查询位置，不依赖仍停留在编辑器中的浏览器原生选区。
 - 测试类型：`e2e / exclusive`
 - What：真实 AI 写回并回退已有 docx、xlsx、pptx 后，馆长回环 `GET /status` 对每条路径各记录至少一次 open dispatch。
 - Why：WPS 窗口刷新依赖加载项；若馆长写盘后没有 dispatch，窗口不可能更新。这条不打开 WPS，用来单独定位三种格式的挂钩。只测 docx 不能证明表格 / 演示写盘也会通知。回环优先端口 `18723`，并行包测会抢端口，因此独占执行。
