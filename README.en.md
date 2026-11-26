@@ -4,7 +4,7 @@
 
 <h1 align="center">NCurator</h1>
 
-<p align="center"><strong>Building the most user-friendly AI assistant for working with local office documents</strong></p>
+<p align="center"><strong>An AI assistant for local office work and video creation and editing</strong></p>
 
 <p align="center">
   <a href="./README.md">简体中文</a> · <strong>English</strong>
@@ -69,7 +69,7 @@ Current progress and planned work. Join the discussion and help shape what comes
 | 🔤 English knowledge base    | English embedding models and indexing                                                                         | ⏳ Planned   |
 | 🧩 Skill integration         | Connect and manage custom and third-party Skills. Implemented by [@AntonyLang](https://github.com/AntonyLang) | ✅ Completed |
 | 🔌 Integration ecosystem     | Connect WeCom, email services, and other workplace platforms (through official Skills)                         | ⏳ Planned   |
-| 📱 Mobile web access         | Connect to your computer from a phone browser to use NCurator remotely                                        | ⏳ Planned   |
+| 📱 Mobile client             | Enable communication between your phone and computer                                                          | ⏳ Planned   |
 | 🧭 Browser data import       | Import data from your browser, starting with bookmarks and history                                            | ⏳ Planned   |
 | 🎬 Video creation and editing | Create and edit video content                                                                                 | 🚧 In development |
 | 🧠 Partner memory            | Build long-term memory                                                                                        | ✅ Implemented |
