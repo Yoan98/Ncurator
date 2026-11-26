@@ -55,6 +55,9 @@ export default function MemoryTextEditor({
       'plaintext'
     )
     const modified = monaco.editor.createModel(latest.current.text, 'plaintext')
+    // Match the memory store's LF text so saved edits stop being dirty on Windows.
+    original.setEOL(monaco.editor.EndOfLineSequence.LF)
+    modified.setEOL(monaco.editor.EndOfLineSequence.LF)
     models.current = { original, modified }
     return () => {
       models.current = null

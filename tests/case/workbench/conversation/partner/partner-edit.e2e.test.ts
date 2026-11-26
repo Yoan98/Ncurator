@@ -291,7 +291,12 @@ describe('workbench conversation e2e', () => {
             .locator('.nc-memory-input')
             .evaluate((element) => {
               const style = getComputedStyle(element)
-              return style.borderBottomWidth === '1px' && style.borderLeftWidth === '0px'
+              return {
+                bottom: parseFloat(style.borderBottomWidth),
+                left: parseFloat(style.borderLeftWidth),
+                style: style.borderBottomStyle,
+                dpr: window.devicePixelRatio
+              }
             })
           await runtime.captureScreenshot({
             name: 'partner-memory-editing',
@@ -352,7 +357,12 @@ describe('workbench conversation e2e', () => {
               result.memorySnapshot.memories[1].confirmed === '持续开发桌面端' &&
               result.memorySnapshot.memories.every((memory) => memory.enabled) &&
               result.reopenedText.includes('简明表达') &&
-              result.bottomLine &&
+              Math.abs(
+                result.bottomLine.bottom -
+                  Math.max(1, Math.floor(result.bottomLine.dpr)) / result.bottomLine.dpr
+              ) <= 0.05 &&
+              result.bottomLine.left === 0 &&
+              result.bottomLine.style === 'solid' &&
               result.modalTitle === '编辑伙伴' &&
               result.prefilledName === ORIGINAL_NAME &&
               result.nameLabelVisible &&
