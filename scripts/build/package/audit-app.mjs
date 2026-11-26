@@ -176,6 +176,7 @@ for (const archivePath of archives) {
     if (process.platform === 'win32' && !fs.existsSync(path.join(appRoot, `${name}.exe`)))
       throw new Error('Packaged executable name is incorrect')
   }
+  assertVcRuntimeDllsPackaged(appRoot)
   const unpackedModules = path.join(path.dirname(archivePath), 'app.asar.unpacked', 'node_modules')
   const binarySuffix = process.platform === 'win32' ? '.exe' : ''
   for (const binary of [
@@ -192,7 +193,6 @@ for (const archivePath of archives) {
     execFileSync(binary, ['-version'], { timeout: 10000, windowsHide: true, stdio: 'pipe' })
   }
   assertPackagedNodePtyHelpersExecutable(appRoot)
-  assertVcRuntimeDllsPackaged(appRoot)
   const directoryAudit = auditPackageDirectory(appRoot)
   const totalBytes = directoryAudit.files.reduce((sum, item) => sum + item.size, 0)
   const webCrawlerSidecarBytes = assertWebCrawlerSidecarPackage(directoryAudit.files, appRoot)
