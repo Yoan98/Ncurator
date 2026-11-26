@@ -68,12 +68,11 @@ Current progress and planned work. Join the discussion and help shape what comes
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------ |
 | 🔤 English knowledge base    | English embedding models and indexing                                                                         | ⏳ Planned   |
 | 🧩 Skill integration         | Connect and manage custom and third-party Skills. Implemented by [@AntonyLang](https://github.com/AntonyLang) | ✅ Completed |
-| 📥 One-click Skill import    | Import Skills from WorkBuddy and Doubao Work (豆包工作) into NCurator in one click                            | ⏳ Planned   |
-| 🔌 Integration ecosystem     | Connect WeCom, email services, and other workplace platforms                                                  | ⏳ Planned   |
+| 🔌 Integration ecosystem     | Connect WeCom, email services, and other workplace platforms (through official Skills)                         | ⏳ Planned   |
 | 📱 Mobile web access         | Connect to your computer from a phone browser to use NCurator remotely                                        | ⏳ Planned   |
 | 🧭 Browser data import       | Import data from your browser, starting with bookmarks and history                                            | ⏳ Planned   |
-| 🖼️ Multimodal knowledge base | Parse, index, and retrieve images and audio with source references                                            | ⏳ Planned   |
-| 🧠 Partner memory            | Build long-term memory                                                                                        | ⏳ Planned   |
+| 🎬 Video creation and editing | Create and edit video content                                                                                 | 🚧 In development |
+| 🧠 Partner memory            | Build long-term memory                                                                                        | ✅ Implemented |
 
 ## Get involved
 
