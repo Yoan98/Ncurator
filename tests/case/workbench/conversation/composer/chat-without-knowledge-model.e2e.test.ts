@@ -161,6 +161,8 @@ describe('workbench conversation', () => {
                 thumbWidth: thumb.getBoundingClientRect().width,
                 radius: getComputedStyle(thumb).borderRadius,
                 border: getComputedStyle(thumb).borderTopWidth,
+                borderStyle: getComputedStyle(thumb).borderTopStyle,
+                dpr: window.devicePixelRatio,
                 markerWidth: mark.getBoundingClientRect().width,
                 hasTitle: [...element.querySelectorAll('[title]')].length > 0
               }
@@ -349,7 +351,12 @@ describe('workbench conversation', () => {
                 Math.abs(result.memoryResult.overviewStyle.width - 18) <= 0.05 &&
                 Math.abs(result.memoryResult.overviewStyle.thumbWidth - 18) <= 0.05 &&
                 Math.abs(result.memoryResult.overviewStyle.markerWidth - 7) <= 0.05 &&
-                result.memoryResult.overviewStyle.border === '1px' &&
+                Math.abs(
+                  parseFloat(result.memoryResult.overviewStyle.border) -
+                    Math.max(1, Math.floor(result.memoryResult.overviewStyle.dpr)) /
+                      result.memoryResult.overviewStyle.dpr
+                ) <= 0.05 &&
+                result.memoryResult.overviewStyle.borderStyle === 'solid' &&
                 result.memoryResult.overviewStyle.radius === '2px' &&
                 !result.memoryResult.overviewStyle.hasTitle &&
                 result.memoryResult.redDots === 2 &&

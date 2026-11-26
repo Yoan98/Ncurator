@@ -48,7 +48,8 @@ export default function DocxColorPicker({
   const [showCustom, setShowCustom] = useState(false)
   const arrow = useRef<HTMLButtonElement>(null)
   const choose = async (color: string | null) => {
-    if (!(await apply(color))) return
+    const unchanged = color !== null && value?.toUpperCase() === color.toUpperCase()
+    if (!unchanged && !(await apply(color))) return
     if (color) setLastColor(color)
     setOpen(false)
   }
@@ -90,7 +91,15 @@ export default function DocxColorPicker({
           setOpen(next)
         }}
         content={
-          <div className="nc-docx-color-panel" role="dialog" aria-label={label}>
+          <div
+            className="nc-docx-color-panel"
+            role="dialog"
+            aria-label={label}
+            onMouseDown={(event) => {
+              if (event.target instanceof Element && event.target.closest('button'))
+                event.preventDefault()
+            }}
+          >
             <div className="nc-docx-color-title">{label}</div>
             <div className="nc-docx-color-grid">
               {colors.map((color) => (
@@ -149,6 +158,10 @@ export default function DocxColorPicker({
           aria-label={t(($) => $.editors.wordRibbon.chooseColor, { value1: label })}
           aria-expanded={open}
           disabled={disabled}
+          onMouseDown={(event) => {
+            event.preventDefault()
+            capture()
+          }}
         >
           <PiCaretDown />
         </button>

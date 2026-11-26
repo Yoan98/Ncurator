@@ -42,7 +42,7 @@ describe('workbench AI question e2e', () => {
         fixtures: ['tests/fixtures/workspace'],
         knowledge: 'cached',
         serviceMode: 'real',
-        execution: 'live',
+        execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
@@ -432,8 +432,13 @@ describe('workbench AI question e2e', () => {
           const copy = page.getByTestId(`workbench-assistant-copy-${answer.id}`)
           await copy.click()
           await expect
-            .poll(() => runtime.electronApp.evaluate(({ clipboard }) => clipboard.readText()))
-            .toBe(answer.content)
+            .poll(async () =>
+              (await runtime.electronApp.evaluate(({ clipboard }) => clipboard.readText())).replace(
+                /\r\n/g,
+                '\n'
+              )
+            )
+            .toBe(answer.content.replace(/\r\n/g, '\n'))
           const completedAt = page.getByTestId(`workbench-assistant-finished-at-${answer.id}`)
           const timestamp = await completedAt.getAttribute('datetime')
           await runtime.assertThat(Boolean(timestamp && Number.isFinite(Date.parse(timestamp))), {
