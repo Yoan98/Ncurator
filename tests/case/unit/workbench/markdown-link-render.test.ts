@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { fromMarkdown } from 'mdast-util-from-markdown'
 import { repairMarkdownLinkDestinations } from '../../../../src/shared/markdownLink'
 import {
   fileExtensionOf,
@@ -16,7 +17,7 @@ describe('repairMarkdownLinkDestinations', () => {
       '![封面](</Users/me/My Docs/cover.png>)'
     )
     expect(repairMarkdownLinkDestinations('[方案](D:\\工作\\方案 v2.docx)')).toBe(
-      '[方案](<D:\\工作\\方案 v2.docx>)'
+      '[方案](<D:/工作/方案 v2.docx>)'
     )
     expect(repairMarkdownLinkDestinations('[站点](https://example.com/a b)')).toBe(
       '[站点](<https://example.com/a b>)'
@@ -41,6 +42,28 @@ describe('repairMarkdownLinkDestinations', () => {
     expect(repairMarkdownLinkDestinations('[a](/x/A b.md) 与 [b](/y/C d.md)')).toBe(
       '[a](</x/A b.md>) 与 [b](</y/C d.md>)'
     )
+  })
+
+  it('preserves Windows dot directories through the real CommonMark parser', () => {
+    const filePath = String.raw`C:\Users\Admin\.ncurator\tests\.tmp\preview.mp4`
+    for (const destination of [filePath, `<${filePath}>`, `file:///${filePath}`]) {
+      const tree = fromMarkdown(repairMarkdownLinkDestinations(`![视频](${destination})`))
+      const paragraph = tree.children[0]
+      if (paragraph.type !== 'paragraph') throw new Error('Expected a paragraph')
+      const image = paragraph.children[0]
+      if (image.type !== 'image') throw new Error('Expected a video image')
+      expect(decodeURIComponent(image.url)).toBe(
+        destination.replace(/[<>]/g, '').replace(/\\/g, '/')
+      )
+    }
+  })
+
+  it('keeps title text and code samples when normalizing Windows destinations', () => {
+    expect(repairMarkdownLinkDestinations(String.raw`[文档](C:\.work\a.md "a\b")`)).toBe(
+      String.raw`[文档](C:/.work/a.md "a\b")`
+    )
+    const code = '`' + String.raw`![视频](<C:\.work\a.mp4>)` + '`'
+    expect(repairMarkdownLinkDestinations(code)).toBe(code)
   })
 })
 

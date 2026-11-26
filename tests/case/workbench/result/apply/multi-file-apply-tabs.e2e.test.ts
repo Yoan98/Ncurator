@@ -200,6 +200,10 @@ describe('workbench result e2e', () => {
             .first()
           const firstEntryText = ((await firstEntry.textContent()) || '').trim()
           const secondEntryText = ((await secondEntry.textContent()) || '').trim()
+          const resourceTabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
+          const resourceTabIdsBefore = await resourceTabs.evaluateAll((tabs) =>
+            tabs.map((tab) => tab.getAttribute('data-testid') || '')
+          )
           await firstEntry.click()
           await waitForApplyPanelFile(page, FIRST_FILE)
           const afterFirstEntryText = (
@@ -214,8 +218,17 @@ describe('workbench result e2e', () => {
           const afterSecondEntryText = (
             (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
           ).trim()
-          const resourceTabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
-          const resourceTabCount = await resourceTabs.count()
+          const resourceTabIdsAfter = await resourceTabs.evaluateAll((tabs) =>
+            tabs.map((tab) => tab.getAttribute('data-testid') || '')
+          )
+          const firstTabId = await resourceTabs
+            .filter({ hasText: FIRST_FILE })
+            .first()
+            .getAttribute('data-testid')
+          const secondTabId = await resourceTabs
+            .filter({ hasText: SECOND_FILE })
+            .first()
+            .getAttribute('data-testid')
           await resourceTabs.filter({ hasText: FIRST_FILE }).first().click()
           await waitForApplyPanelFile(page, FIRST_FILE)
           const afterFirstEntryAgainText = (
@@ -250,7 +263,10 @@ describe('workbench result e2e', () => {
             afterFirstEntryAgainText,
             firstModeTagCount,
             applyPanelCount,
-            resourceTabCount,
+            resourceTabIdsBefore,
+            resourceTabIdsAfter,
+            firstTabId,
+            secondTabId,
             fileArtifactCount: evidence.events.filter((event) => event.type === 'file_artifact')
               .length
           }
@@ -288,7 +304,12 @@ describe('workbench result e2e', () => {
               !result.afterFirstEntryAgainText.includes(SECOND_FILE) &&
               result.firstModeTagCount === 1 &&
               result.applyPanelCount === 1 &&
-              result.resourceTabCount === 2,
+              Boolean(result.firstTabId && result.secondTabId) &&
+              result.resourceTabIdsBefore.every((id) => result.resourceTabIdsAfter.includes(id)) &&
+              new Set(result.resourceTabIdsAfter).size === result.resourceTabIdsAfter.length &&
+              result.resourceTabIdsAfter.length ===
+                new Set([...result.resourceTabIdsBefore, result.firstTabId, result.secondTabId])
+                  .size,
             {
               name: 'workbench-multi-file-apply-single-preview-real',
               message:

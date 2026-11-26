@@ -351,9 +351,17 @@ const wrapSpacedDestination = (destination: string): string => {
   return `<${trimmed}>`
 }
 
+const normalizeWindowsDestination = (destination: string, withTitle = false): string => {
+  if (!/^(?:file:\/\/\/?)?[a-zA-Z]:[\\/]/iu.test(destination.trim())) return destination
+  // Backslashes before punctuation are CommonMark escapes, including `\.` in dot directories.
+  const titleStart = withTitle ? destination.search(/\s+["']/u) : -1
+  const pathEnd = titleStart < 0 ? destination.length : titleStart
+  return destination.slice(0, pathEnd).replace(/\\/g, '/') + destination.slice(pathEnd)
+}
+
 /**
- * Wrap link / image destinations that contain spaces but were not written in the
- * `<…>` form, e.g. `[报告](/Users/me/My Docs/a.pdf)`.
+ * Normalize Windows separators before CommonMark consumes backslash escapes,
+ * and wrap destinations containing spaces, e.g. `[报告](/Users/me/My Docs/a.pdf)`.
  *
  * CommonMark rejects a bare destination with spaces, so such links silently
  * degrade to plain text and the UI loses the reference. Repairing them here keeps
@@ -378,6 +386,14 @@ export const repairMarkdownLinkDestinations = (markdown: string): string => {
     }
 
     if (markdown[destinationStart] === '<') {
+      const angleEnd = markdown.indexOf('>', destinationStart + 1)
+      if (angleEnd !== -1) {
+        output +=
+          markdown.slice(cursor, destinationStart + 1) +
+          normalizeWindowsDestination(markdown.slice(destinationStart + 1, angleEnd))
+        cursor = angleEnd
+        continue
+      }
       output += markdown.slice(cursor, destinationStart + 1)
       cursor = destinationStart + 1
       continue
@@ -400,7 +416,9 @@ export const repairMarkdownLinkDestinations = (markdown: string): string => {
     }
 
     const destination = markdown.slice(destinationStart, destinationEnd)
-    output += markdown.slice(cursor, destinationStart) + wrapSpacedDestination(destination)
+    output +=
+      markdown.slice(cursor, destinationStart) +
+      wrapSpacedDestination(normalizeWindowsDestination(destination, true))
     cursor = destinationEnd
   }
 
