@@ -4,13 +4,16 @@ import ExcelJS from 'exceljs'
 import { toExcelWorkbookData } from '../../../../../src/shared/excelWorkbook'
 import { isWpsApplication } from '../../../../../src/shared/fileReview'
 import path from 'node:path'
-import { describe, it } from 'vitest'
+import { describe, it, expect } from 'vitest'
+import type { Page } from 'playwright'
+import { navigateToSettingsSection } from '../../../../harness/e2e/settings'
 import { runE2ECase, type E2ETestRuntime } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
   getWorkbenchLocator,
   insertWorkbenchReferenceToken,
+  navigateToWorkbench,
   readOfficePlainText,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
@@ -66,6 +69,17 @@ const markerRoundTripped = (file: ReloadedFile): boolean =>
   file.afterRevertText === file.beforeText &&
   file.applyExcerpt.includes(file.marker) &&
   !file.revertExcerpt.includes(file.marker)
+
+async function enableWpsReviewNavigation(page: Page): Promise<void> {
+  await navigateToSettingsSection(page, 'general')
+  const toggle = page.getByTestId('settings-office-diff-wps')
+  await toggle.waitFor({ state: 'visible' })
+  if (!(await toggle.isChecked())) await toggle.click()
+  await expect
+    .poll(async () => (await page.evaluate(() => window.api.appSettingsGet())).openOfficeDiffInWps)
+    .toBe(true)
+  await navigateToWorkbench(page)
+}
 
 async function navigateReviewRegion(
   runtime: E2ETestRuntime,
@@ -235,6 +249,7 @@ describe('workbench result e2e', () => {
             }
           })
           await selectWorkbenchExecutionPermission(page, '完全访问')
+          await enableWpsReviewNavigation(page)
           // 工作区在 after-app-close 阶段删除，这里后注册就会先执行，unlink 才不会撞上 WPS 的文件锁。
           runtime.registerResource({
             name: `wps-office-reset:${CASE_ID}`,
@@ -447,6 +462,7 @@ describe('WPS audit navigation e2e', () => {
             }
           })
           await selectWorkbenchExecutionPermission(page, '完全访问')
+          await enableWpsReviewNavigation(page)
           runtime.registerResource({
             name: 'wps-review-cleanup',
             phase: 'after-app-close',
