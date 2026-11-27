@@ -4,6 +4,7 @@ import type {
   DocumentSelectionNode,
   SelectedReference
 } from './types'
+import { videoFeedbackText, videoFeedbackLabel } from './videoFeedback'
 
 export const selectionLabel = (node: DocumentSelectionNode): string =>
   `${node.filePath.split(/[/\\]/).pop() || node.filePath} · ${node.number}`
@@ -13,6 +14,8 @@ export const chatContentText = (nodes: readonly ChatMessageContentNode[]): strin
     .map((node) => {
       if (node.kind === 'text') return node.text
       if (node.kind === 'reference') return `@${node.reference.name}`
+      if (node.kind === 'video_feedback')
+        return `[${videoFeedbackLabel(node)}] ${videoFeedbackText(node)}`
       return `[${selectionLabel(node)}] ${chatContentText(node.children)}`
     })
     .join('')
@@ -20,7 +23,13 @@ export const chatContentText = (nodes: readonly ChatMessageContentNode[]): strin
 export const chatInlineNodes = (
   nodes: readonly ChatMessageContentNode[]
 ): ChatInlineContentNode[] =>
-  nodes.flatMap((node) => (node.kind === 'document_selection' ? node.children : [node]))
+  nodes.flatMap((node) =>
+    node.kind === 'document_selection'
+      ? node.children
+      : node.kind === 'video_feedback'
+        ? [{ kind: 'text' as const, text: videoFeedbackText(node) }]
+        : [node]
+  )
 
 export const chatReferences = (nodes: readonly ChatMessageContentNode[]): SelectedReference[] => {
   const references = new Map<string, SelectedReference>()
@@ -46,4 +55,5 @@ export const hasUserText = (nodes: readonly ChatMessageContentNode[]): boolean =
 
 export const persistentChatContent = (
   nodes: readonly ChatMessageContentNode[]
-): ChatMessageContentNode[] => nodes.filter((node) => node.kind !== 'document_selection')
+): ChatMessageContentNode[] =>
+  nodes.filter((node) => node.kind !== 'document_selection' && node.kind !== 'video_feedback')

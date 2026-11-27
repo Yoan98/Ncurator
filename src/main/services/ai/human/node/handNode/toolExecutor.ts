@@ -144,7 +144,7 @@ export const executeToolCall = async (input: {
   args: Record<string, JsonValue>
 }): Promise<ToolCallResult> => {
   assertToolAllowed(input.ctx, input.toolName)
-  if (input.toolName === 'delegate_to_subagent') {
+  if (input.toolName === 'delegate_to_subagent' || input.toolName === 'drawing') {
     // The parent pauses here. Relinquish its committed document sessions so children can
     // use those files and the parent reloads their latest contents after the handoff.
     await releaseDocxRunSession(input.ctx.runId)
@@ -161,7 +161,7 @@ export const executeToolCall = async (input: {
     }
     releaseRunFiles(input.ctx.runId)
   }
-  if (/^(docx_|ppt_|excel_|file_(read|search|edit)|image_generate)/.test(input.toolName)) {
+  if (/^(docx_|ppt_|excel_|file_(read|search|edit)|drawing|video_)/.test(input.toolName)) {
     for (const key of ['sourcePath', 'outputPath']) {
       const sourcePath = input.args[key]
       if (typeof sourcePath === 'string' && !/^https?:/.test(sourcePath))

@@ -330,8 +330,17 @@ const TOOL_ITEM_RENDERERS: Record<RuntimeToolName, ToolItemRenderer> = {
   },
   read_image: () => toolCopy('读取图片', sentence(text('读取图片'))),
   ask_user_question: () => toolCopy('询问用户', sentence(text('等待用户确认关键信息'))),
-  image_generate: (input) =>
-    toolCopy('生成图片', sentence(text('生成图片 '), param(readToolFileLabel(input)))),
+  drawing: (input) =>
+    toolCopy('绘制画面', sentence(text('绘制画面 '), param(readToolFileLabel(input)))),
+  video_clip_edit: (input) =>
+    toolCopy('剪辑片段', sentence(text('剪辑片段 '), param(readToolFileLabel(input)))),
+  video_visual_edit: (input) =>
+    toolCopy('调整画面', sentence(text('调整画面 '), param(readToolFileLabel(input)))),
+  video_audio_edit: (input) =>
+    toolCopy('处理音轨', sentence(text('处理音轨 '), param(readToolFileLabel(input)))),
+  video_export: (input) =>
+    toolCopy('导出视频', sentence(text('导出视频 '), param(readToolFileLabel(input)))),
+
   load_skill: (input) => {
     const names = input && 'skillNames' in input ? input.skillNames : undefined
     const label = Array.isArray(names)

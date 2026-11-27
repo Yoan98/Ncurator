@@ -33,6 +33,7 @@ extraResources:
   - from: build/app-update.yml
     to: app-update.yml
 asarUnpack:
+  - 'out/main/scene-sans.otf'
   - 'out/renderer/superdoc/**/*'
   - '**/node_modules/ffmpeg-static/ffmpeg*'
   - '**/node_modules/@ffprobe-installer/*/ffprobe*'
@@ -64,7 +65,7 @@ mac:
   # @electron/osx-sign 会把部分二进制格式的数据文件误判成可执行文件。
   # 这些资源由外层 bundle 签名保护；Mach-O、.node、.dylib 和 .so 不在忽略范围内。
   signIgnore:
-    - '\.(?:asar|bin|dat|icns|nib|pak|png|ttf|zip)$'
+    - '\.(?:asar|bin|dat|icns|nib|pak|png|ttf|otf|zip)$'
     - '/\.jekyll-metadata$'
   # 当前使用项目自建的更新签名证书，不使用 Apple 时间戳服务。
   timestamp: none

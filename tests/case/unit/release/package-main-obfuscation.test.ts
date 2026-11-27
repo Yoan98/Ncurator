@@ -77,6 +77,8 @@ describe('package-main-obfuscation main-process release protection', () => {
       'utf8'
     )
     await writeFile(path.join(mainDirectory, 'index.js'), fixtureSource, 'utf8')
+    const browserSdk = 'export const lerp=(a,b,t)=>a+(b-a)*t\n'
+    await writeFile(path.join(mainDirectory, 'drawing-sdk.mjs'), browserSdk, 'utf8')
     await writeFile(
       path.join(mainDirectory, 'worker.js'),
       `'use strict'; globalThis.__workerReady = true\n`,
@@ -94,6 +96,7 @@ describe('package-main-obfuscation main-process release protection', () => {
       'out/main/worker.js'
     ])
     expect(verified.totals.growthBytes).toBeLessThanOrEqual(MAX_MAIN_OBFUSCATION_GROWTH_BYTES)
+    expect(await readFile(path.join(mainDirectory, 'drawing-sdk.mjs'), 'utf8')).toBe(browserSdk)
     for (const marker of PROTECTED_MAIN_PLAINTEXT_MARKERS) {
       expect(stagedSource).not.toContain(marker.value)
     }

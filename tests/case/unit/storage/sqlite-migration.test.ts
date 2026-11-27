@@ -81,6 +81,15 @@ const schemaSignature = (databasePath: string): unknown => {
   return { tables: tables.map(({ name }) => name), columns, indexes }
 }
 
+const restoreNameBindings = (db: SqliteCore): void => {
+  db.exec(`CREATE TABLE partner_skill_names(partner_id TEXT NOT NULL REFERENCES partner(id) ON DELETE CASCADE,skill_name TEXT NOT NULL,PRIMARY KEY(partner_id,skill_name));
+    INSERT INTO partner_skill_names SELECT b.partner_id,s.name FROM partner_user_skill b JOIN skill_identity s ON s.id=b.skill_id;
+    DROP TABLE partner_user_skill;DROP TABLE skill_identity;
+    ALTER TABLE partner_skill_names RENAME TO partner_user_skill;
+    CREATE INDEX idx_partner_user_skill_name ON partner_user_skill(skill_name);
+    DELETE FROM schema_migrations WHERE version=26;`)
+}
+
 afterEach(async () => {
   await Promise.all(
     temporaryDirectories
@@ -120,7 +129,7 @@ describe('SQLite migration contract', () => {
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
     expect(migrationRows).toContainEqual({ version: 20, name: 'skill_name_bindings' })
-    expect(migrationRows.at(-1)).toEqual({ version: 25, name: 'partner_memory' })
+    expect(migrationRows.at(-1)).toEqual({ version: 26, name: 'skill_identity' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -133,6 +142,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const prepared = new SqliteCore(databasePath)
     prepared.initialize()
+    restoreNameBindings(prepared)
     prepared.exec('DROP TABLE partner_memory')
     prepared.exec(`DROP TABLE partner_user_skill;
       ALTER TABLE llm_config DROP COLUMN manual_models_json;
@@ -154,7 +164,13 @@ describe('SQLite migration contract', () => {
     prepared.close()
     const upgraded = new SqliteCore(databasePath)
     upgraded.initialize()
-    expect(upgraded.prepare('SELECT * FROM partner_user_skill ORDER BY partner_id').all()).toEqual([
+    expect(
+      upgraded
+        .prepare(
+          'SELECT b.partner_id,s.name AS skill_name FROM partner_user_skill b JOIN skill_identity s ON s.id=b.skill_id ORDER BY b.partner_id'
+        )
+        .all()
+    ).toEqual([
       { partner_id: 'a', skill_name: 'weekly-report' },
       { partner_id: 'b', skill_name: 'weekly-report' }
     ])
@@ -169,6 +185,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const previous = new SqliteCore(databasePath)
     previous.initialize()
+    restoreNameBindings(previous)
     previous.exec('DROP TABLE partner_memory')
     previous.exec(`ALTER TABLE llm_config DROP COLUMN manual_models_json;
       ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps;
@@ -209,6 +226,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const previous = new SqliteCore(databasePath)
     previous.initialize()
+    restoreNameBindings(previous)
     previous.exec('DROP TABLE partner_memory')
     previous.exec(`ALTER TABLE llm_config DROP COLUMN manual_models_json;
       ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps;
@@ -254,6 +272,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const prior = new SqliteCore(databasePath)
     prior.initialize()
+    restoreNameBindings(prior)
     prior.exec('DROP TABLE partner_memory')
     prior.exec(
       "ALTER TABLE app_settings DROP COLUMN open_office_diff_in_wps; DELETE FROM schema_migrations WHERE version>=24; UPDATE app_settings SET theme='dark', language='en';"
@@ -274,6 +293,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const previous = new SqliteCore(databasePath)
     previous.initialize()
+    restoreNameBindings(previous)
     previous.exec(`DROP TABLE partner_memory; DELETE FROM schema_migrations WHERE version=25;
       INSERT INTO partner (id,name,avatar_shape,avatar_color,created_at,updated_at,last_viewed_at)
       VALUES ('existing','Existing','circle','blue',1,1,1);`)
@@ -449,6 +469,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const prepared = new SqliteCore(databasePath)
     prepared.initialize()
+    restoreNameBindings(prepared)
     prepared.exec('DROP TABLE partner_memory')
     prepared.prepare('DELETE FROM schema_migrations WHERE version >= 11').run()
     prepared.exec(`DROP INDEX idx_chat_session_message_log_subagent_seq;

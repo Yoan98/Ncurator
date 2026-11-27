@@ -36,7 +36,12 @@ export function usePartnerSkillDraft(open: boolean, partnerId: string | null) {
               ...items,
               ...selection.skillNames
                 .filter((name) => !items.some((item) => item.name === name))
-                .map((name) => ({ name, description: '', bodyBytes: null }))
+                .map((name) => ({
+                  id: `unavailable:${name}`,
+                  name,
+                  description: '',
+                  bodyBytes: null
+                }))
             ])
             if (!refresh || !dirtyRef.current) {
               setNames(selection.skillNames)

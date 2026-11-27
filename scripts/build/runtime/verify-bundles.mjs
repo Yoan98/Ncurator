@@ -1,4 +1,5 @@
 import path from 'node:path'
+import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { readBundleGraph } from './bundle-graph.mjs'
 
@@ -31,6 +32,18 @@ assertNoImports('PDF worker', pdfWorkerGraph, [
   '@huggingface/transformers',
   'onnxruntime-node'
 ])
+const drawingGraph = readBundleGraph(path.join(mainOutDir, 'drawingCli.js'))
+assertNoImports('Drawing CLI', drawingGraph, ['electron'])
+for (const asset of [
+  'drawing-sdk.mjs',
+  'video-scene.mjs',
+  'scene-sans.otf',
+  'media-font-OFL.txt'
+]) {
+  if (!fs.statSync(path.join(mainOutDir, asset)).isFile())
+    throw new Error(`Missing media runtime asset: ${asset}`)
+}
+
 assertNoImports('Embedding utility process', embeddingRuntimeGraph, ['electron'])
 
 if (!embeddingRuntimeGraph.externalImports.has('@huggingface/transformers')) {

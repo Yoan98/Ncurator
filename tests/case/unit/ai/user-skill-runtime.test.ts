@@ -452,7 +452,12 @@ describe('user instruction skill runtime', () => {
 
     // Exercise production budget -> compaction -> projection -> brain, not a synthetic checkpoint.
     await ctx.appendMessageLog([
-      { kind: 'user', content: 'An earlier long task. '.repeat(8000), input: 'old task' },
+      {
+        kind: 'user',
+        content: 'An earlier long task. '.repeat(8000),
+        input: 'old task',
+        context: { selectedReferences: [], attachments: [] }
+      },
       { kind: 'assistant', content: 'Earlier work completed. '.repeat(8000), toolCalls: [] }
     ])
     ctx.humanRuntimeOverrides = { modelContextWindowTokens: 12000 }

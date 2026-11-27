@@ -78,7 +78,14 @@ const listJavaScriptFiles = (rootDirectory) => {
         walk(absolutePath)
         continue
       }
-      if (entry.isFile() && JAVASCRIPT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+      if (
+        entry.isFile() &&
+        JAVASCRIPT_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) &&
+        !['drawing-sdk.mjs', 'video-scene.mjs'].includes(
+          // Browser resources are public engine assets, not Main-process modules.
+          normalizeRelativePath(path.relative(rootDirectory, absolutePath))
+        )
+      ) {
         result.push(absolutePath)
       }
     }

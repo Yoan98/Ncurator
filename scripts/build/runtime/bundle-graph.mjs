@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import ts from 'typescript'
 import { builtinModules } from 'node:module'
 import path from 'node:path'
 
@@ -28,20 +29,45 @@ export const readBundleGraph = (entryPath) => {
     if (!currentPath || visited.has(currentPath)) continue
     visited.add(currentPath)
     const source = fs.readFileSync(currentPath, 'utf8')
-    const importPatterns = [
-      /require\(["']([^"']+)["']\)/gu,
-      /require\.resolve\(["']([^"']+)["']\)/gu,
-      /from\s+["']([^"']+)["']/gu,
-      /import\(["']([^"']+)["']\)/gu
-    ]
-    for (const pattern of importPatterns) {
-      for (const match of source.matchAll(pattern)) {
-        const specifier = match[1]
-        const localPath = resolveLocalModule(currentPath, specifier)
-        if (localPath) pending.push(localPath)
+    const ast = ts.createSourceFile(
+      currentPath,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.JS
+    )
+    const visit = (node) => {
+      let specifier
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      )
+        specifier = node.moduleSpecifier.text
+      if (
+        ts.isCallExpression(node) &&
+        node.arguments.length &&
+        ts.isStringLiteral(node.arguments[0])
+      ) {
+        const expression = node.expression
+        if (
+          expression.kind === ts.SyntaxKind.ImportKeyword ||
+          (ts.isIdentifier(expression) && expression.text === 'require') ||
+          (ts.isPropertyAccessExpression(expression) &&
+            ts.isIdentifier(expression.expression) &&
+            expression.expression.text === 'require' &&
+            expression.name.text === 'resolve')
+        )
+          specifier = node.arguments[0].text
+      }
+      if (specifier) {
+        const local = resolveLocalModule(currentPath, specifier)
+        if (local) pending.push(local)
         else externalImports.add(specifier)
       }
+      ts.forEachChild(node, visit)
     }
+    visit(ast)
   }
 
   return { visited, externalImports }

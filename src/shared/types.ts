@@ -669,7 +669,32 @@ export type DocumentSelectionNode = {
   knowledge?: { kbAvailability: KbAvailability; kbDocumentIds: string[] }
 }
 
-export type ChatMessageContentNode = ChatInlineContentNode | DocumentSelectionNode
+export type VideoFeedbackNode = {
+  kind: 'video_feedback'
+  id: string
+  filePath: string
+  version: string
+  versionPath?: string
+  timeSeconds: number
+  range?: { startSeconds: number; endSeconds: number }
+  screenshotPath: string
+  screenshotSize: { width: number; height: number; sizeBytes: number }
+  frameText?: string
+  annotations: { number: number; kind: 'rectangle' | 'arrow'; text: string }[]
+  /** Editor restoration only; excluded from model projection. */
+  geometry?: {
+    number: number
+    kind: 'rectangle' | 'arrow'
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+  }[]
+}
+export type ChatMessageContentNode =
+  | ChatInlineContentNode
+  | DocumentSelectionNode
+  | VideoFeedbackNode
 
 export type ChatAttachmentKind = 'image' | 'file' | 'directory'
 export type ChatAttachmentStatus = 'ready' | 'processing' | 'failed'
@@ -984,7 +1009,7 @@ export interface WriteTextFileResponse {
 }
 
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
-export type AiFileChangeCapability = 'docx' | 'text_file' | 'ppt' | 'excel' | 'image'
+export type AiFileChangeCapability = 'docx' | 'text_file' | 'ppt' | 'excel' | 'image' | 'video'
 export type AiFileChangeOperation = 'created' | 'updated' | 'deleted' | 'renamed'
 export type AiFileChangeSource =
   | 'text_tool'
@@ -992,6 +1017,7 @@ export type AiFileChangeSource =
   | 'ppt_tool'
   | 'excel_tool'
   | 'image_tool'
+  | 'video_tool'
 
 export interface TextFileDiffArtifact {
   version: 4
@@ -1344,7 +1370,7 @@ export type AppSettings = {
   serviceRoute: ServiceRoute
 }
 
-export type AiFileArtifactCapability = 'docx' | 'ppt' | 'excel' | 'text_file' | 'image'
+export type AiFileArtifactCapability = 'docx' | 'ppt' | 'excel' | 'text_file' | 'image' | 'video'
 export type AiFileArtifactOperation = AiFileChangeOperation
 export type AiFileArtifactRef = {
   kind: 'file'

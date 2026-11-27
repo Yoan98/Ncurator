@@ -118,7 +118,7 @@ export type AssistantProcessToolsetKey =
   | 'terminal'
   | 'web-search'
   | 'browser'
-  | 'image-generation'
+  | 'drawing'
   | 'image-read'
   | 'toolset_loading'
   | 'skill_loading'

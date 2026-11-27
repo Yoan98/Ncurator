@@ -1,13 +1,8 @@
-import { createHash, randomUUID } from 'node:crypto'
-import fs from 'node:fs/promises'
+import { unpackMediaPath } from '../MediaProcess'
 import path from 'node:path'
 import { createCanvas, loadImage } from '@napi-rs/canvas'
 import { Resvg } from '@resvg/resvg-js'
 import { DOMParser } from '@xmldom/xmldom'
-import type { WorkspaceCapabilityBuildInput } from '../types'
-import { isPathInsideRoot } from '../utils/pathBoundary'
-import { resolveSafeTextFilePath, withTextFileMutationQueue } from '../textFile/textFileUtils'
-import type { ImageGenerateInput, ImageGenerateOutput } from './toolSchemas'
 
 const MAX_SVG_BYTES = 1_048_576
 const MAX_IMAGE_EDGE = 8_192
@@ -27,8 +22,6 @@ const FORBIDDEN_ELEMENTS = new Set([
   'animatetransform',
   'set'
 ])
-
-const checksum = (content: Buffer): string => createHash('sha256').update(content).digest('hex')
 
 const parseNumericLength = (value: string): number | undefined => {
   const match = value.trim().match(/^([0-9]+(?:\.[0-9]+)?)(?:px)?$/iu)
@@ -119,11 +112,21 @@ const validateSvg = (svg: string): void => {
   visit(root)
 }
 
-const renderImage = async (input: ImageGenerateInput): Promise<Buffer> => {
+export const renderSvgImage = async (input: {
+  svg: string
+  outputPath: string
+  fontPath: string
+}): Promise<Buffer> => {
   validateSvg(input.svg)
   let rendered: ReturnType<Resvg['render']>
   try {
-    rendered = new Resvg(input.svg).render()
+    rendered = new Resvg(input.svg, {
+      font: {
+        fontFiles: [unpackMediaPath(input.fontPath)],
+        loadSystemFonts: false,
+        defaultFontFamily: 'Ncurator Scene Sans'
+      }
+    }).render()
   } catch {
     throw new Error('The SVG content is invalid.')
   }
@@ -151,77 +154,4 @@ const renderImage = async (input: ImageGenerateInput): Promise<Buffer> => {
   }
   context.drawImage(image, 0, 0)
   return await canvas.encode('webp', WEBP_QUALITY)
-}
-
-const atomicReplaceFile = async (input: {
-  outputPath: string
-  content: Buffer
-  mode: number
-  operationId: string
-}): Promise<void> => {
-  const tempPath = path.join(
-    path.dirname(input.outputPath),
-    `.${path.basename(input.outputPath)}.${input.operationId}.tmp`
-  )
-  try {
-    await fs.writeFile(tempPath, input.content, { flag: 'wx', mode: input.mode })
-    await fs.chmod(tempPath, input.mode)
-    await fs.rename(tempPath, input.outputPath)
-  } catch (error) {
-    await fs.rm(tempPath, { force: true }).catch(() => undefined)
-    throw error
-  }
-}
-
-export const generateImage = async (
-  buildInput: WorkspaceCapabilityBuildInput,
-  args: ImageGenerateInput
-): Promise<ImageGenerateOutput> => {
-  const outputPath = await resolveSafeTextFilePath({
-    sourcePath: args.outputPath,
-    allowMissing: true
-  })
-  const shouldTrackChange = isPathInsideRoot(outputPath, buildInput.workspaceRootPath)
-  const outputBuffer = await renderImage(args)
-
-  return await withTextFileMutationQueue(outputPath, async () => {
-    await fs.mkdir(path.dirname(outputPath), { recursive: true })
-    await resolveSafeTextFilePath({
-      sourcePath: args.outputPath,
-      allowMissing: true
-    })
-
-    const operationId = randomUUID()
-    let beforeBuffer: Buffer | undefined
-    let beforeMode = 0o644
-    try {
-      const stats = await fs.lstat(outputPath)
-      if (stats.isSymbolicLink() || !stats.isFile()) {
-        throw new Error(`Cannot write ${args.outputPath}: the target is not a regular file.`)
-      }
-      beforeMode = stats.mode
-      beforeBuffer = await fs.readFile(outputPath)
-    } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error
-    }
-
-    if (beforeBuffer?.equals(outputBuffer)) return { outputPath: args.outputPath }
-
-    if (!shouldTrackChange) {
-      await atomicReplaceFile({ outputPath, content: outputBuffer, mode: beforeMode, operationId })
-      if (!(await fs.readFile(outputPath)).equals(outputBuffer))
-        throw new Error(
-          'Image verification failed after saving. The file has been written; read it again to verify its contents.'
-        )
-      return { outputPath: args.outputPath }
-    }
-    await buildInput.ctx.writeFileChange({
-      sourcePath: outputPath,
-      buffer: outputBuffer,
-      capability: 'image',
-      expectedChecksum: beforeBuffer ? checksum(beforeBuffer) : undefined
-    })
-
-    return { outputPath: args.outputPath }
-  })
 }

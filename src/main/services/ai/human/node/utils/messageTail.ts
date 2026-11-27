@@ -6,7 +6,7 @@ const COMPACTION_USER_MARKER = 'ncurator_compaction_user'
 const WORKSPACE_INSTRUCTIONS_MARKER = 'ncurator_workspace_instructions'
 const COMPACTION_TOOL_RESULT_MAX_CHARS = 2000
 
-export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
+export const createCurrentBrainUserMessage = (content: HumanMessage['content']): HumanMessage =>
   new HumanMessage({
     content,
     additional_kwargs: { [CURRENT_USER_MARKER]: true }
@@ -37,7 +37,10 @@ export const isWorkspaceInstructionsMessage = (message: BaseMessage): boolean =>
   message.additional_kwargs?.[WORKSPACE_INSTRUCTIONS_MARKER] === true
 
 const isImageReferenceHuman = (message: BaseMessage): boolean =>
-  message.getType() === 'human' && typeof message.content !== 'string'
+  message.getType() === 'human' &&
+  typeof message.content !== 'string' &&
+  !message.additional_kwargs?.ncurator_user_message &&
+  !isCurrentBrainUserMessage(message)
 
 const isBoundaryUser = (message: BaseMessage): boolean =>
   message.getType() === 'human' &&

@@ -12,6 +12,7 @@ import type { WorkspaceStore } from '../storage/domains/WorkspaceStore'
 import type { WebSourceStore } from '../storage/domains/WebSourceStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import { normalizeSelectedReferences } from '../ai/utils/runContext'
+import { validateVideoFeedback } from './videoFeedback'
 
 export const resolveUserContent = async (
   request: ChatSubmitRequest,
@@ -88,7 +89,9 @@ export const resolveUserContent = async (
         }
         node.knowledge = await knowledge(node.filePath)
         await resolve(node.children)
-      } else throw new Error('正文节点无效')
+      } else if (node.kind === 'video_feedback')
+        await validateVideoFeedback(node, request.partnerId)
+      else throw new Error('正文节点无效')
     }
   }
   await resolve(contentNodes)

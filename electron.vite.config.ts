@@ -1,3 +1,4 @@
+import { mediaBrowserAssets } from './scripts/build/runtime/media-assets.mjs'
 import { resolve } from 'path'
 import { execFileSync } from 'node:child_process'
 import { defineConfig, type UserConfig } from 'electron-vite'
@@ -15,6 +16,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
   return {
     main: {
       plugins: [
+        mediaBrowserAssets(),
         {
           name: 'knowledge-cache-identity',
           generateBundle() {
@@ -38,6 +40,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
         rollupOptions: {
           input: {
             index: resolve('src/main/index.ts'),
+            drawingCli: resolve('src/main/services/media/engine/cli.ts'),
             workspacePrepareWorker: resolve(
               'src/main/services/workspace/worker/workspacePrepareWorker.ts'
             ),

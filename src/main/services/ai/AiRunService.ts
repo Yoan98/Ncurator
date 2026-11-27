@@ -76,7 +76,7 @@ export class AiRunService {
     try {
       const ctx = createAiRunContext(payload, {
         ...deps,
-        delegateToSubagent: (agents, toolCallId) => dispatch(agents, toolCallId)
+        delegateToSubagent: (agents, toolCallId, internal) => dispatch(agents, toolCallId, internal)
       })
       const dispatch = createSubagentDispatcher(
         payload,
@@ -145,7 +145,11 @@ export class AiRunService {
           input: payload.input
         })
       }
-      const presentation = resolveAiRunFailurePresentation(failure.failureCode, failure.rawMessage, failure.providerCode)
+      const presentation = resolveAiRunFailurePresentation(
+        failure.failureCode,
+        failure.rawMessage,
+        failure.providerCode
+      )
       const failureSource = presentation.source === 'user' ? 'internal' : presentation.source
       deps.sendEvent({
         type: 'run_failed',

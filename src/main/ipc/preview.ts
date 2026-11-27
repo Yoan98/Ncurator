@@ -74,7 +74,9 @@ export const registerPreviewHandlers = (
     'preview-resource-release',
     'preview-video-open',
     'preview-video-get',
-    'preview-video-convert'
+    'preview-video-convert',
+    'preview-video-frames',
+    'preview-video-freeze'
   ]
   const assertSender = (event: IpcMainInvokeEvent): void => {
     const window = getWindow()
@@ -105,6 +107,21 @@ export const registerPreviewHandlers = (
     assertSender(event)
     return video.get(z.string().uuid().parse(id))
   })
+  ipcMain.handle('preview-video-frames', async (event, id: string) => {
+    assertSender(event)
+    return video.frames(z.string().uuid().parse(id))
+  })
+  ipcMain.handle(
+    'preview-video-freeze',
+    async (event, request: { id: string; partnerId: string }) => {
+      assertSender(event)
+      const input = z
+        .object({ id: z.string().uuid(), partnerId: z.string().regex(/^[a-zA-Z0-9_-]+$/) })
+        .strict()
+        .parse(request)
+      return video.freezeVersion(input.id, input.partnerId)
+    }
+  )
   ipcMain.handle(channels[4], (event, request: { id: string; forceTranscode?: boolean }) => {
     assertSender(event)
     const payload = z

@@ -11,6 +11,9 @@ import type {
 } from '../../../../../shared/types'
 import type { ComposerDraftValue, ComposerNode } from './types'
 import { getReferenceKey } from '../../../utils/reference'
+import { videoFeedbackLabel, videoFeedbackText } from '../../../../../shared/videoFeedback'
+import type { VideoFeedbackNode } from '../../../../../shared/types'
+import { HiOutlineFilm } from 'react-icons/hi2'
 import {
   INLINE_TOKEN_LABEL_CLASS_NAME,
   REFERENCE_TOKEN_CLASS_NAME,
@@ -121,6 +124,7 @@ export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftV
   const contentNodes: ChatMessageContentNode[] = nodes.map((node) => {
     if (node.kind === 'text') return { kind: 'text', text: node.text.replace(/\u00a0/g, ' ') }
     if (node.kind === 'scope') return { kind: 'reference', reference: node.scope }
+    if (node.kind === 'video') return node.feedback
     return node.selection
   })
   return renumberComposerSelections({
@@ -136,11 +140,13 @@ export const createComposerNodesFromDraftValue = (draft: ComposerDraftValue): Co
     draft.contentNodes.map((node): ComposerNode => {
       if (node.kind === 'text') return createTextNode(node.text)
       if (node.kind === 'reference') return createScopeNode(node.reference)
+      if (node.kind === 'video_feedback') return { id: node.id, kind: 'video', feedback: node }
       return { id: node.id, kind: 'selection', selection: node }
     })
   )
 
 const selectionElements = new WeakMap<HTMLElement, DocumentSelectionNode>()
+const videoElements = new WeakMap<HTMLElement, VideoFeedbackNode>()
 const referenceElements = new WeakMap<HTMLElement, SelectedReference>()
 
 const updateSelectionToken = (token: HTMLElement, selection: DocumentSelectionNode): void => {
@@ -217,6 +223,11 @@ export const readComposerNodesFromEditor = (
         return
       }
       if (!(child instanceof HTMLElement)) return
+      if (child.dataset.role === 'video-feedback-token') {
+        const feedback = videoElements.get(child)
+        if (feedback) nodes.push({ id: feedback.id, kind: 'video', feedback })
+        return
+      }
       if (
         child.dataset.role === 'document-selection-token' ||
         child.dataset.role === 'composer-caret-anchor'
@@ -230,7 +241,7 @@ export const readComposerNodesFromEditor = (
           return
         }
         const children = extractComposerDraftValue(read(child)).contentNodes.filter(
-          (node) => node.kind !== 'document_selection'
+          (node) => node.kind !== 'document_selection' && node.kind !== 'video_feedback'
         )
         nodes.push({ id: selection.id, kind: 'selection', selection: { ...selection, children } })
         return
@@ -296,7 +307,39 @@ export const renderComposerNodesToEditor = (editor: HTMLElement, nodes: Composer
   nodes.forEach((node) => {
     if (node.kind === 'text') editor.appendChild(document.createTextNode(node.text))
     else if (node.kind === 'scope') editor.appendChild(createScopeTokenElement(node.scope))
-    else {
+    else if (node.kind === 'video') {
+      const token = document.createElement('span')
+      token.contentEditable = 'false'
+      token.tabIndex = 0
+      token.setAttribute('role', 'button')
+      token.dataset.role = 'video-feedback-token'
+      token.dataset.feedbackId = node.feedback.id
+      token.className =
+        'mx-1 inline-flex max-w-full cursor-pointer flex-col gap-1 rounded-md bg-[var(--notion-blue-bg)] p-1.5 align-middle text-[var(--notion-blue)]'
+      token.title = videoFeedbackText(node.feedback)
+      const label = document.createElement('span')
+      label.className = 'inline-flex items-center gap-1'
+      const icon = document.createElement('span')
+      icon.innerHTML = renderToStaticMarkup(createElement(HiOutlineFilm, { size: 16 }))
+      label.append(icon, document.createTextNode(videoFeedbackLabel(node.feedback)))
+      const opinion = document.createElement('span')
+      opinion.textContent = videoFeedbackText(node.feedback)
+      opinion.className = 'whitespace-pre-wrap text-[var(--notion-text)]'
+      const preview = document.createElement('img')
+      preview.alt = videoFeedbackLabel(node.feedback)
+      preview.className = 'max-h-24 max-w-40 rounded-md object-contain'
+      const fragment = node.feedback
+      void window.api
+        .readFile(fragment.screenshotPath)
+        .then((bytes) => {
+          if (!token.isConnected) return
+          preview.src = `data:image/png;base64,${btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''))}`
+        })
+        .catch(() => {})
+      token.append(label, preview, opinion)
+      videoElements.set(token, fragment)
+      editor.append(token)
+    } else {
       const fragment = document.createElement('span')
       fragment.dataset.role = 'document-selection-fragment'
       fragment.dataset.selectionId = node.selection.id
@@ -378,7 +421,12 @@ export const removeComposerTokenAtCaret = (
     const index = selection.anchorOffset - (backward ? 1 : 0)
     anchor = anchor.childNodes[index] || adjacent(anchor)
   }
-  const roles = ['scope-token', 'document-selection-token', 'document-selection-fragment']
+  const roles = [
+    'scope-token',
+    'document-selection-token',
+    'document-selection-fragment',
+    'video-feedback-token'
+  ]
   while (anchor) {
     if (anchor instanceof Text) {
       if (anchor.data) return false

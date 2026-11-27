@@ -1,5 +1,6 @@
 import { DOCX_TOOL_SPECS } from './docx/toolSpecs'
-import { IMAGE_GENERATION_TOOL_SPECS } from './imageGeneration/toolSpecs'
+import { DRAWING_TOOL_SPECS } from './drawing/toolSpecs'
+import { VIDEO_EDITING_TOOL_SPECS } from './videoEditing/toolSpecs'
 import { KB_TOOL_SPECS } from './kb/toolSpecs'
 import { PDF_TOOL_SPECS } from './pdf/toolSpecs'
 import { PPT_TOOL_SPECS } from './ppt/toolSpecs'
@@ -27,7 +28,8 @@ export const ALL_TOOL_SPECS = [
   ...PPT_TOOL_SPECS,
   ...EXCEL_TOOL_SPECS,
   ...WEB_TOOL_SPECS,
-  ...IMAGE_GENERATION_TOOL_SPECS,
+  ...DRAWING_TOOL_SPECS,
+  ...VIDEO_EDITING_TOOL_SPECS,
   ...AGENT_CONTROL_TOOL_SPECS,
   ...SCHEDULED_TASK_TOOL_SPECS,
   ...SKILL_MANAGEMENT_TOOL_SPECS

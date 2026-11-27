@@ -14,6 +14,7 @@ import {
 } from '../../../assets/WorkspaceAssetService'
 import type { HumanState } from '../types'
 import { renderToolsetCatalog } from '../toolsets'
+import { DRAWING_SYSTEM_PREFIX } from '../../../media/engine/protocol'
 
 export const renderLocalContextText = (
   ctx: Pick<AiRunContext, 'partnerId' | 'platform' | 'userSkillService'>
@@ -66,11 +67,11 @@ export const buildBrainSystemPrompt = (input: {
   ctx: Pick<
     AiRunContext,
     'partnerId' | 'partnerName' | 'platform' | 'userSkillService' | 'partnerMemory'
-  > & { isSubagent?: boolean }
+  > & { isSubagent?: boolean; agentProfile?: 'drawing' }
   loadedSkills?: readonly LoadedUserSkill[]
 }): string => {
   const partnerName = input.ctx.partnerName.trim() || PRODUCT_NAME_ZH
-  return `
+  return `${input.ctx.agentProfile === 'drawing' ? DRAWING_SYSTEM_PREFIX : ''}
 身份：
 - 你是用户的伙伴，你叫${partnerName}
 - 你需要根据已有信息自主决策下一步工具的使用来推进任务，完成用户诉求

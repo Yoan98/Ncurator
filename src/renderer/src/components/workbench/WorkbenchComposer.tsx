@@ -1,3 +1,4 @@
+import { VideoFeedbackContext } from './composer/VideoFeedbackContext'
 import { t, getRendererRuntime } from '../../i18n'
 import FileIcon from '../FileIcon'
 import UsageRing from '../UsageRing'
@@ -158,6 +159,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onFileDropHandlerReady
 }) => {
   const documentSelections = useContext(DocumentSelectionContext)
+  const videos = useContext(VideoFeedbackContext)
   const locked = Boolean(documentSelections?.locked)
   const { message } = AntdApp.useApp()
   const editorRef = useRef<HTMLSpanElement | null>(null)
@@ -953,6 +955,17 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-[var(--notion-accent)] text-[var(--notion-accent-contrast)] shadow group-hover:flex"
                   data-testid={`${workbenchSelectors.attachmentRemoveButtonPrefix}-${attachment.id}`}
                   onClick={(event) => {
+                    const videoToken =
+                      event.target instanceof Element
+                        ? event.target.closest<HTMLElement>('[data-role="video-feedback-token"]')
+                        : null
+                    const feedback = videos?.nodes.find(
+                      (node) => node.id === videoToken?.dataset.feedbackId
+                    )
+                    if (feedback) {
+                      videos?.navigate(feedback)
+                      return
+                    }
                     event.preventDefault()
                     event.stopPropagation()
                     removeAttachment(attachment.id)

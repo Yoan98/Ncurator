@@ -106,6 +106,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     ownerRunId,
     listAgents: () => deps.subagentStore.list(payload.partnerId),
     isSubagent: Boolean(payload.parentToolCallId),
+    agentProfile: payload.agentProfile,
+    terminalEnvironment: deps.terminalEnvironment,
     delegateToSubagent:
       deps.delegateToSubagent ||
       (async () => {

@@ -10,6 +10,7 @@ import {
 } from '../node/utils/messageTail'
 import { orderMessageLogBySeq, repairInterruptedToolCalls, resolveHistoryFloor } from './transcript'
 import { messagesFromLogEntries } from './conversationLogMessages'
+import { videoFeedbackUserMessage } from './videoFeedback'
 
 export type BrainMessagesProjection = {
   messages: BaseMessage[]
@@ -18,10 +19,13 @@ export type BrainMessagesProjection = {
 
 const buildCurrentUserMessage = (input: { ctx: AiRunContext; state: HumanState }): BaseMessage =>
   createCurrentBrainUserMessage(
-    buildBrainUserMessage({
-      state: input.state,
-      ctx: input.ctx
-    })
+    videoFeedbackUserMessage(
+      buildBrainUserMessage({
+        state: input.state,
+        ctx: input.ctx
+      }),
+      input.ctx.contentNodes
+    ).content
   )
 
 export const projectBrainMessagesFromLog = (input: {
@@ -61,7 +65,12 @@ export const projectBrainMessagesFromLog = (input: {
   if (appendCurrentUser) {
     messages.push(
       currentUser?.entry.kind === 'user'
-        ? createCurrentBrainUserMessage(currentUser.entry.content)
+        ? createCurrentBrainUserMessage(
+            videoFeedbackUserMessage(
+              currentUser.entry.content,
+              currentUser.entry.context.contentNodes
+            ).content
+          )
         : buildCurrentUserMessage(input)
     )
   }

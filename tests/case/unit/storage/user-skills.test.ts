@@ -75,14 +75,18 @@ describe('shared user Skill files and partner bindings', () => {
     return directory
   }
 
-  it('discovers files immediately without an index table or query writes', () => {
+  it('discovers files immediately with stable internal identity and no body index or binding writes', () => {
     expect(service.statusForPartner('alice')).toEqual([])
     expect(fs.existsSync(service.getRootDirectory())).toBe(false)
     write()
     const before = db.prepare('SELECT total_changes() AS n').get()
     expect(service.statusForPartner('alice')).toEqual([{ name: 'example', enabled: false }])
     expect(service.list()).toEqual([{ name: 'example', description: 'A reusable workflow' }])
-    expect(db.prepare('SELECT total_changes() AS n').get()).toEqual(before)
+    expect(db.prepare('SELECT total_changes() AS n').get()).not.toEqual(before)
+    const discovered = db.prepare('SELECT total_changes() AS n').get()
+    service.list()
+    expect(db.prepare('SELECT total_changes() AS n').get()).toEqual(discovered)
+    expect(store.listEnabled('alice')).toEqual([])
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE name = 'user_skill'").get()
     ).toBeUndefined()
@@ -226,7 +230,7 @@ describe('shared user Skill files and partner bindings', () => {
     const notify = vi.fn()
     service = new UserSkillService(store, path.join(root, 'skills'), notify)
     db.exec(`CREATE TRIGGER reject_two BEFORE INSERT ON partner_user_skill
-      WHEN NEW.skill_name = 'two' BEGIN SELECT RAISE(ABORT, 'database failure'); END`)
+      WHEN (SELECT name FROM skill_identity WHERE id=NEW.skill_id) = 'two' BEGIN SELECT RAISE(ABORT, 'database failure'); END`)
     expect(() =>
       service.configureForPartner('alice', [
         { name: 'old', enabled: false },
@@ -275,19 +279,21 @@ describe('shared user Skill files and partner bindings', () => {
     expect(service.getDocument('replacement').body).toContain('New content')
   })
 
-  it('checks rename budgets against the final deduplicated choices', () => {
+  it('rejects renaming into another identity even when its files are missing', () => {
     service.create({ name: 'source', description: 'Source', body: 'x'.repeat(40 * 1024) })
     service.create({ name: 'destination', description: 'Destination', body: 'y'.repeat(20 * 1024) })
     service.setEnabled('alice', ['source', 'destination'])
     fs.rmSync(path.join(service.getRootDirectory(), 'destination'), { recursive: true })
-    service.update({
-      originalName: 'source',
-      name: 'destination',
-      description: 'Renamed',
-      body: 'x'.repeat(40 * 1024)
-    })
-    expect(service.getSelection('alice').skillNames).toEqual(['destination'])
-    expect(service.loadEnabled('alice', 'destination').body.length).toBe(40 * 1024)
+    expect(() =>
+      service.update({
+        originalName: 'source',
+        name: 'destination',
+        description: 'Renamed',
+        body: 'x'.repeat(40 * 1024)
+      })
+    ).toThrow(/identity.*conflict/i)
+    expect(store.listEnabled('alice')).toEqual(['destination', 'source'])
+    expect(service.getDocument('source').body).toHaveLength(40 * 1024)
   })
 
   it('does not infer a rename from external directory changes', () => {
@@ -319,7 +325,7 @@ describe('shared user Skill files and partner bindings', () => {
       parseSkillMarkdown(fs.readFileSync(path.join(loaded.resourceBase, 'SKILL.md'), 'utf8'))
     ).toMatchObject({ name: 'example', description: 'A reusable workflow' })
     const columns = db.prepare('PRAGMA table_info(partner_user_skill)').all() as { name: string }[]
-    expect(columns.map((column) => column.name)).toEqual(['partner_id', 'skill_name'])
+    expect(columns.map((column) => column.name)).toEqual(['partner_id', 'skill_id'])
   })
 
   it('copies all resource types and preserves bytes and unknown frontmatter after the source disappears', () => {
@@ -609,7 +615,7 @@ describe('shared user Skill files and partner bindings', () => {
     const original = service.create(parseSkillMarkdown(markdown()))
     service.setEnabled('alice', [original.name])
     db.exec(
-      "CREATE TRIGGER reject_skill_update BEFORE INSERT ON partner_user_skill BEGIN SELECT RAISE(ABORT, 'forced update failure'); END;"
+      "CREATE TRIGGER reject_skill_update BEFORE UPDATE ON skill_identity BEGIN SELECT RAISE(ABORT, 'forced update failure'); END;"
     )
     expect(() =>
       service.update({
@@ -763,7 +769,7 @@ describe('shared user Skill files and partner bindings', () => {
     fs.unlinkSync(path.join(root, 'skills', b.name, 'SKILL.md'))
     expect(service.listOptions()).toEqual(
       expect.arrayContaining([
-        { ...a, bodyBytes: 6 },
+        expect.objectContaining({ ...a, bodyBytes: 6 }),
         expect.objectContaining({
           name: b.name,
           description: '',
@@ -872,5 +878,85 @@ describe('shared user Skill files and partner bindings', () => {
       /symbolic/
     )
     expect(() => service.getDocument(saved.name)).toThrow(/symbolic/)
+  })
+})
+
+describe('official Skill installation receipts', () => {
+  const stage = (name: string, body = 'Official workflow'): string => {
+    const directory = service.createStagingDirectory()
+    fs.writeFileSync(path.join(directory, 'SKILL.md'), markdown(name, body))
+    return directory
+  }
+  const metadata = { id: '42', name: 'video-production', displayName: '视频创作', version: '1.0.0' }
+  it('keeps identity and enabled partners through an official update and rename without exposing IDs to the model', () => {
+    service.installOfficial(stage('original-package-name'), metadata, null)
+    service.setEnabled('alice', [metadata.name])
+    const old = service.identityForOfficial('42')!,
+      fingerprint = service.fingerprint(metadata.name)
+    service.installOfficial(
+      stage('original-package-name', 'Improved workflow'),
+      { ...metadata, name: 'video-maker', displayName: '视频制作', version: '1.1.0' },
+      { name: metadata.name, fingerprint }
+    )
+    expect(service.identityForOfficial('42')).toMatchObject({
+      id: old.id,
+      name: 'video-maker',
+      version: '1.1.0'
+    })
+    expect(store.listEnabled('alice')).toEqual(['video-maker'])
+    expect(fs.existsSync(path.join(service.getRootDirectory(), metadata.name))).toBe(false)
+    expect(service.list()).toEqual([{ name: 'video-maker', description: 'A reusable workflow' }])
+    const copied = service.create({
+      name: 'my-video',
+      description: 'My workflow',
+      body: 'My own preferences'
+    })
+    const local = service.listOptions().find((item) => item.name === copied.name)!
+    expect(local.id).not.toBe(old.id)
+    expect(local.officialId).toBeUndefined()
+  })
+  it('rejects post-confirmation file changes and different identities with the same name', () => {
+    service.installOfficial(stage(metadata.name), metadata, null)
+    const fingerprint = service.fingerprint(metadata.name)
+    fs.appendFileSync(
+      path.join(service.getRootDirectory(), metadata.name, 'SKILL.md'),
+      'Local preference'
+    )
+    expect(() =>
+      service.installOfficial(
+        stage(metadata.name),
+        { ...metadata, version: '1.1.0' },
+        { name: metadata.name, fingerprint }
+      )
+    ).toThrow('modified after download')
+    expect(
+      fs.readFileSync(path.join(service.getRootDirectory(), metadata.name, 'SKILL.md'), 'utf8')
+    ).toContain('Local preference')
+    expect(service.identityForOfficial('42')?.version).toBe('1.0.0')
+    expect(() =>
+      service.installOfficial(stage(metadata.name), { ...metadata, id: '43' }, null)
+    ).toThrow()
+    expect(service.identityForOfficial('43')).toBeUndefined()
+  })
+  it('restores old files and binding when receipt publication fails', () => {
+    service.installOfficial(stage(metadata.name), metadata, null)
+    service.setEnabled('alice', [metadata.name])
+    const fingerprint = service.fingerprint(metadata.name),
+      old = service.identityForOfficial('42')!
+    const failure = vi.spyOn(store, 'installOfficial').mockImplementationOnce(() => {
+      throw Error('Synthetic database failure')
+    })
+    expect(() =>
+      service.installOfficial(
+        stage(metadata.name, 'New workflow'),
+        { ...metadata, name: 'renamed' },
+        { name: metadata.name, fingerprint }
+      )
+    ).toThrow('Synthetic')
+    expect(service.fingerprint(metadata.name)).toBe(fingerprint)
+    expect(store.listEnabled('alice')).toEqual([metadata.name])
+    expect(service.identityForOfficial('42')).toEqual(old)
+    expect(fs.existsSync(path.join(service.getRootDirectory(), 'renamed'))).toBe(false)
+    failure.mockRestore()
   })
 })

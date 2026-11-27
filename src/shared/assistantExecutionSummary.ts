@@ -41,7 +41,7 @@ export type AssistantExecutionToolsetKey =
   | 'terminal'
   | 'web-search'
   | 'browser'
-  | 'image-generation'
+  | 'drawing'
   | 'image-read'
   | 'toolset_loading'
   | 'skill_loading'
@@ -112,7 +112,12 @@ const TOOL_UI_KINDS = {
   excel_edit: 'excel-edit',
   web_search: 'web-search',
   browser_use: 'browser',
-  image_generate: 'image-generation',
+  drawing: 'drawing',
+  video_clip_edit: 'generic',
+  video_visual_edit: 'generic',
+  video_audio_edit: 'generic',
+  video_export: 'generic',
+
   load_toolset: 'toolset_loading',
   load_skill: 'skill_loading',
   memory: 'generic',
@@ -148,7 +153,7 @@ export const getAssistantToolIconKind = (
   if (toolsetKey === 'ppt-edit' || toolsetKey === 'excel-edit') return 'edit'
   if (toolsetKey === 'kb') return 'knowledge'
   if (toolsetKey === 'browser') return 'browser'
-  if (toolsetKey === 'image-generation' || toolsetKey === 'image-read') return 'image'
+  if (toolsetKey === 'drawing' || toolsetKey === 'image-read') return 'image'
   if (toolsetKey === 'toolset_loading') return 'toolset_loading'
   if (toolsetKey === 'skill_loading') return 'skill_loading'
   if (toolsetKey === 'terminal') return 'terminal'
@@ -295,7 +300,7 @@ export const getAssistantToolSummaryText = (
       failed: '浏览器操作失败'
     })
   }
-  if (toolsetKey === 'image-generation') {
+  if (toolsetKey === 'drawing') {
     return statusText(status, {
       running: '正在生成图片',
       completed: '已生成图片',

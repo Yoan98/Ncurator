@@ -503,10 +503,11 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
     { path: 'totalMatchCount / matches[]', description: 'search 命中' }
   ],
   excel_edit: [{ path: 'args.type', description: '决定文案，不读 data' }],
-  image_generate: [
-    { path: 'error?', description: '失败文案' },
-    { path: 'outputPath?', description: '保存路径' }
-  ],
+  drawing: [{ path: 'sourcePath', description: '长期可编辑场景入口' }],
+  video_clip_edit: [{ path: 'editPath / createdIds?', description: '编辑配方及新对象 ID' }],
+  video_visual_edit: [{ path: 'editPath / createdIds?', description: '编辑配方及新对象 ID' }],
+  video_audio_edit: [{ path: 'editPath / createdIds?', description: '编辑配方及新对象 ID' }],
+  video_export: [{ path: 'editPath', description: '导出对应的编辑配方' }],
   load_toolset: [{ path: 'args.toolsetNames', description: '加载的工具包名称' }],
   load_skill: [
     {
@@ -1475,19 +1476,29 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
     },
     { label: '编辑失败', ok: false, data: { error: 'Sheet "Missing" not found' } }
   ],
-  image_generate: [
+  drawing: [
     {
       label: '成功',
-      input: {
-        outputPath: '/workspace/assets/q3-gmv-chart.png',
-        format: 'png',
-        svg: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">…</svg>'
-      },
+      input: { prompt: '白底蓝色圆球向右移动', outputPath: '/workspace/scene.mp4' },
       ok: true,
-      data: { outputPath: '/workspace/assets/q3-gmv-chart.png', width: 640, height: 360 }
+      data: { sourcePath: '/workspace/.ncurator-media/asset/source/scene.json' }
     },
-    { label: '失败', ok: true, data: { error: 'Invalid SVG: unclosed tag <rect>' } }
+    { label: '失败', ok: true, data: { error: 'Media operation cancelled' } }
   ],
+  ...Object.fromEntries(
+    ['video_clip_edit', 'video_visual_edit', 'video_audio_edit', 'video_export'].map((name) => [
+      name,
+      [
+        {
+          label: '成功',
+          input: { outputPath: '/workspace/preview-v2.mp4' },
+          ok: true,
+          data: { editPath: '/workspace/.ncurator-media/asset/edit.json' }
+        },
+        { label: '失败', ok: true, data: { error: 'Time range must be within video' } }
+      ]
+    ])
+  ),
   load_toolset: [
     {
       label: '成功',

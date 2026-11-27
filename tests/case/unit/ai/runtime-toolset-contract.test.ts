@@ -170,7 +170,8 @@ describe('ai unit runtime toolset contract', () => {
       'ppt-write',
       'excel-read',
       'excel-write',
-      'image-generation',
+      'drawing',
+      'video-editing',
       'scheduled-tasks',
       'skill-management'
     ])

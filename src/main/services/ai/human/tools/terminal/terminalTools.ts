@@ -284,7 +284,10 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               chatSessionId: input.partnerId,
               workspaceId: input.workspaceId,
               workspaceRootPath: input.workspaceRootPath,
-              environment: input.ctx.humanRuntimeOverrides?.terminalEnvironment,
+              environment: {
+                ...input.ctx.terminalEnvironment,
+                ...input.ctx.humanRuntimeOverrides?.terminalEnvironment
+              },
               platform: input.ctx.platform,
               runId: input.runId,
               command,

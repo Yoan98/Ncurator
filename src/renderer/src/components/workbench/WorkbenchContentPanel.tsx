@@ -963,18 +963,18 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     if (!canSwitchDocumentDisplayMode(activeApplyRecord)) {
       if (
         activeApplyRecord.status !== 'applied' ||
-        (activeApplyRecord.operation !== 'created' && activeApplyRecord.capability !== 'image')
+        (activeApplyRecord.operation !== 'created' &&
+          !['image', 'video'].includes(activeApplyRecord.capability))
       ) {
         return []
       }
       return [
         {
-          filePath:
-            activeApplyRecord.capability === 'image'
-              ? activeApplyRecord.afterSnapshotPath || activeApplyRecord.path
-              : documentDisplayMode === 'preview'
-                ? activeApplyRecord.path
-                : activeApplyRecord.previewPath || '',
+          filePath: ['image', 'video'].includes(activeApplyRecord.capability)
+            ? activeApplyRecord.afterSnapshotPath || activeApplyRecord.path
+            : documentDisplayMode === 'preview'
+              ? activeApplyRecord.path
+              : activeApplyRecord.previewPath || '',
           fileName: activeApplyRecord.fileName
         }
       ]
@@ -1015,7 +1015,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     () =>
       activeApplyRecord &&
       documentDisplayMode === 'review' &&
-      activeApplyRecord.capability !== 'image' &&
+      !['image', 'video'].includes(activeApplyRecord.capability) &&
       !activeApplyRecord.previewPath ? (
         <div className="flex h-full items-center justify-center text-sm text-[var(--notion-red)]">
           {t(($) => $.workbench.reviewDataIsMissingOrUsesAnUnsupportedFormat)}
@@ -1057,7 +1057,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     (activeApplyRecord.operation === 'renamed' ||
       activeApplyRecord.operation === 'deleted' ||
       (!canSwitchDisplayMode &&
-        activeApplyRecord.capability !== 'image' &&
+        !['image', 'video'].includes(activeApplyRecord.capability) &&
         (activeApplyRecord.status === 'reverted' || activeApplyRecord.operation !== 'created'))) ? (
       <FileChangeNotice record={activeApplyRecord} />
     ) : undefined

@@ -1,3 +1,9 @@
+import { flushVideoFeedback } from '../components/media/pendingVideoFeedback'
+import {
+  VideoFeedbackContext,
+  type VideoFeedbackState
+} from '../components/workbench/composer/VideoFeedbackContext'
+import { videoFeedback } from '../../../shared/videoFeedback'
 import { presentRunFailureText } from '../../../shared/llmFailureText'
 import { messageTimeLabel } from '../i18n/systemText'
 import { t, getProductName, getContactUrl, getRendererRuntime } from '../i18n'
@@ -1054,6 +1060,7 @@ const ChatPage: React.FC = () => {
   const selectionLocationsRef = useRef(new Map<string, Map<string, SelectionLocation>>())
   const [selectionNavigation, setSelectionNavigation] =
     useState<DocumentSelectionState['navigation']>(null)
+  const [videoNavigation, setVideoNavigation] = useState<VideoFeedbackState['navigation']>(null)
   const lastSubmittedInputRef = useRef('')
   const partnerSwitchRequestRef = useRef(0)
   const partnerListHydratedRef = useRef(false)
@@ -4333,13 +4340,24 @@ const ChatPage: React.FC = () => {
       return
     }
 
+    submitInFlightRef.current = true
+    try {
+      await flushVideoFeedback()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error))
+      return
+    } finally {
+      submitInFlightRef.current = false
+    }
+    if (currentPartnerIdRef.current !== currentPartnerId) return
+    const submittedDraft = composerDraftValueRef.current
+    if (!hasUserText(submittedDraft.contentNodes)) return
     const submitPartnerId = currentPartnerId
     const queueAttempt = Boolean(aiRunId)
-    const userQuery = input
-    const submittedContentNodes = composerContentNodes
-    const submittedReferences = selectedReferences
-    const submittedAttachments = attachments
-    const submittedDraft = composerDraftValueRef.current
+    const userQuery = submittedDraft.input
+    const submittedContentNodes = structuredClone(submittedDraft.contentNodes)
+    const submittedReferences = submittedDraft.selectedReferences
+    const submittedAttachments = submittedDraft.attachments
     const optimisticUserMessage: ChatMessage = {
       id: `local-user-${crypto.randomUUID()}`,
       partner_id: submitPartnerId,
@@ -5435,6 +5453,56 @@ const ChatPage: React.FC = () => {
     }
   }
 
+  const videoState: VideoFeedbackState = {
+    partnerId: currentPartnerId || '',
+    locked: !currentPartnerId || submittingPartnerId === currentPartnerId,
+    nodes: videoFeedback(composerContentNodes),
+    navigation: videoNavigation,
+    save: (node) => {
+      if (!currentPartnerId || submittingPartnerId === currentPartnerId) return
+      const draft = composerDraftValueRef.current
+      const existing = draft.contentNodes.some(
+        (item) => item.kind === 'video_feedback' && item.id === node.id
+      )
+      const contentNodes = existing
+        ? draft.contentNodes.map((item) =>
+            item.kind === 'video_feedback' && item.id === node.id ? node : item
+          )
+        : [...draft.contentNodes, { kind: 'text' as const, text: ' ' }, node]
+      const next = {
+        ...draft,
+        contentNodes,
+        input: chatContentText(contentNodes),
+        selectedReferences: chatReferences(contentNodes)
+      }
+      saveComposerDraftForPartner(currentPartnerId, next)
+      applyComposerDraft(next, `video:${node.id}`)
+    },
+    remove: (id) => {
+      if (!currentPartnerId || submittingPartnerId === currentPartnerId) return
+      const draft = composerDraftValueRef.current,
+        contentNodes = draft.contentNodes.filter(
+          (item) => item.kind !== 'video_feedback' || item.id !== id
+        )
+      const next = {
+        ...draft,
+        contentNodes,
+        input: chatContentText(contentNodes),
+        selectedReferences: chatReferences(contentNodes)
+      }
+      saveComposerDraftForPartner(currentPartnerId, next)
+      applyComposerDraft(next, `video-delete:${id}`)
+    },
+    navigate: (node) => {
+      void openFile({
+        path: node.versionPath || node.filePath,
+        fileName: node.filePath.split(/[/\\]/u).pop() || node.filePath,
+        origin: 'preview'
+      })
+      setVideoNavigation({ node, requestId: Date.now() })
+    }
+  }
+
   const workbench = (
     <div
       className="nc-app-shell"
@@ -6274,7 +6342,7 @@ const ChatPage: React.FC = () => {
   )
   return (
     <DocumentSelectionContext.Provider value={selectionState}>
-      {workbench}
+      <VideoFeedbackContext.Provider value={videoState}>{workbench}</VideoFeedbackContext.Provider>
     </DocumentSelectionContext.Provider>
   )
 }

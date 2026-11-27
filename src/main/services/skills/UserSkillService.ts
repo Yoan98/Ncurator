@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { parseDocument, isMap } from 'yaml'
@@ -181,6 +181,66 @@ export class UserSkillService {
     return this.root
   }
 
+  public createStagingDirectory(): string {
+    this.ensureRoot()
+    return fs.mkdtempSync(path.join(this.root, '.official-'))
+  }
+
+  public identityForOfficial(id: string) {
+    return this.store.officialIdentity(id)
+  }
+
+  public fingerprint(name: string): string | null {
+    if (!fs.existsSync(path.join(this.root, name))) return null
+    return this.fingerprintDirectory(this.directory(name))
+  }
+
+  private fingerprintDirectory(root: string): string {
+    const hash = createHash('sha256')
+    const walk = (directory: string): void => {
+      for (const entry of fs
+        .readdirSync(directory, { withFileTypes: true })
+        .sort((a, b) => a.name.localeCompare(b.name))) {
+        const file = path.join(directory, entry.name)
+        if (entry.isSymbolicLink()) throw new Error('Skill contains a symbolic link')
+        hash.update(path.relative(root, file))
+        hash.update('\0')
+        if (entry.isDirectory()) walk(file)
+        else {
+          hash.update(String(fs.statSync(file).mode & 0o777))
+          hash.update(readRegularFile(file))
+        }
+      }
+    }
+    walk(root)
+    return hash.digest('hex')
+  }
+
+  public installOfficial(
+    stage: string,
+    metadata: { id: string; name: string; displayName: string; version: string },
+    expected: { name: string; fingerprint: string | null } | null
+  ): UserSkill {
+    this.ensureRoot()
+    if (path.dirname(fs.realpathSync(stage)) !== fs.realpathSync(this.root))
+      throw new Error('Invalid official Skill staging directory')
+    const current = this.store.officialIdentity(metadata.id)
+    if ((current?.name || null) !== (expected?.name || null))
+      throw new Error('Skill identity changed; download again')
+    if (expected && this.fingerprint(expected.name) !== expected.fingerprint)
+      throw new Error('Skill was modified after download; review and try again')
+    const parsed = this.inspectDirectory(stage)
+    const content = buildMarkdown(
+      { ...parsed, name: metadata.name },
+      readRegularFile(path.join(stage, 'SKILL.md')).toString('utf8')
+    )
+    fs.writeFileSync(path.join(stage, 'SKILL.md'), content)
+    const existingName = expected?.fingerprint ? expected.name : undefined
+    // Fingerprint reads only regular files; it need not parse a staging directory name.
+    const baselineSha256 = this.fingerprintDirectory(stage)
+    return this.publish(stage, existingName, { ...metadata, baselineSha256 })
+  }
+
   public listOptions(): UserSkillOption[] {
     if (!fs.existsSync(this.root)) return []
     if (fs.lstatSync(this.root).isSymbolicLink())
@@ -194,12 +254,14 @@ export class UserSkillService {
         try {
           const document = this.getDocument(entry.name)
           return {
+            ...this.store.ensureIdentity(document.name),
             name: document.name,
             description: document.description,
             bodyBytes: Buffer.byteLength(document.body, 'utf8')
           }
         } catch (error) {
           return {
+            ...this.store.ensureIdentity(entry.name),
             name: entry.name,
             description: '',
             bodyBytes: null,
@@ -462,10 +524,24 @@ export class UserSkillService {
       throw new Error('A skill with this name already exists; no files were overwritten')
   }
 
-  private publish(stage: string, existingName?: string): UserSkill {
+  private publish(
+    stage: string,
+    existingName?: string,
+    official?: {
+      id: string
+      name: string
+      displayName: string
+      version: string
+      baselineSha256: string
+    }
+  ): UserSkill {
     const parsed = this.inspectDirectory(stage)
     this.assertNameAvailable(parsed.name, existingName)
-    this.checkBoundBudgets(existingName ?? parsed.name, parsed.body, parsed.name)
+    this.checkBoundBudgets(
+      (official ? this.store.officialIdentity(official.id)?.name : existingName) ?? parsed.name,
+      parsed.body,
+      parsed.name
+    )
     const destination = path.join(this.root, parsed.name)
     const oldDirectory = existingName ? this.directory(existingName) : undefined
     const backup = existingName ? fs.mkdtempSync(path.join(this.root, '.replace-')) : undefined
@@ -480,7 +556,11 @@ export class UserSkillService {
       }
       fs.renameSync(stage, destination)
       newMoved = true
-      if (existingName) this.store.transaction(() => this.store.rename(existingName, parsed.name))
+      this.store.transaction(() => {
+        if (official) this.store.installOfficial(official, existingName)
+        else if (existingName) this.store.rename(existingName, parsed.name)
+        else this.store.ensureIdentity(parsed.name)
+      })
       committed = true
     } catch (error) {
       if (newMoved) fs.renameSync(destination, stage)

@@ -29,7 +29,8 @@ export const createAiServiceTestRunner = async (
     mainModel: { configId: config.id, modelName: config.model_name || '' },
     preference: context.preference,
     executionPermission: options.executionPermission || 'full_access',
-    selectedReferences: options.selectedReferences
+    selectedReferences: options.selectedReferences,
+    contentNodes: options.contentNodes
   }
   const events: AiRunEvent[] = []
   const io: AiLlmIoRecord[] = []

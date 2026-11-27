@@ -1,7 +1,8 @@
 import type { AiToolFamilyId, ToolFamilyDefinition } from './types'
 import { docxToolFamily } from './docx'
 import { excelToolFamily } from './excel'
-import { imageGenerationToolFamily } from './imageGeneration'
+import { drawingToolFamily } from './drawing'
+import { videoEditingToolFamily } from './videoEditing'
 import { pdfToolFamily } from './pdf'
 import { pptToolFamily } from './ppt'
 import { buildKbCapabilityTools } from './kb/retrievalTools'
@@ -26,7 +27,8 @@ export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinitio
   ppt: pptToolFamily,
   excel: excelToolFamily,
   web: webToolFamily,
-  'image-generation': imageGenerationToolFamily,
+  drawing: drawingToolFamily,
+  'video-editing': videoEditingToolFamily,
   'agent-control': agentControlToolFamily,
   'scheduled-tasks': scheduledTasksToolFamily,
   'skill-management': skillManagementToolFamily

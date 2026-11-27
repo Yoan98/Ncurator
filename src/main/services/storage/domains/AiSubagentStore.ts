@@ -102,6 +102,12 @@ export class AiSubagentStore {
       .run(Date.now())
   }
 
+  public remove(partnerId: string, agentId: string): void {
+    this.sqlite
+      .prepare('DELETE FROM ai_subagent WHERE id=? AND partner_id=?')
+      .run(agentId, partnerId)
+  }
+
   public deleteByPartner(partnerId: string): void {
     this.sqlite.prepare('DELETE FROM ai_subagent WHERE partner_id = ?').run(partnerId)
   }

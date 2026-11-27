@@ -7,7 +7,8 @@ export const AI_TOOL_FAMILY_IDS = [
   'ppt',
   'excel',
   'web',
-  'image-generation',
+  'drawing',
+  'video-editing',
   'agent-control',
   'scheduled-tasks',
   'skill-management'
@@ -48,7 +49,12 @@ export const RUNTIME_TOOL_CATALOG = {
   excel_edit: { familyId: 'excel', toolsetId: 'excel-write' },
   web_search: { familyId: 'web', toolsetId: 'web-browsing' },
   browser_use: { familyId: 'web', toolsetId: 'web-browsing' },
-  image_generate: { familyId: 'image-generation', toolsetId: 'image-generation' },
+  drawing: { familyId: 'drawing', toolsetId: 'drawing' },
+  video_clip_edit: { familyId: 'video-editing', toolsetId: 'video-editing' },
+  video_visual_edit: { familyId: 'video-editing', toolsetId: 'video-editing' },
+  video_audio_edit: { familyId: 'video-editing', toolsetId: 'video-editing' },
+  video_export: { familyId: 'video-editing', toolsetId: 'video-editing' },
+
   load_toolset: { familyId: 'agent-control', toolsetId: 'agent-control' },
   load_skill: { familyId: 'agent-control', toolsetId: 'agent-control' },
   update_plan: { familyId: 'agent-control', toolsetId: 'agent-control' },
@@ -103,7 +109,8 @@ const RUNTIME_TOOLSET_DISPLAY_NAMES = {
   'ppt-write': 'PPT 编辑器',
   'excel-read': 'Excel 阅读器',
   'excel-write': 'Excel 编辑器',
-  'image-generation': '图片生成',
+  drawing: '绘画引擎',
+  'video-editing': '视频剪辑',
   'agent-control': '任务控制',
   'scheduled-tasks': '定时任务',
   'skill-management': 'skill 管理'

@@ -7,6 +7,7 @@ import type {
   SelectedReference
 } from '../../../../../shared/types'
 import type { AiReferenceScope } from '../../types'
+import { videoFeedback, videoFeedbackText } from '../../../../../shared/videoFeedback'
 
 const KB_AVAILABILITY_LABEL: Record<KbAvailability, string> = {
   indexed: '已索引',
@@ -119,7 +120,7 @@ export const renderSelectedReferencesText = (scope: AiReferenceScope): string =>
     })
   }
   if (!scope.contentNodes) scope.selectedReferences.forEach(addReference)
-  return [...documents.values()]
+  const documentText = [...documents.values()]
     .map((document, index) => {
       const excerpts = document.selections.map(renderSelection).join('\n')
       return `${index + 1}. 文档：${document.name}
@@ -128,6 +129,25 @@ export const renderSelectedReferencesText = (scope: AiReferenceScope): string =>
 知识库文档ID：${document.knowledge.kbDocumentIds.join(', ') || '无'}${document.wholeResource ? '\n引用内容：整个资源' : ''}${excerpts ? `\n${excerpts}` : ''}`
     })
     .join('\n\n')
+  const videos = videoFeedback(scope.contentNodes || [])
+    .map((node) =>
+      renderUserBlock(
+        '视频修改意见',
+        [
+          `视频：${node.filePath}`,
+          `版本：${node.version}`,
+          node.versionPath ? `本次意见对应的版本文件：${node.versionPath}` : '',
+          `时间：${node.timeSeconds} 秒`,
+          node.range ? `时间段：[${node.range.startSeconds}, ${node.range.endSeconds}) 秒` : '',
+          `对应截图：${node.screenshotPath}`,
+          videoFeedbackText(node)
+        ]
+          .filter(Boolean)
+          .join('\n')
+      )
+    )
+    .join('\n\n')
+  return [documentText, videos].filter(Boolean).join('\n\n')
 }
 
 export const renderAttachmentsText = (scope: AiReferenceScope): string =>

@@ -1,12 +1,7 @@
+import SkillCatalogList from './SkillCatalogList'
 import { useEffect, useRef, useState } from 'react'
-import { App, Button, Empty, Input, Modal, Spin } from 'antd'
-import {
-  HiOutlineBookOpen,
-  HiOutlineFolderPlus,
-  HiOutlinePlus,
-  HiOutlineTrash,
-  HiOutlinePencilSquare
-} from 'react-icons/hi2'
+import { App, Button, Input, Modal, Spin } from 'antd'
+import { HiOutlineBookOpen, HiOutlineFolderPlus, HiOutlinePlus } from 'react-icons/hi2'
 import type {
   UserSkillOption,
   UserSkillDraft,
@@ -192,7 +187,10 @@ export default function UserSkillsView() {
     })
   }
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--notion-page)]" data-testid={selectors.view}>
+    <div
+      className="flex h-full min-h-0 flex-col bg-[var(--notion-page)]"
+      data-testid={selectors.view}
+    >
       <ViewToolbar
         title={t(($) => $.userSkills.title)}
         icon={<HiOutlineBookOpen className="h-4 w-4 text-[var(--notion-text-soft)]" />}
@@ -217,55 +215,15 @@ export default function UserSkillsView() {
           <Button onClick={() => setRevision((value) => value + 1)}>
             {t(($) => $.userSkills.refresh)}
           </Button>
-        ) : skills.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={t(($) => $.userSkills.empty)}
-            />
-          </div>
         ) : (
-          <div className="divide-y divide-[var(--notion-line)]">
-            {skills.map((skill) => (
-              <div
-                key={skill.name}
-                className="flex items-center gap-3 py-3"
-                data-testid={`${selectors.itemPrefix}-${skill.name}`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div
-                    className="line-clamp-2 break-words text-[14px] font-medium text-[var(--notion-text)] [overflow-wrap:anywhere]"
-                    title={skill.name}
-                  >
-                    {skill.name}
-                  </div>
-                  <div
-                    className="mt-1 line-clamp-2 break-words text-[13px] text-[var(--notion-text-soft)] [overflow-wrap:anywhere]"
-                    title={skill.error ? skillError(skill.error) : skill.description}
-                  >
-                    {skill.error ? skillError(skill.error) : skill.description}
-                  </div>
-                </div>
-                <Button
-                  type="text"
-                  disabled={busy}
-                  icon={<HiOutlinePencilSquare />}
-                  onClick={() => edit(skill)}
-                  aria-label={t(($) => $.userSkills.editTitle, { name: skill.name })}
-                  data-testid={`${selectors.editPrefix}-${skill.name}`}
-                />
-                <Button
-                  type="text"
-                  danger
-                  disabled={busy}
-                  icon={<HiOutlineTrash />}
-                  onClick={() => remove(skill)}
-                  aria-label={t(($) => $.userSkills.deleteTitle, { name: skill.name })}
-                  data-testid={`${selectors.deletePrefix}-${skill.name}`}
-                />
-              </div>
-            ))}
-          </div>
+          <SkillCatalogList
+            skills={skills}
+            revision={revision}
+            busy={busy}
+            onEdit={edit}
+            onRemove={remove}
+            onChanged={() => setRevision((value) => value + 1)}
+          />
         )}
       </div>
       <ConfigurationDrawer

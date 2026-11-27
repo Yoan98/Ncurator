@@ -28,7 +28,7 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 
 模型可见契约 = `promptSpec` + `inputSchema`（经 LangChain bindTools 暴露）。内部 TS 输出类型供执行层与契约测试，不经 prompt 暴露。
 
-用户共享 Skill 是说明文件资产，不是 `HumanToolSpec` 或注册工具包。`load_toolset({ toolsetNames: string[] })` 按稳定名称启用预注册工具包，`load_skill({ skillNames: string[] })` 按唯一名称加载当前有效绑定的说明。两个入口均使用各自 System 目录提供的名称；工具包名称沿用 `docx-read` 等注册键，与内部工具包 ID 同值，不另建映射，也不使用 UI 显示名。Skill 的配置和加载状态均按名称保存；工具包内部 ID 用于状态和恢复，工具预算和 FIFO 淘汰仅针对工具包。用户说明不能新增工具、自动执行脚本、加载依赖或扩大权限。技能目录仅展示名称与简介，已加载正文使用带 name / resourceBase 元数据的独立 skill 块，统一排在 System 末尾的工具组之后。加载反馈持久化名称 / 状态；正文和资源基址仅投递到每轮重建的当前说明区，不重复写入历史 tool 消息，避免压缩或恢复复活失效指令。当前绑定重校验、64 KiB 正文总预算、恢复和缓存取舍见 [Human Harness](human-harness.md#72-load_toolset-流程)。
+用户共享 Skill 是说明文件资产，不是 `HumanToolSpec` 或注册工具包。`load_toolset({ toolsetNames: string[] })` 按稳定名称启用预注册工具包，`load_skill({ skillNames: string[] })` 按唯一名称加载当前有效绑定的说明。两个入口均使用各自 System 目录提供的名称；工具包名称沿用 `docx-read` 等注册键，与内部工具包 ID 同值，不另建映射，也不使用 UI 显示名。Skill 的伙伴配置按内部身份关联，模型发现、调用和加载状态仍按名称保存；身份不进入正文和提示词；工具包内部 ID 用于状态和恢复，工具预算和 FIFO 淘汰仅针对工具包。用户说明不能新增工具、自动执行脚本、加载依赖或扩大权限。技能目录仅展示名称与简介，已加载正文使用带 name / resourceBase 元数据的独立 skill 块，统一排在 System 末尾的工具组之后。加载反馈持久化名称 / 状态；正文和资源基址仅投递到每轮重建的当前说明区，不重复写入历史 tool 消息，避免压缩或恢复复活失效指令。当前绑定重校验、64 KiB 正文总预算、恢复和缓存取舍见 [Human Harness](human-harness.md#72-load_toolset-流程)。
 
 ---
 
@@ -67,7 +67,7 @@ HumanToolSpec = {
 
 **registry 完整性**：`ALL_TOOL_SPECS` 须覆盖全部 `RuntimeToolName`；编译期 `MissingToolSpecName extends never` 断言。每个工具必须提供 `modelResult.renderSuccess`。
 
-**family 组织**：docx / pdf / ppt / excel / text-file / kb / web / terminal / image-generation / agent-control 等；`getToolSpec(name, platform?)` 为唯一查表入口（terminal_run 可按平台变体）。
+**family 组织**：docx / pdf / ppt / excel / text-file / kb / web / terminal / drawing / video-editing / agent-control 等；`getToolSpec(name, platform?)` 为唯一查表入口（terminal_run 可按平台变体）。
 
 单工具完整输入、输出与渲染例子由契约源码维护，使用 `pnpm doc:ai-tool-prompt-audit` 按需生成对照，生成产物不入库。
 

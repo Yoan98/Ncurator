@@ -5,6 +5,8 @@ import type { WorkbenchUiStore } from '../storage/domains/WorkbenchUiStore'
 import type { AiFileChangeStore } from '../storage/domains/AiFileChangeStore'
 import { getFileChangeDirectory } from '../ai/fileChanges/FileChangeSnapshots'
 import { getPartnerRootDir, getPartnerRuntimeDir } from './WorkspaceAssetService'
+import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
+import { videoFeedback } from '../../../shared/videoFeedback'
 import {
   PARTNER_CACHE_CATEGORIES,
   type PartnerCacheCategory,
@@ -60,6 +62,7 @@ export class PartnerCacheService {
       partners: PartnerStore
       ui: WorkbenchUiStore
       fileChanges: AiFileChangeStore
+      messages?: Pick<ChatMessageLogStore, 'list'>
       isPartnerBusy: (partnerId: string) => boolean
       beforeCleanup?: (partnerId: string) => Promise<void>
     }
@@ -148,6 +151,13 @@ export class PartnerCacheService {
     const protectedPaths = new Set(
       (state?.composer.draft.attachments || []).map((item) => path.resolve(item.path))
     )
+    for (const node of videoFeedback(state?.composer.draft.contentNodes || []))
+      protectedPaths.add(path.resolve(node.screenshotPath))
+    for (const record of (await this.deps.messages?.list(partnerId)) || []) {
+      if (record.entry.kind === 'user')
+        for (const node of videoFeedback(record.entry.context.contentNodes || []))
+          protectedPaths.add(path.resolve(node.screenshotPath))
+    }
     const records = categories.includes('file-changes')
       ? (await this.deps.fileChanges.listRecords({ partnerId })).items
       : []
@@ -193,6 +203,7 @@ export class PartnerCacheService {
       await filesIn(directory)
       for (const entry of entries) {
         if (entry.isSymbolicLink()) continue
+        if (category === 'assets' && /^(drawing|video)-/u.test(entry.name)) continue
         const target = path.join(directory, entry.name)
         const files = await filesIn(target)
         const bundles =

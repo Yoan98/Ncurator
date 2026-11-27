@@ -302,6 +302,12 @@ export type DesktopApi = {
   confirmDialogShow: (payload: ConfirmDialogRequest) => Promise<ConfirmDialogResponse>
   confirmDialogClose: (dialogId: string) => Promise<void>
   partnerMessageList: (partnerId: string) => Promise<ChatMessage[]>
+  officialSkillsList: () => Promise<import('../shared/officialSkills').OfficialSkillCatalog>
+  officialSkillsPrepare: (
+    id: string
+  ) => Promise<import('../shared/officialSkills').OfficialSkillDownload>
+  officialSkillsCommit: (token: string) => Promise<void>
+  officialSkillsCancel: (token: string) => Promise<void>
   userSkillsList: () => Promise<UserSkillOption[]>
   onUserSkillsChanged: (callback: () => void) => () => void
   userSkillsImport: () => Promise<UserSkillImportPreview | null>
@@ -449,6 +455,11 @@ export type DesktopApi = {
   previewResourceRelease: (id: string) => Promise<void>
   previewVideoOpen: (request: VideoPreviewOpenRequest) => Promise<VideoPreviewSnapshot>
   previewVideoGet: (id: string) => Promise<VideoPreviewSnapshot>
+  previewVideoFreeze: (request: {
+    id: string
+    partnerId: string
+  }) => Promise<import('../shared/preview').VideoPreviewVersion>
+  previewVideoFrames: (id: string) => Promise<import('../shared/preview').VideoPreviewFrame[]>
   previewVideoConvert: (request: VideoPreviewConvertRequest) => Promise<VideoPreviewSnapshot>
   onWorkbenchUiFlushRequest: (cb: () => void | Promise<void>) => () => void
 }

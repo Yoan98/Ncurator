@@ -74,8 +74,7 @@ export class LoopbackWebSocket {
     this.closed = true
     if (!this.socket.destroyed) {
       try {
-        this.socket.write(encodeFrame(OP_CLOSE, Buffer.alloc(0)))
-        this.socket.end()
+        this.socket.end(encodeFrame(OP_CLOSE, Buffer.alloc(0)), () => this.socket.destroy())
       } catch {
         this.socket.destroy()
       }
@@ -84,6 +83,7 @@ export class LoopbackWebSocket {
   }
 
   private handleClose(): void {
+    if (!this.socket.destroyed) this.socket.destroy()
     if (this.closed) return
     this.closed = true
     this.closeHandler?.()

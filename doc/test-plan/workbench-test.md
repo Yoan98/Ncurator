@@ -21,7 +21,7 @@
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览覆盖可写 XLSX 编辑保存与撤销、宏/模板只读、切 Sheet 和拖列宽后仍可用。`workspace-file-explorer-open-refresh` 覆盖列表打开/焦点刷新、右键行内新建和确认移到回收站，以及删除后禁止自动保存重建。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；用户行为见 `WB-WPS-001`。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
-- image generation apply case 需要真实模型先加载外置 `image-generation` 工具包、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
+- 绘画与动画使用真实子 Agent、内置引擎与 Electron 页面，生成可解码媒体并保留来源；视频工作台用例须把实际截图投递给模型。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；必须在无进程级远程调试口下完成。同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 使用正文由 JavaScript 渲染的真实本地页面，验证冻结网页后台进程连接浏览器并取得正文，不设置本地地址绕过抓取的测试配置。两类 case 均验证结果只回模型、不自动展开右侧面板，对齐 `WB-CORE-007-AC4`；正式包从系统真实入口启动，规则见 `doc/test.md`。
 - Workbench 附件链路不限制文件扩展名、大小、数量或目录大小；点击 `+` 直接打开可选择文件或目录的系统选择器，拖放接受文件与目录并保留源绝对路径，目录不递归扫描；附件卡片采用紧凑内边距，文件夹、音频和视频分别使用对应图标；图片保持灯箱预览，支持右侧文件预览的文档打开资源 Tab，文件夹打开系统文件管理器，音视频和其他不支持右侧预览的文件定位到系统文件所在位置；粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
@@ -607,22 +607,6 @@ pnpm test:update:e2e
 
 ### 5.3 `result`
 
-#### `image-generation-preview-and-revert`
-
-- 测试类型：`e2e / live`
-- What：真实 AI 根据用户请求生成 PNG 图片，用户可以从修改入口预览并回退删除该图片。
-- Why：工具级转码成功不能证明真实模型会使用图片生成工具包，也不能证明最终图片能进入 Workbench 的预览和回退闭环。
-- How：通过真实 Workbench UI 请求 AI 在文件地址内生成指定文件名的简单 PNG；等待 run 完成后打开修改入口，检查图片预览，再执行统一回退确认。
-- Oracle：真实调用 `image_generate` 且输入只有 `outputPath/svg`，正式文件具有 PNG 签名，对齐 `WB-IMAGE-001-AC1`、`WB-IMAGE-001-AC2`；assistant 修改入口、右侧预览和新建文件回退删除对齐 `WB-APPLY-002-AC7`、`WB-APPLY-003-AC7`。自动创建/更新由 AI `image-generate-format-create-update-contract` 覆盖 `WB-IMAGE-001-AC3`，失败无副作用由 `image-generate-safety-and-boundary-contract` 覆盖 `WB-IMAGE-001-AC4`。
-
-#### `image-generation-update-preview-and-revert`
-
-- 测试类型：`e2e / live`
-- What：真实 AI 更新已有 PNG 后，Workbench 直接预览最终图片并可回退恢复原始 bytes。
-- Why：新建图片回退删除不能证明已有图片的首次写入前快照和恢复链路正确。
-- How：先在临时文件地址放置有效 PNG，再通过真实 Workbench UI 请求 AI 更新同一路径；检查更新结果和图片预览，执行统一回退后重新读取文件。
-- Oracle：真实调用 `image_generate`，目标图片产生修改 Artifact，最终文件地址只交付目标图片；更新后正式文件变化且仍为 PNG；右侧直接预览且没有 Diff 切换；回退后 bytes 与原图完全一致，对齐 `WB-IMAGE-001-AC2`、`WB-APPLY-002-AC7`、`WB-APPLY-003-AC7`。
-
 #### `file-preview-actions`
 
 - 测试类型：`e2e / exclusive`（真实网格复制读取系统剪贴板）
@@ -929,6 +913,30 @@ pnpm test:update:e2e
 
 权限、原子回滚、预算精确边界与损坏配置停用由 Unit 补充；缓存命中率由现有缓存专项验证。
 
+#### `media-runtime-production`
+
+- 测试类型：e2e / live，源码与正式包共用。
+- What：真实应用内完成绘画、剪辑、编码和交付。
+- Why：验证 ASAR、离线字体、内置 Node、限定 CDP 和编码器在实际安装包中协作。
+- How：通过聊天要求一秒动画及裁切字幕成片，检查生成文件、长期来源和播放器；macOS 应用 PATH 排除全局 Node/Chrome，采样进程树内存并核对绘图窗口释放。
+- Oracle：`WB-IMAGE-001-AC1/AC2/AC4`、`WB-VIDEO-001-AC1/AC3`；以真实 Artifact、可解码媒体、来源和窗口生命周期为依据。
+
+#### `video-feedback-workbench`
+
+- 测试类型：e2e / live。
+- What：视频工作台意见与消息闭环。
+- Why：防止拖动、标注或截图与模型收到的版本不一致。
+- How：真实 UI 打开视频，用鼠标绘制、移动和调整框与箭头，编辑整帧文字，拖动缩略图与时间段，加入 Composer 并发送；重开历史引用。
+- Oracle：`WB-VIDEO-002-AC1/AC2/AC3/AC4/AC5`；验证吸附双阈值和 Alt、浮层不入截图、未发送同步、失败保留和已发送冻结。
+
+#### `official-skill-download`
+
+- 测试类型：e2e。
+- What：官方目录、下载、更新、覆盖与改名。
+- Why：防止官方更新丢失个人改动或伙伴绑定。
+- How：真实 Skill 页和下载服务，校验图标、分组、覆盖取消、更新改名及伙伴绑定；目录离线与下载中断保留人工回归边界。
+- Oracle：`WB-SKILL-003-AC1/AC2/AC3/AC4`；同身份绑定保留、第三方冲突不覆盖、失败旧文件不变。
+
 ## 6. 自动化覆盖边界
 
 产品埋点的完整规则见 `WB-TELEMETRY-001`。`WB-TELEMETRY-001-AC1/AC2/AC3/AC5/AC6` 的受理触发、终态、开始时的公开型号快照及去重由 `chat-run-service-contract` 验证。`telemetry-service` 验证字段、旧队列丢弃、私有型号隔离和重试复用事件 ID。E2E 验证真实用户行为和禁发，隔离回归验证上报。
@@ -944,7 +952,7 @@ pnpm test:update:e2e
 
 | 验收                                           | 当前证据与缺口                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WB-DOCUMENT-REFERENCE-001-AC7`                | 部分覆盖：`docx-selection-reference` 已验证 18px 共用轨道、隐藏原生竖向条、滑块同步、拖动/滚轮/空白点击、覆盖色块定位与拖动不误触，以及紫色标记、正文排序的重叠循环、鼠标/键盘定位与强调、临时选区无标记和发送清理。删除逐项更新、伙伴/文件隔离、窗口变化后标记位置、外部原文变化、更多密集引用及长区域保留人工验收边界。                                                                  |
+| `WB-DOCUMENT-REFERENCE-001-AC7`                | 部分覆盖：`docx-selection-reference` 已验证 18px 共用轨道、隐藏原生竖向条、滑块同步、拖动/滚轮/空白点击、覆盖色块定位与拖动不误触，以及紫色标记、正文排序的重叠循环、鼠标/键盘定位与强调、临时选区无标记和发送清理。删除逐项更新、伙伴/文件隔离、窗口变化后标记位置、外部原文变化、更多密集引用及长区域保留人工验收边界。                                                                 |
 | `WB-PANEL-003-AC29`                            | 部分覆盖：`docx-review-position-and-inline-diff` 与 `docx-apply-panel-preview-and-revert` 已验证同轨叠层、红删绿增、格式语义、首次打开深页差异目录、滚动前后正文标记固定、整段删除后的内置定位、反复返回审核的锚点恢复，以及预览与回退无残留；轨道滚动交互由 `docx-selection-reference` 验证共用组件。密集循环、重复文字、图片/表格、延迟加载、首尾长区域和历史批次切换保留人工验收边界。 |
 | `WB-CORE-004-AC2/AC3`、`WB-CORE-007-AC3`       | 待补：默认 / 宽松补充和严谨资料边界没有专门真实模型场景。偏好选择、持久化或 prompt 格式检查不能代替行为验证。                                                                                                                                                                                                                                                                             |
 | `WB-COMPOSER-014-AC3`                          | 部分覆盖：重试行见 `llm-retry-process-row`；输出截断、半截回答与网络中断上下文的完整 UI 断言待补。                                                                                                                                                                                                                                                                                        |
@@ -1022,7 +1030,7 @@ pnpm test:update:e2e
 
 | 验收                | 当前覆盖                                                                                                                                                                                     |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WB-MEMORY-001-AC1` | 部分覆盖：`partner-edit` 检查总开关默认启用、两类同步开关及回填；重启后状态由 Unit `sqlite-storage` 验证，UI 重启路径待补。                                                                            |
+| `WB-MEMORY-001-AC1` | 部分覆盖：`partner-edit` 检查总开关默认启用、两类同步开关及回填；重启后状态由 Unit `sqlite-storage` 验证，UI 重启路径待补。                                                                  |
 | `WB-MEMORY-001-AC2` | 部分覆盖：Unit `sqlite-storage` 验证级联删除，`partner-cache-service` 验证清空消息保留正式正文和待确认稿；伙伴切换需人工回归。                                                               |
 | `WB-MEMORY-002-AC1` | 部分覆盖：`partner-edit` 验证自动保存、重新打开、撤销与重做及底线样式；跨平台视觉需人工回归。                                                                                                |
 | `WB-MEMORY-002-AC2` | 部分覆盖：Unit `sqlite-storage` 验证草稿累计、独立审核；`chat-without-knowledge-model` 验证真实 AI 提案后的可编辑逐字 diff、顶栏独立审核，以及与 DOCX 共用的 18px 差异概览、点击和拖动定位。 |
@@ -1030,3 +1038,9 @@ pnpm test:update:e2e
 | `WB-MEMORY-003-AC1` | 部分覆盖：Unit `sqlite-storage`、`runtime-toolset-contract` 验证累计、原子失败及工具契约；`chat-without-knowledge-model` 验证实际模型持续调用。                                              |
 | `WB-MEMORY-003-AC2` | 部分覆盖：Unit `brain-prompt-formatting` 验证同 run 确认、关闭与待确认过滤；`chat-without-knowledge-model` 验证确认后下一次真实会话请求。                                                    |
 | `WB-MEMORY-003-AC3` | 部分覆盖：Unit `sqlite-storage` 验证过期保存和审核被拒绝；并发编辑的 UI 自动合并需人工回归。                                                                                                 |
+
+### 视频制作验收证据边界
+
+- `WB-VIDEO-001-AC1/AC2/AC3`：由 AI `video-editing-contract`、`human-video-edit-live` 验证原素材与配方、时间映射和正式编码；实际视觉、听感与正式包释放仍单独核对。
+- `WB-IMAGE-001-AC1/AC2/AC3/AC4`：引擎编码、透明度、来源、新版本和停止边界由 `drawing-engine-contract`、`human-video-animation-live` 补证；静态图片预览与回退仍需独立人工核对。
+- `WB-APPLY-002-AC7`、`WB-APPLY-003-AC7`：绘画新建结果沿用文件交付与回退；原图片修改以新版本交付。视频工作台验证媒体交付与历史定位，不能代替静态图片回退的 UI 证据。

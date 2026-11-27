@@ -32,6 +32,7 @@ import { globalShortcut } from 'electron'
 import { loadRootEnvOnce } from './utils/rootEnv'
 import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
 import { CdpEndpointService } from './services/browser/CdpEndpointService'
+import { configureDrawingHost } from './services/media/engine/ElectronDrawingHost'
 import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
 import { ElectronWebCrawlerBrowserHost } from './services/webCrawler/ElectronWebCrawlerBrowserHost'
 import { AppUpdateService } from './services/update/AppUpdateService'
@@ -594,6 +595,7 @@ if (!singleInstanceLock) {
       notificationIcon: icon
     })
     const cdpEndpointService = new CdpEndpointService()
+    configureDrawingHost(cdpEndpointService)
     const browserEmbedService = new BrowserEmbedService(
       mainWindow,
       cdpEndpointService,

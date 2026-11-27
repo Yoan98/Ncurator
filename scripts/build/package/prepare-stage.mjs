@@ -458,7 +458,9 @@ const main = async () => {
 
   const rootPackage = JSON.parse(fs.readFileSync(ROOT_PACKAGE_PATH, 'utf8'))
   const runtimeEntries = [
-    ...listJavaScriptFiles(path.join(OUT_DIR, 'main')),
+    ...listJavaScriptFiles(path.join(OUT_DIR, 'main')).filter(
+      (file) => !['drawing-sdk.mjs', 'video-scene.mjs'].includes(path.basename(file))
+    ),
     ...listJavaScriptFiles(path.join(OUT_DIR, 'preload'))
   ]
   const directPackageNames = collectRuntimePackageNames(runtimeEntries)

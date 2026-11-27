@@ -61,6 +61,33 @@ describe('confirmed file sessions', () => {
       capability: 'text_file'
     })
 
+  it('keeps each media snapshot linked to its editable source after the output changes', async () => {
+    const source = path.join(root, 'movie.mp4')
+    const editPath = path.join(root, '.ncurator-media', 'first', 'edit.json')
+    const first = await service.sessions.write('partner', 'first-run', {
+      sourcePath: source,
+      buffer: Buffer.from('video version one'),
+      capability: 'video',
+      mediaOrigin: { editPath }
+    })
+    const snapshot = first.record.afterSnapshotPath!
+    await service.sessions.finalize('partner', 'first-run')
+    await service.sessions.write('partner', 'next-run', {
+      sourcePath: source,
+      buffer: Buffer.from('video version two'),
+      capability: 'video',
+      mediaOrigin: { editPath: path.join(root, '.ncurator-media', 'second', 'edit.json') }
+    })
+    expect(await fs.readFile(snapshot, 'utf8')).toBe('video version one')
+    expect(JSON.parse(await fs.readFile(`${snapshot}.origin.json`, 'utf8'))).toEqual({
+      version: 1,
+      outputPath: snapshot,
+      originalPath: source,
+      sha256: hash(Buffer.from('video version one')),
+      editPath
+    })
+  })
+
   it('checks the disk version again when an AI write waits behind a Word autosave', async () => {
     const make = (name: string, text: string) =>
       writeTestDocxFile(root, name, [{ type: 'paragraph', text }])

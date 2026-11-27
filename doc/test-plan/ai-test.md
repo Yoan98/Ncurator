@@ -13,7 +13,7 @@
 - 负责生产工具 runtime 的完整输入输出、读写链、错误边界、原子性、修改记录与回退契约；只验证真实生产工具调用，不允许 fake。
 - `tool / docx` 覆盖 8 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 首次原始字节基线→最终确认落盘版本净 Diff。
 - `tool / text-file` 覆盖普通文本按行分页读取、四种写入 action、修改记录、结构化 diff 与回退前置数据，以及按行号定位的文本搜索；unit 侧见 `tests/case/unit/ai/text-file-tool-contract.test.ts`。
-- `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作地址内修改记录、Artifact、安全校验和工作地址外绝对路径写入不记录回退。
+- `tool / drawing` 覆盖场景协议、确定性定位、图片与透明动画编码、单任务宿主、原子输出、来源保留及取消。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。`browser_use` 网址协议、系统错误页、加载超时与 `navigate` 成败字段由 Workbench `browser-navigate-error-page` 与 unit `navigate-plan` 覆盖。
 - 工具契约由 family unit contract（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）和 backend tool integration 共同验证；注册完整性由 [registry 编译检查](../../src/main/services/ai/human/tools/registry.ts) 保证。不对 prompt 措辞或 Renderer 投影字句做 unit 单测。
@@ -176,7 +176,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 | `docx_content_edit`       | `replace_text`、`insert_nodes`、`replace_node`、`delete_node`、`move_node`                                                                                                                                | `docx-public-tools`、`docx-net-review-matrix`：文字/visual 创建替换删除移动、首尾顺序重建、等价路径、无变化移动、跨区域拒绝无部分提交           |
 | `docx_format`             | `format_text`、`format_paragraph`、`format_section`、`reset_format`、`apply_named_style`、`create_named_style`、`update_named_style`、`delete_named_style`、`set_numbering`                               | `docx-public-tools`、`docx-net-review-matrix`：实际范围、纯格式 +0/-0、独立样式记录、恢复消除、批量无效目标不得部分生效                         |
 | `docx_table_edit`         | `create_table`、`delete_table`、`insert_row`、`delete_row`、`insert_column`、`delete_column`、`merge_cells`、`split_cell`、`format_table`、`format_row`、`format_cell`                                    | `docx-net-review-matrix`：首尾行列/合并拓扑、对应单元格、格式范围、逐字节回退                                                                   |
-| `docx_read_annotations` | 按节或内容锚点分页查询批注和修订 | 查询 ID 可直接用于回复、接受和拒绝 |
+| `docx_read_annotations`   | 按节或内容锚点分页查询批注和修订                                                                                                                                                                          | 查询 ID 可直接用于回复、接受和拒绝                                                                                                              |
 | `docx_comments_revisions` | `add_comment`、`update_comment`、`reply_comment`、`delete_comment`、`enable_track_changes`、`disable_track_changes`、`accept_revision`、`reject_revision`、`accept_all_revisions`、`reject_all_revisions` | `docx-public-tools`、`docx-net-review-matrix`、`docx-apply-diff`：批注/设置独立变化、根级修订结构、原有用户修订保留、恢复/回退                  |
 
 Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大范围文字变化与长段落耗时/输出规模；`docx-review-resources` 补超链接、旧新资源冲突、源文件已有 NULL/缺失图片关系、命名样式/默认样式/主题继承、缺失定义补全、节范围、用户修订保真。已有损坏图片关系保留原始目标，不复制不存在的资源；真实图片仍完整导入，审核不得产生新增校验问题或因残留图片阻断文字差异。`docx-node-identity`、`docx-operation-matrix` 和现有递归/visual 测试继续保障编辑能力；这些测试不能替代上述真实公开工具覆盖。Workbench 用例归属及界面 Oracle 见 Workbench 测试计划。
@@ -519,24 +519,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - How：真实工具、文件、Skill 服务与 SQLite；直接创建目录后立即查询/启用，修改后验证读取到新内容；两个伙伴保留各自选择；组合停用旧项与启用新项验证最终预算，非法项导致整批回滚。Unit 补充迁移、文件监听、发布回滚、名称变更及精确预算边界。
 - Oracle：无 Skill 索引表，查询不写文件或配置；列表无标题、修改仅返回空对象及简短确认，刚创建立即可用；空数组/重复名称拒绝、配置原子性、损坏停用、其他选择与伙伴隔离有效；长正文和长清单经真实文件工具续读。对应 `WB-SKILL-002-AC1/AC2/AC3/AC6`。
 
-#### image-generation 类别
-
-##### `image-generate-format-create-update-contract`
-
-- 测试类型：`backend`
-- What：`image_generate` 使用 SVG 内容生成真实 PNG、JPEG、WebP，并自动创建或更新目标图片。
-- Why：图片生成的核心交付是可读取的正式图片文件，不能只验证 SVG 或伪造扩展名。
-- How：在临时工作区调用真实 `image_generate`，分别输出 PNG、JPEG、WebP；同一路径再次生成，并覆盖一份预先存在的 JPEG。
-- Oracle：三种文件签名正确且均可实际解码为预期尺寸；新建和已有路径连续更新都复用修改记录和 applyId；已有文件始终保存首次写入前快照；运行中无 file_artifact，主 run 收尾后发布图片记录并保留不可变最终图片快照，不新增图片内容 diff；工具结果只返回 `outputPath`。
-
-##### `image-generate-safety-and-boundary-contract`
-
-- 测试类型：`backend`
-- What：危险 SVG 和不支持格式请求失败；工作区外绝对路径可写入但不产生回退记录。
-- Why：SVG 是可包含脚本和外部资源的输入格式，图片工具必须在写文件前完成安全校验；工作区外写入不得进入可回退记录。
-- How：分别提交包含脚本、外部图片引用、CSS 外链、CSS import、超大尺寸、malformed SVG、`.gif` 输出路径和工作区外路径的真实工具调用；工作区外路径使用安全 SVG，malformed SVG 使用一份已存在目标文件。
-- Oracle：危险 SVG、malformed SVG 和不支持格式均返回明确错误；新目标文件不存在，已有目标文件保持调用前 bytes。工作区外安全 SVG 可以写入，但不生成图片修改记录或 `file_artifact`。
-
 #### 主模型多模态类别
 
 ##### `read-image-multimodal-contract`
@@ -701,14 +683,6 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - How：使用真实 ChatRunService 与存储提交文字、@ 文件/目录/网页、两个 DOCX 选区及文本/PDF/Excel/PPT 选区，拒绝无效区域与定位；脚本化 brain 决策，核对模型收到的正文与保存的快照一致；随后提交选区消息排队，重建服务并执行中断恢复，检查用户消息。
 - Oracle：User 顶层为无属性标签块，顶层块与文档之间只有一个空白行，可选空块省略；同一文件的 @ 与选区合并，每个片段使用 `<用户选中片段N>`，不另列编号；文档元数据与首个片段、同一文档内不同片段之间没有空白行。文字选中内容独立于 `<定位信息>`，行号、页码、不同于选中文字的源文件片段及 `<选中内容的前文>` / `<选中内容的后文>` 都在定位块内；片段内部不插入空白行或额外定位说明句；空块省略，源文与选中文字相同时不重复输出，保留换行、Tab、空白和代码围栏。PPT 仅输出页码和一个选中元素/页面标识；Excel 仅输出“工作表”和“选中单元格范围”，不输出值、公式、display/cells/merges 或前后文，原始 Excel 快照仍保存在真实消息中；详情只在文档信息处展示文件名，想法只出现一次。索引状态以 Main 解析结果为准；未索引选区可接受；brain 复用保存的正文且不重复写 user；排队正文与中断恢复后的正文一致。
 - 待覆盖：任意混排顺序的精确比对、选区不收窄实际知识库检索范围，以及排队消息的完整续接执行。
-
-##### `human-image-generation`
-
-- 测试类型：`backend / mock-llm`
-- What：human 直接使用 builtin `image_generate` 生成并交付 PNG，无需学习。
-- Why：Tool 测试不覆盖 Brain、Hand 的工具包装载和交付主链。
-- How：通过生产 `AiRunService.run` 包含真正主 run 的文件收尾；只脚本化 LLM 决策，真实执行 human graph、图片渲染、修改记录和 Artifact。
-- Oracle：主链经过 Hand 与 brain 交付；只调用一次 `image_generate`；PNG 可解码且尺寸正确；Artifact 和最终交付文件名一致。
 
 ##### `human-excel-read-edit`
 
@@ -891,8 +865,8 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - 测试类型：`backend / mock-llm`
 - What：同一伙伴的多轮 human run 能复用已加载工具包记忆；在 `HUMAN_MAX_ACTIVE_TOOLS=30` 下加载到上限后会 FIFO 淘汰，被淘汰 toolset 可重新加载回来。
 - Why：工具包记忆是 AI 架构跨轮次协作的核心；active tool 上限下的遗忘与重新加载必须由真实 toolset_loading 链路守住，不能只靠 unit 算法。
-- How：跨五轮逐步加载 DOCX、PDF、Excel、PPT 和图片工具包；第四轮加载 `excel-read + image-generation + docx-write` 挤爆预算；第五轮重新加载被淘汰的 `docx-read`。
-- Oracle：工具包跨 run 保留；第三轮的 DOCX/PDF/Excel/PPT 工具包均保留。第四轮包含新请求的 `excel-read/image-generation/docx-write`，最早加载的 `docx-read` 按 FIFO 淘汰，`pdf-read` 仍保留；第五轮真实重新加载 `docx-read` 且最终快照包含它。
+- How：跨五轮逐步加载 DOCX、PDF、Excel、PPT 和图片工具包；第四轮加载 `excel-read + drawing + docx-write` 挤爆预算；第五轮重新加载被淘汰的 `docx-read`。
+- Oracle：工具包跨 run 保留；第三轮的 DOCX/PDF/Excel/PPT 工具包均保留。第四轮包含新请求的 `excel-read/drawing/docx-write`，最早加载的 `docx-read` 按 FIFO 淘汰，`pdf-read` 仍保留；第五轮真实重新加载 `docx-read` 且最终快照包含它。
 
 ##### `plan-memory-maintenance`
 
@@ -1233,6 +1207,40 @@ Unit `docx-diff` 补重复内容匹配、跨 run 字符、Unicode 分段、大�
 - Why：评估规范提炼和交付质量，不能只检查调用成功。
 - How：真实模型与生产入口、目录服务、SQLite 配置；四轮依次沉淀并启用、用新事实交付客户周报与行动清单、修改原规范并保留旧交付、停用当前伙伴。自动发现目录，由模型按需加载管理工具包后查询和批量启停；用户不提供工具名、ID、脚本代码或评审答案。
 - Oracle：自动发现、按名称配置/加载、脚本执行、资源使用和未修改规则保留，源资料、其他 Skill 与伙伴选择不变。按原始模型输入、工具、脚本结果和真实产物人工评 10 分：规范与事实 3，资源可复用 2，生命周期正确 2，交付可用 2，跨轮保留 1；严格超过 8 分，核心交付缺失、关键事实造假、擅改原件或影响其他伙伴均不通过。记录 usage/耗时，不写固定质量分。对应 `WB-SKILL-002-AC1/AC2/AC4/AC6`。
+
+### 视频制作与绘画
+
+##### `drawing-engine-contract`
+
+- 测试类型：backend。
+- What：真实 Electron 绘图页面、CLI、编码、可编辑来源及取消。
+- Why：防止额外浏览器依赖、静态伪动画、透明丢失和进程泄漏。
+- How：生产引擎 CLI 经过正式包同配置混淆后加载场景，检查指定帧并生成 PNG、MP4 和透明 WebM，引用来源后修改；中止真实编码任务。
+- Oracle：尺寸、帧内容变化、alpha、原版本保护及原子发布正确；释放页面与子进程，失败源稿保留。
+
+##### `video-editing-contract`
+
+- 测试类型：backend。
+- What：四个剪辑入口共享配方及真实输出。
+- Why：防止连续变速选段错位及从预览反复压缩。
+- How：生产工具组装普通素材，选段、变速、字幕、叠加和音轨，正式导出；检查真实编码帧与音轨。
+- Oracle：时间映射、字幕音轨同步、未修改区间、旧快照、失败原子性和取消正确，原素材字节不变。
+
+##### `human-video-edit-live`
+
+- 测试类型：backend / live。
+- What：真实模型从素材剪辑、意见修改到正式交付。
+- Why：检验模型能否通过公开契约完成真实任务。
+- How：真实 AiRunService、独立发布的官方 Skill 包、生产工具和 Electron 宿主；自然语言提供素材，再通过生产视频反馈消息提出局部意见，输入不指定内部工具或顺序。
+- Oracle：真实选段与变速、字幕音轨同步、局部修改保留外围、来源可编辑；归档视频、检查帧、用量、耗时及失败原因，视觉听感独立记录。
+
+##### `human-video-animation-live`
+
+- 测试类型：backend / live。
+- What：无 Skill 创作动画，引用旧版修改后参与视频制作。
+- Why：证明绘画引擎独立可用，子 Agent 能实际制作和检查画面。
+- How：真实模型、生产 drawing 与 Electron 绘图页面，自然语言说明动作和局部修改，另行触发取消。
+- Oracle：真实动作及结束状态、未修改内容、来源、定位一致性与停止清理有效；技术断言与实际视觉复核分别归档。
 
 ## 5. 覆盖边界
 

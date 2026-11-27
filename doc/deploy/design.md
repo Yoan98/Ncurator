@@ -22,7 +22,7 @@ prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` 
 - PDF.js 保留 Main 使用的 legacy 模块、worker 与配套资源；Renderer 的 PDF 代码和 worker 随前端构建固化。生产依赖移除未使用的浏览器发行目录和重复的压缩模块。Transformers 保留 Node ESM 入口，移除未使用的浏览器、CommonJS 和压缩发行副本；Google GenAI、LangChain 和 Fontkit 同样按精确路径裁剪未使用的发行副本或模块目录，保留实际 Node 入口、文档加载和字体能力；依赖追踪一旦引用待裁剪文件即构建失败。
 - 依赖内的运行时代码目录按精确路径保留，包括 ExcelJS 的 `lib/doc` 与 YAML 的 `dist/doc`；staging 校验 YAML 解析及序列化，实际安装包审计检查其关键运行时文件，不能按目录名将其当普通文档删除。
 - Windows x64 在 ONNX Runtime 与 Jieba 原生模块旁各自部署 VC++ 运行库，不要求用户预装系统运行库；安装包审计检查两处实际解包的二进制与 DLL，staging 实际加载 Jieba 默认词典并验证中文分词。
-- 视频预览随包携带当前平台的 FFmpeg 与 FFprobe 可执行文件，放在 ASAR 解包目录，源码与安装包使用同一入口；打包审计验证二进制存在并可运行，播放器与中文资源随前端打包。
+- 视频预览随包携带当前平台的 FFmpeg 与 FFprobe 可执行文件，放在 ASAR 解包目录，源码与安装包使用同一入口；打包审计验证二进制存在并可运行，播放器与中文资源随前端打包。绘画 CLI、浏览器 SDK、视频场景与 SceneSans OTF 字体/OFL 随 Main 构建输出，字体解包供原生绘字与编码读取。CLI 使用客户端 Electron 的 Node 模式，渲染复用同一应用中的隔离页面；不安装全局 Node、Chrome 或外部视频工程。浏览器 SDK 与视频场景作为公开页面资源，不参与 Main 混淆；CLI 与其余 Main 模块仍走混淆审计。运行时 bundle 门禁禁止 CLI 引入 electron，并检查媒体资源完整。
 - 网页抓取 sidecar 保留 Playwright 驱动 JS，复用 Electron 提供的 Node 与浏览器，不重复打包这些运行时。搜索库与 HTTP 客户端固定为相互兼容的版本，避免浏览器指纹协议随传递依赖升级失效；构建、缓存复用和打包后检查 sidecar 能否实际启动。
 - 候选 bundle 绑定 Tag、commit、fragment、安装包、更新文件与哈希，测试和发布消费同一份可校验产物。
 

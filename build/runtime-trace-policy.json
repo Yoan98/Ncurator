@@ -4,7 +4,13 @@
     "node_modules/electron/**",
     "node_modules/.pnpm/electron@*/**",
     ".env",
-    "**/.env"
+    "**/.env",
+    "out/main/drawing-sdk.mjs",
+    "out/main/video-scene.mjs",
+    "release-stage/**",
+    "dist/**",
+    ".codex-tmp/**",
+    "tests/**"
   ],
   "explicitIncludes": [],
   "warningRules": [
@@ -91,6 +97,13 @@
       "package": "ffmpeg-static",
       "pathPattern": "/ffmpeg(?:\\.exe)?$",
       "reason": "The FFmpeg native executable is a runtime asset rather than JavaScript. The staged runtime check executes it."
+    },
+    {
+      "id": "playwright-optional-bidi",
+      "kind": "resolve",
+      "package": "playwright-core",
+      "specifierPattern": "^chromium-bidi/lib/cjs/(?:bidiMapper/BidiMapper|cdp/CdpConnection)$",
+      "reason": "The drawing CLI uses Chromium CDP only. Playwright also references optional BiDi-over-CDP modules which are not used by this runtime; real drawing is verified in the packaged app."
     }
   ],
   "requiredFiles": [

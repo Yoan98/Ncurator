@@ -20,8 +20,13 @@ export type VideoPreviewSnapshot = PreviewResource & {
   duration?: number
   progress?: number
   converted: boolean
+  version?: string
+  originalPath?: string
+  fps?: number
   error?: 'source_unavailable' | 'conversion_failed' | 'unsupported'
 }
 
 export type VideoPreviewOpenRequest = { source: string }
 export type VideoPreviewConvertRequest = { id: string; forceTranscode?: boolean }
+export type VideoPreviewFrame = { timeSeconds: number; url: string }
+export type VideoPreviewVersion = { version: string; versionPath: string }

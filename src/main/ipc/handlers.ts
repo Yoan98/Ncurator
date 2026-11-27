@@ -1,3 +1,4 @@
+import { OfficialSkillService } from '../services/skills/OfficialSkillService'
 import type { PartnerMemoryUpdateRequest } from '../../shared/partnerMemory'
 import { exportExcelEdits, canPreserveExcelWorkbook } from '../services/files/ExcelWorkbookEdit'
 import { UserSkillService } from '../services/skills/UserSkillService'
@@ -419,6 +420,7 @@ export function registerHandlers(services: {
     partners: partnerStore,
     ui: workbenchUiStore,
     fileChanges: storageService.aiFileChange,
+    messages: storageService.chatMessageLog,
     isPartnerBusy: (partnerId) => chatRunService.hasActivePartnerRun(partnerId),
     beforeCleanup: (partnerId) => terminalSessionManager.closeByChatSession(partnerId)
   })
@@ -3787,7 +3789,27 @@ export function registerHandlers(services: {
 
   // === Scheduled Task Handlers ===
 
+  const officialSkills = new OfficialSkillService(userSkillService)
   const skillImportOwners = new Set<number>()
+  const officialSkillOwners = new Set<number>()
+  ipcMain.handle('official-skills-list', () => officialSkills.catalog())
+  ipcMain.handle('official-skills-prepare', async (event, id: string) => {
+    if (!officialSkillOwners.has(event.sender.id)) {
+      officialSkillOwners.add(event.sender.id)
+      const owner = event.sender.id
+      event.sender.once('destroyed', () => {
+        officialSkillOwners.delete(owner)
+        void officialSkills.cancelOwner(owner)
+      })
+    }
+    return officialSkills.prepare(id, event.sender.id)
+  })
+  ipcMain.handle('official-skills-commit', (event, token: string) =>
+    officialSkills.commit(token, event.sender.id)
+  )
+  ipcMain.handle('official-skills-cancel', (event, token: string) =>
+    officialSkills.cancel(token, event.sender.id)
+  )
   ipcMain.handle('user-skills-list', () => userSkillService.listOptions())
   ipcMain.handle('user-skills-import', async (event) => {
     const options: OpenDialogOptions = { properties: ['openDirectory', 'dontAddToRecent'] }

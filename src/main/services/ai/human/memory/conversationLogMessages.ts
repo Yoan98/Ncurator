@@ -2,6 +2,7 @@ import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langcha
 import type { ChatMessageLogEntry, ChatMessageLogToolCall } from '../../../../../shared/types'
 import type { HumanRuntimeCache } from '../types'
 import { createImageReferenceMessage } from './multimodal'
+import { videoFeedbackUserMessage } from './videoFeedback'
 
 const toToolCall = (
   call: ChatMessageLogToolCall
@@ -17,7 +18,8 @@ const toToolCall = (
   type: 'tool_call'
 })
 
-const createUserMessage = (content: string): HumanMessage => new HumanMessage(content)
+const createUserMessage = (entry: Extract<ChatMessageLogEntry, { kind: 'user' }>): HumanMessage =>
+  videoFeedbackUserMessage(entry.content, entry.context.contentNodes)
 
 const createAssistantMessage = (
   entry: Extract<ChatMessageLogEntry, { kind: 'assistant' }>
@@ -60,7 +62,7 @@ const appendProjectedEntries = (
     if (entry.kind === 'user') {
       flushImages()
       state.pendingToolCallIds.clear()
-      messages.push(createUserMessage(entry.content))
+      messages.push(createUserMessage(entry))
       continue
     }
     if (entry.kind === 'assistant') {

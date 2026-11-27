@@ -71,6 +71,7 @@ export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 export type AiRuntimePlatform = 'macos' | 'windows'
 
 export type AiRunStartPayload = {
+  agentProfile?: 'drawing'
   subagentId?: string
   ownerRunId?: string
   parentToolCallId?: string
@@ -319,10 +320,12 @@ export type AiTranscript = {
 export type { SubagentAssignment }
 
 export type AiRunDeps = {
+  terminalEnvironment?: Record<string, string>
   modelConfig?: LlmRuntimeConfig
   delegateToSubagent?: (
     agents: SubagentAssignment[],
-    toolCallId: string
+    toolCallId: string,
+    internal?: { profile: 'drawing'; environment: Record<string, string> }
   ) => Promise<import('../../../shared/types').SubagentUpdate[]>
   releaseRun?: (runId: string) => Promise<void>
   defaultStreamingMode?: AiLlmStreamingMode
@@ -377,12 +380,15 @@ export type AiRunDeps = {
 }
 
 export type AiRunContext = {
+  agentProfile?: 'drawing'
+  terminalEnvironment?: Record<string, string>
   ownerRunId: string
   isSubagent: boolean
   listAgents: () => SubagentInfo[]
   delegateToSubagent: (
     agents: SubagentAssignment[],
-    toolCallId: string
+    toolCallId: string,
+    internal?: { profile: 'drawing'; environment: Record<string, string> }
   ) => Promise<import('../../../shared/types').SubagentUpdate[]>
   acquireFile: (sourcePath: string) => void
   runId: string
@@ -485,7 +491,12 @@ export type AiEventDispatchContext = Pick<
 
 export type TerminalToolContext = Pick<
   AiRunContext,
-  'runId' | 'platform' | 'checkCancelled' | 'sendEvent' | 'humanRuntimeOverrides'
+  | 'runId'
+  | 'platform'
+  | 'checkCancelled'
+  | 'sendEvent'
+  | 'humanRuntimeOverrides'
+  | 'terminalEnvironment'
 >
 
 export type KnowledgeRetrievalContext = Pick<

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { VideoFeedbackContext } from '../workbench/composer/VideoFeedbackContext'
+import { useCallback, useEffect, useRef, useState, useContext } from 'react'
 import { App, Spin } from 'antd'
 import {
   HiArrowTopRightOnSquare,
@@ -12,15 +13,18 @@ import '@videojs/react/video/neutral-skin.css'
 import { t, getRendererRuntime } from '../../i18n'
 import type { VideoPreviewSnapshot } from '../../../../shared/preview'
 import './preview.css'
+import VideoWorkbench from './VideoWorkbench'
 
 type Props = { source: string; name?: string; inline?: boolean; unavailable?: boolean }
 
 export default function VideoPreview({ source, name, inline = false, unavailable = false }: Props) {
   const { message } = App.useApp()
+  const feedback = useContext(VideoFeedbackContext)
   const [snapshot, setSnapshot] = useState<VideoPreviewSnapshot | null>(null)
   const [failed, setFailed] = useState<'missing' | 'playback' | null>(null)
   const [loading, setLoading] = useState(true)
   const [retry, setRetry] = useState(0)
+  const [editing, setEditing] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const generationRef = useRef(0)
   const attemptsRef = useRef(0)
@@ -130,12 +134,68 @@ export default function VideoPreview({ source, name, inline = false, unavailable
     if (!result.success) void message.error(result.error || t(($) => $.workbench.couldNotOpen))
   }
   const converting = snapshot?.status === 'converting'
+  useEffect(() => {
+    if (
+      (feedback?.navigation?.node.filePath === source ||
+        feedback?.navigation?.node.versionPath === source) &&
+      !inline
+    )
+      setEditing(true)
+  }, [
+    feedback?.navigation?.requestId,
+    feedback?.navigation?.node.filePath,
+    feedback?.navigation?.node.versionPath,
+    source,
+    inline
+  ])
   const ready = snapshot?.status === 'ready'
+  if (editing && !inline && ready && snapshot && !failed)
+    return (
+      <div className="flex h-full w-full flex-col">
+        <div className="flex justify-end border-b border-[var(--notion-line)] px-4 py-2">
+          <button
+            type="button"
+            className="cursor-pointer rounded-md px-3 py-1 text-[13px] hover:bg-[var(--notion-surface-hover)]"
+            onClick={() => setEditing(false)}
+          >
+            预览
+          </button>
+          <span className="rounded-md bg-[var(--notion-blue-bg)] px-3 py-1 text-[13px] text-[var(--notion-blue)]">
+            编辑
+          </span>
+        </div>
+        <div className="min-h-0 flex-1">
+          <VideoWorkbench
+            source={source}
+            snapshot={snapshot}
+            onError={() => {
+              setEditing(false)
+              void convert(snapshot, generationRef.current)
+            }}
+          />
+        </div>
+      </div>
+    )
   return (
     <div
       className={inline ? 'nc-video-inline' : 'nc-video-canvas'}
       data-testid="workbench-video-preview"
+      style={{ position: 'relative' }}
     >
+      {!inline && ready && !failed ? (
+        <button
+          type="button"
+          className="absolute right-4 top-3 z-30 cursor-pointer rounded-md border border-[var(--notion-line)] bg-[var(--notion-page)] px-3 py-1.5 text-[13px] text-[var(--notion-text)]"
+          disabled={/^https:\/\//iu.test(source)}
+          title={/^https:\/\//iu.test(source) ? '保存到本地后可编辑' : undefined}
+          onClick={() => {
+            videoRef.current?.pause()
+            setEditing(true)
+          }}
+        >
+          编辑
+        </button>
+      ) : null}
       <div
         className="nc-video-frame"
         data-video-state={failed || (converting ? 'converting' : loading ? 'loading' : 'ready')}

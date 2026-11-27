@@ -31,6 +31,7 @@ export type FileChangeWrite = {
   identity?: FileChangeIdentity
   expectedChecksum?: string
   created?: boolean
+  mediaOrigin?: { sourcePath?: string; editPath?: string }
 }
 export type ConfirmedFileWrite = {
   checksum: string
@@ -175,7 +176,8 @@ export class FileChangeSessions {
         )
           throw new Error('文件在操作期间发生变化，请重新读取后再修改')
         attempted = true
-        await fs.rename(sourceTemp!, input.sourcePath)
+        if (input.created) await fs.link(sourceTemp!, input.sourcePath)
+        else await fs.rename(sourceTemp!, input.sourcePath)
         written = true
         notifyOfficeFileWritten(input.sourcePath)
         stage = 'verify'
@@ -187,22 +189,39 @@ export class FileChangeSessions {
       stage = 'snapshot'
       workingPath = path.join(dir, `working-${randomUUID()}${path.extname(input.sourcePath)}`)
       await fs.writeFile(workingPath, input.buffer, { flag: 'wx' })
-      const imageSnapshot =
-        input.capability === 'image'
+      const mediaSnapshot =
+        input.capability === 'image' || input.capability === 'video'
           ? await saveFileChangeSnapshot(
               dir,
               `after-${hash(input.buffer)}${path.extname(input.sourcePath) || '.bin'}`,
               input.buffer
             )
           : undefined
+      if (mediaSnapshot && input.mediaOrigin) {
+        await fs
+          .writeFile(
+            `${mediaSnapshot.snapshotPath}.origin.json`,
+            JSON.stringify({
+              version: 1,
+              ...input.mediaOrigin,
+              outputPath: mediaSnapshot.snapshotPath,
+              originalPath: input.sourcePath,
+              sha256: hash(input.buffer)
+            }),
+            { flag: 'wx' }
+          )
+          .catch((error: NodeJS.ErrnoException) => {
+            if (error.code !== 'EEXIST') throw error
+          })
+      }
       const nextRecord = {
         ...record,
         afterChecksum: hash(input.buffer),
         updatedAt: now,
         error: undefined,
-        afterSnapshotPath: imageSnapshot?.snapshotPath,
-        afterObjectHash: imageSnapshot?.hash,
-        changeCount: input.capability === 'image' ? 1 : 0
+        afterSnapshotPath: mediaSnapshot?.snapshotPath,
+        afterObjectHash: mediaSnapshot?.hash,
+        changeCount: input.capability === 'image' || input.capability === 'video' ? 1 : 0
       }
       stage = 'record'
       await this.store.saveRecord(nextRecord)
@@ -378,11 +397,13 @@ export class FileChangeSessions {
               runSummary: completed?.runSummary || session.record.runSummary,
               error: undefined,
               afterSnapshotPath:
-                session.record.capability === 'image'
+                session.record.capability === 'image' || session.record.capability === 'video'
                   ? session.record.afterSnapshotPath
                   : undefined,
               afterObjectHash:
-                session.record.capability === 'image' ? session.record.afterObjectHash : undefined,
+                session.record.capability === 'image' || session.record.capability === 'video'
+                  ? session.record.afterObjectHash
+                  : undefined,
               updatedAt: Date.now()
             })
           }

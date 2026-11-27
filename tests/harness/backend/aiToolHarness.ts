@@ -19,7 +19,6 @@ import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tool
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
 import { TerminalSessionManager } from '../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/human/tools/textFile'
-import { buildImageGenerationCapabilityTools } from '../../../src/main/services/ai/human/tools/imageGeneration'
 import { agentControlToolFamily } from '../../../src/main/services/ai/human/tools/agentControl'
 import { scheduledTasksToolFamily } from '../../../src/main/services/ai/human/tools/scheduledTasks'
 import { skillManagementToolFamily } from '../../../src/main/services/ai/human/tools/skillManagement'
@@ -307,30 +306,6 @@ export const createWebToolHarness = (
       }) as readonly ToolLike[]
     ),
     ctx
-  }
-}
-
-export const createImageGenerationToolHarness = (
-  runtime: BackendTestRuntime,
-  contextInput: CreateAiRunContextInput = {}
-) => {
-  const ctx = createAlignedAiRunContext(runtime, contextInput)
-  const cache = createHumanRuntimeCache()
-  const activities: CapturedToolActivity[] = []
-  const built = buildImageGenerationCapabilityTools({
-    ctx,
-    cache,
-    runId: runtime.runId,
-    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
-    taskId: runtime.taskId,
-    workspaceRootPath: runtime.workspaceRoot,
-    emitActivity: (activity) => activities.push(activity)
-  })
-
-  return {
-    ...createToolInvoker(built.tools as readonly ToolLike[]),
-    ctx,
-    activities
   }
 }
 

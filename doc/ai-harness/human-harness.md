@@ -91,8 +91,6 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 
 每次预算检查和 brain 推理前重建唯一 System，读取当前伙伴启用的已确认文本，放入 `<长期记忆>` 下的 `<合作偏好>`、`<项目背景>` 块；两类含义及主动使用 `memory` 的规则只在 System 定义，用户本次明确要求优先。未确认稿不注入，伙伴长期记忆总开关关闭时省略整块且不暴露工具。当前运行中确认后，下一次推理读取最新正文；已发出的请求不改写。复用同一刷新入口处理新 run、resume、compaction 后续请求，未变内容保持稳定，不追加重复 System 块。工具历史仍按现有 transcript 管道保存。
 
-
-
 ### 1.6 运行中追加消息的安全交接
 
 - 普通 `running` run 可在 `ai_run.pending_messages_json` 保存多条待处理消息。等待审批或提问时，Main 拒绝普通消息追加。

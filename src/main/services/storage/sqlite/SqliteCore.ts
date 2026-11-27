@@ -28,6 +28,7 @@ import { appThemeMigration } from './migrations/023_app_theme'
 
 import { userSkillsMigration } from './migrations/019_user_skills'
 import { skillNameBindingsMigration } from './migrations/020_skill_name_bindings'
+import { skillIdentityMigration } from './migrations/026_skill_identity'
 import { embeddingModelsMigration } from './migrations/021_embedding_models'
 import { llmManualModelsMigration } from './migrations/022_llm_manual_models'
 
@@ -59,10 +60,11 @@ const MIGRATIONS: readonly Migration[] = [
   llmManualModelsMigration,
   appThemeMigration,
   officeDiffPreferenceMigration,
-  partnerMemoryMigration
+  partnerMemoryMigration,
+  skillIdentityMigration
 ]
 
-export const CURRENT_SCHEMA_VERSION = 25
+export const CURRENT_SCHEMA_VERSION = 26
 
 const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
   [2, new Set(['workspace_change_sets'])]

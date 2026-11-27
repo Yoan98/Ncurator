@@ -77,16 +77,29 @@ Workbench 伙伴。
 | `draft`      | TEXT nullable | AI 待确认稿；NULL 表示无变化，空串表示待确认清空     |
 | `revision`   | INTEGER       | 正文、草稿或启用状态变化时递增，保存和审核检查此版本 |
 
+### `skill_identity`
+
+只保存本地目录身份与官方安装回执，正文和资源继续从目录读取。
+
+| 字段              | 类型                 | 说明                                       |
+| ----------------- | -------------------- | ------------------------------------------ |
+| `id`              | TEXT PRIMARY KEY     | 内部身份，官方与本地来源使用独立前缀       |
+| `name`            | TEXT NOT NULL UNIQUE | 本地目录及模型发现名称                     |
+| `official_id`     | TEXT UNIQUE nullable | 下载目录中的稳定官方 ID；第三方为空        |
+| `display_name`    | TEXT nullable        | 官方展示名称                               |
+| `version`         | TEXT nullable        | 已安装官方版本                             |
+| `baseline_sha256` | TEXT nullable        | 安装时目录内容与权限指纹，用于判断本地改动 |
+
 ### `partner_user_skill`
 
-仅保存伙伴对目录 Skill 的启用选择；名称、描述和内容均读取文件。
+保存伙伴启用选择；正文仍读取文件。
 
-| 字段         | 类型          | 说明                                 |
-| ------------ | ------------- | ------------------------------------ |
-| `partner_id` | TEXT NOT NULL | `partner(id)` 外键，删除伙伴级联配置 |
-| `skill_name` | TEXT NOT NULL | `userData/skills/{name}/` 的名称     |
+| 字段         | 类型          | 说明                                        |
+| ------------ | ------------- | ------------------------------------------- |
+| `partner_id` | TEXT NOT NULL | `partner(id)` 外键，删除伙伴级联配置        |
+| `skill_id`   | TEXT NOT NULL | `skill_identity(id)` 外键，删除身份级联配置 |
 
-复合主键 `(partner_id, skill_name)` 防止重复选择，名称有独立索引；目录缺失不自动删除选择。
+复合主键 `(partner_id, skill_id)`，`skill_id` 有索引。改名更新身份名称，绑定不变；目录暂时缺失不自动删除选择。
 
 ### `partner_ui_state`
 

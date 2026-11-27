@@ -57,7 +57,7 @@ export const createSubagentDispatcher = (
         drain()
       }
     })
-  return async (assignments: SubagentAssignment[], toolCallId: string) => {
+  return async (assignments: SubagentAssignment[], toolCallId: string, internal) => {
     if (payload.parentToolCallId) throw new SubagentBlockedError('子任务不能再次派发')
     if (!assignments.length) throw new Error('子助手分配列表不能为空')
     const modelConfig = await getModelConfig()
@@ -172,11 +172,19 @@ export const createSubagentDispatcher = (
                 userMessageId: randomUUID(),
                 assistantMessageId: randomUUID(),
                 input,
-                contentNodes: undefined
+                contentNodes: undefined,
+                ...(internal
+                  ? {
+                      agentProfile: internal.profile,
+                      selectedReferences: undefined,
+                      attachments: undefined
+                    }
+                  : {})
               },
               {
                 ...deps,
                 modelConfig,
+                ...(internal ? { terminalEnvironment: internal.environment } : {}),
                 delegateToSubagent: undefined,
                 hasPendingUserMessages: undefined,
                 waitForPendingUserMessageSubmissions: undefined,
@@ -354,6 +362,8 @@ export const createSubagentDispatcher = (
         })
       })
     )
+    if (internal)
+      for (const agent of agents) deps.subagentStore.remove(payload.partnerId, agent.agentId)
     return results.map((result) => {
       if (result.status === 'rejected') throw result.reason
       return result.value

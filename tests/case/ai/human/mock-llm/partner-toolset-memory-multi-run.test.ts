@@ -110,7 +110,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLoadToolsetsDecision({
-                  toolsetNames: ['excel-read', 'image-generation', 'docx-write'],
+                  toolsetNames: ['excel-read', 'drawing', 'docx-write'],
                   summary: '补充 Excel 阅读与图片、Word 编辑技能并触发 FIFO 淘汰。'
                 })
               },
@@ -187,7 +187,7 @@ describe('ai human mock-llm backend', () => {
               result.stateAtLimit.includes(toolset)
             ) &&
             Boolean(result.run4EvictionSummary?.includes('docx-read')) &&
-            ['excel-read', 'image-generation', 'docx-write'].every((toolset) =>
+            ['excel-read', 'drawing', 'docx-write'].every((toolset) =>
               result.stateAfterEviction.includes(toolset)
             ) &&
             !result.stateAfterEviction.includes('docx-read') &&

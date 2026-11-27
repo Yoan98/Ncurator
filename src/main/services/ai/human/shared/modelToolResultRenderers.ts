@@ -1023,16 +1023,6 @@ export const renderPptEditModelResult: ModelResultRenderer = ({ args, data }) =>
   })
 }
 
-export const renderImageGenerateModelResult: ModelResultRenderer = ({ data }) => {
-  const obj = isObject(data) ? data : {}
-  const error = readString(obj.error)
-  if (error) return `Error: ${error}`
-  const outputPath = readString(obj.outputPath)
-  return outputPath
-    ? renderPlainConfirmation(`Image saved: ${outputPath}`)
-    : renderPlainConfirmation('Image generation completed.')
-}
-
 export const renderReadImageModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const images = Array.isArray(obj.images) ? obj.images.filter(isObject) : []

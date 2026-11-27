@@ -40,6 +40,7 @@ export const materializeFileReview = async (input: {
       return await materializePptReview({ before, after, reviewDir, identity: session.identity })
     }
     case 'image':
+    case 'video':
       return {
         changed: !before || !before.equals(after),
         changeCount: 1,
