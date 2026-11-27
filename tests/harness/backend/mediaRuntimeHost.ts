@@ -127,6 +127,46 @@ const main = async (): Promise<void> => {
         c = await fs.readFile(path.join(frames, '2-0.800.png'))
       checks.deterministic = hash(a) === hash(c)
       checks.motion = hash(a) !== hash(b)
+      checks.outRequired = true
+      for (const operation of ['frames', 'render']) {
+        checks.outRequired &&= await cli([
+          operation,
+          '--scene',
+          path.join(source, 'scene.json'),
+          ...(operation === 'frames' ? ['--times', '0'] : ['--format', 'png'])
+        ]).then(
+          () => false,
+          (error: Error) => error.message.includes('--out')
+        )
+      }
+      checks.sceneFramesNoOverwrite = await cli([
+        'frames',
+        '--scene',
+        path.join(source, 'scene.json'),
+        '--times',
+        '0.3,0',
+        '--out',
+        frames
+      ]).then(
+        () => false,
+        (error: Error) => error.message.includes('Output already exists')
+      )
+      checks.sceneFramesNoOverwrite &&=
+        hash(b) === hash(await fs.readFile(path.join(frames, '1-0.000.png'))) &&
+        !(await fs.access(path.join(frames, '0-0.300.png')).then(
+          () => true,
+          () => false
+        ))
+      await cli([
+        'frames',
+        '--scene',
+        path.join(source, 'scene.json'),
+        '--times',
+        '0.2',
+        '--out',
+        frames
+      ])
+      checks.existingOutputDirectory = (await fs.stat(path.join(frames, '0-0.200.png'))).isFile()
       for (const extension of ['png', 'jpg', 'webp', 'mp4', 'webm']) {
         const output = path.join(directory, `drawing.${extension}`)
         const rendered = JSON.parse(
@@ -145,6 +185,36 @@ const main = async (): Promise<void> => {
         outputs.push(output)
         checks[`encoded-${extension}`] = (await fs.stat(output)).size > 100
       }
+      const mediaFrames = path.join(directory, 'media-checks')
+      await cli([
+        'frames',
+        '--media',
+        path.join(directory, 'drawing.mp4'),
+        '--times',
+        '0.5,0.9',
+        '--out',
+        mediaFrames
+      ])
+      const protectedFrame = path.join(mediaFrames, '1-0.900.png')
+      const protectedHash = hash(await fs.readFile(protectedFrame))
+      checks.mediaFramesNoOverwrite = await cli([
+        'frames',
+        '--media',
+        path.join(directory, 'drawing.mp4'),
+        '--times',
+        '0.4,0.9',
+        '--out',
+        mediaFrames
+      ]).then(
+        () => false,
+        (error: Error) => error.message.includes('Output already exists')
+      )
+      checks.mediaFramesNoOverwrite &&=
+        protectedHash === hash(await fs.readFile(protectedFrame)) &&
+        !(await fs.access(path.join(mediaFrames, '0-0.400.png')).then(
+          () => true,
+          () => false
+        ))
       const alpha = path.join(directory, 'alpha.png')
       await runMediaProcess(binaries.ffmpeg, [
         '-v',

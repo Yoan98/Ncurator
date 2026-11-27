@@ -1,4 +1,4 @@
-import { readFile, mkdir, writeFile, access, rm, realpath, stat } from 'node:fs/promises'
+import { readFile, mkdir, writeFile, access, rm, realpath, stat, lstat } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
@@ -287,10 +287,8 @@ export const runDrawingCli = async (argv = process.argv.slice(2)): Promise<void>
     const duration = Number(info.format?.duration)
     if (!Number.isFinite(duration) || duration <= 0 || times.some((time) => time >= duration))
       throw new Error('Check time is outside media duration')
-    await mkdir(values.out, { recursive: true })
-    const frames: { timeSeconds: number; path: string }[] = []
-    for (const [index, seconds] of times.entries()) {
-      const file = path.join(values.out, `${index}-${seconds.toFixed(3)}.png`)
+    const frames = await prepareFrames(values.out, times)
+    for (const { timeSeconds: seconds, path: file } of frames) {
       await runMediaProcess(binaries.ffmpeg, [
         '-nostdin',
         '-v',
@@ -301,11 +299,10 @@ export const runDrawingCli = async (argv = process.argv.slice(2)): Promise<void>
         values.media,
         '-frames:v',
         '1',
-        '-y',
+        '-n',
         file
       ])
       await access(file)
-      frames.push({ timeSeconds: seconds, path: file })
     }
     process.stdout.write(JSON.stringify({ frames }) + '\n')
     return
@@ -330,12 +327,9 @@ export const runDrawingCli = async (argv = process.argv.slice(2)): Promise<void>
       const times = parseTimes(values.times)
       if (times.some((time) => time >= manifest.durationSeconds))
         throw new Error('Check time is outside scene duration')
-      await mkdir(values.out, { recursive: true })
-      const frames: { timeSeconds: number; path: string }[] = []
-      for (const [index, seconds] of times.entries()) {
-        const file = path.join(values.out, `${index}-${seconds.toFixed(3)}.png`)
-        await writeFile(file, await capture(page, seconds))
-        frames.push({ timeSeconds: seconds, path: file })
+      const frames = await prepareFrames(values.out, times)
+      for (const { timeSeconds: seconds, path: file } of frames) {
+        await writeFile(file, await capture(page, seconds), { flag: 'wx' })
       }
       process.stdout.write(JSON.stringify({ frames }) + '\n')
     } else {
@@ -368,6 +362,25 @@ export const runDrawingCli = async (argv = process.argv.slice(2)): Promise<void>
     await browser?.close().catch(() => {})
     await resourceServer.close()
   }
+}
+
+const prepareFrames = async (directory: string, times: number[]) => {
+  const frames = times.map((timeSeconds, index) => ({
+    timeSeconds,
+    path: path.join(directory, `${index}-${timeSeconds.toFixed(3)}.png`)
+  }))
+  for (const { path: file } of frames) {
+    const exists = await lstat(file).then(
+      () => true,
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return false
+        throw error
+      }
+    )
+    if (exists) throw new Error(`Output already exists: ${file}`)
+  }
+  await mkdir(directory, { recursive: true })
+  return frames
 }
 
 const parseTimes = (raw?: string): number[] => {

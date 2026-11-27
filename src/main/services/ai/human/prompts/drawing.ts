@@ -71,13 +71,13 @@ renderAt 可能被重复、跳转或倒序调用。画面状态应根据 seconds
 ncurator-drawing frames (--scene <scene.json绝对路径> | --media <视频绝对路径>) --times <逗号分隔的秒数> --out <检查图目录绝对路径>
 - --scene 检查场景代码，--media 检查实际视频，二者选一。
 - --times 指定检查时间，范围为 [0, 场景或视频时长)。
-- --out: string，PNG 图片目录，不存在时自动创建。
+- --out: string（必填），PNG 图片输出目录的绝对路径。
 - 成功时生成图片文件，并在终端输出 JSON：frames: Array<{timeSeconds: number, path: string}>，path 是图片绝对路径。
 
 成品：
 ncurator-drawing render --scene <scene.json绝对路径> --format <格式> --out <输出文件绝对路径> [--at <秒数>]
 - --format: "png" | "jpeg" | "webp" | "mp4" | "webm"，输出格式。
-- --out: string，成品文件绝对路径，不覆盖已有文件。
+- --out: string（必填），成品文件的绝对路径。
 - --at: number，可选，默认 0，指定静态图片取帧时间；视频输出完整场景。
 - PNG、WebP 支持透明图片，WebM 支持透明动画；JPEG、MP4 不支持透明。只生成画面，不自动生成音轨。
 - 成功时生成成品文件，并在终端输出 JSON：scenePath: string（本次场景入口绝对路径），outputPath: string（实际生成文件绝对路径）。
@@ -87,7 +87,7 @@ ncurator-drawing render --scene <scene.json绝对路径> --format <格式> --out
 
 <review>
 使用看图工具查看实际检查图片，确认构图、文字和动作变化。静态成品直接查看输出图片；动画成品通过 frames --media 提取检查帧。发现问题后修改场景代码，重新检查并生成成品。
-不覆盖引用的历史作品。无法完成时说明具体问题，并保留已完成的场景文件。
+无法完成时说明具体问题，并保留已完成的场景文件。
 </review>
 </drawing>
 

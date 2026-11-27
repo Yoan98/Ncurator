@@ -142,6 +142,8 @@ describe('media timeline and context invariants', () => {
     expect(DRAWING_SYSTEM_PREFIX).toContain('canvas.width: integer（必填')
     expect(DRAWING_SYSTEM_PREFIX).toContain('canvas.fps: number（可选，默认 30')
     expect(DRAWING_SYSTEM_PREFIX).toContain('resources: Record<string, string>')
+    expect(DRAWING_SYSTEM_PREFIX.split('--out: string（必填）')).toHaveLength(3)
+    expect(DRAWING_SYSTEM_PREFIX).not.toContain('覆盖')
     for (const block of ['scene', 'code', 'assets', 'render', 'review']) {
       expect(DRAWING_SYSTEM_PREFIX.split(`<${block}>`)).toHaveLength(2)
       expect(DRAWING_SYSTEM_PREFIX).toContain(`</${block}>`)
