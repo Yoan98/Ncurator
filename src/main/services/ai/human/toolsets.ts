@@ -97,12 +97,21 @@ export const RUNTIME_TOOLSET_CATALOG = {
     title: 'excel-write',
     description: '创建或编辑 Excel 文件。'
   },
-  'image-generation': {
-    familyId: 'image-generation',
+  drawing: {
+    familyId: 'drawing',
     source: 'external',
     countsTowardToolBudget: true,
-    title: '图片生成',
-    description: '通过 SVG 绘制生成 PNG、JPEG 或 WebP 图片，并保存为用户工作区域文件。'
+    title: '绘画引擎',
+    description:
+      '绘制静态画面和动画，支持基于已有绘画作品继续修改，导出图片或视频并保留可编辑来源。'
+  },
+  'video-editing': {
+    familyId: 'video-editing',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: '视频剪辑',
+    description:
+      '剪辑与合成视频，支持使用图片和音频素材，调整片段、字幕、布局及音轨，生成预览和成片并保留编辑配方。'
   },
   'agent-control': {
     familyId: 'agent-control',

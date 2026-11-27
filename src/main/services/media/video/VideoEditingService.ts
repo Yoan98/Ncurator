@@ -160,10 +160,35 @@ const compose = async (
   return { ...emptyRecipe(canvas), clips }
 }
 
-const editClips = (
+const editClips = async (
   recipe: VideoRecipe,
-  args: Exclude<ClipEditInput, { operation: 'compose' }>
-): VideoRecipe => {
+  args: Exclude<ClipEditInput, { operation: 'compose' }>,
+  signal?: AbortSignal
+): Promise<VideoRecipe> => {
+  if (args.operation === 'replace') {
+    const clip = recipe.clips.find((item) => item.id === args.clipId)
+    if (!clip) throw new Error(`Clip not found: ${args.clipId}`)
+    if (!path.isAbsolute(args.path)) throw new Error('Clip path must be absolute')
+    const info = await probe(args.path, signal)
+    if (
+      !info.streams.some((stream) => stream.codec_type === 'video' && stream.width && stream.height)
+    )
+      throw new Error('Replacement has no visual stream')
+    const still = image(args.path)
+    if (!still) {
+      const end = clip.sourceStart + (clip.freeze ? 0 : clip.duration * clip.rate)
+      const duration = Number(info.format?.duration)
+      if (!Number.isFinite(duration) || clip.sourceStart >= duration || end > duration + 0.000001)
+        throw new Error('Replacement does not cover the original clip source range')
+    }
+    clip.path = args.path
+    clip.still = still
+    if (still) {
+      clip.sourceStart = 0
+      clip.includeAudio = false
+    }
+    return recipe
+  }
   const duration = recipeDuration(recipe)
   let spans: TimelineSpan[] = []
   if (args.operation === 'cut') {
@@ -373,7 +398,11 @@ export const executeVideoEdit = async (
     if (!('inputPath' in args)) throw new Error('inputPath is required')
     recipe = await loadVideoRecipe(args.inputPath, ctx.abortSignal)
     if (kind === 'clip')
-      recipe = editClips(recipe, args as Exclude<ClipEditInput, { operation: 'compose' }>)
+      recipe = await editClips(
+        recipe,
+        args as Exclude<ClipEditInput, { operation: 'compose' }>,
+        ctx.abortSignal
+      )
     else if (kind === 'visual') createdIds = await editVisual(recipe, args as VisualEditInput)
     else if (kind === 'audio') createdIds = editAudio(recipe, args as AudioEditInput)
   }
@@ -507,6 +536,8 @@ const publishVideo = async (
             'render',
             '--scene',
             path.join(source, 'scene.json'),
+            '--format',
+            'mp4',
             '--out',
             silent
           ],

@@ -14,7 +14,8 @@ import { createRealAiHarness } from './realAiHarness'
 import { createAiServiceTestRunner } from './aiServiceHarness'
 import { EventCollector } from '../core/eventCollector'
 import { buildBrainSystemPrompt } from '../../../src/main/services/ai/human/prompts/brain'
-import { DRAWING_SYSTEM_PREFIX } from '../../../src/main/services/media/engine/protocol'
+import { DRAWING_SYSTEM_PREFIX } from '../../../src/main/services/ai/human/prompts/drawing'
+import { createDrawing } from '../../../src/main/services/ai/human/tools/drawing/runtime'
 import { sceneManifestSchema } from '../../../src/main/services/media/engine/protocol'
 import {
   executeVideoEdit,
@@ -70,21 +71,28 @@ const main = async (): Promise<void> => {
   try {
     const binaries = mediaBinaries()
     if (scenario === 'drawing-engine-contract') {
-      const source = path.join(directory, 'scene')
-      await fs.mkdir(source)
+      const source = path.join(directory, 'custom project', 'scene')
+      await fs.mkdir(path.join(source, 'assets'), { recursive: true })
+      await fs.copyFile(
+        path.join(directory, 'out/main/scene-sans.otf'),
+        path.join(source, 'assets/custom.otf')
+      )
+      const picture = createCanvas(10, 10)
+      picture.getContext('2d').fillRect(0, 0, 10, 10)
+      await fs.writeFile(path.join(source, 'assets/picture.png'), picture.toBuffer('image/png'))
       await fs.writeFile(
         path.join(source, 'scene.json'),
         JSON.stringify({
           entry: 'scene.mjs',
           canvas: { width: 320, height: 180, fps: 10 },
           durationSeconds: 1,
-          resources: {},
+          resources: { font: 'assets/custom.otf', picture: 'assets/picture.png' },
           seed: 1
         })
       )
       await fs.writeFile(
         path.join(source, 'scene.mjs'),
-        `import {roundedRect} from '@ncurator/drawing';let canvas,ctx;export async function initialize({container}){canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;container.append(canvas);ctx=canvas.getContext('2d')}export async function renderAt(t){ctx.clearRect(0,0,320,180);ctx.fillStyle='#2f5f8f';roundedRect(ctx,20+t*200,50,40,40,8)}export async function dispose(){canvas.remove()}`
+        `let canvas,ctx,picture;export async function initialize({container,resources}){const face=await new FontFace('CustomSceneFont','url('+resources.font+')').load();document.fonts.add(face);picture=new Image();picture.src=resources.picture;await picture.decode();canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;container.append(canvas);ctx=canvas.getContext('2d')}export async function renderAt(t){ctx.clearRect(0,0,320,180);ctx.fillStyle='#2f5f8f';ctx.fillRect(20+t*200,50,40,40);ctx.drawImage(picture,10,10);ctx.font='20px CustomSceneFont';ctx.fillText('馆长',20,150)}export async function dispose(){canvas.remove()}`
       )
       const environment = { ...process.env, ...(await host.open()), ELECTRON_RUN_AS_NODE: '1' }
       const cli = async (args: string[], signal?: AbortSignal) => {
@@ -96,15 +104,24 @@ const main = async (): Promise<void> => {
         }
       }
       const frames = path.join(directory, 'checks')
-      await cli([
-        'frames',
-        '--scene',
-        path.join(source, 'scene.json'),
-        '--times',
-        '0.8,0,0.8',
-        '--out',
-        frames
-      ])
+      const frameResult = JSON.parse(
+        await cli([
+          'frames',
+          '--scene',
+          path.join(source, 'scene.json'),
+          '--times',
+          '0.8,0,0.8',
+          '--out',
+          frames
+        ])
+      ) as { frames: { timeSeconds: number; path: string }[] }
+      checks.framePaths =
+        frameResult.frames.length === 3 &&
+        frameResult.frames.every(
+          (item, index) =>
+            item.path === path.join(frames, `${index}-${item.timeSeconds.toFixed(3)}.png`)
+        )
+      checks.fontAndPicture = true
       const a = await fs.readFile(path.join(frames, '0-0.800.png')),
         b = await fs.readFile(path.join(frames, '1-0.000.png')),
         c = await fs.readFile(path.join(frames, '2-0.800.png'))
@@ -112,7 +129,19 @@ const main = async (): Promise<void> => {
       checks.motion = hash(a) !== hash(b)
       for (const extension of ['png', 'jpg', 'webp', 'mp4', 'webm']) {
         const output = path.join(directory, `drawing.${extension}`)
-        await cli(['render', '--scene', path.join(source, 'scene.json'), '--out', output])
+        const rendered = JSON.parse(
+          await cli([
+            'render',
+            '--scene',
+            path.join(source, 'scene.json'),
+            '--format',
+            extension === 'jpg' ? 'jpeg' : extension,
+            '--out',
+            output
+          ])
+        ) as { scenePath: string; outputPath: string }
+        checks[`result-${extension}`] =
+          rendered.scenePath === path.join(source, 'scene.json') && rendered.outputPath === output
         outputs.push(output)
         checks[`encoded-${extension}`] = (await fs.stat(output)).size > 100
       }
@@ -132,7 +161,15 @@ const main = async (): Promise<void> => {
       const bitmap = nativeImage.createFromPath(alpha).toBitmap()
       checks.alpha = bitmap[3] === 0
       const before = hash(await fs.readFile(outputs[0]))
-      await cli(['render', '--scene', path.join(source, 'scene.json'), '--out', outputs[0]]).then(
+      await cli([
+        'render',
+        '--scene',
+        path.join(source, 'scene.json'),
+        '--format',
+        'png',
+        '--out',
+        outputs[0]
+      ]).then(
         () => {
           checks.noOverwrite = false
         },
@@ -153,6 +190,8 @@ const main = async (): Promise<void> => {
           'render',
           '--scene',
           path.join(source, 'scene.json'),
+          '--format',
+          'mp4',
           '--out',
           path.join(directory, 'cancelled.mp4')
         ],
@@ -184,6 +223,59 @@ const main = async (): Promise<void> => {
         () => true,
         () => false
       ))
+
+      manifest.durationSeconds = 1
+      await fs.writeFile(path.join(source, 'scene.json'), JSON.stringify(manifest))
+      const chosenOutput = path.join(directory, 'custom project', 'delivered.png')
+      const taskResult = `成品（供预览、剪辑）：${chosenOutput}；场景入口（供继续编辑）：${path.join(source, 'scene.json')}`
+      const drawn = await createDrawing(
+        {
+          ...ctx,
+          delegateToSubagent: async (assignments, _id, internal) => {
+            checks.taskInput =
+              assignments[0].instruction.includes('输出格式：png') &&
+              assignments[0].instruction.includes('供预览、剪辑') &&
+              !assignments[0].instruction.includes('引擎启动命令')
+            checks.oneDrawingPage = BrowserWindow.getAllWindows().length === 2
+            const quote = (value: string) =>
+              `'${value.replaceAll("'", process.platform === 'win32' ? "''" : "'\\''")}'`
+            const command = `ncurator-drawing render --scene ${quote(path.join(source, 'scene.json'))} --format png --out ${quote(chosenOutput)}`
+            await runMediaProcess(
+              process.platform === 'win32' ? 'powershell.exe' : '/bin/sh',
+              process.platform === 'win32' ? ['-NoProfile', '-Command', command] : ['-c', command],
+              undefined,
+              { ...process.env, ...internal?.environment }
+            )
+            return [
+              {
+                agentId: 'drawing-child',
+                toolCallId: _id,
+                childRunId: 'drawing-contract-child',
+                name: '绘画',
+                task: assignments[0].instruction,
+                status: 'completed',
+                result: taskResult
+              }
+            ]
+          }
+        },
+        { prompt: '在已有场景中继续绘制，保留场景与素材。', format: 'png' },
+        'drawing-contract'
+      )
+      checks.resultDelivery = drawn.result === taskResult
+      checks.artifact = (await ctx.listFileChangeRecords()).some(
+        (record) => record.path === chosenOutput && !!record.afterSnapshotPath
+      )
+      const assets = path.join(directory, 'user-data', 'partners', partnerId, 'runtime', 'assets')
+      checks.noDrawingProject =
+        !(await fs.readdir(assets).catch(() => [])).some((name) => name.startsWith('drawing-')) &&
+        !(await fs.access(path.join(directory, 'custom project', '.ncurator-media')).then(
+          () => true,
+          () => false
+        ))
+      checks.sourceRetained = (await fs.stat(path.join(source, 'scene.mjs'))).size > 0
+      checks.wrapperReleased = BrowserWindow.getAllWindows().length === 1
+      outputs.push(chosenOutput, path.join(source, 'scene.json'))
     } else if (scenario === 'video-editing-contract') {
       const a = path.join(directory, 'source-a.mp4'),
         b = path.join(directory, 'source-b.mp4')
@@ -241,6 +333,21 @@ const main = async (): Promise<void> => {
         size: { width: 320, height: 180 },
         fps: '10'
       })
+      const beforeReplacement = await loadVideoRecipe(audio.editPath)
+      const replacement = await executeVideoEdit(ctx, 'clip', {
+        operation: 'replace',
+        inputPath: audio.editPath,
+        clipId: beforeReplacement.clips[0].id,
+        path: b,
+        outputPath: path.join(directory, 'replaced.mp4')
+      })
+      const replaced = await loadVideoRecipe(replacement.editPath)
+      checks.replacePreservesEdit =
+        replaced.clips[0].path === b &&
+        JSON.stringify({ ...replaced.clips[0], path: a, still: undefined }) ===
+          JSON.stringify({ ...beforeReplacement.clips[0], still: undefined }) &&
+        JSON.stringify(replaced.captions) === JSON.stringify(beforeReplacement.captions) &&
+        JSON.stringify(replaced.audio) === JSON.stringify(beforeReplacement.audio)
       const recolored = await executeVideoEdit(ctx, 'visual', {
         operation: 'captions',
         action: 'update',
@@ -493,61 +600,73 @@ const main = async (): Promise<void> => {
         Object.assign(checks, checkMotionVersions(samples[0], samples[1]))
         checks.oldVersionPreserved = hash(await fs.readFile(first)) === node.version
         const controller = new AbortController(),
-          cancelledOutput = path.join(directory, 'cancelled.mp4')
+          cancelledOutput = path.join(directory, 'star-motion.mp4'),
+          cancelledProject = path.join(directory, 'star-project')
         let finished = false
         const cancelling = run(
-          `再创作一段全新30秒动画，不能沿用上一段素材：白底，一颗红色五角星沿正弦曲线从左向右移动，镜头固定，320×180，10帧每秒，保存到 ${cancelledOutput}，保留来源。`,
+          `再创作一段全新30秒动画，不能沿用上一段素材：白底，一颗红色五角星沿正弦曲线从左向右移动，镜头固定，320×180，10帧每秒，保存到 ${cancelledOutput}，可编辑源稿放在 ${cancelledProject}。`,
           undefined,
           controller.signal
-        ).finally(() => {
-          finished = true
-        })
-        const assets = path.join(directory, 'user-data', 'partners', partnerId, 'runtime', 'assets')
+        )
+          .then(
+            () => undefined,
+            (error: Error) => error
+          )
+          .finally(() => {
+            finished = true
+          })
         let stopReady = false
+        let cancellationError: Error | undefined
+        let sourceFiles: string[] = []
+        const findScenes = async (root: string): Promise<string[]> => {
+          const found: string[] = []
+          for (const entry of await fs.readdir(root, { withFileTypes: true }).catch(() => [])) {
+            const file = path.join(root, entry.name)
+            if (entry.isDirectory()) found.push(...(await findScenes(file)))
+            else if (entry.name === 'scene.json') found.push(file)
+          }
+          return found
+        }
         try {
           for (let attempt = 0; attempt < 6000 && !finished; attempt++) {
-            for (const task of await fs.readdir(assets, { withFileTypes: true }).catch(() => []))
-              if (task.isDirectory() && task.name.startsWith('drawing-')) {
-                const taskRoot = path.join(assets, task.name)
-                const source = path.join(taskRoot, 'source')
-                const manifest = await fs
-                  .readFile(path.join(source, 'scene.json'), 'utf8')
-                  .then((text) => sceneManifestSchema.parse(JSON.parse(text)))
-                  .catch(() => undefined)
-                if (
-                  manifest?.entry &&
-                  (await fs.stat(path.join(source, manifest.entry)).catch(() => undefined))?.size
-                ) {
-                  stopReady = true
-                  break
-                }
+            for (const file of await findScenes(cancelledProject)) {
+              const manifest = await fs
+                .readFile(file, 'utf8')
+                .then((text) => sceneManifestSchema.parse(JSON.parse(text)))
+                .catch(() => undefined)
+              if (
+                manifest &&
+                (
+                  await fs
+                    .stat(path.join(path.dirname(file), manifest.entry))
+                    .catch(() => undefined)
+                )?.size
+              ) {
+                sourceFiles = [file, path.join(path.dirname(file), manifest.entry)]
+                stopReady = true
+                break
               }
+            }
             if (stopReady) break
             await new Promise((resolve) => setTimeout(resolve, 100))
           }
         } finally {
           controller.abort()
-          await cancelling
+          cancellationError = await cancelling
         }
-        const retained = []
-        for (const task of await fs.readdir(assets, { withFileTypes: true }).catch(() => []))
-          if (task.isDirectory() && task.name.startsWith('drawing-')) {
-            const root = path.join(assets, task.name),
-              status = JSON.parse(await fs.readFile(path.join(root, 'task.json'), 'utf8')) as {
-                status: string
-              }
-            if (
-              status.status === 'cancelled' &&
-              (await fs.access(path.join(root, 'source', 'scene.json')).then(
-                () => true,
-                () => false
-              ))
-            )
-              retained.push(task.name)
-          }
+        if (cancellationError) throw cancellationError
         checks.liveStop =
           stopReady &&
-          retained.length > 0 &&
+          (
+            await Promise.all(
+              sourceFiles.map((file) =>
+                fs.access(file).then(
+                  () => true,
+                  () => false
+                )
+              )
+            )
+          ).every(Boolean) &&
           !(await fs.access(cancelledOutput).then(
             () => true,
             () => false

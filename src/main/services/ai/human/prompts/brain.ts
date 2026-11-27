@@ -14,7 +14,7 @@ import {
 } from '../../../assets/WorkspaceAssetService'
 import type { HumanState } from '../types'
 import { renderToolsetCatalog } from '../toolsets'
-import { DRAWING_SYSTEM_PREFIX } from '../../../media/engine/protocol'
+import { DRAWING_SYSTEM_PREFIX } from './drawing'
 
 export const renderLocalContextText = (
   ctx: Pick<AiRunContext, 'partnerId' | 'platform' | 'userSkillService'>
@@ -71,6 +71,10 @@ export const buildBrainSystemPrompt = (input: {
   loadedSkills?: readonly LoadedUserSkill[]
 }): string => {
   const partnerName = input.ctx.partnerName.trim() || PRODUCT_NAME_ZH
+  const mediaRule =
+    input.ctx.isSubagent || input.ctx.agentProfile === 'drawing'
+      ? ''
+      : '- 绘制画面和动画优先使用 drawing；视频剪辑、字幕、布局、音轨调整及导出优先使用 video-editing。\n'
   return `${input.ctx.agentProfile === 'drawing' ? DRAWING_SYSTEM_PREFIX : ''}
 身份：
 - 你是用户的伙伴，你叫${partnerName}
@@ -95,7 +99,7 @@ export const buildBrainSystemPrompt = (input: {
   含空格或括号的路径使用尖括号形式：[显示名称](<绝对路径>)。
 
 特别说明规则：
-- Word、Excel、PPT文件必须使用我们已提供的工具组处理,禁止用terminal或脚本的形式直接修改这些文件。
+${mediaRule}- Word、Excel、PPT文件必须使用我们已提供的工具组处理,禁止用terminal或脚本的形式直接修改这些文件。
 - 读取或修改普通文件如文本、代码、等UTF-8文件时，优先使用 file_read / file_edit这类工具。
 - .doc 是只读旧格式，禁止编辑；遇到 .doc 编辑请求时保留原文件并继续处理其他事项。
 - 网页操作碰到验证码、登录、支付等需要用户协助时，可停下来像用户说明情况。

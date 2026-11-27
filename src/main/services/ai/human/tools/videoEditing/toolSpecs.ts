@@ -8,8 +8,6 @@ import {
 } from './toolSchemas'
 import type { ClipEditInput, VisualEditInput, AudioEditInput, ExportInput } from './toolSchemas'
 
-const sourceRules =
-  '后续操作优先使用返回的 editPath；成品保持配方关联。目标已存在时使用新路径，不通过终端复制、删除或覆盖来绕过版本保护。'
 const meta = createStaticExecutionMetaResolver({
   mutability: 'mutating',
   getResourceKey: (args) => readStringArg(args, 'outputPath'),
@@ -32,9 +30,7 @@ export const VIDEO_CLIP_TOOL_SPEC: HumanToolSpec<
   inputSchema: videoClipEditSchema,
   promptSpec: {
     name: 'video_clip_edit',
-    description:
-      '组装、选段、变速、定格或重复视频片段，保留原素材和可编辑配方，生成新版本预览。时间单位秒，区间左闭右开。' +
-      sourceRules
+    description: '组装、替换、选段、变速、定格或重复视频片段，生成新版本预览并保留可编辑配方。'
   },
   resolveExecutionMeta: meta,
   modelResult
@@ -50,9 +46,7 @@ export const VIDEO_VISUAL_TOOL_SPEC: HumanToolSpec<
   inputSchema: videoVisualEditSchema,
   promptSpec: {
     name: 'video_visual_edit',
-    description:
-      '修改视频字幕、文字或素材叠加、裁切布局及转场；生成可继续编辑的新版本预览。布局坐标为 0 到 1；字幕 style 更新只改变传入属性。' +
-      sourceRules
+    description: '编辑字幕、文字或素材叠加、裁切布局与转场，生成新版本预览。'
   },
   resolveExecutionMeta: meta,
   modelResult
@@ -68,8 +62,7 @@ export const VIDEO_AUDIO_TOOL_SPEC: HumanToolSpec<
   inputSchema: videoAudioEditSchema,
   promptSpec: {
     name: 'video_audio_edit',
-    description:
-      '新增、修改或删除视频音轨，支持同步锚点、增益、淡入淡出和音量包络；不生成语音。' + sourceRules
+    description: '新增、修改或删除视频音轨，支持同步、增益、淡入淡出与音量包络。'
   },
   resolveExecutionMeta: meta,
   modelResult
@@ -81,9 +74,7 @@ export const VIDEO_EXPORT_TOOL_SPEC: HumanToolSpec<ExportInput, 'video_export', 
   inputSchema: videoExportSchema,
   promptSpec: {
     name: 'video_export',
-    description:
-      '按当前原素材及编辑配方导出预览或正式视频，可指定尺寸和帧率。此工具不修改画面内容；重画动画或图片素材使用 drawing。' +
-      sourceRules
+    description: '从原素材与编辑配方导出预览或正式视频，支持指定尺寸和帧率。'
   },
   resolveExecutionMeta: meta,
   modelResult

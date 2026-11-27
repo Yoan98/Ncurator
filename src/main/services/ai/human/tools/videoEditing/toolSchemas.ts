@@ -1,6 +1,6 @@
 import { z } from 'zod/v4'
 
-const seconds = z.number().finite().nonnegative()
+const seconds = z.number().finite().nonnegative().describe('时间，单位秒')
 export const timeRangeSchema = z
   .object({
     startSeconds: seconds.describe('区间起点，秒，包含'),
@@ -21,6 +21,7 @@ export const boxSchema = z
   .refine((value) => value.x + value.width <= 1.000001 && value.y + value.height <= 1.000001, {
     message: 'Box must fit within normalized canvas'
   })
+  .describe('归一化布局框，坐标和尺寸取值为 0 到 1')
 const file = z.string().trim().min(1).describe('本地绝对路径')
 const fps = z
   .string()
@@ -101,6 +102,14 @@ export const videoClipEditSchema = z.discriminatedUnion('operation', [
   z
     .object({
       ...io,
+      operation: z.literal('replace'),
+      clipId: z.string().min(1).describe('已有编辑配方中的片段 ID'),
+      path: file.describe('替换素材的绝对路径；保留片段起点、时长和倍率，视频须覆盖原素材范围')
+    })
+    .strict(),
+  z
+    .object({
+      ...io,
       operation: z.literal('speed'),
       startSeconds: seconds,
       endSeconds: seconds,
@@ -114,7 +123,7 @@ export const videoClipEditSchema = z.discriminatedUnion('operation', [
       ...io,
       operation: z.literal('freeze'),
       atSeconds: seconds,
-      durationSeconds: z.number().positive()
+      durationSeconds: z.number().positive().describe('定格时长，秒')
     })
     .strict(),
   z
@@ -156,7 +165,7 @@ const captions = [
               id: z.string().min(1),
               text: z.string().min(1).optional(),
               range: timeRangeSchema.optional(),
-              style: textStyleSchema.optional()
+              style: textStyleSchema.optional().describe('仅更新传入属性，未传入属性保留')
             })
             .strict()
         )
@@ -244,7 +253,7 @@ export const videoVisualEditSchema = z.union([
       operation: z.literal('transition'),
       atSeconds: seconds,
       type: z.enum(['cut', 'fade', 'wipe-left']),
-      durationSeconds: z.number().positive().optional()
+      durationSeconds: z.number().positive().optional().describe('转场时长，秒')
     })
     .strict()
 ])

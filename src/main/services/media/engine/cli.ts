@@ -7,7 +7,12 @@ import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { chromium, type Page, type Browser } from 'playwright'
-import { sceneManifestSchema, type SceneManifest } from './protocol'
+import {
+  drawingFormatSchema,
+  sceneManifestSchema,
+  type SceneManifest,
+  type DrawingFormat
+} from './protocol'
 import { mediaBinaries, runMediaProcess } from '../MediaProcess'
 import { renderSvgImage } from './svg'
 
@@ -139,7 +144,12 @@ const prepareScene = async (
   for (const [key, file] of Object.entries(manifest.resources))
     resources[key] = server.grant(await realpath(path.resolve(root, file)))
   const entryUrl = `/source/${path.relative(root, entry).split(path.sep).map(encodeURIComponent).join('/')}`
-  const data = { ...manifest, resources }
+  const data = {
+    canvas: manifest.canvas,
+    durationSeconds: manifest.durationSeconds,
+    resources,
+    seed: manifest.seed
+  }
   const staticSvg =
     path.extname(entry).toLowerCase() === '.svg'
       ? await renderSvgImage({
@@ -237,6 +247,7 @@ export const runDrawingCli = async (argv = process.argv.slice(2)): Promise<void>
       media: { type: 'string' },
       times: { type: 'string' },
       out: { type: 'string' },
+      format: { type: 'string' },
       at: { type: 'string' }
     }
   })
@@ -247,13 +258,39 @@ export const runDrawingCli = async (argv = process.argv.slice(2)): Promise<void>
     Boolean(values.scene) === Boolean(values.media)
   )
     throw new Error(
-      'Usage: frames (--scene entry | --media video) --times 0,1 --out directory; render --scene entry --out file [--at seconds]'
+      'Usage: frames (--scene entry | --media video) --times seconds --out directory; render --scene entry --format png|jpeg|webp|mp4|webm --out file [--at seconds]'
     )
   if (!path.isAbsolute(values.out)) throw new Error('Output must be an absolute path')
+  if (!path.isAbsolute(values.scene || values.media || ''))
+    throw new Error('Input must be an absolute path')
+  if (operation === 'render' && !values.scene) throw new Error('Rendering requires --scene')
+  const format = operation === 'render' ? drawingFormatSchema.parse(values.format) : undefined
+  if (format) {
+    const extension = path.extname(values.out).slice(1).toLowerCase()
+    if (extension !== format && !(format === 'jpeg' && extension === 'jpg'))
+      throw new Error('Output extension must match --format')
+  }
   const binaries = mediaBinaries()
   if (operation === 'frames' && values.media) {
+    const times = parseTimes(values.times)
+    const info = JSON.parse(
+      await runMediaProcess(binaries.ffprobe, [
+        '-v',
+        'error',
+        '-show_entries',
+        'format=duration',
+        '-of',
+        'json',
+        values.media
+      ])
+    ) as { format?: { duration?: string } }
+    const duration = Number(info.format?.duration)
+    if (!Number.isFinite(duration) || duration <= 0 || times.some((time) => time >= duration))
+      throw new Error('Check time is outside media duration')
     await mkdir(values.out, { recursive: true })
-    for (const [index, seconds] of parseTimes(values.times).entries()) {
+    const frames: { timeSeconds: number; path: string }[] = []
+    for (const [index, seconds] of times.entries()) {
+      const file = path.join(values.out, `${index}-${seconds.toFixed(3)}.png`)
       await runMediaProcess(binaries.ffmpeg, [
         '-nostdin',
         '-v',
@@ -265,9 +302,12 @@ export const runDrawingCli = async (argv = process.argv.slice(2)): Promise<void>
         '-frames:v',
         '1',
         '-y',
-        path.join(values.out, `${index}-${seconds.toFixed(3)}.png`)
+        file
       ])
+      await access(file)
+      frames.push({ timeSeconds: seconds, path: file })
     }
+    process.stdout.write(JSON.stringify({ frames }) + '\n')
     return
   }
   if (!values.scene) throw new Error('Rendering requires --scene')
@@ -287,17 +327,40 @@ export const runDrawingCli = async (argv = process.argv.slice(2)): Promise<void>
     if (!page) throw new Error('Drawing target is unavailable')
     const manifest = await prepareScene(page, values.scene, resourceServer)
     if (operation === 'frames') {
+      const times = parseTimes(values.times)
+      if (times.some((time) => time >= manifest.durationSeconds))
+        throw new Error('Check time is outside scene duration')
       await mkdir(values.out, { recursive: true })
-      for (const [index, seconds] of parseTimes(values.times).entries()) {
-        if (seconds >= manifest.durationSeconds)
-          throw new Error('Check time is outside scene duration')
-        await writeFile(
-          path.join(values.out, `${index}-${seconds.toFixed(3)}.png`),
-          await capture(page, seconds)
-        )
+      const frames: { timeSeconds: number; path: string }[] = []
+      for (const [index, seconds] of times.entries()) {
+        const file = path.join(values.out, `${index}-${seconds.toFixed(3)}.png`)
+        await writeFile(file, await capture(page, seconds))
+        frames.push({ timeSeconds: seconds, path: file })
       }
+      process.stdout.write(JSON.stringify({ frames }) + '\n')
     } else {
-      await renderOutput(page, manifest, values.out, Number(values.at || 0), binaries.ffmpeg)
+      await renderOutput(
+        page,
+        manifest,
+        values.out,
+        Number(values.at || 0),
+        binaries.ffmpeg,
+        format!
+      )
+      const scenePath =
+        path.extname(values.scene) === '.json'
+          ? values.scene
+          : path.join(path.dirname(values.scene), 'scene.json')
+      const result = { scenePath: await realpath(scenePath), outputPath: values.out }
+      if (process.env.NCURATOR_DRAWING_RECEIPT) {
+        const response = await fetch(process.env.NCURATOR_DRAWING_RECEIPT, {
+          method: 'POST',
+          body: JSON.stringify(result),
+          signal: AbortSignal.timeout(10000)
+        })
+        if (!response.ok) throw new Error(`成品已生成，但文件登记失败：${await response.text()}`)
+      }
+      process.stdout.write(JSON.stringify(result) + '\n')
     }
   } finally {
     await page?.evaluate('(async () => { await window.drawingScene?.dispose() })()').catch(() => {})
@@ -309,7 +372,9 @@ export const runDrawingCli = async (argv = process.argv.slice(2)): Promise<void>
 
 const parseTimes = (raw?: string): number[] => {
   if (!raw) throw new Error('--times requires a comma-separated list of seconds')
-  const times = raw.split(',').map(Number)
+  const parts = raw.split(',')
+  if (parts.some((part) => !part.trim())) throw new Error('Invalid check time')
+  const times = parts.map(Number)
   if (times.some((time) => !Number.isFinite(time) || time < 0))
     throw new Error('Invalid check time')
   return times
@@ -320,7 +385,8 @@ const renderOutput = async (
   manifest: SceneManifest,
   output: string,
   at: number,
-  ffmpeg: string
+  ffmpeg: string,
+  format: DrawingFormat
 ): Promise<void> => {
   if (!Number.isFinite(at) || at < 0 || at >= manifest.durationSeconds)
     throw new Error('Invalid still time')
@@ -331,9 +397,7 @@ const renderOutput = async (
     )
   )
     throw new Error('Output already exists; choose a new version path')
-  const extension = path.extname(output).toLowerCase()
-  if (!['.png', '.jpg', '.jpeg', '.webp', '.mp4', '.webm'].includes(extension))
-    throw new Error('Unsupported drawing format')
+  const extension = '.' + format
   await mkdir(path.dirname(output), { recursive: true })
   const temporary = path.join(path.dirname(output), `.${randomUUID()}.part${extension}`)
   try {

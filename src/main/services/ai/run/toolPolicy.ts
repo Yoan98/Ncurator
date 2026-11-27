@@ -10,12 +10,12 @@ const CHILD_DENIED_TOOLS = new Set([
   'skill_config',
   'memory'
 ])
-export const isToolAllowed = (ctx: Pick<AiRunContext, 'isSubagent'>, toolName: string): boolean =>
-  !ctx.isSubagent || !CHILD_DENIED_TOOLS.has(toolName)
-export const assertToolAllowed = (
-  ctx: Pick<AiRunContext, 'isSubagent'>,
-  toolName: string
-): void => {
+type AgentToolContext = Pick<AiRunContext, 'isSubagent' | 'agentProfile'>
+// 绘画任务已持有渲染队列，嵌套剪辑会等待自身释放。
+export const isToolAllowed = (ctx: AgentToolContext, toolName: string): boolean =>
+  !(ctx.agentProfile === 'drawing' && toolName.startsWith('video_')) &&
+  (!ctx.isSubagent || !CHILD_DENIED_TOOLS.has(toolName))
+export const assertToolAllowed = (ctx: AgentToolContext, toolName: string): void => {
   if (!isToolAllowed(ctx, toolName))
     throw new SubagentBlockedError(`子任务不能使用 ${toolName}，请交回主伙伴`)
 }

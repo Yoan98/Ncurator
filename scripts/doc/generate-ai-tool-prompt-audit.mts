@@ -503,7 +503,7 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
     { path: 'totalMatchCount / matches[]', description: 'search 命中' }
   ],
   excel_edit: [{ path: 'args.type', description: '决定文案，不读 data' }],
-  drawing: [{ path: 'sourcePath', description: '长期可编辑场景入口' }],
+  drawing: [{ path: 'result', description: '子任务交付说明，包含成品与可编辑场景入口' }],
   video_clip_edit: [{ path: 'editPath / createdIds?', description: '编辑配方及新对象 ID' }],
   video_visual_edit: [{ path: 'editPath / createdIds?', description: '编辑配方及新对象 ID' }],
   video_audio_edit: [{ path: 'editPath / createdIds?', description: '编辑配方及新对象 ID' }],
@@ -1479,9 +1479,12 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
   drawing: [
     {
       label: '成功',
-      input: { prompt: '白底蓝色圆球向右移动', outputPath: '/workspace/scene.mp4' },
+      input: { prompt: '白底蓝色圆球向右移动', format: 'mp4' },
       ok: true,
-      data: { sourcePath: '/workspace/.ncurator-media/asset/source/scene.json' }
+      data: {
+        result:
+          '已制作动画。成品（供预览、剪辑）：/workspace/scene.mp4；场景入口（供继续编辑）：/workspace/animation/scene.json。'
+      }
     },
     { label: '失败', ok: true, data: { error: 'Media operation cancelled' } }
   ],

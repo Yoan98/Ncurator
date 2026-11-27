@@ -1,6 +1,6 @@
 import type { HumanToolSpec } from '../types'
 import { drawingSchema, type DrawingInput } from './toolSchemas'
-import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
+import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 
 export const DRAWING_TOOL_SPEC: HumanToolSpec<DrawingInput, 'drawing', 'drawing'> = {
   name: 'drawing',
@@ -9,16 +9,15 @@ export const DRAWING_TOOL_SPEC: HumanToolSpec<DrawingInput, 'drawing', 'drawing'
   inputSchema: drawingSchema,
   promptSpec: {
     name: 'drawing',
-    description: '根据自然语言和本地参考素材制作或修改图片、动画，保留可编辑来源。'
+    description: '绘制静态画面和动画，支持基于已有绘画作品继续修改，保留可编辑场景。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'mutating',
-    getResourceKey: (args) => readStringArg(args, 'outputPath'),
     defaultResourceKey: 'drawing'
   }),
   modelResult: {
-    renderSuccess: ({ args, data }) =>
-      `已生成：${args.outputPath}\n可编辑来源：${data && typeof data === 'object' && !Array.isArray(data) ? data.sourcePath : ''}`
+    renderSuccess: ({ data }) =>
+      String(data && typeof data === 'object' && !Array.isArray(data) ? data.result || '' : '')
   }
 }
 export const DRAWING_TOOL_SPECS = [DRAWING_TOOL_SPEC] as const

@@ -5,7 +5,13 @@ import {
   recipeDuration
 } from '../../../../src/main/services/media/video/recipe'
 import { snapVideoTime } from '../../../../src/shared/videoFeedback'
-import { DRAWING_SYSTEM_PREFIX } from '../../../../src/main/services/media/engine/protocol'
+import {
+  DRAWING_SYSTEM_PREFIX,
+  buildDrawingTaskInput
+} from '../../../../src/main/services/ai/human/prompts/drawing'
+import { drawingSchema } from '../../../../src/main/services/ai/human/tools/drawing/toolSchemas'
+import { DRAWING_TOOL_SPEC } from '../../../../src/main/services/ai/human/tools/drawing/toolSpecs'
+import { isToolAllowed } from '../../../../src/main/services/ai/run/toolPolicy'
 import { buildBrainSystemPrompt } from '../../../../src/main/services/ai/human/prompts/brain'
 import { videoFeedbackUserMessage } from '../../../../src/main/services/ai/human/memory/videoFeedback'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
@@ -94,6 +100,7 @@ describe('media timeline and context invariants', () => {
     expect(initial.startsWith(DRAWING_SYSTEM_PREFIX)).toBe(true)
     expect(initial.split(DRAWING_SYSTEM_PREFIX)).toHaveLength(2)
     expect(rebuilt).toBe(initial)
+    expect(initial).not.toContain('优先使用 drawing')
     expect(buildBrainSystemPrompt({ ctx: { ...ctx, agentProfile: undefined } })).not.toContain(
       DRAWING_SYSTEM_PREFIX
     )
@@ -114,5 +121,42 @@ describe('media timeline and context invariants', () => {
     expect(Array.isArray(message.content)).toBe(true)
     expect(message.content).toHaveLength(2)
     expect(JSON.stringify(message.content)).not.toContain('x1')
+  })
+  it('accepts only the drawing task and format, and delivers the child result unchanged', () => {
+    const task = { prompt: '按项目说明保存；继续修改 /project/scene.json', format: 'webm' as const }
+    expect(drawingSchema.parse(task)).toEqual(task)
+    for (const name of ['references', 'inputPath', 'outputPath', 'renderPath'])
+      expect(drawingSchema.safeParse({ ...task, [name]: '/ignored' }).success).toBe(false)
+    expect(drawingSchema.safeParse({ prompt: task.prompt, format: 'gif' }).success).toBe(false)
+    const message = buildDrawingTaskInput(task)
+    expect(message.startsWith(task.prompt)).toBe(true)
+    expect(message).toContain('输出格式：webm')
+    expect(message).toContain('成品文件（供预览、剪辑）')
+    expect(message).toContain('scene.json 场景入口（供继续编辑）')
+    expect(
+      DRAWING_TOOL_SPEC.modelResult.renderSuccess({ args: task, data: { result: message } })
+    ).toBe(message)
+  })
+  it('describes actual scene inputs without embedding runtime launch configuration', () => {
+    expect(DRAWING_SYSTEM_PREFIX).toContain('entry: string（可选，默认 "scene.mjs"）')
+    expect(DRAWING_SYSTEM_PREFIX).toContain('canvas.width: integer（必填')
+    expect(DRAWING_SYSTEM_PREFIX).toContain('canvas.fps: number（可选，默认 30')
+    expect(DRAWING_SYSTEM_PREFIX).toContain('resources: Record<string, string>')
+    for (const block of ['scene', 'code', 'assets', 'render', 'review']) {
+      expect(DRAWING_SYSTEM_PREFIX.split(`<${block}>`)).toHaveLength(2)
+      expect(DRAWING_SYSTEM_PREFIX).toContain(`</${block}>`)
+    }
+    expect(DRAWING_SYSTEM_PREFIX).not.toMatch(
+      /NCURATOR_|ELECTRON_RUN_AS_NODE|@ncurator|版本 1|本次渲染输出|未指定时自行选择/
+    )
+  })
+  it('keeps nested video rendering out of the drawing task render lease', () => {
+    const drawing = { isSubagent: true, agentProfile: 'drawing' as const }
+    expect(isToolAllowed(drawing, 'video_export')).toBe(false)
+    expect(isToolAllowed(drawing, 'video_visual_edit')).toBe(false)
+    expect(isToolAllowed(drawing, 'terminal_run')).toBe(true)
+    expect(isToolAllowed(drawing, 'file_edit')).toBe(true)
+    expect(isToolAllowed(drawing, 'read_image')).toBe(true)
+    expect(isToolAllowed({ isSubagent: true }, 'video_export')).toBe(true)
   })
 })

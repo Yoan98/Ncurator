@@ -145,6 +145,7 @@
 - `src/main/services/**` 放业务编排、领域服务和适配层。
 - `src/main/services/storage/**` 放 SQLite、LanceDB 和领域 Store。
 - AI 运行入口与基础设施放在 `src/main/services/ai/**`。
+- 提示词尽量集中在对应的 `prompts/` 目录维护。
 - `src/main/utils/**` 只放 Main 侧通用工具，不放强业务流程。
 - `src/main/types/**` 只放 Main 侧 ambient / 适配声明；跨进程类型放 `src/shared/**`。
 
